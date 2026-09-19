@@ -44,3 +44,11 @@ Stos Android, mechanizm lokalnego odczytu SUPLA, legalnie dostępna offline baza
 Czytnik kamery tabletu ma odróżniać kody kreskowe produktów (np. EAN/UPC, mapowane do lokalnego katalogu) od wewnętrznych QR obiektów (typ + trwałe ID). Skan zwraca **odczytany obiekt**, natomiast cel operacji jest osobnym parametrem; sam odczyt nie zmienia magazynu. Dodanie/wyjęcie wymaga potwierdzenia, zapisuje idempotentną operację oraz historię. Nieznany produkt może otrzymać kartę, bez wymogu internetu. Gniazdo adaptera zewnętrznego czytnika pozostaje na przyszłość. Tablet musi móc modyfikować układ kafelków bez ingerowania w wspólny model magazynu.
 
 Więcej przykładów i kontekst produktu: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+
+## Remanent spiżarni — odrębny proces
+
+Remanent jest cykliczną czynnością połączoną z **sesją liczenia**, a nie serią automatycznych operacji „wyciągnij”. Sesja zapisuje zakres, użytkownika, znacznik czasu, snapshot oczekiwanych stanów, postęp i indywidualne wyniki: zgodne / nowa ilość / brak / pominięte. Stan nieokreślony nie jest zerem. Wynik „zgadza się” rejestruje datę fizycznego potwierdzenia.
+
+Na końcu powstaje propozycja korekt, którą użytkownik **osobno zatwierdza**; wtedy transakcyjnie aktualizować stany i historię. Każda korekta ma trwałe ID operacji, powiązaną sesję, ilość przed/po, jednostkę i wykonawcę; ponowne dostarczenie przez synchronizację nie może wykonać jej drugi raz. Zmiany na drugim urządzeniu od chwili snapshotu wymagają uzgodnienia konfliktu przed zastosowaniem różnic. Sesję można wznowić i zachować pominięte pozycje.
+
+Pełny scenariusz i opcje UI opisuje [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#11-nowe-ustalenie--kreator-okresowego-remanentu-spiżarni-na-tablecie).
