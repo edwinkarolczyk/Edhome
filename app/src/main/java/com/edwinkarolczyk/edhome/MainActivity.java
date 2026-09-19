@@ -40,6 +40,7 @@ public final class MainActivity extends Activity {
     private static final int EXPORT_DIAGNOSTICS = 1210;
     private SharedPreferences prefs;
     private LocalDb db;
+    private BetaUpdater updater;
     private LinearLayout root;
     private LinearLayout body;
     private boolean unlocked;
@@ -51,6 +52,7 @@ public final class MainActivity extends Activity {
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
         db = new LocalDb(this);
+        updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         setContentView(root);
@@ -62,11 +64,13 @@ public final class MainActivity extends Activity {
         super.onStop();
         unlocked = false;
         DiagnosticLog.event("ACTIVITY_STOPPED_LOCKED");
+        if (updater != null) updater.stop();
     }
 
     @Override public void onResume() {
         super.onResume();
         if (root != null && !unlocked) render();
+        if (unlocked && updater != null) updater.start();
     }
 
     @Override public void onBackPressed() {
@@ -169,6 +173,7 @@ public final class MainActivity extends Activity {
 
     private void go(String destination) {
         screen = destination;
+        if (unlocked && updater != null) updater.start();
         DiagnosticLog.event("SCREEN", "id=" + destination);
         render();
     }
@@ -200,6 +205,7 @@ public final class MainActivity extends Activity {
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
+                case "updates": updates(); break;
                 case "diagnostics": diagnostics(); break;
                 default: home();
             }
@@ -293,6 +299,7 @@ public final class MainActivity extends Activity {
         button("▦ Kalendarz — w planie", () -> go("calendar"));
         button("⌗ Skaner kodów — w planie", () -> go("scanner"));
         button("◫ Remanent spiżarni", () -> go("audit"));
+        button("↻ Aktualizacje", () -> go("updates"));
         button("⚙ Ustawienia", () -> go("settings"));
         if (DiagnosticLog.enabled()) {
             button("🛠 Diagnostyka BETA", () -> go("diagnostics"));
@@ -553,6 +560,34 @@ public final class MainActivity extends Activity {
         });
         if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
         note("Dane są lokalne, bez funkcji backupu. Nie zapisuj rzeczywistych ważnych danych.");
+    }
+
+
+    private void updates() {
+        header("Aktualizacje • " + BuildConfig.VERSION_NAME);
+        note("Zainstalowany versionCode: " + BuildConfig.VERSION_CODE);
+        if (!BetaUpdater.isBeta()) {
+            note("Stable korzysta z aktualizacji Google Play; bez pobierania APK z aplikacji.");
+            button("Sprawdź w Google Play", () -> updater.openPlay());
+            return;
+        }
+        note("Beta DEV sprawdza manifest HTTPS co 30 sekund, kiedy aplikacja jest aktywna. Pobranie nowego pliku jest automatyczne, lecz instalacja wymaga Twojej zgody w Androidzie.");
+        note("Prywatnych plików GitHub Actions telefon nie pobierze bez uwierzytelnienia. NIE wklejaj tokenu GitHub ani hasła do tego pola.");
+        EditText source = field("HTTPS adres manifestu (bez tokenów)", false);
+        source.setInputType(17);
+        source.setText(updater.configuredFeed());
+        button("Zapisz źródło aktualizacji", () -> {
+            if (!updater.setFeed(source.getText().toString())) {
+                alert("Podaj pełny URL https:// bez danych logowania albo pozostaw puste pole.");
+                return;
+            }
+            alert(updater.configuredFeed().isEmpty()
+                ? "Źródło usunięte. Zdalne sprawdzanie jest wyłączone."
+                : "Zapisano adres. Beta sprawdzi nowy manifest bez dodatkowego logowania.");
+        });
+        button("Sprawdź aktualizację teraz", () -> updater.check(true));
+        button("Sprawdź pobieranie / instaluj gotowy APK", () -> updater.installReady());
+        note("Manifest: channel=beta, versionCode, versionName, changelog, apkUrl HTTPS, sha256. APK musi mieć ten sam identyfikator pakietu i podpis co obecna instalacja.");
     }
 
     private void diagnostics() {
