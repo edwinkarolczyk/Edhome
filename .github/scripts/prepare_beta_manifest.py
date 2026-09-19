@@ -11,7 +11,7 @@ import pathlib
 import re
 from urllib.parse import urlparse
 
-apk = pathlib.Path("app/build/outputs/apk/beta/debug/app-beta-debug.apk")
+apk = pathlib.Path("app/build/outputs/apk/beta/release/app-beta-release.apk")
 gradle = pathlib.Path("app/build.gradle").read_text(encoding="utf-8")
 url = os.environ.get("EDHOME_BETA_APK_URL", "").strip()
 if not url:
