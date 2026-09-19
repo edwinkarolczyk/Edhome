@@ -21,7 +21,7 @@ public final class UpdateApkProvider extends ContentProvider {
         if (!"r".equals(mode) || uri == null || uri.getPathSegments().size() != 2
             || !"apk".equals(uri.getPathSegments().get(0))) throw new FileNotFoundException();
         String basename = uri.getLastPathSegment();
-        if (basename == null || !basename.matches("edhome-beta-[0-9]+\\.apk"))
+        if (basename == null || !basename.matches("edhome-beta-([0-9]+|manual)\\.apk"))
             throw new FileNotFoundException();
         File folder = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         if (folder == null) throw new FileNotFoundException();
