@@ -2,6 +2,8 @@
 
 > **Status gałęzi `beta`:** dostępny jest **prototyp Android EDHOME 0.1.2-beta.1**, z panelem, testową spiżarnią, prostą listą czynności, lokalną diagnostyką pierwszym kreatorem remanentu oraz klientem aktualizacji DEV. Kalendarz, skaner aparatu, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
 
+**UWAGA — konflikt podpisu APK (19.09.2026):** kolejne kompilacje Debug otrzymywały różne certyfikaty. **Nie odinstalowuj działającej wersji, jeżeli zależy Ci na danych.** Kod 0.1.3-beta.1 i poprawiony workflow czekają na skonfigurowanie trwałego prywatnego klucza przez właściciela repozytorium; CI świadomie nie publikuje nowych APK bez tego klucza. To **nie naprawia wstecz** podpisu istniejącej instalacji. [Przyczyna, kroki ratunkowe i konfiguracja podpisu](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
+
 **EDHOME** to lokalne centrum zarządzania gospodarstwem domowym: wspólny kalendarz i planer, czynności, finanse osobiste i wspólne, magazyn z QR, ogród, pojazdy, dom i remonty, energia oraz integracja SUPLA. Jedno gospodarstwo może mieć wielu domowników i urządzeń.
 
 ## Zasady produktu
