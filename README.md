@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** dostępny jest **prototyp Android EDHOME 0.1.1-beta.1**, z panelem, testową spiżarnią, prostą listą czynności, lokalną diagnostyką oraz pierwszym kreatorem remanentu. Kalendarz, skaner aparatu, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
+> **Status gałęzi `beta`:** dostępny jest **prototyp Android EDHOME 0.1.2-beta.1**, z panelem, testową spiżarnią, prostą listą czynności, lokalną diagnostyką pierwszym kreatorem remanentu oraz klientem aktualizacji DEV. Kalendarz, skaner aparatu, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
 
 **EDHOME** to lokalne centrum zarządzania gospodarstwem domowym: wspólny kalendarz i planer, czynności, finanse osobiste i wspólne, magazyn z QR, ogród, pojazdy, dom i remonty, energia oraz integracja SUPLA. Jedno gospodarstwo może mieć wielu domowników i urządzeń.
 
@@ -42,7 +42,8 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
-- [EDHOME 0.1.1-beta.1 — co działa, testy i ostrzeżenie o podpisie APK](docs/BETA_0_1_1.md)
+- [EDHOME 0.1.2-beta.1 — aktualizator Beta/Stable i wymagany hosting](docs/BETA_0_1_2.md)
+- [EDHOME 0.1.1-beta.1 — wcześniejsza beta i remanent](docs/BETA_0_1_1.md)
 - [Zbiorczy rejestr ustaleń](docs/SPECYFIKACJA_CALOSC.md)
 - [Roadmapa](docs/ROADMAP.md) i [architektura](docs/ARCHITEKTURA.md)
 - [Budowanie APK w GitHub Actions](https://github.com/edwinkarolczyk/Edhime/actions/workflows/android-beta.yml)
