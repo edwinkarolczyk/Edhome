@@ -38,6 +38,7 @@ import javax.crypto.spec.PBEKeySpec;
 /** Small, deliberately local-only EDHOME beta preview. */
 public final class MainActivity extends Activity {
     private static final int EXPORT_DIAGNOSTICS = 1210;
+    private static final int IMPORT_BETA_APK = 1211;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -587,6 +588,16 @@ public final class MainActivity extends Activity {
         });
         button("Sprawdź aktualizację teraz", () -> updater.check(true));
         button("Sprawdź pobieranie / instaluj gotowy APK", () -> updater.installReady());
+        button("Wybierz APK z telefonu (bez internetu)", () -> {
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("application/vnd.android.package-archive");
+            try { startActivityForResult(picker, IMPORT_BETA_APK); }
+            catch (Exception error) {
+                DiagnosticLog.error("UPDATE_PICKER", error);
+                alert("Nie można otworzyć wyboru APK.");
+            }
+        });
         note("Manifest: channel=beta, versionCode, versionName, changelog, apkUrl HTTPS, sha256. APK musi mieć ten sam identyfikator pakietu i podpis co obecna instalacja.");
     }
 
@@ -626,6 +637,11 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == IMPORT_BETA_APK) {
+            if (result == RESULT_OK && data != null && data.getData() != null)
+                updater.importSelected(data.getData());
+            return;
+        }
         if (request != EXPORT_DIAGNOSTICS || !DiagnosticLog.enabled()) return;
         if (result != RESULT_OK || data == null || data.getData() == null) {
             DiagnosticLog.event("DIAGNOSTICS_EXPORT_CANCELLED");
