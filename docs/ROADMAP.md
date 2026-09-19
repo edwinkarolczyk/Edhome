@@ -32,3 +32,12 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - Konkretny bank, treści powiadomień, zakres dostępu Android Notification Listener i formaty wyciągów.
 - Lista urządzeń SUPLA i możliwości odczytu po LAN.
 - Docelowy model rozwiązywania konfliktów synchronizacji i kluczy prywatnych.
+
+## Korekta: skaner tabletu i spiżarnia
+
+- **0.1.0:** konfigurowalny panel tabletu z widocznym miejscem na kafelek skanera (bez udawania działającego skanowania).
+- **0.3.0:** podstawowe wspólne zakupy i magazyn spiżarni z opcjonalną ilością; dane działają offline.
+- **0.4.0:** działający skaner kamery, kod kreskowy produktu i QR rzeczy/pudełka/miejsca; operacje „Dodaj / Wyciągnij / Przenieś” z potwierdzeniem; testy nieznanych kodów, duplikatów i historii.
+- **0.8.0:** synchronizacja operacji tabletu i telefonów przez Wi-Fi, bez podwójnych pobrań.
+
+[Pełna specyfikacja ustaleń](SPECYFIKACJA_CALOSC.md) pozostaje źródłem zakresu, a niniejsza roadmapa — kolejności dostarczania.
