@@ -20,9 +20,9 @@ if not url:
 parsed = urlparse(url)
 if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
     raise SystemExit("EDHOME_BETA_APK_URL must be HTTPS without credentials, query or fragment")
-code = int(re.search(r"\\bversionCode\\s+(\\d+)", gradle).group(1))
-version = re.search(r"\\bversionName\\s+'([^']+)'", gradle).group(1)
-beta = re.search(r"beta\\s*\\{[\\s\\S]*?versionNameSuffix\\s+'([^']+)'", gradle).group(1)
+code = int(re.search(r"\bversionCode\s+(\d+)", gradle).group(1))
+version = re.search(r"\bversionName\s+'([^']+)'", gradle).group(1)
+beta = re.search(r"beta\s*\{[\s\S]*?versionNameSuffix\s+'([^']+)'", gradle).group(1)
 digest = hashlib.sha256(apk.read_bytes()).hexdigest()
 manifest = {
     "channel": "beta",
