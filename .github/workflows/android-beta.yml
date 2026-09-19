@@ -9,6 +9,7 @@ on:
       - "gradle.properties"
       - "settings.gradle"
       - ".github/workflows/android-beta.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 jobs:
