@@ -3,7 +3,7 @@
     <application
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
-        android:label="EDHOME Beta"
+        android:label="${appLabel}"
         android:theme="@style/Theme.EDHOME"
         android:icon="@drawable/ic_edhome">
         <activity
