@@ -51,3 +51,9 @@ Manifest musi być mały (do 16 KiB), zwracać HTTP 200, a oba URL-e muszą uży
 **Żeby zamknąć funkcję zgodnie z ustaleniami:** prywatny kanał DEV potrzebuje bezpiecznego miejsca publikacji plików HTTPS, testowego stałego klucza podpisu i testu aktualizacji ze starej instalacji **bez utraty bazy**. Stable wymaga integracji z Play po opublikowaniu.
 
 [Roadmapa](ROADMAP.md) · [Specyfikacja](SPECYFIKACJA_CALOSC.md).
+
+## Potwierdzenie budowania — 19.09.2026
+
+Workflow [EDHOME Beta APK — run 35447855806](https://github.com/edwinkarolczyk/Edhime/actions/runs/35447855806) zakończył się powodzeniem: kompilacja **Beta Debug** i niezależny test kompilacji **Stable Debug** przeszły, a artefakt `EDHOME-0.1.2-beta.1-apk` został opublikowany (tylko Beta; Stable nie publikowano). Wynik CI nie zastępuje ręcznego testu pobierania, weryfikacji APK ani aktualizacji już zainstalowanej aplikacji na konkretnym telefonie.
+
+**Pierwsza instalacja 0.1.2:** wcześniejsze 0.1.1-beta.1 **nie ma** ekranu Aktualizacje; nowy APK należy zainstalować przez system Android. Potem następne APK z zgodnym podpisem można wybierać w EDHOME → Aktualizacje → „Wybierz APK z telefonu”. Zdalne aktualizacje nadal wymagają rzeczywistego manifestu i hostingu HTTPS.
