@@ -86,7 +86,8 @@ public final class BetaUpdater {
 
     public boolean setFeed(String url) {
         String value = url == null ? "" : url.trim();
-        if (!value.isEmpty() && !isSecureUrl(value)) return false;
+        // A GitHub Actions run is an HTML page, NOT the update JSON manifest.
+        if (!value.isEmpty() && (!isSecureUrl(value) || isGitHubActionsPage(value))) return false;
         prefs.edit().putString("updates_feed", value).apply();
         DiagnosticLog.event(value.isEmpty() ? "UPDATES_FEED_CLEARED" : "UPDATES_FEED_SET");
         return true;
@@ -159,6 +160,15 @@ public final class BetaUpdater {
         } finally {
             conn.disconnect();
         }
+    }
+
+    private static boolean isGitHubActionsPage(String value) {
+        Uri uri = Uri.parse(value);
+        String host = uri.getHost();
+        String path = uri.getPath();
+        return host != null && ("github.com".equalsIgnoreCase(host)
+            || "www.github.com".equalsIgnoreCase(host))
+            && path != null && path.contains("/actions/");
     }
 
     private static boolean isSecureUrl(String value) {
