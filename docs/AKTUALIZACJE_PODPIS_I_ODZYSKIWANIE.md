@@ -23,30 +23,16 @@ Nie należy zakładać, że wszystkie archiwa nazwane 0.1.2 mają ten sam podpis
 
 Utwórz **raz**, na swoim komputerze, klucz podpisu tylko dla Beta DEV i bezpieczną kopię offline. Nie wysyłaj go do czatu i nie dodawaj do repozytorium.
 
-**Wariant prostszy na Windows:** pobierz repo, uruchom PowerShell w jego folderze i wykonaj:
+**EDHOME Beta DEV ma już nowy certyfikat (19.09.2026).** Prywatny plik `edhome-beta.p12`, hasło i Base64 zostały przekazane właścicielowi poza repozytorium. Nie generuj kolejnego klucza zamiast niego, ponieważ kolejna zmiana certyfikatu zerwie możliwość aktualizacji.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\tools\\setup-beta-signing.ps1
-```
+Oczekiwany publiczny odcisk certyfikatu SHA-256:
 
-Kreator uruchamia systemowy `keytool` (z JDK/Android Studio), pyta o hasło, zapisuje `edhome-beta.p12` w Dokumentach/EDHOME-Keys i nie nadpisze go przy ponownym uruchomieniu. Później, gdy otworzysz w GitHubie formularz sekretu `EDHOME_BETA_KEYSTORE_B64`, wywołaj:
+`40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE`
+
+Zachowaj przekazany `.p12` i hasła offline. Do GitHub Secrets wklej Base64 i hasła z przekazanych plików. **Nie wrzucaj prywatnych danych do repozytorium.** Pomocniczy [skrypt Windows](../tools/setup-beta-signing.ps1) tylko sprawdza certyfikat i pomaga skopiować Base64; nie generuje już kolejnej tożsamości podpisu. Aby użyć skryptu, umieść przekazany `.p12` w Dokumenty/EDHOME-Keys, pobierz repo i uruchom:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\\tools\\setup-beta-signing.ps1 -CopyBase64
-```
-
-Zawartość B64 znajdzie się w schowku: wklej ją **tylko** do prywatnego GitHub Actions secret. Hasło klucza i magazynu PKCS12 jest takie samo. Jeśli katalog Dokumenty synchronizuje się z chmurą, przenieś kopię klucza do bezpiecznej lokalizacji offline i sprawdź politykę synchronizacji. [Skrypt kreatora](../tools/setup-beta-signing.ps1).
-
-**Wariant ręczny:** przykładowa komenda do uruchomienia lokalnie z JDK:
-
-```powershell
-keytool -genkeypair -v -keystore edhome-beta.p12 -storetype PKCS12 -alias edhome-beta -keyalg RSA -keysize 3072 -validity 10000
-```
-
-Ustal unikalne hasło. Na Windows PowerShell można uzyskać wartość sekretu Base64 **bez wysyłania pliku gdziekolwiek**:
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path .\edhome-beta.p12))) | Set-Clipboard
 ```
 
 Następnie GitHub → repo Edhime → **Settings → Secrets and variables → Actions → New repository secret**. Zapisz `EDHOME_BETA_KEYSTORE_B64` (wartość ze schowka) i pozostałe trzy sekrety (alias i oba hasła). Utrzymuj bezpieczny prywatny backup oryginalnego `.p12` oraz haseł: utrata klucza ponownie uniemożliwi zwykłe aktualizacje. Nie używaj sekretów produkcyjnych Stable w wersji Beta. W przypadku polityk organizacji sprawdź, czy Actions ma dostęp do sekretów.
