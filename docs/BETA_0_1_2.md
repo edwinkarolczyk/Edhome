@@ -6,7 +6,7 @@
 
 | Wariant | Zachowanie |
 |---|---|
-| Stable | Aktualizacje Google Play. Nie instalować w aplikacji APK pobranych z dowolnego adresu. Po publikacji potrzebna integracja z Play In-App Updates / sprawdzanie przy uruchomieniu; w prototypie jest przycisk „Sprawdź w Google Play”. |
+| Stable | Aktualizacje Google Play. Nie instalować w aplikacji APK pobranych z dowolnego adresu. Kod integracji Play In-App Updates jest przygotowany dla wariantu Stable: kontrola po odblokowaniu raz na uruchomienie, zgoda Aktualizuj/Później, otwarcie opisu w Play. Wciąż nie ma opublikowanej wersji Stable ani potwierdzonego testu sklepowego. |
 | Beta DEV | Po odblokowaniu uruchamia sprawdzanie niedużego manifestu **co 30 sekund tylko gdy aplikacja jest aktywna**, jeśli użytkownik skonfigurował adres HTTPS. Przy wyższej wersji pobiera nowy APK w Android DownloadManager, sprawdza SHA-256 oraz tożsamość pakietu i certyfikat podpisu, pokazuje changelog i oferuje „Instaluj” / „Później”. Instalacja wymaga zgody systemowej. |
 | Offline | Codzienna praca EDHOME bez internetu. Beta pozwala ręcznie wskazać APK z pobranych plików Androida; przed pokazaniem instalatora kontroluje numer, identyfikator i podpis. |
 | Podpis | Nie wkładać sekretnego klucza produkcyjnego do repozytorium. Cache testowego debug.keystore nie stanowi trwałej gwarancji kompatybilności. Przy konflikcie podpisu nie odinstalowywać jedynej kopii danych. |
@@ -45,7 +45,7 @@ Manifest musi być mały (do 16 KiB), zwracać HTTP 200, a oba URL-e muszą uży
 
 1. Działającego hostingu manifestu/APK dla prywatnego EDHOME. Adres GitHub Actions wymaga autoryzacji i nie nadaje się do wklejenia w aplikację; nie wkładać prywatnego tokenu do APK.
 2. Produkcyjnego i trwałego klucza podpisu / gwarancji przejścia z wcześniejszych debug APK bez konfliktu. Odinstalowanie usuwa aktualne lokalne dane; eksport bazy nadal do zrobienia.
-3. Pełnej integracji Stable z Google Play In-App Updates: obecna Stable to prototyp nieopublikowany w Play; przycisk otwiera Play, lecz sam nie potwierdza nowej wersji.
+3. Potwierdzonej instalacji Stable z Google Play: kod Play In-App Updates jest dodany, ale aplikacja Stable nie została opublikowana, a działanie z autentyczną ofertą aktualizacji wymaga testów na instalacji sklepowej.
 4. Automatycznych testów instalowania na fizycznych urządzeniach / zachowania całych danych podczas przejścia z poprzednich instalacji.
 
 **Żeby zamknąć funkcję zgodnie z ustaleniami:** prywatny kanał DEV potrzebuje bezpiecznego miejsca publikacji plików HTTPS, testowego stałego klucza podpisu i testu aktualizacji ze starej instalacji **bez utraty bazy**. Stable wymaga integracji z Play po opublikowaniu.
