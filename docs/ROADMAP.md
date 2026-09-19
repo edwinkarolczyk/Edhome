@@ -41,3 +41,12 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - **0.8.0:** synchronizacja operacji tabletu i telefonów przez Wi-Fi, bez podwójnych pobrań.
 
 [Pełna specyfikacja ustaleń](SPECYFIKACJA_CALOSC.md) pozostaje źródłem zakresu, a niniejsza roadmapa — kolejności dostarczania.
+
+## Kreator remanentu — nowe ustalenie 19.09.2026
+
+- **0.2.0:** uniwersalny silnik czynności cyklicznych do przypominania o remanencie (co tydzień/miesiąc/N lub termin ręczny); nie rozpoczynać sesji samowolnie.
+- **0.3.0:** kartoteka produktów spiżarni z opcjonalnym stanem, jednostką i przypisaniem do miejsca.
+- **0.4.0:** tabletowy kreator przeglądający produkty po kolei: „Zgadza się / Dalej”, „Podaj faktyczną liczbę”, „Brak”, „Pomiń”, przerwij/wznów, skanuj poza kolejnością, raport różnic i zatwierdzenie korekt jako osobny krok, historia remanentów.
+- **0.8.0:** odporność na równoległe zmiany stanu przy remanencie i synchronizacji po Wi-Fi: porównywanie ze stanem sesji, bez dublowania korekt.
+
+**Zakres i szczegółowy scenariusz:** [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#11-nowe-ustalenie--kreator-okresowego-remanentu-spiżarni-na-tablecie).
