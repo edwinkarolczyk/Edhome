@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private LinearLayout root;
     private LinearLayout body;
     private boolean unlocked;
+    private boolean stableUpdateChecked;
     private String screen = "home";
     private int bg, surface, ink, subdued, accent;
 
