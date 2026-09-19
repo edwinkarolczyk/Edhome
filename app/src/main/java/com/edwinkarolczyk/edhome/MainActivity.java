@@ -176,6 +176,10 @@ public final class MainActivity extends Activity {
     private void go(String destination) {
         screen = destination;
         if (unlocked && updater != null) updater.start();
+        if (unlocked && !BetaUpdater.isBeta() && !stableUpdateChecked) {
+            stableUpdateChecked = true;
+            PlayUpdateBridge.checkOnce(this);
+        }
         DiagnosticLog.event("SCREEN", "id=" + destination);
         render();
     }
