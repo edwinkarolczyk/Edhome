@@ -56,3 +56,12 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - **0.1.0-beta.1:** skompilowana pierwsza lokalna aplikacja testowa Android z PIN, motywami, prostą listą czynności, testową spiżarnią i kopiowalnymi logami (potwierdzony test ręczny użytkownika w logu, bez błędów w podstawowych operacjach).
 - **0.1.1-beta.1:** na `beta` podpięte dwa różne zasoby ikon Stable/Beta; dodano pierwszy **prototyp** ręcznego kreatora remanentu ze snapshotem, zachowaniem postępu, raportem, korektą po zatwierdzeniu i migracją SQLite v1→v2. Cykliczne przypomnienia, skaner aparatu, jednostki kg/l i automatyczna synchronizacja nadal są **niezrealizowane**.
 - [Opis i test ręczny wersji 0.1.1](BETA_0_1_1.md). Status builda sprawdza się w GitHub Actions, nie należy przyjmować ukończonej aplikacji na podstawie samego zapisu w roadmapie.
+
+## Aktualizacje — stan faktyczny 0.1.2-beta.1
+
+- Kod klienta **Beta DEV**: aktywne sprawdzanie małego manifestu HTTPS co 30 s po konfiguracji adresu, automatyczne pobranie nowej wersji, SHA-256, identyfikator pakietu/podpis i zgoda systemowa na instalację; możliwość ręcznego wskazania lokalnego APK.
+- Kod klienta **Stable**: integracja Google Play In-App Updates, sprawdzenie raz po odblokowaniu aplikacji, „Aktualizuj / Później”, możliwość otwarcia szczegółów Play. Stable nieopublikowana — brak testu prawdziwej aktualizacji sklepowej.
+- **Niezamknięty element infrastruktury:** źródło publicznie dostępnego bez tokenu manifestu HTTPS i zgodnie podpisanych APK; prywatny GitHub Actions wymaga autoryzacji i nie jest takim źródłem. Workflow może wygenerować SHA-256 i manifest po ustawieniu `EDHOME_BETA_APK_URL`, ale nie hostuje plików.
+- **Przed rzeczywistą migracją** zadbać o trwały podpis, backup/eksport i regresję aktualizacji na telefonie. Warianty debug mogą mieć konflikt certyfikatu z wcześniejszymi wydaniami.
+
+[Zasady i wymagania kanału](BETA_0_1_2.md).
