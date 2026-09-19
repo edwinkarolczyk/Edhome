@@ -35,3 +35,9 @@ Wszystkie wymienione funkcje są **zakresem docelowym**, nie deklaracją wykonan
 
 ## Granice zakresu
 Na razie nie modyfikować Trenera 2, PayCheck, WM, SUPLA ani innych repozytoriów. EDHOME ma być samodzielnym projektem; każda zależność zewnętrzna wymaga audytu licencji/kompatybilności.
+
+## Skaner tabletu — spiżarnia (doprecyzowanie)
+
+Na przenośnym tablecie kafelek skanera kodów kreskowych produktów oraz QR rzeczy, pudełek i miejsc. Po skanie duże opcje: **Dodaj do spiżarni**, **Wyciągnij ze spiżarni**, ewentualnie Sprawdź/Przenieś; wyświetlić nazwę, lokalizację i opcjonalną ilość oraz wymagać potwierdzenia operacji. Nieznany kod pozwala stworzyć produkt; skan bez wyboru czynności niczego nie odejmuje. Odczyt offline, synchronizacja lokalna Wi-Fi. Katalog kodów produktów musi mieć legalne źródło, nie zakładamy zewnętrznego API jako obowiązkowego. Opcjonalny zewnętrzny czytnik później.
+
+**Pełny rejestr ustaleń:** [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
