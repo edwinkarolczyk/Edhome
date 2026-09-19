@@ -12,6 +12,10 @@ on:
       - ".github/scripts/**"
   workflow_dispatch:
 
+concurrency:
+  group: edhome-beta-signing
+  cancel-in-progress: false
+
 jobs:
   build-beta:
     runs-on: ubuntu-latest
@@ -27,7 +31,6 @@ jobs:
           java-version: "17"
       - name: Android platform 35
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null
@@ -36,24 +39,43 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
-      - name: Restore beta debug signing key (test only)
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: edhome-beta-debug-signing-v1
-      - name: Build beta and compile-check Stable (Stable is NOT published)
-        run: gradle --no-daemon :app:assembleBetaDebug :app:assembleStableDebug
+      - name: Compile-check Beta and Stable
+        run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
+      - name: Require persistent private signing key
+        env:
+          BETA_KEY_B64: ${{ secrets.EDHOME_BETA_KEYSTORE_B64 }}
+          BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
+          BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
+          BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$BETA_KEY_B64" || -z "$BETA_KEY_ALIAS" || -z "$BETA_STORE_PASSWORD" || -z "$BETA_KEY_PASSWORD" ]]; then
+            echo "::error::Missing one or more EDHOME_BETA signing secrets. No APK is published: random debug signatures would break updates and risk loss of app data."
+            exit 1
+          fi
+          printf '%s' "$BETA_KEY_B64" | base64 --decode > "$RUNNER_TEMP/edhome-beta.p12"
+          chmod 600 "$RUNNER_TEMP/edhome-beta.p12"
+          keytool -list -keystore "$RUNNER_TEMP/edhome-beta.p12" -storepass "$BETA_STORE_PASSWORD" -alias "$BETA_KEY_ALIAS" > /dev/null
+          echo "EDHOME_BETA_KEYSTORE_FILE=$RUNNER_TEMP/edhome-beta.p12" >> "$GITHUB_ENV"
+      - name: Assemble consistently signed Beta Release and compile Stable
+        env:
+          EDHOME_BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
+          EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
+          EDHOME_BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleBetaRelease :app:assembleStableDebug
       - name: Prepare optional manifest for external HTTPS hosting
         env:
           EDHOME_BETA_APK_URL: ${{ vars.EDHOME_BETA_APK_URL }}
           EDHOME_BETA_NOTES: ${{ vars.EDHOME_BETA_NOTES }}
         run: python3 .github/scripts/prepare_beta_manifest.py
-      - name: Publish installable beta
+      - name: Publish installable beta (signed only)
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.1.2-beta.1-apk
+          name: EDHOME-0.1.3-beta.1-signed-apk
           path: |
-            app/build/outputs/apk/beta/debug/app-beta-debug.apk
+            app/build/outputs/apk/beta/release/app-beta-release.apk
             beta-manifest.json
           if-no-files-found: error
           retention-days: 14
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/edhome-beta.p12"
