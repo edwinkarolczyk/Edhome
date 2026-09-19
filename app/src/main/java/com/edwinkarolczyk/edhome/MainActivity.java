@@ -28,6 +28,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -39,6 +41,8 @@ import javax.crypto.spec.PBEKeySpec;
 public final class MainActivity extends Activity {
     private static final int EXPORT_DIAGNOSTICS = 1210;
     private static final int IMPORT_BETA_APK = 1211;
+    private static final int EXPORT_DATA_BACKUP = 1212;
+    private static final int IMPORT_DATA_BACKUP = 1213;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -212,6 +216,7 @@ public final class MainActivity extends Activity {
                 case "audit": audit(); break;
                 case "settings": settings(); break;
                 case "updates": updates(); break;
+                case "backup": backup(); break;
                 case "diagnostics": diagnostics(); break;
                 default: home();
             }
@@ -306,6 +311,7 @@ public final class MainActivity extends Activity {
         button("⌗ Skaner kodów — w planie", () -> go("scanner"));
         button("◫ Remanent spiżarni", () -> go("audit"));
         button("↻ Aktualizacje", () -> go("updates"));
+        button("↧ Kopia danych / przenoszenie", () -> go("backup"));
         button("⚙ Ustawienia", () -> go("settings"));
         if (DiagnosticLog.enabled()) {
             button("🛠 Diagnostyka BETA", () -> go("diagnostics"));
@@ -565,9 +571,40 @@ public final class MainActivity extends Activity {
             render();
         });
         if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
-        note("Dane są lokalne, bez funkcji backupu. Nie zapisuj rzeczywistych ważnych danych.");
+        button("Kopia danych / przenoszenie", () -> go("backup"));
+        note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
     }
 
+
+    private void backup() {
+        header("Kopia danych • przenoszenie między instalacjami");
+        note("Eksport zawiera czynności, spiżarnię, historię i bieżący postęp remanentu, nazwę gospodarstwa oraz motyw.");
+        note("Nie zawiera PIN-u, dziennika diagnostycznego ani adresu aktualizacji. Plik JSON nie jest szyfrowany: przechowuj go prywatnie.");
+        note("Kopia umożliwia przeniesienie danych do nowej instalacji, ale nie omija wymogu tego samego podpisu APK przy zwykłej aktualizacji Androida.");
+        button("Eksportuj kopię danych (.json)", () -> {
+            Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            save.addCategory(Intent.CATEGORY_OPENABLE);
+            save.setType("application/json");
+            save.putExtra(Intent.EXTRA_TITLE, "EDHOME-backup-v1-" + System.currentTimeMillis() + ".json");
+            try { startActivityForResult(save, EXPORT_DATA_BACKUP); }
+            catch (Exception error) {
+                DiagnosticLog.error("DATA_BACKUP_PICKER", error);
+                alert("Nie można otworzyć wyboru miejsca zapisu.");
+            }
+        });
+        button("Przywróć kopię z pliku (.json)", () -> {
+            Intent open = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            open.addCategory(Intent.CATEGORY_OPENABLE);
+            open.setType("application/json");
+            try { startActivityForResult(open, IMPORT_DATA_BACKUP); }
+            catch (Exception error) {
+                DiagnosticLog.error("DATA_RESTORE_PICKER", error);
+                alert("Nie można otworzyć wyboru kopii.");
+            }
+        });
+        note("Przywrócenie zastępuje CAŁĄ obecną spiżarnię, czynności i remanenty. Przed importem wykonaj eksport obecnego stanu.");
+        note("Odzyskiwanie istniejących danych ze starszej wersji 0.1.2, która nie ma eksportu, wymaga osobnego planu — nie odinstalowuj jej bez kopii.");
+    }
 
     private void updates() {
         header("Aktualizacje • " + BuildConfig.VERSION_NAME);
@@ -611,6 +648,7 @@ public final class MainActivity extends Activity {
             }
         });
         note("Manifest: channel=beta, versionCode, versionName, changelog, apkUrl HTTPS, sha256. APK musi mieć ten sam identyfikator pakietu i podpis co obecna instalacja.");
+        button("Kopia danych przed zmianą wersji", () -> go("backup"));
     }
 
     private void diagnostics() {
@@ -652,6 +690,63 @@ public final class MainActivity extends Activity {
         if (request == IMPORT_BETA_APK) {
             if (result == RESULT_OK && data != null && data.getData() != null)
                 updater.importSelected(data.getData());
+            return;
+        }
+        if (request == EXPORT_DATA_BACKUP) {
+            if (result != RESULT_OK || data == null || data.getData() == null) return;
+            try {
+                String json = DataBackup.exportJson(db.getReadableDatabase(), prefs);
+                try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                    if (out == null) throw new IllegalStateException("Brak dostępu do pliku.");
+                    out.write(json.getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                }
+                DiagnosticLog.event("DATA_BACKUP_EXPORTED");
+                alert("Zapisano kopię. Sprawdź, czy plik .json jest widoczny w wybranym miejscu, zanim usuniesz aplikację.");
+            } catch (Exception error) {
+                DiagnosticLog.error("DATA_BACKUP_EXPORT", error);
+                alert("Eksport kopii nie powiódł się. Nie usuwaj aplikacji.");
+            }
+            return;
+        }
+        if (request == IMPORT_DATA_BACKUP) {
+            if (result != RESULT_OK || data == null || data.getData() == null) return;
+            try {
+                byte[] bytes;
+                try (InputStream in = getContentResolver().openInputStream(data.getData());
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    if (in == null) throw new IllegalStateException("Nie można odczytać pliku.");
+                    byte[] block = new byte[8192];
+                    int count;
+                    while ((count = in.read(block)) != -1) {
+                        if (out.size() + count > DataBackup.MAX_BYTES)
+                            throw new IllegalArgumentException("Kopia przekracza limit 8 MB.");
+                        out.write(block, 0, count);
+                    }
+                    bytes = out.toByteArray();
+                }
+                final String json = new String(bytes, StandardCharsets.UTF_8);
+                new AlertDialog.Builder(this)
+                    .setTitle("Zastąpić wszystkie dane?")
+                    .setMessage("Przywrócenie NADPISZE obecną spiżarnię, czynności i remanenty. Zachowa PIN nowej instalacji. Czy masz kopię bieżącego stanu?")
+                    .setNegativeButton("Anuluj", null)
+                    .setPositiveButton("Przywróć", (dialog, which) -> {
+                        try {
+                            DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
+                            DiagnosticLog.event("DATA_BACKUP_RESTORED");
+                            screen = "home";
+                            unlocked = false;
+                            render();
+                            alert("Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.");
+                        } catch (Exception error) {
+                            DiagnosticLog.error("DATA_BACKUP_RESTORE", error);
+                            alert("Nie udało się przywrócić kopii. Dane bazy nie zostały nadpisane, jeśli walidacja lub transakcja zakończyła się błędem.");
+                        }
+                    }).show();
+            } catch (Exception error) {
+                DiagnosticLog.error("DATA_BACKUP_READ", error);
+                alert("Nie można odczytać kopii danych.");
+            }
             return;
         }
         if (request != EXPORT_DIAGNOSTICS || !DiagnosticLog.enabled()) return;
