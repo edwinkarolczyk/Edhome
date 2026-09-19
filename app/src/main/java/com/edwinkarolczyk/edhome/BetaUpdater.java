@@ -1,0 +1,357 @@
+package com.edwinkarolczyk.edhome;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.DownloadManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
+import android.text.TextUtils;
+
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * BETA DEV update client. No account token, no private GitHub artifacts, no silent installs.
+ * Read-only HTTPS feed configured explicitly by the user. Stable is Play-only, no APK download.
+ */
+public final class BetaUpdater {
+    private static final long POLL_MS = 30000L;
+    private static final int MAX_MANIFEST = 16384;
+    private final Activity activity;
+    private final SharedPreferences prefs;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final ExecutorService background = Executors.newSingleThreadExecutor();
+    private final Runnable tick = new Runnable() {
+        @Override public void run() {
+            if (!running) return;
+            if (BuildConfig.DIAGNOSTICS_ENABLED) check(false);
+            handler.postDelayed(this, POLL_MS);
+        }
+    };
+    private boolean running;
+    private boolean checking;
+    private boolean notifying;
+    private boolean verifying;
+    private long activeDownload = -1;
+    private int targetCode;
+    private String expectedHash = "";
+    private String releaseNotes = "";
+    private File targetFile;
+
+    public BetaUpdater(Activity activity) {
+        this.activity = activity;
+        this.prefs = activity.getSharedPreferences("edhome_beta_prefs", Context.MODE_PRIVATE);
+    }
+
+    public static boolean isBeta() {
+        return BuildConfig.DIAGNOSTICS_ENABLED;
+    }
+
+    public String configuredFeed() {
+        return prefs.getString("updates_feed", "");
+    }
+
+    public boolean setFeed(String url) {
+        String value = url == null ? "" : url.trim();
+        if (!value.isEmpty() && !isSecureUrl(value)) return false;
+        prefs.edit().putString("updates_feed", value).apply();
+        DiagnosticLog.event(value.isEmpty() ? "UPDATES_FEED_CLEARED" : "UPDATES_FEED_SET");
+        return true;
+    }
+
+    public void start() {
+        if (running) return;
+        running = true;
+        handler.post(tick);
+    }
+
+    public void stop() {
+        running = false;
+        handler.removeCallbacks(tick);
+    }
+
+    public void check(boolean manual) {
+        if (!isBeta()) {
+            if (manual) openPlay();
+            return;
+        }
+        String endpoint = configuredFeed();
+        if (endpoint.isEmpty()) {
+            if (manual) inform("Brak źródła aktualizacji. Repozytorium GitHub jest prywatne, więc APK z Actions nie jest publicznym kanałem aktualizacji. Ustaw dostępny bez logowania adres HTTPS manifestu wydania Beta DEV.");
+            return;
+        }
+        if (checking) return;
+        checking = true;
+        background.execute(() -> {
+            JSONObject manifest = null;
+            String error = null;
+            try {
+                manifest = readManifest(endpoint);
+            } catch (Exception e) {
+                error = e.getClass().getSimpleName();
+            }
+            JSONObject result = manifest;
+            String failure = error;
+            handler.post(() -> {
+                checking = false;
+                if (!running && !manual) return;
+                if (failure != null) {
+                    DiagnosticLog.event("UPDATE_CHECK_FAILED");
+                    if (manual) inform("Nie udało się odczytać źródła aktualizacji HTTPS. Sprawdź połączenie i manifest.");
+                    return;
+                }
+                handleManifest(result, manual);
+            });
+        });
+    }
+
+    private static JSONObject readManifest(String endpoint) throws Exception {
+        URL url = new URL(endpoint);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(6500);
+        conn.setReadTimeout(6500);
+        conn.setInstanceFollowRedirects(false);
+        conn.setRequestProperty("Accept", "application/json");
+        try {
+            if (conn.getResponseCode() != 200) throw new IllegalStateException("HTTP_NOT_OK");
+            if (conn.getContentLengthLong() > MAX_MANIFEST) throw new IllegalStateException("MANIFEST_TOO_LARGE");
+            try (InputStream in = conn.getInputStream()) {
+                byte[] data = new byte[MAX_MANIFEST + 1];
+                int offset = 0, n;
+                while (offset < data.length && (n = in.read(data, offset, data.length - offset)) > 0)
+                    offset += n;
+                if (offset > MAX_MANIFEST) throw new IllegalStateException("MANIFEST_TOO_LARGE");
+                return new JSONObject(new String(data, 0, offset, java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private static boolean isSecureUrl(String value) {
+        try {
+            Uri uri = Uri.parse(value);
+            return "https".equalsIgnoreCase(uri.getScheme())
+                && !TextUtils.isEmpty(uri.getHost())
+                && uri.getUserInfo() == null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void handleManifest(JSONObject json, boolean manual) {
+        if (json == null) return;
+        String channel = json.optString("channel", "");
+        int code = json.optInt("versionCode", 0);
+        String link = json.optString("apkUrl", "");
+        String digest = json.optString("sha256", "").toLowerCase(java.util.Locale.ROOT);
+        if (!"beta".equals(channel) || code <= 0 || !isSecureUrl(link)
+            || !digest.matches("[0-9a-f]{64}")) {
+            DiagnosticLog.event("UPDATE_MANIFEST_INVALID");
+            if (manual) inform("Manifest nieprawidłowy: wymagane channel=beta, większy versionCode, apkUrl HTTPS i SHA-256.");
+            return;
+        }
+        if (code <= BuildConfig.VERSION_CODE) {
+            DiagnosticLog.event("UPDATE_UP_TO_DATE");
+            if (manual) inform("Masz aktualną wersję: " + BuildConfig.VERSION_NAME);
+            return;
+        }
+        DiagnosticLog.event("UPDATE_AVAILABLE", "versionCode=" + code);
+        if (code == targetCode && activeDownload >= 0) {
+            inspectDownload(manual);
+            return;
+        }
+        if (code == targetCode && targetFile != null && targetFile.exists()) {
+            inspectFile();
+            return;
+        }
+        targetCode = code;
+        expectedHash = digest;
+        releaseNotes = json.optString("changelog", "");
+        File folder = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (folder == null) {
+            if (manual) inform("Nie można przygotować katalogu pobierania.");
+            return;
+        }
+        targetFile = new File(folder, "edhome-beta-" + code + ".apk");
+        if (targetFile.exists() && !targetFile.delete()) {
+            if (manual) inform("Nie można usunąć poprzedniego pobrania.");
+            return;
+        }
+        try {
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(link));
+            request.setTitle("EDHOME Beta — aktualizacja");
+            request.setDescription("Pobieranie kompilacji testowej; instalacja wymaga potwierdzenia.");
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
+            request.setDestinationInExternalFilesDir(activity, Environment.DIRECTORY_DOWNLOADS,
+                targetFile.getName());
+            DownloadManager dm = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
+            if (dm == null) throw new IllegalStateException("NO_DOWNLOAD_MANAGER");
+            activeDownload = dm.enqueue(request);
+            DiagnosticLog.event("UPDATE_DOWNLOAD_STARTED", "versionCode=" + code);
+            if (manual) inform("Znaleziono wersję " + json.optString("versionName", Integer.toString(code)) + ". Rozpoczęto pobieranie. Instalacja nie nastąpi bez Twojej zgody.");
+        } catch (Exception error) {
+            activeDownload = -1;
+            DiagnosticLog.error("UPDATE_DOWNLOAD_START", error);
+            if (manual) inform("Nie można rozpocząć pobierania aktualizacji.");
+        }
+    }
+
+    public void inspectDownload(boolean manual) {
+        if (activeDownload < 0) {
+            if (manual) check(true);
+            return;
+        }
+        DownloadManager dm = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
+        if (dm == null) return;
+        try (android.database.Cursor c = dm.query(new DownloadManager.Query().setFilterById(activeDownload))) {
+            if (c == null || !c.moveToFirst()) return;
+            int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+            if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                activeDownload = -1;
+                inspectFile();
+            } else if (status == DownloadManager.STATUS_FAILED) {
+                activeDownload = -1;
+                DiagnosticLog.event("UPDATE_DOWNLOAD_FAILED");
+                if (manual) inform("Pobranie nie powiodło się. Sprawdź adres HTTPS i połączenie.");
+            } else if (manual) inform("Pobieranie trwa. Wróć do Aktualizacji, aby sprawdzić ponownie.");
+        } catch (Exception error) {
+            DiagnosticLog.error("UPDATE_DOWNLOAD_CHECK", error);
+        }
+    }
+
+    private void inspectFile() {
+        if (targetFile == null || !targetFile.exists() || verifying) return;
+        verifying = true;
+        File candidate = targetFile;
+        String expected = expectedHash;
+        int requestedCode = targetCode;
+        background.execute(() -> {
+            boolean correct = verify(candidate, expected, requestedCode);
+            handler.post(() -> {
+                verifying = false;
+                if (correct) {
+                    DiagnosticLog.event("UPDATE_APK_VERIFIED");
+                    if (!notifying) {
+                        notifying = true;
+                        new AlertDialog.Builder(activity)
+                            .setTitle("EDHOME Beta — aktualizacja gotowa")
+                            .setMessage("Wersja " + requestedCode + "\n\n" + releaseNotes
+                                + "\n\nPlik pobrany, skrót SHA-256, pakiet i podpis Androida sprawdzone. Instalację potwierdzasz w systemie.")
+                            .setPositiveButton("Instaluj", (d, w) -> install(candidate))
+                            .setNegativeButton("Później", (d, w) -> {
+                                DiagnosticLog.event("UPDATE_DEFERRED");
+                                notifying = false;
+                            })
+                            .show();
+                    }
+                } else {
+                    DiagnosticLog.event("UPDATE_APK_REJECTED");
+                    candidate.delete();
+                    inform("Odrzucono pobrany APK: niezgodny skrót, pakiet, wersja lub podpis. Nie instaluj go.");
+                }
+            });
+        });
+    }
+
+    private boolean verify(File apk, String sha256, int code) {
+        if (!apk.isFile() || apk.length() == 0) return false;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] block = new byte[32768];
+            try (FileInputStream in = new FileInputStream(apk)) {
+                int read;
+                while ((read = in.read(block)) != -1) digest.update(block, 0, read);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder actual = new StringBuilder();
+            for (byte b : hash) actual.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
+            if (!MessageDigest.isEqual(actual.toString().getBytes(StandardCharsets.US_ASCII),
+                  sha256.getBytes(StandardCharsets.US_ASCII))) return false;
+
+            PackageManager pm = activity.getPackageManager();
+            int flags = Build.VERSION.SDK_INT >= 28
+                ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+            PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), flags);
+            PackageInfo installed = pm.getPackageInfo(activity.getPackageName(), flags);
+            if (archive == null || !activity.getPackageName().equals(archive.packageName)) return false;
+            long archiveCode = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
+            if (archiveCode != code || archiveCode <= BuildConfig.VERSION_CODE) return false;
+            Signature[] from = Build.VERSION.SDK_INT >= 28
+                ? archive.signingInfo.getApkContentsSigners() : archive.signatures;
+            Signature[] existing = Build.VERSION.SDK_INT >= 28
+                ? installed.signingInfo.getApkContentsSigners() : installed.signatures;
+            return from != null && existing != null && from.length == existing.length
+                && Arrays.equals(from, existing);
+        } catch (Exception problem) {
+            DiagnosticLog.error("UPDATE_VERIFY", problem);
+            return false;
+        }
+    }
+
+    private void install(File apk) {
+        try {
+            if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
+                DiagnosticLog.event("UPDATE_INSTALL_PERMISSION_NEEDED");
+                inform("Android wymaga zgody na instalowanie aktualizacji przez EDHOME Beta. Nadaj zgodę w ustawieniach i ponownie otwórz Aktualizacje.");
+                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + activity.getPackageName()));
+                activity.startActivity(settings);
+                return;
+            }
+            Uri uri = Uri.parse("content://" + activity.getPackageName()
+                + ".updates/apk/" + apk.getName());
+            Intent action = new Intent(Intent.ACTION_VIEW);
+            action.setDataAndType(uri, "application/vnd.android.package-archive");
+            action.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(action);
+            DiagnosticLog.event("UPDATE_INSTALLER_OPENED");
+        } catch (Exception failure) {
+            DiagnosticLog.error("UPDATE_INSTALLER", failure);
+            inform("Nie udało się uruchomić instalatora. Otwórz Aktualizacje ponownie.");
+        }
+    }
+
+    public void installReady() {
+        if (targetFile == null || !targetFile.exists()) {
+            inform("Brak zweryfikowanego APK w tej sesji. Sprawdź aktualizacje.");
+            return;
+        }
+        inspectFile();
+    }
+
+    public void openPlay() {
+        String packageName = activity.getPackageName();
+        Intent intent = new Intent(Intent.ACTION_VIEW,
+            Uri.parse("market://details?id=" + packageName));
+        try { activity.startActivity(intent); }
+        catch (Exception e) {
+            activity.startActivity(new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=" + packageName)));
+        }
+    }
+
+    private void inform(String message) {
+        if (activity.isFinishing() || (Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
+        new AlertDialog.Builder(activity).setMessage(message).setPositiveButton("OK", null).show();
+    }
+}
