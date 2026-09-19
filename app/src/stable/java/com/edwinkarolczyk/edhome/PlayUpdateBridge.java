@@ -37,8 +37,8 @@ public final class PlayUpdateBridge {
                 .setPositiveButton("Aktualizuj", (d, w) -> {
                     try {
                         manager.startUpdateFlowForResult(info,
-                            AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(),
-                            activity, 3131);
+                            activity, AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(),
+                            3131);
                     } catch (Exception e) {
                         Log.w("EDHOME_PLAY", "Unable to start Play update");
                     }
