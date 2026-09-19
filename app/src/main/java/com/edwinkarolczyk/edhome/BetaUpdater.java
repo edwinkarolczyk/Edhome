@@ -22,6 +22,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.io.FileOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -43,11 +44,15 @@ public final class BetaUpdater {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!running) return;
-            if (BuildConfig.DIAGNOSTICS_ENABLED) check(false);
+            if (BuildConfig.DIAGNOSTICS_ENABLED) {
+                if (activeDownload >= 0) inspectDownload(false);
+                check(false);
+            }
             handler.postDelayed(this, POLL_MS);
         }
     };
     private boolean running;
+    private int lastDeferredCode = -1;
     private boolean checking;
     private boolean notifying;
     private boolean verifying;
@@ -60,6 +65,14 @@ public final class BetaUpdater {
     public BetaUpdater(Activity activity) {
         this.activity = activity;
         this.prefs = activity.getSharedPreferences("edhome_beta_prefs", Context.MODE_PRIVATE);
+        activeDownload = prefs.getLong("update_download_id", -1);
+        targetCode = prefs.getInt("update_target_code", 0);
+        expectedHash = prefs.getString("update_target_hash", "");
+        releaseNotes = prefs.getString("update_target_notes", "");
+        if (targetCode > 0) {
+            File folder = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (folder != null) targetFile = new File(folder, "edhome-beta-" + targetCode + ".apk");
+        }
     }
 
     public static boolean isBeta() {
@@ -176,6 +189,7 @@ public final class BetaUpdater {
             return;
         }
         DiagnosticLog.event("UPDATE_AVAILABLE", "versionCode=" + code);
+        if (code == lastDeferredCode && !manual) return;
         if (code == targetCode && activeDownload >= 0) {
             inspectDownload(manual);
             return;
@@ -207,6 +221,10 @@ public final class BetaUpdater {
             DownloadManager dm = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
             if (dm == null) throw new IllegalStateException("NO_DOWNLOAD_MANAGER");
             activeDownload = dm.enqueue(request);
+            prefs.edit().putLong("update_download_id", activeDownload)
+                .putInt("update_target_code", targetCode)
+                .putString("update_target_hash", expectedHash)
+                .putString("update_target_notes", releaseNotes).apply();
             DiagnosticLog.event("UPDATE_DOWNLOAD_STARTED", "versionCode=" + code);
             if (manual) inform("Znaleziono wersję " + json.optString("versionName", Integer.toString(code)) + ". Rozpoczęto pobieranie. Instalacja nie nastąpi bez Twojej zgody.");
         } catch (Exception error) {
@@ -228,9 +246,11 @@ public final class BetaUpdater {
             int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
             if (status == DownloadManager.STATUS_SUCCESSFUL) {
                 activeDownload = -1;
+                prefs.edit().remove("update_download_id").apply();
                 inspectFile();
             } else if (status == DownloadManager.STATUS_FAILED) {
                 activeDownload = -1;
+                prefs.edit().remove("update_download_id").apply();
                 DiagnosticLog.event("UPDATE_DOWNLOAD_FAILED");
                 if (manual) inform("Pobranie nie powiodło się. Sprawdź adres HTTPS i połączenie.");
             } else if (manual) inform("Pobieranie trwa. Wróć do Aktualizacji, aby sprawdzić ponownie.");
@@ -260,6 +280,7 @@ public final class BetaUpdater {
                             .setPositiveButton("Instaluj", (d, w) -> install(candidate))
                             .setNegativeButton("Później", (d, w) -> {
                                 DiagnosticLog.event("UPDATE_DEFERRED");
+                                lastDeferredCode = requestedCode;
                                 notifying = false;
                             })
                             .show();
@@ -285,7 +306,8 @@ public final class BetaUpdater {
             byte[] hash = digest.digest();
             StringBuilder actual = new StringBuilder();
             for (byte b : hash) actual.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
-            if (!MessageDigest.isEqual(actual.toString().getBytes(StandardCharsets.US_ASCII),
+            if (!sha256.isEmpty() && !MessageDigest.isEqual(
+                  actual.toString().getBytes(StandardCharsets.US_ASCII),
                   sha256.getBytes(StandardCharsets.US_ASCII))) return false;
 
             PackageManager pm = activity.getPackageManager();
@@ -295,7 +317,7 @@ public final class BetaUpdater {
             PackageInfo installed = pm.getPackageInfo(activity.getPackageName(), flags);
             if (archive == null || !activity.getPackageName().equals(archive.packageName)) return false;
             long archiveCode = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
-            if (archiveCode != code || archiveCode <= BuildConfig.VERSION_CODE) return false;
+            if ((code > 0 && archiveCode != code) || archiveCode <= BuildConfig.VERSION_CODE) return false;
             Signature[] from = Build.VERSION.SDK_INT >= 28
                 ? archive.signingInfo.getApkContentsSigners() : archive.signatures;
             Signature[] existing = Build.VERSION.SDK_INT >= 28
@@ -329,6 +351,48 @@ public final class BetaUpdater {
             DiagnosticLog.error("UPDATE_INSTALLER", failure);
             inform("Nie udało się uruchomić instalatora. Otwórz Aktualizacje ponownie.");
         }
+    }
+
+
+    /** Offline fallback for APK shared in chat or copied locally. Package signer is still checked. */
+    public void importSelected(Uri picked) {
+        if (!isBeta() || picked == null) return;
+        File folder = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (folder == null) { inform("Brak miejsca na plik APK."); return; }
+        File candidate = new File(folder, "edhome-beta-manual.apk");
+        activeDownload = -1;
+        targetCode = 0;
+        expectedHash = "";
+        releaseNotes = "Aktualizacja wybrana z plików urządzenia. Zawsze sprawdzamy identyfikator i podpis.";
+        targetFile = candidate;
+        notifying = false;
+        background.execute(() -> {
+            boolean copied = false;
+            try (InputStream in = activity.getContentResolver().openInputStream(picked);
+                 FileOutputStream out = new FileOutputStream(candidate, false)) {
+                if (in == null) throw new IllegalStateException("No file stream");
+                byte[] buffer = new byte[32768];
+                int count;
+                long total = 0;
+                while ((count = in.read(buffer)) != -1) {
+                    total += count;
+                    if (total > 250L * 1024L * 1024L)
+                        throw new IllegalStateException("APK too large");
+                    out.write(buffer, 0, count);
+                }
+                copied = total > 0;
+            } catch (Exception failure) {
+                DiagnosticLog.error("UPDATE_LOCAL_IMPORT", failure);
+            }
+            boolean ok = copied;
+            handler.post(() -> {
+                if (ok) inspectFile();
+                else {
+                    candidate.delete();
+                    inform("Nie można otworzyć wybranego pliku APK.");
+                }
+            });
+        });
     }
 
     public void installReady() {
