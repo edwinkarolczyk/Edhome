@@ -166,7 +166,8 @@ public final class BetaUpdater {
             Uri uri = Uri.parse(value);
             return "https".equalsIgnoreCase(uri.getScheme())
                 && !TextUtils.isEmpty(uri.getHost())
-                && uri.getUserInfo() == null;
+                && uri.getUserInfo() == null
+                && uri.getQuery() == null && uri.getFragment() == null;
         } catch (Exception e) {
             return false;
         }
