@@ -63,3 +63,100 @@ Trwałe identyfikatory; typowane atrybuty dodatkowe i relacje; rejestr obiektów
 ## 9. Otwarta lista przed implementacją
 
 Wybór stosu Android, modeli danych/konfliktów Wi-Fi, audyt faktycznej wersji PayCheck i rozwiązań Trenera 2, dobór lokalnego silnika mowy, licencje bazy ogrodniczej, możliwości konkretnych urządzeń SUPLA, źródła katalogu kodów produktów, obsługa uprawnień Notification Listener, zasady przesyłania danych prywatnych, aktualne wymagania Google Play i polityka prywatności. Zadania wdrażać etapami wg ROADMAP.md.
+
+---
+
+## 10. Ustalenia szczegółowe z rozmowy — kontekst, granice i warianty
+
+### Marka oraz repozytorium
+
+- Nazwa wybrana świadomie: **EDHOME**; podpis **Idea by Edwin**. Wcześniej padały inne pomysły nazw (DOMORA, HOMIQ, DOMEXA, SWOJO, EDHOME, DOMNIO), ale **żaden nie zastępuje aktualnego wyboru**.
+- Dwa wizualnie rozpoznawalne warianty ikony: Stable oraz Beta, **zaokrąglone narożniki**. Obie grafiki zostały zaakceptowane koncepcyjnie; zasoby graficzne Androida wymagają osobnego eksportu/przygotowania i nie należy twierdzić, że istnieją w tym repo.
+- GitHub: rzeczywista nazwa repozytorium to `edwinkarolczyk/Edhime`, nie `EDHOME`. Nie zmieniać z automatu nazwy repozytorium; nazwa produktu zawsze EDHOME. Repo prywatne.
+- Proponowane, niezatwierdzone do publikacji identyfikatory: `com.edwinkarolczyk.edhome` dla oficjalnej aplikacji, `com.edwinkarolczyk.edhome.beta` dla oddzielnej Beta DEV.
+- `main` stabilna, `beta` prace rozwojowe. Beta DEV może być zainstalowana obok stabilnej dzięki oddzielnemu identyfikatorowi **i własnym testowym danym**; testowy kanał Google Play może używać identyfikatora stabilnego, więc nie należy tych dwóch koncepcji mylić.
+
+### Przepływy wymagające szczególnej spójności
+
+1. **OC pojazdu i oszczędności:** przykładowy koszt 700 zł, odłożone 500 zł i cztery miesiące do terminu → 200 zł braku, sugestia 50 zł miesięcznie. Jeśli koszt, termin lub oszczędności się zmienią, sugestia przelicza się; odkładanie pieniędzy to nie zakup polisy ani podwójny wydatek.
+2. **Zmiana kół:** jedna operacja aktualizuje komplet zamontowany na aucie, komplet odłożony do magazynu, serwis pojazdu i zadanie; rachunek w PayCheck pojawia się tylko gdy rzeczywiście jest wydatek. Osobne dane każdego kompletu/opony: rozmiar, DOT vs data zakupu, bieżnik/stan, okres i przebieg użytkowania, aktualne miejsce.
+3. **Przedmiot w pudełku:** przeniesienie pudełka zachowuje numer i QR; wyszukanie jego zawartości wskazuje bieżące położenie pudełka. Pozostałe narzędzia mogą leżeć luzem w miejscu; brak pudełka nie oznacza braku lokalizacji.
+4. **Pożyczenie:** odróżniaj „moja rzecz u kogoś” od „cudza rzecz u mnie”. Własność, posiadacz i aktualne miejsce to inne pola. Po zwrocie poprzednie miejsce to propozycja, a nie automatyczne przepisanie historii.
+5. **Powiadomienie bankowe:** wpływ i wydatek rozpoznawać odrębnie, filtrować źródłowe aplikacje. Przykład wpływu 1,00 PLN jest tylko przykładem formatu wiadomości. Zapis wstępny czeka na zatwierdzenie; późniejsze księgowanie z wyciągu uzgadnia i deduplikuje ten sam transfer.
+6. **Prywatność:** „Zajęty” to ujawnienie zajętości, nie prywatnej treści. Nie wysyłać na wspólny tablet całej prywatnej bazy transakcji z myślą, że jej przyciski będą ukryte.
+7. **SUPLA i PV:** początkowo odczyt, nie sterowanie. Gdy lokalne API/protokół nie istnieje dla danego urządzenia, nie oznaczać integracji jako „offline”; grzałka CWU i inne urządzenia nie mogą być nieostrożnie rozłączane.
+8. **Prace na dachu i PV:** zadanie „ocenić zaleganie śniegu” może być cykliczne/sezonowe, ale nie oznacza automatycznej rekomendacji samodzielnego wejścia na zaśnieżony dach. Usuwanie śniegu, jeśli wymagane, jako zadanie z odpowiednim wykonawcą i zasadami bezpieczeństwa.
+
+### Decyzje, które pozostają propozycjami
+
+- Dokładny stos Android, baza/ORM, metoda lokalnego wykrywania urządzeń i transport synchronizacji, przechowywanie kluczy, rozwiązywanie konfliktów po pracy offline.
+- Katalog produktów po EAN/UPC i botaniczna baza offline: sprawdzić faktyczne źródła, zawartość, licencje, dostępność i możliwość przechowywania lokalnego; nie twierdzić, że OpenFarm/Growstuff są już zweryfikowane.
+- Powiadomienia o nowych buildach Beta DEV: szybka kontrola **małego manifestu** tylko podczas działania i pobranie nowej kompilacji po opublikowaniu w CI; Android może wymagać zgody użytkownika na instalację. Aktualizacje przez Google Play podlegają mechanizmowi Play.
+- Model okresowego remanentu, progi dla spiżarni, zasady stanu orientacyjnego i obsługa opakowań są szczegółowo opisane niżej jako nowy wymóg użytkownika i elementy do dopracowania.
+
+## 11. NOWE USTALENIE — kreator okresowego remanentu spiżarni na tablecie
+
+**WYMAGANIE UŻYTKOWNIKA:** w spiżarni EDHOME ma co ustawiony, cykliczny czas uruchamiać/proponować **remanent**. Kreator przechodzi **po kolei przez zapisane rzeczy**. Dla każdej użytkownik podaje faktyczną liczbę albo naciska **„Zgadza się / Dalej”**, jeśli liczba na półce jest zgodna z zapisem. Remanent ma być wygodny na przenośnym tablecie.
+
+### Reguła uruchamiania
+
+- Konfigurowalna częstotliwość: co tydzień, miesiąc, co N dni/tygodni/miesięcy, kwartalnie, przed sezonem lub ręcznie; osobno można wybierać pełną spiżarnię, wskazane miejsce/kategorię i remanent częściowy. **Żaden interwał nie jest narzucony jako jedyny.**
+- Przypomnienie trafia do Czynności i kalendarza, ale **remanent jest procesem/kreatorem**, nie zwykłą jednozdaniową czynnością. Domownik wybiera dogodny termin; urządzenie nie rozpoczyna samowolnie sesji.
+- Każda sesja ma stałe ID, datę, wykonawcę, wybrany zakres, postęp, status i zapamiętany stan oczekiwany/snapshot dla porównania; można przerwać i później wznowić.
+
+### Ekran pojedynczego produktu
+
+Przykład ilustracyjny, bez rzeczywistych danych gospodarstwa:
+
+```text
+EDHOME > Spiżarnia > Remanent
+Produkt 7 z 38                         [pauza]
+Ryż 1 kg
+Miejsce: Spiżarnia / Górna półka
+Zapisany stan: 4 sztuki
+
+[ Zgadza się — 4 szt. ]     [ Zmień liczbę ]
+[ Brak na półce ]          [ Pomiń / sprawdź później ]
+```
+
+- „**Zgadza się / Dalej**” potwierdza zapisany stan fizyczny i automatycznie przechodzi do następnej pozycji, bez konieczności pisania „4”.
+- „**Zmień liczbę**” otwiera duży klawiaturowy edytor liczby (np. zapisano 4, faktycznie 2) i po zatwierdzeniu przechodzi dalej. Obsłużyć 0, ułamki tam, gdzie sensowne (kg/l), jednostki i różnicę między zamkniętym opakowaniem a ilością szacunkową.
+- „**Brak na półce**” to jawne potwierdzenie zera, inne niż brak danych; „Pomiń” oznacza **niezweryfikowane**, nie zero.
+- Zdjęcie i krótka notatka opcjonalne; dostępne „Wstecz” oraz wyszukanie/zeskanowanie produktu poza kolejnością. Można skanować kod kreskowy w trakcie remanentu.
+- Jeśli produkt ma **stan nieokreślony** (np. narzędzie lub rzecz niemierzona w sztukach), kreator nie wymusza zmyślonej liczby: umożliwia „Jest / Nie ma / Nie sprawdzono”. Stan orientacyjny oznacza się jako taki.
+- Produkt, którego nie ma w zapisanej liście, można dodać bez utraty postępu sesji. Nieznany EAN → lokalna karta produktu, jeśli brak katalogowego odpowiednika.
+
+### Zakończenie i uzgadnianie rozbieżności
+
+- Na końcu wyświetlić **raport różnic**: zgodne, mniej niż zapisano, więcej niż zapisano, brakujące, nowe, pominięte; rozdzielić wynik sesji od faktycznej korekty magazynu.
+- **Nie zmieniać automatycznie ilości już przy samym przejściu kreatora**: pokaż proponowane korekty i dopiero po decyzji użytkownika zapisz nowe stany (możliwa korekta poszczególnych wierszy przed akceptacją). Zachować stary stan, nowy stan, różnicę, użytkownika i czas w historii.
+- Wznowienie po zamknięciu aplikacji, braku sieci lub wygaszeniu tabletu; po wznowieniu nie dublować korekt. Po równoległych dodaniach/wyjęciach na innym urządzeniu wykryć konflikt, przedstawić zmiany i nie nadpisywać ich ślepo przestarzałym snapshotem.
+- Remanent tylko wybranego zakresu **nie potwierdza** niewidocznych produktów/pozostałych miejsc. Pozycje pominięte pozostają do sprawdzenia; odrębna data **ostatniego fizycznego potwierdzenia** per produkt lub miejsce.
+- Po zakończeniu sesja pozostaje w historii, wraz z czasem, zakresem, wykonawcą, wynikiem i wprowadzonymi korektami. Częstotliwość następnej sesji liczyć według jawnej reguły (od planu/od wykonania, zależnie od ustawienia).
+- Dla produktów z progiem minimalnym spadek po zatwierdzonym remanencie **może zaproponować** dopisanie do wspólnej listy zakupów, a nie dopisywać bez zgody.
+
+### Rozróżnienie trzech działań spiżarni
+
+| Działanie | Co robi |
+|---|---|
+| Codzienny skan → „Dodaj” | Zwiększa stan po zatwierdzeniu |
+| Codzienny skan → „Wyciągnij” | Zmniejsza stan po zatwierdzeniu |
+| Remanent | Potwierdza faktyczny stan pozycji i, po osobnej akceptacji raportu, może skorygować różnice |
+
+Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, uprawnień i historii operacji**. Wymóg „sam skan niczego nie zmienia” pozostaje aktualny.
+
+## 12. Orientacyjna kolejność realizacji — uzupełnienie ROADMAP
+
+- **0.1.0**: pulpit tabletu, przewijanie, nawigacja, lokalna baza i ustawienia.
+- **0.2.0**: Czynności, reguły „co miesiąc / co N / przed zimą” i późniejsze przypinanie procesów remanentu do kalendarza.
+- **0.3.0**: wspólna lista zakupów, lokalna kartoteka spiżarni i podstawowa ilość/jednostka.
+- **0.4.0**: QR/EAN i codzienne Dodaj/Wyciągnij; **kreator remanentu ze snapshotem, Dalej, faktyczną liczbą, pominięciem, wznowieniem i raportem korekt**. Rozdzielić zadanie w kalendarzu od stanu sesji.
+- **0.8.0**: synchronizacja telefon–tablet, deduplikacja operacji i konflikty równoległych zmian. Wcześniejszy remanent ma działać lokalnie również bez synchronizacji.
+- Wersje i kolejność to **proponowana roadmapa**, nie obietnica gotowego terminu ani stan wdrożenia.
+
+## 13. Dokumenty powiązane
+
+- [ARCHITEKTURA.md](ARCHITEKTURA.md) — tożsamość, typowane relacje, bezpieczeństwo i migracje.
+- [ROADMAP.md](ROADMAP.md) — etapy i kryteria odbioru.
+- [USTALENIA_PRODUKTU.md](USTALENIA_PRODUKTU.md) — krótszy indeks funkcjonalności.
+- Ten plik jest **głównym rejestrem zakresu i decyzji EDHOME**, aktualizowany przy kolejnych uzgodnieniach. Różnica między zakresem docelowym a faktycznie zrealizowaną funkcją jest obowiązkowa.
