@@ -160,3 +160,12 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - [ROADMAP.md](ROADMAP.md) — etapy i kryteria odbioru.
 - [USTALENIA_PRODUKTU.md](USTALENIA_PRODUKTU.md) — krótszy indeks funkcjonalności.
 - Ten plik jest **głównym rejestrem zakresu i decyzji EDHOME**, aktualizowany przy kolejnych uzgodnieniach. Różnica między zakresem docelowym a faktycznie zrealizowaną funkcją jest obowiązkowa.
+
+
+## 14. Diagnostyka beta vs stable — ustalenie z 19.09.2026
+
+- **Beta DEV:** od pierwszej uruchamialnej kompilacji automatycznie zapisuj lokalny plik diagnostyczny obejmujący techniczne zdarzenia aplikacji, błędy, wersję i etapy operacji. Interfejs ma umożliwiać **kopiowanie całego dostępnego logu do schowka** oraz **eksport do pliku .txt**, który użytkownik może wkleić lub przesłać do analizy.
+- **Stable:** diagnostyka beta musi być wyłączona na poziomie wariantu kompilacji — nie tylko ukryty przycisk. Nie instalować obsługi błędów diagnostycznych ani nie tworzyć pliku. Niezależny standardowy mechanizm crash reporting wymaga odrębnej decyzji i zgód.
+- Minimalizacja danych: nie zapisywać PIN, haseł, danych bankowych, tekstu powiadomień, nazw produktów, pełnych obiektów ani tokenów. Zapisywać typ zdarzenia, ekran, status, wersję i klasę/ramki wyjątku bez jego potencjalnie prywatnej wiadomości. Nie pobierać całego systemowego Android logcat.
+- Log pozostaje offline w prywatnym katalogu aplikacji; automatyczne przesyłanie poza dom/urządzenie **nie jest ustalone**. Kopiowanie i eksport wykonuje człowiek.
+- Prototyp implementacji i instrukcję znajdziesz w [BETA_0_1_0.md](BETA_0_1_0.md); fakt istnienia kodu nie jest potwierdzeniem działającego APK, dopóki build nie przejdzie.
