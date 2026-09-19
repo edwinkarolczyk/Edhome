@@ -17,7 +17,7 @@ Nie należy zakładać, że wszystkie archiwa nazwane 0.1.2 mają ten sam podpis
 - Nowy kanał wymaga czterech sekretów GitHub Actions: `EDHOME_BETA_KEYSTORE_B64`, `EDHOME_BETA_KEY_ALIAS`, `EDHOME_BETA_STORE_PASSWORD`, `EDHOME_BETA_KEY_PASSWORD`. Bez nich CI może skompilować kod, lecz **celowo zakończy się błędem przed publikacją APK**.
 - Beta DEV będzie budowana jako podpisany wariant `betaRelease`, a Stable kompilowana kontrolnie, bez publikacji. Plik klucza rozpakowywany tylko do katalogu tymczasowego runnera i usuwany po zadaniu.
 - Aktualizator wymaga tej samej tożsamości pakietu i certyfikatu co zainstalowana aplikacja. Nowy stały klucz **nie naprawi zgodności wstecz z APK podpisanym zaginionym kluczem**.
-- Nowa wersja w konfiguracji projektu: `0.1.3-beta.1` / `versionCode 4`. **Nie nazywać jej wydaną ani gotową do instalacji, dopóki nie powstanie podpisany, zweryfikowany artefakt i nie ma decyzji co do zachowania danych.**
+- Nowa wersja w konfiguracji projektu: `0.1.4-beta.1` / `versionCode 5`. **Nie nazywać jej wydaną ani gotową do instalacji, dopóki nie powstanie podpisany, zweryfikowany artefakt i nie ma decyzji co do zachowania danych.**
 
 ## Konfiguracja trwałego podpisu — wykonuje właściciel repozytorium
 
@@ -64,7 +64,7 @@ Prawidłowy kanał Beta DEV potrzebuje **trwałego, dostępnego bez logowania HT
 1. Nie wysyłać „kolejnego naprawionego APK” bez trwałego podpisu.
 2. Ustalić, czy użytkownik chce zachować testowe dane 0.1.2. Jeśli tak, pomóc wykonać i zweryfikować kopię z urządzenia przed jakimkolwiek odinstalowaniem.
 3. Skonfigurować cztery sekrety podpisu (użytkownik robi to w GitHub).
-4. Zbudować raz `0.1.3-beta.1`, porównać certyfikat w następnym wydaniu i przetestować aktualizację z tej wersji na tę samą podpisaną linię — bez utraty danych.
+4. Zbudować raz `0.1.4-beta.1`, porównać certyfikat w następnym wydaniu i przetestować aktualizację z tej wersji na tę samą podpisaną linię — bez utraty danych.
 5. Ustalić serwer binarnego kanału DEV i wdrożyć rzeczywisty manifest HTTPS, a dopiero potem włączyć częste zdalne sprawdzanie w aplikacji.
 
 [Opis 0.1.2](BETA_0_1_2.md) · [roadmapa](ROADMAP.md) · [pełna specyfikacja](SPECYFIKACJA_CALOSC.md).
