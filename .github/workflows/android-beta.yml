@@ -54,7 +54,12 @@ jobs:
           fi
           printf '%s' "$BETA_KEY_B64" | base64 --decode > "$RUNNER_TEMP/edhome-beta.p12"
           chmod 600 "$RUNNER_TEMP/edhome-beta.p12"
-          keytool -list -keystore "$RUNNER_TEMP/edhome-beta.p12" -storepass "$BETA_STORE_PASSWORD" -alias "$BETA_KEY_ALIAS" > /dev/null
+          EXPECTED_SHA256="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
+          ACTUAL_SHA256=$(keytool -list -v -keystore "$RUNNER_TEMP/edhome-beta.p12" -storepass "$BETA_STORE_PASSWORD" -alias "$BETA_KEY_ALIAS" | awk '/SHA256:/{print $2; exit}')
+          if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+            echo "::error::EDHOME Beta signing certificate mismatch. Refusing to publish an incompatible APK."
+            exit 1
+          fi
           echo "EDHOME_BETA_KEYSTORE_FILE=$RUNNER_TEMP/edhome-beta.p12" >> "$GITHUB_ENV"
       - name: Assemble consistently signed Beta Release and compile Stable
         env:
@@ -62,6 +67,15 @@ jobs:
           EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
           EDHOME_BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleBetaRelease :app:assembleStableDebug
+      - name: Verify signed APK certificate
+        run: |
+          APK="app/build/outputs/apk/beta/release/app-beta-release.apk"
+          EXPECTED_SHA256="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
+          ACTUAL_SHA256=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print toupper($2); exit}' | sed 's/../&:/g;s/:$//')
+          if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+            echo "::error::Signed APK has an unexpected certificate."
+            exit 1
+          fi
       - name: Prepare optional manifest for external HTTPS hosting
         env:
           EDHOME_BETA_APK_URL: ${{ vars.EDHOME_BETA_APK_URL }}
