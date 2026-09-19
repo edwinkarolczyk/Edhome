@@ -5,7 +5,8 @@
         android:usesCleartextTraffic="false"
         android:label="${appLabel}"
         android:theme="@style/Theme.EDHOME"
-        android:icon="@drawable/ic_edhome">
+        android:icon="@drawable/ic_edhome_brand"
+        android:roundIcon="@drawable/ic_edhome_brand">
         <activity
             android:name=".MainActivity"
             android:exported="true"
