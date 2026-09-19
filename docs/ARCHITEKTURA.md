@@ -38,3 +38,9 @@ Każda wersja bazy ma numer schematu, procedurę migracji i weryfikację. Ekspor
 ## Decyzje techniczne do audytu przed implementacją
 
 Stos Android, mechanizm lokalnego odczytu SUPLA, legalnie dostępna offline baza upraw, stan kodu PayCheck/Trener 2, model synchronizacji przy kilku telefonach, bezpieczeństwo PIN i kluczy, dokładne ograniczenia powiadomień bankowych/Androida i instalowania aktualizacji z Google Play. Niczego tu nie ogłaszamy jako wdrożone.
+
+## Adaptery skanowania i operacje magazynowe
+
+Czytnik kamery tabletu ma odróżniać kody kreskowe produktów (np. EAN/UPC, mapowane do lokalnego katalogu) od wewnętrznych QR obiektów (typ + trwałe ID). Skan zwraca **odczytany obiekt**, natomiast cel operacji jest osobnym parametrem; sam odczyt nie zmienia magazynu. Dodanie/wyjęcie wymaga potwierdzenia, zapisuje idempotentną operację oraz historię. Nieznany produkt może otrzymać kartę, bez wymogu internetu. Gniazdo adaptera zewnętrznego czytnika pozostaje na przyszłość. Tablet musi móc modyfikować układ kafelków bez ingerowania w wspólny model magazynu.
+
+Więcej przykładów i kontekst produktu: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
