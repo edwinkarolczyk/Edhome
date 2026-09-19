@@ -197,7 +197,8 @@ public final class MainActivity extends Activity {
                 case "tasks": tasks(); break;
                 case "pantry": pantry(); break;
                 case "calendar": placeholder("Kalendarz", "Wspólny kalendarz i powtarzanie czynności to następny etap."); break;
-                case "scanner": placeholder("Skaner i remanent", "Kamera, kody kreskowe/QR i kreator remanentu nie działają jeszcze w tej becie."); break;
+                case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
+                case "audit": audit(); break;
                 case "settings": settings(); break;
                 case "diagnostics": diagnostics(); break;
                 default: home();
@@ -290,12 +291,13 @@ public final class MainActivity extends Activity {
         button("✓ Czynności", () -> go("tasks"));
         button("▣ Spiżarnia", () -> go("pantry"));
         button("▦ Kalendarz — w planie", () -> go("calendar"));
-        button("⌗ Skaner / Remanent — w planie", () -> go("scanner"));
+        button("⌗ Skaner kodów — w planie", () -> go("scanner"));
+        button("◫ Remanent spiżarni", () -> go("audit"));
         button("⚙ Ustawienia", () -> go("settings"));
         if (DiagnosticLog.enabled()) {
             button("🛠 Diagnostyka BETA", () -> go("diagnostics"));
         }
-        note("Nie ma jeszcze działającego skanera, remanentu, PayCheck, SUPLA ani synchronizacji.");
+        note("Remanent działa testowo offline. Skanera kodów, cyklicznych przypomnień, PayCheck, SUPLA i synchronizacji jeszcze nie ma.");
     }
 
     private void tasks() {
@@ -352,6 +354,7 @@ public final class MainActivity extends Activity {
 
     private void pantry() {
         header("Spiżarnia • uproszczony stan testowy");
+        button("◫ Remanent — sprawdź ilości", () -> go("audit"));
         button("+ Dodaj produkt (1 szt.)", () -> {
             EditText input = new EditText(this);
             input.setHint("Nazwa produktu");
@@ -396,7 +399,128 @@ public final class MainActivity extends Activity {
                 });
             }
         }
-        note("Skanowanie, remanent, kg/l i lokalizacje — zaplanowane, nie działają.");
+        note("Remanent dostępny osobno. Skanowanie kodów, kg/l i lokalizacje — w planie.");
+    }
+
+
+    /** Minimalny remanent wersji 0.1.1: stały snapshot, zapis postępu, korekta dopiero na końcu. */
+    private void audit() {
+        header("Spiżarnia / Remanent • BETA");
+        long session = db.openAuditId();
+        if (session == 0) {
+            note("Sprawdź produkty po kolei. „Zgadza się” nie wymaga przepisywania ilości.");
+            note("Sesja zapisuje postęp lokalnie. Ilości zmienią się dopiero po zatwierdzeniu raportu.");
+            button("Rozpocznij remanent", () -> {
+                long created = db.startAudit();
+                if (created <= 0) {
+                    alert("Spiżarnia jest pusta. Dodaj najpierw produkt.");
+                    return;
+                }
+                DiagnosticLog.event("AUDIT_STARTED");
+                render();
+            });
+            note("Harmonogram cykliczny, skanowanie kodów i przegląd wybranych miejsc będą dodawane etapami.");
+            return;
+        }
+        int[] progress = db.auditProgress(session);
+        title("Sprawdzono " + progress[1] + " z " + progress[0]);
+        if (progress[1] < progress[0]) {
+            try (Cursor item = db.auditNext(session)) {
+                if (!item.moveToFirst()) { alert("Nie można znaleźć następnego produktu."); return; }
+                long rowId = item.getLong(0);
+                String product = item.getString(1);
+                int expected = item.getInt(2);
+                LinearLayout entry = card();
+                entry.addView(text(product, 23, true));
+                entry.addView(text("Zapisany stan: " + expected + " szt.", 19, false));
+                button("✓ Zgadza się — dalej", () -> {
+                    db.auditAnswer(rowId, expected, "match");
+                    DiagnosticLog.event("AUDIT_MATCH");
+                    render();
+                });
+                button("Podaj faktyczną liczbę", () -> {
+                    EditText amount = new EditText(this);
+                    amount.setInputType(2);
+                    amount.setText(Integer.toString(expected));
+                    amount.setSelectAllOnFocus(true);
+                    amount.requestFocus();
+                    new AlertDialog.Builder(this).setTitle("Faktyczna liczba sztuk")
+                        .setView(amount).setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Dalej", (dialog, which) -> {
+                            String value = amount.getText().toString().trim();
+                            try {
+                                int number = Integer.parseInt(value);
+                                if (number < 0) { alert("Liczba nie może być ujemna."); return; }
+                                db.auditAnswer(rowId, number, "count");
+                                DiagnosticLog.event("AUDIT_COUNTED");
+                                render();
+                            } catch (NumberFormatException invalid) {
+                                DiagnosticLog.event("AUDIT_INVALID_COUNT");
+                                alert("Podaj poprawną liczbę całkowitą.");
+                            }
+                        }).show();
+                });
+                button("Brak na półce — 0 szt.", () -> {
+                    db.auditAnswer(rowId, 0, "count");
+                    DiagnosticLog.event("AUDIT_MISSING");
+                    render();
+                });
+                button("Pomiń / sprawdź później", () -> {
+                    db.auditAnswer(rowId, null, "skip");
+                    DiagnosticLog.event("AUDIT_SKIPPED");
+                    render();
+                });
+            }
+        } else {
+            title("Raport remanentu");
+            int changes = 0, skipped = 0;
+            try (Cursor rows = db.auditRows(session)) {
+                while (rows.moveToNext()) {
+                    String name = rows.getString(0);
+                    int expected = rows.getInt(1);
+                    String status = rows.getString(3);
+                    if ("skip".equals(status)) {
+                        skipped++;
+                        card().addView(text(name + ": nie sprawdzono", 16, false));
+                    } else {
+                        int actual = rows.getInt(2);
+                        if (actual != expected) {
+                            changes++;
+                            card().addView(text(name + ": " + expected + " → " + actual + " szt.", 16, false));
+                        }
+                    }
+                }
+            }
+            if (changes == 0) note("Bez rozbieżności w sprawdzonych pozycjach.");
+            note("Proponowane korekty: " + changes + " • Pominięte: " + skipped);
+            button("Zatwierdź raport i ewentualne korekty", () -> {
+                String outcome = db.finishAudit(session);
+                if ("OK".equals(outcome)) {
+                    DiagnosticLog.event("AUDIT_COMMITTED");
+                    alert("Remanent zakończony. Korekty zapisano w historii.");
+                    render();
+                } else if ("CONFLICT".equals(outcome)) {
+                    DiagnosticLog.event("AUDIT_CONFLICT");
+                    alert("Stan produktu zmienił się podczas remanentu. Niczego nie nadpisano. Sprawdź zmiany; możesz anulować sesję i policzyć ponownie.");
+                } else alert("Remanent nie jest gotowy do zatwierdzenia.");
+            });
+        }
+        button("← Cofnij ostatnią odpowiedź", () -> {
+            if (!db.auditUndo(session)) { alert("Nie ma czego cofać."); return; }
+            DiagnosticLog.event("AUDIT_UNDO");
+            render();
+        });
+        button("Zapisz postęp i wróć do spiżarni", () -> go("pantry"));
+        button("Anuluj remanent (bez korekt)", () -> {
+            new AlertDialog.Builder(this).setTitle("Anulować remanent?")
+                .setMessage("Wyniki sesji zostaną oznaczone jako anulowane. Nie zmienimy stanów spiżarni.")
+                .setNegativeButton("Nie", null)
+                .setPositiveButton("Anuluj", (dialog, which) -> {
+                    db.cancelAudit(session);
+                    DiagnosticLog.event("AUDIT_CANCELLED");
+                    go("pantry");
+                }).show();
+        });
     }
 
     private void placeholder(String name, String why) {
@@ -486,19 +610,169 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 1);
+            super(context, "edhome-beta-preview.db", null, 2);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
+            addAuditTables(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            // Do not silently drop beta data; migrations must be explicitly designed.
-            DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
-            throw new IllegalStateException("Missing EDHOME database migration");
+            if (oldVersion == 1 && newVersion == 2) {
+                addAuditTables(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_1_TO_2");
+            } else {
+                DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
+                throw new IllegalStateException("Missing EDHOME database migration");
+            }
+        }
+
+
+        private static void addAuditTables(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE audit_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at INTEGER NOT NULL, completed_at INTEGER, status TEXT NOT NULL)");
+            database.execSQL("CREATE TABLE audit_rows (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL, pantry_id INTEGER NOT NULL, name_snapshot TEXT NOT NULL, expected_qty INTEGER NOT NULL, counted_qty INTEGER, status TEXT NOT NULL DEFAULT 'pending', UNIQUE(session_id, pantry_id))");
+            database.execSQL("CREATE TABLE audit_corrections (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL, pantry_id INTEGER NOT NULL, old_qty INTEGER NOT NULL, new_qty INTEGER NOT NULL, changed_at INTEGER NOT NULL, UNIQUE(session_id, pantry_id))");
+        }
+
+        long openAuditId() {
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT id FROM audit_sessions WHERE status='open' ORDER BY id DESC LIMIT 1", null)) {
+                return c.moveToFirst() ? c.getLong(0) : 0;
+            }
+        }
+
+        long startAudit() {
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                if (openAuditId() != 0) return openAuditId();
+                long id;
+                ContentValues session = new ContentValues();
+                session.put("started_at", System.currentTimeMillis());
+                session.put("status", "open");
+                id = database.insertOrThrow("audit_sessions", null, session);
+                database.execSQL("INSERT INTO audit_rows (session_id,pantry_id,name_snapshot,expected_qty) SELECT ?,id,name,qty FROM pantry",
+                    new Object[]{id});
+                long count;
+                try (Cursor c = database.rawQuery(
+                        "SELECT COUNT(*) FROM audit_rows WHERE session_id=?", new String[]{Long.toString(id)})) {
+                    c.moveToFirst();
+                    count = c.getLong(0);
+                }
+                if (count == 0) return 0; // rollback empty session
+                database.setTransactionSuccessful();
+                return id;
+            } finally {
+                database.endTransaction();
+            }
+        }
+
+        int[] auditProgress(long id) {
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT COUNT(*),SUM(CASE WHEN status!='pending' THEN 1 ELSE 0 END) FROM audit_rows WHERE session_id=?",
+                    new String[]{Long.toString(id)})) {
+                if (!c.moveToFirst()) return new int[]{0, 0};
+                return new int[]{c.getInt(0), c.getInt(1)};
+            }
+        }
+
+        Cursor auditNext(long id) {
+            return getReadableDatabase().rawQuery(
+                "SELECT id,name_snapshot,expected_qty FROM audit_rows WHERE session_id=? AND status='pending' ORDER BY id ASC LIMIT 1",
+                new String[]{Long.toString(id)});
+        }
+
+        Cursor auditRows(long id) {
+            return getReadableDatabase().rawQuery(
+                "SELECT name_snapshot,expected_qty,counted_qty,status FROM audit_rows WHERE session_id=? ORDER BY id",
+                new String[]{Long.toString(id)});
+        }
+
+        void auditAnswer(long rowId, Integer count, String status) {
+            ContentValues values = new ContentValues();
+            values.put("status", status);
+            if (count == null) values.putNull("counted_qty");
+            else values.put("counted_qty", count);
+            getWritableDatabase().update("audit_rows", values,
+                "id=? AND status='pending' AND session_id IN (SELECT id FROM audit_sessions WHERE status='open')",
+                new String[]{Long.toString(rowId)});
+        }
+
+        boolean auditUndo(long session) {
+            SQLiteDatabase database = getWritableDatabase();
+            ContentValues values = new ContentValues();
+            values.put("status", "pending");
+            values.putNull("counted_qty");
+            return database.update("audit_rows", values,
+                "id=(SELECT MAX(id) FROM audit_rows WHERE session_id=? AND status!='pending') AND session_id=?",
+                new String[]{Long.toString(session), Long.toString(session)}) > 0;
+        }
+
+        void cancelAudit(long id) {
+            ContentValues values = new ContentValues();
+            values.put("status", "cancelled");
+            values.put("completed_at", System.currentTimeMillis());
+            getWritableDatabase().update("audit_sessions", values,
+                "id=? AND status='open'", new String[]{Long.toString(id)});
+        }
+
+        String finishAudit(long session) {
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                try (Cursor status = database.rawQuery(
+                        "SELECT status FROM audit_sessions WHERE id=?", new String[]{Long.toString(session)})) {
+                    if (!status.moveToFirst() || !"open".equals(status.getString(0))) return "NOT_OPEN";
+                }
+                try (Cursor unreviewed = database.rawQuery(
+                        "SELECT COUNT(*) FROM audit_rows WHERE session_id=? AND status='pending'",
+                        new String[]{Long.toString(session)})) {
+                    if (!unreviewed.moveToFirst() || unreviewed.getInt(0) != 0) return "PENDING";
+                }
+                try (Cursor items = database.rawQuery(
+                        "SELECT r.pantry_id,r.expected_qty,r.counted_qty,r.status,p.qty FROM audit_rows r LEFT JOIN pantry p ON p.id=r.pantry_id WHERE r.session_id=?",
+                        new String[]{Long.toString(session)})) {
+                    while (items.moveToNext()) {
+                        String state = items.getString(3);
+                        if ("skip".equals(state)) continue;
+                        if (items.isNull(4) || items.getInt(1) != items.getInt(4)) {
+                            return "CONFLICT"; // snapshot is stale; no corrections applied
+                        }
+                    }
+                }
+                try (Cursor items = database.rawQuery(
+                        "SELECT pantry_id,expected_qty,counted_qty FROM audit_rows WHERE session_id=? AND status!='skip' AND expected_qty!=counted_qty",
+                        new String[]{Long.toString(session)})) {
+                    while (items.moveToNext()) {
+                        long itemId = items.getLong(0);
+                        int before = items.getInt(1), after = items.getInt(2);
+                        ContentValues changed = new ContentValues();
+                        changed.put("qty", after);
+                        int updated = database.update("pantry", changed, "id=? AND qty=?",
+                            new String[]{Long.toString(itemId), Integer.toString(before)});
+                        if (updated != 1) return "CONFLICT";
+                        ContentValues history = new ContentValues();
+                        history.put("session_id", session);
+                        history.put("pantry_id", itemId);
+                        history.put("old_qty", before);
+                        history.put("new_qty", after);
+                        history.put("changed_at", System.currentTimeMillis());
+                        database.insertOrThrow("audit_corrections", null, history);
+                    }
+                }
+                ContentValues complete = new ContentValues();
+                complete.put("status", "completed");
+                complete.put("completed_at", System.currentTimeMillis());
+                if (database.update("audit_sessions", complete, "id=? AND status='open'",
+                        new String[]{Long.toString(session)}) != 1) return "NOT_OPEN";
+                database.setTransactionSuccessful();
+                return "OK";
+            } finally {
+                database.endTransaction();
+            }
         }
 
         int openTasks() {
