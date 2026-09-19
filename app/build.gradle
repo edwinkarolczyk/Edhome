@@ -3,26 +3,42 @@ plugins {
 }
 
 android {
-    namespace 'com.edwinkarolczyk.edhome.beta'
+    namespace 'com.edwinkarolczyk.edhome'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.edwinkarolczyk.edhome.beta'
+        applicationId 'com.edwinkarolczyk.edhome'
         minSdk 26
         targetSdk 35
         versionCode 1
-        versionName '0.1.0-beta.1'
+        versionName '0.1.0'
+        buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
+    }
+
+    flavorDimensions 'channel'
+    productFlavors {
+        stable {
+            dimension 'channel'
+            applicationId 'com.edwinkarolczyk.edhome'
+            versionNameSuffix '-prototype'
+            manifestPlaceholders = [appLabel: 'EDHOME Prototype']
+            buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
+        }
+        beta {
+            dimension 'channel'
+            applicationId 'com.edwinkarolczyk.edhome.beta'
+            versionNameSuffix '-beta.1'
+            manifestPlaceholders = [appLabel: 'EDHOME Beta']
+            buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'true'
+        }
     }
 
     buildTypes {
-        debug {
-            applicationIdSuffix ''
-            versionNameSuffix ''
-        }
-        release {
-            minifyEnabled false
-        }
+        debug { minifyEnabled false }
+        release { minifyEnabled false }
     }
+
+    buildFeatures { buildConfig true }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
