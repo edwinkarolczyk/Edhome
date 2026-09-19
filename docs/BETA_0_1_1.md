@@ -30,3 +30,7 @@
 ## Powiązane
 
 [Pełna specyfikacja](SPECYFIKACJA_CALOSC.md) • [roadmapa](ROADMAP.md) • [poprzednia beta](BETA_0_1_0.md).
+
+## Potwierdzenie kompilacji i podpisu testowego
+
+GitHub Actions [run 35447241443](https://github.com/edwinkarolczyk/Edhime/actions/runs/35447241443) zakończył się sukcesem, a artefakt `EDHOME-0.1.1-beta.1-apk` zawiera `app-beta-debug.apk`. Wprowadzono cache **testowego** podpisu debug dla przyszłych kompilacji, ale cache nie jest bezterminową gwarancją i nie zastępuje trwałego klucza wydawniczego przechowywanego poza repo. Podpis `0.1.0-beta.1` może być inny, więc jego danych nie należy bezmyślnie usuwać przy konflikcie aktualizacji.
