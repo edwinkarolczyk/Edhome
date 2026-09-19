@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status:** projekt koncepcyjny. Repozytorium na razie zawiera zarys i dokumentację, bez gotowej aplikacji Android, APK ani publikacji Google Play.
+> **Status gałęzi `beta`:** dostępny jest **prototyp Android EDHOME 0.1.1-beta.1**, z panelem, testową spiżarnią, prostą listą czynności, lokalną diagnostyką oraz pierwszym kreatorem remanentu. Kalendarz, skaner aparatu, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
 
 **EDHOME** to lokalne centrum zarządzania gospodarstwem domowym: wspólny kalendarz i planer, czynności, finanse osobiste i wspólne, magazyn z QR, ogród, pojazdy, dom i remonty, energia oraz integracja SUPLA. Jedno gospodarstwo może mieć wielu domowników i urządzeń.
 
@@ -39,6 +39,15 @@
 - `beta` — rozwój, testy i przygotowywanie zmian przed przeniesieniem na `main`.
 - Beta DEV może mieć oddzielny pakiet i dane; beta Google Play może używać pakietu oficjalnego w kanale testowym.
 - Proponowane identyfikatory (do potwierdzenia przed publikacją): `com.edwinkarolczyk.edhome` i `com.edwinkarolczyk.edhome.beta`.
+
+## Pierwsza beta i pliki do zaglądania
+
+- [EDHOME 0.1.1-beta.1 — co działa, testy i ostrzeżenie o podpisie APK](docs/BETA_0_1_1.md)
+- [Zbiorczy rejestr ustaleń](docs/SPECYFIKACJA_CALOSC.md)
+- [Roadmapa](docs/ROADMAP.md) i [architektura](docs/ARCHITEKTURA.md)
+- [Budowanie APK w GitHub Actions](https://github.com/edwinkarolczyk/Edhime/actions/workflows/android-beta.yml)
+
+**Bezpieczeństwo danych:** używaj wyłącznie danych testowych. Debug APK może mieć inny podpis niż poprzednia instalacja, a odinstalowanie usuwa lokalną spiżarnię/czynności/PIN. Brak eksportu bazy użytkownika.
 
 ## Następne kroki
 
