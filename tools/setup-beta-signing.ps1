@@ -1,4 +1,4 @@
-# EDHOME Beta DEV — jednorazowe przygotowanie prywatnego klucza APK.
+# EDHOME Beta DEV — weryfikacja JUZ UTWORZONEGO klucza i kopiowanie Base64.
 # Uruchom w PowerShell na swoim komputerze. Nie wysylaj pliku .p12 ani hasel do czatu.
 # Ten skrypt NIE dodaje sekretow do GitHub i NIE zapisuje hasel.
 [CmdletBinding()]
@@ -26,21 +26,17 @@ if (-not $keytool) {
     throw 'Brak keytool. Zainstaluj JDK 17 lub Android Studio i uruchom skrypt ponownie.'
 }
 
-if (Test-Path -LiteralPath $keyFile) {
-    Write-Host "Klucz juz istnieje: $keyFile" -ForegroundColor Yellow
-    Write-Host 'Nie generuje nowego klucza: podmiana zablokowalaby aktualizacje.'
-} else {
-    New-Item -ItemType Directory -Force -Path $keyDirectory | Out-Null
-    Write-Host 'EDHOME Beta DEV — generowanie TRWALEGO klucza Android.' -ForegroundColor Cyan
-    Write-Host 'Wpisz nowe mocne haslo w konsoli keytool. Nie wpisuj go do czatu.'
-    Write-Host 'Dla PKCS12 haslo klucza i magazynu jest takie samo.'
-    & $keytool -genkeypair -v -keystore $keyFile -storetype PKCS12 -alias $alias -keyalg RSA -keysize 3072 -validity 10000 -dname 'CN=EDHOME Beta, OU=Development, O=EDHOME, C=PL'
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $keyFile)) {
-        throw 'Generowanie klucza sie nie powiodlo. Nie konfiguruj sekretow z niekompletnego pliku.'
-    }
-    Write-Host "Utworzono klucz: $keyFile" -ForegroundColor Green
+if (-not (Test-Path -LiteralPath $keyFile)) {
+    throw 'Najpierw zapisz juz wygenerowany klucz EDHOME edhome-beta.p12 w Dokumenty/EDHOME-Keys. NIE generuj nowego klucza.'
 }
-
+Write-Host "Klucz istnieje: $keyFile" -ForegroundColor Green
+Write-Host 'Wprowadz haslo do klucza, by sprawdzic certyfikat (haslo nie bedzie zapisane).'
+& $keytool -list -v -keystore $keyFile -alias $alias | Out-String | ForEach-Object {
+    if ($_ -notmatch '40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE') {
+        throw 'Certyfikat jest inny niz staly certyfikat EDHOME Beta. Przerwano.'
+    }
+}
+if ($LASTEXITCODE -ne 0) { throw 'Nie udalo sie zweryfikowac klucza.' }
 Write-Host ''
 Write-Host 'Zrob KOPIE OFFLINE pliku .p12 i zachowaj haslo. Bez nich przyszle APK nie zaktualizuja obecnej wersji.' -ForegroundColor Yellow
 Write-Host 'Nie dodawaj pliku klucza do repozytorium, chmury publicznej ani czatu.'
