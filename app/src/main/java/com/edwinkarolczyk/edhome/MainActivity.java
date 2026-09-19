@@ -578,18 +578,25 @@ public final class MainActivity extends Activity {
             return;
         }
         note("Beta DEV sprawdza manifest HTTPS co 30 sekund, kiedy aplikacja jest aktywna. Pobranie nowego pliku jest automatyczne, lecz instalacja wymaga Twojej zgody w Androidzie.");
-        note("Prywatnych plików GitHub Actions telefon nie pobierze bez uwierzytelnienia. NIE wklejaj tokenu GitHub ani hasła do tego pola.");
+        note("UWAGA: link github.com/.../actions/runs/... jest STRONĄ kompilacji, a nie źródłem aktualizacji. Nie wklejaj tu takiego linku.");
+        note("Automatyczne aktualizacje wymagają osobno opublikowanego pliku manifestu JSON i APK na HTTPS. Repozytorium pozostaje prywatne. Nigdy nie wpisuj tokenu GitHub ani hasła.");
         EditText source = field("HTTPS adres manifestu (bez tokenów)", false);
         source.setInputType(17);
         source.setText(updater.configuredFeed());
         button("Zapisz źródło aktualizacji", () -> {
             if (!updater.setFeed(source.getText().toString())) {
-                alert("Podaj pełny URL https:// bez danych logowania albo pozostaw puste pole.");
+                alert("To musi być URL HTTPS pliku manifestu JSON, a nie strona GitHub Actions, token lub hasło. Gdy nie mamy serwera aktualizacji, wyczyść to pole.");
                 return;
             }
             alert(updater.configuredFeed().isEmpty()
                 ? "Źródło usunięte. Zdalne sprawdzanie jest wyłączone."
                 : "Zapisano adres. Beta sprawdzi nowy manifest bez dodatkowego logowania.");
+        });
+        button("Wyłącz zdalne sprawdzanie (wyczyść link)", () -> {
+            updater.setFeed("");
+            DiagnosticLog.event("UPDATES_FEED_DISABLED");
+            render();
+            alert("Źródło usunięte. Praca EDHOME i ręczny import APK nadal działają offline.");
         });
         button("Sprawdź aktualizację teraz", () -> updater.check(true));
         button("Sprawdź pobieranie / instaluj gotowy APK", () -> updater.installReady());
