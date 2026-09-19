@@ -21,7 +21,23 @@ Nie należy zakładać, że wszystkie archiwa nazwane 0.1.2 mają ten sam podpis
 
 ## Konfiguracja trwałego podpisu — wykonuje właściciel repozytorium
 
-Utwórz **raz**, na swoim komputerze, klucz podpisu tylko dla Beta DEV i bezpieczną kopię offline. Nie wysyłaj go do czatu i nie dodawaj do repozytorium. Przykładowa komenda do uruchomienia lokalnie z JDK:
+Utwórz **raz**, na swoim komputerze, klucz podpisu tylko dla Beta DEV i bezpieczną kopię offline. Nie wysyłaj go do czatu i nie dodawaj do repozytorium.
+
+**Wariant prostszy na Windows:** pobierz repo, uruchom PowerShell w jego folderze i wykonaj:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\tools\\setup-beta-signing.ps1
+```
+
+Kreator uruchamia systemowy `keytool` (z JDK/Android Studio), pyta o hasło, zapisuje `edhome-beta.p12` w Dokumentach/EDHOME-Keys i nie nadpisze go przy ponownym uruchomieniu. Później, gdy otworzysz w GitHubie formularz sekretu `EDHOME_BETA_KEYSTORE_B64`, wywołaj:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\tools\\setup-beta-signing.ps1 -CopyBase64
+```
+
+Zawartość B64 znajdzie się w schowku: wklej ją **tylko** do prywatnego GitHub Actions secret. Hasło klucza i magazynu PKCS12 jest takie samo. Jeśli katalog Dokumenty synchronizuje się z chmurą, przenieś kopię klucza do bezpiecznej lokalizacji offline i sprawdź politykę synchronizacji. [Skrypt kreatora](../tools/setup-beta-signing.ps1).
+
+**Wariant ręczny:** przykładowa komenda do uruchomienia lokalnie z JDK:
 
 ```powershell
 keytool -genkeypair -v -keystore edhome-beta.p12 -storetype PKCS12 -alias edhome-beta -keyalg RSA -keysize 3072 -validity 10000
