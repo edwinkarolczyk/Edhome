@@ -29,7 +29,8 @@ places = statements(section(main, "private static void addPlaces",
 upgrade = section(main, "@Override public void onUpgrade", "private static void addPlaces")
 step2 = statements(section(upgrade, "if (oldVersion < 2)", "if (oldVersion < 3)"))
 step3 = statements(section(upgrade, "if (oldVersion < 3)", "if (oldVersion < 4)"))
-step4 = statements(section(upgrade, "if (oldVersion < 4)", "private static void addPlaces")) if "private static void addPlaces" in upgrade else statements(upgrade.split("if (oldVersion < 4)",1)[1])
+step4 = statements(section(upgrade, "if (oldVersion < 4)", "if (oldVersion < 5)"))
+step5 = statements(upgrade.split("if (oldVersion < 5)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
@@ -45,13 +46,13 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 4, "Database version and backup format differ"
+assert version == backup_version == 5, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + places)
 expected = schema(fresh)
 assert len(expected) == 7, "Unexpected number of tables"
-for old in (1, 2, 3):
+for old in (1, 2, 3, 4):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
@@ -67,12 +68,14 @@ for old in (1, 2, 3):
         execute(db, step2 + audit)
     if old < 3:
         execute(db, step3 + history)
-    execute(db, step4 + places)
+    execute(db, step4 + places + step5)
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     assert db.execute("SELECT id,name,qty FROM pantry").fetchone() == (3, "Ryż", 4)
     assert db.execute("SELECT repeat_rule,repeat_every,place_id FROM tasks").fetchone() == (
         "once", 1, None)
+    assert db.execute("SELECT priority,duration_minutes FROM tasks").fetchone() == (
+        "normal", 30), "Migration must preserve task with planning defaults"
     db.close()
 
 definitions = section(backup, "private static final String[][] TABLES = {", "};")
@@ -83,5 +86,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != DB_VERSION' in backup
-print("SQLite migrations 1→4, 2→4, 3→4: PASS; 7 backup tables/columns: PASS")
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
+assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
+print("SQLite migrations 1→5, 2→5, 3→5, 4→5: PASS; v5 backup columns and legacy defaults: PASS")
