@@ -1007,24 +1007,44 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 2);
+            super(context, "edhome-beta-preview.db", null, 3);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
-            database.execSQL("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)");
+            database.execSQL("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, "
+                + "due_date TEXT, repeat_rule TEXT NOT NULL DEFAULT 'once', "
+                + "repeat_every INTEGER NOT NULL DEFAULT 1)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
             addAuditTables(database);
+            addTaskHistory(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion == 1 && newVersion == 2) {
+            if (oldVersion < 1 || newVersion > 3) {
+                DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
+                throw new IllegalStateException("Unsupported EDHOME database migration");
+            }
+            if (oldVersion < 2) {
                 addAuditTables(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_1_TO_2");
-            } else {
-                DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
-                throw new IllegalStateException("Missing EDHOME database migration");
             }
+            if (oldVersion < 3) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN due_date TEXT");
+                database.execSQL("ALTER TABLE tasks ADD COLUMN repeat_rule TEXT NOT NULL DEFAULT 'once'");
+                database.execSQL("ALTER TABLE tasks ADD COLUMN repeat_every INTEGER NOT NULL DEFAULT 1");
+                addTaskHistory(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_2_TO_3");
+            }
+        }
+
+        private static void addTaskHistory(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE task_history ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, "
+                + "title_snapshot TEXT NOT NULL, completed_at INTEGER NOT NULL, "
+                + "due_date TEXT, next_due_date TEXT)");
+            database.execSQL("CREATE INDEX task_history_task_idx ON task_history(task_id,id)");
         }
 
 
@@ -1179,17 +1199,71 @@ public final class MainActivity extends Activity {
             }
         }
 
-        void addTask(String title) {
-            ContentValues values = new ContentValues();
-            values.put("title", title);
-            getWritableDatabase().insertOrThrow("tasks", null, values);
+        int overdueTasks() {
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT COUNT(*) FROM tasks WHERE done=0 AND due_date IS NOT NULL "
+                    + "AND due_date<?", new String[]{LocalDate.now().toString()})) {
+                return cursor.moveToFirst() ? cursor.getInt(0) : 0;
+            }
         }
 
-        void setTaskDone(long id, boolean done) {
+        void saveTask(Long id, String title, String dueDate, String rule, int every) {
+            String error = TaskRules.validate(title, dueDate, rule, every);
+            if (error != null) throw new IllegalArgumentException(error);
             ContentValues values = new ContentValues();
-            values.put("done", done ? 1 : 0);
-            getWritableDatabase().update("tasks", values, "id=?",
-                new String[]{Long.toString(id)});
+            values.put("title", title);
+            if (dueDate.isEmpty()) values.putNull("due_date");
+            else values.put("due_date", dueDate);
+            values.put("repeat_rule", rule);
+            values.put("repeat_every", every);
+            if (id == null) getWritableDatabase().insertOrThrow("tasks", null, values);
+            else {
+                // Editing a completed one-off into a recurring task reopens it.
+                if (TaskRules.recurring(rule)) values.put("done", 0);
+                getWritableDatabase().update("tasks", values, "id=?",
+                    new String[]{Long.toString(id)});
+            }
+        }
+
+        void completeTask(long id) {
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try (Cursor cursor = database.rawQuery(
+                    "SELECT title,done,due_date,repeat_rule,repeat_every FROM tasks WHERE id=?",
+                    new String[]{Long.toString(id)})) {
+                if (!cursor.moveToFirst() || cursor.getInt(1) != 0) return;
+                String title = cursor.getString(0);
+                String due = cursor.isNull(2) ? null : cursor.getString(2);
+                String rule = cursor.getString(3);
+                int every = cursor.getInt(4);
+                String next = TaskRules.recurring(rule)
+                    ? TaskRules.nextDue(due, rule, every, LocalDate.now()) : null;
+                ContentValues changed = new ContentValues();
+                changed.put("done", next == null ? 1 : 0);
+                if (next != null) changed.put("due_date", next);
+                int affected = database.update("tasks", changed, "id=? AND done=0",
+                    new String[]{Long.toString(id)});
+                if (affected != 1) return;
+                ContentValues history = new ContentValues();
+                history.put("task_id", id);
+                history.put("title_snapshot", title);
+                history.put("completed_at", System.currentTimeMillis());
+                if (due == null) history.putNull("due_date");
+                else history.put("due_date", due);
+                if (next == null) history.putNull("next_due_date");
+                else history.put("next_due_date", next);
+                database.insertOrThrow("task_history", null, history);
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
+            }
+        }
+
+        void reopenTask(long id) {
+            ContentValues values = new ContentValues();
+            values.put("done", 0);
+            getWritableDatabase().update("tasks", values,
+                "id=? AND repeat_rule='once'", new String[]{Long.toString(id)});
         }
 
         void deleteTask(long id) {
