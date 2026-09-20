@@ -23,8 +23,9 @@ create = statements(section(main, "@Override public void onCreate(SQLiteDatabase
                             "@Override public void onUpgrade"))
 audit = statements(section(main, "private static void addAuditTables", "long openAuditId"))
 members = statements(section(main, "private static void addMembers", "private static void addAuditTables"))
+shifts = statements(section(main, "private static void addMemberSchedules", "private static void addMembers"))
 history = statements(section(main, "private static void addTaskHistory",
-                             "private static void addMembers"))
+                             "private static void addMemberSchedules"))
 places = statements(section(main, "private static void addPlaces",
                             "private static void addTaskHistory"))
 upgrade = section(main, "@Override public void onUpgrade", "private static void addPlaces")
@@ -32,7 +33,8 @@ step2 = statements(section(upgrade, "if (oldVersion < 2)", "if (oldVersion < 3)"
 step3 = statements(section(upgrade, "if (oldVersion < 3)", "if (oldVersion < 4)"))
 step4 = statements(section(upgrade, "if (oldVersion < 4)", "if (oldVersion < 5)"))
 step5 = statements(section(upgrade, "if (oldVersion < 5)", "if (oldVersion < 6)"))
-step6 = statements(upgrade.split("if (oldVersion < 6)", 1)[1])
+step6 = statements(section(upgrade, "if (oldVersion < 6)", "if (oldVersion < 7)"))
+step7 = statements(upgrade.split("if (oldVersion < 7)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
@@ -45,16 +47,16 @@ def schema(database):
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name NOT LIKE 'sqlite_%' ORDER BY name")}
 
-assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(members) == 1
+assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(members) == 1 and len(shifts) == 2
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 6, "Database version and backup format differ"
+assert version == backup_version == 7, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + places + members)
+execute(fresh, create + audit + history + places + members + shifts)
 expected = schema(fresh)
-assert len(expected) == 8, "Unexpected number of tables"
-for old in (1, 2, 3, 4, 5):
+assert len(expected) == 10, "Unexpected number of tables"
+for old in (1, 2, 3, 4, 5, 6):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
@@ -70,6 +72,8 @@ for old in (1, 2, 3, 4, 5):
         execute(db, step4 + places)
     if old >= 5:
         execute(db, step5)
+    if old >= 6:
+        execute(db, step6 + members)
     if old < 2:
         execute(db, step2 + audit)
     if old < 3:
@@ -78,7 +82,9 @@ for old in (1, 2, 3, 4, 5):
         execute(db, step4 + places)
     if old < 5:
         execute(db, step5)
-    execute(db, step6 + members)
+    if old < 6:
+        execute(db, step6 + members)
+    execute(db, step7 + shifts)
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     assert db.execute("SELECT id,name,qty FROM pantry").fetchone() == (3, "Ryż", 4)
@@ -92,6 +98,14 @@ for old in (1, 2, 3, 4, 5):
     assert db.execute("SELECT t.title,m.name FROM tasks t "
                       "JOIN household_members m ON m.id=t.assignee_id").fetchone() == (
         "Test", "Edwin")
+    db.execute("INSERT INTO member_weekly_shifts (member_id,weekday,shift) "
+               "VALUES (4,1,'morning')")
+    db.execute("INSERT INTO member_shift_exceptions (member_id,date,shift) "
+               "VALUES (4,'2026-09-21','off')")
+    assert db.execute("SELECT shift FROM member_weekly_shifts "
+                      "WHERE member_id=4 AND weekday=1").fetchone() == ("morning",)
+    assert db.execute("SELECT shift FROM member_shift_exceptions "
+                      "WHERE member_id=4 AND date='2026-09-21'").fetchone() == ("off",)
     db.close()
 
 definitions = section(backup, "private static final String[][] TABLES = {", "};")
@@ -102,9 +116,11 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
 assert '"assignee_id".equals(key)' in backup
-print("SQLite migrations 1→6, 2→6, 3→6, 4→6, 5→6: PASS; members and v6 backup contract: PASS")
+assert 'inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])' in backup
+assert '"member_id".equals(column) || "weekday".equals(column)' in backup
+print("SQLite migrations v1–v6→v7: PASS; household members, weekly shifts, exceptions and backup: PASS")
