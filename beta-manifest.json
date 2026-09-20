@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 17,
-  "versionName": "0.2.7-beta.1",
-  "changelog": "EDHOME Beta 0.2.7 — Beta bez PIN-u, domownicy i wykonawcy czynności, SQLite v6.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.2.7-beta.1/edhome-beta.apk",
-  "sha256": "66a92af5518bf7aff1854f78b75c69f722f0b3eed95547875367ece72197888e"
+  "versionCode": 18,
+  "versionName": "0.2.8-beta.1",
+  "changelog": "EDHOME Beta 0.2.8 — tygodniowy grafik domowników, wyjątki dat, SQLite v7.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.2.8-beta.1/edhome-beta.apk",
+  "sha256": "c0ce0ca56fcb3511393386484abef8e9c0851a87ab0a0356543831092fe7d396"
 }
