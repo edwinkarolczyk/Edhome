@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** EDHOME **0.2.5-beta.1** (`versionCode 15`, SQLite 4). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
+> **Status gałęzi `beta`:** EDHOME **0.2.6-beta.1** (`versionCode 16`, SQLite 5). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. W tej wersji czynności mają priorytet i szacowany czas wykonania. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.2.6 — priorytet i czas czynności, migracje i test OTA](docs/BETA_0_2_6.md)
 - [Wersja 0.2.5 — OTA przez GitHub Releases i jednorazowa aktualizacja przejściowa](docs/BETA_0_2_5.md)
 - [Wersja 0.2.4 — poprawiony komunikat niedostępnego kanału aktualizacji](docs/BETA_0_2_4.md)
 - [Wersja 0.2.3 — zakres zmian, ograniczenia i test na telefonie](docs/BETA_0_2_3.md)
@@ -65,6 +66,6 @@
 
 ## Następne kroki
 
-Na gałęzi `beta`: zweryfikować wydanie 0.2.5 i publiczny manifest, przetestować instalację przejściową na Androidzie oraz wykrycie następnej wersji OTA; następnie rozwijać przypomnienia, miejsca, przedmioty i relacje czynności. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
+Na gałęzi `beta`: zweryfikować aktualizację 0.2.5 → 0.2.6 na fizycznym telefonie z zachowaniem danych. Następnie wersja 0.2.7: pojedynczy wykonawca i lokalny grafik zmianowy z wyjątkami. Dopiero na tej podstawie proponować trzy dogodne terminy. Utrzymać kopie danych oraz testy migracji. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
