@@ -24,12 +24,12 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 4;
+    private static final int DB_VERSION = 5;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
-            "place_id"},
+            "place_id", "priority", "duration_minutes"},
         {"pantry", "id", "name", "qty"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
         {"audit_rows", "id", "session_id", "pantry_id", "name_snapshot",
@@ -105,7 +105,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -153,6 +153,14 @@ final class DataBackup {
                                 && "place_id".equals(key)) {
                             values.putNull(key);
                             continue;
+                        }
+                        if (inputVersion < 5 && "tasks".equals(definition[0])) {
+                            if ("priority".equals(key)) {
+                                values.put(key, "normal"); continue;
+                            }
+                            if ("duration_minutes".equals(key)) {
+                                values.put(key, 30); continue;
+                            }
                         }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
@@ -226,6 +234,14 @@ final class DataBackup {
                     String error = TaskRules.validate(values.getAsString("title"),
                         due == null ? "" : due, rule, every == null ? 0 : every);
                     if (error != null) throw new IllegalArgumentException(error);
+                    String priority = values.getAsString("priority");
+                    Long minutes = values.getAsLong("duration_minutes");
+                    if (priority == null
+                            || !java.util.Arrays.asList(
+                                "low", "normal", "high", "urgent").contains(priority)
+                            || minutes == null || minutes < 1 || minutes > 480)
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy priorytet lub czas czynności.");
                 }
                 rows.add(values);
             }
@@ -282,7 +298,8 @@ final class DataBackup {
 
     private static boolean isNumberColumn(String column) {
         return "id".equals(column) || "done".equals(column) || "qty".equals(column)
-            || "repeat_every".equals(column) || "task_id".equals(column)
+            || "repeat_every".equals(column) || "duration_minutes".equals(column)
+            || "task_id".equals(column)
             || "place_id".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
