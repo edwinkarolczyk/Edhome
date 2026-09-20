@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** kod **EDHOME 0.2.3-beta.1** (`versionCode 13`, SQLite 4): menu 3 × 3 z zapamiętywaniem kolejności, kalendarz miesiąc/tydzień/dzień/agenda, przypomnienia opt-in, czynności, Miejsca, spiżarnia, remanent i kopie danych. Po zgodzie właściciela wbudowany jest domyślny adres publicznego kanału APK. **Kanał nie działa jeszcze, dopóki nie powstanie publiczne repozytorium `EDHOME-Updates` i nie zostanie dodany ograniczony sekret publikowania.** Kod, dane i podpis pozostają prywatne. Żaden wariant nie jest w Google Play.
+> **Status gałęzi `beta`:** kod **EDHOME 0.2.4-beta.1** (`versionCode 14`, SQLite 4): menu 3 × 3 z zapamiętywaniem kolejności, kalendarz miesiąc/tydzień/dzień/agenda, przypomnienia opt-in, czynności, Miejsca, spiżarnia, remanent i kopie danych. Po zgodzie właściciela wbudowany jest domyślny adres publicznego kanału APK. **Kanał nie działa jeszcze, dopóki nie powstanie publiczne repozytorium `EDHOME-Updates` i nie zostanie dodany ograniczony sekret publikowania.** Kod, dane i podpis pozostają prywatne. Żaden wariant nie jest w Google Play.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.2.4 — poprawiony komunikat niedostępnego kanału aktualizacji](docs/BETA_0_2_4.md)
 - [Wersja 0.2.3 — zakres zmian, ograniczenia i test na telefonie](docs/BETA_0_2_3.md)
 - [Włączenie publicznego kanału APK — jednorazowe kroki GitHub](docs/KANAL_AKTUALIZACJI_BETA.md)
 - [EDHOME 0.2.1-beta.1 — pionowa siatka 3 × 3](docs/BETA_0_2_1.md)
