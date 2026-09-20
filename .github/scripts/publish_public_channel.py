@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Opt-in binary-only EDHOME Beta publishing to a separate PUBLIC GitHub repo.
+"""Publish signed EDHOME Beta like Trener 2/WMM: public GitHub Releases.
 
-Private source repo stays private. Nothing is published unless the owner creates
-a separate public distribution repo and configures BOTH a variable and secret.
-Upload signed APK first, then update the tiny public manifest as the last step.
-A tag is immutable: re-run requires a NEW versionCode/versionName.
+The source repo is already public. This script must only run for the trusted
+beta branch with the built-in GitHub Actions GITHUB_TOKEN. It never publishes a
+signing key, authentication token, or user data. Upload APK before advancing
+the beta branch manifest; existing release tags remain immutable.
 """
 import base64
 import hashlib
@@ -17,12 +17,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-repo = os.environ.get("EDHOME_PUBLIC_CHANNEL_REPO", "").strip()
+repo = "edwinkarolczyk/Edhome"
+branch = "beta"
 token = os.environ.get("GH_TOKEN", "").strip()
-if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
-    raise SystemExit("EDHOME_PUBLIC_CHANNEL_REPO must be owner/public-repo")
+if os.environ.get("GITHUB_REPOSITORY") != repo:
+    raise SystemExit("Refusing publication outside the EDHOME repository.")
+if os.environ.get("GITHUB_REF") != "refs/heads/beta":
+    raise SystemExit("Refusing publication outside the beta branch.")
 if not token:
-    raise SystemExit("EDHOME_PUBLIC_CHANNEL_TOKEN is missing; refusing publication.")
+    raise SystemExit("Built-in GitHub Actions token is missing.")
 
 apk = Path("app/build/outputs/apk/beta/release/app-beta-release.apk")
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
@@ -36,7 +39,8 @@ tag = "beta-v" + version
 asset_name = "edhome-beta.apk"
 asset_url = ("https://github.com/" + repo + "/releases/download/"
              + urllib.parse.quote(tag) + "/" + asset_name)
-digest = hashlib.file_digest(apk.open("rb"), "sha256").hexdigest()
+with apk.open("rb") as source:
+    digest = hashlib.file_digest(source, "sha256").hexdigest()
 
 headers = {
     "Authorization": "Bearer " + token,
@@ -72,9 +76,9 @@ else:
 
 body, _ = api("POST", base + "/releases", {
     "tag_name": tag,
-    "target_commitish": "main",
+    "target_commitish": branch,
     "name": "EDHOME " + version,
-    "body": "Binary-only EDHOME Beta distribution. Source repository remains private.",
+    "body": "Signed EDHOME Beta APK. Install over your existing Beta; keep app data. Android must confirm installation.",
     "draft": False,
     "prerelease": True,
 })
@@ -83,6 +87,13 @@ upload_url = release["upload_url"].split("{", 1)[0]
 upload_url += "?name=" + urllib.parse.quote(asset_name)
 api("POST", upload_url, apk.read_bytes(),
     "application/vnd.android.package-archive")
+# Check the release really exposes its APK before advertising it to installed phones.
+asset_response, _ = api("GET", base + "/releases/tags/"
+                        + urllib.parse.quote(tag))
+assets = json.loads(asset_response).get("assets", [])
+if not any(item.get("name") == asset_name and item.get("size", 0) > 1000
+           for item in assets):
+    raise SystemExit("Release APK is not visible; refusing manifest advancement.")
 manifest = {
     "channel": "beta",
     "versionCode": code,
@@ -95,10 +106,14 @@ manifest = {
 manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2)
                   + "\n").encode("utf-8")
 # Only advance 'latest' AFTER the new release asset is available.
-latest_url = base + "/contents/beta-manifest.json"
+latest_url = base + "/contents/beta-manifest.json?ref=" + branch
 try:
     existing, _ = api("GET", latest_url)
-    existing_sha = json.loads(existing)["sha"]
+    existing_info = json.loads(existing)
+    existing_sha = existing_info["sha"]
+    previous = json.loads(base64.b64decode(existing_info["content"]))
+    if int(previous.get("versionCode", 0)) >= code:
+        raise SystemExit("Refusing to replace a newer or equal Beta manifest.")
 except urllib.error.HTTPError as error:
     if error.code != 404:
         raise
@@ -106,7 +121,7 @@ except urllib.error.HTTPError as error:
 request = {
     "message": "release(beta): " + version,
     "content": base64.b64encode(manifest_bytes).decode("ascii"),
-    "branch": "main",
+    "branch": branch,
 }
 if existing_sha:
     request["sha"] = existing_sha
@@ -114,4 +129,4 @@ api("PUT", latest_url, request)
 Path("beta-manifest.json").write_bytes(manifest_bytes)
 print("EDHOME public channel updated:", repo, version, "versionCode=", code)
 print("Feed (public): https://raw.githubusercontent.com/"
-      + repo + "/main/beta-manifest.json")
+      + repo + "/" + branch + "/beta-manifest.json")
