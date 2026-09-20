@@ -313,7 +313,7 @@ public final class BetaUpdater {
                         content.setPadding(padding, padding, padding, padding / 2);
                         TextView heading = new TextView(activity);
                         heading.setText("EDHOME  •  BETA");
-                        heading.setTextColor(0xff7dd2ba);
+                        heading.setTextColor(trenerTheme() ? 0xffef2b2d : 0xff7dd2ba);
                         heading.setTextSize(14);
                         heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                         content.addView(heading);
@@ -342,12 +342,16 @@ public final class BetaUpdater {
                             .create();
                         dialog.setCanceledOnTouchOutside(false);
                         dialog.show();
-                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xff7dd2ba);
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(
+                            trenerTheme() ? 0xffef2b2d : 0xff7dd2ba);
                         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setAllCaps(false);
                         GradientDrawable panel = new GradientDrawable();
-                        panel.setColor(0xff203344);
+                        panel.setColor(trenerTheme() ? 0xff141414 : 0xff203344);
                         panel.setCornerRadius(activity.getResources()
-                            .getDisplayMetrics().density * 24f);
+                            .getDisplayMetrics().density * 18f);
+                        if (trenerTheme()) panel.setStroke(
+                            (int) (activity.getResources().getDisplayMetrics().density + 0.5f),
+                            0xff303030);
                         if (dialog.getWindow() != null)
                             dialog.getWindow().setBackgroundDrawable(panel);
                     }
@@ -478,6 +482,10 @@ public final class BetaUpdater {
             activity.startActivity(new Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://play.google.com/store/apps/details?id=" + packageName)));
         }
+    }
+
+    private boolean trenerTheme() {
+        return "Trener 2".equals(prefs.getString("theme", "Grafitowy"));
     }
 
     private void inform(String message) {
