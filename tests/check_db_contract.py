@@ -79,7 +79,7 @@ definitions = section(backup, "private static final String[][] TABLES = {", "};"
 table_defs = re.findall(r'\{\s*"([^"]+)"\s*,([^{}]+)\}', definitions, re.S)
 assert len(table_defs) == len(expected), "A table is missing from backup definition"
 for table, fields in table_defs:
-    columns = ["id"] + re.findall(r'"([^"]+)"', fields)
+    columns = re.findall(r'"([^"]+)"', fields)
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
