@@ -1,0 +1,8 @@
+{
+  "channel": "beta",
+  "versionCode": 15,
+  "versionName": "0.2.5-beta.1",
+  "changelog": "EDHOME Beta 0.2.5 — automatyczne aktualizacje z GitHub Releases.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.2.5-beta.1/edhome-beta.apk",
+  "sha256": "5620a7e690dba2baeef22ff732925157463af2473b0e99f32242d68da177d36f"
+}
