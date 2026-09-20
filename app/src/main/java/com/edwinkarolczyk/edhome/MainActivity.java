@@ -74,6 +74,12 @@ public final class MainActivity extends Activity {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
     };
+    private static final String[] TASK_PRIORITIES = {"low", "normal", "high", "urgent"};
+    private static final String[] TASK_PRIORITY_LABELS = {
+        "Niski", "Normalny", "Wysoki", "Pilny"
+    };
+    private static final int MIN_TASK_MINUTES = 1;
+    private static final int MAX_TASK_MINUTES = 480;
     private static final String[] PLACE_TYPES = {"Dom", "Ogród", "Garaż", "Warsztat", "Pomieszczenie", "Inne"};
     private int bg, surface, ink, subdued, accent;
 
@@ -563,8 +569,13 @@ public final class MainActivity extends Activity {
         check.setTextColor(done ? subdued : ink);
         check.setButtonTintList(ColorStateList.valueOf(accent));
         box.addView(check);
+        String[] planning = db.taskPlanning(id);
         String description = (due.isEmpty() ? "Bez terminu" : "Termin: " + due)
-            + " • " + TaskRules.label(rule, every);
+            + " • " + TaskRules.label(rule, every)
+            + " • " + planning[1] + " min"
+            + " • Priorytet: " + TASK_PRIORITY_LABELS[
+                Math.max(0, java.util.Arrays.asList(TASK_PRIORITIES)
+                    .indexOf(planning[0]))];
         if (!done && !due.isEmpty() && due.compareTo(LocalDate.now().toString()) < 0)
             description += " • ZALEGŁE";
         if (done) description += " • Wykonane";
@@ -650,6 +661,25 @@ public final class MainActivity extends Activity {
         name.setTextSize(18);
         form.addView(text("Co trzeba zrobić?", 16, true));
         form.addView(name);
+
+        String[] currentPlanning = id == null
+            ? new String[]{"normal", "30"} : db.taskPlanning(id);
+        form.addView(text("Priorytet", 16, true));
+        Spinner priority = new Spinner(this);
+        priority.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(TASK_PRIORITY_LABELS)));
+        priority.setSelection(Math.max(0,
+            java.util.Arrays.asList(TASK_PRIORITIES).indexOf(currentPlanning[0])));
+        form.addView(priority);
+        form.addView(text("Szacowany czas wykonania (minuty)", 16, true));
+        EditText duration = new EditText(this);
+        duration.setSingleLine(true);
+        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        duration.setHint("Od 1 do 480 minut");
+        duration.setText(currentPlanning[1]);
+        duration.setTextColor(ink);
+        duration.setHintTextColor(subdued);
+        form.addView(duration);
 
         EditText date = new EditText(this);
         date.setSingleLine(true);
@@ -745,12 +775,28 @@ public final class MainActivity extends Activity {
                         return;
                     }
                 }
+                int estimatedMinutes;
+                try {
+                    estimatedMinutes = Integer.parseInt(
+                        duration.getText().toString().trim());
+                } catch (NumberFormatException problem) {
+                    duration.setError("Podaj czas od 1 do 480 minut.");
+                    return;
+                }
+                if (estimatedMinutes < MIN_TASK_MINUTES
+                        || estimatedMinutes > MAX_TASK_MINUTES) {
+                    duration.setError("Podaj czas od 1 do 480 minut.");
+                    return;
+                }
+                String selectedPriority = TASK_PRIORITIES[
+                    priority.getSelectedItemPosition()];
                 String title = name.getText().toString().trim();
                 String due = date.getText().toString().trim();
                 String error = TaskRules.validate(title, due, rule, every);
                 if (error != null) { alert(error); return; }
                 db.saveTask(id, title, due, rule, every,
-                    placeIds.get(chosenPlace.getSelectedItemPosition()));
+                    placeIds.get(chosenPlace.getSelectedItemPosition()),
+                    selectedPriority, estimatedMinutes);
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
@@ -1724,14 +1770,16 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 4);
+            super(context, "edhome-beta-preview.db", null, 5);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, "
                 + "due_date TEXT, repeat_rule TEXT NOT NULL DEFAULT 'once', "
-                + "repeat_every INTEGER NOT NULL DEFAULT 1, place_id INTEGER)");
+                + "repeat_every INTEGER NOT NULL DEFAULT 1, place_id INTEGER, "
+                + "priority TEXT NOT NULL DEFAULT 'normal', "
+                + "duration_minutes INTEGER NOT NULL DEFAULT 30)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
             addAuditTables(database);
             addTaskHistory(database);
@@ -1740,7 +1788,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 4) {
+            if (oldVersion < 1 || newVersion > 5) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -1759,6 +1807,11 @@ public final class MainActivity extends Activity {
                 addPlaces(database);
                 database.execSQL("ALTER TABLE tasks ADD COLUMN place_id INTEGER");
                 DiagnosticLog.event("DATABASE_MIGRATED_3_TO_4");
+            }
+            if (oldVersion < 5) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'");
+                database.execSQL("ALTER TABLE tasks ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 30");
+                DiagnosticLog.event("DATABASE_MIGRATED_4_TO_5");
             }
         }
 
@@ -1936,10 +1989,16 @@ public final class MainActivity extends Activity {
         }
 
         void saveTask(Long id, String title, String dueDate, String rule, int every,
-                Long placeId) {
+                Long placeId, String priority, int durationMinutes) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
+            if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
+                throw new IllegalArgumentException("Nieznany priorytet czynności.");
+            if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
+                throw new IllegalArgumentException("Czas musi wynosić 1–480 minut.");
             ContentValues values = new ContentValues();
+            values.put("priority", priority);
+            values.put("duration_minutes", durationMinutes);
             values.put("title", title);
             if (dueDate.isEmpty()) values.putNull("due_date");
             else values.put("due_date", dueDate);
@@ -2006,6 +2065,17 @@ public final class MainActivity extends Activity {
 
         void deleteTask(long id) {
             getWritableDatabase().delete("tasks", "id=?", new String[]{Long.toString(id)});
+        }
+
+        String[] taskPlanning(long taskId) {
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT priority,duration_minutes FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                if (!cursor.moveToFirst())
+                    return new String[]{"normal", "30"};
+                return new String[]{cursor.getString(0),
+                    Integer.toString(cursor.getInt(1))};
+            }
         }
 
         Long taskPlaceId(long taskId) {
