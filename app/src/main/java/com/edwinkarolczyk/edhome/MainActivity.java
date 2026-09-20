@@ -67,6 +67,7 @@ public final class MainActivity extends Activity {
     private String screen = "home";
     private String calendarMonth = YearMonth.now().toString();
     private String calendarDay = LocalDate.now().toString();
+    private String calendarView = "month";
     private String tasksFilter = "all";
     private String pantrySearch = "";
     private static final String[] HOME_TILE_IDS = {
@@ -599,13 +600,20 @@ public final class MainActivity extends Activity {
         name.setSingleLine(true);
         name.setHint("Nazwa czynności");
         name.setText(existingName);
+        name.setTextColor(ink);
+        name.setHintTextColor(subdued);
+        name.setTextSize(18);
+        form.addView(text("Co trzeba zrobić?", 16, true));
         form.addView(name);
 
         EditText date = new EditText(this);
         date.setSingleLine(true);
         date.setHint("Termin: RRRR-MM-DD (opcjonalnie)");
         date.setText(existingDate);
+        date.setTextColor(ink);
+        date.setHintTextColor(subdued);
         date.setFocusable(false);
+        form.addView(text("Termin wykonania", 16, true));
         date.setOnClickListener(v -> {
             LocalDate initial;
             try { initial = LocalDate.parse(date.getText().toString()); }
@@ -633,6 +641,17 @@ public final class MainActivity extends Activity {
         interval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         interval.setHint("N: co ile dni / tygodni / miesięcy / lat");
         interval.setText(String.valueOf(Math.max(1, existingEvery)));
+        interval.setTextColor(ink);
+        interval.setHintTextColor(subdued);
+        interval.setVisibility(TaskRules.custom(existingRule) ? View.VISIBLE : View.GONE);
+        repeat.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                    View view, int position, long selectedId) {
+                interval.setVisibility(TaskRules.custom(TaskRules.RULES[position])
+                    ? View.VISIBLE : View.GONE);
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
         form.addView(interval);
         form.addView(text("Dla pór roku wybierz termin przygotowania przed sezonem. "
             + "Będzie powtarzany w kolejnych latach.", 13, false));
@@ -695,6 +714,15 @@ public final class MainActivity extends Activity {
                 render();
             }));
         dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(rounded(surface));
+            dialog.getWindow().setLayout((int) (getResources().getDisplayMetrics()
+                .widthPixels * 0.94f), -2);
+        }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setAllCaps(false);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(accent);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setAllCaps(false);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ink);
     }
 
     private void showTaskHistory(long id, String name) {
@@ -750,27 +778,56 @@ public final class MainActivity extends Activity {
         LocalDate selected = LocalDate.parse(calendarDay);
         note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
             new Locale("pl", "PL")) + " " + month.getYear());
+        LinearLayout views = new LinearLayout(this);
+        views.setOrientation(LinearLayout.VERTICAL);
+        body.addView(views);
+        String[][] modes = {{"month", "Miesiąc"}, {"week", "Tydzień"},
+            {"day", "Dzień"}, {"agenda", "Agenda"}};
+        for (int i = 0; i < modes.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            views.addView(row);
+            for (int k = i; k < i + 2; k++) {
+                String[] mode = modes[k];
+                Button view = new Button(this);
+                view.setText(mode[1] + (mode[0].equals(calendarView) ? " ✓" : ""));
+                view.setAllCaps(false);
+                view.setTextColor(mode[0].equals(calendarView) ? bg : ink);
+                view.setBackground(rounded(mode[0].equals(calendarView)
+                    ? accent : surface));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(44), 1);
+                p.setMargins(dp(3), dp(3), dp(3), dp(3));
+                row.addView(view, p);
+                view.setOnClickListener(v -> { calendarView = mode[0]; render(); });
+            }
+        }
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         body.addView(nav);
         Button prev = new Button(this);
-        prev.setText("← Miesiąc");
+        prev.setText("← " + ("week".equals(calendarView) ? "Tydzień"
+            : "day".equals(calendarView) ? "Dzień" : "Miesiąc"));
         prev.setAllCaps(false);
         nav.addView(prev, new LinearLayout.LayoutParams(0, -2, 1));
         prev.setOnClickListener(v -> {
-            YearMonth previous = month.minusMonths(1);
-            calendarMonth = previous.toString();
-            calendarDay = previous.atDay(1).toString();
+            LocalDate previous = "week".equals(calendarView) ? selected.minusWeeks(1)
+                : "day".equals(calendarView) ? selected.minusDays(1)
+                : month.minusMonths(1).atDay(1);
+            calendarMonth = YearMonth.from(previous).toString();
+            calendarDay = previous.toString();
             render();
         });
         Button next = new Button(this);
-        next.setText("Miesiąc →");
+        next.setText(("week".equals(calendarView) ? "Tydzień"
+            : "day".equals(calendarView) ? "Dzień" : "Miesiąc") + " →");
         next.setAllCaps(false);
         nav.addView(next, new LinearLayout.LayoutParams(0, -2, 1));
         next.setOnClickListener(v -> {
-            YearMonth following = month.plusMonths(1);
-            calendarMonth = following.toString();
-            calendarDay = following.atDay(1).toString();
+            LocalDate following = "week".equals(calendarView) ? selected.plusWeeks(1)
+                : "day".equals(calendarView) ? selected.plusDays(1)
+                : month.plusMonths(1).atDay(1);
+            calendarMonth = YearMonth.from(following).toString();
+            calendarDay = following.toString();
             render();
         });
         button("Dzisiaj", () -> {
@@ -801,6 +858,7 @@ public final class MainActivity extends Activity {
             while (c.moveToNext()) counts.put(c.getString(0), c.getInt(1));
         }
 
+        if (!"day".equals(calendarView) && !"agenda".equals(calendarView)) {
         LinearLayout headings = new LinearLayout(this);
         headings.setOrientation(LinearLayout.HORIZONTAL);
         body.addView(headings);
@@ -811,10 +869,13 @@ public final class MainActivity extends Activity {
             headings.addView(label, new LinearLayout.LayoutParams(0, dp(32), 1));
         }
 
-        LocalDate first = month.atDay(1);
+        LocalDate first = "week".equals(calendarView)
+            ? selected.with(java.time.DayOfWeek.MONDAY) : month.atDay(1);
         LocalDate gridStart = first.minusDays(first.getDayOfWeek().getValue() - 1);
-        int weeks = (first.getDayOfWeek().getValue() - 1
-            + month.lengthOfMonth() + 6) / 7;
+        int weeks = "week".equals(calendarView) ? 1
+            : (first.getDayOfWeek().getValue() - 1
+                + month.lengthOfMonth() + 6) / 7;
+        if (!"day".equals(calendarView) && !"agenda".equals(calendarView))
         for (int week = 0; week < weeks; week++) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
@@ -822,7 +883,8 @@ public final class MainActivity extends Activity {
             for (int weekday = 0; weekday < 7; weekday++) {
                 LocalDate day = gridStart.plusDays(week * 7L + weekday);
                 String iso = day.toString();
-                boolean inMonth = YearMonth.from(day).equals(month);
+                boolean inMonth = "week".equals(calendarView)
+                    || YearMonth.from(day).equals(month);
                 TextView tile = text(String.valueOf(day.getDayOfMonth())
                     + (inMonth && counts.containsKey(iso)
                         ? "\n• " + counts.get(iso) : ""), 13, false);
@@ -844,6 +906,23 @@ public final class MainActivity extends Activity {
                 });
             }
         }
+        }
+        if ("agenda".equals(calendarView)) {
+            LinearLayout agenda = card();
+            agenda.addView(text("Nadchodzące 30 dni", 17, true));
+            int shown = 0;
+            try (Cursor c = db.getReadableDatabase().rawQuery(
+                    "SELECT due_date,title FROM tasks WHERE done=0 AND due_date>=? "
+                    + "AND due_date<=? ORDER BY due_date,id LIMIT 100",
+                    new String[]{selected.toString(), selected.plusDays(29).toString()})) {
+                while (c.moveToNext()) {
+                    shown++;
+                    agenda.addView(text("• " + c.getString(0) + " — " + c.getString(1),
+                        14, false));
+                }
+            }
+            if (shown == 0) agenda.addView(text("Brak terminów.", 14, false));
+        }
         title("Termin: " + selected.toString());
         int found = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
@@ -863,8 +942,8 @@ public final class MainActivity extends Activity {
             tasksFilter = "all";
             go("tasks");
         });
-        note("Kalendarz pokazuje najbliższe terminy czynności. "
-            + "Przypomnienia systemowe i planowanie dostępności domowników będą rozwijane osobno.");
+        note("Miesiąc, tydzień, dzień i agenda pokazują te same zapisane czynności. "
+            + "Planowanie dostępności domowników będzie rozwijane osobno.");
     }
 
     private void places() {
