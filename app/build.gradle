@@ -3,7 +3,13 @@ plugins {
 }
 
 // Public HTTPS address only. Never place tokens or private Actions URLs in the APK.
-def betaFeedUrl = (System.getenv('EDHOME_BETA_FEED_URL') ?: '').trim()
+def publicChannelRepo = (System.getenv('EDHOME_PUBLIC_CHANNEL_REPO') ?: '').trim()
+if (publicChannelRepo && !(publicChannelRepo ==~ /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/))
+    throw new GradleException('Invalid EDHOME_PUBLIC_CHANNEL_REPO')
+def betaFeedUrl = (System.getenv('EDHOME_BETA_FEED_URL')
+    ?: (publicChannelRepo
+        ? "https://raw.githubusercontent.com/${publicChannelRepo}/main/beta-manifest.json"
+        : '')).trim()
 if (betaFeedUrl) {
     def feed = new URI(betaFeedUrl)
     if (feed.scheme != 'https' || !feed.host || feed.userInfo || feed.query
