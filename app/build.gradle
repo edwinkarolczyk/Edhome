@@ -4,9 +4,12 @@ plugins {
 
 // Public HTTPS address only. Never place tokens or private Actions URLs in the APK.
 def betaFeedUrl = (System.getenv('EDHOME_BETA_FEED_URL') ?: '').trim()
-if (betaFeedUrl && (!(betaFeedUrl ==~ /^https:\/\/[A-Za-z0-9.-]+\/[A-Za-z0-9_./%-]+\.json$/)
-        || betaFeedUrl.contains('..'))) {
-    throw new GradleException('EDHOME_BETA_FEED_URL must be an unauthenticated HTTPS JSON path')
+if (betaFeedUrl) {
+    def feed = new URI(betaFeedUrl)
+    if (feed.scheme != 'https' || !feed.host || feed.userInfo || feed.query
+            || feed.fragment || !feed.path.endsWith('.json') || feed.path.contains('..')) {
+        throw new GradleException('EDHOME_BETA_FEED_URL must be an unauthenticated HTTPS JSON path')
+    }
 }
 
 android {
