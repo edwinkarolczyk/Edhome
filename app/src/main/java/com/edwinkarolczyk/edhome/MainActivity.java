@@ -501,7 +501,9 @@ public final class MainActivity extends Activity {
             Button chip = new Button(this);
             chip.setAllCaps(false);
             chip.setText(filter[1]);
-            chip.setTextColor(filter[0].equals(tasksFilter) ? bg : ink);
+            chip.setTextColor(filter[0].equals(tasksFilter)
+                ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+                    ? Color.WHITE : bg) : ink);
             chip.setBackground(rounded(filter[0].equals(tasksFilter) ? accent : surface));
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48));
             cp.setMargins(0, 0, dp(8), 0);
