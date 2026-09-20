@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.1.5-beta.1**: czynności z terminami i regułami powtarzania, miesięczny kalendarz, historia wykonań, spiżarnia, remanent oraz kopie danych. Poprzednia wersja 0.1.4-beta.1 została zbudowana i podpisana stałym certyfikatem; nowy APK 0.1.5 udostępniać dopiero po pomyślnym zakończeniu osobnej kompilacji. Systemowe powiadomienia, skaner, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
+> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.1.6-beta.1**: czynności z terminami i regułami powtarzania, miesięczny kalendarz, historia wykonań, spiżarnia, remanent oraz kopie danych. Poprzednia wersja 0.1.4-beta.1 została zbudowana i podpisana stałym certyfikatem; nowy APK 0.1.5 udostępniać dopiero po pomyślnym zakończeniu osobnej kompilacji. Systemowe powiadomienia, skaner, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [EDHOME 0.1.6-beta.1 — wymagana aktualizacja w Beta, Później tylko w Stable](docs/BETA_0_1_6.md)
 - [EDHOME 0.1.5-beta.1 — czynności, kalendarz, migracja i testy](docs/BETA_0_1_5.md)
 - [EDHOME 0.1.4-beta.1 — kod kopii danych i instrukcja ręcznego przenoszenia](docs/BETA_0_1_4.md)
 - [EDHOME 0.1.2-beta.1 — aktualizator Beta/Stable i wymagany hosting](docs/BETA_0_1_2.md)
