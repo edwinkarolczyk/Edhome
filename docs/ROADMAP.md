@@ -1,5 +1,7 @@
 # EDHOME — roadmapa (propozycja)
 
+> **Stan bieżący 0.2.6-beta.1 na `beta`:** rzeczywiste repozytorium `edwinkarolczyk/Edhome` jest publiczne; aktualizacje podpisanego APK korzystają z GitHub Releases i manifestu na `beta`, bez osobnego tokenu. Kolejny ukończony fragment 0.2: priorytet i czas wykonania czynności, SQLite v5 i zgodny backup starszych danych. Test end-to-end na fizycznym telefonie pozostaje osobnym kryterium odbioru. Główny rejestr wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
 | Etap | Zakres | Warunek odbioru |
@@ -26,7 +28,7 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 
 ## Otwarte decyzje
 
-- Nazwa repozytorium to obecnie **Edhime**; marka aplikacji **EDHOME**. Ewentualne przemianowanie GitHub tylko po odrębnej decyzji.
+- Rzeczywiste repozytorium to **edwinkarolczyk/Edhome**, publiczne; marka aplikacji **EDHOME**. Wcześniejsze `Edhime` jest nieaktualnym zapisem historycznym.
 - Stos Android i silnik lokalnego rozpoznawania mowy.
 - Format i źródła legalnie dostępnej bazy ogrodniczej.
 - Konkretny bank, treści powiadomień, zakres dostępu Android Notification Listener i formaty wyciągów.
@@ -57,11 +59,11 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - **0.1.1-beta.1:** na `beta` podpięte dwa różne zasoby ikon Stable/Beta; dodano pierwszy **prototyp** ręcznego kreatora remanentu ze snapshotem, zachowaniem postępu, raportem, korektą po zatwierdzeniu i migracją SQLite v1→v2. Cykliczne przypomnienia, skaner aparatu, jednostki kg/l i automatyczna synchronizacja nadal są **niezrealizowane**.
 - [Opis i test ręczny wersji 0.1.1](BETA_0_1_1.md). Status builda sprawdza się w GitHub Actions, nie należy przyjmować ukończonej aplikacji na podstawie samego zapisu w roadmapie.
 
-## Aktualizacje — stan faktyczny 0.1.2-beta.1
+## Aktualizacje — stan historyczny 0.1.2-beta.1 (kanał zaktualizowano w 0.2.5)
 
 - Kod klienta **Beta DEV**: aktywne sprawdzanie małego manifestu HTTPS co 30 s po konfiguracji adresu, automatyczne pobranie nowej wersji, SHA-256, identyfikator pakietu/podpis i zgoda systemowa na instalację; możliwość ręcznego wskazania lokalnego APK.
 - Kod klienta **Stable**: integracja Google Play In-App Updates, sprawdzenie raz po odblokowaniu aplikacji, „Aktualizuj / Później”, możliwość otwarcia szczegółów Play. Stable nieopublikowana — brak testu prawdziwej aktualizacji sklepowej.
-- **Niezamknięty element infrastruktury:** źródło publicznie dostępnego bez tokenu manifestu HTTPS i zgodnie podpisanych APK; prywatny GitHub Actions wymaga autoryzacji i nie jest takim źródłem. Workflow może wygenerować SHA-256 i manifest po ustawieniu `EDHOME_BETA_APK_URL`, ale nie hostuje plików.
+- **Historycznie niezakończona infrastruktura:** przed 0.2.5 nie było publicznego manifestu i APK. Od 0.2.5 podpisane APK są publikowane w GitHub Releases publicznego repo, a manifest na gałęzi `beta`; nie należy wracać do ręcznej konfiguracji URL/tokenów.
 - **Przed rzeczywistą migracją** zadbać o trwały podpis, backup/eksport i regresję aktualizacji na telefonie. Warianty debug mogą mieć konflikt certyfikatu z wcześniejszymi wydaniami.
 
 [Zasady i wymagania kanału](BETA_0_1_2.md).
@@ -76,3 +78,10 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - Osobna weryfikacja wydania APK w GitHub Actions; zapis kodu nie oznacza testu instalacji na fizycznym telefonie.
 
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
+
+
+## Następny inkrement — 0.2.7-beta.1
+
+- Domownik/wykonawca czynności i lokalny grafik pracy z wyjątkami (jako **plan** do kolejnej wersji, nie deklaracja gotowości).
+- Później proponowanie trzech terminów uwzględniających szacowany czas i grafik; zadanie zawsze pozostaje samodzielne i może nie mieć przypisanego miejsca.
+- Dalsza rozbudowa alertów i powiązań z wieloma obiektami po zweryfikowaniu migracji, backupu i testów na telefonie.
