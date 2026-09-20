@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** kod **EDHOME 0.2.2-beta.1** (`versionCode 12`, SQLite 4): menu 3 × 3, samodzielne czynności, opcjonalne Miejsca, spiżarnia, remanent i kopie danych. Po zgodzie właściciela wbudowany jest domyślny adres publicznego kanału APK. **Kanał nie działa jeszcze, dopóki nie powstanie publiczne repozytorium `EDHOME-Updates` i nie zostanie dodany ograniczony sekret publikowania.** Kod, dane i podpis pozostają prywatne. Żaden wariant nie jest w Google Play.
+> **Status gałęzi `beta`:** kod **EDHOME 0.2.3-beta.1** (`versionCode 13`, SQLite 4): menu 3 × 3 z zapamiętywaniem kolejności, kalendarz miesiąc/tydzień/dzień/agenda, przypomnienia opt-in, czynności, Miejsca, spiżarnia, remanent i kopie danych. Po zgodzie właściciela wbudowany jest domyślny adres publicznego kanału APK. **Kanał nie działa jeszcze, dopóki nie powstanie publiczne repozytorium `EDHOME-Updates` i nie zostanie dodany ograniczony sekret publikowania.** Kod, dane i podpis pozostają prywatne. Żaden wariant nie jest w Google Play.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.2.3 — zakres zmian, ograniczenia i test na telefonie](docs/BETA_0_2_3.md)
 - [Włączenie publicznego kanału APK — jednorazowe kroki GitHub](docs/KANAL_AKTUALIZACJI_BETA.md)
 - [EDHOME 0.2.1-beta.1 — pionowa siatka 3 × 3](docs/BETA_0_2_1.md)
 - [EDHOME 0.2.0-beta.1 — Miejsca, aktualizator, konfiguracja kanału](docs/BETA_0_2_0.md)
@@ -62,6 +63,6 @@
 
 ## Następne kroki
 
-Na gałęzi `beta`: dopracować UI kalendarza i systemowe przypomnienia, a następnie miejsca, przedmioty i relacje czynności. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
+Na gałęzi `beta`: sprawdzić 0.2.3 na Androidzie i uruchomić publiczny kanał APK; następnie rozwijać przypomnienia, miejsca, przedmioty i relacje czynności. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
