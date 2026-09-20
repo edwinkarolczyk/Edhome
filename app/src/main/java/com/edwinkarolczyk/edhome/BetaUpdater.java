@@ -5,6 +5,9 @@ import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.Typeface;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -286,12 +289,34 @@ public final class BetaUpdater {
                         notifying = true;
                         // Beta DEV: a verified newer APK is mandatory; Stable alone
                         // offers "Później" through PlayUpdateBridge.
+                        int padding = (int) (24 * activity.getResources()
+                            .getDisplayMetrics().density + 0.5f);
+                        LinearLayout content = new LinearLayout(activity);
+                        content.setOrientation(LinearLayout.VERTICAL);
+                        content.setPadding(padding, padding, padding, padding / 2);
+                        TextView heading = new TextView(activity);
+                        heading.setText("EDHOME  •  BETA");
+                        heading.setTextColor(0xff7dd2ba);
+                        heading.setTextSize(14);
+                        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                        content.addView(heading);
+                        TextView version = new TextView(activity);
+                        version.setText("Wymagana aktualizacja\\nWersja " + requestedCode);
+                        version.setTextColor(0xfff7fbff);
+                        version.setTextSize(23);
+                        version.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                        version.setPadding(0, padding / 2, 0, padding / 2);
+                        content.addView(version);
+                        TextView description = new TextView(activity);
+                        description.setText((releaseNotes.isEmpty()
+                            ? "Nowe wydanie EDHOME Beta jest gotowe."
+                            : releaseNotes) + "\\n\\nZweryfikowano plik i podpis APK. "
+                            + "Android poprosi Cię o zgodę na instalację.");
+                        description.setTextColor(0xffc5d3dd);
+                        description.setTextSize(15);
+                        content.addView(description);
                         AlertDialog dialog = new AlertDialog.Builder(activity)
-                            .setTitle("EDHOME Beta — wymagana aktualizacja")
-                            .setMessage("Nowa wersja (" + requestedCode + ") jest gotowa.\n\n"
-                                + releaseNotes
-                                + "\n\nPrzed dalszym korzystaniem z EDHOME Beta zainstaluj aktualizację. "
-                                + "Plik i podpis zostały sprawdzone. Android poprosi Cię o zatwierdzenie instalacji.")
+                            .setView(content)
                             .setPositiveButton("Aktualizuj", (d, w) -> {
                                 notifying = false;
                                 install(candidate);
@@ -300,6 +325,8 @@ public final class BetaUpdater {
                             .create();
                         dialog.setCanceledOnTouchOutside(false);
                         dialog.show();
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xff7dd2ba);
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setAllCaps(false);
                         GradientDrawable panel = new GradientDrawable();
                         panel.setColor(0xff203344);
                         panel.setCornerRadius(activity.getResources()
