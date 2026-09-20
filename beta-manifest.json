@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 15,
-  "versionName": "0.2.5-beta.1",
-  "changelog": "EDHOME Beta 0.2.5 — automatyczne aktualizacje z GitHub Releases.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.2.5-beta.1/edhome-beta.apk",
-  "sha256": "5620a7e690dba2baeef22ff732925157463af2473b0e99f32242d68da177d36f"
+  "versionCode": 16,
+  "versionName": "0.2.6-beta.1",
+  "changelog": "EDHOME Beta 0.2.6 — priorytet i czas czynności, migracja SQLite v5, zgodne kopie danych.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.2.6-beta.1/edhome-beta.apk",
+  "sha256": "6ee461780f199226861f2f5eb5de58c4ead587b059be8a44d1b3d7112819afde"
 }
