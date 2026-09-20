@@ -92,6 +92,15 @@ public final class BetaUpdater {
         return prefs.getString("updates_feed", "");
     }
 
+    /** A build-time URL alone does not prove the APK/manifest have been published. */
+    public boolean channelVerified() {
+        return prefs.getBoolean("updates_channel_verified", false);
+    }
+
+    public String channelStatus() {
+        return prefs.getString("updates_channel_status", "unchecked");
+    }
+
     public boolean feedFromBuild() {
         return !BuildConfig.EDHOME_BETA_FEED_URL.isEmpty();
     }
@@ -142,7 +151,8 @@ public final class BetaUpdater {
             try {
                 manifest = readManifest(endpoint);
             } catch (Exception e) {
-                error = e.getClass().getSimpleName();
+                error = e instanceof java.io.FileNotFoundException
+                    ? "missing" : e.getClass().getSimpleName();
             }
             JSONObject result = manifest;
             String failure = error;
@@ -150,10 +160,22 @@ public final class BetaUpdater {
                 checking = false;
                 if (!running && !manual) return;
                 if (failure != null) {
+                    prefs.edit().putBoolean("updates_channel_verified", false)
+                        .putString("updates_channel_status",
+                            "missing".equals(failure) ? "missing" : "offline").apply();
                     DiagnosticLog.event("UPDATE_CHECK_FAILED");
-                    if (manual) inform("Nie udało się odczytać źródła aktualizacji HTTPS. Sprawdź połączenie i manifest.");
+                    if (manual) inform("missing".equals(failure)
+                        ? "Kanał aktualizacji EDHOME nie został jeszcze opublikowany. "
+                            + "Nie musisz wpisywać żadnego adresu HTTPS. "
+                            + "Do czasu uruchomienia kanału użyj przycisku Instaluj APK "
+                            + "i wskaż podpisany plik z GitHub Actions."
+                        : "Nie można teraz połączyć się z kanałem aktualizacji EDHOME. "
+                            + "Sprawdź internet albo spróbuj później. "
+                            + "Nie musisz sam ustawiać żadnego adresu HTTPS.");
                     return;
                 }
+                prefs.edit().putBoolean("updates_channel_verified", true)
+                    .putString("updates_channel_status", "online").apply();
                 handleManifest(result, manual);
             });
         });
@@ -167,7 +189,10 @@ public final class BetaUpdater {
         conn.setInstanceFollowRedirects(false);
         conn.setRequestProperty("Accept", "application/json");
         try {
-            if (conn.getResponseCode() != 200) throw new IllegalStateException("HTTP_NOT_OK");
+            int status = conn.getResponseCode();
+            if (status == 404 || status == 410)
+                throw new java.io.FileNotFoundException("EDHOME channel not published");
+            if (status != 200) throw new IllegalStateException("HTTP_" + status);
             if (conn.getContentLengthLong() > MAX_MANIFEST) throw new IllegalStateException("MANIFEST_TOO_LARGE");
             try (InputStream in = conn.getInputStream()) {
                 byte[] data = new byte[MAX_MANIFEST + 1];
