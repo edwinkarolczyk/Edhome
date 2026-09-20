@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** kod **EDHOME 0.2.4-beta.1** (`versionCode 14`, SQLite 4): menu 3 × 3 z zapamiętywaniem kolejności, kalendarz miesiąc/tydzień/dzień/agenda, przypomnienia opt-in, czynności, Miejsca, spiżarnia, remanent i kopie danych. Po zgodzie właściciela wbudowany jest domyślny adres publicznego kanału APK. **Kanał nie działa jeszcze, dopóki nie powstanie publiczne repozytorium `EDHOME-Updates` i nie zostanie dodany ograniczony sekret publikowania.** Kod, dane i podpis pozostają prywatne. Żaden wariant nie jest w Google Play.
+> **Status gałęzi `beta`:** EDHOME **0.2.5-beta.1** (`versionCode 15`, SQLite 4). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,9 +44,10 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.2.5 — OTA przez GitHub Releases i jednorazowa aktualizacja przejściowa](docs/BETA_0_2_5.md)
 - [Wersja 0.2.4 — poprawiony komunikat niedostępnego kanału aktualizacji](docs/BETA_0_2_4.md)
 - [Wersja 0.2.3 — zakres zmian, ograniczenia i test na telefonie](docs/BETA_0_2_3.md)
-- [Włączenie publicznego kanału APK — jednorazowe kroki GitHub](docs/KANAL_AKTUALIZACJI_BETA.md)
+- [Archiwalne kroki dla osobnego repo dystrybucji — obecnie niepotrzebne](docs/KANAL_AKTUALIZACJI_BETA.md)
 - [EDHOME 0.2.1-beta.1 — pionowa siatka 3 × 3](docs/BETA_0_2_1.md)
 - [EDHOME 0.2.0-beta.1 — Miejsca, aktualizator, konfiguracja kanału](docs/BETA_0_2_0.md)
 - [EDHOME 0.1.8-beta.1 — panel, zadania, spiżarnia, ochrona danych](docs/BETA_0_1_8.md)
@@ -64,6 +65,6 @@
 
 ## Następne kroki
 
-Na gałęzi `beta`: sprawdzić 0.2.3 na Androidzie i uruchomić publiczny kanał APK; następnie rozwijać przypomnienia, miejsca, przedmioty i relacje czynności. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
+Na gałęzi `beta`: zweryfikować wydanie 0.2.5 i publiczny manifest, przetestować instalację przejściową na Androidzie oraz wykrycie następnej wersji OTA; następnie rozwijać przypomnienia, miejsca, przedmioty i relacje czynności. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
