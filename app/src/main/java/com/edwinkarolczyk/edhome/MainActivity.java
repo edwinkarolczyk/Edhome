@@ -1172,7 +1172,7 @@ public final class MainActivity extends Activity {
 
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
-        note("Eksport zawiera czynności, spiżarnię, historię i bieżący postęp remanentu, nazwę gospodarstwa oraz motyw.");
+        note("Eksport zawiera czynności, miejsca i ich przypisania, spiżarnię, historię, bieżący remanent oraz ustawienia gospodarstwa.");
         note("Nie zawiera PIN-u, dziennika diagnostycznego ani adresu aktualizacji. Plik JSON nie jest szyfrowany: przechowuj go prywatnie.");
         note("Kopia umożliwia przeniesienie danych do nowej instalacji, ale nie omija wymogu tego samego podpisu APK przy zwykłej aktualizacji Androida.");
         button("Eksportuj kopię danych (.json)", () -> {
@@ -1197,7 +1197,7 @@ public final class MainActivity extends Activity {
             }
         });
         note("Przywrócenie zastępuje CAŁĄ obecną spiżarnię, czynności i remanenty. Przed importem wykonaj eksport obecnego stanu.");
-        note("Odzyskiwanie istniejących danych ze starszej wersji 0.1.2, która nie ma eksportu, wymaga osobnego planu — nie odinstalowuj jej bez kopii.");
+        note("Przed aktualizacją sprawdź zapisany plik JSON. Poprzednie kopie 0.1.4–0.1.8 można zaimportować.");
     }
 
     /** Update dashboard: no feed URL, SHA, manifest or developer text in primary UI. */
