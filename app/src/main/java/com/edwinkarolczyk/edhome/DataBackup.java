@@ -24,11 +24,13 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 6;
+    private static final int DB_VERSION = 7;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
         {"household_members", "id", "name"},
+        {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
+        {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id"},
         {"pantry", "id", "name", "qty"},
@@ -106,7 +108,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -135,6 +137,8 @@ final class DataBackup {
             JSONArray items = (inputVersion == 2 && "task_history".equals(definition[0]))
                 || (inputVersion < 4 && "places".equals(definition[0]))
                 || (inputVersion < 6 && "household_members".equals(definition[0]))
+                || (inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])
+                    || "member_shift_exceptions".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -208,6 +212,27 @@ final class DataBackup {
                             || memberName.length() > 80)
                         throw new IllegalArgumentException("Nieprawidłowy domownik.");
                 }
+                if ("member_weekly_shifts".equals(definition[0])
+                        || "member_shift_exceptions".equals(definition[0])) {
+                    String shift = values.getAsString("shift");
+                    if (!java.util.Arrays.asList("off", "morning", "afternoon",
+                            "night").contains(shift))
+                        throw new IllegalArgumentException("Nieprawidłowa zmiana.");
+                    if ("member_weekly_shifts".equals(definition[0])) {
+                        Long day = values.getAsLong("weekday");
+                        if (day == null || day < 1 || day > 7)
+                            throw new IllegalArgumentException("Nieprawidłowy dzień tygodnia.");
+                    } else {
+                        String date = values.getAsString("date");
+                        try {
+                            if (date == null
+                                    || !java.time.LocalDate.parse(date).toString().equals(date))
+                                throw new IllegalArgumentException("Nieprawidłowa data wyjątku.");
+                        } catch (java.time.format.DateTimeParseException problem) {
+                            throw new IllegalArgumentException("Nieprawidłowa data wyjątku.");
+                        }
+                    }
+                }
                 if ("pantry".equals(definition[0])) {
                     Long qty = values.getAsLong("qty");
                     if (qty == null || qty > 100000000L ||
@@ -269,6 +294,24 @@ final class DataBackup {
                     java.util.Locale.ROOT)))
                 throw new IllegalArgumentException("Powielone imiona domowników.");
         }
+        Set<String> weeklyKeys = new HashSet<>();
+        for (ContentValues shift : parsed.get("member_weekly_shifts")) {
+            Long memberId = shift.getAsLong("member_id");
+            if (!members.contains(memberId))
+                throw new IllegalArgumentException("Grafik wskazuje nieistniejącego domownika.");
+            String key = memberId + ":" + shift.getAsLong("weekday");
+            if (!weeklyKeys.add(key))
+                throw new IllegalArgumentException("Powielony dzień tygodnia w grafiku.");
+        }
+        Set<String> exceptionKeys = new HashSet<>();
+        for (ContentValues shift : parsed.get("member_shift_exceptions")) {
+            Long memberId = shift.getAsLong("member_id");
+            if (!members.contains(memberId))
+                throw new IllegalArgumentException("Wyjątek wskazuje nieistniejącego domownika.");
+            String key = memberId + ":" + shift.getAsString("date");
+            if (!exceptionKeys.add(key))
+                throw new IllegalArgumentException("Powielony wyjątek w grafiku.");
+        }
         Set<Long> places = new HashSet<>();
         Set<String> placeNames = new HashSet<>();
         for (ContentValues place : parsed.get("places")) {
@@ -326,6 +369,7 @@ final class DataBackup {
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "assignee_id".equals(column)
+            || "member_id".equals(column) || "weekday".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
