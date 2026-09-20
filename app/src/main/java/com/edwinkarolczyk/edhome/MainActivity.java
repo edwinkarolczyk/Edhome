@@ -169,7 +169,8 @@ public final class MainActivity extends Activity {
         b.setTextSize(16);
         b.setAllCaps(false);
         b.setTextColor(bg);
-        b.setBackgroundTintList(ColorStateList.valueOf(accent));
+        b.setBackground(rounded(accent));
+        b.setMinHeight(dp(56));
         b.setOnClickListener(v -> callback.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.setMargins(0, dp(4), 0, dp(4));
