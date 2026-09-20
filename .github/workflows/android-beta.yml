@@ -48,6 +48,9 @@ jobs:
             tests/task_rules/TaskRulesSmoke.java
           java -cp "$RUNNER_TEMP/task-check" com.edwinkarolczyk.edhome.TaskRulesSmoke
       - name: Compile-check Beta and Stable
+        env:
+          EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO }}
+          EDHOME_BETA_FEED_URL: ${{ vars.EDHOME_BETA_FEED_URL }}
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
         env:
@@ -74,6 +77,8 @@ jobs:
           EDHOME_BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
           EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
           EDHOME_BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+          EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO }}
+          EDHOME_BETA_FEED_URL: ${{ vars.EDHOME_BETA_FEED_URL }}
         run: gradle --no-daemon :app:assembleBetaRelease :app:assembleStableDebug
       - name: Verify signed APK certificate
         run: |
@@ -98,6 +103,17 @@ jobs:
             beta-manifest.json
           if-no-files-found: error
           retention-days: 14
+      - name: Publish public binary channel (opt in only)
+        env:
+          EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO }}
+          EDHOME_BETA_NOTES: ${{ vars.EDHOME_BETA_NOTES }}
+          GH_TOKEN: ${{ secrets.EDHOME_PUBLIC_CHANNEL_TOKEN }}
+        run: |
+          if [[ -z "$EDHOME_PUBLIC_CHANNEL_REPO" ]]; then
+            echo "Public channel not approved/configured; signed APK remains private artifact."
+            exit 0
+          fi
+          python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/edhome-beta.p12"
