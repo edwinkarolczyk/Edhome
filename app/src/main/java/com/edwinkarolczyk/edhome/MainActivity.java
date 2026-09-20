@@ -497,7 +497,7 @@ public final class MainActivity extends Activity {
                 history.append(time);
                 if (!cursor.isNull(1)) history.append(" • termin ").append(cursor.getString(1));
                 if (!cursor.isNull(2)) history.append(" → ").append(cursor.getString(2));
-                history.append("\\n");
+                history.append("\n");
             }
         }
         new AlertDialog.Builder(this).setTitle("Historia: " + name)
@@ -571,7 +571,7 @@ public final class MainActivity extends Activity {
                 boolean inMonth = YearMonth.from(day).equals(month);
                 TextView tile = text(String.valueOf(day.getDayOfMonth())
                     + (inMonth && counts.containsKey(iso)
-                        ? "\\n• " + counts.get(iso) : ""), 13, false);
+                        ? "\n• " + counts.get(iso) : ""), 13, false);
                 tile.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
                 tile.setMinHeight(dp(54));
                 tile.setTextColor(inMonth ? ink : subdued);
