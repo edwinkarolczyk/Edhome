@@ -301,7 +301,7 @@ public final class BetaUpdater {
                         heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                         content.addView(heading);
                         TextView version = new TextView(activity);
-                        version.setText("Wymagana aktualizacja\\nWersja " + requestedCode);
+                        version.setText("Wymagana aktualizacja\nWersja " + requestedCode);
                         version.setTextColor(0xfff7fbff);
                         version.setTextSize(23);
                         version.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -310,7 +310,7 @@ public final class BetaUpdater {
                         TextView description = new TextView(activity);
                         description.setText((releaseNotes.isEmpty()
                             ? "Nowe wydanie EDHOME Beta jest gotowe."
-                            : releaseNotes) + "\\n\\nZweryfikowano plik i podpis APK. "
+                            : releaseNotes) + "\n\nZweryfikowano plik i podpis APK. "
                             + "Android poprosi Cię o zgodę na instalację.");
                         description.setTextColor(0xffc5d3dd);
                         description.setTextSize(15);
