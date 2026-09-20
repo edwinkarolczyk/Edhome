@@ -40,6 +40,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+      - name: Verify update-channel scripts
+        run: python3 -m py_compile .github/scripts/prepare_beta_manifest.py .github/scripts/publish_public_channel.py
       - name: Task calendar recurrence regression
         run: |
           mkdir -p "$RUNNER_TEMP/task-check"
