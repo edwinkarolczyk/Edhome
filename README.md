@@ -1,8 +1,8 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.1.4-beta.1**, z panelem, testową spiżarnią, czynnościami, remanentem, diagnostyką, klientem aktualizacji DEV oraz eksportem/importem kopii danych. Ostatnia opisana wcześniej kompilacja APK to 0.1.2-beta.1; nowsza wersja nie jest jeszcze podpisanym wydaniem. Kalendarz, skaner aparatu, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
+> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.1.5-beta.1**: czynności z terminami i regułami powtarzania, miesięczny kalendarz, historia wykonań, spiżarnia, remanent oraz kopie danych. Poprzednia wersja 0.1.4-beta.1 została zbudowana i podpisana stałym certyfikatem; nowy APK 0.1.5 udostępniać dopiero po pomyślnym zakończeniu osobnej kompilacji. Systemowe powiadomienia, skaner, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
 
-**UWAGA — konflikt podpisu APK (19.09.2026):** kolejne kompilacje Debug otrzymywały różne certyfikaty. **Nie odinstalowuj działającej wersji, jeżeli zależy Ci na danych.** Kod 0.1.4-beta.1 i poprawiony workflow czekają na skonfigurowanie trwałego prywatnego klucza przez właściciela repozytorium; CI świadomie nie publikuje nowych APK bez tego klucza. To **nie naprawia wstecz** podpisu istniejącej instalacji. [Przyczyna, kroki ratunkowe i konfiguracja podpisu](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
+**Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
 **EDHOME** to lokalne centrum zarządzania gospodarstwem domowym: wspólny kalendarz i planer, czynności, finanse osobiste i wspólne, magazyn z QR, ogród, pojazdy, dom i remonty, energia oraz integracja SUPLA. Jedno gospodarstwo może mieć wielu domowników i urządzeń.
 
@@ -44,17 +44,18 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [EDHOME 0.1.5-beta.1 — czynności, kalendarz, migracja i testy](docs/BETA_0_1_5.md)
 - [EDHOME 0.1.4-beta.1 — kod kopii danych i instrukcja ręcznego przenoszenia](docs/BETA_0_1_4.md)
 - [EDHOME 0.1.2-beta.1 — aktualizator Beta/Stable i wymagany hosting](docs/BETA_0_1_2.md)
 - [EDHOME 0.1.1-beta.1 — wcześniejsza beta i remanent](docs/BETA_0_1_1.md)
 - [Zbiorczy rejestr ustaleń](docs/SPECYFIKACJA_CALOSC.md)
 - [Roadmapa](docs/ROADMAP.md) i [architektura](docs/ARCHITEKTURA.md)
-- [Budowanie APK w GitHub Actions](https://github.com/edwinkarolczyk/Edhime/actions/workflows/android-beta.yml)
+- [Budowanie APK w GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/workflows/android-beta.yml)
 
-**Bezpieczeństwo danych:** używaj wyłącznie danych testowych. Debug APK może mieć inny podpis niż poprzednia instalacja, a odinstalowanie usuwa lokalną spiżarnię/czynności/PIN. Eksport/import danych dodano dopiero w kodzie 0.1.4; wcześniejsza instalacja 0.1.2 nie ma eksportu i nie można jej automatycznie bezpiecznie zastąpić.
+**Bezpieczeństwo danych:** w fazie beta używaj danych testowych i eksportuj kopię przed aktualizacją. Obecna linia podpisanych APK może aktualizować się w miejscu; stare instalacje Debug z obcym podpisem wymagają osobnego odzyskiwania danych. Kopia JSON 0.1.4 (SQLite v2) może zostać zaimportowana przez kod 0.1.5 (SQLite v3).
 
 ## Następne kroki
 
-Na gałęzi `beta`: zapisać model obiektów i relacji, plan etapów, kontrakty synchronizacji, politykę prywatności, dopiero potem wybrać stos Android i przygotować uruchamialny szkielet. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
+Na gałęzi `beta`: dopracować UI kalendarza i systemowe przypomnienia, a następnie miejsca, przedmioty i relacje czynności. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
 
-**Uwaga o nazwie repozytorium:** adres GitHub jest na razie `edwinkarolczyk/Edhime` (pisownia inna niż marka EDHOME). Nie zmieniono nazwy repozytorium.
+**Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
