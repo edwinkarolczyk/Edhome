@@ -69,10 +69,22 @@ public final class MainActivity extends Activity {
     private String calendarDay = LocalDate.now().toString();
     private String calendarView = "month";
     private String tasksFilter = "all";
+    private long selectedMemberId;
     private String pantrySearch = "";
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
+    };
+    private static final String[] SHIFT_VALUES = {
+        "unset", "off", "morning", "afternoon", "night"
+    };
+    private static final String[] SHIFT_LABELS = {
+        "Nie ustawiono", "Wolne", "06:00–14:00", "14:00–22:00",
+        "22:00–06:00 (nocna)"
+    };
+    private static final String[] WEEKDAY_LABELS = {
+        "Poniedziałek", "Wtorek", "Środa", "Czwartek",
+        "Piątek", "Sobota", "Niedziela"
     };
     private static final String[] TASK_PRIORITIES = {"low", "normal", "high", "urgent"};
     private static final String[] TASK_PRIORITY_LABELS = {
@@ -117,6 +129,7 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
+        else if (unlocked && "member_schedule".equals(screen)) go("members");
         else if (unlocked && ("task_history".equals(screen)
                 || "members".equals(screen))) go("tasks");
         else if (unlocked && !"home".equals(screen)) go("home");
@@ -281,6 +294,7 @@ public final class MainActivity extends Activity {
             switch (screen) {
                 case "tasks": tasks(); break;
                 case "members": members(); break;
+                case "member_schedule": memberSchedule(); break;
                 case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
                 case "places": places(); break;
@@ -494,7 +508,7 @@ public final class MainActivity extends Activity {
     private void members() {
         header("Domownicy • wykonawcy czynności");
         note("Lokalna lista wykonawców. Możesz pozostawić czynność bez osoby. "
-            + "Grafiki pracy i wyjątki będą w następnym etapie.");
+            + "Grafik i wyjątki ustawiasz osobno dla każdej osoby.");
         EditText person = field("Imię lub nazwa osoby", false);
         person.setSingleLine(true);
         button("+ Dodaj domownika", () -> {
@@ -519,6 +533,10 @@ public final class MainActivity extends Activity {
                 String memberName = people.getString(1);
                 LinearLayout memberCard = card();
                 memberCard.addView(text(memberName, 18, true));
+                smallButton(memberCard, "Grafik i wyjątki →", () -> {
+                    selectedMemberId = memberId;
+                    go("member_schedule");
+                });
                 smallButton(memberCard, "Usuń domownika", () ->
                     new AlertDialog.Builder(this)
                         .setTitle("Usunąć domownika?")
@@ -1857,7 +1875,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 6);
+            super(context, "edhome-beta-preview.db", null, 7);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -1873,11 +1891,12 @@ public final class MainActivity extends Activity {
             addTaskHistory(database);
             addPlaces(database);
             addMembers(database);
+            addMemberSchedules(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 6) {
+            if (oldVersion < 1 || newVersion > 7) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -1907,6 +1926,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN assignee_id INTEGER");
                 DiagnosticLog.event("DATABASE_MIGRATED_5_TO_6");
             }
+            if (oldVersion < 7) {
+                addMemberSchedules(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_6_TO_7");
+            }
         }
 
         private static void addPlaces(SQLiteDatabase database) {
@@ -1922,6 +1945,17 @@ public final class MainActivity extends Activity {
             database.execSQL("CREATE INDEX task_history_task_idx ON task_history(task_id,id)");
         }
 
+
+        private static void addMemberSchedules(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE member_weekly_shifts ("
+                + "member_id INTEGER NOT NULL, weekday INTEGER NOT NULL "
+                + "CHECK(weekday BETWEEN 1 AND 7), shift TEXT NOT NULL, "
+                + "PRIMARY KEY(member_id,weekday))");
+            database.execSQL("CREATE TABLE member_shift_exceptions ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "member_id INTEGER NOT NULL, date TEXT NOT NULL, "
+                + "shift TEXT NOT NULL, UNIQUE(member_id,date))");
+        }
 
         private static void addMembers(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE household_members ("
@@ -2241,12 +2275,95 @@ public final class MainActivity extends Activity {
                 clear.putNull("assignee_id");
                 database.update("tasks", clear, "assignee_id=?",
                     new String[]{Long.toString(memberId)});
+                database.delete("member_weekly_shifts", "member_id=?",
+                    new String[]{Long.toString(memberId)});
+                database.delete("member_shift_exceptions", "member_id=?",
+                    new String[]{Long.toString(memberId)});
                 database.delete("household_members", "id=?",
                     new String[]{Long.toString(memberId)});
                 database.setTransactionSuccessful();
             } finally {
                 database.endTransaction();
             }
+        }
+
+        String memberName(long memberId) {
+            try (Cursor person = getReadableDatabase().rawQuery(
+                    "SELECT name FROM household_members WHERE id=?",
+                    new String[]{Long.toString(memberId)})) {
+                return person.moveToFirst() ? person.getString(0) : "";
+            }
+        }
+
+        private void requireMember(long memberId) {
+            if (memberName(memberId).isEmpty())
+                throw new IllegalArgumentException("Domownik nie istnieje.");
+        }
+
+        private static void validateShift(String shift) {
+            if (!java.util.Arrays.asList(SHIFT_VALUES).contains(shift))
+                throw new IllegalArgumentException("Nieprawidłowy rodzaj zmiany.");
+        }
+
+        String weeklyShift(long memberId, int weekday) {
+            if (weekday < 1 || weekday > 7)
+                throw new IllegalArgumentException("Nieprawidłowy dzień tygodnia.");
+            try (Cursor shift = getReadableDatabase().rawQuery(
+                    "SELECT shift FROM member_weekly_shifts "
+                    + "WHERE member_id=? AND weekday=?",
+                    new String[]{Long.toString(memberId), Integer.toString(weekday)})) {
+                return shift.moveToFirst() ? shift.getString(0) : "unset";
+            }
+        }
+
+        void setWeeklyShift(long memberId, int weekday, String value) {
+            requireMember(memberId);
+            validateShift(value);
+            if (weekday < 1 || weekday > 7)
+                throw new IllegalArgumentException("Nieprawidłowy dzień tygodnia.");
+            SQLiteDatabase database = getWritableDatabase();
+            if ("unset".equals(value)) {
+                database.delete("member_weekly_shifts",
+                    "member_id=? AND weekday=?",
+                    new String[]{Long.toString(memberId), Integer.toString(weekday)});
+                return;
+            }
+            ContentValues values = new ContentValues();
+            values.put("member_id", memberId);
+            values.put("weekday", weekday);
+            values.put("shift", value);
+            database.insertWithOnConflict("member_weekly_shifts", null,
+                values, SQLiteDatabase.CONFLICT_REPLACE);
+        }
+
+        String effectiveShift(long memberId, String date) {
+            LocalDate parsed = LocalDate.parse(date);
+            try (Cursor shift = getReadableDatabase().rawQuery(
+                    "SELECT shift FROM member_shift_exceptions "
+                    + "WHERE member_id=? AND date=?",
+                    new String[]{Long.toString(memberId), date})) {
+                if (shift.moveToFirst()) return shift.getString(0);
+            }
+            return weeklyShift(memberId, parsed.getDayOfWeek().getValue());
+        }
+
+        void setShiftException(long memberId, String date, String shift) {
+            requireMember(memberId);
+            LocalDate.parse(date);
+            validateShift(shift);
+            SQLiteDatabase database = getWritableDatabase();
+            if ("unset".equals(shift)) {
+                database.delete("member_shift_exceptions",
+                    "member_id=? AND date=?",
+                    new String[]{Long.toString(memberId), date});
+                return;
+            }
+            ContentValues values = new ContentValues();
+            values.put("member_id", memberId);
+            values.put("date", date);
+            values.put("shift", shift);
+            database.insertWithOnConflict("member_shift_exceptions", null,
+                values, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
         boolean savePlace(Long id, String name, String kind) {
