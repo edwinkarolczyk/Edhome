@@ -491,6 +491,52 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void members() {
+        header("Domownicy • wykonawcy czynności");
+        note("Lokalna lista wykonawców. Możesz pozostawić czynność bez osoby. "
+            + "Grafiki pracy i wyjątki będą w następnym etapie.");
+        EditText person = field("Imię lub nazwa osoby", false);
+        person.setSingleLine(true);
+        button("+ Dodaj domownika", () -> {
+            try {
+                if (!db.addMember(person.getText().toString())) {
+                    person.setError("Ta osoba jest już na liście.");
+                    return;
+                }
+                DiagnosticLog.event("MEMBER_ADDED");
+                render();
+            } catch (IllegalArgumentException error) {
+                person.setError("Podaj nazwę osoby (1–80 znaków).");
+            }
+        });
+        int count = 0;
+        try (Cursor people = db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",
+                null)) {
+            while (people.moveToNext()) {
+                count++;
+                long memberId = people.getLong(0);
+                String memberName = people.getString(1);
+                LinearLayout memberCard = card();
+                memberCard.addView(text(memberName, 18, true));
+                smallButton(memberCard, "Usuń domownika", () ->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć domownika?")
+                        .setMessage("Czynności przypisane do " + memberName
+                            + " pozostaną, ale bez wykonawcy.")
+                        .setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Usuń", (dialog, which) -> {
+                            db.deleteMember(memberId);
+                            DiagnosticLog.event("MEMBER_REMOVED");
+                            render();
+                        }).show());
+            }
+        }
+        if (count == 0) note("Nie ma jeszcze domowników. Dodaj osobę, aby móc "
+            + "wybierać wykonawcę w formularzu czynności.");
+        button("← Czynności", () -> go("tasks"));
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
