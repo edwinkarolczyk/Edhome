@@ -2,6 +2,7 @@ package com.edwinkarolczyk.edhome;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentValues;
@@ -25,12 +26,23 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -51,6 +63,8 @@ public final class MainActivity extends Activity {
     private boolean unlocked;
     private boolean stableUpdateChecked;
     private String screen = "home";
+    private String calendarMonth = YearMonth.now().toString();
+    private String calendarDay = LocalDate.now().toString();
     private int bg, surface, ink, subdued, accent;
 
     @Override public void onCreate(Bundle savedState) {
@@ -211,7 +225,7 @@ public final class MainActivity extends Activity {
             switch (screen) {
                 case "tasks": tasks(); break;
                 case "pantry": pantry(); break;
-                case "calendar": placeholder("Kalendarz", "Wspólny kalendarz i powtarzanie czynności to następny etap."); break;
+                case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
@@ -302,12 +316,13 @@ public final class MainActivity extends Activity {
         note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
         title(prefs.getString("household", "Moje gospodarstwo"));
         LinearLayout info = card();
-        info.addView(text("Pierwsza wersja testowa", 19, true));
-        info.addView(text("Działa lokalnie: PIN, motywy, proste czynności i stan spiżarni.", 15, false));
-        note("Niedokończone czynności: " + db.openTasks());
+        info.addView(text("Twój domowy plan", 19, true));
+        info.addView(text("Czynności, harmonogram, kalendarz i stan spiżarni działają lokalnie.", 15, false));
+        note("Niedokończone czynności: " + db.openTasks()
+            + " • Zaległe terminy: " + db.overdueTasks());
         button("✓ Czynności", () -> go("tasks"));
         button("▣ Spiżarnia", () -> go("pantry"));
-        button("▦ Kalendarz — w planie", () -> go("calendar"));
+        button("▦ Kalendarz", () -> go("calendar"));
         button("⌗ Skaner kodów — w planie", () -> go("scanner"));
         button("◫ Remanent spiżarni", () -> go("audit"));
         button("↻ Aktualizacje", () -> go("updates"));
@@ -316,59 +331,283 @@ public final class MainActivity extends Activity {
         if (DiagnosticLog.enabled()) {
             button("🛠 Diagnostyka BETA", () -> go("diagnostics"));
         }
-        note("Remanent działa testowo offline. Skanera kodów, cyklicznych przypomnień, PayCheck, SUPLA i synchronizacji jeszcze nie ma.");
+        note("Harmonogram i historia wykonania działają offline. Powiadomienia systemowe, skaner, PayCheck, SUPLA i synchronizacja pozostają w planie.");
     }
 
     private void tasks() {
-        header("Czynności • testowa lista lokalna");
-        button("+ Nowa czynność", () -> {
-            EditText input = new EditText(this);
-            input.setSingleLine(true);
-            input.setHint("Np. zebrać winogrona");
-            new AlertDialog.Builder(this).setTitle("Dodaj czynność")
-                .setView(input).setNegativeButton("Anuluj", null)
-                .setPositiveButton("Dodaj", (dialog, which) -> {
-                    String name = input.getText().toString().trim();
-                    if (name.isEmpty()) { alert("Podaj nazwę."); return; }
-                    db.addTask(name);
-                    DiagnosticLog.event("TASK_ADDED");
-                    render();
-                }).show();
-        });
-        note("Długie przytrzymanie pozycji — usuń.");
+        header("Czynności • plan i wykonania");
+        note("Czynności działają samodzielnie; powiązania z przedmiotami będą opcjonalne w kolejnych etapach.");
+        button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
+        button("▦ Kalendarz czynności", () -> go("calendar"));
+        note("Zaległe: " + db.overdueTasks()
+            + " • Zakończenie czynności cyklicznej automatycznie wyznacza kolejny termin.");
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT id,title,done FROM tasks ORDER BY done ASC,id DESC", null)) {
-            if (cursor.getCount() == 0) note("Lista jest pusta.");
+                "SELECT id,title,done,due_date,repeat_rule,repeat_every FROM tasks "
+                + "ORDER BY done ASC,CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
+                + "due_date ASC,id DESC", null)) {
+            if (cursor.getCount() == 0) note("Brak czynności. Dodaj pierwszą.");
             while (cursor.moveToNext()) {
-                long id = cursor.getLong(0);
-                String name = cursor.getString(1);
-                boolean done = cursor.getInt(2) == 1;
-                LinearLayout box = card();
-                CheckBox check = new CheckBox(this);
-                check.setText(name);
-                check.setTextColor(done ? subdued : ink);
-                check.setTextSize(17);
-                check.setButtonTintList(ColorStateList.valueOf(accent));
-                check.setChecked(done);
-                box.addView(check);
-                check.setOnCheckedChangeListener((v, value) -> {
-                    db.setTaskDone(id, value);
-                    DiagnosticLog.event(value ? "TASK_COMPLETED" : "TASK_REOPENED");
+                drawTask(cursor.getLong(0), cursor.getString(1), cursor.getInt(2) == 1,
+                    cursor.isNull(3) ? "" : cursor.getString(3), cursor.getString(4),
+                    cursor.getInt(5));
+            }
+        }
+    }
+
+    private void smallButton(LinearLayout container, String label, Runnable action) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(14);
+        b.setOnClickListener(v -> action.run());
+        container.addView(b, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void drawTask(long id, String name, boolean done, String due,
+            String rule, int every) {
+        LinearLayout box = card();
+        CheckBox check = new CheckBox(this);
+        check.setText(name);
+        check.setChecked(done);
+        check.setTextSize(17);
+        check.setTextColor(done ? subdued : ink);
+        check.setButtonTintList(ColorStateList.valueOf(accent));
+        box.addView(check);
+        String description = (due.isEmpty() ? "Bez terminu" : "Termin: " + due)
+            + " • " + TaskRules.label(rule, every);
+        if (!done && !due.isEmpty() && due.compareTo(LocalDate.now().toString()) < 0)
+            description += " • ZALEGŁE";
+        if (done) description += " • Wykonane";
+        TextView meta = text(description, 13, false);
+        meta.setTextColor(subdued);
+        box.addView(meta);
+        check.setOnCheckedChangeListener((v, value) -> {
+            if (value) {
+                db.completeTask(id);
+                DiagnosticLog.event("TASK_COMPLETED");
+            } else {
+                db.reopenTask(id);
+                DiagnosticLog.event("TASK_REOPENED");
+            }
+            render();
+        });
+        smallButton(box, "Edytuj / termin / powtarzanie", () ->
+            editTask(id, name, due, rule, every));
+        smallButton(box, "Historia wykonań", () -> showTaskHistory(id, name));
+        smallButton(box, "Usuń", () ->
+            new AlertDialog.Builder(this).setTitle("Usunąć czynność?")
+                .setMessage(name).setNegativeButton("Nie", null)
+                .setPositiveButton("Usuń", (dialog, which) -> {
+                    db.deleteTask(id);
+                    DiagnosticLog.event("TASK_DELETED");
                     render();
-                });
-                check.setOnLongClickListener(v -> {
-                    new AlertDialog.Builder(this).setTitle("Usunąć czynność?")
-                        .setMessage(name).setNegativeButton("Nie", null)
-                        .setPositiveButton("Usuń", (dialog, which) -> {
-                            db.deleteTask(id);
-                            DiagnosticLog.event("TASK_DELETED");
-                            render();
-                        }).show();
-                    return true;
+                }).show());
+    }
+
+    private void editTask(Long id, String existingName, String existingDate,
+            String existingRule, int existingEvery) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(8));
+
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa czynności");
+        name.setText(existingName);
+        form.addView(name);
+
+        EditText date = new EditText(this);
+        date.setSingleLine(true);
+        date.setHint("Termin: RRRR-MM-DD (opcjonalnie)");
+        date.setText(existingDate);
+        date.setFocusable(false);
+        date.setOnClickListener(v -> {
+            LocalDate initial;
+            try { initial = LocalDate.parse(date.getText().toString()); }
+            catch (Exception ignored) { initial = LocalDate.now(); }
+            DatePickerDialog picker = new DatePickerDialog(this,
+                (view, year, month, day) ->
+                    date.setText(LocalDate.of(year, month + 1, day).toString()),
+                initial.getYear(), initial.getMonthValue() - 1,
+                initial.getDayOfMonth());
+            picker.show();
+        });
+        form.addView(date);
+        smallButton(form, "Wybierz datę", () -> date.performClick());
+        smallButton(form, "Bez terminu", () -> date.setText(""));
+
+        TextView label = text("Powtarzanie", 15, true);
+        form.addView(label);
+        Spinner repeat = new Spinner(this);
+        repeat.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item, TaskRules.LABELS));
+        repeat.setSelection(TaskRules.index(existingRule));
+        form.addView(repeat);
+        EditText interval = new EditText(this);
+        interval.setSingleLine(true);
+        interval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        interval.setHint("N: co ile dni / tygodni / miesięcy / lat");
+        interval.setText(String.valueOf(Math.max(1, existingEvery)));
+        form.addView(interval);
+        form.addView(text("Dla pór roku wybierz termin przygotowania przed sezonem. "
+            + "Będzie powtarzany w kolejnych latach.", 13, false));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(id == null ? "Nowa czynność" : "Edytuj czynność")
+            .setView(scroll)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(v -> {
+                String rule = TaskRules.RULES[repeat.getSelectedItemPosition()];
+                int every = 1;
+                if (TaskRules.custom(rule)) {
+                    try { every = Integer.parseInt(interval.getText().toString().trim()); }
+                    catch (NumberFormatException error) {
+                        interval.setError("Wpisz liczbę od 1 do 365.");
+                        return;
+                    }
+                }
+                String title = name.getText().toString().trim();
+                String due = date.getText().toString().trim();
+                String error = TaskRules.validate(title, due, rule, every);
+                if (error != null) { alert(error); return; }
+                db.saveTask(id, title, due, rule, every);
+                DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
+                dialog.dismiss();
+                render();
+            }));
+        dialog.show();
+    }
+
+    private void showTaskHistory(long id, String name) {
+        StringBuilder history = new StringBuilder();
+        int found = 0;
+        try (Cursor cursor = db.getReadableDatabase().rawQuery(
+                "SELECT completed_at,due_date,next_due_date FROM task_history "
+                + "WHERE task_id=? ORDER BY id DESC LIMIT 100",
+                new String[]{Long.toString(id)})) {
+            while (cursor.moveToNext()) {
+                found++;
+                String time = Instant.ofEpochMilli(cursor.getLong(0))
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                history.append(time);
+                if (!cursor.isNull(1)) history.append(" • termin ").append(cursor.getString(1));
+                if (!cursor.isNull(2)) history.append(" → ").append(cursor.getString(2));
+                history.append("\\n");
+            }
+        }
+        new AlertDialog.Builder(this).setTitle("Historia: " + name)
+            .setMessage(found == 0 ? "Brak zapisanych wykonań." : history.toString())
+            .setPositiveButton("OK", null).show();
+    }
+
+    private void calendar() {
+        header("Kalendarz • czynności");
+        YearMonth month = YearMonth.parse(calendarMonth);
+        LocalDate selected = LocalDate.parse(calendarDay);
+        note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
+            new Locale("pl", "PL")) + " " + month.getYear());
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        body.addView(nav);
+        Button prev = new Button(this);
+        prev.setText("← Miesiąc");
+        prev.setAllCaps(false);
+        nav.addView(prev, new LinearLayout.LayoutParams(0, -2, 1));
+        prev.setOnClickListener(v -> {
+            YearMonth previous = month.minusMonths(1);
+            calendarMonth = previous.toString();
+            calendarDay = previous.atDay(1).toString();
+            render();
+        });
+        Button next = new Button(this);
+        next.setText("Miesiąc →");
+        next.setAllCaps(false);
+        nav.addView(next, new LinearLayout.LayoutParams(0, -2, 1));
+        next.setOnClickListener(v -> {
+            YearMonth following = month.plusMonths(1);
+            calendarMonth = following.toString();
+            calendarDay = following.atDay(1).toString();
+            render();
+        });
+        button("Dzisiaj", () -> {
+            calendarDay = LocalDate.now().toString();
+            calendarMonth = YearMonth.from(LocalDate.now()).toString();
+            render();
+        });
+
+        Map<String, Integer> counts = new HashMap<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT due_date,COUNT(*) FROM tasks WHERE done=0 AND due_date>=? "
+                + "AND due_date<=? GROUP BY due_date",
+                new String[]{month.atDay(1).toString(),
+                    month.atEndOfMonth().toString()})) {
+            while (c.moveToNext()) counts.put(c.getString(0), c.getInt(1));
+        }
+
+        LinearLayout headings = new LinearLayout(this);
+        headings.setOrientation(LinearLayout.HORIZONTAL);
+        body.addView(headings);
+        for (String day : new String[]{"Pn","Wt","Śr","Cz","Pt","So","Nd"}) {
+            TextView label = text(day, 12, true);
+            label.setTextColor(subdued);
+            label.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+            headings.addView(label, new LinearLayout.LayoutParams(0, dp(32), 1));
+        }
+
+        LocalDate first = month.atDay(1);
+        LocalDate gridStart = first.minusDays(first.getDayOfWeek().getValue() - 1);
+        for (int week = 0; week < 6; week++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            body.addView(row);
+            for (int weekday = 0; weekday < 7; weekday++) {
+                LocalDate day = gridStart.plusDays(week * 7L + weekday);
+                String iso = day.toString();
+                boolean inMonth = YearMonth.from(day).equals(month);
+                TextView tile = text(String.valueOf(day.getDayOfMonth())
+                    + (inMonth && counts.containsKey(iso)
+                        ? "\\n• " + counts.get(iso) : ""), 13, false);
+                tile.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+                tile.setMinHeight(dp(54));
+                tile.setTextColor(inMonth ? ink : subdued);
+                tile.setPadding(dp(1), dp(7), dp(1), dp(4));
+                if (iso.equals(selected.toString())) {
+                    tile.setBackground(rounded(accent));
+                    tile.setTextColor(bg);
+                } else if (iso.equals(LocalDate.now().toString())) {
+                    tile.setBackground(rounded(surface));
+                }
+                row.addView(tile, new LinearLayout.LayoutParams(0, dp(58), 1));
+                tile.setOnClickListener(v -> {
+                    calendarDay = iso;
+                    calendarMonth = YearMonth.from(day).toString();
+                    render();
                 });
             }
         }
-        note("Daty, powtarzanie, sezony i przypisanie domownikom: zaplanowane.");
+        title("Termin: " + selected.toString());
+        int found = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,title,done,due_date,repeat_rule,repeat_every "
+                + "FROM tasks WHERE done=0 AND due_date=? ORDER BY title COLLATE NOCASE",
+                new String[]{selected.toString()})) {
+            while (c.moveToNext()) {
+                found++;
+                drawTask(c.getLong(0), c.getString(1), false,
+                    c.getString(3), c.getString(4), c.getInt(5));
+            }
+        }
+        if (found == 0) note("Brak zaplanowanych czynności na ten dzień.");
+        button("+ Dodaj czynność", () ->
+            editTask(null, "", selected.toString(), "once", 1));
+        button("Wszystkie czynności", () -> go("tasks"));
+        note("Kalendarz pokazuje najbliższe terminy czynności. "
+            + "Przypomnienia systemowe i planowanie dostępności domowników będą rozwijane osobno.");
     }
 
     private void pantry() {
