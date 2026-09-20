@@ -114,7 +114,7 @@ final class DataBackup {
         String tileOrder = settings.optString("homeTileOrder", "");
         if (household.trim().isEmpty() || household.length() > 200
                 || !("Grafitowy".equals(theme) || "Leśny".equals(theme)
-                    || "Jasny".equals(theme)))
+                    || "Jasny".equals(theme) || "Trener 2".equals(theme)))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia kopii.");
         if (!tileOrder.isEmpty()) {
             java.util.Set<String> allowed = new HashSet<>(java.util.Arrays.asList(
