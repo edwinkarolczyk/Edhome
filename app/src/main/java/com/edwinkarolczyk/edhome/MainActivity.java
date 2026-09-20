@@ -118,7 +118,13 @@ public final class MainActivity extends Activity {
 
     private void palette() {
         String theme = prefs.getString("theme", "Grafitowy");
-        if ("Leśny".equals(theme)) {
+        if ("Trener 2".equals(theme)) {
+            bg = Color.rgb(9, 9, 9);
+            surface = Color.rgb(20, 20, 20);
+            ink = Color.rgb(244, 244, 244);
+            subdued = Color.rgb(168, 168, 168);
+            accent = Color.rgb(239, 43, 45);
+        } else if ("Leśny".equals(theme)) {
             bg = Color.rgb(17, 34, 27);
             surface = Color.rgb(31, 56, 44);
             ink = Color.rgb(237, 247, 234);
@@ -142,7 +148,10 @@ public final class MainActivity extends Activity {
     private GradientDrawable rounded(int color) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(dp(22));
+        drawable.setCornerRadius(dp(18));
+        if ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+                && color == surface)
+            drawable.setStroke(dp(1), Color.rgb(48, 48, 48));
         return drawable;
     }
 
@@ -180,7 +189,8 @@ public final class MainActivity extends Activity {
         b.setText(value);
         b.setTextSize(16);
         b.setAllCaps(false);
-        b.setTextColor(bg);
+        b.setTextColor("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+            ? Color.WHITE : bg);
         b.setBackground(rounded(accent));
         b.setMinHeight(dp(56));
         b.setOnClickListener(v -> callback.run());
@@ -795,7 +805,9 @@ public final class MainActivity extends Activity {
                 Button view = new Button(this);
                 view.setText(mode[1] + (mode[0].equals(calendarView) ? " ✓" : ""));
                 view.setAllCaps(false);
-                view.setTextColor(mode[0].equals(calendarView) ? bg : ink);
+                view.setTextColor(mode[0].equals(calendarView)
+                    ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+                        ? Color.WHITE : bg) : ink);
                 view.setBackground(rounded(mode[0].equals(calendarView)
                     ? accent : surface));
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(44), 1);
@@ -904,7 +916,8 @@ public final class MainActivity extends Activity {
                 tile.setPadding(dp(1), dp(7), dp(1), dp(4));
                 if (iso.equals(selected.toString())) {
                     tile.setBackground(rounded(accent));
-                    tile.setTextColor(bg);
+                    tile.setTextColor("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+                    ? Color.WHITE : bg);
                 } else if (iso.equals(LocalDate.now().toString())) {
                     tile.setBackground(rounded(surface));
                 }
@@ -1297,7 +1310,9 @@ public final class MainActivity extends Activity {
     private void settings() {
         header("Ustawienia");
         note("Aktualny motyw: " + prefs.getString("theme", "Grafitowy"));
-        for (String theme : new String[]{"Grafitowy", "Leśny", "Jasny"}) {
+        note("Trener 2: niemal czarne tło, grafitowe karty, czerwone przyciski "
+            + "i jasne podpisy — paleta z aplikacji Trener 2.");
+        for (String theme : new String[]{"Grafitowy", "Leśny", "Jasny", "Trener 2"}) {
             button("Motyw: " + theme, () -> {
                 prefs.edit().putString("theme", theme).apply();
                 DiagnosticLog.event("THEME_CHANGED");
@@ -1489,11 +1504,15 @@ public final class MainActivity extends Activity {
         row.addView(tile, params);
 
         TextView pictogram = text(symbol, 27, true);
-        pictogram.setTextColor(primary ? bg : accent);
+        pictogram.setTextColor(primary
+            ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+                ? Color.WHITE : bg) : accent);
         pictogram.setGravity(Gravity.CENTER);
         tile.addView(pictogram, new LinearLayout.LayoutParams(-1, dp(39)));
         TextView captionView = text(caption, 12, true);
-        captionView.setTextColor(primary ? bg : ink);
+        captionView.setTextColor(primary
+            ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
+                ? Color.WHITE : bg) : ink);
         captionView.setGravity(Gravity.CENTER);
         captionView.setMaxLines(3);
         tile.addView(captionView);
