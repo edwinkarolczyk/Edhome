@@ -30,7 +30,7 @@
 
 ## Wygląd i warianty
 
-- Motywy **Grafitowy** (domyślny), **Leśny**, **Jasny**.
+- Motywy **Grafitowy** (domyślny), **Leśny**, **Jasny** i **Trener 2** (czarno-czerwony, inspirowany rzeczywistym arkuszem stylów aplikacji).
 - Responsywny telefon ok. 6,4 cala oraz tablet; kalendarz bez stałego dolnego paska.
 - Ikony wariantów Stable i Beta, zaokrąglone rogi; czytelny napis **BETA** w wydaniu testowym.
 - Nazwa gospodarstwa użytkownika niezależna od marki EDHOME.
