@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.Context;
+import android.graphics.drawable.GradientDrawable;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -53,7 +54,6 @@ public final class BetaUpdater {
         }
     };
     private boolean running;
-    private int lastDeferredCode = -1;
     private boolean checking;
     private boolean notifying;
     private boolean verifying;
@@ -201,7 +201,6 @@ public final class BetaUpdater {
             return;
         }
         DiagnosticLog.event("UPDATE_AVAILABLE", "versionCode=" + code);
-        if (code == lastDeferredCode && !manual) return;
         if (code == targetCode && activeDownload >= 0) {
             inspectDownload(manual);
             return;
@@ -285,17 +284,28 @@ public final class BetaUpdater {
                     DiagnosticLog.event("UPDATE_APK_VERIFIED");
                     if (!notifying) {
                         notifying = true;
-                        new AlertDialog.Builder(activity)
-                            .setTitle("EDHOME Beta — aktualizacja gotowa")
-                            .setMessage("Wersja " + requestedCode + "\n\n" + releaseNotes
-                                + "\n\nPlik pobrany, skrót SHA-256, pakiet i podpis Androida sprawdzone. Instalację potwierdzasz w systemie.")
-                            .setPositiveButton("Instaluj", (d, w) -> install(candidate))
-                            .setNegativeButton("Później", (d, w) -> {
-                                DiagnosticLog.event("UPDATE_DEFERRED");
-                                lastDeferredCode = requestedCode;
+                        // Beta DEV: a verified newer APK is mandatory; Stable alone
+                        // offers "Później" through PlayUpdateBridge.
+                        AlertDialog dialog = new AlertDialog.Builder(activity)
+                            .setTitle("EDHOME Beta — wymagana aktualizacja")
+                            .setMessage("Nowa wersja (" + requestedCode + ") jest gotowa.\n\n"
+                                + releaseNotes
+                                + "\n\nPrzed dalszym korzystaniem z EDHOME Beta zainstaluj aktualizację. "
+                                + "Plik i podpis zostały sprawdzone. Android poprosi Cię o zatwierdzenie instalacji.")
+                            .setPositiveButton("Aktualizuj", (d, w) -> {
                                 notifying = false;
+                                install(candidate);
                             })
-                            .show();
+                            .setCancelable(false)
+                            .create();
+                        dialog.setCanceledOnTouchOutside(false);
+                        dialog.show();
+                        GradientDrawable panel = new GradientDrawable();
+                        panel.setColor(0xff203344);
+                        panel.setCornerRadius(activity.getResources()
+                            .getDisplayMetrics().density * 24f);
+                        if (dialog.getWindow() != null)
+                            dialog.getWindow().setBackgroundDrawable(panel);
                     }
                 } else {
                     DiagnosticLog.event("UPDATE_APK_REJECTED");
