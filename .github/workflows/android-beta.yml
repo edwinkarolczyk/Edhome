@@ -114,7 +114,9 @@ jobs:
           GH_TOKEN: ${{ secrets.EDHOME_PUBLIC_CHANNEL_TOKEN }}
         run: |
           if [[ -z "$GH_TOKEN" ]]; then
-            echo "::warning::Public update channel is NOT operational: EDHOME_PUBLIC_CHANNEL_TOKEN is missing. Signed APK is available only as a private Actions artifact."\n            echo "### OTA publication not available" >> "$GITHUB_STEP_SUMMARY"\n            echo "Signed APK was built, but the public channel is not live: EDHOME_PUBLIC_CHANNEL_TOKEN is missing. Do not call this run a working OTA release." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Public update channel is NOT operational: EDHOME_PUBLIC_CHANNEL_TOKEN is missing. Signed APK is available only as a private Actions artifact."
+            echo "### OTA publication not available" >> "$GITHUB_STEP_SUMMARY"
+            echo "Signed APK was built, but the public channel is not live: EDHOME_PUBLIC_CHANNEL_TOKEN is missing. Do not call this run a working OTA release." >> "$GITHUB_STEP_SUMMARY"
             echo "Create public edwinkarolczyk/EDHOME-Updates and add a fine-grained PAT with Contents read/write restricted to that repository only."
             exit 0
           fi
