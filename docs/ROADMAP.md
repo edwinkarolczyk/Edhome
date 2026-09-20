@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan bieżący 0.2.7-beta.1 na `beta`:** publiczne `edwinkarolczyk/Edhome`, podpisane GitHub Releases i manifest `beta`, bez dodatkowego tokenu. Beta DEV bez PIN-u; pojedynczy wykonawca czynności i lista domowników; SQLite v6 oraz kopie v2–v6. Wymagany test APK na telefonie. Główny rejestr wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+> **Stan bieżący 0.2.8-beta.1 na `beta`:** publiczne `edwinkarolczyk/Edhome`, GitHub Releases i manifest `beta`. Beta DEV bez PIN-u; zadania z opcjonalnym wykonawcą, lokalny grafik 7 dni i wyjątki dat; SQLite v7 oraz import kopii v2–v7. Test na telefonie pozostaje osobnym kryterium odbioru. Główny rejestr wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,8 +80,8 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.2.8-beta.1
+## Następny inkrement — 0.2.9-beta.1
 
-- Lokalny grafik pracy i wyjątki dla poszczególnych domowników, bez udawania synchronizacji między urządzeniami.
-- Później proponowanie trzech terminów uwzględniających szacowany czas i grafik; zadanie pozostaje samodzielne, miejsce i wykonawca opcjonalne.
-- Dalsza rozbudowa alertów i powiązań z wieloma obiektami po zweryfikowaniu migracji, backupu i testów na telefonie.
+- Trzy **propozycje** terminu na podstawie jawnie ustawionego grafiku, wyjątków i szacowanego czasu czynności. Brak grafiku to brak podstawy do automatycznego stwierdzania dostępności.
+- Przypisanie terminu następuje wyłącznie po wyborze użytkownika; nie dopisywać samoczynnie daty.
+- Własne godziny zmian, kalendarz współdomowników i bardziej zaawansowana rotacja jako odrębne dalsze etapy po przetestowaniu tej wersji.
