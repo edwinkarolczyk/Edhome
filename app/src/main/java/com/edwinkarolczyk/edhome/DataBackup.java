@@ -53,6 +53,7 @@ final class DataBackup {
         JSONObject settings = new JSONObject();
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
+        settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -110,10 +111,22 @@ final class DataBackup {
         JSONObject settings = root.getJSONObject("settings");
         String household = settings.getString("household");
         String theme = settings.getString("theme");
+        String tileOrder = settings.optString("homeTileOrder", "");
         if (household.trim().isEmpty() || household.length() > 200
                 || !("Grafitowy".equals(theme) || "Leśny".equals(theme)
                     || "Jasny".equals(theme)))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia kopii.");
+        if (!tileOrder.isEmpty()) {
+            java.util.Set<String> allowed = new HashSet<>(java.util.Arrays.asList(
+                "tasks", "calendar", "places", "pantry", "audit", "updates",
+                "backup", "settings", "today"));
+            java.util.Set<String> selected = new HashSet<>();
+            String[] ids = tileOrder.split(",", -1);
+            if (ids.length != 9)
+                throw new IllegalArgumentException("Nieprawidłowa kolejność kafelków.");
+            for (String id : ids) if (!allowed.contains(id) || !selected.add(id))
+                throw new IllegalArgumentException("Nieprawidłowa kolejność kafelków.");
+        }
 
         JSONObject tables = root.getJSONObject("tables");
         Map<String, List<ContentValues>> parsed = new HashMap<>();
@@ -256,7 +269,8 @@ final class DataBackup {
         }
         // Keep the new installation's PIN and update-source configuration untouched.
         if (!prefs.edit().putString("household", household)
-                .putString("theme", theme).commit())
+                .putString("theme", theme)
+                .putString("home_tile_order", tileOrder).commit())
             throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
     }
 
