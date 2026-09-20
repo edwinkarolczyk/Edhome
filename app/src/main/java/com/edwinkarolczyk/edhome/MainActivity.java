@@ -638,6 +638,8 @@ public final class MainActivity extends Activity {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(8), dp(18), dp(8));
+        form.addView(text(id == null ? "Nowa czynność" : "Edytuj czynność",
+            21, true));
 
         EditText name = new EditText(this);
         name.setSingleLine(true);
@@ -729,7 +731,6 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(id == null ? "Nowa czynność" : "Edytuj czynność")
             .setView(scroll)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz", null).create();
