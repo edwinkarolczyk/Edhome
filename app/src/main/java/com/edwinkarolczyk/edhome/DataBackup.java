@@ -24,12 +24,13 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 5;
+    private static final int DB_VERSION = 6;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
+        {"household_members", "id", "name"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
-            "place_id", "priority", "duration_minutes"},
+            "place_id", "priority", "duration_minutes", "assignee_id"},
         {"pantry", "id", "name", "qty"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
         {"audit_rows", "id", "session_id", "pantry_id", "name_snapshot",
@@ -105,7 +106,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -133,6 +134,7 @@ final class DataBackup {
         for (String[] definition : TABLES) {
             JSONArray items = (inputVersion == 2 && "task_history".equals(definition[0]))
                 || (inputVersion < 4 && "places".equals(definition[0]))
+                || (inputVersion < 6 && "household_members".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -162,13 +164,18 @@ final class DataBackup {
                                 values.put(key, 30); continue;
                             }
                         }
+                        if (inputVersion < 6 && "tasks".equals(definition[0])
+                                && "assignee_id".equals(key)) {
+                            values.putNull(key);
+                            continue;
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
                     if (value == JSONObject.NULL) {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
-                            || "place_id".equals(key)))
+                            || "place_id".equals(key) || "assignee_id".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -194,6 +201,12 @@ final class DataBackup {
                             || !java.util.Arrays.asList("Dom", "Ogród", "Garaż",
                                 "Warsztat", "Pomieszczenie", "Inne").contains(kind))
                         throw new IllegalArgumentException("Nieprawidłowe miejsce w kopii.");
+                }
+                if ("household_members".equals(definition[0])) {
+                    String memberName = values.getAsString("name");
+                    if (memberName == null || memberName.trim().isEmpty()
+                            || memberName.length() > 80)
+                        throw new IllegalArgumentException("Nieprawidłowy domownik.");
                 }
                 if ("pantry".equals(definition[0])) {
                     Long qty = values.getAsLong("qty");
@@ -248,6 +261,14 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Set<Long> members = new HashSet<>();
+        Set<String> memberNames = new HashSet<>();
+        for (ContentValues member : parsed.get("household_members")) {
+            members.add(member.getAsLong("id"));
+            if (!memberNames.add(member.getAsString("name").toLowerCase(
+                    java.util.Locale.ROOT)))
+                throw new IllegalArgumentException("Powielone imiona domowników.");
+        }
         Set<Long> places = new HashSet<>();
         Set<String> placeNames = new HashSet<>();
         for (ContentValues place : parsed.get("places")) {
@@ -260,6 +281,10 @@ final class DataBackup {
             Long placeId = task.getAsLong("place_id");
             if (placeId != null && !places.contains(placeId))
                 throw new IllegalArgumentException("Czynność wskazuje nieistniejące miejsce.");
+            Long assigneeId = task.getAsLong("assignee_id");
+            if (assigneeId != null && !members.contains(assigneeId))
+                throw new IllegalArgumentException(
+                    "Czynność wskazuje nieistniejącego domownika.");
         }
         Set<Long> sessions = new HashSet<>();
         for (ContentValues session : parsed.get("audit_sessions"))
@@ -300,7 +325,7 @@ final class DataBackup {
         return "id".equals(column) || "done".equals(column) || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "task_id".equals(column)
-            || "place_id".equals(column)
+            || "place_id".equals(column) || "assignee_id".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
