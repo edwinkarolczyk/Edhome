@@ -84,7 +84,21 @@ public final class BetaUpdater {
     }
 
     public String configuredFeed() {
-        return prefs.getString("updates_feed", "");
+        // An explicit user override (including empty/disabled) wins over the
+        // public feed compiled into this beta. Never place credentials here.
+        if (prefs.contains("updates_feed"))
+            return prefs.getString("updates_feed", "");
+        return BuildConfig.EDHOME_BETA_FEED_URL;
+    }
+
+    public boolean feedFromBuild() {
+        return !prefs.contains("updates_feed")
+            && !BuildConfig.EDHOME_BETA_FEED_URL.isEmpty();
+    }
+
+    public boolean resetFeedToBuildDefault() {
+        prefs.edit().remove("updates_feed").apply();
+        return !configuredFeed().isEmpty();
     }
 
     public boolean setFeed(String url) {
@@ -114,7 +128,9 @@ public final class BetaUpdater {
         }
         String endpoint = configuredFeed();
         if (endpoint.isEmpty()) {
-            if (manual) inform("Brak źródła aktualizacji. Repozytorium GitHub jest prywatne, więc APK z Actions nie jest publicznym kanałem aktualizacji. Ustaw dostępny bez logowania adres HTTPS manifestu wydania Beta DEV.");
+            if (manual) inform("Kanał automatycznych aktualizacji nie jest jeszcze skonfigurowany. "
+                + "Na razie wybierz APK z telefonu. Podpisane wydanie z prywatnych "
+                + "GitHub Actions nie jest publicznym źródłem do pobierania.");
             return;
         }
         if (checking) return;
