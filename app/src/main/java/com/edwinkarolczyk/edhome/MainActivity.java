@@ -29,6 +29,8 @@ import android.widget.LinearLayout;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import android.widget.ScrollView;
+import android.widget.HorizontalScrollView;
+import android.view.Gravity;
 import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
@@ -230,6 +232,7 @@ public final class MainActivity extends Activity {
                 case "audit": audit(); break;
                 case "settings": settings(); break;
                 case "updates": updates(); break;
+                case "updates_advanced": updatesAdvanced(); break;
                 case "backup": backup(); break;
                 case "diagnostics": diagnostics(); break;
                 default: home();
@@ -845,49 +848,126 @@ public final class MainActivity extends Activity {
         note("Odzyskiwanie istniejących danych ze starszej wersji 0.1.2, która nie ma eksportu, wymaga osobnego planu — nie odinstalowuj jej bez kopii.");
     }
 
+    /** Update dashboard: no feed URL, SHA, manifest or developer text in primary UI. */
     private void updates() {
-        header("Aktualizacje • " + BuildConfig.VERSION_NAME);
+        title("EDHOME  •  " + (BetaUpdater.isBeta() ? "BETA" : "STABLE"));
+        note("Aktualizacje aplikacji");
+        button("← Panel główny", () -> go("home"));
+        LinearLayout version = card();
+        version.addView(text("Zainstalowana wersja", 15, false));
+        version.addView(text(BuildConfig.VERSION_NAME, 29, true));
+        TextView installed = text("✓  Gotowa do użycia", 15, true);
+        installed.setTextColor(accent);
+        version.addView(installed);
+
+        LinearLayout status = card();
+        status.addView(text("Aktualizacje automatyczne", 19, true));
+        if (!BetaUpdater.isBeta()) {
+            status.addView(text("Google Play • aktualizacja lub Później", 15, false));
+        } else if (updater.configuredFeed().isEmpty()) {
+            TextView line = text("○  Kanał pobierania nie jest podłączony", 16, true);
+            line.setTextColor(subdued);
+            status.addView(line);
+            status.addView(text("Na razie wybierasz APK z telefonu. "
+                + "Sam podpis aplikacji nie uruchamia automatycznych pobrań.", 14, false));
+        } else {
+            TextView line = text("✓  Automatyczne sprawdzanie aktywne", 16, true);
+            line.setTextColor(accent);
+            status.addView(line);
+            status.addView(text("Nowa wersja Beta jest pobierana podczas pracy aplikacji. "
+                + "Gdy będzie gotowa, zobaczysz obowiązkową aktualizację.", 14, false));
+        }
+
+        note("Przesuń kafelki w bok →");
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setFillViewport(false);
+        LinearLayout tiles = new LinearLayout(this);
+        tiles.setOrientation(LinearLayout.HORIZONTAL);
+        tiles.setPadding(dp(1), dp(9), dp(8), dp(12));
+        scroll.addView(tiles);
+        body.addView(scroll);
+        updateTile(tiles, "↻", "Sprawdź\naktualizację", true, () -> {
+            if (!BetaUpdater.isBeta()) updater.openPlay();
+            else if (updater.configuredFeed().isEmpty())
+                alert("Automatyczny kanał nie jest jeszcze podłączony. "
+                    + "Możesz zainstalować nowy APK z telefonu.");
+            else updater.check(true);
+        });
+        if (BetaUpdater.isBeta()) {
+            updateTile(tiles, "↓", "Instaluj\nAPK z telefonu", false, () -> {
+                Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("application/vnd.android.package-archive");
+                try { startActivityForResult(picker, IMPORT_BETA_APK); }
+                catch (Exception error) {
+                    DiagnosticLog.error("UPDATE_PICKER", error);
+                    alert("Nie można wybrać APK.");
+                }
+            });
+            updateTile(tiles, "✓", "Pobrany\nAPK", false, () -> updater.installReady());
+        }
+        updateTile(tiles, "▣", "Kopia\ndanych", false, () -> go("backup"));
+        updateTile(tiles, "⚙", "Opcje\nzaawansowane", false, () -> go("updates_advanced"));
+        note(BetaUpdater.isBeta()
+            ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
+            : "Stable: możesz wybrać Aktualizuj lub Później.");
+    }
+
+    private void updateTile(LinearLayout tiles, String symbol, String caption,
+            boolean primary, Runnable callback) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setPadding(dp(10), dp(14), dp(10), dp(14));
+        tile.setBackground(rounded(primary ? accent : surface));
+        tile.setOnClickListener(v -> callback.run());
+        tile.setClickable(true);
+        tile.setFocusable(true);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(150), dp(150));
+        params.setMargins(0, 0, dp(12), 0);
+        tiles.addView(tile, params);
+
+        TextView pictogram = text(symbol, 33, true);
+        pictogram.setTextColor(primary ? bg : accent);
+        pictogram.setGravity(Gravity.CENTER);
+        tile.addView(pictogram, new LinearLayout.LayoutParams(-1, dp(57)));
+        TextView captionView = text(caption, 15, true);
+        captionView.setTextColor(primary ? bg : ink);
+        captionView.setGravity(Gravity.CENTER);
+        captionView.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        tile.addView(captionView);
+    }
+
+    private void updatesAdvanced() {
+        header("Aktualizacje • opcje zaawansowane");
         note("Zainstalowany versionCode: " + BuildConfig.VERSION_CODE);
         if (!BetaUpdater.isBeta()) {
-            note("Stable korzysta z aktualizacji Google Play; bez pobierania APK z aplikacji.");
+            note("Stable używa wyłącznie Google Play.");
             button("Sprawdź w Google Play", () -> updater.openPlay());
             return;
         }
-        note("Beta DEV sprawdza manifest HTTPS co 30 sekund, kiedy aplikacja jest aktywna. Pobranie nowego pliku jest automatyczne, lecz instalacja wymaga Twojej zgody w Androidzie.");
-        note("UWAGA: link github.com/.../actions/runs/... jest STRONĄ kompilacji, a nie źródłem aktualizacji. Nie wklejaj tu takiego linku.");
-        note("Automatyczne aktualizacje wymagają osobno opublikowanego pliku manifestu JSON i APK na HTTPS. Repozytorium pozostaje prywatne. Nigdy nie wpisuj tokenu GitHub ani hasła.");
-        EditText source = field("HTTPS adres manifestu (bez tokenów)", false);
+        note("Kanał Beta sprawdza mały manifest co 30 sekund tylko, gdy aplikacja jest aktywna.");
+        note("Źródło musi udostępniać HTTPS JSON i podpisane APK bez logowania. "
+            + "Nie wpisuj tu tokenu GitHub, hasła ani adresu strony kompilacji Actions.");
+        EditText source = field("Adres HTTPS manifestu JSON", false);
         source.setInputType(17);
         source.setText(updater.configuredFeed());
         button("Zapisz źródło aktualizacji", () -> {
             if (!updater.setFeed(source.getText().toString())) {
-                alert("To musi być URL HTTPS pliku manifestu JSON, a nie strona GitHub Actions, token lub hasło. Gdy nie mamy serwera aktualizacji, wyczyść to pole.");
+                alert("Podaj HTTPS adres manifestu JSON bez tokenu ani strony GitHub Actions.");
                 return;
             }
-            alert(updater.configuredFeed().isEmpty()
-                ? "Źródło usunięte. Zdalne sprawdzanie jest wyłączone."
-                : "Zapisano adres. Beta sprawdzi nowy manifest bez dodatkowego logowania.");
+            go("updates");
         });
-        button("Wyłącz zdalne sprawdzanie (wyczyść link)", () -> {
+        button("Wyłącz zdalne sprawdzanie", () -> {
             updater.setFeed("");
             DiagnosticLog.event("UPDATES_FEED_DISABLED");
-            render();
-            alert("Źródło usunięte. Praca EDHOME i ręczny import APK nadal działają offline.");
+            go("updates");
         });
-        button("Sprawdź aktualizację teraz", () -> updater.check(true));
-        button("Sprawdź pobieranie / instaluj gotowy APK", () -> updater.installReady());
-        button("Wybierz APK z telefonu (bez internetu)", () -> {
-            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            picker.addCategory(Intent.CATEGORY_OPENABLE);
-            picker.setType("application/vnd.android.package-archive");
-            try { startActivityForResult(picker, IMPORT_BETA_APK); }
-            catch (Exception error) {
-                DiagnosticLog.error("UPDATE_PICKER", error);
-                alert("Nie można otworzyć wyboru APK.");
-            }
-        });
-        note("Manifest: channel=beta, versionCode, versionName, changelog, apkUrl HTTPS, sha256. APK musi mieć ten sam identyfikator pakietu i podpis co obecna instalacja.");
-        button("Kopia danych przed zmianą wersji", () -> go("backup"));
+        button("Sprawdź teraz", () -> updater.check(true));
+        note("Manifest: channel=beta, versionCode, versionName, changelog, apkUrl, sha256. "
+            + "Plik musi mieć zgodny podpis, pakiet i wyższy numer wersji.");
     }
 
     private void diagnostics() {
