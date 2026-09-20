@@ -34,6 +34,20 @@ public final class TaskRulesSmoke {
             LocalDate.of(2026, 11, 15)), "2027-11-15");
         equals(TaskRules.nextDue("2026-12-31", "weekly", 1,
             LocalDate.of(2026, 12, 15)), "2027-01-07");
-        System.out.println("TaskRulesSmoke: 10 checks passed");
+        valid(TaskRules.validate(" ", "2026-10-01", "once", 1) != null,
+            "Empty title must be rejected");
+        valid(TaskRules.validate("Ok", "2026-12-01", "every_weeks", 366) != null,
+            "Interval upper bound must be enforced");
+        valid(TaskRules.validate("Ok", "2026-12-01", "not_a_rule", 1) != null,
+            "Unknown repeat rule must be rejected");
+        equals(TaskRules.nextDue("2026-12-31", "daily", 1,
+            LocalDate.of(2026, 12, 31)), "2027-01-01");
+        equals(TaskRules.nextDue("2026-01-31", "every_months", 2,
+            LocalDate.of(2026, 3, 30)), "2026-03-31");
+        equals(TaskRules.nextDue("2026-01-31", "every_months", 2,
+            LocalDate.of(2026, 3, 31)), "2026-05-31");
+        valid(TaskRules.nextDue("2026-10-01", "once", 1,
+            LocalDate.of(2026, 10, 1)) == null, "One-off must not repeat");
+        System.out.println("TaskRulesSmoke: 17 checks passed");
     }
 }
