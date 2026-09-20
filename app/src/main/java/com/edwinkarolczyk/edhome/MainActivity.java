@@ -1330,22 +1330,23 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 3);
+            super(context, "edhome-beta-preview.db", null, 4);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, "
                 + "due_date TEXT, repeat_rule TEXT NOT NULL DEFAULT 'once', "
-                + "repeat_every INTEGER NOT NULL DEFAULT 1)");
+                + "repeat_every INTEGER NOT NULL DEFAULT 1, place_id INTEGER)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
             addAuditTables(database);
             addTaskHistory(database);
+            addPlaces(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 3) {
+            if (oldVersion < 1 || newVersion > 4) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -1360,6 +1361,16 @@ public final class MainActivity extends Activity {
                 addTaskHistory(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_2_TO_3");
             }
+            if (oldVersion < 4) {
+                addPlaces(database);
+                database.execSQL("ALTER TABLE tasks ADD COLUMN place_id INTEGER");
+                DiagnosticLog.event("DATABASE_MIGRATED_3_TO_4");
+            }
+        }
+
+        private static void addPlaces(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "name TEXT NOT NULL COLLATE NOCASE UNIQUE, kind TEXT NOT NULL DEFAULT 'Inne')");
         }
 
         private static void addTaskHistory(SQLiteDatabase database) {
@@ -1530,7 +1541,8 @@ public final class MainActivity extends Activity {
             }
         }
 
-        void saveTask(Long id, String title, String dueDate, String rule, int every) {
+        void saveTask(Long id, String title, String dueDate, String rule, int every,
+                Long placeId) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             ContentValues values = new ContentValues();
@@ -1539,6 +1551,15 @@ public final class MainActivity extends Activity {
             else values.put("due_date", dueDate);
             values.put("repeat_rule", rule);
             values.put("repeat_every", every);
+            if (placeId == null) values.putNull("place_id");
+            else {
+                try (Cursor c = getReadableDatabase().rawQuery(
+                        "SELECT id FROM places WHERE id=?",
+                        new String[]{Long.toString(placeId)})) {
+                    if (!c.moveToFirst()) throw new IllegalArgumentException("Miejsce nie istnieje");
+                }
+                values.put("place_id", placeId);
+            }
             if (id == null) getWritableDatabase().insertOrThrow("tasks", null, values);
             else {
                 // Editing a completed one-off into a recurring task reopens it.
@@ -1591,6 +1612,55 @@ public final class MainActivity extends Activity {
 
         void deleteTask(long id) {
             getWritableDatabase().delete("tasks", "id=?", new String[]{Long.toString(id)});
+        }
+
+        Long taskPlaceId(long taskId) {
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT place_id FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                return c.moveToFirst() && !c.isNull(0) ? c.getLong(0) : null;
+            }
+        }
+
+        String placeLabel(long taskId) {
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT p.name FROM tasks t JOIN places p ON t.place_id=p.id "
+                    + "WHERE t.id=?", new String[]{Long.toString(taskId)})) {
+                return c.moveToFirst() ? c.getString(0) : "";
+            }
+        }
+
+        boolean savePlace(Long id, String name, String kind) {
+            if (name.isEmpty() || name.length() > 160)
+                throw new IllegalArgumentException("Invalid place name");
+            SQLiteDatabase database = getWritableDatabase();
+            try (Cursor c = database.rawQuery(
+                    "SELECT id FROM places WHERE name=? COLLATE NOCASE"
+                    + (id == null ? "" : " AND id!=?"),
+                    id == null ? new String[]{name}
+                        : new String[]{name, Long.toString(id)})) {
+                if (c.moveToFirst()) return false;
+            }
+            ContentValues values = new ContentValues();
+            values.put("name", name);
+            values.put("kind", kind);
+            if (id == null) database.insertOrThrow("places", null, values);
+            else database.update("places", values, "id=?",
+                new String[]{Long.toString(id)});
+            return true;
+        }
+
+        void deletePlace(long id) {
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
+                    new Object[]{id});
+                database.delete("places", "id=?", new String[]{Long.toString(id)});
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
+            }
         }
 
         void addStock(String name) {
