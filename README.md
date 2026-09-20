@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.1.6-beta.1**: czynności z terminami i regułami powtarzania, miesięczny kalendarz, historia wykonań, spiżarnia, remanent oraz kopie danych. Poprzednia wersja 0.1.4-beta.1 została zbudowana i podpisana stałym certyfikatem; nowy APK 0.1.5 udostępniać dopiero po pomyślnym zakończeniu osobnej kompilacji. Systemowe powiadomienia, skaner, PayCheck, SUPLA i synchronizacja pozostają w planie. Żaden wariant nie został opublikowany w Google Play.
+> **Status gałęzi `beta`:** kod **EDHOME 0.1.8-beta.1** obejmuje przesuwany panel kafli, zadania z filtrami i historią, kalendarz, wyszukiwalną spiżarnię, remanent, kopie danych i obowiązkowe okno aktualizacji Beta. Numer kodu 9 i stały certyfikat podpisu. Stan APK i wyniki testów sprawdzaj w GitHub Actions; samo repozytorium nie oznacza instalacji na telefonie. Systemowe powiadomienia, skaner, PayCheck, SUPLA i synchronizacja są w kolejnych etapach. Żaden wariant nie został opublikowany w Google Play.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,8 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [EDHOME 0.1.8-beta.1 — panel, zadania, spiżarnia, ochrona danych](docs/BETA_0_1_8.md)
+- [EDHOME 0.1.7-beta.1 — kafelkowy ekran aktualizacji](docs/BETA_0_1_7.md)
 - [EDHOME 0.1.6-beta.1 — wymagana aktualizacja w Beta, Później tylko w Stable](docs/BETA_0_1_6.md)
 - [EDHOME 0.1.5-beta.1 — czynności, kalendarz, migracja i testy](docs/BETA_0_1_5.md)
 - [EDHOME 0.1.4-beta.1 — kod kopii danych i instrukcja ręcznego przenoszenia](docs/BETA_0_1_4.md)
@@ -53,7 +55,7 @@
 - [Roadmapa](docs/ROADMAP.md) i [architektura](docs/ARCHITEKTURA.md)
 - [Budowanie APK w GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/workflows/android-beta.yml)
 
-**Bezpieczeństwo danych:** w fazie beta używaj danych testowych i eksportuj kopię przed aktualizacją. Obecna linia podpisanych APK może aktualizować się w miejscu; stare instalacje Debug z obcym podpisem wymagają osobnego odzyskiwania danych. Kopia JSON 0.1.4 (SQLite v2) może zostać zaimportowana przez kod 0.1.5 (SQLite v3).
+**Bezpieczeństwo danych:** w fazie beta używaj danych testowych i eksportuj kopię przed aktualizacją. Obecna linia podpisanych APK może aktualizować się w miejscu; stare instalacje Debug z obcym podpisem wymagają osobnego odzyskiwania danych. Kopia JSON 0.1.4 (SQLite v2) może zostać zaimportowana przez kod 0.1.8 (SQLite v3).
 
 ## Następne kroki
 
