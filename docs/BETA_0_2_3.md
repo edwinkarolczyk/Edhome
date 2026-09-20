@@ -5,7 +5,7 @@ Gałąź: `beta`; `versionCode=13`, `versionName=0.2.3-beta.1`.
 
 ## Wprowadzone w kodzie
 
-- Panel główny: dziewięć kafelków nadal 3 × 3, zaokrąglone; przytrzymaj kafelek i przeciągnij na inny. Kolejność zostaje w prywatnych preferencjach urządzenia po restarcie. Przewijanie strony pozostaje pionowe. Ekran Aktualizacje zachowuje swoją własną siatkę 3 × 3 i nie podlega przemieszczaniu.
+- Panel główny: dziewięć kafelków nadal 3 × 3, zaokrąglone; przytrzymaj kafelek i przeciągnij na inny. Kolejność zostaje w prywatnych preferencjach urządzenia po restarcie i w eksportowanej kopii JSON. Przewijanie strony pozostaje pionowe. Ekran Aktualizacje zachowuje swoją własną siatkę 3 × 3 i nie podlega przemieszczaniu.
 - Formularz czynności: czytelniejsze etykiety/pola, zaokrąglone okno, pole odstępu N widoczne tylko dla reguł `co N`, istniejące walidacje i opcjonalne miejsce.
 - Kalendarz: miesiąc, tydzień, dzień i agenda na kolejne 30 dni. Zapis nadal korzysta z tej samej tabeli czynności i wspólnej historii.
 - Przypomnienia: dobrowolny przełącznik w Ustawieniach, lokalny nieprecyzyjny alarm raz dziennie około 09:00 dla czynności terminowych lub zaległych; odtworzenie harmonogramu po restarcie, zmianie zegara/strefy i aktualizacji. Android 13+ prosi o zgodę na powiadomienia. Alarm może zostać opóźniony przez Androida; po wymuszeniu zatrzymania aplikacji dostarczanie alarmów nie jest gwarantowane. Na powiadomieniu nie ma tytułów prywatnych zadań.
