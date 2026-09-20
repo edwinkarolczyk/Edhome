@@ -363,14 +363,8 @@ public final class MainActivity extends Activity {
             go("tasks");
         });
 
-        note("Przesuń kafelki w bok →");
-        HorizontalScrollView scroll = new HorizontalScrollView(this);
-        scroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout tiles = new LinearLayout(this);
-        tiles.setOrientation(LinearLayout.HORIZONTAL);
-        tiles.setPadding(dp(1), dp(6), dp(8), dp(12));
-        scroll.addView(tiles);
-        body.addView(scroll);
+        note("Menu • 9 kafelków, przewijaj ekran góra–dół ↓");
+        LinearLayout tiles = tileGrid();
         updateTile(tiles, "✓", "Czynności", true, () -> {
             tasksFilter = "all";
             go("tasks");
@@ -382,6 +376,10 @@ public final class MainActivity extends Activity {
         updateTile(tiles, "↻", "Aktualizacje", false, () -> go("updates"));
         updateTile(tiles, "▤", "Kopia danych", false, () -> go("backup"));
         updateTile(tiles, "⚙", "Ustawienia", false, () -> go("settings"));
+        updateTile(tiles, "◷", "Na dziś", false, () -> {
+            tasksFilter = "today";
+            go("tasks");
+        });
 
         LinearLayout today = card();
         today.addView(text("Najbliższe czynności", 19, true));
@@ -1233,15 +1231,8 @@ public final class MainActivity extends Activity {
                 + "Pobieranie nastąpi tylko dla nowszego, poprawnie podpisanego APK.", 14, false));
         }
 
-        note("Przesuń kafelki w bok →");
-        HorizontalScrollView scroll = new HorizontalScrollView(this);
-        scroll.setHorizontalScrollBarEnabled(false);
-        scroll.setFillViewport(false);
-        LinearLayout tiles = new LinearLayout(this);
-        tiles.setOrientation(LinearLayout.HORIZONTAL);
-        tiles.setPadding(dp(1), dp(9), dp(8), dp(12));
-        scroll.addView(tiles);
-        body.addView(scroll);
+        note("Menu • 3 × 3, przewijaj ekran góra–dół ↓");
+        LinearLayout tiles = tileGrid();
         updateTile(tiles, "↻", "Sprawdź\naktualizację", true, () -> {
             if (!BetaUpdater.isBeta()) updater.openPlay();
             else if (updater.configuredFeed().isEmpty())
@@ -1250,7 +1241,7 @@ public final class MainActivity extends Activity {
             else updater.check(true);
         });
         if (BetaUpdater.isBeta()) {
-            updateTile(tiles, "↓", "Instaluj\nAPK z telefonu", false, () -> {
+            updateTile(tiles, "↓", "Instaluj\nAPK", false, () -> {
                 Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 picker.addCategory(Intent.CATEGORY_OPENABLE);
                 picker.setType("application/vnd.android.package-archive");
@@ -1261,36 +1252,83 @@ public final class MainActivity extends Activity {
                 }
             });
             updateTile(tiles, "✓", "Pobrany\nAPK", false, () -> updater.installReady());
+        } else {
+            updateTile(tiles, "▶", "Otwórz\nGoogle Play", false, () -> updater.openPlay());
+            updateTile(tiles, "i", "Kanał\nStable", false, () ->
+                alert("Stable pobiera aktualizacje z Google Play. Dostępny jest przycisk Później."));
         }
         updateTile(tiles, "▣", "Kopia\ndanych", false, () -> go("backup"));
         updateTile(tiles, "⚙", "Opcje\nzaawansowane", false, () -> go("updates_advanced"));
+        updateTile(tiles, "◉", "Status\nkanału", false, () ->
+            alert(!BetaUpdater.isBeta() ? "Kanał Stable: Google Play."
+                : updater.configuredFeed().isEmpty()
+                    ? "Brak źródła HTTPS. Możesz instalować APK ręcznie."
+                    : "Źródło HTTPS jest skonfigurowane. "
+                        + "Sprawdź aktualizację, aby przetestować dostępność serwera."));
+        updateTile(tiles, "i", "Wersja\naplikacji", false, () ->
+            alert("EDHOME " + BuildConfig.VERSION_NAME
+                + "\nversionCode: " + BuildConfig.VERSION_CODE));
+        updateTile(tiles, "◷", "Co\nnowego", false, () ->
+            alert("EDHOME " + BuildConfig.VERSION_NAME
+                + "\nUkład kafelków 3 × 3, przewijanie pionowe. "
+                + "Kolejne wydania zachowują zgodność podpisu APK."));
+        updateTile(tiles, "⌂", "Panel\ngłówny", false, () -> go("home"));
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
             : "Stable: możesz wybrać Aktualizuj lub Później.");
     }
 
-    private void updateTile(LinearLayout tiles, String symbol, String caption,
+    /** Exactly three square tiles per row; the outer page owns vertical scrolling. */
+    private LinearLayout tileGrid() {
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setPadding(0, dp(6), 0, dp(12));
+        body.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+        return grid;
+    }
+
+    private void updateTile(LinearLayout grid, String symbol, String caption,
             boolean primary, Runnable callback) {
+        LinearLayout row;
+        if (grid.getChildCount() == 0
+                || ((LinearLayout) grid.getChildAt(grid.getChildCount() - 1))
+                    .getChildCount() == 3) {
+            row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+            rowParams.setMargins(0, 0, 0, dp(8));
+            grid.addView(row, rowParams);
+        } else {
+            row = (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
+        }
+
+        int width = getResources().getDisplayMetrics().widthPixels;
+        int height = getResources().getDisplayMetrics().heightPixels;
+        // Page padding: 18dp left + 18dp right. Two gaps: 8dp each.
+        int widthSide = (width - dp(52)) / 3;
+        int heightSide = (height - dp(340)) / 3;
+        int side = Math.max(dp(76), Math.min(widthSide, heightSide));
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
-        tile.setPadding(dp(10), dp(14), dp(10), dp(14));
+        tile.setPadding(dp(4), dp(7), dp(4), dp(7));
         tile.setBackground(rounded(primary ? accent : surface));
         tile.setOnClickListener(v -> callback.run());
         tile.setClickable(true);
         tile.setFocusable(true);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(150), dp(150));
-        params.setMargins(0, 0, dp(12), 0);
-        tiles.addView(tile, params);
+        tile.setContentDescription(caption.replace("\n", " "));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(side, side);
+        if (row.getChildCount() > 0) params.setMargins(dp(8), 0, 0, 0);
+        row.addView(tile, params);
 
-        TextView pictogram = text(symbol, 33, true);
+        TextView pictogram = text(symbol, 27, true);
         pictogram.setTextColor(primary ? bg : accent);
         pictogram.setGravity(Gravity.CENTER);
-        tile.addView(pictogram, new LinearLayout.LayoutParams(-1, dp(57)));
-        TextView captionView = text(caption, 15, true);
+        tile.addView(pictogram, new LinearLayout.LayoutParams(-1, dp(39)));
+        TextView captionView = text(caption, 12, true);
         captionView.setTextColor(primary ? bg : ink);
         captionView.setGravity(Gravity.CENTER);
-        captionView.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        captionView.setMaxLines(3);
         tile.addView(captionView);
     }
 
