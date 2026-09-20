@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.2.0-beta.1** (`versionCode 10`, SQLite 4): samodzielne czynności, opcjonalne przypisanie do Miejsc, kalendarz, spiżarnia, remanent i kopie danych. Kanał pobierania APK przygotowano do aktywacji w osobnym PUBLICZNYM repozytorium plików, gdy właściciel zdecyduje o publicznym udostępnianiu samych APK. Kod EDHOME jest prywatny. Nie oznacza to, że aktualizacje już pobierają się automatycznie. Żaden wariant nie jest w Google Play.
+> **Status gałęzi `beta`:** w kodzie jest **EDHOME 0.2.1-beta.1** (`versionCode 11`, SQLite 4; pionowe menu kafli 3 × 3): samodzielne czynności, opcjonalne przypisanie do Miejsc, kalendarz, spiżarnia, remanent i kopie danych. Kanał pobierania APK przygotowano do aktywacji w osobnym PUBLICZNYM repozytorium plików, gdy właściciel zdecyduje o publicznym udostępnianiu samych APK. Kod EDHOME jest prywatny. Nie oznacza to, że aktualizacje już pobierają się automatycznie. Żaden wariant nie jest w Google Play.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [EDHOME 0.2.1-beta.1 — pionowa siatka 3 × 3](docs/BETA_0_2_1.md)
 - [EDHOME 0.2.0-beta.1 — Miejsca, aktualizator, konfiguracja kanału](docs/BETA_0_2_0.md)
 - [EDHOME 0.1.8-beta.1 — panel, zadania, spiżarnia, ochrona danych](docs/BETA_0_1_8.md)
 - [EDHOME 0.1.7-beta.1 — kafelkowy ekran aktualizacji](docs/BETA_0_1_7.md)
