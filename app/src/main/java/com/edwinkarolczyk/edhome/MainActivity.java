@@ -87,6 +87,8 @@ public final class MainActivity extends Activity {
         super.onCreate(savedState);
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
+        // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
+        unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
         ReminderReceiver.schedule(this);
         updater = new BetaUpdater(this);
@@ -99,13 +101,15 @@ public final class MainActivity extends Activity {
 
     @Override public void onStop() {
         super.onStop();
-        unlocked = false;
-        DiagnosticLog.event("ACTIVITY_STOPPED_LOCKED");
+        if (!BetaUpdater.isBeta()) unlocked = false;
+        DiagnosticLog.event(BetaUpdater.isBeta()
+            ? "ACTIVITY_STOPPED_BETA_NO_PIN" : "ACTIVITY_STOPPED_LOCKED");
         if (updater != null) updater.stop();
     }
 
     @Override public void onResume() {
         super.onResume();
+        if (BetaUpdater.isBeta()) unlocked = true;
         if (root != null && !unlocked) render();
         if (unlocked && updater != null) updater.start();
     }
@@ -270,8 +274,8 @@ public final class MainActivity extends Activity {
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
 
-        if (!prefs.contains("pin_hash")) setupPin();
-        else if (!unlocked) unlockPin();
+        if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();
+        else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
@@ -1737,9 +1741,11 @@ public final class MainActivity extends Activity {
                             DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
                             DiagnosticLog.event("DATA_BACKUP_RESTORED");
                             screen = "home";
-                            unlocked = false;
+                            unlocked = BetaUpdater.isBeta();
                             render();
-                            alert("Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.");
+                            alert(BetaUpdater.isBeta()
+                                ? "Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
+                                : "Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.");
                         } catch (Exception error) {
                             DiagnosticLog.error("DATA_BACKUP_RESTORE", error);
                             alert("Nie udało się przywrócić kopii. Dane bazy nie zostały nadpisane, jeśli walidacja lub transakcja zakończyła się błędem.");
