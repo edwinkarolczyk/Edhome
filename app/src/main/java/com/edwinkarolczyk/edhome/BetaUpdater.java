@@ -174,8 +174,6 @@ public final class BetaUpdater {
                             + "Nie musisz sam ustawiać żadnego adresu HTTPS.");
                     return;
                 }
-                prefs.edit().putBoolean("updates_channel_verified", true)
-                    .putString("updates_channel_status", "online").apply();
                 handleManifest(result, manual);
             });
         });
@@ -236,10 +234,14 @@ public final class BetaUpdater {
         String digest = json.optString("sha256", "").toLowerCase(java.util.Locale.ROOT);
         if (!"beta".equals(channel) || code <= 0 || !isSecureUrl(link)
             || !digest.matches("[0-9a-f]{64}")) {
+            prefs.edit().putBoolean("updates_channel_verified", false)
+                .putString("updates_channel_status", "invalid").apply();
             DiagnosticLog.event("UPDATE_MANIFEST_INVALID");
             if (manual) inform("Manifest nieprawidłowy: wymagane channel=beta, większy versionCode, apkUrl HTTPS i SHA-256.");
             return;
         }
+        prefs.edit().putBoolean("updates_channel_verified", true)
+            .putString("updates_channel_status", "online").apply();
         if (code <= BuildConfig.VERSION_CODE) {
             DiagnosticLog.event("UPDATE_UP_TO_DATE");
             if (manual) inform("Masz aktualną wersję: " + BuildConfig.VERSION_NAME);
