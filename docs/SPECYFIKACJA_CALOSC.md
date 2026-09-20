@@ -1,6 +1,6 @@
 # EDHOME — pełny rejestr ustaleń koncepcyjnych
 
-> Status: **wymagania i założenia**, a nie gotowe funkcje. Marka: **EDHOME — Idea by Edwin** (wcześniej roboczo „Ranczo”). Na razie nie przenosimy kodu innych aplikacji. Dokument opisuje ustalenia z rozmowy, a roadmapa osobno określa kolejność wdrożenia.
+> **Główne źródło ustaleń EDHOME — Idea by Edwin.** Wymagania nie są automatycznie gotowymi funkcjami. Stan implementacji i kolejność dostaw: [ROADMAP.md](ROADMAP.md) oraz [README.md](../README.md). Rzeczywiste repo to `edwinkarolczyk/Edhome` (obecnie **publiczne**), a prace rozwojowe odbywają się wyłącznie na `beta`; `main` bez zmian. Beta 0.2.6 dodaje priorytet i czas czynności oraz SQLite v5. Dawne wpisy „Edhime”/„prywatne repo” poniżej są opisem historycznych ustaleń, nie aktualną konfiguracją GitHub. Nie kopiujemy automatycznie kodu innych aplikacji.
 
 ## 1. Wizja
 
@@ -55,7 +55,7 @@ Trwałe identyfikatory; typowane atrybuty dodatkowe i relacje; rejestr obiektów
 
 ## 8. Dystrybucja i testy
 
-- Prywatne repozytorium GitHub ma obecnie nazwę **Edhime**; nazwa marki **EDHOME**. `main` oficjalna, `beta` rozwój. Beta DEV może mieć inny package ID i odseparowane dane.
+- Faktyczna nazwa repozytorium: **edwinkarolczyk/Edhome**, widoczność **publiczna**; marka **EDHOME**. `main` oficjalna, `beta` rozwój. Repozytorium nie wymaga osobnego tokenu OTA — podpisane Beta APK trafiają do publicznych GitHub Releases. Beta DEV może mieć inny package ID i odseparowane dane.
 - Oficjalna wersja: raz po uruchomieniu sprawdzenie aktualizacji, opis zmian, aktualizuj / przypomnij później. Dystrybucja sklepowa używa mechanizmu Google Play.
 - Beta DEV: duży napis „BETA”, kontrola metadanych co kilkanaście/kilkadziesiąt sekund tylko podczas działania, pobieranie nowego zatwierdzonego buildu, testy CI **przed** publikacją, sprawdzanie podpisu/integralności. Nie obiecywać bezgłośnej instalacji Androida ani natychmiastowych update'ów Play.
 - Wersja aplikacji, build, schema danych i protokół synchronizacji osobno; kontrola zgodności, kopia przed migracją, testy offline/prywatności/finansów/QR/2 urządzeń. Przygotowanie Google Play od początku, rzeczywista publikacja po stabilizacji.
@@ -72,7 +72,7 @@ Wybór stosu Android, modeli danych/konfliktów Wi-Fi, audyt faktycznej wersji P
 
 - Nazwa wybrana świadomie: **EDHOME**; podpis **Idea by Edwin**. Wcześniej padały inne pomysły nazw (DOMORA, HOMIQ, DOMEXA, SWOJO, EDHOME, DOMNIO), ale **żaden nie zastępuje aktualnego wyboru**.
 - Dwa wizualnie rozpoznawalne warianty ikony: Stable oraz Beta, **zaokrąglone narożniki**. Obie grafiki zostały zaakceptowane koncepcyjnie; zasoby graficzne Androida wymagają osobnego eksportu/przygotowania i nie należy twierdzić, że istnieją w tym repo.
-- GitHub: rzeczywista nazwa repozytorium to `edwinkarolczyk/Edhime`, nie `EDHOME`. Nie zmieniać z automatu nazwy repozytorium; nazwa produktu zawsze EDHOME. Repo prywatne.
+- GitHub: **aktualnie** `edwinkarolczyk/Edhome` jest publiczne. Wcześniejsze `Edhime` i prywatna widoczność to wyłącznie zapis historyczny. Nazwa produktu zawsze **EDHOME**. Nie zmieniać automatycznie repozytorium.
 - Proponowane, niezatwierdzone do publikacji identyfikatory: `com.edwinkarolczyk.edhome` dla oficjalnej aplikacji, `com.edwinkarolczyk.edhome.beta` dla oddzielnej Beta DEV.
 - `main` stabilna, `beta` prace rozwojowe. Beta DEV może być zainstalowana obok stabilnej dzięki oddzielnemu identyfikatorowi **i własnym testowym danym**; testowy kanał Google Play może używać identyfikatora stabilnego, więc nie należy tych dwóch koncepcji mylić.
 
