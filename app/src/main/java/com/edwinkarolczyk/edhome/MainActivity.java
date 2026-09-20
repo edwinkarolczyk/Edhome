@@ -69,6 +69,7 @@ public final class MainActivity extends Activity {
     private String calendarDay = LocalDate.now().toString();
     private String tasksFilter = "all";
     private String pantrySearch = "";
+    private static final String[] PLACE_TYPES = {"Dom", "Ogród", "Garaż", "Warsztat", "Pomieszczenie", "Inne"};
     private int bg, surface, ink, subdued, accent;
 
     @Override public void onCreate(Bundle savedState) {
@@ -99,6 +100,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
+        else if (unlocked && "places".equals(screen)) go("home");
         else if (unlocked && "task_history".equals(screen)) go("tasks");
         else if (unlocked && !"home".equals(screen)) go("home");
         else super.onBackPressed();
@@ -253,6 +255,7 @@ public final class MainActivity extends Activity {
                 case "tasks": tasks(); break;
                 case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
+                case "places": places(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
@@ -373,6 +376,7 @@ public final class MainActivity extends Activity {
             go("tasks");
         });
         updateTile(tiles, "▦", "Kalendarz", false, () -> go("calendar"));
+        updateTile(tiles, "⌂", "Miejsca", false, () -> go("places"));
         updateTile(tiles, "▣", "Spiżarnia", false, () -> go("pantry"));
         updateTile(tiles, "◫", "Remanent", false, () -> go("audit"));
         updateTile(tiles, "↻", "Aktualizacje", false, () -> go("updates"));
@@ -403,7 +407,8 @@ public final class MainActivity extends Activity {
 
     private void tasks() {
         header("Czynności • plan i wykonania");
-        note("Czynności działają samodzielnie; powiązania z przedmiotami będą opcjonalne w kolejnych etapach.");
+        note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
+        button("⌂ Miejsca", () -> go("places"));
         button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
         button("▦ Kalendarz czynności", () -> go("calendar"));
         note("Zaległe: " + db.overdueTasks()
@@ -482,6 +487,8 @@ public final class MainActivity extends Activity {
         if (!done && !due.isEmpty() && due.compareTo(LocalDate.now().toString()) < 0)
             description += " • ZALEGŁE";
         if (done) description += " • Wykonane";
+        String place = db.placeLabel(id);
+        if (!place.isEmpty()) description += " • " + place;
         TextView meta = text(description, 13, false);
         meta.setTextColor(subdued);
         box.addView(meta);
@@ -568,6 +575,35 @@ public final class MainActivity extends Activity {
         form.addView(interval);
         form.addView(text("Dla pór roku wybierz termin przygotowania przed sezonem. "
             + "Będzie powtarzany w kolejnych latach.", 13, false));
+        form.addView(text("Miejsce (opcjonalnie)", 15, true));
+        java.util.ArrayList<Long> placeIds = new java.util.ArrayList<>();
+        java.util.ArrayList<String> placeNames = new java.util.ArrayList<>();
+        placeIds.add(null);
+        placeNames.add("Bez przypisanego miejsca");
+        try (Cursor places = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,kind FROM places ORDER BY name COLLATE NOCASE", null)) {
+            while (places.moveToNext()) {
+                placeIds.add(places.getLong(0));
+                placeNames.add(places.getString(1) + " • " + places.getString(2));
+            }
+        }
+        Spinner chosenPlace = new Spinner(this);
+        chosenPlace.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item, placeNames));
+        if (id != null) {
+            Long currentPlace = db.taskPlaceId(id);
+            if (currentPlace != null) {
+                for (int i = 1; i < placeIds.size(); i++) {
+                    if (currentPlace.equals(placeIds.get(i))) {
+                        chosenPlace.setSelection(i);
+                        break;
+                    }
+                }
+            }
+        }
+        form.addView(chosenPlace);
+        form.addView(text("Miejsca dodasz w module Miejsca. "
+            + "Czynności bez miejsca działają normalnie.", 12, false));
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
@@ -591,7 +627,8 @@ public final class MainActivity extends Activity {
                 String due = date.getText().toString().trim();
                 String error = TaskRules.validate(title, due, rule, every);
                 if (error != null) { alert(error); return; }
-                db.saveTask(id, title, due, rule, every);
+                db.saveTask(id, title, due, rule, every,
+                    placeIds.get(chosenPlace.getSelectedItemPosition()));
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
                 render();
@@ -767,6 +804,91 @@ public final class MainActivity extends Activity {
         });
         note("Kalendarz pokazuje najbliższe terminy czynności. "
             + "Przypomnienia systemowe i planowanie dostępności domowników będą rozwijane osobno.");
+    }
+
+    private void places() {
+        header("Miejsca • gospodarstwo");
+        note("Miejsca są opcjonalnym powiązaniem czynności. "
+            + "Usunięcie miejsca nie usunie przypisanych czynności.");
+        button("+ Dodaj miejsce", () -> placeEditor(null, "", "Dom"));
+        int count = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,kind FROM places ORDER BY name COLLATE NOCASE", null)) {
+            while (c.moveToNext()) {
+                count++;
+                long id = c.getLong(0);
+                String name = c.getString(1), kind = c.getString(2);
+                LinearLayout card = card();
+                card.addView(text(name, 19, true));
+                card.addView(text(kind, 13, false));
+                try (Cursor countTasks = db.getReadableDatabase().rawQuery(
+                        "SELECT COUNT(*) FROM tasks WHERE place_id=?",
+                        new String[]{Long.toString(id)})) {
+                    if (countTasks.moveToFirst())
+                        card.addView(text("Przypisane czynności: "
+                            + countTasks.getInt(0), 14, false));
+                }
+                LinearLayout actions = new LinearLayout(this);
+                actions.setOrientation(LinearLayout.HORIZONTAL);
+                card.addView(actions);
+                taskAction(actions, "Edytuj", () -> placeEditor(id, name, kind));
+                taskAction(actions, "Usuń", () -> new AlertDialog.Builder(this)
+                    .setTitle("Usunąć miejsce?")
+                    .setMessage(name + "\\nCzynności pozostaną bez przypisania.")
+                    .setNegativeButton("Anuluj", null)
+                    .setPositiveButton("Usuń", (d, w) -> {
+                        db.deletePlace(id);
+                        DiagnosticLog.event("PLACE_DELETED");
+                        render();
+                    }).show());
+            }
+        }
+        if (count == 0) note("Dodaj np. Ogród, Garaż lub Kuchnia.");
+        button("Wróć do czynności", () -> go("tasks"));
+    }
+
+    private void placeEditor(Long id, String name, String kind) {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18), dp(8), dp(18), dp(8));
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(name);
+        input.setHint("Nazwa miejsca");
+        layout.addView(input);
+        Spinner type = new Spinner(this);
+        type.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item, PLACE_TYPES));
+        for (int i = 0; i < PLACE_TYPES.length; i++)
+            if (PLACE_TYPES[i].equals(kind)) type.setSelection(i);
+        layout.addView(type);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(id == null ? "Nowe miejsce" : "Edycja miejsca")
+            .setView(layout)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(v -> {
+                String value = input.getText().toString().trim();
+                if (value.isEmpty() || value.length() > 160) {
+                    input.setError("Podaj nazwę (maks. 160 znaków).");
+                    return;
+                }
+                try {
+                    if (!db.savePlace(id, value,
+                            PLACE_TYPES[type.getSelectedItemPosition()])) {
+                        input.setError("Miejsce o tej nazwie już istnieje.");
+                        return;
+                    }
+                    DiagnosticLog.event(id == null ? "PLACE_ADDED" : "PLACE_EDITED");
+                    dialog.dismiss();
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.error("PLACE_SAVE", error);
+                    alert("Nie można zapisać miejsca.");
+                }
+            }));
+        dialog.show();
     }
 
     private void pantry() {
