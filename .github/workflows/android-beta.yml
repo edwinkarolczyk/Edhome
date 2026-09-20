@@ -21,7 +21,7 @@ jobs:
   build-beta:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
         with:
           gradle-version: "8.10.2"
       - name: Verify update-channel scripts
-        run: python3 -m py_compile .github/scripts/prepare_beta_manifest.py .github/scripts/publish_public_channel.py
+        run: python3 -m py_compile .github/scripts/publish_public_channel.py
       - name: Task calendar recurrence regression
         run: |
           mkdir -p "$RUNNER_TEMP/task-check"
@@ -52,9 +52,6 @@ jobs:
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Compile-check Beta and Stable
-        env:
-          EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO || 'edwinkarolczyk/EDHOME-Updates' }}
-          EDHOME_BETA_FEED_URL: ${{ vars.EDHOME_BETA_FEED_URL }}
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
         env:
@@ -81,8 +78,6 @@ jobs:
           EDHOME_BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
           EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
           EDHOME_BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
-          EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO || 'edwinkarolczyk/EDHOME-Updates' }}
-          EDHOME_BETA_FEED_URL: ${{ vars.EDHOME_BETA_FEED_URL }}
         run: gradle --no-daemon :app:assembleBetaRelease :app:assembleStableDebug
       - name: Verify signed APK certificate
         run: |
@@ -93,34 +88,18 @@ jobs:
             echo "::error::Signed APK has an unexpected certificate."
             exit 1
           fi
-      - name: Prepare optional manifest for external HTTPS hosting
-        env:
-          EDHOME_BETA_APK_URL: ${{ vars.EDHOME_BETA_APK_URL }}
-          EDHOME_BETA_NOTES: ${{ vars.EDHOME_BETA_NOTES }}
-        run: python3 .github/scripts/prepare_beta_manifest.py
-      - name: Publish installable beta (signed only)
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.2.4-beta.1-signed-apk
-          path: |
-            app/build/outputs/apk/beta/release/app-beta-release.apk
-            beta-manifest.json
+          name: EDHOME-0.2.5-beta.1-signed-apk
+          path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Publish public binary channel (opt in only)
+      - name: Publish signed Beta release and live manifest
         env:
-          EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO || 'edwinkarolczyk/EDHOME-Updates' }}
-          EDHOME_BETA_NOTES: ${{ vars.EDHOME_BETA_NOTES }}
-          GH_TOKEN: ${{ secrets.EDHOME_PUBLIC_CHANNEL_TOKEN }}
-        run: |
-          if [[ -z "$GH_TOKEN" ]]; then
-            echo "::warning::Public update channel is NOT operational: EDHOME_PUBLIC_CHANNEL_TOKEN is missing. Signed APK is available only as a private Actions artifact."
-            echo "### OTA publication not available" >> "$GITHUB_STEP_SUMMARY"
-            echo "Signed APK was built, but the public channel is not live: EDHOME_PUBLIC_CHANNEL_TOKEN is missing. Do not call this run a working OTA release." >> "$GITHUB_STEP_SUMMARY"
-            echo "Create public edwinkarolczyk/EDHOME-Updates and add a fine-grained PAT with Contents read/write restricted to that repository only."
-            exit 0
-          fi
-          python3 .github/scripts/publish_public_channel.py
+          GH_TOKEN: ${{ github.token }}
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.2.5 — automatyczne aktualizacje z GitHub Releases."
+        run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/edhome-beta.p12"
