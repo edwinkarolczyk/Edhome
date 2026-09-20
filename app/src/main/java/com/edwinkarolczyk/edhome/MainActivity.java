@@ -2034,9 +2034,10 @@ public final class MainActivity extends Activity {
 
         private static void addMemberSchedules(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE member_weekly_shifts ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "member_id INTEGER NOT NULL, weekday INTEGER NOT NULL "
                 + "CHECK(weekday BETWEEN 1 AND 7), shift TEXT NOT NULL, "
-                + "PRIMARY KEY(member_id,weekday))");
+                + "UNIQUE(member_id,weekday))");
             database.execSQL("CREATE TABLE member_shift_exceptions ("
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "member_id INTEGER NOT NULL, date TEXT NOT NULL, "
