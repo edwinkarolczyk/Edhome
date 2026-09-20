@@ -157,6 +157,35 @@ final class DataBackup {
                 Long id = values.getAsLong("id");
                 if (id == null || id <= 0 || !ids.add(id))
                     throw new IllegalArgumentException("Nieprawidłowe lub powielone ID.");
+                if ("pantry".equals(definition[0])) {
+                    Long qty = values.getAsLong("qty");
+                    if (qty == null || qty > 100000000L ||
+                        values.getAsString("name") == null
+                        || values.getAsString("name").trim().isEmpty()
+                        || values.getAsString("name").length() > 160)
+                        throw new IllegalArgumentException("Nieprawidłowy produkt w kopii.");
+                }
+                if ("audit_sessions".equals(definition[0])) {
+                    String status = values.getAsString("status");
+                    if (!("open".equals(status) || "completed".equals(status)
+                            || "cancelled".equals(status)))
+                        throw new IllegalArgumentException("Nieznany stan remanentu.");
+                }
+                if ("audit_rows".equals(definition[0])) {
+                    String status = values.getAsString("status");
+                    Long expected = values.getAsLong("expected_qty");
+                    Long counted = values.getAsLong("counted_qty");
+                    if (expected == null || expected > 100000000L
+                            || counted != null && counted > 100000000L
+                            || !("pending".equals(status) || "skip".equals(status)
+                                 || "match".equals(status) || "count".equals(status)))
+                        throw new IllegalArgumentException("Nieprawidłowy wpis remanentu.");
+                }
+                if ("audit_corrections".equals(definition[0])) {
+                    if (values.getAsLong("old_qty") > 100000000L ||
+                        values.getAsLong("new_qty") > 100000000L)
+                        throw new IllegalArgumentException("Nieprawidłowa korekta remanentu.");
+                }
                 if ("tasks".equals(definition[0])) {
                     Long done = values.getAsLong("done");
                     if (done == null || done > 1)
@@ -171,6 +200,16 @@ final class DataBackup {
                 rows.add(values);
             }
             parsed.put(definition[0], rows);
+        }
+
+        Set<Long> sessions = new HashSet<>();
+        for (ContentValues session : parsed.get("audit_sessions"))
+            sessions.add(session.getAsLong("id"));
+        for (String name : new String[]{"audit_rows", "audit_corrections"}) {
+            for (ContentValues item : parsed.get(name)) {
+                if (!sessions.contains(item.getAsLong("session_id")))
+                    throw new IllegalArgumentException("Kopia ma wpisy bez remanentu.");
+            }
         }
 
         database.beginTransaction();
