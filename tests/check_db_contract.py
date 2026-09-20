@@ -24,7 +24,7 @@ create = statements(section(main, "@Override public void onCreate(SQLiteDatabase
 audit = statements(section(main, "private static void addAuditTables", "long openAuditId"))
 members = statements(section(main, "private static void addMembers", "private static void addAuditTables"))
 history = statements(section(main, "private static void addTaskHistory",
-                             "private static void addAuditTables"))
+                             "private static void addMembers"))
 places = statements(section(main, "private static void addPlaces",
                             "private static void addTaskHistory"))
 upgrade = section(main, "@Override public void onUpgrade", "private static void addPlaces")
