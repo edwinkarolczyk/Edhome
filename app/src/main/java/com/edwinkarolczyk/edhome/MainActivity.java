@@ -809,12 +809,14 @@ public final class MainActivity extends Activity {
         body.addView(nav);
         Button prev = new Button(this);
         prev.setText("← " + ("week".equals(calendarView) ? "Tydzień"
-            : "day".equals(calendarView) ? "Dzień" : "Miesiąc"));
+            : "day".equals(calendarView) ? "Dzień"
+            : "agenda".equals(calendarView) ? "30 dni" : "Miesiąc"));
         prev.setAllCaps(false);
         nav.addView(prev, new LinearLayout.LayoutParams(0, -2, 1));
         prev.setOnClickListener(v -> {
             LocalDate previous = "week".equals(calendarView) ? selected.minusWeeks(1)
                 : "day".equals(calendarView) ? selected.minusDays(1)
+                : "agenda".equals(calendarView) ? selected.minusDays(30)
                 : month.minusMonths(1).atDay(1);
             calendarMonth = YearMonth.from(previous).toString();
             calendarDay = previous.toString();
@@ -822,12 +824,14 @@ public final class MainActivity extends Activity {
         });
         Button next = new Button(this);
         next.setText(("week".equals(calendarView) ? "Tydzień"
-            : "day".equals(calendarView) ? "Dzień" : "Miesiąc") + " →");
+            : "day".equals(calendarView) ? "Dzień"
+            : "agenda".equals(calendarView) ? "30 dni" : "Miesiąc") + " →");
         next.setAllCaps(false);
         nav.addView(next, new LinearLayout.LayoutParams(0, -2, 1));
         next.setOnClickListener(v -> {
             LocalDate following = "week".equals(calendarView) ? selected.plusWeeks(1)
                 : "day".equals(calendarView) ? selected.plusDays(1)
+                : "agenda".equals(calendarView) ? selected.plusDays(30)
                 : month.plusMonths(1).atDay(1);
             calendarMonth = YearMonth.from(following).toString();
             calendarDay = following.toString();
@@ -853,11 +857,14 @@ public final class MainActivity extends Activity {
         });
 
         Map<String, Integer> counts = new HashMap<>();
+        LocalDate countStart = "week".equals(calendarView)
+            ? selected.with(java.time.DayOfWeek.MONDAY) : month.atDay(1);
+        LocalDate countEnd = "week".equals(calendarView)
+            ? countStart.plusDays(6) : month.atEndOfMonth();
         try (Cursor c = db.getReadableDatabase().rawQuery(
                 "SELECT due_date,COUNT(*) FROM tasks WHERE done=0 AND due_date>=? "
                 + "AND due_date<=? GROUP BY due_date",
-                new String[]{month.atDay(1).toString(),
-                    month.atEndOfMonth().toString()})) {
+                new String[]{countStart.toString(), countEnd.toString()})) {
             while (c.moveToNext()) counts.put(c.getString(0), c.getInt(1));
         }
 
