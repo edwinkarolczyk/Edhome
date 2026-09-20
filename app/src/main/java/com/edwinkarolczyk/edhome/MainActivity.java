@@ -67,6 +67,8 @@ public final class MainActivity extends Activity {
     private String screen = "home";
     private String calendarMonth = YearMonth.now().toString();
     private String calendarDay = LocalDate.now().toString();
+    private String tasksFilter = "all";
+    private String pantrySearch = "";
     private int bg, surface, ink, subdued, accent;
 
     @Override public void onCreate(Bundle savedState) {
@@ -130,7 +132,7 @@ public final class MainActivity extends Activity {
     private GradientDrawable rounded(int color) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(dp(18));
+        drawable.setCornerRadius(dp(22));
         return drawable;
     }
 
@@ -212,6 +214,10 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
+        int systemBarFlags = "Jasny".equals(prefs.getString("theme", "Grafitowy"))
+            ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
+        getWindow().getDecorView().setSystemUiVisibility(systemBarFlags);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -227,6 +233,7 @@ public final class MainActivity extends Activity {
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
+                case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
@@ -319,23 +326,61 @@ public final class MainActivity extends Activity {
         title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
         note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
         title(prefs.getString("household", "Moje gospodarstwo"));
-        LinearLayout info = card();
-        info.addView(text("Twój domowy plan", 19, true));
-        info.addView(text("Czynności, harmonogram, kalendarz i stan spiżarni działają lokalnie.", 15, false));
-        note("Niedokończone czynności: " + db.openTasks()
-            + " • Zaległe terminy: " + db.overdueTasks());
-        button("✓ Czynności", () -> go("tasks"));
-        button("▣ Spiżarnia", () -> go("pantry"));
-        button("▦ Kalendarz", () -> go("calendar"));
-        button("⌗ Skaner kodów — w planie", () -> go("scanner"));
-        button("◫ Remanent spiżarni", () -> go("audit"));
-        button("↻ Aktualizacje", () -> go("updates"));
-        button("↧ Kopia danych / przenoszenie", () -> go("backup"));
-        button("⚙ Ustawienia", () -> go("settings"));
-        if (DiagnosticLog.enabled()) {
-            button("🛠 Diagnostyka BETA", () -> go("diagnostics"));
+
+        LinearLayout summary = card();
+        summary.addView(text("Twój domowy plan", 21, true));
+        int overdue = db.overdueTasks();
+        summary.addView(text("Do zrobienia: " + db.openTasks()
+            + "     Zaległe: " + overdue, 16, true));
+        TextView reminder = text(overdue == 0
+            ? "✓  Brak zaległych czynności."
+            : "•  Otwórz zaległe i wybierz, co wykonać dziś.", 14, false);
+        reminder.setTextColor(overdue == 0 ? accent : ink);
+        summary.addView(reminder);
+        summary.setOnClickListener(v -> {
+            tasksFilter = overdue == 0 ? "today" : "overdue";
+            go("tasks");
+        });
+
+        note("Przesuń kafelki w bok →");
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout tiles = new LinearLayout(this);
+        tiles.setOrientation(LinearLayout.HORIZONTAL);
+        tiles.setPadding(dp(1), dp(6), dp(8), dp(12));
+        scroll.addView(tiles);
+        body.addView(scroll);
+        updateTile(tiles, "✓", "Czynności", true, () -> {
+            tasksFilter = "all";
+            go("tasks");
+        });
+        updateTile(tiles, "▦", "Kalendarz", false, () -> go("calendar"));
+        updateTile(tiles, "▣", "Spiżarnia", false, () -> go("pantry"));
+        updateTile(tiles, "◫", "Remanent", false, () -> go("audit"));
+        updateTile(tiles, "↻", "Aktualizacje", false, () -> go("updates"));
+        updateTile(tiles, "▤", "Kopia danych", false, () -> go("backup"));
+        updateTile(tiles, "⚙", "Ustawienia", false, () -> go("settings"));
+
+        LinearLayout today = card();
+        today.addView(text("Najbliższe czynności", 19, true));
+        int displayed = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT title,due_date FROM tasks WHERE done=0 AND due_date IS NOT NULL "
+                + "ORDER BY due_date ASC,id ASC LIMIT 4", null)) {
+            while (c.moveToNext()) {
+                displayed++;
+                today.addView(text("• " + c.getString(1) + " — " + c.getString(0), 14, false));
+            }
         }
-        note("Harmonogram i historia wykonania działają offline. Powiadomienia systemowe, skaner, PayCheck, SUPLA i synchronizacja pozostają w planie.");
+        if (displayed == 0)
+            today.addView(text("Brak zaplanowanych terminów.", 14, false));
+        smallButton(today, "Zobacz wszystkie czynności →", () -> {
+            tasksFilter = "all";
+            go("tasks");
+        });
+        if (DiagnosticLog.enabled())
+            button("Diagnostyka BETA", () -> go("diagnostics"));
+        note("Działa offline. Powiadomienia systemowe, skaner i synchronizacja są w kolejnych etapach.");
     }
 
     private void tasks() {
