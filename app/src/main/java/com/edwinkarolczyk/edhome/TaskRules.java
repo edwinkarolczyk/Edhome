@@ -53,26 +53,23 @@ final class TaskRules {
     static String nextDue(String date, String rule, int every, LocalDate completed) {
         if (!recurring(rule)) return null;
         LocalDate base = LocalDate.parse(date);
-        LocalDate candidate = base;
-        // An already elapsed due date advances from its original schedule,
-        // rather than drifting based on the hour at which the user finished.
-        int safety = 0;
+        LocalDate candidate;
+        // Anchor every calculation to the original due date, so 31 January
+        // -> 28 February -> 31 March, and 29 February returns in leap years.
+        long step = 0;
         do {
+            if (++step > 50000) throw new IllegalStateException("Date out of supported range");
+            long amount = step * (TaskRules.custom(rule) ? every : 1L);
             switch (rule) {
-                case "daily": case "every_days": candidate = candidate.plusDays(
-                    "daily".equals(rule) ? 1 : every); break;
-                case "weekly": case "every_weeks": candidate = candidate.plusWeeks(
-                    "weekly".equals(rule) ? 1 : every); break;
-                case "monthly": case "every_months": candidate = candidate.plusMonths(
-                    "monthly".equals(rule) ? 1 : every); break;
-                case "yearly": case "every_years": candidate = candidate.plusYears(
-                    "yearly".equals(rule) ? 1 : every); break;
+                case "daily": case "every_days": candidate = base.plusDays(amount); break;
+                case "weekly": case "every_weeks": candidate = base.plusWeeks(amount); break;
+                case "monthly": case "every_months": candidate = base.plusMonths(amount); break;
+                case "yearly": case "every_years": candidate = base.plusYears(amount); break;
                 case "before_spring": case "before_summer":
                 case "before_autumn": case "before_winter":
-                    candidate = candidate.plusYears(1); break;
+                    candidate = base.plusYears(step); break;
                 default: throw new IllegalArgumentException("Unknown recurrence rule");
             }
-            if (++safety > 50000) throw new IllegalStateException("Date out of supported range");
         } while (!candidate.isAfter(completed));
         return candidate.toString();
     }
