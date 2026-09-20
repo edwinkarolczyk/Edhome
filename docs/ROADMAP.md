@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan bieżący 0.2.6-beta.1 na `beta`:** rzeczywiste repozytorium `edwinkarolczyk/Edhome` jest publiczne; aktualizacje podpisanego APK korzystają z GitHub Releases i manifestu na `beta`, bez osobnego tokenu. Kolejny ukończony fragment 0.2: priorytet i czas wykonania czynności, SQLite v5 i zgodny backup starszych danych. Test end-to-end na fizycznym telefonie pozostaje osobnym kryterium odbioru. Główny rejestr wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+> **Stan bieżący 0.2.7-beta.1 na `beta`:** publiczne `edwinkarolczyk/Edhome`, podpisane GitHub Releases i manifest `beta`, bez dodatkowego tokenu. Beta DEV bez PIN-u; pojedynczy wykonawca czynności i lista domowników; SQLite v6 oraz kopie v2–v6. Wymagany test APK na telefonie. Główny rejestr wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,8 +80,8 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.2.7-beta.1
+## Następny inkrement — 0.2.8-beta.1
 
-- Domownik/wykonawca czynności i lokalny grafik pracy z wyjątkami (jako **plan** do kolejnej wersji, nie deklaracja gotowości).
-- Później proponowanie trzech terminów uwzględniających szacowany czas i grafik; zadanie zawsze pozostaje samodzielne i może nie mieć przypisanego miejsca.
+- Lokalny grafik pracy i wyjątki dla poszczególnych domowników, bez udawania synchronizacji między urządzeniami.
+- Później proponowanie trzech terminów uwzględniających szacowany czas i grafik; zadanie pozostaje samodzielne, miejsce i wykonawca opcjonalne.
 - Dalsza rozbudowa alertów i powiązań z wieloma obiektami po zweryfikowaniu migracji, backupu i testów na telefonie.
