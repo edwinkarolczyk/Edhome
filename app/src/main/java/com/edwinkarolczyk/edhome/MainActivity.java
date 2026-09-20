@@ -117,7 +117,8 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
-        else if (unlocked && "task_history".equals(screen)) go("tasks");
+        else if (unlocked && ("task_history".equals(screen)
+                || "members".equals(screen))) go("tasks");
         else if (unlocked && !"home".equals(screen)) go("home");
         else super.onBackPressed();
     }
@@ -279,6 +280,7 @@ public final class MainActivity extends Activity {
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
+                case "members": members(); break;
                 case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
                 case "places": places(); break;
@@ -493,6 +495,7 @@ public final class MainActivity extends Activity {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
         button("⌂ Miejsca", () -> go("places"));
+        button("♙ Domownicy / wykonawcy", () -> go("members"));
         button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
         button("▦ Kalendarz czynności", () -> go("calendar"));
         note("Zaległe: " + db.overdueTasks()
@@ -585,6 +588,8 @@ public final class MainActivity extends Activity {
         if (done) description += " • Wykonane";
         String place = db.placeLabel(id);
         if (!place.isEmpty()) description += " • " + place;
+        String assignee = db.assigneeLabel(id);
+        if (!assignee.isEmpty()) description += " • Wykonawca: " + assignee;
         TextView meta = text(description, 13, false);
         meta.setTextColor(subdued);
         box.addView(meta);
@@ -762,6 +767,35 @@ public final class MainActivity extends Activity {
         form.addView(text("Miejsca dodasz w module Miejsca. "
             + "Czynności bez miejsca działają normalnie.", 12, false));
 
+        form.addView(text("Wykonawca (opcjonalnie)", 15, true));
+        java.util.ArrayList<Long> memberIds = new java.util.ArrayList<>();
+        java.util.ArrayList<String> memberNames = new java.util.ArrayList<>();
+        memberIds.add(null);
+        memberNames.add("Bez wyznaczonej osoby");
+        try (Cursor members = db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE", null)) {
+            while (members.moveToNext()) {
+                memberIds.add(members.getLong(0));
+                memberNames.add(members.getString(1));
+            }
+        }
+        Spinner chosenMember = new Spinner(this);
+        chosenMember.setAdapter(themeSpinnerAdapter(memberNames));
+        if (id != null) {
+            Long currentMember = db.taskAssigneeId(id);
+            if (currentMember != null) {
+                for (int i = 1; i < memberIds.size(); i++) {
+                    if (currentMember.equals(memberIds.get(i))) {
+                        chosenMember.setSelection(i);
+                        break;
+                    }
+                }
+            }
+        }
+        form.addView(chosenMember);
+        form.addView(text("Osoby dodasz w Czynności → Domownicy. "
+            + "Bez wykonawcy czynność nadal działa.", 12, false));
+
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -800,7 +834,8 @@ public final class MainActivity extends Activity {
                 if (error != null) { alert(error); return; }
                 db.saveTask(id, title, due, rule, every,
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
-                    selectedPriority, estimatedMinutes);
+                    selectedPriority, estimatedMinutes,
+                    memberIds.get(chosenMember.getSelectedItemPosition()));
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
@@ -1776,7 +1811,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 5);
+            super(context, "edhome-beta-preview.db", null, 6);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -1785,16 +1820,18 @@ public final class MainActivity extends Activity {
                 + "due_date TEXT, repeat_rule TEXT NOT NULL DEFAULT 'once', "
                 + "repeat_every INTEGER NOT NULL DEFAULT 1, place_id INTEGER, "
                 + "priority TEXT NOT NULL DEFAULT 'normal', "
-                + "duration_minutes INTEGER NOT NULL DEFAULT 30)");
+                + "duration_minutes INTEGER NOT NULL DEFAULT 30, "
+                + "assignee_id INTEGER)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
             addAuditTables(database);
             addTaskHistory(database);
             addPlaces(database);
+            addMembers(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 5) {
+            if (oldVersion < 1 || newVersion > 6) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -1819,6 +1856,11 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 30");
                 DiagnosticLog.event("DATABASE_MIGRATED_4_TO_5");
             }
+            if (oldVersion < 6) {
+                addMembers(database);
+                database.execSQL("ALTER TABLE tasks ADD COLUMN assignee_id INTEGER");
+                DiagnosticLog.event("DATABASE_MIGRATED_5_TO_6");
+            }
         }
 
         private static void addPlaces(SQLiteDatabase database) {
@@ -1834,6 +1876,12 @@ public final class MainActivity extends Activity {
             database.execSQL("CREATE INDEX task_history_task_idx ON task_history(task_id,id)");
         }
 
+
+        private static void addMembers(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE household_members ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "name TEXT NOT NULL COLLATE NOCASE UNIQUE)");
+        }
 
         private static void addAuditTables(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE audit_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at INTEGER NOT NULL, completed_at INTEGER, status TEXT NOT NULL)");
@@ -1995,7 +2043,8 @@ public final class MainActivity extends Activity {
         }
 
         void saveTask(Long id, String title, String dueDate, String rule, int every,
-                Long placeId, String priority, int durationMinutes) {
+                Long placeId, String priority, int durationMinutes,
+                Long assigneeId) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
@@ -2005,6 +2054,16 @@ public final class MainActivity extends Activity {
             ContentValues values = new ContentValues();
             values.put("priority", priority);
             values.put("duration_minutes", durationMinutes);
+            if (assigneeId == null) values.putNull("assignee_id");
+            else {
+                try (Cursor person = getReadableDatabase().rawQuery(
+                        "SELECT id FROM household_members WHERE id=?",
+                        new String[]{Long.toString(assigneeId)})) {
+                    if (!person.moveToFirst())
+                        throw new IllegalArgumentException("Wykonawca nie istnieje.");
+                }
+                values.put("assignee_id", assigneeId);
+            }
             values.put("title", title);
             if (dueDate.isEmpty()) values.putNull("due_date");
             else values.put("due_date", dueDate);
@@ -2084,6 +2143,24 @@ public final class MainActivity extends Activity {
             }
         }
 
+        Long taskAssigneeId(long taskId) {
+            try (Cursor person = getReadableDatabase().rawQuery(
+                    "SELECT assignee_id FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                return person.moveToFirst() && !person.isNull(0)
+                    ? person.getLong(0) : null;
+            }
+        }
+
+        String assigneeLabel(long taskId) {
+            try (Cursor person = getReadableDatabase().rawQuery(
+                    "SELECT m.name FROM tasks t JOIN household_members m "
+                    + "ON t.assignee_id=m.id WHERE t.id=?",
+                    new String[]{Long.toString(taskId)})) {
+                return person.moveToFirst() ? person.getString(0) : "";
+            }
+        }
+
         Long taskPlaceId(long taskId) {
             try (Cursor c = getReadableDatabase().rawQuery(
                     "SELECT place_id FROM tasks WHERE id=?",
@@ -2097,6 +2174,32 @@ public final class MainActivity extends Activity {
                     "SELECT p.name FROM tasks t JOIN places p ON t.place_id=p.id "
                     + "WHERE t.id=?", new String[]{Long.toString(taskId)})) {
                 return c.moveToFirst() ? c.getString(0) : "";
+            }
+        }
+
+        boolean addMember(String name) {
+            String trimmed = name.trim();
+            if (trimmed.isEmpty() || trimmed.length() > 80)
+                throw new IllegalArgumentException("Nazwa osoby: 1–80 znaków.");
+            ContentValues values = new ContentValues();
+            values.put("name", trimmed);
+            return getWritableDatabase().insertWithOnConflict(
+                "household_members", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+        }
+
+        void deleteMember(long memberId) {
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                ContentValues clear = new ContentValues();
+                clear.putNull("assignee_id");
+                database.update("tasks", clear, "assignee_id=?",
+                    new String[]{Long.toString(memberId)});
+                database.delete("household_members", "id=?",
+                    new String[]{Long.toString(memberId)});
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
             }
         }
 
