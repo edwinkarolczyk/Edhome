@@ -84,7 +84,7 @@ jobs:
       - name: Publish installable beta (signed only)
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.1.4-beta.1-signed-apk
+          name: EDHOME-0.1.5-beta.1-signed-apk
           path: |
             app/build/outputs/apk/beta/release/app-beta-release.apk
             beta-manifest.json
