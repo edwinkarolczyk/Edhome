@@ -10,6 +10,7 @@ on:
       - "settings.gradle"
       - ".github/workflows/android-beta.yml"
       - ".github/scripts/**"
+      - "tests/**"
   workflow_dispatch:
 
 concurrency:
@@ -39,6 +40,13 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+      - name: Task calendar recurrence regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/task-check"
+          javac -d "$RUNNER_TEMP/task-check" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TaskRules.java \
+            tests/task_rules/TaskRulesSmoke.java
+          java -cp "$RUNNER_TEMP/task-check" com.edwinkarolczyk.edhome.TaskRulesSmoke
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
