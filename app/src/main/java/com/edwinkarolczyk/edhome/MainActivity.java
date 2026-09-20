@@ -82,6 +82,7 @@ public final class MainActivity extends Activity {
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
         db = new LocalDb(this);
+        ReminderReceiver.schedule(this);
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -413,7 +414,8 @@ public final class MainActivity extends Activity {
         });
         if (DiagnosticLog.enabled())
             button("Diagnostyka BETA", () -> go("diagnostics"));
-        note("Działa offline. Powiadomienia systemowe, skaner i synchronizacja są w kolejnych etapach.");
+        note("Działa offline. Przypomnienia włączysz w Ustawieniach; skaner "
+            + "i synchronizacja są w kolejnych etapach.");
     }
 
     /** A validated, persisted nine-tile order; unknown and repeated IDs are ignored. */
@@ -709,6 +711,7 @@ public final class MainActivity extends Activity {
                 if (error != null) { alert(error); return; }
                 db.saveTask(id, title, due, rule, every,
                     placeIds.get(chosenPlace.getSelectedItemPosition()));
+                ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
                 render();
@@ -1304,6 +1307,21 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("HOUSEHOLD_RENAMED");
             render();
         });
+        boolean reminders = prefs.getBoolean("reminders_enabled", false);
+        button(reminders ? "Przypomnienia: WŁĄCZONE" : "Przypomnienia: WYŁĄCZONE", () -> {
+            boolean enabled = !prefs.getBoolean("reminders_enabled", false);
+            prefs.edit().putBoolean("reminders_enabled", enabled).apply();
+            if (enabled && Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                    7130);
+            ReminderReceiver.schedule(this);
+            render();
+        });
+        note("Lokalne przypomnienie o 09:00 dla zaległych i dzisiejszych czynności. "
+            + "Android może opóźnić nieprecyzyjny alarm przez oszczędzanie baterii. "
+            + "Tytuły czynności nie pojawiają się na ekranie blokady.");
         if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
         button("Kopia danych / przenoszenie", () -> go("backup"));
         note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
