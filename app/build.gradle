@@ -2,22 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
-// Public HTTPS address only. Never place tokens or private Actions URLs in the APK.
-// Approved binary-only public distribution; source and signing keys remain in this private repo.
-def publicChannelRepo = (System.getenv('EDHOME_PUBLIC_CHANNEL_REPO') ?: 'edwinkarolczyk/EDHOME-Updates').trim()
-if (publicChannelRepo && !(publicChannelRepo ==~ /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/))
-    throw new GradleException('Invalid EDHOME_PUBLIC_CHANNEL_REPO')
-def betaFeedUrl = (System.getenv('EDHOME_BETA_FEED_URL')
-    ?: (publicChannelRepo
-        ? "https://raw.githubusercontent.com/${publicChannelRepo}/main/beta-manifest.json"
-        : '')).trim()
-if (betaFeedUrl) {
-    def feed = new URI(betaFeedUrl)
-    if (feed.scheme != 'https' || !feed.host || feed.userInfo || feed.query
-            || feed.fragment || !feed.path.endsWith('.json') || feed.path.contains('..')) {
-        throw new GradleException('EDHOME_BETA_FEED_URL must be an unauthenticated HTTPS JSON path')
-    }
-}
+// EDHOME is public: publish signed Beta APK and manifest in this repository,
+// from the beta branch. Never include a GitHub token or signing key in an APK.
+def betaFeedUrl = 'https://raw.githubusercontent.com/edwinkarolczyk/Edhome/beta/beta-manifest.json'
 
 android {
     namespace 'com.edwinkarolczyk.edhome'
@@ -27,8 +14,8 @@ android {
         applicationId 'com.edwinkarolczyk.edhome'
         minSdk 26
         targetSdk 35
-        versionCode 14
-        versionName '0.2.4'
+        versionCode 15
+        versionName '0.2.5'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
     }
