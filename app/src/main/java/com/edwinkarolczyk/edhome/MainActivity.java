@@ -661,6 +661,19 @@ public final class MainActivity extends Activity {
             calendarMonth = YearMonth.from(LocalDate.now()).toString();
             render();
         });
+        LinearLayout summary = card();
+        summary.addView(text("Wybrano: " + selected.format(
+            DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy", new Locale("pl", "PL"))),
+            18, true));
+        int overdue = db.overdueTasks();
+        TextView warning = text(overdue == 0
+            ? "✓  Bez zaległości" : "•  Zaległe czynności: " + overdue, 15, false);
+        warning.setTextColor(overdue == 0 ? accent : ink);
+        summary.addView(warning);
+        if (overdue > 0) smallButton(summary, "Pokaż zaległe →", () -> {
+            tasksFilter = "overdue";
+            go("tasks");
+        });
 
         Map<String, Integer> counts = new HashMap<>();
         try (Cursor c = db.getReadableDatabase().rawQuery(
@@ -683,7 +696,9 @@ public final class MainActivity extends Activity {
 
         LocalDate first = month.atDay(1);
         LocalDate gridStart = first.minusDays(first.getDayOfWeek().getValue() - 1);
-        for (int week = 0; week < 6; week++) {
+        int weeks = (first.getDayOfWeek().getValue() - 1
+            + month.lengthOfMonth() + 6) / 7;
+        for (int week = 0; week < weeks; week++) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             body.addView(row);
@@ -727,7 +742,10 @@ public final class MainActivity extends Activity {
         if (found == 0) note("Brak zaplanowanych czynności na ten dzień.");
         button("+ Dodaj czynność", () ->
             editTask(null, "", selected.toString(), "once", 1));
-        button("Wszystkie czynności", () -> go("tasks"));
+        button("Wszystkie czynności", () -> {
+            tasksFilter = "all";
+            go("tasks");
+        });
         note("Kalendarz pokazuje najbliższe terminy czynności. "
             + "Przypomnienia systemowe i planowanie dostępności domowników będą rozwijane osobno.");
     }
