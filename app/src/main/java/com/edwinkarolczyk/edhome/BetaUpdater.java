@@ -84,16 +84,16 @@ public final class BetaUpdater {
     }
 
     public String configuredFeed() {
-        // An explicit user override (including empty/disabled) wins over the
-        // public feed compiled into this beta. Never place credentials here.
-        if (prefs.contains("updates_feed"))
-            return prefs.getString("updates_feed", "");
-        return BuildConfig.EDHOME_BETA_FEED_URL;
+        // The signed Beta build's owner-approved channel outranks old local
+        // empty/disabled overrides left by earlier preview installations.
+        // Never compile authentication credentials into an APK.
+        if (!BuildConfig.EDHOME_BETA_FEED_URL.isEmpty())
+            return BuildConfig.EDHOME_BETA_FEED_URL;
+        return prefs.getString("updates_feed", "");
     }
 
     public boolean feedFromBuild() {
-        return !prefs.contains("updates_feed")
-            && !BuildConfig.EDHOME_BETA_FEED_URL.isEmpty();
+        return !BuildConfig.EDHOME_BETA_FEED_URL.isEmpty();
     }
 
     public boolean resetFeedToBuildDefault() {
@@ -102,8 +102,9 @@ public final class BetaUpdater {
     }
 
     public boolean setFeed(String url) {
+        // Mandatory Beta updates cannot be switched off by stale preferences.
+        if (feedFromBuild()) return false;
         String value = url == null ? "" : url.trim();
-        // A GitHub Actions run is an HTML page, NOT the update JSON manifest.
         if (!value.isEmpty() && (!isSecureUrl(value) || isGitHubActionsPage(value))) return false;
         prefs.edit().putString("updates_feed", value).apply();
         DiagnosticLog.event(value.isEmpty() ? "UPDATES_FEED_CLEARED" : "UPDATES_FEED_SET");
