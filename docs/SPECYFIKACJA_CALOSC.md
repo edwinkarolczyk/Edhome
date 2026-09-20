@@ -1,6 +1,6 @@
 # EDHOME — pełny rejestr ustaleń koncepcyjnych
 
-> **Główne źródło ustaleń EDHOME — Idea by Edwin.** Wymagania nie są automatycznie gotowymi funkcjami. Stan implementacji i kolejność dostaw: [ROADMAP.md](ROADMAP.md) oraz [README.md](../README.md). Rzeczywiste repo to `edwinkarolczyk/Edhome` (obecnie **publiczne**), a prace rozwojowe odbywają się wyłącznie na `beta`; `main` bez zmian. Beta 0.2.6 dodaje priorytet i czas czynności oraz SQLite v5. Dawne wpisy „Edhime”/„prywatne repo” poniżej są opisem historycznych ustaleń, nie aktualną konfiguracją GitHub. Nie kopiujemy automatycznie kodu innych aplikacji.
+> **Główne źródło ustaleń EDHOME — Idea by Edwin.** Wymagania nie są automatycznie gotowymi funkcjami. Stan implementacji i kolejność dostaw: [ROADMAP.md](ROADMAP.md) oraz [README.md](../README.md). Rzeczywiste repo to `edwinkarolczyk/Edhome` (obecnie **publiczne**), a prace rozwojowe odbywają się wyłącznie na `beta`; `main` bez zmian. Beta 0.2.7 ma **celowo wyłączony PIN wyłącznie w Beta**, opcjonalnego wykonawcę czynności i SQLite v6; Stable zachowuje wymaganie PIN. Priorytet i czas czynności wprowadzono w 0.2.6. Dawne wpisy „Edhime”/„prywatne repo” poniżej są opisem historycznych ustaleń, nie aktualną konfiguracją GitHub. Nie kopiujemy automatycznie kodu innych aplikacji.
 
 ## 1. Wizja
 
@@ -169,3 +169,11 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Minimalizacja danych: nie zapisywać PIN, haseł, danych bankowych, tekstu powiadomień, nazw produktów, pełnych obiektów ani tokenów. Zapisywać typ zdarzenia, ekran, status, wersję i klasę/ramki wyjątku bez jego potencjalnie prywatnej wiadomości. Nie pobierać całego systemowego Android logcat.
 - Log pozostaje offline w prywatnym katalogu aplikacji; automatyczne przesyłanie poza dom/urządzenie **nie jest ustalone**. Kopiowanie i eksport wykonuje człowiek.
 - Prototyp implementacji i instrukcję znajdziesz w [BETA_0_1_0.md](BETA_0_1_0.md); fakt istnienia kodu nie jest potwierdzeniem działającego APK, dopóki build nie przejdzie.
+
+
+## 15. Zatwierdzona zmiana użytkownika — Beta bez PIN-u (20.09.2026)
+
+- **Beta DEV uruchamia się bez PIN-u** i nie blokuje się ponownie po zejściu do tła ani po imporcie kopii. Dotychczasowy PIN nie jest usuwany, ale w Beta nie może zatrzymywać ekranu startowego.
+- **Stable** nadal wymaga uwierzytelnienia PIN. Nie należy przenosić poluzowania zabezpieczenia z Beta na Stable.
+- Wersja 0.2.7 dodaje lokalną listę domowników i opcjonalne przypisanie jednej osoby do czynności. Harmonogramy i automatyczny wybór terminu nie są jeszcze zrealizowane; etap 0.2.8 jest osobny.
+- Odróżniać testy kodu/CI od rzeczywistej weryfikacji na telefonie.
