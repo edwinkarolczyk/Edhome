@@ -733,53 +733,127 @@ public final class MainActivity extends Activity {
     }
 
     private void pantry() {
-        header("Spiżarnia • uproszczony stan testowy");
-        button("◫ Remanent — sprawdź ilości", () -> go("audit"));
-        button("+ Dodaj produkt (1 szt.)", () -> {
-            EditText input = new EditText(this);
-            input.setHint("Nazwa produktu");
-            input.setSingleLine(true);
-            new AlertDialog.Builder(this).setTitle("Nowy produkt")
-                .setView(input).setNegativeButton("Anuluj", null)
-                .setPositiveButton("Dodaj", (dialog, which) -> {
-                    String name = input.getText().toString().trim();
-                    if (name.isEmpty()) { alert("Podaj nazwę."); return; }
-                    db.addStock(name);
-                    DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
+        header("Spiżarnia • lokalne zapasy");
+        button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
+        button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
+        button(pantrySearch.isEmpty() ? "⌕ Szukaj produktu" :
+            "⌕ Szukaj: " + pantrySearch, () -> {
+            EditText search = new EditText(this);
+            search.setSingleLine(true);
+            search.setText(pantrySearch);
+            search.setHint("Nazwa produktu");
+            new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
+                .setView(search).setNegativeButton("Anuluj", null)
+                .setNeutralButton("Wyczyść", (d, w) -> {
+                    pantrySearch = "";
+                    render();
+                })
+                .setPositiveButton("Szukaj", (d, w) -> {
+                    pantrySearch = search.getText().toString().trim();
                     render();
                 }).show();
         });
+        int matched = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE", null)) {
-            if (cursor.getCount() == 0) note("Spiżarnia jest pusta.");
             while (cursor.moveToNext()) {
                 long id = cursor.getLong(0);
                 String name = cursor.getString(1);
+                if (!pantrySearch.isEmpty() && !name.toLowerCase(Locale.ROOT)
+                    .contains(pantrySearch.toLowerCase(Locale.ROOT))) continue;
+                matched++;
                 int qty = cursor.getInt(2);
                 LinearLayout box = card();
-                box.addView(text(name + " • " + qty + " szt.", 18, true));
-                Button add = new Button(this);
-                add.setText("+1 Dodaj");
-                add.setAllCaps(false);
-                box.addView(add);
-                add.setOnClickListener(v -> {
-                    db.changeStock(id, +1);
+                box.addView(text(name + "  •  " + qty + " szt.", 18, true));
+                LinearLayout quick = new LinearLayout(this);
+                quick.setOrientation(LinearLayout.HORIZONTAL);
+                box.addView(quick);
+                taskAction(quick, "＋ 1", () -> {
+                    db.changeStock(id, 1);
                     DiagnosticLog.event("PANTRY_INCREMENT");
                     render();
                 });
-                Button remove = new Button(this);
-                remove.setText("−1 Wyciągnij");
-                remove.setAllCaps(false);
-                remove.setEnabled(qty > 0);
-                box.addView(remove);
-                remove.setOnClickListener(v -> {
+                taskAction(quick, "－ 1", () -> {
                     db.changeStock(id, -1);
                     DiagnosticLog.event("PANTRY_DECREMENT");
                     render();
                 });
+                taskAction(quick, "Ustaw ilość", () -> {
+                    EditText count = new EditText(this);
+                    count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                    count.setSingleLine(true);
+                    count.setText(String.valueOf(qty));
+                    new AlertDialog.Builder(this).setTitle(name + " • ilość")
+                        .setView(count).setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Zapisz", (d, w) -> {
+                            try {
+                                int value = Integer.parseInt(count.getText().toString().trim());
+                                if (value < 0 || value > 100000000) {
+                                    alert("Podaj ilość od 0 do 100 000 000.");
+                                    return;
+                                }
+                                db.setStock(id, value);
+                                DiagnosticLog.event("PANTRY_QUANTITY_SET");
+                                render();
+                            } catch (NumberFormatException invalid) {
+                                alert("Podaj liczbę całkowitą.");
+                            }
+                        }).show();
+                });
+                LinearLayout management = new LinearLayout(this);
+                management.setOrientation(LinearLayout.HORIZONTAL);
+                box.addView(management);
+                taskAction(management, "Zmień nazwę", () -> pantryProductDialog(id, name));
+                taskAction(management, "Usuń", () -> {
+                    if (db.openAuditId() != 0) {
+                        alert("Najpierw zakończ lub anuluj remanent. "
+                            + "W jego trakcie nie można usuwać produktów.");
+                        return;
+                    }
+                    new AlertDialog.Builder(this).setTitle("Usunąć produkt?")
+                        .setMessage(name + " • " + qty + " szt.")
+                        .setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Usuń", (d, w) -> {
+                            db.deleteStock(id);
+                            DiagnosticLog.event("PANTRY_PRODUCT_DELETED");
+                            render();
+                        }).show();
+                });
             }
         }
-        note("Remanent dostępny osobno. Skanowanie kodów, kg/l i lokalizacje — w planie.");
+        if (matched == 0) note(pantrySearch.isEmpty()
+            ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
+            : "Nie znaleziono produktów. Wyczyść wyszukiwanie.");
+        note("Ta wersja zapisuje ilości w sztukach. Jednostki kg/l i skaner będą kolejnym etapem.");
+    }
+
+    private void pantryProductDialog(Long id, String existingName) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(existingName);
+        input.setHint("Nazwa produktu");
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(id == null ? "Dodaj do spiżarni" : "Zmień nazwę produktu")
+            .setView(input).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(v -> {
+                String name = input.getText().toString().trim();
+                if (name.isEmpty() || name.length() > 160) {
+                    input.setError("Podaj nazwę (maks. 160 znaków).");
+                    return;
+                }
+                if (id == null) {
+                    db.addStock(name);
+                    DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
+                } else if (!db.renameStock(id, name)) {
+                    input.setError("Produkt o tej nazwie już istnieje.");
+                    return;
+                } else DiagnosticLog.event("PANTRY_PRODUCT_RENAMED");
+                dialog.dismiss();
+                render();
+            }));
+        dialog.show();
     }
 
 
@@ -1470,21 +1544,67 @@ public final class MainActivity extends Activity {
         }
 
         void addStock(String name) {
-            ContentValues values = new ContentValues();
-            values.put("name", name);
-            values.put("qty", 1);
-            getWritableDatabase().insertOrThrow("pantry", null, values);
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                long existing = 0;
+                try (Cursor c = database.rawQuery(
+                        "SELECT id FROM pantry WHERE name=? COLLATE NOCASE LIMIT 1",
+                        new String[]{name})) {
+                    if (c.moveToFirst()) existing = c.getLong(0);
+                }
+                if (existing > 0) {
+                    database.execSQL(
+                        "UPDATE pantry SET qty=qty+1 WHERE id=? AND qty<100000000",
+                        new Object[]{existing});
+                } else {
+                    ContentValues values = new ContentValues();
+                    values.put("name", name);
+                    values.put("qty", 1);
+                    database.insertOrThrow("pantry", null, values);
+                }
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
+            }
         }
 
         void changeStock(long id, int diff) {
-            if (diff < 0) {
-                getWritableDatabase().execSQL(
-                    "UPDATE pantry SET qty=qty-1 WHERE id=? AND qty>0",
-                    new Object[]{id});
-            } else {
-                getWritableDatabase().execSQL(
-                    "UPDATE pantry SET qty=qty+1 WHERE id=?", new Object[]{id});
-            }
+            if (diff < 0) getWritableDatabase().execSQL(
+                "UPDATE pantry SET qty=qty-1 WHERE id=? AND qty>0",
+                new Object[]{id});
+            else getWritableDatabase().execSQL(
+                "UPDATE pantry SET qty=qty+1 WHERE id=? AND qty<100000000",
+                new Object[]{id});
         }
+
+        void setStock(long id, int qty) {
+            if (qty < 0 || qty > 100000000) throw new IllegalArgumentException("Invalid quantity");
+            ContentValues values = new ContentValues();
+            values.put("qty", qty);
+            getWritableDatabase().update("pantry", values, "id=?",
+                new String[]{Long.toString(id)});
+        }
+
+        boolean renameStock(long id, String name) {
+            SQLiteDatabase database = getWritableDatabase();
+            try (Cursor c = database.rawQuery(
+                    "SELECT id FROM pantry WHERE name=? COLLATE NOCASE AND id!=? LIMIT 1",
+                    new String[]{name, Long.toString(id)})) {
+                if (c.moveToFirst()) return false;
+            }
+            ContentValues values = new ContentValues();
+            values.put("name", name);
+            return database.update("pantry", values, "id=?",
+                new String[]{Long.toString(id)}) == 1;
+        }
+
+        void deleteStock(long id) {
+            if (openAuditId() != 0)
+                throw new IllegalStateException("An audit is open");
+            getWritableDatabase().delete("pantry", "id=?",
+                new String[]{Long.toString(id)});
+        }
+
     }
 }
