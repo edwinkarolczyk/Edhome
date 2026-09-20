@@ -24,16 +24,18 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 3;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
-        {"tasks", "id", "title", "done"},
+        {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every"},
         {"pantry", "id", "name", "qty"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
         {"audit_rows", "id", "session_id", "pantry_id", "name_snapshot",
             "expected_qty", "counted_qty", "status"},
         {"audit_corrections", "id", "session_id", "pantry_id", "old_qty",
-            "new_qty", "changed_at"}
+            "new_qty", "changed_at"},
+        {"task_history", "id", "task_id", "title_snapshot", "completed_at",
+            "due_date", "next_due_date"}
     };
 
     private DataBackup() { }
@@ -97,9 +99,10 @@ final class DataBackup {
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
             throw new IllegalArgumentException("Plik jest za duży (maks. 8 MB).");
         JSONObject root = new JSONObject(json);
+        int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || root.optInt("databaseVersion", -1) != DB_VERSION)
+                || (inputVersion != 2 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -113,7 +116,8 @@ final class DataBackup {
         JSONObject tables = root.getJSONObject("tables");
         Map<String, List<ContentValues>> parsed = new HashMap<>();
         for (String[] definition : TABLES) {
-            JSONArray items = tables.getJSONArray(definition[0]);
+            JSONArray items = inputVersion == 2 && "task_history".equals(definition[0])
+                ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
             List<ContentValues> rows = new ArrayList<>();
@@ -123,11 +127,18 @@ final class DataBackup {
                 ContentValues values = new ContentValues();
                 for (int j = 1; j < definition.length; j++) {
                     String key = definition[j];
-                    if (!item.has(key))
+                    if (!item.has(key)) {
+                        if (inputVersion == 2 && "tasks".equals(definition[0])) {
+                            if ("due_date".equals(key)) { values.putNull(key); continue; }
+                            if ("repeat_rule".equals(key)) { values.put(key, "once"); continue; }
+                            if ("repeat_every".equals(key)) { values.put(key, 1); continue; }
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
+                    }
                     Object value = item.get(key);
                     if (value == JSONObject.NULL) {
-                        if (!("completed_at".equals(key) || "counted_qty".equals(key)))
+                        if (!("completed_at".equals(key) || "counted_qty".equals(key)
+                            || "due_date".equals(key) || "next_due_date".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -150,6 +161,12 @@ final class DataBackup {
                     Long done = values.getAsLong("done");
                     if (done == null || done > 1)
                         throw new IllegalArgumentException("Nieprawidłowy status czynności.");
+                    String due = values.getAsString("due_date");
+                    String rule = values.getAsString("repeat_rule");
+                    Integer every = values.getAsInteger("repeat_every");
+                    String error = TaskRules.validate(values.getAsString("title"),
+                        due == null ? "" : due, rule, every == null ? 0 : every);
+                    if (error != null) throw new IllegalArgumentException(error);
                 }
                 rows.add(values);
             }
@@ -182,6 +199,7 @@ final class DataBackup {
 
     private static boolean isNumberColumn(String column) {
         return "id".equals(column) || "done".equals(column) || "qty".equals(column)
+            || "repeat_every".equals(column) || "task_id".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
