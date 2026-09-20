@@ -1433,14 +1433,20 @@ public final class MainActivity extends Activity {
             status.addView(line);
             status.addView(text("Na razie wybierasz APK z telefonu. "
                 + "Sam podpis aplikacji nie uruchamia automatycznych pobrań.", 14, false));
-        } else {
-            TextView line = text("✓  Źródło aktualizacji skonfigurowane", 16, true);
+        } else if (updater.channelVerified()) {
+            TextView line = text("✓  Kanał aktualizacji dostępny", 16, true);
             line.setTextColor(accent);
             status.addView(line);
-            status.addView(text("Źródło ustawione"
-                + (updater.feedFromBuild() ? " w aplikacji." : " w opcjach zaawansowanych.")
-                + " Dostępność serwera potwierdza przycisk Sprawdź aktualizację. "
-                + "Pobieranie nastąpi tylko dla nowszego, poprawnie podpisanego APK.", 14, false));
+            status.addView(text("Nowe wydania będą pobierane z oficjalnego kanału EDHOME. "
+                + "Instalację potwierdzasz w Androidzie.", 14, false));
+        } else {
+            TextView line = text("!  Kanał aktualizacji jeszcze niedostępny", 16, true);
+            line.setTextColor(ink);
+            status.addView(line);
+            status.addView(text("Adres jest już wpisany w aplikację — niczego nie musisz "
+                + "konfigurować ani szukać w internecie. Gdy plik aktualizacji "
+                + "zostanie opublikowany, aplikacja wykryje go sama. "
+                + "Na razie wybierz podpisany APK przyciskiem Instaluj APK.", 14, false));
         }
 
         note("Menu • 3 × 3, przewijaj ekran góra–dół ↓");
@@ -1475,8 +1481,12 @@ public final class MainActivity extends Activity {
             alert(!BetaUpdater.isBeta() ? "Kanał Stable: Google Play."
                 : updater.configuredFeed().isEmpty()
                     ? "Brak źródła HTTPS. Możesz instalować APK ręcznie."
-                    : "Źródło HTTPS jest skonfigurowane. "
-                        + "Sprawdź aktualizację, aby przetestować dostępność serwera."));
+                    : updater.channelVerified()
+                        ? "Kanał EDHOME został odczytany. Aktualizacje są dostępne."
+                        : "Kanał EDHOME nie został jeszcze potwierdzony. "
+                            + "Adres jest zapisany automatycznie. "
+                            + "Nie musisz wpisywać żadnego HTTPS; na razie "
+                            + "wybierz podpisany APK z GitHub Actions."));
         updateTile(tiles, "i", "Wersja\naplikacji", false, () ->
             alert("EDHOME " + BuildConfig.VERSION_NAME
                 + "\nversionCode: " + BuildConfig.VERSION_CODE));
