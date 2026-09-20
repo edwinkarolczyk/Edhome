@@ -65,3 +65,14 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - **Przed rzeczywistą migracją** zadbać o trwały podpis, backup/eksport i regresję aktualizacji na telefonie. Warianty debug mogą mieć konflikt certyfikatu z wcześniejszymi wydaniami.
 
 [Zasady i wymagania kanału](BETA_0_1_2.md).
+
+
+## Etap wykonany w kodzie — 0.1.5-beta.1 (20.09.2026)
+
+- Samodzielne czynności otrzymały termin, regułę powtarzania oraz osobną historię wykonania.
+- Powtarzanie dzienne/tygodniowe/miesięczne/roczne, co N jednostek i sezonowe na wybrany przez użytkownika dzień przygotowania.
+- Pierwszy miesięczny kalendarz z datą, liczbą czynności i listą wybranego dnia; nie jest to jeszcze pełny planer z grafikami.
+- SQLite v3, migracja 1→2→3 i backup JSON v3 z importem wcześniejszego formatu v2.
+- Osobna weryfikacja wydania APK w GitHub Actions; zapis kodu nie oznacza testu instalacji na fizycznym telefonie.
+
+[Zakres i scenariusze odbioru](BETA_0_1_5.md).
