@@ -98,7 +98,9 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (unlocked && !"home".equals(screen)) go("home");
+        if (unlocked && "updates_advanced".equals(screen)) go("updates");
+        else if (unlocked && "task_history".equals(screen)) go("tasks");
+        else if (unlocked && !"home".equals(screen)) go("home");
         else super.onBackPressed();
     }
 
@@ -605,7 +607,8 @@ public final class MainActivity extends Activity {
     }
 
     private void taskHistoryScreen() {
-        header("Historia wykonanych czynności");
+        title("Historia wykonanych czynności");
+        button("← Czynności", () -> go("tasks"));
         note("Ostatnie 100 wykonań. Historia zostaje również po usunięciu czynności z listy.");
         int count = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
@@ -1151,7 +1154,8 @@ public final class MainActivity extends Activity {
     }
 
     private void updatesAdvanced() {
-        header("Aktualizacje • opcje zaawansowane");
+        title("Aktualizacje • opcje zaawansowane");
+        button("← Aktualizacje", () -> go("updates"));
         note("Zainstalowany versionCode: " + BuildConfig.VERSION_CODE);
         if (!BetaUpdater.isBeta()) {
             note("Stable używa wyłącznie Google Play.");
