@@ -69,6 +69,10 @@ public final class MainActivity extends Activity {
     private String calendarDay = LocalDate.now().toString();
     private String tasksFilter = "all";
     private String pantrySearch = "";
+    private static final String[] HOME_TILE_IDS = {
+        "tasks", "calendar", "places", "pantry", "audit",
+        "updates", "backup", "settings", "today"
+    };
     private static final String[] PLACE_TYPES = {"Dom", "Ogród", "Garaż", "Warsztat", "Pomieszczenie", "Inne"};
     private int bg, surface, ink, subdued, accent;
 
@@ -363,23 +367,31 @@ public final class MainActivity extends Activity {
             go("tasks");
         });
 
-        note("Menu • 9 kafelków, przewijaj ekran góra–dół ↓");
+        note("Menu • przytrzymaj kafelek, aby zmienić kolejność; przewijaj góra–dół ↓");
         LinearLayout tiles = tileGrid();
-        updateTile(tiles, "✓", "Czynności", true, () -> {
-            tasksFilter = "all";
-            go("tasks");
-        });
-        updateTile(tiles, "▦", "Kalendarz", false, () -> go("calendar"));
-        updateTile(tiles, "⌂", "Miejsca", false, () -> go("places"));
-        updateTile(tiles, "▣", "Spiżarnia", false, () -> go("pantry"));
-        updateTile(tiles, "◫", "Remanent", false, () -> go("audit"));
-        updateTile(tiles, "↻", "Aktualizacje", false, () -> go("updates"));
-        updateTile(tiles, "▤", "Kopia danych", false, () -> go("backup"));
-        updateTile(tiles, "⚙", "Ustawienia", false, () -> go("settings"));
-        updateTile(tiles, "◷", "Na dziś", false, () -> {
-            tasksFilter = "today";
-            go("tasks");
-        });
+        for (String tileId : homeTileOrder()) {
+            LinearLayout tile = homeTile(tiles, tileId);
+            tile.setOnLongClickListener(v -> {
+                android.content.ClipData data = android.content.ClipData.newPlainText(
+                    "edhome-home-tile", tileId);
+                return tile.startDragAndDrop(data, new View.DragShadowBuilder(tile),
+                    null, 0);
+            });
+            tile.setOnDragListener((v, event) -> {
+                if (event.getAction() == android.view.DragEvent.ACTION_DRAG_STARTED)
+                    return event.getClipDescription() != null
+                        && event.getClipDescription().hasMimeType(
+                            android.content.ClipDescription.MIMETYPE_TEXT_PLAIN);
+                if (event.getAction() == android.view.DragEvent.ACTION_DROP) {
+                    if (event.getClipData() == null
+                            || event.getClipData().getItemCount() == 0) return false;
+                    CharSequence item = event.getClipData().getItemAt(0).getText();
+                    if (item == null) return false;
+                    return moveHomeTile(item.toString(), tileId);
+                }
+                return true;
+            });
+        }
 
         LinearLayout today = card();
         today.addView(text("Najbliższe czynności", 19, true));
@@ -401,6 +413,57 @@ public final class MainActivity extends Activity {
         if (DiagnosticLog.enabled())
             button("Diagnostyka BETA", () -> go("diagnostics"));
         note("Działa offline. Powiadomienia systemowe, skaner i synchronizacja są w kolejnych etapach.");
+    }
+
+    /** A validated, persisted nine-tile order; unknown and repeated IDs are ignored. */
+    private java.util.List<String> homeTileOrder() {
+        java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        String saved = prefs.getString("home_tile_order", "");
+        for (String id : saved.split(",")) {
+            if (java.util.Arrays.asList(HOME_TILE_IDS).contains(id)
+                    && !result.contains(id)) result.add(id);
+        }
+        for (String id : HOME_TILE_IDS) if (!result.contains(id)) result.add(id);
+        return result;
+    }
+
+    private boolean moveHomeTile(String from, String to) {
+        java.util.List<String> order = homeTileOrder();
+        if (!order.contains(from) || !order.contains(to)) return false;
+        if (from.equals(to)) return true;
+        order.remove(from);
+        order.add(order.indexOf(to), from);
+        prefs.edit().putString("home_tile_order", android.text.TextUtils.join(",", order))
+            .apply();
+        DiagnosticLog.event("HOME_TILES_REORDERED");
+        render();
+        return true;
+    }
+
+    private LinearLayout homeTile(LinearLayout grid, String id) {
+        switch (id) {
+            case "tasks": return updateTile(grid, "✓", "Czynności", true, () -> {
+                tasksFilter = "all"; go("tasks");
+            });
+            case "calendar": return updateTile(grid, "▦", "Kalendarz", false,
+                () -> go("calendar"));
+            case "places": return updateTile(grid, "⌂", "Miejsca", false,
+                () -> go("places"));
+            case "pantry": return updateTile(grid, "▣", "Spiżarnia", false,
+                () -> go("pantry"));
+            case "audit": return updateTile(grid, "◫", "Remanent", false,
+                () -> go("audit"));
+            case "updates": return updateTile(grid, "↻", "Aktualizacje", false,
+                () -> go("updates"));
+            case "backup": return updateTile(grid, "▤", "Kopia danych", false,
+                () -> go("backup"));
+            case "settings": return updateTile(grid, "⚙", "Ustawienia", false,
+                () -> go("settings"));
+            case "today": return updateTile(grid, "◷", "Na dziś", false, () -> {
+                tasksFilter = "today"; go("tasks");
+            });
+            default: throw new IllegalArgumentException("Unknown home tile");
+        }
     }
 
     private void tasks() {
@@ -1287,7 +1350,7 @@ public final class MainActivity extends Activity {
         return grid;
     }
 
-    private void updateTile(LinearLayout grid, String symbol, String caption,
+    private LinearLayout updateTile(LinearLayout grid, String symbol, String caption,
             boolean primary, Runnable callback) {
         LinearLayout row;
         if (grid.getChildCount() == 0
@@ -1330,6 +1393,7 @@ public final class MainActivity extends Activity {
         captionView.setGravity(Gravity.CENTER);
         captionView.setMaxLines(3);
         tile.addView(captionView);
+        return tile;
     }
 
     private void updatesAdvanced() {
