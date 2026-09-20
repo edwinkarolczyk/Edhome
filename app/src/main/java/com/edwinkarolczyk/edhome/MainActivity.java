@@ -1341,11 +1341,18 @@ public final class MainActivity extends Activity {
             button("Sprawdź w Google Play", () -> updater.openPlay());
             return;
         }
-        note("Kanał Beta sprawdza mały manifest co 30 sekund tylko, gdy aplikacja jest aktywna.");
-        note(updater.feedFromBuild() ? "Adres publicznego kanału pochodzi z aplikacji."
-            : updater.configuredFeed().isEmpty()
-                ? "Kanał nie jest jeszcze skonfigurowany."
-                : "Kanał ustawiono ręcznie dla tej instalacji.");
+        note("Kanał Beta sprawdza manifest co 30 sekund, kiedy aplikacja jest aktywna.");
+        if (updater.feedFromBuild()) {
+            note("Adres zatwierdzonego kanału Beta jest zapisany w aplikacji. "
+                + "Poprzednie lokalne wyłączenie aktualizacji nie blokuje go.");
+            note("Źródło: " + updater.configuredFeed());
+            note("Adres nie jest dowodem działania serwera. Sprawdź połączenie poniżej.");
+            button("Sprawdź aktualizację i połączenie", () -> updater.check(true));
+            button("← Aktualizacje", () -> go("updates"));
+            return;
+        }
+        note(updater.configuredFeed().isEmpty() ? "Kanał nie jest jeszcze skonfigurowany."
+            : "Kanał ustawiono ręcznie dla tej instalacji.");
         note("Źródło musi udostępniać HTTPS JSON i podpisane APK bez logowania. "
             + "Nie wpisuj tu tokenu GitHub, hasła ani adresu strony kompilacji Actions.");
         EditText source = field("Adres HTTPS manifestu JSON", false);
