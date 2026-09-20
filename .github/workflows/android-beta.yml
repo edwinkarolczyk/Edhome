@@ -49,6 +49,8 @@ jobs:
             app/src/main/java/com/edwinkarolczyk/edhome/TaskRules.java \
             tests/task_rules/TaskRulesSmoke.java
           java -cp "$RUNNER_TEMP/task-check" com.edwinkarolczyk.edhome.TaskRulesSmoke
+      - name: SQLite migration and backup contract
+        run: python3 tests/check_db_contract.py
       - name: Compile-check Beta and Stable
         env:
           EDHOME_PUBLIC_CHANNEL_REPO: ${{ vars.EDHOME_PUBLIC_CHANNEL_REPO || 'edwinkarolczyk/EDHOME-Updates' }}
@@ -99,7 +101,7 @@ jobs:
       - name: Publish installable beta (signed only)
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.2.2-beta.1-signed-apk
+          name: EDHOME-0.2.3-beta.1-signed-apk
           path: |
             app/build/outputs/apk/beta/release/app-beta-release.apk
             beta-manifest.json
