@@ -3,7 +3,8 @@ plugins {
 }
 
 // Public HTTPS address only. Never place tokens or private Actions URLs in the APK.
-def publicChannelRepo = (System.getenv('EDHOME_PUBLIC_CHANNEL_REPO') ?: '').trim()
+// Approved binary-only public distribution; source and signing keys remain in this private repo.
+def publicChannelRepo = (System.getenv('EDHOME_PUBLIC_CHANNEL_REPO') ?: 'edwinkarolczyk/EDHOME-Updates').trim()
 if (publicChannelRepo && !(publicChannelRepo ==~ /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/))
     throw new GradleException('Invalid EDHOME_PUBLIC_CHANNEL_REPO')
 def betaFeedUrl = (System.getenv('EDHOME_BETA_FEED_URL')
