@@ -544,6 +544,11 @@ public final class MainActivity extends Activity {
         b.setText(label);
         b.setAllCaps(false);
         b.setTextSize(14);
+        if ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))) {
+            b.setTextColor(Color.WHITE);
+            b.setBackground(rounded(Color.rgb(41, 41, 41)));
+            b.setAllCaps(false);
+        }
         b.setOnClickListener(v -> action.run());
         container.addView(b, new LinearLayout.LayoutParams(-1, -2));
     }
@@ -604,6 +609,30 @@ public final class MainActivity extends Activity {
         action.setOnClickListener(v -> run.run());
     }
 
+    private ArrayAdapter<String> themeSpinnerAdapter(java.util.List<String> items) {
+        return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
+            @Override public View getView(int position, View convertView,
+                    android.view.ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                if (view instanceof TextView) {
+                    ((TextView) view).setTextColor(ink);
+                    view.setPadding(dp(9), dp(12), dp(9), dp(12));
+                }
+                return view;
+            }
+            @Override public View getDropDownView(int position, View convertView,
+                    android.view.ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                if (view instanceof TextView) {
+                    ((TextView) view).setTextColor(ink);
+                    view.setBackgroundColor(surface);
+                    view.setPadding(dp(10), dp(14), dp(10), dp(14));
+                }
+                return view;
+            }
+        };
+    }
+
     private void editTask(Long id, String existingName, String existingDate,
             String existingRule, int existingEvery) {
         LinearLayout form = new LinearLayout(this);
@@ -646,8 +675,7 @@ public final class MainActivity extends Activity {
         TextView label = text("Powtarzanie", 15, true);
         form.addView(label);
         Spinner repeat = new Spinner(this);
-        repeat.setAdapter(new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item, TaskRules.LABELS));
+        repeat.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(TaskRules.LABELS)));
         repeat.setSelection(TaskRules.index(existingRule));
         form.addView(repeat);
         EditText interval = new EditText(this);
@@ -682,8 +710,7 @@ public final class MainActivity extends Activity {
             }
         }
         Spinner chosenPlace = new Spinner(this);
-        chosenPlace.setAdapter(new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item, placeNames));
+        chosenPlace.setAdapter(themeSpinnerAdapter(placeNames));
         if (id != null) {
             Long currentPlace = db.taskPlaceId(id);
             if (currentPlace != null) {
