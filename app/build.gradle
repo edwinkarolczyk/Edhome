@@ -2,6 +2,13 @@ plugins {
     id 'com.android.application'
 }
 
+// Public HTTPS address only. Never place tokens or private Actions URLs in the APK.
+def betaFeedUrl = (System.getenv('EDHOME_BETA_FEED_URL') ?: '').trim()
+if (betaFeedUrl && (!(betaFeedUrl ==~ /^https:\/\/[A-Za-z0-9.-]+\/[A-Za-z0-9_./%-]+\.json$/)
+        || betaFeedUrl.contains('..'))) {
+    throw new GradleException('EDHOME_BETA_FEED_URL must be an unauthenticated HTTPS JSON path')
+}
+
 android {
     namespace 'com.edwinkarolczyk.edhome'
     compileSdk 35
@@ -13,6 +20,7 @@ android {
         versionCode 9
         versionName '0.1.8'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
+        buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
     }
 
     // One durable key, provided through local environment or GitHub Actions secrets.
