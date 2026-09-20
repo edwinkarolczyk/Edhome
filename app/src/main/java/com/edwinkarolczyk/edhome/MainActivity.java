@@ -195,7 +195,23 @@ public final class MainActivity extends Activity {
     }
 
     private void alert(String message) {
-        new AlertDialog.Builder(this).setMessage(message).setPositiveButton("OK", null).show();
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(24), dp(24), dp(12));
+        TextView heading = text("EDHOME", 18, true);
+        heading.setTextColor(accent);
+        content.addView(heading);
+        TextView bodyText = text(message, 16, false);
+        content.addView(bodyText);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setView(content)
+            .setPositiveButton("OK", null)
+            .create();
+        dialog.show();
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawable(rounded(surface));
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setAllCaps(false);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(accent);
     }
 
     private void go(String destination) {
@@ -1070,6 +1086,7 @@ public final class MainActivity extends Activity {
         LinearLayout version = card();
         version.addView(text("Zainstalowana wersja", 15, false));
         version.addView(text(BuildConfig.VERSION_NAME, 29, true));
+        version.addView(text("Wersja instalacyjna: " + BuildConfig.VERSION_CODE, 13, false));
         TextView installed = text("✓  Gotowa do użycia", 15, true);
         installed.setTextColor(accent);
         version.addView(installed);
@@ -1085,11 +1102,13 @@ public final class MainActivity extends Activity {
             status.addView(text("Na razie wybierasz APK z telefonu. "
                 + "Sam podpis aplikacji nie uruchamia automatycznych pobrań.", 14, false));
         } else {
-            TextView line = text("✓  Automatyczne sprawdzanie aktywne", 16, true);
+            TextView line = text("✓  Źródło aktualizacji skonfigurowane", 16, true);
             line.setTextColor(accent);
             status.addView(line);
-            status.addView(text("Nowa wersja Beta jest pobierana podczas pracy aplikacji. "
-                + "Gdy będzie gotowa, zobaczysz obowiązkową aktualizację.", 14, false));
+            status.addView(text("Źródło ustawione"
+                + (updater.feedFromBuild() ? " w aplikacji." : " w opcjach zaawansowanych.")
+                + " Dostępność serwera potwierdza przycisk Sprawdź aktualizację. "
+                + "Pobieranie nastąpi tylko dla nowszego, poprawnie podpisanego APK.", 14, false));
         }
 
         note("Przesuń kafelki w bok →");
@@ -1163,6 +1182,10 @@ public final class MainActivity extends Activity {
             return;
         }
         note("Kanał Beta sprawdza mały manifest co 30 sekund tylko, gdy aplikacja jest aktywna.");
+        note(updater.feedFromBuild() ? "Adres publicznego kanału pochodzi z aplikacji."
+            : updater.configuredFeed().isEmpty()
+                ? "Kanał nie jest jeszcze skonfigurowany."
+                : "Kanał ustawiono ręcznie dla tej instalacji.");
         note("Źródło musi udostępniać HTTPS JSON i podpisane APK bez logowania. "
             + "Nie wpisuj tu tokenu GitHub, hasła ani adresu strony kompilacji Actions.");
         EditText source = field("Adres HTTPS manifestu JSON", false);
@@ -1175,6 +1198,11 @@ public final class MainActivity extends Activity {
             }
             go("updates");
         });
+        if (!BuildConfig.EDHOME_BETA_FEED_URL.isEmpty())
+            button("Przywróć domyślny kanał Beta", () -> {
+                updater.resetFeedToBuildDefault();
+                go("updates");
+            });
         button("Wyłącz zdalne sprawdzanie", () -> {
             updater.setFeed("");
             DiagnosticLog.event("UPDATES_FEED_DISABLED");
