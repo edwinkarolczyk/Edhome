@@ -555,6 +555,92 @@ public final class MainActivity extends Activity {
         button("← Czynności", () -> go("tasks"));
     }
 
+    private void memberSchedule() {
+        String name = db.memberName(selectedMemberId);
+        if (name.isEmpty()) {
+            go("members");
+            return;
+        }
+        header("Grafik pracy • " + name);
+        note("Lokalny grafik pon.–niedz. Puste dni są nieustalone, "
+            + "a nie automatycznie wolne. Zmiana nocna kończy się następnego dnia.");
+        button("← Domownicy", () -> go("members"));
+        for (int day = 1; day <= 7; day++) {
+            final int weekday = day;
+            LinearLayout shiftCard = card();
+            shiftCard.addView(text(WEEKDAY_LABELS[day - 1], 17, true));
+            Spinner chosenShift = new Spinner(this);
+            chosenShift.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(SHIFT_LABELS)));
+            String configured = db.weeklyShift(selectedMemberId, weekday);
+            chosenShift.setSelection(Math.max(0, java.util.Arrays.asList(
+                SHIFT_VALUES).indexOf(configured)));
+            shiftCard.addView(chosenShift);
+            smallButton(shiftCard, "Zapisz dzień", () -> {
+                db.setWeeklyShift(selectedMemberId, weekday,
+                    SHIFT_VALUES[chosenShift.getSelectedItemPosition()]);
+                DiagnosticLog.event("MEMBER_WEEKLY_SHIFT_SAVED");
+                render();
+            });
+        }
+
+        LinearLayout exception = card();
+        exception.addView(text("Wyjątek na konkretny dzień", 18, true));
+        exception.addView(text("Nadpisuje tygodniowy grafik tylko dla tej daty. "
+            + "„Nie ustawiono” usuwa wyjątek i przywraca grafik tygodniowy.",
+            13, false));
+        EditText selectedDate = new EditText(this);
+        selectedDate.setSingleLine(true);
+        selectedDate.setFocusable(false);
+        selectedDate.setText(LocalDate.now().toString());
+        selectedDate.setTextColor(ink);
+        selectedDate.setOnClickListener(v -> {
+            LocalDate initial = LocalDate.parse(selectedDate.getText().toString());
+            new DatePickerDialog(this, (view, year, month, day) ->
+                selectedDate.setText(LocalDate.of(
+                    year, month + 1, day).toString()),
+                initial.getYear(), initial.getMonthValue() - 1,
+                initial.getDayOfMonth()).show();
+        });
+        exception.addView(selectedDate);
+        smallButton(exception, "Wybierz datę", () -> selectedDate.performClick());
+        Spinner exceptionShift = new Spinner(this);
+        exceptionShift.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(SHIFT_LABELS)));
+        exception.addView(exceptionShift);
+        smallButton(exception, "Zapisz wyjątek / usuń wyjątek", () -> {
+            String date = selectedDate.getText().toString();
+            db.setShiftException(selectedMemberId, date,
+                SHIFT_VALUES[exceptionShift.getSelectedItemPosition()]);
+            DiagnosticLog.event("MEMBER_SHIFT_EXCEPTION_SAVED");
+            render();
+        });
+        LinearLayout saved = card();
+        saved.addView(text("Zapisane wyjątki", 18, true));
+        int exceptions = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT date,shift FROM member_shift_exceptions "
+                + "WHERE member_id=? ORDER BY date ASC",
+                new String[]{Long.toString(selectedMemberId)})) {
+            while (c.moveToNext()) {
+                exceptions++;
+                String date = c.getString(0);
+                String shift = c.getString(1);
+                saved.addView(text(date + " • " + SHIFT_LABELS[
+                    Math.max(0, java.util.Arrays.asList(SHIFT_VALUES)
+                        .indexOf(shift))], 15, false));
+                smallButton(saved, "Usuń wyjątek " + date, () -> {
+                    db.setShiftException(selectedMemberId, date, "unset");
+                    DiagnosticLog.event("MEMBER_SHIFT_EXCEPTION_REMOVED");
+                    render();
+                });
+            }
+        }
+        if (exceptions == 0)
+            saved.addView(text("Brak wyjątków. Każda data korzysta z grafiku "
+                + "tygodniowego lub jest nieustalona.", 13, false));
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
