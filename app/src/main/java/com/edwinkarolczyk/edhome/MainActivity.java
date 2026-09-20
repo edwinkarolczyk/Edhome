@@ -389,12 +389,49 @@ public final class MainActivity extends Activity {
         button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
         button("▦ Kalendarz czynności", () -> go("calendar"));
         note("Zaległe: " + db.overdueTasks()
-            + " • Zakończenie czynności cyklicznej automatycznie wyznacza kolejny termin.");
+            + " • Wykonanie cyklicznej wyznacza kolejny termin.");
+        HorizontalScrollView filters = new HorizontalScrollView(this);
+        filters.setHorizontalScrollBarEnabled(false);
+        LinearLayout filterRow = new LinearLayout(this);
+        filterRow.setOrientation(LinearLayout.HORIZONTAL);
+        filterRow.setPadding(0, dp(5), 0, dp(8));
+        filters.addView(filterRow);
+        body.addView(filters);
+        for (String[] filter : new String[][] {
+            {"all", "Wszystkie"}, {"today", "Dzisiaj"},
+            {"overdue", "Zaległe"}, {"upcoming", "Nadchodzące"},
+            {"done", "Wykonane"} }) {
+            Button chip = new Button(this);
+            chip.setAllCaps(false);
+            chip.setText(filter[1]);
+            chip.setTextColor(filter[0].equals(tasksFilter) ? bg : ink);
+            chip.setBackground(rounded(filter[0].equals(tasksFilter) ? accent : surface));
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48));
+            cp.setMargins(0, 0, dp(8), 0);
+            filterRow.addView(chip, cp);
+            chip.setOnClickListener(v -> {
+                tasksFilter = filter[0];
+                render();
+            });
+        }
+        button("Historia wszystkich wykonań", () -> go("task_history"));
+        String today = LocalDate.now().toString();
+        String condition;
+        String[] args = null;
+        switch (tasksFilter) {
+            case "today": condition = "done=0 AND due_date=?"; args = new String[]{today}; break;
+            case "overdue": condition = "done=0 AND due_date<?"; args = new String[]{today}; break;
+            case "upcoming": condition = "done=0 AND due_date>?"; args = new String[]{today}; break;
+            case "done": condition = "done=1"; break;
+            default: condition = "1=1";
+        }
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,title,done,due_date,repeat_rule,repeat_every FROM tasks "
-                + "ORDER BY done ASC,CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
-                + "due_date ASC,id DESC", null)) {
-            if (cursor.getCount() == 0) note("Brak czynności. Dodaj pierwszą.");
+                + "WHERE " + condition + " ORDER BY done ASC,"
+                + "CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
+                + "due_date ASC,id DESC", args)) {
+            if (cursor.getCount() == 0)
+                note("Brak czynności w tym widoku. Wybierz inny filtr lub dodaj nową.");
             while (cursor.moveToNext()) {
                 drawTask(cursor.getLong(0), cursor.getString(1), cursor.getInt(2) == 1,
                     cursor.isNull(3) ? "" : cursor.getString(3), cursor.getString(4),
@@ -440,17 +477,30 @@ public final class MainActivity extends Activity {
             }
             render();
         });
-        smallButton(box, "Edytuj / termin / powtarzanie", () ->
-            editTask(id, name, due, rule, every));
-        smallButton(box, "Historia wykonań", () -> showTaskHistory(id, name));
-        smallButton(box, "Usuń", () ->
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        box.addView(actions);
+        taskAction(actions, "Edytuj", () -> editTask(id, name, due, rule, every));
+        taskAction(actions, "Historia", () -> showTaskHistory(id, name));
+        taskAction(actions, "Usuń", () ->
             new AlertDialog.Builder(this).setTitle("Usunąć czynność?")
-                .setMessage(name).setNegativeButton("Nie", null)
+                .setMessage(name + "\\nHistoria jej wykonań zostanie zachowana.")
+                .setNegativeButton("Nie", null)
                 .setPositiveButton("Usuń", (dialog, which) -> {
                     db.deleteTask(id);
                     DiagnosticLog.event("TASK_DELETED");
                     render();
                 }).show());
+    }
+
+    private void taskAction(LinearLayout row, String label, Runnable run) {
+        TextView action = text(label, 13, true);
+        action.setGravity(Gravity.CENTER);
+        action.setBackground(rounded(surface == bg ? accent : bg));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1);
+        lp.setMargins(dp(2), dp(5), dp(2), 0);
+        row.addView(action, lp);
+        action.setOnClickListener(v -> run.run());
     }
 
     private void editTask(Long id, String existingName, String existingDate,
@@ -552,6 +602,29 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Historia: " + name)
             .setMessage(found == 0 ? "Brak zapisanych wykonań." : history.toString())
             .setPositiveButton("OK", null).show();
+    }
+
+    private void taskHistoryScreen() {
+        header("Historia wykonanych czynności");
+        note("Ostatnie 100 wykonań. Historia zostaje również po usunięciu czynności z listy.");
+        int count = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT title_snapshot,completed_at,due_date,next_due_date "
+                + "FROM task_history ORDER BY id DESC LIMIT 100", null)) {
+            while (c.moveToNext()) {
+                count++;
+                LinearLayout entry = card();
+                entry.addView(text(c.getString(0), 17, true));
+                String finished = Instant.ofEpochMilli(c.getLong(1))
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                entry.addView(text("Wykonano: " + finished, 14, false));
+                if (!c.isNull(2)) entry.addView(text("Termin: " + c.getString(2), 13, false));
+                if (!c.isNull(3)) entry.addView(text("Następnie: " + c.getString(3), 13, false));
+            }
+        }
+        if (count == 0) note("Brak zapisanych wykonań.");
+        button("Wróć do czynności", () -> go("tasks"));
     }
 
     private void calendar() {
