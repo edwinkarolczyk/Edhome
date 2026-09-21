@@ -834,6 +834,13 @@ public final class MainActivity extends Activity {
         if (!place.isEmpty()) description += " • " + place;
         String assignee = db.assigneeLabel(id);
         if (!assignee.isEmpty()) description += " • Wykonawca: " + assignee;
+        String[] alertTime = db.taskReminder(id);
+        if (!alertTime[0].isEmpty()) {
+            java.time.LocalDateTime when = ReminderRules.target(
+                due, alertTime[0], Integer.parseInt(alertTime[1]));
+            description += " • Przypomnienie: " + when.toLocalDate()
+                + " " + when.toLocalTime() + " (orientacyjnie)";
+        }
         TextView meta = text(description, 13, false);
         meta.setTextColor(subdued);
         box.addView(meta);
@@ -845,6 +852,7 @@ public final class MainActivity extends Activity {
                 db.reopenTask(id);
                 DiagnosticLog.event("TASK_REOPENED");
             }
+            ReminderReceiver.schedule(this);
             render();
         });
         LinearLayout actions = new LinearLayout(this);
@@ -857,6 +865,7 @@ public final class MainActivity extends Activity {
                 .setMessage(name + "\\nHistoria jej wykonań zostanie zachowana.")
                 .setNegativeButton("Nie", null)
                 .setPositiveButton("Usuń", (dialog, which) -> {
+                    ReminderReceiver.cancelTask(this, id);
                     db.deleteTask(id);
                     DiagnosticLog.event("TASK_DELETED");
                     render();
@@ -1040,6 +1049,47 @@ public final class MainActivity extends Activity {
         form.addView(text("Osoby dodasz w Czynności → Domownicy. "
             + "Bez wykonawcy czynność nadal działa.", 12, false));
 
+        form.addView(text("Przypomnienie dla tej czynności", 16, true));
+        form.addView(text("Standardowe: około 09:00 w dniu terminu lub dla "
+            + "zaległych. Własne: wybrana godzina i wyprzedzenie. "
+            + "Nie wysyłamy alertów w ciszy 22:00–07:00: "
+            + "godziny 22:00–23:59 przesuwamy na 21:00 tego dnia, "
+            + "00:00–06:59 na 07:00. Android może opóźnić alarm.",
+            12, false));
+        String[] savedReminder = id == null
+            ? new String[]{"", "0"} : db.taskReminder(id);
+        Spinner reminderMode = new Spinner(this);
+        reminderMode.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "Standardowo ok. 09:00", "Moja godzina i wyprzedzenie")));
+        reminderMode.setSelection(savedReminder[0].isEmpty() ? 0 : 1);
+        form.addView(reminderMode);
+        EditText reminderHour = new EditText(this);
+        reminderHour.setSingleLine(true);
+        reminderHour.setFocusable(false);
+        reminderHour.setText(savedReminder[0].isEmpty()
+            ? "19:00" : savedReminder[0]);
+        reminderHour.setTextColor(ink);
+        reminderHour.setOnClickListener(v -> {
+            java.time.LocalTime initial = java.time.LocalTime.parse(
+                reminderHour.getText().toString());
+            new android.app.TimePickerDialog(this,
+                (picker, hour, minute) -> reminderHour.setText(
+                    String.format(java.util.Locale.ROOT, "%02d:%02d",
+                        hour, minute)),
+                initial.getHour(), initial.getMinute(), true).show();
+        });
+        form.addView(reminderHour);
+        smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick());
+        Spinner lead = new Spinner(this);
+        lead.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            ReminderRules.LEAD_LABELS)));
+        int savedLead = Integer.parseInt(savedReminder[1]);
+        for (int i = 0; i < ReminderRules.LEADS.length; i++)
+            if (ReminderRules.LEADS[i] == savedLead) lead.setSelection(i);
+        form.addView(lead);
+        form.addView(text("Włącz przypomnienia globalnie w Ustawieniach. "
+            + "Bez daty można używać tylko opcji standardowej.", 12, false));
+
         form.addView(text("Propozycje terminu (opcjonalnie)", 16, true));
         form.addView(text("Do 3 dat w najbliższych 28 dniach, według grafiku "
             + "wybranej osoby, wyjątków i czasu wykonania. Godziny są orientacyjne: "
@@ -1138,10 +1188,20 @@ public final class MainActivity extends Activity {
                     date.setError("Wystawianie odpadów wymaga terminu.");
                     return;
                 }
+                String customTime = reminderMode.getSelectedItemPosition() == 0
+                    ? null : reminderHour.getText().toString();
+                int leadDays = reminderMode.getSelectedItemPosition() == 0
+                    ? 0 : ReminderRules.LEADS[lead.getSelectedItemPosition()];
+                if (customTime != null && due.isEmpty()) {
+                    date.setError("Własne przypomnienie wymaga terminu.");
+                    return;
+                }
+                if (id != null) ReminderReceiver.cancelTask(this, id);
                 db.saveTask(id, title, due, rule, every,
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
                     selectedPriority, estimatedMinutes,
-                    memberIds.get(chosenMember.getSelectedItemPosition()));
+                    memberIds.get(chosenMember.getSelectedItemPosition()),
+                    customTime, leadDays);
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
@@ -1835,8 +1895,10 @@ public final class MainActivity extends Activity {
             ReminderReceiver.schedule(this);
             render();
         });
-        note("Lokalne przypomnienie o 09:00 dla zaległych i dzisiejszych czynności. "
-            + "Android może opóźnić nieprecyzyjny alarm przez oszczędzanie baterii. "
+        note("Standardowo przypomnienia przychodzą około 09:00. "
+            + "Dla poszczególnych czynności ustawisz godzinę i wyprzedzenie "
+            + "w ich edycji. Cisza 22:00–07:00. "
+            + "Android może opóźnić alarm przez oszczędzanie baterii. "
             + "Tytuły czynności nie pojawiają się na ekranie blokady.");
         if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
         button("Kopia danych / przenoszenie", () -> go("backup"));
@@ -2190,7 +2252,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 9);
+            super(context, "edhome-beta-preview.db", null, 10);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -2201,7 +2263,8 @@ public final class MainActivity extends Activity {
                 + "priority TEXT NOT NULL DEFAULT 'normal', "
                 + "duration_minutes INTEGER NOT NULL DEFAULT 30, "
                 + "assignee_id INTEGER, "
-                + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT)");
+                + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
+                + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
             addAuditTables(database);
             addTaskHistory(database);
@@ -2213,7 +2276,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 9) {
+            if (oldVersion < 1 || newVersion > 10) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -2255,6 +2318,12 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN task_kind TEXT NOT NULL DEFAULT 'general'");
                 database.execSQL("ALTER TABLE tasks ADD COLUMN waste_fraction TEXT");
                 DiagnosticLog.event("DATABASE_MIGRATED_8_TO_9");
+            }
+            if (oldVersion < 10) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN remind_time TEXT");
+                database.execSQL("ALTER TABLE tasks ADD COLUMN reminder_lead_days "
+                    + "INTEGER NOT NULL DEFAULT 0");
+                DiagnosticLog.event("DATABASE_MIGRATED_9_TO_10");
             }
         }
 
@@ -2459,11 +2528,15 @@ public final class MainActivity extends Activity {
 
         void saveTask(Long id, String title, String dueDate, String rule, int every,
                 Long placeId, String priority, int durationMinutes,
-                Long assigneeId) {
+                Long assigneeId, String customTime, int reminderLeadDays) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (id != null && isWasteTask(id) && dueDate.isEmpty())
                 throw new IllegalArgumentException("Odpady wymagają daty wystawienia.");
+            if (customTime != null && (!ReminderRules.validTime(customTime)
+                    || dueDate.isEmpty()
+                    || !ReminderRules.allowedLead(reminderLeadDays)))
+                throw new IllegalArgumentException("Nieprawidłowe przypomnienie.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
             if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
@@ -2471,6 +2544,10 @@ public final class MainActivity extends Activity {
             ContentValues values = new ContentValues();
             values.put("priority", priority);
             values.put("duration_minutes", durationMinutes);
+            if (customTime == null) values.putNull("remind_time");
+            else values.put("remind_time", customTime);
+            values.put("reminder_lead_days",
+                customTime == null ? 0 : reminderLeadDays);
             if (assigneeId == null) values.putNull("assignee_id");
             else {
                 try (Cursor person = getReadableDatabase().rawQuery(
@@ -2583,6 +2660,16 @@ public final class MainActivity extends Activity {
 
         void deleteTask(long id) {
             getWritableDatabase().delete("tasks", "id=?", new String[]{Long.toString(id)});
+        }
+
+        String[] taskReminder(long taskId) {
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT remind_time,reminder_lead_days FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                if (!cursor.moveToFirst()) return new String[]{"", "0"};
+                return new String[]{cursor.isNull(0) ? "" : cursor.getString(0),
+                    Integer.toString(cursor.getInt(1))};
+            }
         }
 
         String[] taskPlanning(long taskId) {
