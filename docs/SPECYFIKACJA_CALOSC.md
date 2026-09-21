@@ -243,3 +243,12 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Nie zakładać dostępności lokalnego API, pomiaru każdego obwodu ani możliwości płynnej regulacji mocy grzałek bez sprawdzenia konkretnego osprzętu. Prawdziwe sterowanie może wymagać dodatkowego licznika energii, sterownika lub czujników i fachowego projektu elektrycznego.
 
 **Status:** ustalenie koncepcyjne. Panel, priorytety i sterowanie nie są automatycznie wdrożone przez dodanie tego opisu; kolejność poniżej w roadmapie.
+
+
+## EDHOME UI Refresh 0.3.3-beta.1 — zatwierdzone przez Edwina
+
+- Jedno gospodarstwo, te same 9 kafelków, zawartość i logika; cztery wizualne motywy: Neonowy, Naturalny, Pastelowy i Szklany (rozmiar i proporcje zrzutów jako punkt odniesienia, bez obietnicy dosłownej identyczności każdego piksela na wszystkich Androidach).
+- Karty i kafelki z dużym zaokrągleniem, palety i kontrast dostosowane do motywu, graficzne ikony i czytelne dotykowe przyciski. Układ 3×3 przewijany pionowo.
+- Kliknięcie otwiera moduł; **przytrzymanie wyświetla Edytuj / Przesuń**; przeciąganie za uchwyt zmienia kolejność. Edycja prezentacji pozwala zmienić podpis i kolor kafelka, ale **nigdy powiązanie ID/modułu ani dane**. Nie usuwamy systemowych 9 kafelków.
+- Po ponownym uruchomieniu zachowuje się kolejność, motyw i wygląd. Kopia JSON uwzględnia edycje wizualne. Wersja bazy SQLite pozostaje v10; Beta bez PIN-u, Stable z PIN-em, repo i kanał aktualizacji bez zmian.
+- Obrazy koncepcyjne są inspiracją, nie zrzutem z uruchomionego Androida; wykonanie UI w aplikacji wymaga kompilacji i osobnego testu na telefonie. Dalsze 0.3.4: minutniki urządzeń.
