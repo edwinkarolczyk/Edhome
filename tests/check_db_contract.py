@@ -25,6 +25,7 @@ audit = statements(section(main, "private static void addAuditTables", "long ope
 members = statements(section(main, "private static void addMembers", "private static void addAuditTables"))
 shifts = statements(section(main, "private static void addMemberSchedules", "private static void addMembers"))
 shopping = statements(section(main, "private static void addShopping", "private static void addMemberSchedules"))
+timers = statements(section(main, "private static void addDeviceTimers", "long startDeviceTimer"))
 history = statements(section(main, "private static void addTaskHistory",
                              "private static void addShopping"))
 places = statements(section(main, "private static void addPlaces",
@@ -46,7 +47,8 @@ step7 = statements(section(upgrade, "if (oldVersion < 7)", "if (oldVersion < 8)"
 step8 = statements(section(upgrade, "if (oldVersion < 8)", "if (oldVersion < 9)"))
 step9 = statements(section(upgrade, "if (oldVersion < 9)", "if (oldVersion < 10)"))
 step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 11 && oldVersion >= 4)"))
-step11 = statements(upgrade.split("if (oldVersion < 11 && oldVersion >= 4)", 1)[1])
+step11 = statements(section(upgrade, "if (oldVersion < 11 && oldVersion >= 4)", "if (oldVersion < 12)"))
+step12 = statements(upgrade.split("if (oldVersion < 12)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
@@ -59,16 +61,16 @@ def schema(database):
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name NOT LIKE 'sqlite_%' ORDER BY name")}
 
-assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
+assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 11, "Database version and backup format differ"
+assert version == backup_version == 12, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + places + sibling_index + members + shifts + shopping)
+execute(fresh, create + audit + history + places + sibling_index + members + shifts + shopping + timers)
 expected = schema(fresh)
-assert len(expected) == 11, "Unexpected number of tables"
-for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+assert len(expected) == 12, "Unexpected number of tables"
+for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
@@ -81,7 +83,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
     if old >= 3:
         execute(db, step3 + history)
     if old >= 4:
-        execute(db, step4 + legacy_places)
+        execute(db, step4 + (places + sibling_index if old >= 11 else legacy_places))
     if old >= 5:
         execute(db, step5)
     if old >= 6:
@@ -112,10 +114,20 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
         execute(db, step9)
     if old < 10:
         execute(db, step10)
-    if old >= 4:
+    if 4 <= old < 11:
         execute(db, step11 + sibling_index)
+    execute(db, step12 + timers[0:0])
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
+    db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
+               "end_at,status) VALUES (3,'washer','Bawełna',1789980000000,"
+               "1789985400000,'running')")
+    assert db.execute("SELECT title,status,acknowledged_at FROM device_timers "
+                      "WHERE id=3").fetchone() == ('Bawełna','running',None)
+    db.execute("UPDATE device_timers SET status='acknowledged',"
+               "acknowledged_at=1789985500000 WHERE id=3")
+    assert db.execute("SELECT status FROM device_timers WHERE id=3"
+                      ).fetchone() == ('acknowledged',)
     assert db.execute("SELECT id,name,qty FROM pantry").fetchone() == (3, "Ryż", 4)
     assert db.execute("SELECT repeat_rule,repeat_every,place_id FROM tasks").fetchone() == (
         "once", 1, None)
@@ -187,7 +199,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
@@ -207,4 +219,4 @@ assert 'inputVersion < 11 && "places".equals(definition[0])' in backup
 assert '"parent_id".equals(key)' in backup and '"icon".equals(key)' in backup
 assert 'PlaceRules.validForest(hierarchy)' in backup
 assert 'PlaceRules.validateFields(name, kind,' in backup
-print("SQLite migrations v1–v10→v11: PASS; hierarchical places, task links and backup defaults: PASS")
+print("SQLite migrations v1–v11→v12: PASS; appliance timers, places and backup: PASS")
