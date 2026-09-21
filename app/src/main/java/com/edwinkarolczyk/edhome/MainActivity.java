@@ -2816,6 +2816,8 @@ public final class MainActivity extends Activity {
                     + "wysłany tylko kod kreskowy. Jeśli nazwy nie będzie, "
                     + "aplikacja zaproponuje ręczny wpis.")
                 .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                .setNeutralButton("Moje produkty", (d,w) ->
+                    choosePantryProductForCode(barcode, operationId))
                 .setPositiveButton("Szukaj produktu", (d,w) ->
                     lookupPantryProduct(barcode, operationId))
                 .setOnCancelListener(d -> finishPantryBatch()).show();
@@ -2834,6 +2836,69 @@ public final class MainActivity extends Activity {
             .setOnCancelListener(d -> finishPantryBatch()).show();
     }
 
+
+    /** A second barcode can refer to an item already stored offline. */
+    private void choosePantryProductForCode(String barcode, String operationId) {
+        java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+        java.util.ArrayList<String> captions = new java.util.ArrayList<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE LIMIT 250",
+                null)) {
+            while (c.moveToNext()) {
+                long id = c.getLong(0);
+                String name = c.getString(1);
+                int quantity = c.getInt(2);
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+                ids.add(id);
+                captions.add(name + "\n" + PantryPackageRules.summary(quantity,
+                    pack.unit, pack.sizeMilli));
+            }
+        }
+        if (ids.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Nie masz jeszcze produktów")
+                .setMessage("Wyszukaj kod w katalogach albo dodaj produkt ręcznie.")
+                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                .setPositiveButton("Szukaj w bazach", (d,w) ->
+                    lookupPantryProduct(barcode, operationId))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz swój produkt")
+            .setMessage("Powiąż zeskanowany kod z produktem, który masz już w spiżarni. "
+                + "Nazwa i ilość zostaną zachowane; po zatwierdzeniu dodam 1 opakowanie.")
+            .setItems(captions.toArray(new String[0]), (d,which) ->
+                confirmExistingPantryCode(barcode, operationId, ids.get(which)))
+            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+            .setOnCancelListener(d -> finishPantryBatch()).show();
+    }
+
+    private void confirmExistingPantryCode(String barcode,
+            String operationId, long pantryId) {
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT name,qty FROM pantry WHERE id=?",
+                new String[]{Long.toString(pantryId)})) {
+            if (!c.moveToFirst()) {
+                finishPantryBatch();
+                alert("Wybrany produkt już nie istnieje.");
+                return;
+            }
+            String name = c.getString(0);
+            int qty = c.getInt(1);
+            PantryPackageStore.Pack pack = PantryPackageStore.find(
+                db.getReadableDatabase(), pantryId);
+            new AlertDialog.Builder(this).setTitle("Przypisz kod i dodaj +1")
+                .setMessage(name + "\n" + PantryPackageRules.summary(
+                    qty, pack.unit, pack.sizeMilli) + "\nNowy kod: " + barcode
+                    + "\n\nPotwierdź, że to dokładnie ten sam produkt i opakowanie.")
+                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                .setPositiveButton("Powiąż i dodaj +1", (d,w) ->
+                    commitPantryBarcode(barcode, null, "ADD", operationId, null,
+                        null, pack.unit, pack.sizeMilli, pantryId))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
+        }
+    }
 
     private void lookupPantryProduct(String barcode, String operationId) {
         java.util.concurrent.atomic.AtomicBoolean cancelled =
@@ -3165,9 +3230,16 @@ public final class MainActivity extends Activity {
     private void commitPantryBarcode(String barcode, String name,
             String mode, String operationId, PantryProductLookup.Product found,
             String newCategory, String unit, long sizeMilli) {
+        commitPantryBarcode(barcode, name, mode, operationId, found, newCategory,
+            unit, sizeMilli, 0L);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory, String unit, long sizeMilli, long selectedPantryId) {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
-                barcode, name, mode, operationId, unit, sizeMilli);
+                barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId);
             DiagnosticLog.event("COMMITTED".equals(result) ?
                 "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
             if (newCategory != null && "COMMITTED".equals(result)) {

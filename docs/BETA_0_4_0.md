@@ -65,3 +65,10 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Nazwa nie jest wpisywana ręcznie, gdy użytkownik wybierze propozycję; ręczna nazwa pozostaje opcją przy braku trafnego wyniku. Zdjęcie jest pobierane dopiero po wyborze propozycji; jego brak nie blokuje dodania.
 - Katalogi mogą nie obsługiwać identycznie API wyszukiwania po nazwie. EDHOME pokazuje status każdego katalogu, nie gwarantuje pełnej dostępności katalogów ani kompletności polskich produktów.
 - SQLite pozostaje v17; ilości, kody, historia, zdjęcia i dotychczasowy backup nie wymagają migracji. Stable main bez zmian.
+
+## 0.4.0-beta.10 — powiąż nieznany kod z własnym produktem
+
+- Przy nieznanym kodzie w trybie dodawania dostępne „Moje produkty”: wybierz istniejący produkt z listy i potwierdź przypisanie kodu oraz **+1 pełne opakowanie**. Nie trzeba ręcznie przepisywać nazwy ani pytać baz zewnętrznych. Przy braku produktów pozostaje wyszukiwanie w katalogach.
+- Przy wyborze widoczne są nazwa i aktualny stan wraz z jednostką. Operacja wskazuje ID produktu, weryfikuje, że produkt nadal istnieje i że kod nie należy do innego produktu; powiązanie, zmiana stanu i zapis historii następują w jednej transakcji, z ochroną UUID przed ponownym naliczeniem.
+- Przypisanie nie zmienia nazwy, kategorii, specyfikacji opakowania ani zdjęć dotychczasowego produktu. Jeśli w katalogach nie było nazwy, można skorzystać z własnego produktu bez dodatkowego internetu.
+- SQLite v17: brak migracji i zmian formatu kopii zapasowej. Stable main pozostaje bez zmian.

@@ -108,6 +108,15 @@ final class PantryBarcodeStore {
 
     static String commit(SQLiteDatabase db, String barcode, String nameIfNew,
                          String mode, String operationId, String unit, long sizeMilli) {
+        return commit(db, barcode, nameIfNew, mode, operationId, unit, sizeMilli, 0L);
+    }
+
+    /** Attach a new barcode to the explicitly selected pantry ID, never a name guess. */
+    static String commit(SQLiteDatabase db, String barcode, String nameIfNew,
+                         String mode, String operationId, String unit, long sizeMilli,
+                         long selectedPantryId) {
+        if (selectedPantryId < 0)
+            throw new IllegalArgumentException("Nieprawidłowy produkt.");
         if (!PantryPackageRules.valid(unit, sizeMilli))
             throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
         if (!PantryScanRules.validBarcode(barcode)
@@ -121,17 +130,29 @@ final class PantryBarcodeStore {
                 return "DUPLICATE_IGNORED";
             }
             Item item = find(db, barcode);
+            if (item != null && selectedPantryId > 0 && item.id != selectedPantryId)
+                throw new IllegalArgumentException("Kod jest przypisany do innego produktu.");
             if (item == null) {
                 if (!"ADD".equals(mode))
                     throw new IllegalArgumentException("Nieznany kod. Najpierw dodaj produkt.");
                 String name = nameIfNew == null ? "" : nameIfNew.trim();
-                if (name.isEmpty() || name.length() > 160)
+                if (selectedPantryId == 0 && (name.isEmpty() || name.length() > 160))
                     throw new IllegalArgumentException("Nazwa produktu: 1–160 znaków.");
                 long pantryId = 0;
-                try (Cursor cursor = db.rawQuery(
-                        "SELECT id FROM pantry WHERE name=? COLLATE NOCASE LIMIT 1",
-                        new String[]{name})) {
-                    if (cursor.moveToFirst()) pantryId = cursor.getLong(0);
+                if (selectedPantryId > 0) {
+                    try (Cursor cursor = db.rawQuery(
+                            "SELECT id FROM pantry WHERE id=? LIMIT 1",
+                            new String[]{Long.toString(selectedPantryId)})) {
+                        if (cursor.moveToFirst()) pantryId = cursor.getLong(0);
+                    }
+                    if (pantryId == 0)
+                        throw new IllegalArgumentException("Wybrany produkt już nie istnieje.");
+                } else {
+                    try (Cursor cursor = db.rawQuery(
+                            "SELECT id FROM pantry WHERE name=? COLLATE NOCASE LIMIT 1",
+                            new String[]{name})) {
+                        if (cursor.moveToFirst()) pantryId = cursor.getLong(0);
+                    }
                 }
                 if (pantryId == 0) {
                     ContentValues product = new ContentValues();
