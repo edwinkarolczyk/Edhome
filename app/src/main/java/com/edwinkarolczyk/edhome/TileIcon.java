@@ -8,6 +8,22 @@ import android.view.View;
 
 /** Scalable native vector icons; no font, bitmap, SVG parser or network needed. */
 final class TileIcon extends View {
+    static final String[] ICON_IDS = {
+        "tasks", "calendar", "places", "pantry", "audit",
+        "updates", "backup", "settings", "today",
+        "washer", "dryer", "dishwasher"
+    };
+    static final String[] ICON_NAMES = {
+        "Czynności", "Kalendarz", "Dom", "Spiżarnia", "Remanent",
+        "Aktualizacje", "Kopia danych", "Ustawienia", "Zegar",
+        "Pralka", "Suszarka", "Zmywarka"
+    };
+
+    static boolean known(String value) {
+        for (String icon : ICON_IDS) if (icon.equals(value)) return true;
+        return false;
+    }
+
     private final String id;
     private final Paint pen = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -104,6 +120,31 @@ final class TileIcon extends View {
                 canvas.drawCircle(24, 24, 16, pen);
                 line(canvas, 24, 24, 24, 14);
                 line(canvas, 24, 24, 31, 28);
+                break;
+            case "washer":
+                rect(canvas, 9, 7, 39, 41, 3);
+                line(canvas, 9, 17, 39, 17);
+                canvas.drawCircle(24, 29, 8, pen);
+                canvas.drawCircle(14, 12, 1.4f, fill);
+                canvas.drawCircle(19, 12, 1.4f, fill);
+                break;
+            case "dryer":
+                rect(canvas, 9, 7, 39, 41, 3);
+                line(canvas, 9, 17, 39, 17);
+                canvas.drawCircle(24, 29, 8, pen);
+                line(canvas, 21, 27, 27, 31);
+                line(canvas, 27, 27, 21, 31);
+                canvas.drawCircle(14, 12, 1.4f, fill);
+                break;
+            case "dishwasher":
+                rect(canvas, 9, 7, 39, 41, 3);
+                line(canvas, 9, 17, 39, 17);
+                line(canvas, 15, 27, 33, 27);
+                line(canvas, 15, 34, 33, 34);
+                line(canvas, 18, 24, 18, 37);
+                line(canvas, 24, 24, 24, 37);
+                line(canvas, 30, 24, 30, 37);
+                canvas.drawCircle(14, 12, 1.4f, fill);
                 break;
             default:
                 canvas.drawCircle(24, 24, 12, pen);
