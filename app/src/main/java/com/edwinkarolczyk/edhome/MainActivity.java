@@ -130,6 +130,7 @@ public final class MainActivity extends Activity {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
         else if (unlocked && "shopping".equals(screen)) go("pantry");
+        else if (unlocked && "waste".equals(screen)) go("tasks");
         else if (unlocked && "member_schedule".equals(screen)) go("members");
         else if (unlocked && ("task_history".equals(screen)
                 || "members".equals(screen))) go("tasks");
@@ -294,6 +295,7 @@ public final class MainActivity extends Activity {
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
+                case "waste": waste(); break;
                 case "members": members(); break;
                 case "member_schedule": memberSchedule(); break;
                 case "task_history": taskHistoryScreen(); break;
@@ -447,6 +449,7 @@ public final class MainActivity extends Activity {
         if (displayed == 0)
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
         smallButton(today, "Lista zakupów →", () -> go("shopping"));
+        smallButton(today, "Odpady i terminy wystawienia →", () -> go("waste"));
         smallButton(today, "Zobacz wszystkie czynności →", () -> {
             tasksFilter = "all";
             go("tasks");
@@ -648,6 +651,7 @@ public final class MainActivity extends Activity {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
         button("⌂ Miejsca", () -> go("places"));
+        button("♻ Odpady i wystawianie", () -> go("waste"));
         button("♙ Domownicy / wykonawcy", () -> go("members"));
         button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
         button("▦ Kalendarz czynności", () -> go("calendar"));
@@ -1043,6 +1047,10 @@ public final class MainActivity extends Activity {
                 String due = date.getText().toString().trim();
                 String error = TaskRules.validate(title, due, rule, every);
                 if (error != null) { alert(error); return; }
+                if (id != null && db.isWasteTask(id) && due.isEmpty()) {
+                    date.setError("Wystawianie odpadów wymaga terminu.");
+                    return;
+                }
                 db.saveTask(id, title, due, rule, every,
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
                     selectedPriority, estimatedMinutes,
@@ -2095,7 +2103,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 8);
+            super(context, "edhome-beta-preview.db", null, 9);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -2105,7 +2113,8 @@ public final class MainActivity extends Activity {
                 + "repeat_every INTEGER NOT NULL DEFAULT 1, place_id INTEGER, "
                 + "priority TEXT NOT NULL DEFAULT 'normal', "
                 + "duration_minutes INTEGER NOT NULL DEFAULT 30, "
-                + "assignee_id INTEGER)");
+                + "assignee_id INTEGER, "
+                + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
             addAuditTables(database);
             addTaskHistory(database);
@@ -2117,7 +2126,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 8) {
+            if (oldVersion < 1 || newVersion > 9) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -2154,6 +2163,11 @@ public final class MainActivity extends Activity {
             if (oldVersion < 8) {
                 addShopping(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_7_TO_8");
+            }
+            if (oldVersion < 9) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN task_kind TEXT NOT NULL DEFAULT 'general'");
+                database.execSQL("ALTER TABLE tasks ADD COLUMN waste_fraction TEXT");
+                DiagnosticLog.event("DATABASE_MIGRATED_8_TO_9");
             }
         }
 
@@ -2361,6 +2375,8 @@ public final class MainActivity extends Activity {
                 Long assigneeId) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
+            if (id != null && isWasteTask(id) && dueDate.isEmpty())
+                throw new IllegalArgumentException("Odpady wymagają daty wystawienia.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
             if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
@@ -2398,6 +2414,42 @@ public final class MainActivity extends Activity {
                 if (TaskRules.recurring(rule)) values.put("done", 0);
                 getWritableDatabase().update("tasks", values, "id=?",
                     new String[]{Long.toString(id)});
+            }
+        }
+
+        boolean isWasteTask(long id) {
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT task_kind FROM tasks WHERE id=?",
+                    new String[]{Long.toString(id)})) {
+                return c.moveToFirst() && "waste".equals(c.getString(0));
+            }
+        }
+
+        boolean createWasteTask(String fraction, String date, String rule,
+                int every) {
+            String error = WasteRules.validate(fraction, date, rule, every);
+            if (error != null) throw new IllegalArgumentException(error);
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try (Cursor existing = database.rawQuery(
+                    "SELECT id FROM tasks WHERE task_kind='waste' "
+                    + "AND waste_fraction=? AND due_date=? AND done=0 LIMIT 1",
+                    new String[]{fraction, date})) {
+                if (existing.moveToFirst()) return false;
+                ContentValues values = new ContentValues();
+                values.put("title", "Wystaw: " + WasteRules.label(fraction));
+                values.put("due_date", date);
+                values.put("repeat_rule", rule);
+                values.put("repeat_every", every);
+                values.put("priority", "normal");
+                values.put("duration_minutes", 10);
+                values.put("task_kind", "waste");
+                values.put("waste_fraction", fraction);
+                database.insertOrThrow("tasks", null, values);
+                database.setTransactionSuccessful();
+                return true;
+            } finally {
+                database.endTransaction();
             }
         }
 
