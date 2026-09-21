@@ -67,12 +67,18 @@ public final class ReminderReceiver extends BroadcastReceiver {
         java.io.File file = context.getDatabasePath("edhome-beta-preview.db");
         if (!file.isFile()) return;
         int due = 0;
+        int wasteDue = 0;
         try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
                 file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
              Cursor rows = database.rawQuery(
-                "SELECT COUNT(*) FROM tasks WHERE done=0 AND due_date IS NOT NULL "
+                "SELECT COUNT(*),COALESCE(SUM(CASE WHEN task_kind='waste' "
+                    + "THEN 1 ELSE 0 END),0) FROM tasks "
+                    + "WHERE done=0 AND due_date IS NOT NULL "
                     + "AND due_date<=?", new String[]{LocalDate.now().toString()})) {
-            if (rows.moveToFirst()) due = rows.getInt(0);
+            if (rows.moveToFirst()) {
+                due = rows.getInt(0);
+                wasteDue = rows.getInt(1);
+            }
         } catch (Exception problem) {
             DiagnosticLog.error("REMINDER_DATABASE", problem);
             return;
@@ -91,7 +97,10 @@ public final class ReminderReceiver extends BroadcastReceiver {
         Notification notification = new Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • czynności")
-            .setContentText("Czynności do wykonania: " + due)
+            .setContentText(wasteDue > 0
+                ? "Odpady do wystawienia: " + wasteDue
+                    + " • pozostałe czynności: " + (due - wasteDue)
+                : "Czynności do wykonania: " + due)
             .setContentIntent(open)
             .setAutoCancel(true)
             .build();
