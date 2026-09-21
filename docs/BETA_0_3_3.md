@@ -23,3 +23,11 @@
 ## Kolejność dalszego rozwoju
 
 Następna wersja funkcjonalna **0.3.4-beta.1**: lokalne minutniki pralki/suszarki/zmywarki. Wygląd 0.3.3 to osobny inkrement, nie deklaracja gotowości minutników czy synchronizacji Wi-Fi.
+
+## Korekta UI — 0.3.3-beta.3
+
+- Dwa dodatkowe **ciemne motywy EDHOME**: `WMM` (grafit/turkus) oraz `Trener 2` (czerń/czerwień); razem sześć stylów. Są inspirowane tamtymi aplikacjami, ale **nie zmieniają** ich ustawień ani nie gwarantują dosłownej zgodności bez ich zrzutów wzorcowych.
+- Motyw jest ustawieniem **lokalnej instalacji EDHOME na danym urządzeniu**, nie przypisaniem do domownika; także podpisy, kolory, ikony i kolejność kafelków są lokalne. Import kopii JSON odtwarza te ustawienia na instalacji docelowej. Brak synchronizacji motywu między telefonami przed planowanym etapem Wi-Fi.
+- `Edytuj kafelek`: wybór ikony z lokalnego katalogu z podglądem (9 dotychczasowych oraz miniatury pralki, suszarki i zmywarki); wciąż jest to tylko wygląd, nie uruchamia jeszcze minutnika. Ikona zachowuje się po restarcie i w kopii JSON.
+- W trakcie przeciągania inne kafelki **płynnie rozsuwają się na przewidywane miejsca**; widoczna luka i opis pozycji wskazują, gdzie trafi przenoszony kafelek. Zapis kolejności dopiero po upuszczeniu; anulowanie przywraca wygląd bez zapisu.
+- SQLite v10, Beta bez PIN-u, Stable z PIN-em. Weryfikacja animacji i wszystkich motywów wymaga testu na prawdziwym telefonie.
