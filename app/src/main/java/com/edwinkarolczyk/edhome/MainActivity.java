@@ -1949,8 +1949,8 @@ public final class MainActivity extends Activity {
         StringBuilder history = new StringBuilder();
         int found = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT completed_at,due_date,next_due_date FROM task_history "
-                + "WHERE task_id=? ORDER BY id DESC LIMIT 100",
+                "SELECT completed_at,due_date,next_due_date,assignee_name_snapshot "
+                + "FROM task_history WHERE task_id=? ORDER BY id DESC LIMIT 100",
                 new String[]{Long.toString(id)})) {
             while (cursor.moveToNext()) {
                 found++;
@@ -1960,6 +1960,8 @@ public final class MainActivity extends Activity {
                 history.append(time);
                 if (!cursor.isNull(1)) history.append(" • termin ").append(cursor.getString(1));
                 if (!cursor.isNull(2)) history.append(" → ").append(cursor.getString(2));
+                if (!cursor.isNull(3))
+                    history.append(" • wykonał/a: ").append(cursor.getString(3));
                 history.append("\n");
             }
         }
@@ -1974,8 +1976,9 @@ public final class MainActivity extends Activity {
         note("Ostatnie 100 wykonań. Historia zostaje również po usunięciu czynności z listy.");
         int count = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
-                "SELECT title_snapshot,completed_at,due_date,next_due_date "
-                + "FROM task_history ORDER BY id DESC LIMIT 100", null)) {
+                "SELECT title_snapshot,completed_at,due_date,next_due_date,"
+                + "assignee_name_snapshot FROM task_history "
+                + "ORDER BY id DESC LIMIT 100", null)) {
             while (c.moveToNext()) {
                 count++;
                 LinearLayout entry = card();
@@ -1986,6 +1989,8 @@ public final class MainActivity extends Activity {
                 entry.addView(text("Wykonano: " + finished, 14, false));
                 if (!c.isNull(2)) entry.addView(text("Termin: " + c.getString(2), 13, false));
                 if (!c.isNull(3)) entry.addView(text("Następnie: " + c.getString(3), 13, false));
+                if (!c.isNull(4)) entry.addView(text("Wykonał/a: "
+                    + c.getString(4), 13, false));
             }
         }
         if (count == 0) note("Brak zapisanych wykonań.");
@@ -3906,10 +3911,60 @@ public final class MainActivity extends Activity {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try {
+                java.util.ArrayList<Long> affectedRotations = new java.util.ArrayList<>();
+                try (Cursor affected = database.rawQuery(
+                        "SELECT DISTINCT task_id FROM task_rotation_members "
+                        + "WHERE member_id=?", new String[]{Long.toString(memberId)})) {
+                    while (affected.moveToNext())
+                        affectedRotations.add(affected.getLong(0));
+                }
+                database.delete("task_rotation_members", "member_id=?",
+                    new String[]{Long.toString(memberId)});
                 ContentValues clear = new ContentValues();
                 clear.putNull("assignee_id");
                 database.update("tasks", clear, "assignee_id=?",
                     new String[]{Long.toString(memberId)});
+                for (Long taskId : affectedRotations) {
+                    java.util.ArrayList<Long> remaining = new java.util.ArrayList<>();
+                    try (Cursor rows = database.rawQuery(
+                            "SELECT member_id FROM task_rotation_members "
+                            + "WHERE task_id=? ORDER BY position",
+                            new String[]{Long.toString(taskId)})) {
+                        while (rows.moveToNext()) remaining.add(rows.getLong(0));
+                    }
+                    if (remaining.size() < 2) {
+                        database.delete("task_rotation_members", "task_id=?",
+                            new String[]{Long.toString(taskId)});
+                        if (remaining.size() == 1) {
+                            ContentValues fixed = new ContentValues();
+                            fixed.put("assignee_id", remaining.get(0));
+                            database.update("tasks", fixed,
+                                "id=? AND assignee_id IS NULL",
+                                new String[]{Long.toString(taskId)});
+                        }
+                    } else {
+                        try (Cursor current = database.rawQuery(
+                                "SELECT assignee_id FROM tasks WHERE id=?",
+                                new String[]{Long.toString(taskId)})) {
+                            if (current.moveToFirst() && current.isNull(0)) {
+                                ContentValues next = new ContentValues();
+                                next.put("assignee_id", remaining.get(0));
+                                database.update("tasks", next, "id=?",
+                                    new String[]{Long.toString(taskId)});
+                            }
+                        }
+                        // Re-number positions after removing a person.
+                        database.delete("task_rotation_members", "task_id=?",
+                            new String[]{Long.toString(taskId)});
+                        for (int i = 0; i < remaining.size(); i++) {
+                            ContentValues row = new ContentValues();
+                            row.put("task_id", taskId);
+                            row.put("member_id", remaining.get(i));
+                            row.put("position", i);
+                            database.insertOrThrow("task_rotation_members", null, row);
+                        }
+                    }
+                }
                 database.delete("member_weekly_shifts", "member_id=?",
                     new String[]{Long.toString(memberId)});
                 database.delete("member_shift_exceptions", "member_id=?",
