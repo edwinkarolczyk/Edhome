@@ -21,7 +21,7 @@ for expected in checks:
 assert 'CREATE TABLE waste' not in main
 assert '"waste".equals(tasks.getString(1))' in reminder
 assert '"waste".equals(task.getString(3))' in reminder
-assert 'prefs.getBoolean("reminders_enabled", false)' in reminder
+assert 'pref.getBoolean("reminders_enabled", false)' in reminder
 assert 'WHERE done=0 AND due_date IS NOT NULL' in reminder
 assert '"task_kind", "waste_fraction"' in backup
 print("Waste tasks share task IDs, calendar, history and opt-in reminders: PASS")
