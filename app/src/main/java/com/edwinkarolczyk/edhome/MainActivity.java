@@ -2673,8 +2673,9 @@ public final class MainActivity extends Activity {
         if (matched == 0) note(pantrySearch.isEmpty()
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
             : "Nie znaleziono produktów. Wyczyść wyszukiwanie.");
-        note("Skanowanie i zapasy działają offline. Open Food Facts jest opcjonalne; "
-            + "zdjęcia pobieramy na żądanie. Jednostki kg/l i licznik odjęcia: kolejny etap.");
+        note("Skan i znane produkty działają offline. Nieznane kody można "
+            + "wyszukać w bazach Open Facts: żywność, chemia, kosmetyki i karma. "
+            + "Nazwa ręczna tylko przy braku wyniku. Kg/l i licznik odjęcia: kolejny etap.");
     }
 
 
@@ -2717,13 +2718,12 @@ public final class MainActivity extends Activity {
         }
         if (item == null) {
             new AlertDialog.Builder(this).setTitle("Nieznany kod: " + barcode)
-                .setMessage("Jak dodać produkt? Open Food Facts wymaga internetu "
-                    + "i wyśle tylko ten kod do publicznej bazy. "
-                    + "Ręczny wpis działa całkowicie offline.")
+                .setMessage("Przeszukać bazy Open Facts? Mogą zawierać żywność, "
+                    + "proszki do prania, kosmetyki i karmę. Do baz zostanie "
+                    + "wysłany tylko kod kreskowy. Jeśli nazwy nie będzie, "
+                    + "aplikacja zaproponuje ręczny wpis.")
                 .setNegativeButton("Anuluj", null)
-                .setNeutralButton("Wpisz ręcznie", (d,w) ->
-                    showNewPantryProductDialog(barcode, operationId, null))
-                .setPositiveButton("Open Food Facts", (d,w) ->
+                .setPositiveButton("Szukaj produktu", (d,w) ->
                     lookupPantryProduct(barcode, operationId))
                 .show();
             return;
@@ -2743,7 +2743,7 @@ public final class MainActivity extends Activity {
         java.util.concurrent.atomic.AtomicBoolean cancelled =
             new java.util.concurrent.atomic.AtomicBoolean(false);
         AlertDialog loading = new AlertDialog.Builder(this)
-            .setTitle("Open Food Facts")
+            .setTitle("Bazy Open Facts")
             .setMessage("Szukam nazwy i zdjęcia dla kodu " + barcode + "…")
             .setNegativeButton("Anuluj", (d,w) -> cancelled.set(true))
             .create();
@@ -2772,22 +2772,25 @@ public final class MainActivity extends Activity {
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (problem != null) {
                     DiagnosticLog.error("PANTRY_OFF_LOOKUP", problem);
-                    new AlertDialog.Builder(this).setTitle("Brak połączenia z bazą")
-                        .setMessage("Możesz dodać produkt ręcznie. Nie zmieniono stanu.")
+                    new AlertDialog.Builder(this).setTitle("Nie udało się sprawdzić wszystkich baz")
+                        .setMessage("Co najmniej jedna baza była niedostępna. "
+                            + "Nie mogę potwierdzić, czy produkt w niej występuje. "
+                            + "Możesz spróbować później albo wpisać nazwę ręcznie. "
+                            + "Stan spiżarni nie został zmieniony.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
                         .show();
                 } else if (found == null) {
-                    new AlertDialog.Builder(this).setTitle("Brak produktu w bazie")
-                        .setMessage("Nie znaleziono nazwy dla kodu " + barcode
-                            + ". Możesz wprowadzić produkt samodzielnie.")
+                    new AlertDialog.Builder(this).setTitle("Nie znaleziono nazwy produktu")
+                        .setMessage("Żadna dostępna baza nie rozpoznała kodu " + barcode
+                            + ". Wpisz nazwę ręcznie. Stan nie został zmieniony.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
                         .show();
                 } else {
-                    DiagnosticLog.event("PANTRY_OFF_FOUND");
+                    DiagnosticLog.event("PANTRY_OPEN_FACTS_FOUND");
                     showNewPantryProductDialog(barcode, operationId, found);
                 }
             });
@@ -2812,22 +2815,28 @@ public final class MainActivity extends Activity {
                 form.addView(picture);
             }
         }
-        EditText name = new EditText(this);
-        name.setSingleLine(true);
-        name.setHint("Nazwa produktu / opakowania");
-        name.setText(found == null ? "" : found.name);
-        form.addView(name);
-        if (found != null && !found.brand.isEmpty())
-            form.addView(text("Marka: " + found.brand, 14, false));
+        EditText name = null;
+        if (found == null) {
+            name = new EditText(this);
+            name.setSingleLine(true);
+            name.setHint("Nazwa produktu / opakowania");
+            form.addView(name);
+        } else {
+            form.addView(text(found.name, 18, true));
+            if (!found.brand.isEmpty())
+                form.addView(text("Marka: " + found.brand, 14, false));
+        }
         form.addView(text(found == null
-            ? "Kod: " + barcode + " • ręczny wpis, offline"
-            : "Źródło: Open Food Facts • " + barcode
-                + " • zweryfikuj nazwę i zdjęcie przed zapisem.", 13, false));
+            ? "Kod: " + barcode + " • nazwa ręczna, offline"
+            : "Źródło: " + found.source + " • " + barcode
+                + " • sprawdź zgodność z opakowaniem.", 13, false));
+        final EditText manualName = name;
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", null)
             .setPositiveButton("Dodaj +1", (d,w) -> {
-                String entered = name.getText().toString().trim();
+                String entered = found != null ? found.name
+                    : manualName.getText().toString().trim();
                 if (entered.isEmpty() || entered.length() > 160) {
                     alert("Nazwa produktu musi mieć 1–160 znaków.");
                     return;

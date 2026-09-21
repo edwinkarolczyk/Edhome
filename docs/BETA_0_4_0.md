@@ -18,3 +18,10 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Dane użytkownika (zapasy, członkowie domu, lokalizacje) nie są przesyłane do Open Food Facts.
 - Ilości spiżarni pozostają w sztukach. Jednostki kg/l i automatyczny licznik odjęcia nie są jeszcze implementowane.
 - Nie deklarować sukcesu aparatu na fizycznym telefonie bez testu Edwina.
+
+## 0.4.0-beta.4 — wyszukiwanie wielu kategorii
+
+- Rozpoznanie z bazy pokazuje nazwę produktu jako tekst, bez żądania ręcznego wpisywania. Użytkownik potwierdza dopisanie +1. Nazwę istniejącego produktu można nadal zmienić w Spiżarni.
+- Ręczne pole nazwy pojawia się dopiero przy braku nazwy w katalogach albo niedostępności wyszukiwania; status sieci jest wyraźnie rozróżniony od braku produktu.
+- Wyszukiwanie na życzenie, kolejno: Open Food Facts (żywność), Open Products Facts (m.in. chemia), Open Beauty Facts (kosmetyki) i Open Pet Food Facts (karma). Pierwszy znaleziony produkt z nazwą wystarcza. Zakres danych w katalogach różni się; brak wyniku nie oznacza braku produktu na rynku.
+- Zabezpieczenie zdjęć umożliwia lokalne zapamiętywanie obrazów z dopuszczonych serwerów obrazów projektu Open Facts; zapasy pozostają lokalne. Nie zapewniamy pełnego pokrycia katalogów i nazw polskich.

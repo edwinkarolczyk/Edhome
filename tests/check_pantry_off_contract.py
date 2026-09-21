@@ -8,23 +8,33 @@ backup = Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").rea
 gradle = Path("app/build.gradle").read_text()
 required = {
     "offline existing": "PantryBarcodeStore.find(",
-    "opt-in database button": '.setPositiveButton("Open Food Facts"',
-    "offline manual button": '.setNeutralButton("Wpisz ręcznie"',
+    "opt-in database button": '.setPositiveButton("Szukaj produktu"',
+    "offline manual fallback": '.setPositiveButton("Wpisz ręcznie"',
     "no inventory mutation on lookup": "showNewPantryProductDialog(barcode, operationId, found);",
     "confirmation before inventory update": '.setPositiveButton("Dodaj +1", (d,w) -> {',
     "transactional scanner reuse": 'PantryBarcodeStore.commit(db.getWritableDatabase()',
     "metadata insert": "PantryBarcodeStore.saveDetails(",
     "migration 14 to 15": "DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS",
-    "manual fallback on connection failure": "Brak połączenia z bazą",
+    "manual fallback on connection failure": "Nie udało się sprawdzić wszystkich baz",
     "photo user refresh": "refreshPantryPhoto(details.imageUrl)",
 }
 for label, token in required.items():
     assert token in main, f"Missing {label}"
-assert main.index("PantryBarcodeStore.find(") < main.index('setPositiveButton("Open Food Facts"')
+assert main.index("PantryBarcodeStore.find(") < main.index('setPositiveButton("Szukaj produktu"')
 for token in (
-    "https://world.openfoodfacts.org/api/v2/product/",
+    '"world.openfoodfacts.org"',
+    '"world.openproductsfacts.org"',
+    '"world.openbeautyfacts.org"',
+    '"world.openpetfoodfacts.org"',
+    '"Open Products Facts"',
+    '"Open Beauty Facts"',
+    '"Open Pet Food Facts"',
+    '"https://" + host + "/api/v2/product/"',
     "PantryScanRules.validBarcode(barcode)",
-    'IMAGE_HOST = "images.openfoodfacts.org"',
+    '"images.openfoodfacts.org"',
+    '"images.openproductsfacts.org"',
+    '"images.openbeautyfacts.org"',
+    '"images.openpetfoodfacts.org"',
     "setInstanceFollowRedirects(false)",
     "setConnectTimeout(5000)",
     "setReadTimeout(6000)",
@@ -43,5 +53,10 @@ for token in ('{"pantry_product_details", "id", "pantry_id", "brand", "image_url
               "Nieprawidłowe dane zdjęcia w kopii.",
               "DB_VERSION = 15;"):
     assert token in backup, "Missing backup contract: " + token
-assert "versionCode 33" in gradle and "versionNameSuffix '-beta.3'" in gradle
-print("Opt-in Open Food Facts, offline fallback, v15 metadata and backup: PASS")
+assert "versionCode 34" in gradle and "versionNameSuffix '-beta.4'" in gradle
+assert "if (found == null) {\n            name = new EditText(this);" in main
+assert "String entered = found != null ? found.name" in main
+assert "Źródło: \" + found.source" in main
+assert "lookupOne(barcode, catalogue[0], catalogue[1])" in api
+assert "if (!image && responseCode == 404) return null;" in api
+print("Multi-catalogue Open Facts, automatic name, offline fallback, v15: PASS")

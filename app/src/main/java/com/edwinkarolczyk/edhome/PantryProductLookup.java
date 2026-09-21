@@ -19,18 +19,30 @@ import java.security.MessageDigest;
 final class PantryProductLookup {
     private static final int MAX_JSON_BYTES = 96 * 1024;
     private static final int MAX_IMAGE_BYTES = 640 * 1024;
-    private static final String IMAGE_HOST = "images.openfoodfacts.org";
+    // Public Open Facts projects provide different categories of household goods.
+    private static final String[][] CATALOGUES = {
+        {"world.openfoodfacts.org", "Open Food Facts"},
+        {"world.openproductsfacts.org", "Open Products Facts"},
+        {"world.openbeautyfacts.org", "Open Beauty Facts"},
+        {"world.openpetfoodfacts.org", "Open Pet Food Facts"}
+    };
+    private static final String[] IMAGE_HOSTS = {
+        "images.openfoodfacts.org", "images.openproductsfacts.org",
+        "images.openbeautyfacts.org", "images.openpetfoodfacts.org"
+    };
     private static final String USER_AGENT =
         "EDHOME-Android/0.4.0 (https://github.com/edwinkarolczyk/Edhome)";
     private PantryProductLookup() { }
 
     static final class Product {
         final String name;
+        final String source;
         final String brand;
         final String imageUrl;
         final byte[] image;
-        Product(String name, String brand, String imageUrl, byte[] image) {
+        Product(String name, String source, String brand, String imageUrl, byte[] image) {
             this.name = name;
+            this.source = source;
             this.brand = brand;
             this.imageUrl = imageUrl;
             this.image = image;
@@ -41,10 +53,12 @@ final class PantryProductLookup {
         if (candidate == null || candidate.length() > 1200) return false;
         try {
             URL u = new URL(candidate);
-            return "https".equalsIgnoreCase(u.getProtocol())
-                && IMAGE_HOST.equalsIgnoreCase(u.getHost())
-                && (u.getPort() == -1 || u.getPort() == 443)
-                && u.getUserInfo() == null;
+            if (!"https".equalsIgnoreCase(u.getProtocol())
+                    || (u.getPort() != -1 && u.getPort() != 443)
+                    || u.getUserInfo() != null) return false;
+            for (String allowed : IMAGE_HOSTS)
+                if (allowed.equalsIgnoreCase(u.getHost())) return true;
+            return false;
         } catch (Exception ignored) { return false; }
     }
 
@@ -63,8 +77,10 @@ final class PantryProductLookup {
             : "application/json");
         c.setInstanceFollowRedirects(false);
         try {
-            if (c.getResponseCode() != 200)
-                throw new java.io.IOException("HTTP " + c.getResponseCode());
+            int responseCode = c.getResponseCode();
+            if (!image && responseCode == 404) return null;
+            if (responseCode != 200)
+                throw new java.io.IOException("HTTP " + responseCode);
             if (image) {
                 String contentType = c.getContentType();
                 if (contentType == null || !(contentType.startsWith("image/jpeg")
@@ -88,19 +104,47 @@ final class PantryProductLookup {
         } finally { c.disconnect(); }
     }
 
+    /** Search food, household/cleaning goods, beauty and pet food in order.
+     * A missing record must NOT prevent searching the next catalogue.
+     * Transmit only the product barcode after an explicit user action.
+     */
     static Product lookup(String barcode) throws Exception {
         if (!PantryScanRules.validBarcode(barcode))
             throw new IllegalArgumentException("Nieprawidłowy kod.");
-        URL endpoint = new URL("https://world.openfoodfacts.org/api/v2/product/"
-            + barcode + ".json?fields=code,product_name_pl,product_name,brands,"
+        Exception lastFailure = null;
+        int inaccessibleCatalogues = 0;
+        for (String[] catalogue : CATALOGUES) {
+            try {
+                Product found = lookupOne(barcode, catalogue[0], catalogue[1]);
+                if (found != null) return found;
+            } catch (Exception error) {
+                lastFailure = error;
+                inaccessibleCatalogues++;
+            }
+        }
+        if (inaccessibleCatalogues > 0)
+            throw new java.io.IOException(
+                "Nie udało się przeszukać wszystkich baz.", lastFailure);
+        return null;
+    }
+
+    private static Product lookupOne(String barcode, String host, String source)
+            throws Exception {
+        URL endpoint = new URL("https://" + host + "/api/v2/product/"
+            + barcode + ".json?fields=code,product_name_pl,product_name,"
+            + "product_name_en,generic_name_pl,generic_name,brands,"
             + "image_front_url,image_url");
-        JSONObject root = new JSONObject(new String(
-            get(endpoint, MAX_JSON_BYTES, false), StandardCharsets.UTF_8));
+        byte[] result = get(endpoint, MAX_JSON_BYTES, false);
+        if (result == null) return null;
+        JSONObject root = new JSONObject(new String(result, StandardCharsets.UTF_8));
         if (root.optInt("status", 0) != 1 || root.optJSONObject("product") == null)
             return null;
         JSONObject row = root.getJSONObject("product");
         String name = clip(row.optString("product_name_pl", ""), 160);
         if (name.isEmpty()) name = clip(row.optString("product_name", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("product_name_en", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("generic_name_pl", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("generic_name", ""), 160);
         if (name.isEmpty()) return null;
         String brand = clip(row.optString("brands", ""), 100);
         String url = row.optString("image_front_url", "");
@@ -109,9 +153,9 @@ final class PantryProductLookup {
         byte[] image = null;
         if (!url.isEmpty()) {
             try { image = get(new URL(url), MAX_IMAGE_BYTES, true); }
-            catch (Exception ignored) { /* Name must remain usable without a photo. */ }
+            catch (Exception ignored) { /* Product name remains useful without a photo. */ }
         }
-        return new Product(name, brand, url, image);
+        return new Product(name, source, brand, url, image);
     }
 
     static byte[] fetchImage(String imageUrl) throws Exception {
