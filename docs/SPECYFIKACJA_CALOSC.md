@@ -245,7 +245,7 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 **Status:** ustalenie koncepcyjne. Panel, priorytety i sterowanie nie są automatycznie wdrożone przez dodanie tego opisu; kolejność poniżej w roadmapie.
 
 
-## EDHOME UI Refresh 0.3.3-beta.1 — zatwierdzone przez Edwina
+## EDHOME UI Refresh 0.3.3-beta.2 — zatwierdzone przez Edwina
 
 - Jedno gospodarstwo, te same 9 kafelków, zawartość i logika; cztery wizualne motywy: Neonowy, Naturalny, Pastelowy i Szklany (rozmiar i proporcje zrzutów jako punkt odniesienia, bez obietnicy dosłownej identyczności każdego piksela na wszystkich Androidach).
 - Karty i kafelki z dużym zaokrągleniem, palety i kontrast dostosowane do motywu, graficzne ikony i czytelne dotykowe przyciski. Układ 3×3 przewijany pionowo.
