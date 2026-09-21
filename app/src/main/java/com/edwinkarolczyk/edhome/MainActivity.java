@@ -548,8 +548,10 @@ public final class MainActivity extends Activity {
         java.util.List<String> original = homeTileOrder();
         if (!original.contains(source) || !original.contains(target)) return;
         java.util.List<String> preview = new java.util.ArrayList<>(original);
-        preview.remove(source);
-        preview.add(preview.indexOf(target), source);
+        if (!source.equals(target)) {
+            preview.remove(source);
+            preview.add(preview.indexOf(target), source);
+        }
         java.util.Map<String, int[]> slots = new java.util.HashMap<>();
         for (String id : original) {
             int[] location = new int[2];
