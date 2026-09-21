@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** EDHOME **0.2.8-beta.1** (`versionCode 18`, SQLite 7). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę oraz lokalny grafik tygodniowy z wyjątkami dat. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
+> **Status gałęzi `beta`:** EDHOME **0.2.9-beta.1** (`versionCode 19`, SQLite 7). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę i grafik z wyjątkami oraz do trzech proponowanych dat do ręcznego zatwierdzenia. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.2.9 — propozycje trzech terminów czynności](docs/BETA_0_2_9.md)
 - [Wersja 0.2.8 — grafik tygodniowy i wyjątki domowników](docs/BETA_0_2_8.md)
 - [Wersja 0.2.7 — Beta bez PIN-u i wykonawcy czynności](docs/BETA_0_2_7.md)
 - [Wersja 0.2.6 — priorytet i czas czynności, migracje i test OTA](docs/BETA_0_2_6.md)
@@ -68,6 +69,6 @@
 
 ## Następne kroki
 
-Na gałęzi `beta`: zweryfikować 0.2.7 → 0.2.8 i brak PIN-u w Beta na fizycznym telefonie z zachowaniem danych. Następnie 0.2.9: trzy propozycje terminu na podstawie jawnego grafiku, wyjątków i czasu czynności. Utrzymać kopie danych oraz testy migracji. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
+Na gałęzi `beta`: przetestować 0.2.8 → 0.2.9 na fizycznym telefonie, bez PIN-u i utraty danych. Następnie rozszerzyć model terminu o godzinę i ograniczać konflikty z innymi czynnościami; osobno własne godziny zmian i rotację. Propozycje z 0.2.9 to orientacyjne okna, a zapis terminu wymaga ręcznego kliknięcia Zapisz. Utrzymać kopie danych i testy migracji. Utrzymać kopie danych oraz testy migracji. Przed przenoszeniem funkcji PayCheck i Trenera 2 wykonać audyt ich konkretnych wersji i licencji użytych zależności.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
