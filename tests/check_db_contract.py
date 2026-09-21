@@ -45,8 +45,8 @@ step6 = statements(section(upgrade, "if (oldVersion < 6)", "if (oldVersion < 7)"
 step7 = statements(section(upgrade, "if (oldVersion < 7)", "if (oldVersion < 8)"))
 step8 = statements(section(upgrade, "if (oldVersion < 8)", "if (oldVersion < 9)"))
 step9 = statements(section(upgrade, "if (oldVersion < 9)", "if (oldVersion < 10)"))
-step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 11)"))
-step11 = statements(upgrade.split("if (oldVersion < 11)", 1)[1])
+step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 11 && oldVersion >= 4)"))
+step11 = statements(upgrade.split("if (oldVersion < 11 && oldVersion >= 4)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
