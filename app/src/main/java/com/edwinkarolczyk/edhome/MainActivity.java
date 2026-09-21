@@ -3253,34 +3253,95 @@ public final class MainActivity extends Activity {
                 values, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
-        boolean savePlace(Long id, String name, String kind) {
-            if (name.isEmpty() || name.length() > 160)
-                throw new IllegalArgumentException("Invalid place name");
-            SQLiteDatabase database = getWritableDatabase();
-            try (Cursor c = database.rawQuery(
-                    "SELECT id FROM places WHERE name=? COLLATE NOCASE"
-                    + (id == null ? "" : " AND id!=?"),
-                    id == null ? new String[]{name}
-                        : new String[]{name, Long.toString(id)})) {
-                if (c.moveToFirst()) return false;
+        String placePath(long id) {
+            java.util.ArrayList<String> pieces = new java.util.ArrayList<>();
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            Long current = id;
+            while (current != null && seen.add(current)
+                    && seen.size() <= 100) {
+                try (Cursor c = getReadableDatabase().rawQuery(
+                        "SELECT name,parent_id FROM places WHERE id=?",
+                        new String[]{Long.toString(current)})) {
+                    if (!c.moveToFirst()) break;
+                    pieces.add(0, c.getString(0));
+                    current = c.isNull(1) ? null : c.getLong(1);
+                }
             }
-            ContentValues values = new ContentValues();
-            values.put("name", name);
-            values.put("kind", kind);
-            if (id == null) database.insertOrThrow("places", null, values);
-            else database.update("places", values, "id=?",
-                new String[]{Long.toString(id)});
-            return true;
+            return android.text.TextUtils.join(" → ", pieces);
         }
 
-        void deletePlace(long id) {
+        boolean canPlaceWithin(Long movingId, Long parentId) {
+            if (parentId == null) return true;
+            java.util.Map<Long, Long> parents = new java.util.HashMap<>();
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT id,parent_id FROM places", null)) {
+                while (c.moveToNext())
+                    parents.put(c.getLong(0),
+                        c.isNull(1) ? null : c.getLong(1));
+            }
+            return PlaceRules.canMove(parents, movingId, parentId);
+        }
+
+        boolean savePlace(Long id, String name, String kind,
+                Long parentId, String icon) {
+            String error = PlaceRules.validateFields(name, kind, icon);
+            if (error != null) throw new IllegalArgumentException(error);
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try {
+                if (id != null) {
+                    try (Cursor found = database.rawQuery(
+                            "SELECT id FROM places WHERE id=?",
+                            new String[]{Long.toString(id)})) {
+                        if (!found.moveToFirst())
+                            throw new IllegalArgumentException("Miejsce już nie istnieje.");
+                    }
+                }
+                if (!canPlaceWithin(id, parentId))
+                    throw new IllegalArgumentException(
+                        "Nie można przenieść miejsca do niego samego, "
+                        + "jego podmiejsca ani nieistniejącej lokalizacji.");
+                try (Cursor duplicate = database.rawQuery(
+                        "SELECT id FROM places WHERE COALESCE(parent_id,0)=? "
+                        + "AND name=? COLLATE NOCASE" + (id == null ? "" : " AND id!=?"),
+                        id == null
+                            ? new String[]{Long.toString(parentId == null ? 0 : parentId),
+                                name}
+                            : new String[]{Long.toString(parentId == null ? 0 : parentId),
+                                name, Long.toString(id)})) {
+                    if (duplicate.moveToFirst()) return false;
+                }
+                ContentValues values = new ContentValues();
+                values.put("name", name);
+                values.put("kind", kind);
+                values.put("icon", icon);
+                if (parentId == null) values.putNull("parent_id");
+                else values.put("parent_id", parentId);
+                if (id == null) database.insertOrThrow("places", null, values);
+                else database.update("places", values, "id=?",
+                    new String[]{Long.toString(id)});
+                database.setTransactionSuccessful();
+                return true;
+            } finally {
+                database.endTransaction();
+            }
+        }
+
+        boolean deletePlace(long id) {
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                try (Cursor children = database.rawQuery(
+                        "SELECT COUNT(*) FROM places WHERE parent_id=?",
+                        new String[]{Long.toString(id)})) {
+                    if (children.moveToFirst() && children.getInt(0) != 0)
+                        return false;
+                }
                 database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});
                 database.delete("places", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
+                return true;
             } finally {
                 database.endTransaction();
             }
