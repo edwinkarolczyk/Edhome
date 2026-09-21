@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 21,
-  "versionName": "0.3.1-beta.1",
-  "changelog": "EDHOME Beta 0.3.1 — odpady, daty wystawienia, wspólne Czynności i przypomnienia, SQLite v9.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.1-beta.1/edhome-beta.apk",
-  "sha256": "2237540f3fd8c0052e3b4aa4fb835d8f8b14664abd65332cd37ca11a7b20f5c3"
+  "versionCode": 23,
+  "versionName": "0.3.2-beta.2",
+  "changelog": "EDHOME Beta 0.3.2 — przypomnienia per czynność: godzina, wyprzedzenie i cisza 22–07; SQLite v10.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.2-beta.2/edhome-beta.apk",
+  "sha256": "a0edbaf1aaa2e13d96c003be4ead4c304b1556f7d51c55e6d206d2f80df03c7a"
 }
