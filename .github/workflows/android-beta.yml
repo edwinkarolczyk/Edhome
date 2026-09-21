@@ -100,6 +100,14 @@ jobs:
         run: python3 tests/check_db_contract.py
       - name: Beta without PIN contract
         run: python3 tests/check_beta_pin_contract.py
+      - name: Nine-tile drop slots and saved order regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/home-tile-order"
+          javac -d "$RUNNER_TEMP/home-tile-order" \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileOrder.java \
+            tests/task_rules/HomeTileOrderSmoke.java
+          java -cp "$RUNNER_TEMP/home-tile-order" \
+            com.edwinkarolczyk.edhome.HomeTileOrderSmoke
       - name: Four-theme UI-only and drag-edit contract
         run: python3 tests/check_ui_refresh_contract.py
       - name: Compile-check Beta and Stable
@@ -142,14 +150,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.3.4-beta.1-signed-apk
+          name: EDHOME-0.3.4-beta.2-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.4 — własne nazwy i hierarchia Miejsc, pełne ścieżki, ikony i bezpieczne przenoszenie; SQLite v11."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.4-beta.2 — naprawa przeciągania kafelków: podgląd = zapis, zawsze 9 widocznych kafelków, bez zmian danych."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
