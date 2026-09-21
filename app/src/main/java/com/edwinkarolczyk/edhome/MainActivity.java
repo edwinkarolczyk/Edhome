@@ -2331,15 +2331,24 @@ public final class MainActivity extends Activity {
             });
         }
 
-        TextView pictogram = text(symbol, 29, true);
-        pictogram.setTextColor(highlighted && skin.light
-            ? skin.accentInk : accent);
-        pictogram.setGravity(Gravity.CENTER);
-        pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
         LinearLayout.LayoutParams iconParams =
             new LinearLayout.LayoutParams(dp(46), dp(46));
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
-        tile.addView(pictogram, iconParams);
+        if (isHome) {
+            String iconId = captionToHomeTileId(caption);
+            TileIcon pictogram = new TileIcon(this, iconId,
+                highlighted && skin.light ? skin.accentInk : accent);
+            pictogram.setPadding(dp(5), dp(5), dp(5), dp(5));
+            pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
+            tile.addView(pictogram, iconParams);
+        } else {
+            TextView pictogram = text(symbol, 29, true);
+            pictogram.setTextColor(highlighted && skin.light
+                ? skin.accentInk : accent);
+            pictogram.setGravity(Gravity.CENTER);
+            pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
+            tile.addView(pictogram, iconParams);
+        }
         TextView captionView = text(caption, 12, true);
         captionView.setTextColor(highlighted
             ? skin.tileText(tileTint) : ink);
