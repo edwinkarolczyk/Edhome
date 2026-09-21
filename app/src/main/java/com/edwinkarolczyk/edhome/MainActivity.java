@@ -1141,6 +1141,180 @@ public final class MainActivity extends Activity {
             + "wystawienia z lokalnego harmonogramu odbioru.");
     }
 
+    /** Local appliance timing is separate from recurring chores and their history. */
+    private void timers() {
+        header("Minutniki • urządzenia domowe");
+        note("Pralka, suszarka i zmywarka. Czas jest liczony od rozpoczęcia "
+            + "i zapisany lokalnie. Android może opóźnić powiadomienie "
+            + "(oszczędzanie baterii); odczyt w aplikacji pokazuje rzeczywisty termin.");
+        boolean enabled = prefs.getBoolean("timer_notifications_enabled", false);
+        button(enabled ? "🔔 Powiadomienia minutników: WŁĄCZONE"
+                : "○ Powiadomienia minutników: WYŁĄCZONE", () -> {
+            boolean newValue = !prefs.getBoolean(
+                "timer_notifications_enabled", false);
+            prefs.edit().putBoolean("timer_notifications_enabled",
+                newValue).apply();
+            if (newValue && Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(
+                        android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{
+                    android.Manifest.permission.POST_NOTIFICATIONS}, 7132);
+            }
+            DeviceTimerReceiver.scheduleAll(this);
+            render();
+        });
+        note("Powiadomienia są opcjonalne i niezależne od przypomnień czynności. "
+            + "Obowiązuje cisza 22:00–07:00. Minutnik działa i kończy się "
+            + "również bez zgody na powiadomienia.");
+        LinearLayout editor = card();
+        editor.addView(text("Uruchom minutnik", 20, true));
+        editor.addView(text("Urządzenie", 15, true));
+        Spinner device = new Spinner(this);
+        device.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            DeviceTimerRules.LABELS)));
+        editor.addView(device);
+        editor.addView(text("Nazwa / program (opcjonalnie)", 15, true));
+        EditText titleInput = new EditText(this);
+        titleInput.setSingleLine(true);
+        titleInput.setTextColor(ink);
+        titleInput.setHintTextColor(subdued);
+        titleInput.setHint("np. Pralka Bosch • Bawełna");
+        editor.addView(titleInput);
+        editor.addView(text("Czas w minutach (1–1440)", 15, true));
+        EditText minutes = new EditText(this);
+        minutes.setSingleLine(true);
+        minutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        minutes.setText("60");
+        minutes.setTextColor(ink);
+        editor.addView(minutes);
+        LinearLayout presets = new LinearLayout(this);
+        presets.setOrientation(LinearLayout.HORIZONTAL);
+        editor.addView(presets);
+        for (int choice : new int[]{30, 45, 60, 90}) {
+            taskAction(presets, choice + " min",
+                () -> minutes.setText(Integer.toString(choice)));
+        }
+        smallButton(editor, "▶ Rozpocznij", () -> {
+            int duration;
+            try {
+                duration = Integer.parseInt(
+                    minutes.getText().toString().trim());
+            } catch (NumberFormatException problem) {
+                minutes.setError("Podaj czas od 1 do 1440 minut.");
+                return;
+            }
+            if (duration < 1 || duration > 1440) {
+                minutes.setError("Podaj czas od 1 do 1440 minut.");
+                return;
+            }
+            String type = DeviceTimerRules.TYPES[
+                device.getSelectedItemPosition()];
+            String title = titleInput.getText().toString().trim();
+            if (title.isEmpty())
+                title = DeviceTimerRules.LABELS[
+                    device.getSelectedItemPosition()];
+            if (!DeviceTimerRules.validTitle(title)) {
+                titleInput.setError("Nazwa: maks. 80 znaków.");
+                return;
+            }
+            try {
+                long timerId = db.startDeviceTimer(type, title, duration);
+                DeviceTimerReceiver.scheduleAll(this);
+                DiagnosticLog.event("DEVICE_TIMER_STARTED");
+                render();
+                android.widget.Toast.makeText(this,
+                    "Minutnik uruchomiony", android.widget.Toast.LENGTH_SHORT)
+                    .show();
+            } catch (Exception problem) {
+                DiagnosticLog.error("DEVICE_TIMER_START", problem);
+                alert("Nie udało się uruchomić minutnika.");
+            }
+        });
+        button("↻ Odśwież pozostały czas", () -> render());
+        long now = System.currentTimeMillis();
+        int active = 0, finished = 0, past = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,device_type,title,start_at,end_at,status,"
+                + "acknowledged_at FROM device_timers "
+                + "ORDER BY CASE WHEN status='running' THEN 0 ELSE 1 END,"
+                + "end_at ASC,id DESC LIMIT 200", null)) {
+            while (c.moveToNext()) {
+                long id = c.getLong(0);
+                String type = c.getString(1), name = c.getString(2);
+                long end = c.getLong(4);
+                String status = c.getString(5);
+                boolean running = "running".equals(status);
+                if (running && end > now) active++;
+                else if (running) finished++;
+                else past++;
+                LinearLayout row = card();
+                LinearLayout heading = new LinearLayout(this);
+                heading.setOrientation(LinearLayout.HORIZONTAL);
+                heading.setGravity(Gravity.CENTER_VERTICAL);
+                TileIcon icon = new TileIcon(this, type, accent);
+                icon.setPadding(dp(7), dp(7), dp(7), dp(7));
+                icon.setBackground(skin.panel(this, skin.iconBacking, 22));
+                heading.addView(icon, new LinearLayout.LayoutParams(
+                    dp(49), dp(49)));
+                TextView label = text(name, 19, true);
+                LinearLayout.LayoutParams labelParams =
+                    new LinearLayout.LayoutParams(0, -2, 1f);
+                labelParams.setMargins(dp(12), 0, 0, 0);
+                heading.addView(label, labelParams);
+                row.addView(heading);
+                String finishTime = java.time.Instant.ofEpochMilli(end)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter
+                        .ofPattern("dd.MM.yyyy • HH:mm"));
+                row.addView(text("Koniec: " + finishTime, 13, false));
+                if (running && end > now) {
+                    TextView timeLeft = text("◷ Pozostało około "
+                        + DeviceTimerRules.minutesLeft(end, now)
+                        + " min", 16, true);
+                    timeLeft.setTextColor(accent);
+                    row.addView(timeLeft);
+                    smallButton(row, "■ Zatrzymaj bez wykonania", () ->
+                        new AlertDialog.Builder(this)
+                            .setTitle("Zatrzymać minutnik?")
+                            .setMessage(name + "\\nZapis pozostanie w historii.")
+                            .setNegativeButton("Wróć", null)
+                            .setPositiveButton("Zatrzymaj", (dialog, which) -> {
+                                if (db.updateDeviceTimer(id,
+                                        "cancelled",
+                                        System.currentTimeMillis())) {
+                                    DeviceTimerReceiver.cancel(this, id);
+                                    DiagnosticLog.event(
+                                        "DEVICE_TIMER_CANCELLED");
+                                }
+                                render();
+                            }).show());
+                } else if (running) {
+                    TextView done = text("✓ Program zakończony "
+                        + "• oczekuje na potwierdzenie", 16, true);
+                    done.setTextColor(accent);
+                    row.addView(done);
+                    smallButton(row, "✓ Potwierdź zakończenie", () -> {
+                        if (db.updateDeviceTimer(id, "acknowledged",
+                                System.currentTimeMillis())) {
+                            DeviceTimerReceiver.cancel(this, id);
+                            DiagnosticLog.event(
+                                "DEVICE_TIMER_ACKNOWLEDGED");
+                            render();
+                        }
+                    });
+                } else {
+                    row.addView(text("acknowledged".equals(status)
+                        ? "✓ Potwierdzono" : "■ Zatrzymano", 13, false));
+                }
+            }
+        }
+        if (active + finished + past == 0)
+            note("Brak minutników. Wybierz urządzenie i czas powyżej.");
+        else note("W trakcie: " + active + " • Do potwierdzenia: "
+            + finished + " • Historia na ekranie: " + past);
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
