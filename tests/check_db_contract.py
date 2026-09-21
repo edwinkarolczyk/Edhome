@@ -26,8 +26,16 @@ members = statements(section(main, "private static void addMembers", "private st
 shifts = statements(section(main, "private static void addMemberSchedules", "private static void addMembers"))
 shopping = statements(section(main, "private static void addShopping", "private static void addMemberSchedules"))
 timers = statements(section(main, "private static void addDeviceTimers", "long startDeviceTimer"))
+rotations = statements(section(main, "private static void addTaskRotations",
+                                "private static void addShopping"))
 history = statements(section(main, "private static void addTaskHistory",
-                             "private static void addShopping"))
+                             "private static void addTaskRotations"))
+legacy_history = [
+    "CREATE TABLE task_history (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "task_id INTEGER NOT NULL, title_snapshot TEXT NOT NULL, "
+    "completed_at INTEGER NOT NULL, due_date TEXT, next_due_date TEXT)",
+    "CREATE INDEX task_history_task_idx ON task_history(task_id,id)"
+]
 places = statements(section(main, "private static void addPlaces",
                             "private static void addTaskHistory"))
 sibling_index = statements(section(main, "private static void addPlaceSiblingIndex",
@@ -48,7 +56,8 @@ step8 = statements(section(upgrade, "if (oldVersion < 8)", "if (oldVersion < 9)"
 step9 = statements(section(upgrade, "if (oldVersion < 9)", "if (oldVersion < 10)"))
 step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 11 && oldVersion >= 4)"))
 step11 = statements(section(upgrade, "if (oldVersion < 11 && oldVersion >= 4)", "if (oldVersion < 12)"))
-step12 = statements(upgrade.split("if (oldVersion < 12)", 1)[1])
+step12 = statements(section(upgrade, "if (oldVersion < 12)", "if (oldVersion < 13)"))
+step13 = statements(upgrade.split("if (oldVersion < 13)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
@@ -61,16 +70,16 @@ def schema(database):
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name NOT LIKE 'sqlite_%' ORDER BY name")}
 
-assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
+assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 12, "Database version and backup format differ"
+assert version == backup_version == 13, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + places + sibling_index + members + shifts + shopping + timers)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers)
 expected = schema(fresh)
-assert len(expected) == 12, "Unexpected number of tables"
-for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+assert len(expected) == 13, "Unexpected number of tables"
+for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
@@ -81,7 +90,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
     if old >= 2:
         execute(db, audit)
     if old >= 3:
-        execute(db, step3 + history)
+        execute(db, step3 + legacy_history)
     if old >= 4:
         execute(db, step4 + (places + sibling_index if old >= 11 else legacy_places))
     if old >= 5:
@@ -99,7 +108,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
     if old < 2:
         execute(db, step2 + audit)
     if old < 3:
-        execute(db, step3 + history)
+        execute(db, step3 + legacy_history)
     if old < 4:
         execute(db, step4 + places + sibling_index)
     if old < 5:
@@ -116,8 +125,15 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
         execute(db, step10)
     if 4 <= old < 11:
         execute(db, step11 + sibling_index)
-    assert "addDeviceTimers(database);" in upgrade.split("if (oldVersion < 12)", 1)[1]
-    execute(db, timers)
+    if old >= 12:
+        execute(db, timers)
+    elif old < 12:
+        execute(db, timers)
+    if old < 13:
+        execute(db, rotations)
+        for statement in step13:
+            if statement.startswith("ALTER TABLE task_history"):
+                db.execute(statement)
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -200,7 +216,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
@@ -220,4 +236,8 @@ assert 'inputVersion < 11 && "places".equals(definition[0])' in backup
 assert '"parent_id".equals(key)' in backup and '"icon".equals(key)' in backup
 assert 'PlaceRules.validForest(hierarchy)' in backup
 assert 'PlaceRules.validateFields(name, kind,' in backup
-print("SQLite migrations v1–v11→v12: PASS; appliance timers, places and backup: PASS")
+assert '"task_rotation_members", "task_id", "member_id", "position"' in backup
+assert '"assignee_id", "assignee_name_snapshot"' in backup
+assert '"task_rotation_members".equals(definition[0])' in backup
+assert 'task_id ASC, position ASC' in backup
+print("SQLite migrations v1–v12→v13: PASS; rotations, timers, places and backup: PASS")
