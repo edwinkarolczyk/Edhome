@@ -24,11 +24,17 @@ assert "beginHomeDrag(tile, (String) id)" in main
 assert "MotionEvent.ACTION_MOVE" in main
 assert "ACTION_DRAG_LOCATION" in main
 assert "scrollHomeDuringDrag(" in main
-assert "previewHomeTilePlacement(homeDragSource, tileId)" in main
-assert "translationX(destination[0] - position[0])" in main
-assert "translationY(destination[1] - position[1])" in main
+assert "previewHomeTilePlacement(nearest)" in main
+assert "translationX(target[0] - old[0])" in main
+assert "translationY(target[1] - old[1])" in main
 assert "homeDragHint.setText(" in main
-assert "if (!source.equals(target))" in main
+assert "HomeTileOrder.moved(homeDragOrder, homeDragSource, slot)" in main
+assert "HomeTileOrder.moved(before, source, slot)" in main
+assert "scheduleHomeDragFinish()" in main
+assert "tile.setAlpha(1f)" in main
+assert "tile.setVisibility(View.VISIBLE)" in main
+assert "homeDragDropped = homeDragTargetIndex >= 0;" in main
+assert "moveHomeTile(sourceId, tileId)" not in main
 assert 'putString("home_tile_order"' in main
 assert 'prefs.getString("tile_label_" + id' in main
 assert 'prefs.getString("tile_tint_" + id' in main
@@ -43,6 +49,6 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 26" in gradle
+assert "versionCode 27" in gradle
 assert "versionName '0.3.4'" in gradle
-print("6 themes, 9 tiles, live drop preview, icon library, visual backup and DB v11: PASS")
+print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v11: PASS")
