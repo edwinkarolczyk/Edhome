@@ -29,7 +29,14 @@ history = statements(section(main, "private static void addTaskHistory",
                              "private static void addShopping"))
 places = statements(section(main, "private static void addPlaces",
                             "private static void addTaskHistory"))
-upgrade = section(main, "@Override public void onUpgrade", "private static void addPlaces")
+sibling_index = statements(section(main, "private static void addPlaceSiblingIndex",
+                                    "private static void addPlaces"))
+legacy_places = [
+    "CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "name TEXT NOT NULL COLLATE NOCASE UNIQUE, "
+    "kind TEXT NOT NULL DEFAULT 'Inne')"
+]
+upgrade = section(main, "@Override public void onUpgrade", "private static void addPlaceSiblingIndex")
 step2 = statements(section(upgrade, "if (oldVersion < 2)", "if (oldVersion < 3)"))
 step3 = statements(section(upgrade, "if (oldVersion < 3)", "if (oldVersion < 4)"))
 step4 = statements(section(upgrade, "if (oldVersion < 4)", "if (oldVersion < 5)"))
@@ -38,7 +45,8 @@ step6 = statements(section(upgrade, "if (oldVersion < 6)", "if (oldVersion < 7)"
 step7 = statements(section(upgrade, "if (oldVersion < 7)", "if (oldVersion < 8)"))
 step8 = statements(section(upgrade, "if (oldVersion < 8)", "if (oldVersion < 9)"))
 step9 = statements(section(upgrade, "if (oldVersion < 9)", "if (oldVersion < 10)"))
-step10 = statements(upgrade.split("if (oldVersion < 10)", 1)[1])
+step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 11)"))
+step11 = statements(upgrade.split("if (oldVersion < 11)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
@@ -51,16 +59,16 @@ def schema(database):
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name NOT LIKE 'sqlite_%' ORDER BY name")}
 
-assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
+assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 10, "Database version and backup format differ"
+assert version == backup_version == 11, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + places + members + shifts + shopping)
+execute(fresh, create + audit + history + places + sibling_index + members + shifts + shopping)
 expected = schema(fresh)
 assert len(expected) == 11, "Unexpected number of tables"
-for old in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
@@ -73,7 +81,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9):
     if old >= 3:
         execute(db, step3 + history)
     if old >= 4:
-        execute(db, step4 + places)
+        execute(db, step4 + legacy_places)
     if old >= 5:
         execute(db, step5)
     if old >= 6:
@@ -89,7 +97,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9):
     if old < 3:
         execute(db, step3 + history)
     if old < 4:
-        execute(db, step4 + places)
+        execute(db, step4 + places + sibling_index)
     if old < 5:
         execute(db, step5)
     if old < 6:
@@ -100,7 +108,10 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9):
         execute(db, step8 + shopping)
     if old < 9:
         execute(db, step9)
-    execute(db, step10)
+    if old < 10:
+        execute(db, step10)
+    if old >= 4:
+        execute(db, step11 + sibling_index)
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     assert db.execute("SELECT id,name,qty FROM pantry").fetchone() == (3, "Ryż", 4)
@@ -113,6 +124,26 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9):
     ).fetchone() == ("general", None)
     assert db.execute("SELECT remind_time,reminder_lead_days FROM tasks "
                       "WHERE id=7").fetchone() == (None, 0)
+    db.execute("INSERT INTO places (id,name,kind) VALUES (12,'Dom','Dom')")
+    db.execute("INSERT INTO places (id,name,parent_id,kind,icon) "
+               "VALUES (13,'Kuchnia',12,'Pomieszczenie','room')")
+    db.execute("INSERT INTO places (id,name,parent_id,kind,icon) "
+               "VALUES (14,'Półka 1',13,'Półka','shelf')")
+    db.execute("INSERT INTO places (id,name,parent_id,kind,icon) "
+               "VALUES (15,'Garaż',NULL,'Garaż','garage')")
+    db.execute("INSERT INTO places (id,name,parent_id,kind,icon) "
+               "VALUES (16,'Półka 1',15,'Półka','shelf')")
+    assert db.execute("SELECT name,kind,parent_id,icon FROM places WHERE id=12"
+                      ).fetchone() == ('Dom', 'Dom', None, 'places')
+    db.execute("UPDATE tasks SET place_id=14 WHERE id=7")
+    assert db.execute("SELECT place_id FROM tasks WHERE id=7"
+                      ).fetchone() == (14,)
+    try:
+        db.execute("INSERT INTO places (name,parent_id,icon) "
+                   "VALUES ('półka 1',13,'shelf')")
+        raise AssertionError("Duplicate sibling name allowed")
+    except sqlite3.IntegrityError:
+        pass
     assert db.execute("SELECT assignee_id FROM tasks").fetchone() == (None,)
     db.execute("INSERT INTO household_members (id,name) VALUES (4,'Edwin')")
     db.execute("UPDATE tasks SET assignee_id=4 WHERE id=7")
@@ -154,7 +185,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
@@ -170,4 +201,8 @@ assert 'WasteRules.validate(fraction, due, rule,' in backup
 assert 'inputVersion < 10 && "tasks".equals(definition[0])' in backup
 assert '"remind_time".equals(key)' in backup
 assert '"reminder_lead_days".equals(key)' in backup
-print("SQLite migrations v1–v9→v10: PASS; reminder hour/lead and backup defaults: PASS")
+assert 'inputVersion < 11 && "places".equals(definition[0])' in backup
+assert '"parent_id".equals(key)' in backup and '"icon".equals(key)' in backup
+assert 'PlaceRules.validForest(hierarchy)' in backup
+assert 'PlaceRules.validateFields(name, kind,' in backup
+print("SQLite migrations v1–v10→v11: PASS; hierarchical places, task links and backup defaults: PASS")
