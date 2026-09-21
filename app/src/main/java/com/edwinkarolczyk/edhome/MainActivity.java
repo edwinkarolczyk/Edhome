@@ -1854,11 +1854,24 @@ public final class MainActivity extends Activity {
 
     private void settings() {
         header("Ustawienia");
-        note("Aktualny motyw: " + prefs.getString("theme", "Grafitowy"));
-        note("Trener 2: niemal czarne tło, grafitowe karty, czerwone przyciski "
-            + "i jasne podpisy — paleta z aplikacji Trener 2.");
-        for (String theme : new String[]{"Grafitowy", "Leśny", "Jasny", "Trener 2"}) {
-            button("Motyw: " + theme, () -> {
+        note("Aktywny styl: " + skin.name
+            + " • cztery warianty tej samej aplikacji bez zmiany danych.");
+        note("Wybierz styl i sprawdź go od razu. Zmiana działa dla "
+            + "całej aplikacji i pozostaje po ponownym uruchomieniu.");
+        String[] descriptions = {
+            "Ciemny granat • mięta • wyraźne kafle",
+            "Leśna zieleń • ciepłe, naturalne akcenty",
+            "Jasny krem • łagodne kolory • wysoki kontrast",
+            "Głęboki błękit • szklane karty • subtelny połysk"
+        };
+        for (int i = 0; i < UiSkin.THEMES.length; i++) {
+            String theme = UiSkin.THEMES[i];
+            String description = descriptions[i];
+            LinearLayout example = card();
+            example.addView(text((skin.name.equals(theme) ? "✓  " : "")
+                + theme, 18, true));
+            example.addView(text(description, 13, false));
+            smallButton(example, "Wybierz motyw " + theme, () -> {
                 prefs.edit().putString("theme", theme).apply();
                 DiagnosticLog.event("THEME_CHANGED");
                 render();
