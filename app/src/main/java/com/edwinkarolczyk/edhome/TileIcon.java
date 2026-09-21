@@ -11,12 +11,16 @@ final class TileIcon extends View {
     static final String[] ICON_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today",
-        "washer", "dryer", "dishwasher"
+        "washer", "dryer", "dishwasher",
+        "shelf", "cabinet", "drawer", "room", "garden",
+        "garage", "workshop", "box"
     };
     static final String[] ICON_NAMES = {
         "Czynności", "Kalendarz", "Dom", "Spiżarnia", "Remanent",
         "Aktualizacje", "Kopia danych", "Ustawienia", "Zegar",
-        "Pralka", "Suszarka", "Zmywarka"
+        "Pralka", "Suszarka", "Zmywarka",
+        "Półka", "Szafka", "Szuflada", "Pokój", "Ogród",
+        "Garaż", "Warsztat", "Pudełko"
     };
 
     static boolean known(String value) {
@@ -145,6 +149,60 @@ final class TileIcon extends View {
                 line(canvas, 24, 24, 24, 37);
                 line(canvas, 30, 24, 30, 37);
                 canvas.drawCircle(14, 12, 1.4f, fill);
+                break;
+            case "shelf":
+                line(canvas, 8, 13, 40, 13);
+                line(canvas, 8, 27, 40, 27);
+                line(canvas, 8, 41, 40, 41);
+                line(canvas, 12, 13, 12, 41);
+                line(canvas, 36, 13, 36, 41);
+                break;
+            case "cabinet":
+                rect(canvas, 10, 8, 38, 41, 3);
+                line(canvas, 24, 8, 24, 41);
+                canvas.drawCircle(21, 25, 1.4f, fill);
+                canvas.drawCircle(27, 25, 1.4f, fill);
+                break;
+            case "drawer":
+                rect(canvas, 9, 9, 39, 40, 3);
+                line(canvas, 9, 19, 39, 19);
+                line(canvas, 9, 30, 39, 30);
+                line(canvas, 20, 15, 28, 15);
+                line(canvas, 20, 26, 28, 26);
+                line(canvas, 20, 36, 28, 36);
+                break;
+            case "room":
+                rect(canvas, 8, 9, 40, 40, 3);
+                rect(canvas, 20, 22, 32, 40, 1);
+                canvas.drawCircle(29, 33, 1.4f, fill);
+                break;
+            case "garden":
+                line(canvas, 24, 23, 24, 41);
+                canvas.drawOval(9, 13, 25, 26, pen);
+                canvas.drawOval(23, 8, 39, 23, pen);
+                line(canvas, 11, 41, 37, 41);
+                break;
+            case "garage": {
+                Path roof = new Path();
+                roof.moveTo(7, 20);
+                roof.lineTo(24, 8);
+                roof.lineTo(41, 20);
+                canvas.drawPath(roof, pen);
+                rect(canvas, 10, 20, 38, 41, 1);
+                rect(canvas, 16, 26, 32, 41, 1);
+                line(canvas, 17, 31, 31, 31);
+                line(canvas, 17, 36, 31, 36);
+                break;
+            }
+            case "workshop":
+                line(canvas, 12, 36, 36, 12);
+                canvas.drawCircle(12, 36, 6, pen);
+                canvas.drawCircle(36, 12, 6, pen);
+                break;
+            case "box":
+                rect(canvas, 10, 18, 38, 39, 2);
+                rect(canvas, 8, 11, 40, 19, 2);
+                line(canvas, 20, 26, 28, 26);
                 break;
             default:
                 canvas.drawCircle(24, 24, 12, pen);
