@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan bieżący 0.2.8-beta.1 na `beta`:** publiczne `edwinkarolczyk/Edhome`, GitHub Releases i manifest `beta`. Beta DEV bez PIN-u; zadania z opcjonalnym wykonawcą, lokalny grafik 7 dni i wyjątki dat; SQLite v7 oraz import kopii v2–v7. Test na telefonie pozostaje osobnym kryterium odbioru. Główny rejestr wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+> **Stan bieżący 0.2.9-beta.1 na `beta`:** publiczne `edwinkarolczyk/Edhome`, GitHub Releases i manifest `beta`. Beta bez PIN-u, z opcjonalnym wykonawcą i grafikiem; do 3 orientacyjnych propozycji dat na podstawie jawnego grafiku i czasu. Zapis terminu wyłącznie po zatwierdzeniu. SQLite v7, import kopii v2–v7. Test na telefonie osobnym kryterium odbioru. Główne wymagania: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,8 +80,8 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.2.9-beta.1
+## Następny inkrement — 0.3.0-beta.1 (po odbiorze 0.2.9)
 
-- Trzy **propozycje** terminu na podstawie jawnie ustawionego grafiku, wyjątków i szacowanego czasu czynności. Brak grafiku to brak podstawy do automatycznego stwierdzania dostępności.
-- Przypisanie terminu następuje wyłącznie po wyborze użytkownika; nie dopisywać samoczynnie daty.
-- Własne godziny zmian, kalendarz współdomowników i bardziej zaawansowana rotacja jako odrębne dalsze etapy po przetestowaniu tej wersji.
+- Zapisywalna godzina rozpoczęcia i zakończenia terminu oraz wykrywanie kolizji z innymi zaplanowanymi czynnościami, bez narzucania terminu.
+- Dalsza obsługa domowych obowiązków i przypomnień według sekcji 0.3.0; własne godziny zmian i rotację planować osobno, nie udawać gotowej integracji.
+- Testy aktualizacji i kopii na telefonie przed rozbudową schematu.
