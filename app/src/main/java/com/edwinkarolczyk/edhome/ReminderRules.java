@@ -28,25 +28,27 @@ final class ReminderRules {
     }
 
     static LocalDateTime target(String date, String hhmm, int leadDays) {
+        return target(date, hhmm, leadDays,
+            QuietHoursRules.DEFAULT_START, QuietHoursRules.DEFAULT_END);
+    }
+
+    static LocalDateTime target(String date, String hhmm, int leadDays,
+            String quietStart, String quietEnd) {
         if (!validTime(hhmm) || !allowedLead(leadDays))
             throw new IllegalArgumentException("Invalid reminder time or lead");
         LocalDate day = LocalDate.parse(date).minusDays(leadDays);
         LocalTime time = LocalTime.parse(hhmm);
-        // Quiet hours are 22:00–07:00. Advance late reminders to 21:00
-        // on the chosen reminder day instead of announcing overnight.
-        if (!time.isBefore(LocalTime.of(22, 0)))
-            time = LocalTime.of(21, 0);
-        if (time.isBefore(LocalTime.of(7, 0)))
-            time = LocalTime.of(7, 0);
-        return day.atTime(time);
+        return QuietHoursRules.adjustRequested(
+            day, time, quietStart, quietEnd);
     }
 
     static LocalDateTime nextAllowed(LocalDateTime candidate) {
-        LocalTime time = candidate.toLocalTime();
-        if (!time.isBefore(LocalTime.of(22, 0)))
-            return candidate.toLocalDate().plusDays(1).atTime(7, 0);
-        if (time.isBefore(LocalTime.of(7, 0)))
-            return candidate.toLocalDate().atTime(7, 0);
-        return candidate;
+        return nextAllowed(candidate,
+            QuietHoursRules.DEFAULT_START, QuietHoursRules.DEFAULT_END);
+    }
+
+    static LocalDateTime nextAllowed(LocalDateTime candidate,
+            String quietStart, String quietEnd) {
+        return QuietHoursRules.nextAllowed(candidate, quietStart, quietEnd);
     }
 }
