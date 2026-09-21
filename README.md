@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** EDHOME **0.3.0-beta.1** (`versionCode 20`, SQLite 8). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę i grafik z wyjątkami oraz do trzech proponowanych dat do ręcznego zatwierdzenia. Dodatkowo pierwszy pakiet 0.3: lokalna lista zakupów, opcjonalna ilość i jednostka. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
+> **Status gałęzi `beta`:** EDHOME **0.3.1-beta.1** (`versionCode 21`, SQLite 9). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę i grafik z wyjątkami oraz do trzech proponowanych dat do ręcznego zatwierdzenia. W etapie 0.3 działa lokalna lista zakupów i nowy ekran odpadów: data wystawienia, frakcja, powtarzanie i potwierdzenie w tych samych Czynnościach. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.3.1 — odpady i terminy wystawiania](docs/BETA_0_3_1.md)
 - [Wersja 0.3.0 — lokalna lista zakupów i migracja SQLite v8](docs/BETA_0_3_0.md)
 - [Wersja 0.2.9 — propozycje trzech terminów czynności](docs/BETA_0_2_9.md)
 - [Wersja 0.2.8 — grafik tygodniowy i wyjątki domowników](docs/BETA_0_2_8.md)
