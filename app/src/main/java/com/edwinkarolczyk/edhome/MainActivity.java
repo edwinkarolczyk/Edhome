@@ -268,7 +268,7 @@ public final class MainActivity extends Activity {
         if (root == null || prefs == null) return;
         palette();
         root.removeAllViews();
-        root.setBackground(rounded(bg));
+        root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
         int systemBarFlags = skin.light
@@ -396,10 +396,8 @@ public final class MainActivity extends Activity {
         planHeader.setGravity(Gravity.CENTER_VERTICAL);
         TextView planTitle = text("Twój domowy plan", 21, true);
         planHeader.addView(planTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView homeMark = text("⌂", 39, true);
-        homeMark.setGravity(Gravity.CENTER);
-        homeMark.setTextColor(accent);
-        planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        HomeIllustration homeMark = new HomeIllustration(this, skin);
+        planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(68), dp(52)));
         summary.addView(planHeader);
         int overdue = db.overdueTasks();
         summary.addView(text("Do zrobienia: " + db.openTasks()
