@@ -25,6 +25,10 @@ final class DataBackup {
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
     private static final int DB_VERSION = 10;
+    private static final String[] HOME_TILE_IDS = {
+        "tasks", "calendar", "places", "pantry", "audit",
+        "updates", "backup", "settings", "today"
+    };
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
@@ -59,6 +63,16 @@ final class DataBackup {
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
+        JSONObject appearance = new JSONObject();
+        for (String id : HOME_TILE_IDS) {
+            JSONObject tile = new JSONObject();
+            if (prefs.contains("tile_label_" + id))
+                tile.put("label", prefs.getString("tile_label_" + id, ""));
+            if (prefs.contains("tile_tint_" + id))
+                tile.put("tint", prefs.getString("tile_tint_" + id, "default"));
+            if (tile.length() > 0) appearance.put(id, tile);
+        }
+        settings.put("homeTileAppearance", appearance);
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -118,8 +132,7 @@ final class DataBackup {
         String theme = settings.getString("theme");
         String tileOrder = settings.optString("homeTileOrder", "");
         if (household.trim().isEmpty() || household.length() > 200
-                || !("Grafitowy".equals(theme) || "Leśny".equals(theme)
-                    || "Jasny".equals(theme) || "Trener 2".equals(theme)))
+                || !UiSkin.accepted(theme))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia kopii.");
         if (!tileOrder.isEmpty()) {
             java.util.Set<String> allowed = new HashSet<>(java.util.Arrays.asList(
@@ -131,6 +144,33 @@ final class DataBackup {
                 throw new IllegalArgumentException("Nieprawidłowa kolejność kafelków.");
             for (String id : ids) if (!allowed.contains(id) || !selected.add(id))
                 throw new IllegalArgumentException("Nieprawidłowa kolejność kafelków.");
+        }
+
+        JSONObject appearance = settings.optJSONObject("homeTileAppearance");
+        Map<String, String> labels = new HashMap<>();
+        Map<String, String> tints = new HashMap<>();
+        if (appearance != null) {
+            java.util.Iterator<String> keys = appearance.keys();
+            while (keys.hasNext()) {
+                String id = keys.next();
+                if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id))
+                    throw new IllegalArgumentException("Nieznany kafelek w kopii.");
+                JSONObject tile = appearance.getJSONObject(id);
+                if (tile.has("label")) {
+                    String label = tile.getString("label").trim();
+                    if (label.isEmpty() || label.length() > 24
+                            || label.contains("\n"))
+                        throw new IllegalArgumentException("Nieprawidłowa nazwa kafelka.");
+                    labels.put(id, label);
+                }
+                if (tile.has("tint")) {
+                    String tint = tile.getString("tint");
+                    if (!java.util.Arrays.asList("default", "mint",
+                            "blue", "amber", "violet").contains(tint))
+                        throw new IllegalArgumentException("Nieznany kolor kafelka.");
+                    tints.put(id, tint);
+                }
+            }
         }
 
         JSONObject tables = root.getJSONObject("tables");
@@ -417,9 +457,18 @@ final class DataBackup {
             database.endTransaction();
         }
         // Keep the new installation's PIN and update-source configuration untouched.
-        if (!prefs.edit().putString("household", household)
-                .putString("theme", theme)
-                .putString("home_tile_order", tileOrder).commit())
+        SharedPreferences.Editor restored = prefs.edit()
+            .putString("household", household)
+            .putString("theme", theme)
+            .putString("home_tile_order", tileOrder);
+        for (String id : HOME_TILE_IDS) {
+            restored.remove("tile_label_" + id).remove("tile_tint_" + id);
+            if (labels.containsKey(id))
+                restored.putString("tile_label_" + id, labels.get(id));
+            if (tints.containsKey(id))
+                restored.putString("tile_tint_" + id, tints.get(id));
+        }
+        if (!restored.commit())
             throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
     }
 
