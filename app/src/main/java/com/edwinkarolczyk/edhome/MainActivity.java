@@ -21,6 +21,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
 import android.view.View;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
+import android.view.DragEvent;
+import android.widget.PopupMenu;
+import android.graphics.drawable.RippleDrawable;
 import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -94,6 +99,8 @@ public final class MainActivity extends Activity {
     private static final int MAX_TASK_MINUTES = 480;
     private static final String[] PLACE_TYPES = {"Dom", "Ogród", "Garaż", "Warsztat", "Pomieszczenie", "Inne"};
     private int bg, surface, ink, subdued, accent;
+    private UiSkin skin;
+    private boolean homeEditMode;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -145,42 +152,22 @@ public final class MainActivity extends Activity {
     }
 
     private void palette() {
-        String theme = prefs.getString("theme", "Grafitowy");
-        if ("Trener 2".equals(theme)) {
-            bg = Color.rgb(9, 9, 9);
-            surface = Color.rgb(20, 20, 20);
-            ink = Color.rgb(244, 244, 244);
-            subdued = Color.rgb(168, 168, 168);
-            accent = Color.rgb(239, 43, 45);
-        } else if ("Leśny".equals(theme)) {
-            bg = Color.rgb(17, 34, 27);
-            surface = Color.rgb(31, 56, 44);
-            ink = Color.rgb(237, 247, 234);
-            subdued = Color.rgb(177, 204, 183);
-            accent = Color.rgb(122, 197, 152);
-        } else if ("Jasny".equals(theme)) {
-            bg = Color.rgb(241, 245, 246);
-            surface = Color.WHITE;
-            ink = Color.rgb(30, 44, 55);
-            subdued = Color.rgb(94, 115, 126);
-            accent = Color.rgb(35, 115, 105);
-        } else {
-            bg = Color.rgb(17, 26, 37);
-            surface = Color.rgb(34, 50, 67);
-            ink = Color.rgb(242, 247, 251);
-            subdued = Color.rgb(173, 196, 210);
-            accent = Color.rgb(127, 205, 181);
-        }
+        skin = UiSkin.forName(prefs.getString("theme", UiSkin.NEON));
+        bg = skin.background;
+        surface = skin.surface;
+        ink = skin.foreground;
+        subdued = skin.secondary;
+        accent = skin.accent;
     }
 
     private GradientDrawable rounded(int color) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(dp(18));
-        if ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-                && color == surface)
-            drawable.setStroke(dp(1), Color.rgb(48, 48, 48));
-        return drawable;
+        return skin.panel(this, color, 24);
+    }
+
+    private void touchFeedback(View view) {
+        view.setForeground(new RippleDrawable(
+            ColorStateList.valueOf(skin.light ? 0x22000000 : 0x44FFFFFF),
+            null, skin.panel(this, Color.WHITE, 26)));
     }
 
     private TextView text(String value, int size, boolean bold) {
@@ -189,7 +176,7 @@ public final class MainActivity extends Activity {
         view.setTextSize(size);
         view.setTextColor(ink);
         view.setPadding(0, dp(5), 0, dp(6));
-        if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        if (bold) view.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
         return view;
     }
 
@@ -204,8 +191,9 @@ public final class MainActivity extends Activity {
     private LinearLayout card() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(16), dp(14), dp(16), dp(14));
-        box.setBackground(rounded(surface));
+        box.setPadding(dp(18), dp(17), dp(18), dp(17));
+        box.setBackground(skin.panel(this, surface, 28));
+        box.setElevation(dp(3));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.setMargins(0, dp(7), 0, dp(7));
         body.addView(box, params);
@@ -217,9 +205,10 @@ public final class MainActivity extends Activity {
         b.setText(value);
         b.setTextSize(16);
         b.setAllCaps(false);
-        b.setTextColor("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-            ? Color.WHITE : bg);
-        b.setBackground(rounded(accent));
+        b.setTextColor(skin.accentInk);
+        b.setBackground(skin.pill(this, accent));
+        b.setElevation(dp(2));
+        touchFeedback(b);
         b.setMinHeight(dp(56));
         b.setOnClickListener(v -> callback.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
@@ -275,10 +264,10 @@ public final class MainActivity extends Activity {
         if (root == null || prefs == null) return;
         palette();
         root.removeAllViews();
-        root.setBackgroundColor(bg);
+        root.setBackground(rounded(bg));
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
-        int systemBarFlags = "Jasny".equals(prefs.getString("theme", "Grafitowy"))
+        int systemBarFlags = skin.light
             ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                 | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
         getWindow().getDecorView().setSystemUiVisibility(systemBarFlags);
@@ -288,7 +277,7 @@ public final class MainActivity extends Activity {
         scroll.setClipToPadding(false);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(18), dp(14), dp(18), dp(48));
+        body.setPadding(dp(16), dp(14), dp(16), dp(48));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
 
