@@ -15,6 +15,7 @@ final class PlaceRules {
             return "Rodzaj miejsca może mieć maks. 80 znaków.";
         if (icon == null || !java.util.Arrays.asList(
                 "places", "pantry", "audit", "today", "tasks",
+                "calendar", "updates", "backup", "settings",
                 "washer", "dryer", "dishwasher", "shelf", "cabinet",
                 "drawer", "room", "garden", "garage", "workshop", "box"
             ).contains(icon))
