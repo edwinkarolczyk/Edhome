@@ -116,7 +116,8 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
         execute(db, step10)
     if 4 <= old < 11:
         execute(db, step11 + sibling_index)
-    execute(db, step12 + timers[0:0])
+    assert "addDeviceTimers(database);" in upgrade.split("if (oldVersion < 12)", 1)[1]
+    execute(db, timers)
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
