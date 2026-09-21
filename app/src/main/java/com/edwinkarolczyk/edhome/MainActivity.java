@@ -129,6 +129,7 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
+        else if (unlocked && "shopping".equals(screen)) go("pantry");
         else if (unlocked && "member_schedule".equals(screen)) go("members");
         else if (unlocked && ("task_history".equals(screen)
                 || "members".equals(screen))) go("tasks");
@@ -297,6 +298,7 @@ public final class MainActivity extends Activity {
                 case "member_schedule": memberSchedule(); break;
                 case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
+                case "shopping": shopping(); break;
                 case "places": places(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
@@ -444,6 +446,7 @@ public final class MainActivity extends Activity {
         }
         if (displayed == 0)
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
+        smallButton(today, "Lista zakupów →", () -> go("shopping"));
         smallButton(today, "Zobacz wszystkie czynności →", () -> {
             tasksFilter = "all";
             go("tasks");
@@ -1377,8 +1380,81 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void shopping() {
+        header("Lista zakupów • offline");
+        note("W tej wersji lista jest lokalna na tym urządzeniu. "
+            + "Zaznaczenie zakupu nie zmienia automatycznie stanu spiżarni. "
+            + "Ilość możesz zostawić pustą, co nie oznacza zera.");
+        button("← Spiżarnia", () -> go("pantry"));
+        EditText item = field("Co kupić?", false);
+        EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
+        quantity.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            | android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+        Spinner unit = new Spinner(this);
+        unit.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(ShoppingRules.UNITS)));
+        body.addView(unit);
+        button("+ Dodaj do listy", () -> {
+            try {
+                String name = ShoppingRules.validatedName(
+                    item.getText().toString());
+                Long amount = ShoppingRules.parseQuantity(
+                    quantity.getText().toString());
+                if (!db.addShoppingItem(name, amount,
+                        ShoppingRules.UNITS[unit.getSelectedItemPosition()])) {
+                    item.setError("Produkt jest już na liście.");
+                    return;
+                }
+                DiagnosticLog.event("SHOPPING_ITEM_ADDED");
+                render();
+            } catch (IllegalArgumentException problem) {
+                alert(problem.getMessage());
+            }
+        });
+        int count = 0;
+        try (Cursor cursor = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty_milli,unit,checked FROM shopping_items "
+                + "ORDER BY checked ASC,name COLLATE NOCASE", null)) {
+            while (cursor.moveToNext()) {
+                count++;
+                final long shoppingId = cursor.getLong(0);
+                final String name = cursor.getString(1);
+                final Long amount = cursor.isNull(2)
+                    ? null : cursor.getLong(2);
+                final boolean done = cursor.getInt(4) == 1;
+                LinearLayout box = card();
+                CheckBox check = new CheckBox(this);
+                check.setText(name + " • " + ShoppingRules.formatQuantity(amount)
+                    + (amount == null ? "" : " " + cursor.getString(3)));
+                check.setTextColor(done ? subdued : ink);
+                check.setTextSize(17);
+                check.setButtonTintList(ColorStateList.valueOf(accent));
+                check.setChecked(done);
+                box.addView(check);
+                check.setOnCheckedChangeListener((view, isChecked) -> {
+                    db.setShoppingChecked(shoppingId, isChecked);
+                    DiagnosticLog.event("SHOPPING_ITEM_CHECKED");
+                    render();
+                });
+                smallButton(box, "Usuń z listy", () ->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć z listy zakupów?")
+                        .setMessage(name)
+                        .setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Usuń", (dialog, which) -> {
+                            db.deleteShoppingItem(shoppingId);
+                            DiagnosticLog.event("SHOPPING_ITEM_DELETED");
+                            render();
+                        }).show());
+            }
+        }
+        if (count == 0) note("Lista jest pusta. Dodaj pierwszy produkt.");
+    }
+
     private void pantry() {
         header("Spiżarnia • lokalne zapasy");
+        button("☷ Lista zakupów", () -> go("shopping"));
         button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
         button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
         button(pantrySearch.isEmpty() ? "⌕ Szukaj produktu" :
@@ -2019,7 +2095,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 7);
+            super(context, "edhome-beta-preview.db", null, 8);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -2036,11 +2112,12 @@ public final class MainActivity extends Activity {
             addPlaces(database);
             addMembers(database);
             addMemberSchedules(database);
+            addShopping(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 7) {
+            if (oldVersion < 1 || newVersion > 8) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -2074,6 +2151,10 @@ public final class MainActivity extends Activity {
                 addMemberSchedules(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_6_TO_7");
             }
+            if (oldVersion < 8) {
+                addShopping(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_7_TO_8");
+            }
         }
 
         private static void addPlaces(SQLiteDatabase database) {
@@ -2089,6 +2170,14 @@ public final class MainActivity extends Activity {
             database.execSQL("CREATE INDEX task_history_task_idx ON task_history(task_id,id)");
         }
 
+
+        private static void addShopping(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE shopping_items ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "name TEXT NOT NULL COLLATE NOCASE UNIQUE, "
+                + "qty_milli INTEGER, unit TEXT NOT NULL DEFAULT 'szt.', "
+                + "checked INTEGER NOT NULL DEFAULT 0)");
+        }
 
         private static void addMemberSchedules(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE member_weekly_shifts ("
@@ -2542,6 +2631,32 @@ public final class MainActivity extends Activity {
             } finally {
                 database.endTransaction();
             }
+        }
+
+        boolean addShoppingItem(String name, Long amount, String unit) {
+            String clean = ShoppingRules.validatedName(name);
+            if (!ShoppingRules.knownUnit(unit)
+                    || amount != null && (amount < 1 || amount > ShoppingRules.MAX_MILLI))
+                throw new IllegalArgumentException("Nieprawidłowa ilość lub jednostka.");
+            ContentValues values = new ContentValues();
+            values.put("name", clean);
+            if (amount == null) values.putNull("qty_milli");
+            else values.put("qty_milli", amount);
+            values.put("unit", unit);
+            return getWritableDatabase().insertWithOnConflict(
+                "shopping_items", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+        }
+
+        void setShoppingChecked(long id, boolean checked) {
+            ContentValues values = new ContentValues();
+            values.put("checked", checked ? 1 : 0);
+            getWritableDatabase().update("shopping_items", values, "id=?",
+                new String[]{Long.toString(id)});
+        }
+
+        void deleteShoppingItem(long id) {
+            getWritableDatabase().delete("shopping_items", "id=?",
+                new String[]{Long.toString(id)});
         }
 
         void addStock(String name) {
