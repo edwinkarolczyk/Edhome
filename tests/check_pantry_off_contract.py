@@ -36,8 +36,8 @@ for token in (
     '"images.openbeautyfacts.org"',
     '"images.openpetfoodfacts.org"',
     "setInstanceFollowRedirects(false)",
-    "setConnectTimeout(5000)",
-    "setReadTimeout(6000)",
+    "setConnectTimeout(4000)",
+    "setReadTimeout(5000)",
     "MAX_JSON_BYTES = 96 * 1024",
     "MAX_IMAGE_BYTES = 640 * 1024",
     "getFilesDir()",
@@ -53,10 +53,14 @@ for token in ('{"pantry_product_details", "id", "pantry_id", "brand", "image_url
               "Nieprawidłowe dane zdjęcia w kopii.",
               "DB_VERSION = 17;"):
     assert token in backup, "Missing backup contract: " + token
-assert "versionCode 37" in gradle and "versionNameSuffix '-beta.7'" in gradle
+assert "versionCode 38" in gradle and "versionNameSuffix '-beta.8'" in gradle
 assert "if (found == null) {\n            name = new EditText(this);" in main
 assert "String entered = found != null ? found.name" in main
 assert "Źródło: \" + found.source" in main
-assert "lookupOne(barcode, catalogue[0], catalogue[1])" in api
-assert "if (!image && responseCode == 404) return null;" in api
-print("Multi-catalogue Open Facts, automatic name, offline fallback, v15: PASS")
+assert "lookupOne(candidate, catalogue[0], label)" in api
+assert "if (!image && (code == 404 || code == 410)) return null;" in api
+assert "PantryLookupCodes.candidates(barcode)" in api
+assert "lookupDetailed(barcode," in main
+assert "Sprawdzone katalogi:" in main
+assert "Przekierowanie poza zaufane serwery Open Facts." in api
+print("Multi-catalogue Open Facts, UPC aliases, redirects, diagnostic report: PASS")

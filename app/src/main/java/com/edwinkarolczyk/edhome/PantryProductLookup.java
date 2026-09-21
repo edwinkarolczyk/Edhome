@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.security.MessageDigest;
 
 /** Opt-in online enrichment. The pantry database and scanner work without network. */
@@ -68,84 +70,183 @@ final class PantryProductLookup {
         return s.length() > max ? s.substring(0, max) : s;
     }
 
+    private static boolean allowedHttps(URL u, boolean image) {
+        if (!"https".equalsIgnoreCase(u.getProtocol())
+                || (u.getPort() != -1 && u.getPort() != 443)
+                || u.getUserInfo() != null) return false;
+        if (image) return safeImageUrl(u.toString());
+        for (String[] entry : CATALOGUES)
+            if (entry[0].equalsIgnoreCase(u.getHost())) return true;
+        return false;
+    }
+
+    /** Follow only verified HTTPS redirects to an allowed Open Facts server. */
     private static byte[] get(URL url, int maximum, boolean image) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) url.openConnection();
-        c.setConnectTimeout(5000);
-        c.setReadTimeout(6000);
-        c.setRequestProperty("User-Agent", USER_AGENT);
-        c.setRequestProperty("Accept", image ? "image/jpeg,image/png,image/webp"
-            : "application/json");
-        c.setInstanceFollowRedirects(false);
-        try {
-            int responseCode = c.getResponseCode();
-            if (!image && responseCode == 404) return null;
-            if (responseCode != 200)
-                throw new java.io.IOException("HTTP " + responseCode);
-            if (image) {
-                String contentType = c.getContentType();
-                if (contentType == null || !(contentType.startsWith("image/jpeg")
-                        || contentType.startsWith("image/png")
-                        || contentType.startsWith("image/webp")))
-                    throw new java.io.IOException("Nieobsługiwany format zdjęcia.");
-            }
-            if (c.getContentLengthLong() > maximum)
-                throw new java.io.IOException("Odpowiedź przekracza limit.");
-            try (InputStream input = c.getInputStream();
-                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-                byte[] buffer = new byte[8192];
-                int n;
-                while ((n = input.read(buffer)) != -1) {
-                    if (output.size() + n > maximum)
-                        throw new java.io.IOException("Odpowiedź przekracza limit.");
-                    output.write(buffer, 0, n);
-                }
-                return output.toByteArray();
-            }
-        } finally { c.disconnect(); }
-    }
-
-    /** Search food, household/cleaning goods, beauty and pet food in order.
-     * A missing record must NOT prevent searching the next catalogue.
-     * Transmit only the product barcode after an explicit user action.
-     */
-    static Product lookup(String barcode) throws Exception {
-        if (!PantryScanRules.validBarcode(barcode))
-            throw new IllegalArgumentException("Nieprawidłowy kod.");
-        Exception lastFailure = null;
-        int inaccessibleCatalogues = 0;
-        for (String[] catalogue : CATALOGUES) {
+        URL current = url;
+        for (int hop = 0; hop <= 3; hop++) {
+            if (!allowedHttps(current, image))
+                throw new java.io.IOException("Przekierowanie poza zaufane serwery Open Facts.");
+            HttpURLConnection c = (HttpURLConnection) current.openConnection();
+            c.setConnectTimeout(4000);
+            c.setReadTimeout(5000);
+            c.setRequestProperty("User-Agent", USER_AGENT);
+            c.setRequestProperty("Accept", image ? "image/jpeg,image/png,image/webp"
+                : "application/json");
+            c.setInstanceFollowRedirects(false);
             try {
-                Product found = lookupOne(barcode, catalogue[0], catalogue[1]);
-                if (found != null) return found;
-            } catch (Exception error) {
-                lastFailure = error;
-                inaccessibleCatalogues++;
-            }
+                int code = c.getResponseCode();
+                if (code == 301 || code == 302 || code == 303
+                        || code == 307 || code == 308) {
+                    String location = c.getHeaderField("Location");
+                    if (location == null || location.isEmpty())
+                        throw new java.io.IOException("Przekierowanie bez adresu.");
+                    current = new URL(current, location);
+                    continue;
+                }
+                if (!image && (code == 404 || code == 410)) return null;
+                if (code != 200) throw new java.io.IOException("HTTP " + code);
+                if (image) {
+                    String contentType = c.getContentType();
+                    if (contentType == null || !(contentType.startsWith("image/jpeg")
+                            || contentType.startsWith("image/png")
+                            || contentType.startsWith("image/webp")))
+                        throw new java.io.IOException("Nieobsługiwany format zdjęcia.");
+                }
+                if (c.getContentLengthLong() > maximum)
+                    throw new java.io.IOException("Odpowiedź przekracza limit.");
+                try (InputStream input = c.getInputStream();
+                     ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[8192];
+                    int n;
+                    while ((n = input.read(buffer)) != -1) {
+                        if (output.size() + n > maximum)
+                            throw new java.io.IOException("Odpowiedź przekracza limit.");
+                        output.write(buffer, 0, n);
+                    }
+                    return output.toByteArray();
+                }
+            } finally { c.disconnect(); }
         }
-        if (inaccessibleCatalogues > 0)
-            throw new java.io.IOException(
-                "Nie udało się przeszukać wszystkich baz.", lastFailure);
-        return null;
+        throw new java.io.IOException("Zbyt wiele przekierowań serwera.");
     }
 
-    private static Product lookupOne(String barcode, String host, String source)
+    interface Progress {
+        void catalogue(String label, String result);
+    }
+
+    static final class Report {
+        final Product product;
+        final String details;
+        final boolean partialFailure;
+        Report(Product product, String details, boolean partialFailure) {
+            this.product = product;
+            this.details = details;
+            this.partialFailure = partialFailure;
+        }
+    }
+
+    private static final class Attempt {
+        final Product product;
+        final boolean unnamed;
+        Attempt(Product product, boolean unnamed) {
+            this.product = product;
+            this.unnamed = unnamed;
+        }
+    }
+
+    /** Each project gets a separate, visible result; a failure never masks later sources. */
+    static Report lookupDetailed(String barcode, Progress progress) {
+        List<String> alternatives = PantryLookupCodes.candidates(barcode);
+        List<String> results = new ArrayList<>();
+        boolean partialFailure = false;
+        for (String[] catalogue : CATALOGUES) {
+            String label = catalogue[1];
+            if (progress != null) progress.catalogue(label, "sprawdzam…");
+            boolean unnamed = false;
+            boolean failed = false;
+            String lastError = "";
+            Product found = null;
+            int attempted = 0;
+            for (String candidate : alternatives) {
+                attempted++;
+                try {
+                    Attempt attempt = lookupOne(candidate, catalogue[0], label);
+                    if (attempt.product != null) {
+                        found = attempt.product;
+                        break;
+                    }
+                    unnamed |= attempt.unnamed;
+                } catch (Exception error) {
+                    failed = true;
+                    lastError = shortError(error);
+                    break; // Do not retry a failed server using more aliases.
+                }
+            }
+            String status;
+            if (found != null) status = "znaleziono";
+            else if (failed) {
+                status = "problem (" + lastError + ")";
+                partialFailure = true;
+            } else if (unnamed) status = "rekord bez nazwy";
+            else status = "brak rekordu";
+            String line = label + ": " + status + " • wariantów kodu: " + attempted;
+            results.add(line);
+            if (progress != null) progress.catalogue(label, status);
+            // Diagnostic event contains no product barcode or personal pantry data.
+            DiagnosticLog.event("PANTRY_CATALOGUE_" + catalogueKey(label) + "_"
+                + (found != null ? "FOUND" : failed ? "ERROR"
+                    : unnamed ? "UNNAMED" : "NOT_FOUND"));
+            if (found != null) return new Report(found,
+                joinResults(results), partialFailure);
+        }
+        return new Report(null, joinResults(results), partialFailure);
+    }
+
+    static Product lookup(String barcode) throws Exception {
+        Report report = lookupDetailed(barcode, null);
+        if (report.partialFailure && report.product == null)
+            throw new java.io.IOException(report.details);
+        return report.product;
+    }
+
+    private static String catalogueKey(String name) {
+        return name.toUpperCase(java.util.Locale.ROOT).replace(' ', '_');
+    }
+
+    private static String shortError(Exception error) {
+        String message = error.getMessage();
+        if (message == null || message.isEmpty()) return "brak połączenia";
+        message = message.replace('\n', ' ').replace('\r', ' ');
+        return message.length() > 65 ? message.substring(0, 65) : message;
+    }
+
+    private static String joinResults(List<String> lines) {
+        StringBuilder result = new StringBuilder();
+        for (String line : lines) {
+            if (result.length() != 0) result.append("\n");
+            result.append(line);
+        }
+        return result.toString();
+    }
+
+    private static Attempt lookupOne(String barcode, String host, String source)
             throws Exception {
         URL endpoint = new URL("https://" + host + "/api/v2/product/"
             + barcode + ".json?fields=code,product_name_pl,product_name,"
             + "product_name_en,generic_name_pl,generic_name,brands,"
             + "image_front_url,image_url");
         byte[] result = get(endpoint, MAX_JSON_BYTES, false);
-        if (result == null) return null;
+        if (result == null) return new Attempt(null, false);
         JSONObject root = new JSONObject(new String(result, StandardCharsets.UTF_8));
         if (root.optInt("status", 0) != 1 || root.optJSONObject("product") == null)
-            return null;
+            return new Attempt(null, false);
         JSONObject row = root.getJSONObject("product");
         String name = clip(row.optString("product_name_pl", ""), 160);
         if (name.isEmpty()) name = clip(row.optString("product_name", ""), 160);
         if (name.isEmpty()) name = clip(row.optString("product_name_en", ""), 160);
         if (name.isEmpty()) name = clip(row.optString("generic_name_pl", ""), 160);
         if (name.isEmpty()) name = clip(row.optString("generic_name", ""), 160);
-        if (name.isEmpty()) return null;
+        if (name.isEmpty()) return new Attempt(null, true);
         String brand = clip(row.optString("brands", ""), 100);
         String url = row.optString("image_front_url", "");
         if (!safeImageUrl(url)) url = row.optString("image_url", "");
@@ -153,9 +254,9 @@ final class PantryProductLookup {
         byte[] image = null;
         if (!url.isEmpty()) {
             try { image = get(new URL(url), MAX_IMAGE_BYTES, true); }
-            catch (Exception ignored) { /* Product name remains useful without a photo. */ }
+            catch (Exception ignored) { /* A photo must not hide a recognized name. */ }
         }
-        return new Product(name, source, brand, url, image);
+        return new Attempt(new Product(name, source, brand, url, image), false);
     }
 
     static byte[] fetchImage(String imageUrl) throws Exception {

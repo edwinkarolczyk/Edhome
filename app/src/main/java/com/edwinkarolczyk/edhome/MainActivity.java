@@ -2852,10 +2852,16 @@ public final class MainActivity extends Activity {
         });
         loading.show();
         new Thread(() -> {
-            PantryProductLookup.Product product = null;
+            PantryProductLookup.Report report = null;
             Exception failure = null;
             try {
-                product = PantryProductLookup.lookup(barcode);
+                report = PantryProductLookup.lookupDetailed(barcode,
+                    (catalogue, status) -> runOnUiThread(() -> {
+                        if (!cancelled.get() && loading.isShowing())
+                            loading.setMessage("Przeszukuję katalogi Open Facts…\n"
+                                + catalogue + ": " + status);
+                    }));
+                PantryProductLookup.Product product = report.product;
                 if (product != null && product.image != null
                         && !product.imageUrl.isEmpty()) {
                     try {
@@ -2867,33 +2873,38 @@ public final class MainActivity extends Activity {
             } catch (Exception error) {
                 failure = error;
             }
-            final PantryProductLookup.Product found = product;
+            final PantryProductLookup.Report checked = report;
             final Exception problem = failure;
             runOnUiThread(() -> {
                 loading.dismiss();
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
-                if (problem != null) {
-                    DiagnosticLog.error("PANTRY_OFF_LOOKUP", problem);
-                    new AlertDialog.Builder(this).setTitle("Nie udało się sprawdzić wszystkich baz")
-                        .setMessage("Co najmniej jedna baza była niedostępna. "
-                            + "Nie mogę potwierdzić, czy produkt w niej występuje. "
-                            + "Możesz spróbować później albo wpisać nazwę ręcznie. "
-                            + "Stan spiżarni nie został zmieniony.")
+                if (problem != null || checked == null
+                        || checked.partialFailure && checked.product == null) {
+                    if (problem != null)
+                        DiagnosticLog.error("PANTRY_OFF_LOOKUP", problem);
+                    String details = checked == null ? "Nie udało się rozpocząć wyszukiwania."
+                        : checked.details;
+                    new AlertDialog.Builder(this).setTitle("Nie wszystkie bazy odpowiedziały")
+                        .setMessage("Nie mogę potwierdzić, że kodu nie ma w bazach. "
+                            + "Stan spiżarni nie został zmieniony.\n\n"
+                            + details + "\n\nMożesz spróbować później albo wpisać nazwę ręcznie.")
                         .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
                         .setOnCancelListener(d -> finishPantryBatch()).show();
-                } else if (found == null) {
-                    new AlertDialog.Builder(this).setTitle("Nie znaleziono nazwy produktu")
-                        .setMessage("Żadna dostępna baza nie rozpoznała kodu " + barcode
-                            + ". Wpisz nazwę ręcznie. Stan nie został zmieniony.")
+                } else if (checked.product == null) {
+                    new AlertDialog.Builder(this).setTitle("Brak nazwy w sprawdzonych katalogach")
+                        .setMessage("Sprawdzono także inne zapisy UPC/EAN tego kodu.\n\n"
+                            + checked.details + "\n\nStan nie został zmieniony. "
+                            + "Możesz wpisać nazwę ręcznie.")
                         .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
                         .setOnCancelListener(d -> finishPantryBatch()).show();
                 } else {
                     DiagnosticLog.event("PANTRY_OPEN_FACTS_FOUND");
-                    showNewPantryProductDialog(barcode, operationId, found);
+                    showNewPantryProductDialog(barcode, operationId,
+                        checked.product, checked.details);
                 }
             });
         }, "edhome-off-lookup").start();
@@ -2902,6 +2913,11 @@ public final class MainActivity extends Activity {
     /** No stock change until this confirmation, even if Open Food Facts responded. */
     private void showNewPantryProductDialog(String barcode, String operationId,
             PantryProductLookup.Product found) {
+        showNewPantryProductDialog(barcode, operationId, found, "");
+    }
+
+    private void showNewPantryProductDialog(String barcode, String operationId,
+            PantryProductLookup.Product found, String sourceDetails) {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         int padding = (int) (16 * getResources().getDisplayMetrics().density);
@@ -2932,6 +2948,8 @@ public final class MainActivity extends Activity {
             ? "Kod: " + barcode + " • nazwa ręczna, offline"
             : "Źródło: " + found.source + " • " + barcode
                 + " • sprawdź zgodność z opakowaniem.", 13, false));
+        if (!sourceDetails.isEmpty())
+            form.addView(text("Sprawdzone katalogi:\n" + sourceDetails, 12, false));
         final EditText manualName = name;
         final Spinner categorySpinner = pantryCategorySpinner(
             found == null ? "other" : PantryCategories.fromSource(found.source));

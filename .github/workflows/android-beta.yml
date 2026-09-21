@@ -169,6 +169,16 @@ jobs:
           java -cp "$RUNNER_TEMP/pantry-batch" \
             com.edwinkarolczyk.edhome.PantryBatchSessionSmoke
           python3 tests/check_pantry_batch_contract.py
+      - name: Alternate UPC EAN GTIN lookup regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-lookup-codes"
+          javac -d "$RUNNER_TEMP/pantry-lookup-codes" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryScanRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryLookupCodes.java \
+            tests/task_rules/PantryLookupCodesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-lookup-codes" \
+            com.edwinkarolczyk.edhome.PantryLookupCodesSmoke
+          python3 tests/check_pantry_sources_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -227,14 +237,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.4.0-beta.7-signed-apk
+          name: EDHOME-0.4.0-beta.8-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.7 — seryjne skanowanie spiżarni, ponowienie aparatu po zapisie i ochrona przed podwójnym naliczeniem; SQLite v17."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.8 — poprawka katalogów Open Facts, kody UPC/EAN i raport wyszukiwania; SQLite v17."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

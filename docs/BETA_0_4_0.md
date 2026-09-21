@@ -49,3 +49,11 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Wciąż jeden skan to **jedno całe opakowanie**, bez samoczynnego odejmowania. UUID operacji i zapis ilości wraz z ruchem w transakcji SQLite pozostają bez zmian. Licznik serii rośnie wyłącznie przy COMMITTED, nie przy DUPLICATE_IGNORED.
 - Seria pozostaje w pamięci MainActivity, bez automatycznego wznowienia aparatu po restarcie procesu. Brak migracji bazy: SQLite v17, kopia zapasowa zgodna z 0.4.0-beta.6.
 - CI sprawdza stany i odporność na powtórny wynik callbacku, ale fizyczne działanie aparatu, uprawnień i reakcji telefonu należy zweryfikować po instalacji.
+
+## 0.4.0-beta.8 — katalogi i diagnostyka produktów
+
+- Wyszukiwanie kodów z EAN/UPC/GTIN uwzględnia powiązane formaty z zerami na początku, ale oryginalny kod zachowujemy w lokalnym magazynie; nie łączymy różnych towarów bez potwierdzenia.
+- Zapytania HTTPS honorują maksymalnie trzy przekierowania **wyłącznie** w dozwolonych domenach projektów Open Facts. Błąd sieciowy jednej bazy nie blokuje prób w następnych, a HTTP 404/410 jest wynikiem „brak rekordu”, nie błędem internetu.
+- Każdy realnie sprawdzony katalog Open Food Facts / Open Products Facts / Open Beauty Facts / Open Pet Food Facts raportuje „znaleziono / brak rekordu / rekord bez nazwy / problem HTTP”. Raport zawiera liczbę wariantów kodu. Diagnostyka zapisuje status źródła, ale nie kod kreskowy użytkownika.
+- Potwierdzanie zmiany stanu pozostaje wymagane; istniejące dane, historia, zdjęcia i baza SQLite v17 pozostają bez zmian. Po zgodzie użytkownika do baz przesyłany jest tylko kod produktu.
+- Dostępność i aktualność zewnętrznych baz nie są pod naszą kontrolą. Nie zakładamy, że każda baza zawiera wszystkie polskie produkty lub chemię domową.
