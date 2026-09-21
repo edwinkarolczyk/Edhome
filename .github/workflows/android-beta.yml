@@ -49,6 +49,14 @@ jobs:
             app/src/main/java/com/edwinkarolczyk/edhome/TaskRules.java \
             tests/task_rules/TaskRulesSmoke.java
           java -cp "$RUNNER_TEMP/task-check" com.edwinkarolczyk.edhome.TaskRulesSmoke
+      - name: Time suggestion regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/time-suggestions"
+          javac -d "$RUNNER_TEMP/time-suggestions" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java \
+            tests/task_rules/TimeSuggestionsSmoke.java
+          java -cp "$RUNNER_TEMP/time-suggestions" \
+            com.edwinkarolczyk.edhome.TimeSuggestionsSmoke
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Beta without PIN contract
@@ -93,14 +101,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.2.8-beta.1-signed-apk
+          name: EDHOME-0.2.9-beta.1-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.2.8 — tygodniowy grafik domowników, wyjątki dat, SQLite v7."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.2.9 — trzy opcjonalne propozycje terminu według grafiku, bez automatycznego zapisu."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
