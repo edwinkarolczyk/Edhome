@@ -8,7 +8,7 @@ skin = Path("app/src/main/java/com/edwinkarolczyk/edhome/UiSkin.java").read_text
 backup = Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 assert all('"' + name + '"' in skin for name in
-           ("Neonowy", "Naturalny", "Pastelowy", "Szklany"))
+           ("Neonowy", "Naturalny", "Pastelowy", "Szklany", "WMM", "Trener 2"))
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
@@ -24,13 +24,25 @@ assert "beginHomeDrag(tile, (String) id)" in main
 assert "MotionEvent.ACTION_MOVE" in main
 assert "ACTION_DRAG_LOCATION" in main
 assert "scrollHomeDuringDrag(" in main
+assert "previewHomeTilePlacement(homeDragSource, tileId)" in main
+assert "translationX(destination[0] - position[0])" in main
+assert "translationY(destination[1] - position[1])" in main
+assert "homeDragHint.setText(" in main
+assert "if (!source.equals(target))" in main
 assert 'putString("home_tile_order"' in main
 assert 'prefs.getString("tile_label_" + id' in main
 assert 'prefs.getString("tile_tint_" + id' in main
 assert '"homeTileAppearance"' in backup
-assert 'restored.remove("tile_label_" + id).remove("tile_tint_" + id)' in backup
+assert 'restored.remove("tile_label_" + id)' in backup
+assert '.remove("tile_tint_" + id).remove("tile_icon_" + id)' in backup
+assert 'prefs.getString("tile_icon_" + moduleId, moduleId)' in main
+assert 'settings.put("homeTileAppearance", appearance)' in backup
+assert 'tile.put("icon", prefs.getString("tile_icon_" + id, id))' in backup
+icons = Path("app/src/main/java/com/edwinkarolczyk/edhome/TileIcon.java").read_text(encoding="utf-8")
+assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher"))
+assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 24" in gradle
+assert "versionCode 25" in gradle
 assert "versionName '0.3.3'" in gradle
-print("4 themes, 9 tiles, long-press/edit/drag, visual backup, DB v10 and Beta PIN-free: PASS")
+print("6 themes, 9 tiles, live drop preview, icon library, visual backup and DB v10: PASS")
