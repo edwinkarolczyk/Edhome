@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 28,
-  "versionName": "0.3.5-beta.1",
-  "changelog": "EDHOME Beta 0.3.5-beta.1 — lokalne minutniki pralki, suszarki i zmywarki, potwierdzenie zakończenia, opcjonalne powiadomienia; SQLite v12.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.5-beta.1/edhome-beta.apk",
-  "sha256": "c9f3b8f1268c247686d0ae15b9fb3e080afd33d8c608b3102f493330f9fe3ba1"
+  "versionCode": 29,
+  "versionName": "0.3.6-beta.1",
+  "changelog": "EDHOME Beta 0.3.6-beta.1 — rotacyjne obowiązki domowników, historia wykonawcy i bezpieczne usuwanie osób; SQLite v13.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.6-beta.1/edhome-beta.apk",
+  "sha256": "72ec813e3032a17721295398fe62c3e6cf7e6c8a4bb6004b45310774cdc40c36"
 }
