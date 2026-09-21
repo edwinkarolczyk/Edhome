@@ -7,8 +7,7 @@ reminder = Path("app/src/main/java/com/edwinkarolczyk/edhome/ReminderReceiver.ja
 backup = Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
 checks = (
     "case \"waste\": waste(); break;",
-    'SELECT id,title,done,due_date,repeat_rule,repeat_every '
-    '\n                + "FROM tasks WHERE task_kind=\'waste\' "',
+    '"FROM tasks WHERE task_kind=\'waste\' "',
     'values.put("task_kind", "waste");',
     'values.put("waste_fraction", fraction);',
     'if (existing.moveToFirst()) return false;',
