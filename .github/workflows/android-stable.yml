@@ -40,7 +40,12 @@ jobs:
         run: |
           python3 tests/check_db_contract.py
           python3 tests/check_place_contract.py
-          python3 tests/check_ui_refresh_contract.py
+          # This Stable is 0.3.4; the shared Beta-only UI guard requires 0.3.5.
+          grep -Fq "versionCode 27" app/build.gradle
+          grep -Fq "versionName '0.3.4'" app/build.gradle
+          grep -Fq "manifestPlaceholders = [appLabel: 'EDHOME Stable']" app/build.gradle
+          grep -Fq "super(context, \"edhome-beta-preview.db\", null, 12)" app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java
+          grep -Fq "private static final int DB_VERSION = 12;" app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java
           mkdir -p "$RUNNER_TEMP/home-tile-order"
           javac -d "$RUNNER_TEMP/home-tile-order" \
             app/src/main/java/com/edwinkarolczyk/edhome/HomeTileOrder.java \
