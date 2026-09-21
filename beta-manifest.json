@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 30,
-  "versionName": "0.3.7-beta.1",
-  "changelog": "EDHOME Beta 0.3.7-beta.1 — ustawiane godziny ciszy oraz czytelniejszy tryb układania kafelków; SQLite v13.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.7-beta.1/edhome-beta.apk",
-  "sha256": "050c4ca6a57d539bdf49280be2098c1be9678cbb48e5c2c7828469dbdba8a36a"
+  "versionCode": 31,
+  "versionName": "0.4.0-beta.1",
+  "changelog": "EDHOME Beta 0.4.0-beta.1 — skaner kodów kreskowych, lokalna kartoteka i historia ruchów; SQLite v14.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.1/edhome-beta.apk",
+  "sha256": "2851999adff103e19414d2b1747f08681bac12f2856edafef08089d03614eca0"
 }
