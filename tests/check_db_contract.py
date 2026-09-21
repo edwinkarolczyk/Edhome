@@ -26,7 +26,7 @@ members = statements(section(main, "private static void addMembers", "private st
 shifts = statements(section(main, "private static void addMemberSchedules", "private static void addMembers"))
 shopping = statements(section(main, "private static void addShopping", "private static void addMemberSchedules"))
 history = statements(section(main, "private static void addTaskHistory",
-                             "private static void addMemberSchedules"))
+                             "private static void addShopping"))
 places = statements(section(main, "private static void addPlaces",
                             "private static void addTaskHistory"))
 upgrade = section(main, "@Override public void onUpgrade", "private static void addPlaces")
