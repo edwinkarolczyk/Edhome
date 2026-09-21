@@ -106,3 +106,24 @@ Szczegóły wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#21-edhome-
 - Kryteria: brak tokenów w APK/logach/commicie, poprawna obsługa odwołania dostępu, różnych instancji SUPLA i niekompletnej telemetrii.
 
 Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-api-oauth2-i-broker-mqtt-doprecyzowanie-na-podstawie-zrzutów-21092026). Ta sekcja to roadmapa, nie potwierdzenie wykonania.
+
+
+## Aktualizacja roadmapy po 30 odpowiedziach Edwina — 21.09.2026
+
+**Źródło decyzji:** [DECYZJE_2026-09-21_FORMULARZ_30.md](DECYZJE_2026-09-21_FORMULARZ_30.md). Ten plan ustala **kolejność i kryteria**, nie deklaruje ukończenia. Starsze etapy roadmapy mogą przedstawiać historyczny zakres i nie zastępują późniejszych decyzji użytkownika.
+
+| Kolejność | Obszar / rezultat | Kryterium odbioru |
+|---|---|---|
+| 1 | Domknąć bieżącą betę 0.3.4 (SQLite v11, aktualizacje i testy użytkowe) | CI zielone; migracje danych i test telefonu/tabletu; odróżnić wydaną wersję od nieopublikowanego kodu. |
+| 2 | UI, panel i Miejsca | Sześć motywów; dowolne/dodawane/ukrywane kafelki, rozmiary, przeciąganie całego kafelka; tryb tabletu w **tym samym APK** z realnym ograniczeniem uprawnień; nazwy i rodzaje miejsc tworzone przez użytkownika; pudełko w pudełku bez cykli. |
+| 3 | Czynności ↔ Kalendarz ↔ Miejsca | Dwa formularze czynności, trzy rodzaje daty sezonowej, reguła terminu per czynność, wspólne ID i jeden stan widoczny w wielu ekranach; planer łączy grafik, dostępność, czas i obciążenie. |
+| 4 | Spiżarnia ↔ Zakupy ↔ Skaner | Dwa tryby skanowania. Dodawanie seryjne + zgodna licencyjnie baza produktów; wyciąganie domyślnie -1 po ustawianym odliczaniu, powtórny odczyt ignorowany, zmiana liczby restartuje czas; „Do dodania do [miejsce]” z lokalizacją per pozycja zakupów; historia i testy podwójnego skanu. |
+| 5 | Remanent i zabezpieczenie danych | Konflikt ponownej weryfikacji zmienionych pozycji bez utraty reszty; kopie JSON, lokalne i NAS; testy migracji i odtwarzania. |
+| 6 | **PayCheck — pierwszy duży nowy moduł** | Prywatne profile + wspólny budżet pokazujący wkłady, transakcja zatwierdzana przez użytkownika, powiązania z rzeczywistymi obiektami/kalendarzem bez podwójnego księgowania. |
+| 7 | Współpraca telefon–tablet i synchronizacja | Zgodność danych i uprawnień; ustalić dokładne operacje wymagające połączenia (wskazane: transfer rzeczy między urządzeniami, sterowanie SUPLA/energią, rozliczenia wspólnego budżetu). |
+| 8 | SUPLA → Energia | Najpierw rzeczywiste urządzenia i stany; potem pomiary i priorytety; sterowanie/automatyka dopiero po audycie; model profili PV **otwarty (pytanie 28)**. |
+| 9 | Pojazdy, ogród i dalsze moduły | Korzystają z istniejących obiektów/czynności/kalendarza/magazynu/finansów, bez osobnych kopii faktów. |
+
+**Prace przekrojowe przy KAŻDYM etapie:** wspólne ID i relacje, jeden właściciel danych, migracja/backup, prywatność, log Beta, CI i regresja. Bez zamrażania rozwoju na samą architekturę.
+
+**Nierozstrzygnięte:** pyt. 13 (dziedziczenie czynności miejsca), 28 (model PV); szczegóły trybu tabletu, czas domyślny odliczania, zachowanie innego kodu w trakcie licznika i semantyka wymaganych połączeń. Nie wybierać ich za użytkownika.
