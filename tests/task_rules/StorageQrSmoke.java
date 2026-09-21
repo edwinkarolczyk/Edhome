@@ -19,7 +19,7 @@ public final class StorageQrSmoke {
         check(StorageQr.decode("EDHOME:STORAGE:1:thing:01")==null,"leading zeros");
         check(StorageQr.decode("EDHOME:STORAGE:1:thing:42:garbage")==null,
             "excess fields");
-        check(StorageQr.decode("EDHOME:STORAGE:1:thing:999999999999999999")==null,
+        check(StorageQr.decode("EDHOME:STORAGE:1:thing:9999999999999999999")==null,
             "overflow");
         try{StorageQr.encode("box",0);throw new AssertionError("invalid id");}
         catch(IllegalArgumentException expected){passed++;}
