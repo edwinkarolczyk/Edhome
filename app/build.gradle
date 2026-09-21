@@ -14,8 +14,8 @@ android {
         applicationId 'com.edwinkarolczyk.edhome'
         minSdk 26
         targetSdk 35
-        versionCode 23
-        versionName '0.3.2'
+        versionCode 24
+        versionName '0.3.3'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
     }
