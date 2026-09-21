@@ -7,6 +7,7 @@ from pathlib import Path
 
 main = Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 backup = Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
+pantry_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -57,7 +58,8 @@ step9 = statements(section(upgrade, "if (oldVersion < 9)", "if (oldVersion < 10)
 step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 11 && oldVersion >= 4)"))
 step11 = statements(section(upgrade, "if (oldVersion < 11 && oldVersion >= 4)", "if (oldVersion < 12)"))
 step12 = statements(section(upgrade, "if (oldVersion < 12)", "if (oldVersion < 13)"))
-step13 = statements(upgrade.split("if (oldVersion < 13)", 1)[1])
+step13 = statements(section(upgrade, "if (oldVersion < 13)", "if (oldVersion < 14)"))
+pantry14 = statements(section(pantry_store, "static void createTables(SQLiteDatabase db)", "static Item find(").replace("db.execSQL(", "database.execSQL("))
 
 def execute(database, sql):
     for statement in sql:
@@ -73,12 +75,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 13, "Database version and backup format differ"
+assert version == backup_version == 14, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14)
 expected = schema(fresh)
-assert len(expected) == 13, "Unexpected number of tables"
+assert len(expected) == 15 and len(pantry14) == 4, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -134,6 +136,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         for statement in step13:
             if statement.startswith("ALTER TABLE task_history"):
                 db.execute(statement)
+    execute(db, pantry14)  # v13 to v14, also after older migrations
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -216,7 +219,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
@@ -240,4 +243,4 @@ assert '"task_rotation_members", "task_id", "member_id", "position"' in backup
 assert '"assignee_id", "assignee_name_snapshot"' in backup
 assert '"task_rotation_members".equals(definition[0])' in backup
 assert 'task_id ASC, position ASC' in backup
-print("SQLite migrations v1–v12→v13: PASS; rotations, timers, places and backup: PASS")
+print("SQLite migrations v1–v12→v14: PASS; barcodes, rotations, timers, places and backup: PASS")

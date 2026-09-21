@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 13;
+    private static final int DB_VERSION = 14;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -49,7 +49,10 @@ final class DataBackup {
         {"audit_corrections", "id", "session_id", "pantry_id", "old_qty",
             "new_qty", "changed_at"},
         {"task_history", "id", "task_id", "title_snapshot", "completed_at",
-            "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"}
+            "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"},
+        {"pantry_barcodes", "id", "pantry_id", "barcode"},
+        {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
+            "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"}
     };
 
     private DataBackup() { }
@@ -137,7 +140,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -216,6 +219,8 @@ final class DataBackup {
                 || (inputVersion < 8 && "shopping_items".equals(definition[0]))
                 || (inputVersion < 12 && "device_timers".equals(definition[0]))
                 || (inputVersion < 13 && "task_rotation_members".equals(definition[0]))
+                || (inputVersion < 14 && ("pantry_barcodes".equals(definition[0])
+                    || "pantry_movements".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -387,6 +392,24 @@ final class DataBackup {
                         || values.getAsString("name").length() > 160)
                         throw new IllegalArgumentException("Nieprawidłowy produkt w kopii.");
                 }
+                if ("pantry_barcodes".equals(definition[0])
+                        && !PantryScanRules.validBarcode(values.getAsString("barcode")))
+                    throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                if ("pantry_movements".equals(definition[0])) {
+                    Long before = values.getAsLong("before_qty");
+                    Long after = values.getAsLong("after_qty");
+                    Long amount = values.getAsLong("qty");
+                    String kind = values.getAsString("kind");
+                    String operation = values.getAsString("operation_id");
+                    if (!PantryScanRules.validBarcode(values.getAsString("barcode"))
+                            || operation == null || operation.isEmpty()
+                            || amount == null || amount != 1 || before == null
+                            || after == null || before > 100000000L
+                            || after > 100000000L
+                            || !("ADD".equals(kind) ? after == before + 1
+                                : "TAKE".equals(kind) && after + 1 == before))
+                        throw new IllegalArgumentException("Nieprawidłowy ruch w kopii.");
+                }
                 if ("audit_sessions".equals(definition[0])) {
                     String status = values.getAsString("status");
                     if (!("open".equals(status) || "completed".equals(status)
@@ -451,6 +474,19 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Set<Long> pantryIds = new HashSet<>();
+        for (ContentValues p : parsed.get("pantry"))
+            pantryIds.add(p.getAsLong("id"));
+        Set<String> codes = new HashSet<>();
+        for (ContentValues b : parsed.get("pantry_barcodes")) {
+            if (!pantryIds.contains(b.getAsLong("pantry_id"))
+                    || !codes.add(b.getAsString("barcode")))
+                throw new IllegalArgumentException("Nieprawidłowe powiązanie kodu.");
+        }
+        Set<String> movements = new HashSet<>();
+        for (ContentValues m : parsed.get("pantry_movements"))
+            if (!movements.add(m.getAsString("operation_id")))
+                throw new IllegalArgumentException("Powielona operacja skanu.");
         Set<String> shoppingNames = new HashSet<>();
         for (ContentValues item : parsed.get("shopping_items")) {
             if (!shoppingNames.add(item.getAsString("name").toLowerCase(
@@ -616,6 +652,7 @@ final class DataBackup {
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
-            || "changed_at".equals(column);
+            || "changed_at".equals(column) || "before_qty".equals(column)
+            || "after_qty".equals(column) || "happened_at".equals(column);
     }
 }

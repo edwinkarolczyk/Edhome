@@ -1,6 +1,8 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Activity;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.ClipData;
@@ -78,6 +80,7 @@ public final class MainActivity extends Activity {
     private String tasksFilter = "all";
     private long selectedMemberId;
     private String pantrySearch = "";
+    private static final String SCAN_MODE_PREF = "pantry_scan_mode";
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -2557,6 +2560,10 @@ public final class MainActivity extends Activity {
         header("Spiżarnia • lokalne zapasy");
         button("☷ Lista zakupów", () -> go("shopping"));
         button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
+        button("📷 Skanuj i dodaj +1", () -> openPantryCamera(false));
+        button("📷 Skanuj i wyciągnij −1", () -> openPantryCamera(true));
+        button("⌨ Wpisz kod ręcznie", this::manualPantryBarcode);
+        button("Historia skanów", this::showPantryScanHistory);
         button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
         button(pantrySearch.isEmpty() ? "⌕ Szukaj produktu" :
             "⌕ Szukaj: " + pantrySearch, () -> {
@@ -2646,7 +2653,100 @@ public final class MainActivity extends Activity {
         if (matched == 0) note(pantrySearch.isEmpty()
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
             : "Nie znaleziono produktów. Wyczyść wyszukiwanie.");
-        note("Ta wersja zapisuje ilości w sztukach. Jednostki kg/l i skaner będą kolejnym etapem.");
+        note("Etap 0.4: skan kodu offline i potwierdzanie ±1 szt. Zdjęcia, kg/l "
+            + "oraz automatyczny licznik odjęcia są kolejnymi krokami.");
+    }
+
+
+    /** Start an offline barcode scan; never mutate stock in the camera callback. */
+    private void openPantryCamera(boolean take) {
+        prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
+        IntentIntegrator scanner = new IntentIntegrator(this);
+        scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
+        scanner.setPrompt(take ? "EDHOME: wyciągnij ze spiżarni" : "EDHOME: dodaj do spiżarni");
+        scanner.setBeepEnabled(false);
+        scanner.setOrientationLocked(false);
+        scanner.initiateScan();
+    }
+
+    private void manualPantryBarcode() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
+        new AlertDialog.Builder(this).setTitle("Wpisz kod kreskowy")
+            .setView(input).setNegativeButton("Anuluj", null)
+            .setNeutralButton("Wyciągnij −1", (d, w) -> onPantryBarcode(
+                input.getText().toString().trim(), "TAKE"))
+            .setPositiveButton("Dodaj +1", (d, w) -> onPantryBarcode(
+                input.getText().toString().trim(), "ADD")).show();
+    }
+
+    private void onPantryBarcode(String barcode, String mode) {
+        if (!PantryScanRules.validBarcode(barcode)) {
+            alert("Niepoprawny kod EAN/UPC/GTIN — sprawdź cyfrę kontrolną.");
+            DiagnosticLog.event("PANTRY_BARCODE_INVALID");
+            return;
+        }
+        PantryBarcodeStore.Item item = PantryBarcodeStore.find(
+            db.getReadableDatabase(), barcode);
+        String operationId = java.util.UUID.randomUUID().toString();
+        if (item == null && "TAKE".equals(mode)) {
+            alert("Nieznany kod. Najpierw dodaj produkt do spiżarni.");
+            return;
+        }
+        if (item == null) {
+            EditText name = new EditText(this);
+            name.setSingleLine(true);
+            name.setHint("Nazwa produktu / opakowania");
+            new AlertDialog.Builder(this).setTitle("Nowy kod: " + barcode)
+                .setMessage("Nie ma go w lokalnej kartotece. Wpisz nazwę "
+                    + "istniejącego produktu lub podaj nową. Zapis zwiększy stan o 1.")
+                .setView(name).setNegativeButton("Anuluj", null)
+                .setPositiveButton("Dodaj +1", (d,w) -> commitPantryBarcode(
+                    barcode, name.getText().toString(), "ADD", operationId)).show();
+            return;
+        }
+        String question = "TAKE".equals(mode) ? "Wyciągnąć 1 szt.?" : "Dodać 1 szt.?";
+        new AlertDialog.Builder(this).setTitle(item.name)
+            .setMessage("Kod: " + barcode + "\nObecny stan: " + item.qty
+                + " szt.\n" + question)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("TAKE".equals(mode) ? "Wyciągnij −1" : "Dodaj +1",
+                (d,w) -> commitPantryBarcode(barcode, null, mode, operationId))
+            .show();
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId) {
+        try {
+            String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
+                barcode, name, mode, operationId);
+            DiagnosticLog.event("COMMITTED".equals(result) ?
+                "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
+            render();
+        } catch (Exception problem) {
+            DiagnosticLog.error("PANTRY_SCAN_COMMIT", problem);
+            alert(problem.getMessage() == null ? "Nie udało się zapisać skanu."
+                : problem.getMessage());
+        }
+    }
+
+    private void showPantryScanHistory() {
+        StringBuilder history = new StringBuilder();
+        try (Cursor cursor = db.getReadableDatabase().rawQuery(
+                "SELECT name_snapshot,kind,before_qty,after_qty "
+                + "FROM pantry_movements ORDER BY id DESC LIMIT 30", null)) {
+            while (cursor.moveToNext()) {
+                history.append("TAKE".equals(cursor.getString(1)) ? "−1 " : "+1 ")
+                    .append(cursor.getString(0)).append(" • ")
+                    .append(cursor.getInt(2)).append(" → ").append(cursor.getInt(3))
+                    .append(" szt.\n");
+            }
+        }
+        new AlertDialog.Builder(this).setTitle("Ostatnie skany")
+            .setMessage(history.length() == 0 ? "Brak skanów." : history.toString())
+            .setPositiveButton("Zamknij", null).show();
     }
 
     private void pantryProductDialog(Long id, String existingName) {
@@ -3316,6 +3416,12 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
+        if (scan != null) {
+            if (scan.getContents() != null) onPantryBarcode(scan.getContents(),
+                prefs.getString(SCAN_MODE_PREF, "ADD"));
+            return;
+        }
         if (request == IMPORT_BETA_APK) {
             if (result == RESULT_OK && data != null && data.getData() != null)
                 updater.importSelected(data.getData());
@@ -3412,7 +3518,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 13);
+            super(context, "edhome-beta-preview.db", null, 14);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -3434,11 +3540,12 @@ public final class MainActivity extends Activity {
             addShopping(database);
             addDeviceTimers(database);
             addTaskRotations(database);
+            PantryBarcodeStore.createTables(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 13) {
+            if (oldVersion < 1 || newVersion > 14) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3511,6 +3618,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE task_history ADD COLUMN "
                     + "assignee_name_snapshot TEXT");
                 DiagnosticLog.event("DATABASE_MIGRATED_12_TO_13_TASK_ROTATION");
+            }
+            if (oldVersion < 14) {
+                PantryBarcodeStore.createTables(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_13_TO_14_PANTRY_BARCODES");
             }
         }
 
@@ -4396,8 +4507,15 @@ public final class MainActivity extends Activity {
         void deleteStock(long id) {
             if (openAuditId() != 0)
                 throw new IllegalStateException("An audit is open");
-            getWritableDatabase().delete("pantry", "id=?",
-                new String[]{Long.toString(id)});
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                database.delete("pantry_barcodes", "pantry_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("pantry", "id=?",
+                    new String[]{Long.toString(id)});
+                database.setTransactionSuccessful();
+            } finally { database.endTransaction(); }
         }
 
     }
