@@ -366,7 +366,7 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 
 ## 25. Własny dysk sieciowy / NAS jako EDHOME Hub i lokalne API — analiza warunkowa 21.09.2026
 
-**Status: koncepcja, nie wdrożono ani nie potwierdzono modelu i możliwości urządzenia ze zdjęcia.** Użytkownik ma własny dysk/serwer domowy i chce rozważyć jego użycie do EDHOME. Nie utożsamiać samego udziału sieciowego SMB z serwerem aplikacji; specyfikacja zależy od modelu, CPU/RAM, systemu, możliwości Docker/Container Manager, pakietów/SSH i stabilności pracy 24/7. Bez danych technicznych nie obiecywać instalacji API bezpośrednio na tym urządzeniu.
+**Status: koncepcja, nie wdrożono. Model urządzenia potwierdzony przez Edwina: D-Link DNS-320L.** Jego aktualna wersja firmware, stan, dostępne protokoły i zasoby nie zostały zweryfikowane; nie traktować wskazania modelu jako potwierdzenia możliwości uruchomienia API. Nie utożsamiać samego udziału sieciowego SMB z serwerem aplikacji; specyfikacja zależy od modelu, CPU/RAM, systemu, możliwości Docker/Container Manager, pakietów/SSH i stabilności pracy 24/7. Bez danych technicznych nie obiecywać instalacji API bezpośrednio na tym urządzeniu.
 
 ### Docelowa topologia
 
@@ -381,4 +381,11 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 
 ### Weryfikacja przed decyzją wdrożeniową
 
-Potrzebne: producent i dokładny model ze spodu/etykiety lub panelu WWW, wersja firmware/systemu, CPU/architektura, RAM, obsługa kontenerów/aplikacji/SSH, typ udziału (NAS czy zwykły dysk USB przy routerze), dostępne miejsce/dyski i sieć LAN. **Nie umieszczać na publicznym GitHubie adresów IP, loginów, numerów seryjnych ani zdjęć z danymi dostępu.** Po ustaleniu sprzętu wybrać A albo B, dopiero później porty, bazę, API, kopie i test dwóch urządzeń. Obecnie brak potwierdzenia, że konkretny pokazany dysk obsłuży serwer API.
+**Model znamy: D-Link DNS-320L.** Przed podłączeniem: odczytać z panelu wersję firmware i stan dysków, zweryfikować dostępny protokół udziału (np. SMB) i kopie oraz stabilność LAN; nie wpisywać wartości CPU/RAM bez sprawdzenia wariantu sprzętowego. Jest to starsza platforma NAS; nie zakładać natywnej obsługi Dockera/nowoczesnego stosu serwerowego. Ewentualne nieoficjalne uruchamianie usług/SSH oznacza osobny eksperyment na kopiach testowych, nie wymaganie EDHOME i nie zalecany host produkcyjnego API. **Rekomendowany wariant B: EDHOME Hub na osobnym, aktualizowanym mini-PC/komputerze, DNS-320L jako magazyn backupów/eksportów/załączników, jeśli jego stan i bezpieczna konfiguracja pozwalają.** **Nie umieszczać na publicznym GitHubie adresów IP, loginów, numerów seryjnych ani zdjęć z danymi dostępu.** Po ustaleniu sprzętu wybrać A albo B, dopiero później porty, bazę, API, kopie i test dwóch urządzeń. Obecnie brak potwierdzenia, że konkretny pokazany dysk obsłuży serwer API.
+
+
+### Decyzja projektowa po podaniu modelu DNS-320L (21.09.2026)
+
+- Nie blokować EDHOME na możliwościach tego NAS: architektura Huba i API jest niezależna od sprzętu; **wariant B jest rozwiązaniem referencyjnym**, nie deklaracją zakupu mini-PC ani uruchomionej usługi.
+- DNS-320L może być używany w LAN do kopii JSON, mediów i załączników **po przetestowaniu firmware, dysków i protokołu**; nie przypisywać mu Docker/aktualnych pakietów bez potwierdzenia. Niewspierane lub stare protokoły SMB (np. wymuszające SMB1) traktować jako przeszkodę bezpieczeństwa — nie obniżać zabezpieczeń całej sieci dla wygody integracji.
+- API pracuje na osobnym hoście i samodzielnie przechowuje aktualny stan; zapisy na NAS są **backupem**, nie współdzieloną aktywną bazą SQLite. Przećwiczyć odtworzenie i wykonać kopię dodatkowo poza NAS.
