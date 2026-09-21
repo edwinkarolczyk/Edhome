@@ -33,5 +33,5 @@ for token in (
 section=api.split("static NameSearchReport searchByName(",1)[1].split("private static String readProductName",1)[0]
 for forbidden in ("SQLiteDatabase", "insertOrThrow(", "PantryBarcodeStore.commit(", "database.update("):
     assert forbidden not in section, "remote search modifies stock: "+forbidden
-assert "versionCode 41" in gradle and "versionNameSuffix '-beta.11'" in gradle
+assert "versionCode 42" in gradle and "versionNameSuffix '-beta.12'" in gradle
 print("Name search: opt-in, four sources, selection and stock-neutral confirmation: PASS")

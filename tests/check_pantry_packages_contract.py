@@ -8,7 +8,7 @@ scan = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java
 gradle = Path("app/build.gradle").read_text()
 for value in (
     '"DATABASE_MIGRATED_16_TO_17_PANTRY_PACKAGES"',
-    'super(context, "edhome-beta-preview.db", null, 18)',
+    'super(context, "edhome-beta-preview.db", null, 19)',
     'PantryPackageStore.fillLegacy(database)',
     'PantryPackageStore.create(database)',
     'PantryPackageRules.summary(',
@@ -38,7 +38,7 @@ for value in (
 ):
     assert value in scan, "Missing atomic barcode/package contract: " + value
 for value in (
-    'DB_VERSION = 18;',
+    'DB_VERSION = 19;',
     '{"pantry_packages", "pantry_id", "unit", "size_milli"}',
     'inputVersion < 17 && "pantry_packages".equals(definition[0])',
     '"size_milli".equals(column)',
@@ -47,5 +47,5 @@ for value in (
     'packagedProducts.size() != pantryIds.size()',
 ):
     assert value in backup, "Missing backup contract: " + value
-assert 'versionCode 41' in gradle and "versionNameSuffix '-beta.11'" in gradle
+assert 'versionCode 42' in gradle and "versionNameSuffix '-beta.12'" in gradle
 print("Pantry packages UI, stock isolation, backup v17 and scanner: PASS")

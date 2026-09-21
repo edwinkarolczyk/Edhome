@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 18;
+    private static final int DB_VERSION = 19;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -43,6 +43,10 @@ final class DataBackup {
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",
             "packages", "before_qty", "after_qty", "happened_at"},
+        {"storage_items", "id", "name", "kind", "parent_box_id", "place_id",
+            "lent_to", "lent_at", "created_at"},
+        {"storage_events", "id", "item_id", "name_snapshot", "action",
+            "details", "happened_at"},
         {"device_timers", "id", "device_type", "title", "start_at", "end_at",
             "status", "acknowledged_at"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
@@ -100,7 +104,9 @@ final class DataBackup {
                 String[] columns = columns(definition);
                 JSONArray rows = new JSONArray();
                 String orderBy = "task_rotation_members".equals(definition[0])
-                    ? "task_id ASC, position ASC" : "id ASC";
+                    ? "task_id ASC, position ASC"
+                    : "pantry_packages".equals(definition[0])
+                        ? "pantry_id ASC" : "id ASC";
                 try (Cursor cursor = database.query(definition[0], columns,
                         null, null, null, null, orderBy)) {
                     while (cursor.moveToNext()) {
@@ -144,7 +150,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -228,6 +234,8 @@ final class DataBackup {
                 || (inputVersion < 15 && "pantry_product_details".equals(definition[0]))
                 || (inputVersion < 17 && "pantry_packages".equals(definition[0]))
                 || (inputVersion < 18 && "shopping_receipts".equals(definition[0]))
+                || (inputVersion < 19 && ("storage_items".equals(definition[0])
+                    || "storage_events".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -397,6 +405,39 @@ final class DataBackup {
                         throw new IllegalArgumentException(
                             "Nieprawidłowa pozycja listy zakupów.");
                 }
+                if ("storage_items".equals(definition[0])) {
+                    String name = values.getAsString("name");
+                    String kind = values.getAsString("kind");
+                    String person = values.getAsString("lent_to");
+                    Long lentAt = values.getAsLong("lent_at");
+                    Long created = values.getAsLong("created_at");
+                    Long box = values.getAsLong("parent_box_id");
+                    Long place = values.getAsLong("place_id");
+                    if (name == null || name.trim().isEmpty() || name.length() > 160
+                            || !("box".equals(kind) || "thing".equals(kind))
+                            || box != null && place != null
+                            || person != null && (person.trim().isEmpty()
+                                || person.length() > 80 || !"thing".equals(kind))
+                            || (person == null) != (lentAt == null)
+                            || lentAt != null && lentAt <= 0
+                            || created == null || created <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa rzecz lub pudełko.");
+                }
+                if ("storage_events".equals(definition[0])) {
+                    String action = values.getAsString("action");
+                    String name = values.getAsString("name_snapshot");
+                    String details = values.getAsString("details");
+                    Long itemId = values.getAsLong("item_id");
+                    Long stamp = values.getAsLong("happened_at");
+                    if (itemId == null || itemId < 1 || name == null
+                            || name.trim().isEmpty() || name.length() > 160
+                            || details == null || details.length() > 300
+                            || !("created".equals(action) || "moved".equals(action)
+                                || "lent".equals(action) || "returned".equals(action)
+                                || "removed".equals(action))
+                            || stamp == null || stamp <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa historia rzeczy.");
+                }
                 if ("shopping_receipts".equals(definition[0])) {
                     Long shopping = values.getAsLong("shopping_id");
                     Long pantry = values.getAsLong("pantry_id");
@@ -518,6 +559,26 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Map<Long, ContentValues> objects = new HashMap<>();
+        Set<Long> validPlaces = new HashSet<>();
+        for (ContentValues place : parsed.get("places"))
+            validPlaces.add(place.getAsLong("id"));
+        for (ContentValues object : parsed.get("storage_items"))
+            objects.put(object.getAsLong("id"), object);
+        for (ContentValues object : parsed.get("storage_items")) {
+            Long box = object.getAsLong("parent_box_id");
+            Long place = object.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Rzecz ma nieistniejące miejsce.");
+            Set<Long> seen = new HashSet<>();
+            while (box != null) {
+                ContentValues parent = objects.get(box);
+                if (!seen.add(box) || parent == null
+                        || !"box".equals(parent.getAsString("kind")))
+                    throw new IllegalArgumentException("Błąd powiązania pudełek.");
+                box = parent.getAsLong("parent_box_id");
+            }
+        }
         Set<Long> pantryIds = new HashSet<>();
         for (ContentValues p : parsed.get("pantry"))
             pantryIds.add(p.getAsLong("id"));
@@ -719,6 +780,8 @@ final class DataBackup {
             || "old_qty".equals(column) || "new_qty".equals(column)
             || "changed_at".equals(column) || "size_milli".equals(column)
             || "shopping_id".equals(column) || "packages".equals(column)
+            || "parent_box_id".equals(column) || "lent_at".equals(column)
+            || "created_at".equals(column) || "item_id".equals(column)
             || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column);
     }

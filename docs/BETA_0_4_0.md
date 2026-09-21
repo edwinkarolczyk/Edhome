@@ -81,3 +81,12 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Kupno to nie księgowanie wydatku. Brak cen i automatycznego PayCheck w tym przyjęciu.
 
 **Pozostały zakres 0.4:** pełne QR rzeczy/pudełek, pożyczki, przypisanie miejsca na zakupy i zakres remanentu. Nie oznaczać 0.4 jako ukończonego na podstawie samego zielonego CI.
+
+## 0.4.0-beta.12 — rzeczy, pudełka, QR i wypożyczenia
+
+- Miejsca → Rzeczy i pudełka. Można dodawać rzeczy i pudełka, ustawiać miejsce albo pudełko nadrzędne, przenosić, przeglądać lokalizację wynikową, pokazać i zeskanować QR.
+- QR to typ+trwałe lokalne ID; przeniesienie nie wymaga zmiany etykiety. QR działa na urządzeniu z lokalną kartoteką, a synchronizacja między urządzeniami jest osobnym etapem. Kod QR nie jest hasłem ani kluczem dostępu.
+- Pudełka nie mogą być przenoszone do siebie ani swoich pod-pudełek; nie wolno usunąć pudełka z zawartością. Położenie rzeczy w pudełku jest dziedziczone zamiast kopiować lokalizację do każdej rzeczy.
+- Wypożyczanie i zwroty rzeczy zapisywane są w historii lokalnej. Pudełka nie są wypożyczane. W czasie wypożyczenia rzecz nie może być przeniesiona/usunięta bez zwrotu.
+- SQLite v18→v19, eksport i import JSON zawierają rzeczy oraz historię. Naprawiono też sortowanie `pantry_packages` przy eksporcie: ta tabela ma `pantry_id`, nie `id`.
+- Testy automatyczne nie zastępują fizycznego testu skanera i wydruku QR.

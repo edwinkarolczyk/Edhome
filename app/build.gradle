@@ -14,7 +14,7 @@ android {
         applicationId 'com.edwinkarolczyk.edhome'
         minSdk 26
         targetSdk 35
-        versionCode 41
+        versionCode 42
         versionName '0.4.0'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
@@ -46,7 +46,7 @@ android {
         beta {
             dimension 'channel'
             applicationId 'com.edwinkarolczyk.edhome.beta'
-            versionNameSuffix '-beta.11'
+            versionNameSuffix '-beta.12'
             signingConfig signingConfigs.betaRelease
             manifestPlaceholders = [appLabel: 'EDHOME Beta']
             buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'true'

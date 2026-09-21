@@ -86,6 +86,7 @@ public final class MainActivity extends Activity {
     private static final String SCAN_MODE_PREF = "pantry_scan_mode";
     private final PantryBatchSession pantryBatch = new PantryBatchSession();
     private boolean pantrySingleCameraPending;
+    private boolean storageQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -170,6 +171,7 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
+        else if (unlocked && "storage".equals(screen)) go("places");
         else if (unlocked && "shopping".equals(screen)) go("pantry");
         else if (unlocked && "waste".equals(screen)) go("tasks");
         else if (unlocked && "member_schedule".equals(screen)) go("members");
@@ -328,6 +330,7 @@ public final class MainActivity extends Activity {
                 case "pantry": pantry(); break;
                 case "shopping": shopping(); break;
                 case "places": places(); break;
+                case "storage": storage(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
@@ -2231,6 +2234,7 @@ public final class MainActivity extends Activity {
 
     private void places() {
         header("Miejsca • moje gospodarstwo");
+        button("▣ Rzeczy i pudełka / QR", () -> go("storage"));
         note("Ty nazywasz lokalizacje. Dom → Kuchnia → Szafka → "
             + "Półka to przykładowa ścieżka, nie narzucona lista. "
             + "Rodzaj jest opcjonalny; miejsce może mieć dowolną liczbę podmiejsc.");
@@ -2487,6 +2491,194 @@ public final class MainActivity extends Activity {
                 });
         });
         dialog.show();
+    }
+
+
+    private void storage() {
+        header("Rzeczy • pudełka • QR");
+        note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
+            + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
+        button("+ Dodaj rzecz", () -> storageEditor("thing", null));
+        button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        button("▣ Skanuj QR rzeczy lub pudełka", () -> {
+            if (storageQrCameraPending || pantrySingleCameraPending
+                    || pantryBatch.active()) return;
+            storageQrCameraPending = true;
+            IntentIntegrator qr = new IntentIntegrator(this);
+            qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            qr.setPrompt("EDHOME: QR rzeczy lub pudełka");
+            qr.setBeepEnabled(false);
+            qr.setOrientationLocked(false);
+            qr.initiateScan();
+        });
+        button("← Miejsca", () -> go("places"));
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),
+                    c.getLong(0));
+                if(item==null)continue;
+                count++;
+                LinearLayout box=card();
+                box.addView(text(("box".equals(item.kind)?"▣ Pudełko: ":"◉ Rzecz: ")
+                    +item.name,18,true));
+                box.addView(text(StorageStore.location(db.getReadableDatabase(),item),
+                    13,false));
+                if(item.lentTo!=null)
+                    box.addView(text("Wypożyczono: "+item.lentTo,13,false));
+                smallButton(box,"Pokaż QR",()->showStorageQr(item));
+                if(item.lentTo==null)
+                    smallButton(box,"Przenieś",()->storageEditor(item.kind,item.id));
+                if("thing".equals(item.kind)){
+                    if(item.lentTo==null)
+                        smallButton(box,"Wypożycz",()->askStorageLend(item));
+                    else smallButton(box,"Zwrot",()->{
+                        try{
+                            StorageStore.returned(db.getWritableDatabase(),item.id);
+                            DiagnosticLog.event("STORAGE_RETURNED");render();
+                        }catch(Exception e){alert(e.getMessage());}
+                    });
+                }
+                smallButton(box,"Usuń",()->new AlertDialog.Builder(this)
+                    .setTitle("Usunąć rzecz z magazynu?")
+                    .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń",(d,w)->{
+                        try {
+                            StorageStore.remove(db.getWritableDatabase(),item.id);
+                            DiagnosticLog.event("STORAGE_REMOVED");render();
+                        }catch(Exception e){alert(e.getMessage());}
+                    }).show());
+            }
+        }
+        if(count==0)note("Dodaj pierwszą rzecz albo pudełko; nazwy i miejsca wybierasz sam.");
+        title("Ostatnie ruchy magazynu");
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT name_snapshot,action,details FROM storage_events "
+                +"ORDER BY id DESC LIMIT 12",null)){
+            while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
+                +" • "+c.getString(2));
+        }
+    }
+
+    private void storageEditor(String kind, Long itemId) {
+        StorageStore.Item existing=itemId==null?null:
+            StorageStore.find(db.getReadableDatabase(),itemId);
+        if(itemId!=null && existing==null){
+            alert("Rzecz już nie istnieje.");return;
+        }
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa rzeczy albo pudełka");
+        name.setText(existing==null?"":existing.name);
+        if(existing==null)layout.addView(name);
+        else layout.addView(text("Przenieś: "+existing.name,18,true));
+        java.util.List<Long> boxIds=new java.util.ArrayList<>();
+        java.util.List<Long> placeIds=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        boxIds.add(null);placeIds.add(null);labels.add("Bez lokalizacji");
+        for(PlaceEntry place:readPlaces()){
+            boxIds.add(null);placeIds.add(place.id);
+            labels.add("Miejsce: "+db.placePath(place.id));
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM storage_items WHERE kind='box' ORDER BY name",
+                null)) {
+            while(c.moveToNext()){
+                if(itemId!=null && c.getLong(0)==itemId)continue;
+                boxIds.add(c.getLong(0));placeIds.add(null);
+                labels.add("W pudełku: "+c.getString(1));
+            }
+        }
+        Spinner destination=new Spinner(this);
+        destination.setAdapter(themeSpinnerAdapter(labels));
+        if(existing!=null)for(int i=0;i<labels.size();i++){
+            if(java.util.Objects.equals(boxIds.get(i),existing.boxId)
+                    &&java.util.Objects.equals(placeIds.get(i),existing.placeId)){
+                destination.setSelection(i);break;
+            }
+        }
+        layout.addView(text("Położenie (rzeczy w pudełku dziedziczą jego miejsce)",
+            14,false));
+        layout.addView(destination);
+        new AlertDialog.Builder(this)
+            .setTitle(existing==null?"Dodaj do magazynu":"Przenieś")
+            .setView(layout).setNegativeButton("Anuluj",null)
+            .setPositiveButton(existing==null?"Dodaj":"Przenieś",(d,w)->{
+                try{
+                    int i=destination.getSelectedItemPosition();
+                    if(existing==null)StorageStore.create(db.getWritableDatabase(),
+                        name.getText().toString(),kind,boxIds.get(i),placeIds.get(i));
+                    else StorageStore.move(db.getWritableDatabase(),existing.id,
+                        boxIds.get(i),placeIds.get(i));
+                    DiagnosticLog.event(existing==null?
+                        "STORAGE_CREATED":"STORAGE_MOVED");
+                    render();
+                }catch(Exception problem){alert(problem.getMessage());}
+            }).show();
+    }
+
+    private void askStorageLend(StorageStore.Item item){
+        EditText recipient=new EditText(this);
+        recipient.setSingleLine(true);recipient.setHint("Komu wypożyczono?");
+        new AlertDialog.Builder(this).setTitle("Wypożycz: "+item.name)
+            .setView(recipient).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Wypożycz",(d,w)->{
+                try{
+                    StorageStore.lend(db.getWritableDatabase(),item.id,
+                        recipient.getText().toString());
+                    DiagnosticLog.event("STORAGE_LENT");render();
+                }catch(Exception problem){alert(problem.getMessage());}
+            }).show();
+    }
+
+    private void showStorageQr(StorageStore.Item item) {
+        String payload=StorageQr.encode(item.kind,item.id);
+        try{
+            com.google.zxing.common.BitMatrix bits =
+                new com.google.zxing.MultiFormatWriter().encode(payload,
+                    com.google.zxing.BarcodeFormat.QR_CODE,384,384);
+            Bitmap bmp=Bitmap.createBitmap(bits.getWidth(),bits.getHeight(),
+                Bitmap.Config.ARGB_8888);
+            for(int y=0;y<bits.getHeight();y++)
+                for(int x=0;x<bits.getWidth();x++)
+                    bmp.setPixel(x,y,bits.get(x,y)?Color.BLACK:Color.WHITE);
+            ImageView picture=new ImageView(this);
+            picture.setImageBitmap(bmp);
+            picture.setAdjustViewBounds(true);
+            new AlertDialog.Builder(this).setTitle("QR • "+item.name)
+                .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
+                    +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
+                .setView(picture).setNegativeButton("Zamknij",null)
+                .setPositiveButton("Kopiuj kod",(d,w)->{
+                    ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
+                        .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
+                }).show();
+        }catch(Exception error){
+            DiagnosticLog.error("STORAGE_QR_DRAW",error);
+            alert("Nie udało się wyświetlić QR.");
+        }
+    }
+
+    private void openStorageQr(String value) {
+        StorageQr.Target target=StorageQr.decode(value);
+        if(target==null){alert("To nie jest QR rzeczy/pudełka EDHOME.");return;}
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),target.id);
+        if(item==null||!item.kind.equals(target.kind)){
+            alert("Nie znaleziono obiektu o tym QR w lokalnym magazynie.");
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle(item.name)
+            .setMessage(("box".equals(item.kind)?"Pudełko":"Rzecz")
+                +"\n"+StorageStore.location(db.getReadableDatabase(),item)
+                +(item.lentTo==null?"":"\nWypożyczono: "+item.lentTo))
+            .setNegativeButton("Zamknij",null)
+            .setPositiveButton("Magazyn",(d,w)->go("storage")).show();
     }
 
     private void shopping() {
@@ -4099,6 +4291,11 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request, result, data);
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
+            if (storageQrCameraPending) {
+                storageQrCameraPending = false;
+                if (scan.getContents() != null) openStorageQr(scan.getContents());
+                return;
+            }
             if (pantryBatch.active()) {
                 if (!pantryBatch.receiveScan(scan.getContents())) {
                     if (scan.getContents() == null) finishPantryBatch();
@@ -4209,7 +4406,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 18);
+            super(context, "edhome-beta-preview.db", null, 19);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -4233,6 +4430,7 @@ public final class MainActivity extends Activity {
             addMemberSchedules(database);
             addShopping(database);
             ShoppingReceiptStore.create(database);
+            StorageStore.createTables(database);
             addDeviceTimers(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
@@ -4242,7 +4440,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 18) {
+            if (oldVersion < 1 || newVersion > 19) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -4338,6 +4536,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 18) {
                 ShoppingReceiptStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS");
+            }
+            if (oldVersion < 19) {
+                StorageStore.createTables(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_18_TO_19_STORAGE_QR");
             }
         }
 

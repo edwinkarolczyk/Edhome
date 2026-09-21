@@ -185,6 +185,15 @@ jobs:
         run: python3 tests/check_pantry_existing_code_contract.py
       - name: Shopping receipt inventory and backup contract
         run: python3 tests/check_shopping_receipt_contract.py
+      - name: Storage object box QR and backup contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/edhome-storage-qr"
+          javac -d "$RUNNER_TEMP/edhome-storage-qr" \
+            app/src/main/java/com/edwinkarolczyk/edhome/StorageQr.java \
+            tests/task_rules/StorageQrSmoke.java
+          java -cp "$RUNNER_TEMP/edhome-storage-qr" \
+            com.edwinkarolczyk.edhome.StorageQrSmoke
+          python3 tests/check_storage_qr_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -243,14 +252,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.4.0-beta.11-signed-apk
+          name: EDHOME-0.4.0-beta.12-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.11 — potwierdzane przyjmowanie zakupów do spiżarni bez dubli; SQLite v18."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.12 — rzeczy, pudełka, QR, przeniesienia i wypożyczenia; SQLite v19."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
