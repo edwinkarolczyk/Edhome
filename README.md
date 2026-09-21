@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** EDHOME **0.3.6-beta.1** (`versionCode 29`, SQLite 13). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę i grafik z wyjątkami oraz do trzech proponowanych dat do ręcznego zatwierdzenia. W etapie 0.3 działa lista zakupów, odpady jako Czynności i własna godzina/wyprzedzenie przypomnienia dla pojedynczego zadania, z ciszą 22:00–07:00 i zgodą Androida. Nowość 0.3.3: sześć motywów (w tym WMM i Trener 2), zaokrąglone kafelki, podgląd miejsca upuszczenia i wybór ikony z katalogu, bez zmiany danych. Nowość 0.3.5: lokalne minutniki pralki, suszarki i zmywarki, potwierdzanie zakończenia oraz opcjonalne powiadomienia. Nowość 0.3.6: rotacyjne obowiązki domowników z automatyczną zmianą wykonawcy i historią osoby wykonującej. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
+> **Status gałęzi `beta`:** EDHOME **0.3.7-beta.1** (`versionCode 30`, SQLite 13). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę i grafik z wyjątkami oraz do trzech proponowanych dat do ręcznego zatwierdzenia. W etapie 0.3 działa lista zakupów, odpady jako Czynności i własna godzina/wyprzedzenie przypomnienia dla pojedynczego zadania, z ciszą 22:00–07:00 i zgodą Androida. Nowość 0.3.3: sześć motywów (w tym WMM i Trener 2), zaokrąglone kafelki, podgląd miejsca upuszczenia i wybór ikony z katalogu, bez zmiany danych. Nowość 0.3.5: lokalne minutniki pralki, suszarki i zmywarki, potwierdzanie zakończenia oraz opcjonalne powiadomienia. Nowość 0.3.6: rotacyjne obowiązki domowników z automatyczną zmianą wykonawcy i historią osoby wykonującej. Nowość 0.3.7: konfigurowalna cisza powiadomień i bardziej widoczny tryb układania kafelków. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,7 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.3.7 — godziny ciszy i układanie kafelków](docs/BETA_0_3_7.md)
 - [Wersja 0.3.6 — rotacyjne obowiązki i SQLite v13](docs/BETA_0_3_6.md)
 - [Wersja 0.3.5 — minutniki urządzeń i SQLite v12](docs/BETA_0_3_5.md)
 - [Wersja 0.3.4 — hierarchia własnych Miejsc i SQLite v11](docs/BETA_0_3_4.md)
@@ -76,6 +77,6 @@
 
 ## Następne kroki
 
-Na `beta`: zweryfikować rotację na fizycznym telefonie: A → B → C → A, historię wykonawcy, usuwanie osoby z rotacji i zachowanie danych po aktualizacji z 0.3.5. Następny mały etap 0.3.7: konfigurowalne godziny ciszy. Synchronizacja kilku urządzeń dopiero w 0.8; `main` pozostaje bez zmian.
+Na `beta`: odebrać 0.3.7 na fizycznym telefonie: menu przytrzymania i przesuwanie kafelków, zmienione godziny ciszy dla czynności/minutników, migracje i historię rotacji. Następnie przygotować prace PC jako osobny interfejs do wspólnego modelu danych; pełna synchronizacja kilku urządzeń dopiero w 0.8. `main` pozostaje bez zmian.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
