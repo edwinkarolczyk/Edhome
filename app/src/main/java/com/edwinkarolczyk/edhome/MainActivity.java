@@ -1294,7 +1294,7 @@ public final class MainActivity extends Activity {
                 "SELECT id,name,kind FROM places ORDER BY name COLLATE NOCASE", null)) {
             while (places.moveToNext()) {
                 placeIds.add(places.getLong(0));
-                placeNames.add(places.getString(1) + " • " + places.getString(2));
+                placeNames.add(db.placePath(places.getLong(0)));
             }
         }
         Spinner chosenPlace = new Spinner(this);
