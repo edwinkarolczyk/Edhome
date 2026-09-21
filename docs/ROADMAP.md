@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.6-beta.1 (`beta`):** rotacyjne obowiązki domowników, automatyczna zmiana wykonawcy na kolejnym terminie oraz historia osoby wykonującej. SQLite v13, kopie v2–v13; minutniki, Miejsca i 9 kafelków zachowane. Beta bez PIN-u, Stable z PIN-em. [Odbiór rotacji](BETA_0_3_6.md).
+> **Stan 0.3.7-beta.1 (`beta`):** rotacyjne obowiązki, konfigurowalne godziny ciszy dla czynności i minutników oraz bardziej widoczny tryb układania kafelków. SQLite v13, kopie v2–v13. Beta bez PIN-u, Stable z PIN-em. [Odbiór 0.3.7](BETA_0_3_7.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,10 +80,10 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.7-beta.1
+## Zrealizowany inkrement — 0.3.7-beta.1
 
-- Dalsze ustawienia przypomnień: konfigurowalne godziny ciszy i czytelny podgląd, co stanie się z alarmem poza dozwolonym oknem.
-- Rotacyjne obowiązki pozostają w 0.3.6; nie mieszać ich z kolejną zmianą schematu bez potrzeby.
+- Konfigurowalne godziny ciszy dla czynności i minutników, eksport/import JSON.
+- Wyraźne wejście w tryb układania; przytrzymanie w zwykłym trybie pozostaje menu Edytuj / Przesuń. Odbiór gestów na telefonie pozostaje do wykonania.
 - Nie włączać synchronizacji kilku urządzeń przed etapem 0.8. Weryfikować CI, podpis, manifest i zachowanie na fizycznym Androidzie.
 
 
@@ -142,3 +142,14 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 | Etap Wi-Fi / 0.8 | Przesyłanie zakupów i ruchów po uprawnieniach, idempotencja przyjęć, spójne korekty ceny i remanentu. | Bez dubli i nadpisania historii po pracy offline na kilku urządzeniach. |
 
 **Otwarte przed implementacją:** kiedy prosić o wpis ceny, widoczność cen na wspólnym tablecie, domyślna metoda wyceny stanu oraz decyzja, czy szacunkowa wartość zapasu należy do pierwszego inkrementu czy etapu raportów. Nie zmieniać kodu, APK ani `main` w tym wątku bez wyraźnego osobnego polecenia.
+
+
+## EDHOME na komputerze — plan architektury (bez deklaracji działającej wersji PC)
+
+- **Interfejs:** responsywny panel webowy otwierany w przeglądarce Windows / Linux / macOS; docelowo opcjonalny instalator Windows/EXE jako opakowanie panelu. Na dużym ekranie: lewy panel modułów, centrum z kalendarzem i listami, prawa karta szczegółów, przeciąganie myszą/touch.
+- **Wspólna semantyka:** te same trwałe ID gospodarstwa, osoby, miejsca i czynności, wspólne zasady historii, terminów i uprawnień. Android pozostaje natywną aplikacją offline; nie przenosić 1:1 widoku 3×3 na monitor.
+- **Etap przed synchronizacją:** można prototypować panel PC na testowych danych albo imporcie osobnej kopii JSON. Nie prezentować tego jako danych na żywo z telefonu.
+- **Etap 0.8:** lokalny EDHOME Hub na zaufanym komputerze/NAS jako punkt wymiany po domowym Wi-Fi; Android zachowuje SQLite offline, PC używa API Huba. Identyfikatory zmian, wersje schematu, deduplikacja i rozwiązywanie konfliktów, a nie wspólny plik SQLite otwarty przez kilka urządzeń.
+- **Prywatność:** logowanie/sesja i role domowników, finansów prywatnych nie udostępniać z automatu na wspólnym PC/tablecie. Domyślnie bez publicznego wystawiania Huba do internetu.
+
+Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `main`.
