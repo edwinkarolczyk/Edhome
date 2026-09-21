@@ -88,8 +88,10 @@ final class DataBackup {
             for (String[] definition : TABLES) {
                 String[] columns = columns(definition);
                 JSONArray rows = new JSONArray();
+                String orderBy = "task_rotation_members".equals(definition[0])
+                    ? "task_id ASC, position ASC" : "id ASC";
                 try (Cursor cursor = database.query(definition[0], columns,
-                        null, null, null, null, "id ASC")) {
+                        null, null, null, null, orderBy)) {
                     while (cursor.moveToNext()) {
                         JSONObject row = new JSONObject();
                         for (int i = 0; i < columns.length; i++) {
@@ -300,9 +302,12 @@ final class DataBackup {
                         throw new IllegalArgumentException("Nieprawidłowy typ pola: " + key);
                     }
                 }
-                Long id = values.getAsLong("id");
-                if (id == null || id <= 0 || !ids.add(id))
-                    throw new IllegalArgumentException("Nieprawidłowe lub powielone ID.");
+                if (!"task_rotation_members".equals(definition[0])) {
+                    Long id = values.getAsLong("id");
+                    if (id == null || id <= 0 || !ids.add(id))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowe lub powielone ID.");
+                }
                 if ("places".equals(definition[0])) {
                     String name = values.getAsString("name");
                     String kind = values.getAsString("kind");
