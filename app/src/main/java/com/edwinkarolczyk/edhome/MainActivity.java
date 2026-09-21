@@ -99,7 +99,6 @@ public final class MainActivity extends Activity {
     };
     private static final int MIN_TASK_MINUTES = 1;
     private static final int MAX_TASK_MINUTES = 480;
-    private static final String[] PLACE_TYPES = {"Dom", "Ogród", "Garaż", "Warsztat", "Pomieszczenie", "Inne"};
     private int bg, surface, ink, subdued, accent;
     private UiSkin skin;
     private boolean homeEditMode;
@@ -2658,7 +2657,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 10);
+            super(context, "edhome-beta-preview.db", null, 11);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -2682,7 +2681,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 10) {
+            if (oldVersion < 1 || newVersion > 11) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -2731,11 +2730,33 @@ public final class MainActivity extends Activity {
                     + "INTEGER NOT NULL DEFAULT 0");
                 DiagnosticLog.event("DATABASE_MIGRATED_9_TO_10");
             }
+            if (oldVersion < 11 && oldVersion >= 4) {
+                // The old global UNIQUE(name) must be replaced with sibling-scoped
+                // uniqueness. Preserve IDs so task.place_id remains valid.
+                database.execSQL("CREATE TABLE places_v11 (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "name TEXT NOT NULL COLLATE NOCASE, kind TEXT NOT NULL DEFAULT '', "
+                    + "parent_id INTEGER, icon TEXT NOT NULL DEFAULT 'places', "
+                    + "CHECK(parent_id IS NULL OR parent_id!=id))");
+                database.execSQL("INSERT INTO places_v11 (id,name,kind) "
+                    + "SELECT id,name,kind FROM places");
+                database.execSQL("DROP TABLE places");
+                database.execSQL("ALTER TABLE places_v11 RENAME TO places");
+                addPlaceSiblingIndex(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_10_TO_11_PLACES");
+            }
+        }
+
+        private static void addPlaceSiblingIndex(SQLiteDatabase database) {
+            database.execSQL("CREATE UNIQUE INDEX places_siblings_idx "
+                + "ON places (COALESCE(parent_id,0), name COLLATE NOCASE)");
         }
 
         private static void addPlaces(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                + "name TEXT NOT NULL COLLATE NOCASE UNIQUE, kind TEXT NOT NULL DEFAULT 'Inne')");
+                + "name TEXT NOT NULL COLLATE NOCASE, kind TEXT NOT NULL DEFAULT '', "
+                + "parent_id INTEGER, icon TEXT NOT NULL DEFAULT 'places', "
+                + "CHECK(parent_id IS NULL OR parent_id!=id))");
+            addPlaceSiblingIndex(database);
         }
 
         private static void addTaskHistory(SQLiteDatabase database) {
