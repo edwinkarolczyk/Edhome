@@ -30,7 +30,7 @@ for token in (
     '"Open Beauty Facts"',
     '"Open Pet Food Facts"',
     '"https://" + host + "/api/v2/product/"',
-    "PantryScanRules.validBarcode(barcode)",
+    "PantryLookupCodes.candidates(barcode)",
     '"images.openfoodfacts.org"',
     '"images.openproductsfacts.org"',
     '"images.openbeautyfacts.org"',
