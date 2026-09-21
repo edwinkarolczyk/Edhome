@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 42,
-  "versionName": "0.4.0-beta.12",
-  "changelog": "EDHOME Beta 0.4.0-beta.12 — rzeczy, pudełka, QR, przeniesienia i wypożyczenia; SQLite v19.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.12/edhome-beta.apk",
-  "sha256": "28788ef28a4dbe6b80447b3df8749904a842c4bfb9d5d6cae98960671e081e50"
+  "versionCode": 43,
+  "versionName": "0.4.0-beta.13",
+  "changelog": "EDHOME Beta 0.4.0-beta.13 — ochrona rzeczy podczas usuwania miejsc i pełne ścieżki lokalizacji; SQLite v19.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.13/edhome-beta.apk",
+  "sha256": "d56e272287f7fd631cd745035c9e1dcbffe012cf04a5882b0d57d295b36b0c6b"
 }
