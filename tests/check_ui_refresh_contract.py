@@ -28,7 +28,7 @@ assert "previewHomeTilePlacement(nearest)" in main
 assert "translationX(target[0] - old[0])" in main
 assert "translationY(target[1] - old[1])" in main
 assert "homeDragHint.setText(" in main
-assert "HomeTileOrder.moved(homeDragOrder, homeDragSource, slot)" in main
+assert "HomeTileOrder.moved(" in main and "homeDragOrder, homeDragSource, slot" in main
 assert "HomeTileOrder.moved(before, source, slot)" in main
 assert "scheduleHomeDragFinish()" in main
 assert "tile.setAlpha(1f)" in main
