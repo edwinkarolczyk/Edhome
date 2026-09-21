@@ -1,0 +1,98 @@
+name: EDHOME Stable 0.3.4 APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/build.gradle"
+      - ".github/workflows/android-stable.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edhome-stable-0-3-4
+  cancel-in-progress: false
+
+jobs:
+  build-stable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Stable branch
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android platform 35
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Stable DB, place and UI contract checks
+        run: |
+          python3 tests/check_db_contract.py
+          python3 tests/check_place_contract.py
+          python3 tests/check_ui_refresh_contract.py
+          mkdir -p "$RUNNER_TEMP/home-tile-order"
+          javac -d "$RUNNER_TEMP/home-tile-order" \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileOrder.java \
+            tests/task_rules/HomeTileOrderSmoke.java
+          java -cp "$RUNNER_TEMP/home-tile-order" \
+            com.edwinkarolczyk.edhome.HomeTileOrderSmoke
+      - name: Require existing persistent signing key
+        env:
+          KEY_B64: ${{ secrets.EDHOME_BETA_KEYSTORE_B64 }}
+          KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEY_B64" || -z "$KEY_ALIAS" || -z "$STORE_PASSWORD" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Existing EDHOME signing secrets are missing; refusing unsigned Stable release."
+            exit 1
+          fi
+          printf "%s" "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/edhome-stable.p12"
+          chmod 600 "$RUNNER_TEMP/edhome-stable.p12"
+          EXPECTED="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
+          ACTUAL=$(keytool -list -v -keystore "$RUNNER_TEMP/edhome-stable.p12" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" | awk '/SHA256:/{print $2; exit}')
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::Existing signing certificate mismatch; refusing Stable release."
+            exit 1
+          fi
+          echo "EDHOME_BETA_KEYSTORE_FILE=$RUNNER_TEMP/edhome-stable.p12" >> "$GITHUB_ENV"
+      - name: Build signed Stable 0.3.4
+        env:
+          EDHOME_BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
+          EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
+          EDHOME_BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleStableRelease
+      - name: Verify APK package, version and signature
+        run: |
+          APK="app/build/outputs/apk/stable/release/app-stable-release.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "^package: name='com.edwinkarolczyk.edhome' versionCode='27' versionName='0.3.4'"
+          EXPECTED="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
+          ACTUAL=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print toupper($2); exit}' | sed 's/../&:/g;s/:$//')
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::Stable APK signature does not match persistent EDHOME key."
+            exit 1
+          fi
+      - name: Upload Stable APK privately as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EDHOME-0.3.4-Stable-signed-APK
+          path: app/build/outputs/apk/stable/release/app-stable-release.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/edhome-stable.p12"
+
+# No GitHub Release, public asset, manifest, or beta-branch update is performed.
