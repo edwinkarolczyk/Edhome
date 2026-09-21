@@ -90,8 +90,16 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
         if (manager == null) return;
         LocalDateTime local = LocalDateTime.ofInstant(
             Instant.ofEpochMilli(end), ZoneId.systemDefault());
-        // Same quiet period as regular EDHOME task reminders (22:00–07:00).
-        long allowed = ReminderRules.nextAllowed(local)
+        SharedPreferences prefs = preferences(context);
+        String quietStart = prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String quietEnd = prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        if (!QuietHoursRules.validWindow(quietStart, quietEnd)) {
+            quietStart = QuietHoursRules.DEFAULT_START;
+            quietEnd = QuietHoursRules.DEFAULT_END;
+        }
+        long allowed = ReminderRules.nextAllowed(local, quietStart, quietEnd)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
             allowed, alarm(context, id, end, PendingIntent.FLAG_UPDATE_CURRENT));
@@ -133,10 +141,19 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             DiagnosticLog.error("DEVICE_TIMER_ALARM", error);
             return;
         }
+        SharedPreferences prefs = preferences(context);
+        String quietStart = prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String quietEnd = prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        if (!QuietHoursRules.validWindow(quietStart, quietEnd)) {
+            quietStart = QuietHoursRules.DEFAULT_START;
+            quietEnd = QuietHoursRules.DEFAULT_END;
+        }
         LocalDateTime now = LocalDateTime.now();
-        if (now.getHour() >= 22 || now.getHour() < 7) {
-            // If Doze delivers in quiet hours, retry after quiet hours.
-            long next = ReminderRules.nextAllowed(now)
+        if (QuietHoursRules.isQuiet(now, quietStart, quietEnd)) {
+            // If Doze delivers in quiet hours, retry after the configured window.
+            long next = ReminderRules.nextAllowed(now, quietStart, quietEnd)
                 .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
             AlarmManager manager = (AlarmManager)
                 context.getSystemService(Context.ALARM_SERVICE);
@@ -146,7 +163,6 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
                         PendingIntent.FLAG_UPDATE_CURRENT));
             return;
         }
-        SharedPreferences prefs = preferences(context);
         String fingerprint = Long.toString(expected);
         if (fingerprint.equals(prefs.getString("timer_notified_" + id, "")))
             return;
