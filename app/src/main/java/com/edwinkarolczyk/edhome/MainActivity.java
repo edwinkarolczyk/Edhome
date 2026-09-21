@@ -950,8 +950,7 @@ public final class MainActivity extends Activity {
             chip.setAllCaps(false);
             chip.setText(filter[1]);
             chip.setTextColor(filter[0].equals(tasksFilter)
-                ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-                    ? Color.WHITE : bg) : ink);
+                ? skin.accentInk : ink);
             chip.setBackground(rounded(filter[0].equals(tasksFilter) ? accent : surface));
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48));
             cp.setMargins(0, 0, dp(8), 0);
@@ -992,13 +991,17 @@ public final class MainActivity extends Activity {
         b.setText(label);
         b.setAllCaps(false);
         b.setTextSize(14);
-        if ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))) {
-            b.setTextColor(Color.WHITE);
-            b.setBackground(rounded(Color.rgb(41, 41, 41)));
-            b.setAllCaps(false);
-        }
+        boolean onHome = "home".equals(screen);
+        b.setTextColor(onHome ? skin.buttonForeground : ink);
+        b.setBackground(skin.pill(this, onHome
+            ? (skin.light ? 0xFFEFF8F2 : 0xFFEAF5F5) : skin.tileTop));
+        b.setElevation(dp(2));
+        b.setMinHeight(dp(52));
+        touchFeedback(b);
         b.setOnClickListener(v -> action.run());
-        container.addView(b, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, dp(5), 0, dp(5));
+        container.addView(b, params);
     }
 
     private void drawTask(long id, String name, boolean done, String due,
@@ -1478,8 +1481,7 @@ public final class MainActivity extends Activity {
                 view.setText(mode[1] + (mode[0].equals(calendarView) ? " ✓" : ""));
                 view.setAllCaps(false);
                 view.setTextColor(mode[0].equals(calendarView)
-                    ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-                        ? Color.WHITE : bg) : ink);
+                    ? skin.accentInk : ink);
                 view.setBackground(rounded(mode[0].equals(calendarView)
                     ? accent : surface));
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(44), 1);
@@ -1588,8 +1590,7 @@ public final class MainActivity extends Activity {
                 tile.setPadding(dp(1), dp(7), dp(1), dp(4));
                 if (iso.equals(selected.toString())) {
                     tile.setBackground(rounded(accent));
-                    tile.setTextColor("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-                    ? Color.WHITE : bg);
+                    tile.setTextColor(skin.accentInk);
                 } else if (iso.equals(LocalDate.now().toString())) {
                     tile.setBackground(rounded(surface));
                 }
