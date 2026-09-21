@@ -95,3 +95,14 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - **Testy odbiorowe:** bilans kW vs kWh, świeżość telemetrii, brak pomiaru, spadek PV, import sieciowy, utrata LAN, histereza, priorytety, maksymalna moc/temperatura, brak podwójnego księgowania w PayCheck. Limit eksportu nie zastępuje zgłoszeń do operatora.
 
 Szczegóły wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#21-edhome--panel-zarządzania-energią-i-priorytetami-nadwyżek-pv-uzgodnienie). **To jest zakres planowany, nie funkcja już dostępna w APK.**
+
+## Integracja SUPLA — kamienie milowe
+
+- **Odkrywanie:** po wyborze zgodnej instancji Cloud API i bezpiecznym OAuth2 pobrać listę uprawnionych kanałów; nie testować endpointów zapisu na realnym koncie.
+- **Odczyt:** stany i pomiary ze źródłem, jednostką, znacznikiem czasu i mapowaniem do obiektów EDHOME.
+- **MQTT (opcjonalnie):** odbiór zmian chmurowego brokera SUPLA przez TLS; to nie jest automatycznie lokalny/offline broker. Konfiguracja sekretów poza repo i logami.
+- **Offline:** osobny adapter LAN wyłącznie po potwierdzeniu protokołu konkretnego urządzenia; przy utracie połączenia oznaczać dane jako nieaktualne.
+- **Sterowanie:** dopiero po sprawdzeniu uprawnień, parametrów urządzeń i zabezpieczeń; w pierwszym wydaniu tylko odczyt.
+- Kryteria: brak tokenów w APK/logach/commicie, poprawna obsługa odwołania dostępu, różnych instancji SUPLA i niekompletnej telemetrii.
+
+Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-api-oauth2-i-broker-mqtt-doprecyzowanie-na-podstawie-zrzutów-21092026). Ta sekcja to roadmapa, nie potwierdzenie wykonania.
