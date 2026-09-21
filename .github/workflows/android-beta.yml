@@ -132,14 +132,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.3.3-beta.1-signed-apk
+          name: EDHOME-0.3.3-beta.3-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.3 — cztery motywy UI, zaokrąglone kafelki, edytuj/przeciągnij, kopie wyglądu; bez zmian SQLite."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.3-beta.3 — dwa dodatkowe motywy WMM i Trener 2, biblioteka ikon, animowany podgląd przeciągania; SQLite bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
