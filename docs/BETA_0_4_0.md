@@ -25,3 +25,11 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Ręczne pole nazwy pojawia się dopiero przy braku nazwy w katalogach albo niedostępności wyszukiwania; status sieci jest wyraźnie rozróżniony od braku produktu.
 - Wyszukiwanie na życzenie, kolejno: Open Food Facts (żywność), Open Products Facts (m.in. chemia), Open Beauty Facts (kosmetyki) i Open Pet Food Facts (karma). Pierwszy znaleziony produkt z nazwą wystarcza. Zakres danych w katalogach różni się; brak wyniku nie oznacza braku produktu na rynku.
 - Zabezpieczenie zdjęć umożliwia lokalne zapamiętywanie obrazów z dopuszczonych serwerów obrazów projektu Open Facts; zapasy pozostają lokalne. Nie zapewniamy pełnego pokrycia katalogów i nazw polskich.
+
+## 0.4.0-beta.5 — kategorie spiżarni
+
+- Filtrowanie żywność i napoje / chemia domowa / kosmetyki i higiena / karma / pozostałe.
+- Nowy produkt ręczny: wybór kategorii. Przy istniejącym produkcie: Edytuj pozwala zmienić nazwę i kategorię.
+- Po rozpoznaniu w Open Food Facts, Open Beauty Facts lub Open Pet Food Facts domyślna kategoria jest ustawiana automatycznie. Open Products Facts jest katalogiem ogólnym: domyślnie Pozostałe; użytkownik może jawnie wybrać Chemia domowa lub inną kategorię. Nie ma zgadywania po nazwie.
+- Zastane produkty otrzymują kategorię Pozostałe. Migrujemy bazę SQLite v15 → v16 bez utraty ID, ilości, kodów kreskowych, historii i zdjęć; kopia JSON ma pole kategorii, starsze kopie ustawiają Pozostałe.
+- Jednostki kg/l, zmienne opakowania i seryjne skanowanie nie są jeszcze w tej wersji.

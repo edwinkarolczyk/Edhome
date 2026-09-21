@@ -141,6 +141,16 @@ jobs:
             com.edwinkarolczyk.edhome.PantryScanRulesSmoke
       - name: Pantry Open Food Facts integration contract
         run: python3 tests/check_pantry_off_contract.py
+      - name: Pantry category regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-categories"
+          javac -d "$RUNNER_TEMP/pantry-categories" \\
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryCategories.java \\
+            tests/task_rules/PantryCategoriesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-categories" \\
+            com.edwinkarolczyk.edhome.PantryCategoriesSmoke
+      - name: Pantry category and backup contract
+        run: python3 tests/check_pantry_categories_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -199,14 +209,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.4.0-beta.4-signed-apk
+          name: EDHOME-0.4.0-beta.5-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.4 — automatyczna nazwa i kilka katalogów Open Facts dla chemii, kosmetyków, karmy i żywności; SQLite v15."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.5 — kategorie spiżarni, filtr i przypisywanie produktów; SQLite v16."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

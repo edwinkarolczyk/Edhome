@@ -82,6 +82,7 @@ public final class MainActivity extends Activity {
     private String tasksFilter = "all";
     private long selectedMemberId;
     private String pantrySearch = "";
+    private String pantryCategoryFilter = "";
     private static final String SCAN_MODE_PREF = "pantry_scan_mode";
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
@@ -2562,6 +2563,18 @@ public final class MainActivity extends Activity {
         header("Spiżarnia • lokalne zapasy");
         button("☷ Lista zakupów", () -> go("shopping"));
         button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
+        button("☷ Kategoria: " + (pantryCategoryFilter.isEmpty()
+                ? "Wszystkie" : PantryCategories.label(pantryCategoryFilter)), () -> {
+            int chosen = java.util.Arrays.asList(PantryCategories.FILTER_IDS)
+                .indexOf(pantryCategoryFilter);
+            new AlertDialog.Builder(this).setTitle("Filtr kategorii")
+                .setSingleChoiceItems(PantryCategories.FILTER_LABELS,
+                    Math.max(0, chosen), (dialog, index) -> {
+                        pantryCategoryFilter = PantryCategories.FILTER_IDS[index];
+                        dialog.dismiss();
+                        render();
+                    }).setNegativeButton("Anuluj", null).show();
+        });
         button("📷 Skanuj i dodaj +1", () -> openPantryCamera(false));
         button("📷 Skanuj i wyciągnij −1", () -> openPantryCamera(true));
         button("⌨ Wpisz kod ręcznie", this::manualPantryBarcode);
@@ -2586,10 +2599,13 @@ public final class MainActivity extends Activity {
         });
         int matched = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE", null)) {
+                "SELECT id,name,qty,category FROM pantry ORDER BY name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
                 long id = cursor.getLong(0);
                 String name = cursor.getString(1);
+                String category = cursor.getString(3);
+                if (!pantryCategoryFilter.isEmpty()
+                        && !pantryCategoryFilter.equals(category)) continue;
                 if (!pantrySearch.isEmpty() && !name.toLowerCase(Locale.ROOT)
                     .contains(pantrySearch.toLowerCase(Locale.ROOT))) continue;
                 matched++;
@@ -2612,6 +2628,7 @@ public final class MainActivity extends Activity {
                     }
                 }
                 box.addView(text(name + "  •  " + qty + " szt.", 18, true));
+                box.addView(text(PantryCategories.label(category), 13, false));
                 if (details != null && !details.brand.isEmpty())
                     box.addView(text("Marka: " + details.brand, 13, false));
                 LinearLayout quick = new LinearLayout(this);
@@ -2652,7 +2669,7 @@ public final class MainActivity extends Activity {
                 LinearLayout management = new LinearLayout(this);
                 management.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(management);
-                taskAction(management, "Zmień nazwę", () -> pantryProductDialog(id, name));
+                taskAction(management, "Edytuj", () -> pantryProductDialog(id, name));
                 taskAction(management, "Usuń", () -> {
                     if (db.openAuditId() != 0) {
                         alert("Najpierw zakończ lub anuluj remanent. "
@@ -2670,12 +2687,12 @@ public final class MainActivity extends Activity {
                 });
             }
         }
-        if (matched == 0) note(pantrySearch.isEmpty()
+        if (matched == 0) note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
-            : "Nie znaleziono produktów. Wyczyść wyszukiwanie.");
-        note("Skan i znane produkty działają offline. Nieznane kody można "
-            + "wyszukać w bazach Open Facts: żywność, chemia, kosmetyki i karma. "
-            + "Nazwa ręczna tylko przy braku wyniku. Kg/l i licznik odjęcia: kolejny etap.");
+            : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
+        note("Kategorie: żywność, chemia, kosmetyki, karma i pozostałe. "
+            + "Można je zmienić w Edytuj. Ogólna baza Open Products Facts "
+            + "nie przesądza, czy produkt jest chemią domową. Kg/l: kolejny etap.");
     }
 
 
@@ -2831,6 +2848,10 @@ public final class MainActivity extends Activity {
             : "Źródło: " + found.source + " • " + barcode
                 + " • sprawdź zgodność z opakowaniem.", 13, false));
         final EditText manualName = name;
+        final Spinner categorySpinner = pantryCategorySpinner(
+            found == null ? "other" : PantryCategories.fromSource(found.source));
+        form.addView(text("Kategoria produktu", 14, false));
+        form.addView(categorySpinner);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", null)
@@ -2842,7 +2863,7 @@ public final class MainActivity extends Activity {
                     return;
                 }
                 commitPantryBarcode(barcode, entered, "ADD", operationId,
-                    found);
+                    found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()]);
             }).show();
     }
 
@@ -2875,19 +2896,30 @@ public final class MainActivity extends Activity {
 
     private void commitPantryBarcode(String barcode, String name,
             String mode, String operationId, PantryProductLookup.Product found) {
+        commitPantryBarcode(barcode, name, mode, operationId, found, null);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory) {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
                 barcode, name, mode, operationId);
             DiagnosticLog.event("COMMITTED".equals(result) ?
                 "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
-            if (found != null && "COMMITTED".equals(result)) {
+            if (newCategory != null && "COMMITTED".equals(result)) {
                 try {
                     PantryBarcodeStore.Item product = PantryBarcodeStore.find(
                         db.getReadableDatabase(), barcode);
-                    if (product != null) PantryBarcodeStore.saveDetails(
-                        db.getWritableDatabase(), product.id, found.brand, found.imageUrl);
+                    if (product != null) {
+                        PantryCategoriesStore.setIfOther(db.getWritableDatabase(),
+                            product.id, newCategory);
+                        if (found != null) PantryBarcodeStore.saveDetails(
+                            db.getWritableDatabase(), product.id,
+                            found.brand, found.imageUrl);
+                    }
                 } catch (Exception detailsError) {
-                    DiagnosticLog.error("PANTRY_OFF_DETAILS", detailsError);
+                    DiagnosticLog.error("PANTRY_CATEGORY_DETAILS", detailsError);
                 }
             }
             render();
@@ -2915,37 +2947,62 @@ public final class MainActivity extends Activity {
             .setPositiveButton("Zamknij", null).show();
     }
 
+    private Spinner pantryCategorySpinner(String category) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_item, PantryCategories.LABELS);
+        adapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        int initial = java.util.Arrays.asList(PantryCategories.IDS)
+            .indexOf(category);
+        spinner.setSelection(Math.max(0, initial));
+        return spinner;
+    }
+
     private void pantryProductDialog(Long id, String existingName) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int)(16 * getResources().getDisplayMetrics().density);
+        form.setPadding(padding, padding, padding, padding);
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setText(existingName);
         input.setHint("Nazwa produktu");
+        form.addView(input);
+        String oldCategory = id == null ? "other"
+            : PantryCategoriesStore.find(db.getReadableDatabase(), id);
+        form.addView(text("Kategoria", 14, false));
+        Spinner category = pantryCategorySpinner(oldCategory);
+        form.addView(category);
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(id == null ? "Dodaj do spiżarni" : "Zmień nazwę produktu")
-            .setView(input).setNegativeButton("Anuluj", null)
+            .setTitle(id == null ? "Dodaj do spiżarni" : "Edytuj produkt")
+            .setView(form).setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             .setOnClickListener(v -> {
                 String name = input.getText().toString().trim();
+                String categoryId = PantryCategories.IDS[category.getSelectedItemPosition()];
                 if (name.isEmpty() || name.length() > 160) {
                     input.setError("Podaj nazwę (maks. 160 znaków).");
                     return;
                 }
                 if (id == null) {
-                    db.addStock(name);
+                    db.addStock(name, categoryId);
                     DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
                 } else if (!db.renameStock(id, name)) {
                     input.setError("Produkt o tej nazwie już istnieje.");
                     return;
-                } else DiagnosticLog.event("PANTRY_PRODUCT_RENAMED");
+                } else {
+                    PantryCategoriesStore.set(db.getWritableDatabase(), id, categoryId);
+                    DiagnosticLog.event("PANTRY_PRODUCT_EDITED");
+                }
                 dialog.dismiss();
                 render();
             }));
         dialog.show();
     }
 
-
-    /** Minimalny remanent wersji 0.1.1: stały snapshot, zapis postępu, korekta dopiero na końcu. */
     private void audit() {
         header("Spiżarnia / Remanent • BETA");
         long session = db.openAuditId();
@@ -3684,7 +3741,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 15);
+            super(context, "edhome-beta-preview.db", null, 16);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -3697,7 +3754,10 @@ public final class MainActivity extends Activity {
                 + "assignee_id INTEGER, "
                 + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
                 + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0)");
-            database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
+            database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0, "
+                + "category TEXT NOT NULL DEFAULT 'other' CHECK(category IN "
+                + "('other','food','household','beauty','pet')))");
             addAuditTables(database);
             addTaskHistory(database);
             addPlaces(database);
@@ -3712,7 +3772,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 15) {
+            if (oldVersion < 1 || newVersion > 16) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3793,6 +3853,12 @@ public final class MainActivity extends Activity {
             if (oldVersion < 15) {
                 PantryBarcodeStore.createDetails(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS");
+            }
+            if (oldVersion < 16) {
+                database.execSQL("ALTER TABLE pantry ADD COLUMN category TEXT "
+                    + "NOT NULL DEFAULT 'other' CHECK(category IN "
+                    + "('other','food','household','beauty','pet'))");
+                DiagnosticLog.event("DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES");
             }
         }
 
@@ -4619,7 +4685,9 @@ public final class MainActivity extends Activity {
                 new String[]{Long.toString(id)});
         }
 
-        void addStock(String name) {
+        void addStock(String name, String category) {
+            if (!PantryCategories.known(category))
+                throw new IllegalArgumentException("Nieznana kategoria.");
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try {
@@ -4637,6 +4705,7 @@ public final class MainActivity extends Activity {
                     ContentValues values = new ContentValues();
                     values.put("name", name);
                     values.put("qty", 1);
+                    values.put("category", category);
                     database.insertOrThrow("pantry", null, values);
                 }
                 database.setTransactionSuccessful();

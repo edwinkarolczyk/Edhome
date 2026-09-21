@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 15;
+    private static final int DB_VERSION = 16;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -39,7 +39,7 @@ final class DataBackup {
             "place_id", "priority", "duration_minutes", "assignee_id",
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
         {"task_rotation_members", "task_id", "member_id", "position"},
-        {"pantry", "id", "name", "qty"},
+        {"pantry", "id", "name", "qty", "category"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"device_timers", "id", "device_type", "title", "start_at", "end_at",
             "status", "acknowledged_at"},
@@ -141,7 +141,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -294,6 +294,11 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 16 && "pantry".equals(definition[0])
+                                && "category".equals(key)) {
+                            values.put(key, "other");
+                            continue;
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
@@ -391,7 +396,8 @@ final class DataBackup {
                     if (qty == null || qty > 100000000L ||
                         values.getAsString("name") == null
                         || values.getAsString("name").trim().isEmpty()
-                        || values.getAsString("name").length() > 160)
+                        || values.getAsString("name").length() > 160
+                        || !PantryCategories.known(values.getAsString("category")))
                         throw new IllegalArgumentException("Nieprawidłowy produkt w kopii.");
                 }
                 if ("pantry_barcodes".equals(definition[0])
