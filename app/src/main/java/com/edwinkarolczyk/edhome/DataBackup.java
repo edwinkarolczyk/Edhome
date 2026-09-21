@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 7;
+    private static final int DB_VERSION = 8;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
@@ -34,6 +34,7 @@ final class DataBackup {
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id"},
         {"pantry", "id", "name", "qty"},
+        {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
         {"audit_rows", "id", "session_id", "pantry_id", "name_snapshot",
             "expected_qty", "counted_qty", "status"},
@@ -108,7 +109,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -139,6 +140,7 @@ final class DataBackup {
                 || (inputVersion < 6 && "household_members".equals(definition[0]))
                 || (inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])
                     || "member_shift_exceptions".equals(definition[0])))
+                || (inputVersion < 8 && "shopping_items".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -179,7 +181,8 @@ final class DataBackup {
                     if (value == JSONObject.NULL) {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
-                            || "place_id".equals(key) || "assignee_id".equals(key)))
+                            || "place_id".equals(key) || "assignee_id".equals(key)
+                            || "qty_milli".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -232,6 +235,20 @@ final class DataBackup {
                             throw new IllegalArgumentException("Nieprawidłowa data wyjątku.");
                         }
                     }
+                }
+                if ("shopping_items".equals(definition[0])) {
+                    String itemName = values.getAsString("name");
+                    String unit = values.getAsString("unit");
+                    Long amount = values.getAsLong("qty_milli");
+                    Long checked = values.getAsLong("checked");
+                    if (itemName == null || itemName.trim().isEmpty()
+                            || itemName.length() > 160
+                            || !ShoppingRules.knownUnit(unit)
+                            || amount != null && (amount < 1
+                                || amount > ShoppingRules.MAX_MILLI)
+                            || checked == null || checked > 1)
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowa pozycja listy zakupów.");
                 }
                 if ("pantry".equals(definition[0])) {
                     Long qty = values.getAsLong("qty");
@@ -286,6 +303,13 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Set<String> shoppingNames = new HashSet<>();
+        for (ContentValues item : parsed.get("shopping_items")) {
+            if (!shoppingNames.add(item.getAsString("name").toLowerCase(
+                    java.util.Locale.ROOT)))
+                throw new IllegalArgumentException(
+                    "Powielone produkty na liście zakupów.");
+        }
         Set<Long> members = new HashSet<>();
         Set<String> memberNames = new HashSet<>();
         for (ContentValues member : parsed.get("household_members")) {
@@ -365,7 +389,9 @@ final class DataBackup {
     }
 
     private static boolean isNumberColumn(String column) {
-        return "id".equals(column) || "done".equals(column) || "qty".equals(column)
+        return "id".equals(column) || "done".equals(column)
+            || "checked".equals(column) || "qty_milli".equals(column)
+            || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "assignee_id".equals(column)
