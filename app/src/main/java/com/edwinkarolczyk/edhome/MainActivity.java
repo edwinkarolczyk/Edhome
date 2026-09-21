@@ -3337,11 +3337,8 @@ public final class MainActivity extends Activity {
         }
 
         String placeLabel(long taskId) {
-            try (Cursor c = getReadableDatabase().rawQuery(
-                    "SELECT p.name FROM tasks t JOIN places p ON t.place_id=p.id "
-                    + "WHERE t.id=?", new String[]{Long.toString(taskId)})) {
-                return c.moveToFirst() ? c.getString(0) : "";
-            }
+            Long placeId = taskPlaceId(taskId);
+            return placeId == null ? "" : placePath(placeId);
         }
 
         boolean addMember(String name) {
