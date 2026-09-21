@@ -312,3 +312,53 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 - **PayCheck pierwszy duży kolejny moduł**. SUPLA najpierw lista urządzeń i stanów, automatyka PV etapami. Rozwój fundamentu równolegle z funkcjami. Największa obawa: brak powiązań między modułami — każdy inkrement musi wykazać wspólne ID, właściciela danych, relacje i testy integracji.
 
 **Otwarte bez decyzji:** dziedziczenie widoczności czynności z miejsc nadrzędnych (pytanie 13), model priorytetów PV (28), dokładny czas odliczania i zachowanie skanera dla innego kodu, szczegółowa lista ograniczeń tabletu i precyzyjny zakres operacji wymagających połączenia. Nie wypełniać ich domysłami.
+
+
+## 24. Spiżarnia — koszt produktu i historia cen (propozycja koncepcyjna 21.09.2026)
+
+**Status: kierunek do dopracowania z Edwinem; NIE wdrożono w APK.** Ta sekcja rozdziela uzgodnioną intencję („ile coś kosztowało, z historią w spiżarni”) od poniższych rekomendacji modelu danych. W tym czacie wolno zmieniać specyfikację i roadmapę na `beta`; nie modyfikować kodu, APK ani `main` bez odrębnego polecenia.
+
+### Cel i przykład interfejsu
+
+- Na karcie produktu można zobaczyć **ostatnią znaną cenę**, opcjonalnie **typową cenę za porównywalną jednostkę**, historię rzeczywistych zakupów z datą/sklepem/ilością/ceną oraz — jeśli dane wystarczają — **szacunkową wartość aktualnego zapasu**. Użytkownik nie musi podawać ceny przy każdym skanie „Wyciągnij”.
+- Dane o cenie są **opcjonalne**. Brak ceny to „nieznana”, **nie 0 zł**. Ostatnia cena zakupu nie jest aktualną ceną sklepową ani gwarancją wartości tego, co pozostało na półce.
+- Widok może pokazywać np. „Ryż 1 kg · 4 opakowania · ostatnio 6,49 zł/op. · kupiony 12.09 · historia cen”; wartość zapasu tylko jako oznaczony szacunek, gdy część przyjęć nie ma cen.
+- W historii zachować cenę faktycznie zapłaconą, wraz z ilością i datą. Późniejsza edycja nazwy, katalogu, EAN lub ceny referencyjnej **nie przelicza historycznych paragonów**.
+
+### Trzy odrębne rodzaje zapisu
+
+1. **Kartoteka produktu/wariantu:** trwały ID, nazwa i ewentualnie EAN, rozmiar opakowania, jednostka oraz ostatnia znana cena/podgląd. Wariant „ryż 1 kg” i „ryż 500 g” może należeć do tej samej rodziny, ale nie mieszać cen za opakowanie.
+2. **Zakup / przyjęcie do magazynu:** ID zdarzenia, ID produktu, data (czas lokalny + znacznik techniczny), ilość i jednostka, cena jednostkowa/łączna rzeczywiście zapłacona, waluta, opcjonalnie sklep, promocja/rabat, dokument/zdjęcie paragonu, domownik i docelowe miejsce. **Zapis zakupu** i **fizyczne zwiększenie stanu** to różne fakty: zakup z listy może oczekiwać jako „Do dodania do [miejsce]” i dopiero po potwierdzeniu wejść do spiżarni. Własne uprawy, prezenty i korekty remanentu nie są zakupami po cenie 0 zł.
+3. **Ruch magazynowy:** dodanie, wyciągnięcie, przeniesienie, zwrot, strata, korekta remanentu. Zapisuje ilość i źródło; zwykłe wyjęcie produktu **nie tworzy nowego wydatku finansowego**. Dla produktu bez historii ceny ruch pozostaje w pełni możliwy.
+
+### Przepływy użytkownika (proponowane domyślne zachowanie)
+
+- **Lista zakupów → kupione:** można wpisać faktyczną ilość, cenę i sklep dla danej pozycji; cena jest opcjonalna. Pozycje mogą zostać oznaczone jako kupione, lecz nie zmienia to automatycznie stanu spiżarni; pozostają „Do dodania do [miejsce]”. Gdy przyjęcie jest potwierdzone, wskazać ID konkretnego zakupu, bez tworzenia drugiego zakupu.
+- **Skaner Dodaj:** dopisuje potwierdzoną ilość i miejsce; może użyć istniejącej oczekującej pozycji zakupu lub utworzyć samo przyjęcie bez ceny. Nie wymuszać formularza ceny w szybkim skanowaniu.
+- **Skaner Wyciągnij:** zmniejsza ilość, zapisuje historię, bez zmiany ceny zakupu i bez księgowania nowej transakcji.
+- **Remanent:** korekta stanu i historia rozbieżności nie udają nowego zakupu ani sprzedaży; mogą zmienić wartość zapasu wyłącznie po świadomym zatwierdzeniu sesji.
+- **Edytuj cenę:** korekta błędu konkretnego zakupu ma być audytowalna; odrębna „cena referencyjna” służy podpowiedzi i nie nadpisuje przeszłości.
+
+### Historia cen i wycena — nie mylić pojęć
+
+- „Ostatnia cena” = ostatni **rzeczywisty, datowany zakup tego samego wariantu**, z daną walutą. „Najniższa/najwyższa/średnia” liczyć tylko z porównywalnych jednostek i danych oznaczonych jako faktycznie zapłacone, nie z szacunków/promocyjnych etykiet bez zakupu.
+- Do porównywania różnych opakowań pokazywać cenę za kg/l/szt. **tylko po znanym przeliczeniu** rozmiaru opakowania; nie porównywać bezpośrednio ceny za paczkę 500 g z paczką 1 kg. Ułamkowe stany kg/l i części opakowań muszą mieć jawne jednostki.
+- Historia promocji/rabatów: cena końcowa po rabacie (dla pozycji), opcjonalnie cena przed rabatem, kod dokumentu i źródło kwoty; nie dopisywać domyślnego sklepu lub rabatu.
+- Szacowana wartość tego, co aktualnie jest na stanie, jest **informacją magazynową, nie saldem konta ani nowym wydatkiem**. Gdy wiadomo, które partie pozostały, można używać ich kosztów; przy braku powiązań proponowany fallback: średnia ważona znanych przyjęć, z jasną etykietą „szacunek / część bez ceny”. Metodę wyceny (partie, FIFO czy średnia) i politykę mieszanego stanu ustalić przed implementacją; **nie pokazywać fałszywie dokładnej sumy**. Przeterminowanie, ubytki i podarowanie także nie tworzą drugi raz kosztu zakupu.
+
+### Powiązanie z PayCheck i prywatność
+
+- Docelowo jeden paragon/zakup zbiorczy może zawierać **wiele pozycji spiżarni**, ale być powiązany z **jedną rzeczywistą transakcją finansową**, nie osobną transakcją za każdą paczkę. Nie wymuszać identyczności sumy bez uzgodnienia rabatów, zwrotów, opłat i artykułów spoza spiżarni; różnicę pokazać użytkownikowi do wyjaśnienia.
+- Zakup zapisany ręcznie, później rozpoznany z bankowego powiadomienia i wyciągu bankowego jest **tym samym wydatkiem**: łączyć po stabilnym ID/uzgodnieniu i potwierdzeniu, bez podwójnego księgowania.
+- Tablet we wspólnym trybie może pokazywać tylko dozwolony poziom danych: domyślnie ceny produktu i wspólnego zakupu **tylko przy uprawnieniu do wspólnych kosztów**; prywatne konto, metoda płatności i osobiste transakcje PayCheck nigdy nie trafiają do wspólnego cache urządzenia przez samo ukrycie ekranów.
+- Cena i paragon nie trafiają do logów Beta; dokumenty oraz historia uwzględniają eksport/backup, retencję i osobę dokonującą korekty.
+
+### Kryteria projektowe i pytania otwarte
+
+1. Jeden produkt kupiony kilkukrotnie po różnych cenach ma kilka niezmiennych zapisów cen; jego karta pokazuje ostatnią cenę, nie nadpisuje starej.
+2. Skanowanie bez ceny, darowizna, ubytek i remanent pozostają legalnymi operacjami; 0 zł nie zastępuje braku ceny.
+3. Zakupy nie dublują się między listą zakupów, przyjęciem, historią ruchów i PayCheck.
+4. Różne rozmiary paczek, promocje, częściowo zużyte opakowania oraz partie bez ceny nie generują pozornej dokładności raportów.
+5. Po synchronizacji Wi-Fi zdarzenia mają identyfikator, źródło i idempotencję; równoległe zmiany i korekty ceny nie niszczą historii.
+
+**Do decyzji Edwina przed kodowaniem:** czy cenę wpisujemy tylko na życzenie przy oznaczaniu „kupione”, czy także pytamy przy ręcznym „Dodaj”; czy na wspólnym tablecie pokazywać ceny zakupów; czy wartość zapasu ma być od razu w pierwszym wydaniu, czy później. Proponowany kierunek: nie blokować szybkiego skanowania ceną, najpierw historia zakupów i ostatnia cena, dopiero później rozbudowana wycena.
