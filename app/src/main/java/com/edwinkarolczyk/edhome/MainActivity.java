@@ -2054,14 +2054,16 @@ public final class MainActivity extends Activity {
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name
-            + " • cztery warianty tej samej aplikacji bez zmiany danych.");
+            + " • sześć wariantów tej samej aplikacji bez zmiany danych.");
         note("Wybierz styl i sprawdź go od razu. Zmiana działa dla "
             + "całej aplikacji i pozostaje po ponownym uruchomieniu.");
         String[] descriptions = {
             "Ciemny granat • mięta • wyraźne kafle",
             "Leśna zieleń • ciepłe, naturalne akcenty",
             "Jasny krem • łagodne kolory • wysoki kontrast",
-            "Głęboki błękit • szklane karty • subtelny połysk"
+            "Głęboki błękit • szklane karty • subtelny połysk",
+            "WMM • warsztatowy grafit • turkusowe akcenty",
+            "Trener 2 • głęboka czerń • czerwone akcenty"
         };
         for (int i = 0; i < UiSkin.THEMES.length; i++) {
             String theme = UiSkin.THEMES[i];
