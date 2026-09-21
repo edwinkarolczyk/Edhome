@@ -106,6 +106,16 @@ jobs:
             com.edwinkarolczyk.edhome.DeviceTimerRulesSmoke
       - name: Appliance timers / alarms / backup contract
         run: python3 tests/check_device_timer_contract.py
+      - name: Recurring assignee rotation regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/rotation"
+          javac -d "$RUNNER_TEMP/rotation" \
+            app/src/main/java/com/edwinkarolczyk/edhome/RotationRules.java \
+            tests/task_rules/RotationRulesSmoke.java
+          java -cp "$RUNNER_TEMP/rotation" \
+            com.edwinkarolczyk.edhome.RotationRulesSmoke
+      - name: Rotation DB / history / backup contract
+        run: python3 tests/check_rotation_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Beta without PIN contract
