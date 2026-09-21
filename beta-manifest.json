@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 29,
-  "versionName": "0.3.6-beta.1",
-  "changelog": "EDHOME Beta 0.3.6-beta.1 — rotacyjne obowiązki domowników, historia wykonawcy i bezpieczne usuwanie osób; SQLite v13.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.6-beta.1/edhome-beta.apk",
-  "sha256": "72ec813e3032a17721295398fe62c3e6cf7e6c8a4bb6004b45310774cdc40c36"
+  "versionCode": 30,
+  "versionName": "0.3.7-beta.1",
+  "changelog": "EDHOME Beta 0.3.7-beta.1 — ustawiane godziny ciszy oraz czytelniejszy tryb układania kafelków; SQLite v13.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.7-beta.1/edhome-beta.apk",
+  "sha256": "050c4ca6a57d539bdf49280be2098c1be9678cbb48e5c2c7828469dbdba8a36a"
 }
