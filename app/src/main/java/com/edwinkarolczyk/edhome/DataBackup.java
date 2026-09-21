@@ -68,6 +68,10 @@ final class DataBackup {
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
         settings.put("timerNotificationsEnabled",
             prefs.getBoolean("timer_notifications_enabled", false));
+        settings.put("quietHoursStart", prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START));
+        settings.put("quietHoursEnd", prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END));
         JSONObject appearance = new JSONObject();
         for (String id : HOME_TILE_IDS) {
             JSONObject tile = new JSONObject();
@@ -145,6 +149,13 @@ final class DataBackup {
         if (settings.has("timerNotificationsEnabled")
                 && !(settings.get("timerNotificationsEnabled") instanceof Boolean))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia minutników.");
+        String quietStart = settings.optString("quietHoursStart",
+            QuietHoursRules.DEFAULT_START);
+        String quietEnd = settings.optString("quietHoursEnd",
+            QuietHoursRules.DEFAULT_END);
+        if (!QuietHoursRules.validWindow(quietStart, quietEnd))
+            throw new IllegalArgumentException(
+                "Nieprawidłowe godziny ciszy w kopii.");
         if (household.trim().isEmpty() || household.length() > 200
                 || !UiSkin.accepted(theme))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia kopii.");
@@ -567,7 +578,9 @@ final class DataBackup {
             .putString("household", household)
             .putString("theme", theme)
             .putString("home_tile_order", tileOrder)
-            .putBoolean("timer_notifications_enabled", timerNotifications);
+            .putBoolean("timer_notifications_enabled", timerNotifications)
+            .putString("quiet_hours_start", quietStart)
+            .putString("quiet_hours_end", quietEnd);
         for (String id : HOME_TILE_IDS) {
             restored.remove("tile_label_" + id)
                 .remove("tile_tint_" + id).remove("tile_icon_" + id);
