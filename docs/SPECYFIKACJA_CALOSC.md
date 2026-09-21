@@ -314,9 +314,9 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 **Otwarte bez decyzji:** dziedziczenie widoczności czynności z miejsc nadrzędnych (pytanie 13), model priorytetów PV (28), dokładny czas odliczania i zachowanie skanera dla innego kodu, szczegółowa lista ograniczeń tabletu i precyzyjny zakres operacji wymagających połączenia. Nie wypełniać ich domysłami.
 
 
-## 24. Spiżarnia — koszt produktu i historia cen (propozycja koncepcyjna 21.09.2026)
+## 24. Spiżarnia — koszt produktu i historia cen (ustalenia potwierdzone 21.09.2026)
 
-**Status: kierunek do dopracowania z Edwinem; NIE wdrożono w APK.** Ta sekcja rozdziela uzgodnioną intencję („ile coś kosztowało, z historią w spiżarni”) od poniższych rekomendacji modelu danych. W tym czacie wolno zmieniać specyfikację i roadmapę na `beta`; nie modyfikować kodu, APK ani `main` bez odrębnego polecenia.
+**Status: trzy decyzje użytkownika zatwierdzone 21.09.2026; funkcja planowana, NIE wdrożona w APK.** Ta sekcja rozdziela uzgodnioną intencję („ile coś kosztowało, z historią w spiżarni”) od poniższych rekomendacji modelu danych. W tym czacie wolno zmieniać specyfikację i roadmapę na `beta`; nie modyfikować kodu, APK ani `main` bez odrębnego polecenia.
 
 ### Cel i przykład interfejsu
 
@@ -350,7 +350,7 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 
 - Docelowo jeden paragon/zakup zbiorczy może zawierać **wiele pozycji spiżarni**, ale być powiązany z **jedną rzeczywistą transakcją finansową**, nie osobną transakcją za każdą paczkę. Nie wymuszać identyczności sumy bez uzgodnienia rabatów, zwrotów, opłat i artykułów spoza spiżarni; różnicę pokazać użytkownikowi do wyjaśnienia.
 - Zakup zapisany ręcznie, później rozpoznany z bankowego powiadomienia i wyciągu bankowego jest **tym samym wydatkiem**: łączyć po stabilnym ID/uzgodnieniu i potwierdzeniu, bez podwójnego księgowania.
-- Tablet we wspólnym trybie może pokazywać tylko dozwolony poziom danych: domyślnie ceny produktu i wspólnego zakupu **tylko przy uprawnieniu do wspólnych kosztów**; prywatne konto, metoda płatności i osobiste transakcje PayCheck nigdy nie trafiają do wspólnego cache urządzenia przez samo ukrycie ekranów.
+- **Decyzja Edwina:** tablet we wspólnym trybie pokazuje **wszystkie zapisane ceny produktów oraz historię ich cen/zakupów**, także gdy zakup został opłacony prywatnie, ale **bez danych kont, kart, metody płatności, sald i osobistych transakcji PayCheck**. Ceny są udostępnioną częścią kartoteki spiżarni; prywatne rekordy finansowe pozostają chronione i nie są kopiowane do wspólnego cache tabletu. Nie ujawniać przez szczegóły zakupów prywatnych paragonów/dokumentów z danymi bankowymi.
 - Cena i paragon nie trafiają do logów Beta; dokumenty oraz historia uwzględniają eksport/backup, retencję i osobę dokonującą korekty.
 
 ### Kryteria projektowe i pytania otwarte
@@ -361,4 +361,4 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 4. Różne rozmiary paczek, promocje, częściowo zużyte opakowania oraz partie bez ceny nie generują pozornej dokładności raportów.
 5. Po synchronizacji Wi-Fi zdarzenia mają identyfikator, źródło i idempotencję; równoległe zmiany i korekty ceny nie niszczą historii.
 
-**Do decyzji Edwina przed kodowaniem:** czy cenę wpisujemy tylko na życzenie przy oznaczaniu „kupione”, czy także pytamy przy ręcznym „Dodaj”; czy na wspólnym tablecie pokazywać ceny zakupów; czy wartość zapasu ma być od razu w pierwszym wydaniu, czy później. Proponowany kierunek: nie blokować szybkiego skanowania ceną, najpierw historia zakupów i ostatnia cena, dopiero później rozbudowana wycena.
+**Zatwierdzone przez Edwina — 21.09.2026:** (1) cena jest **opcjonalna przy oznaczaniu pozycji listy jako „kupione”** i nigdy nie blokuje skanowania/wyciągania; (2) wspólny tablet pokazuje **wszystkie ceny produktów**, ale **żadnych danych kont ani osobistej księgowości PayCheck**; (3) **wartość całego zapasu dopiero w późniejszym etapie**, po historii zakupów i cen. Nadal otwarta jest szczegółowa metoda późniejszej wyceny (partie/FIFO/średnia) i polityka niepełnych danych; nie zastępować nieznanej ceny zerem.
