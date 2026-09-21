@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.2-beta.1 (`beta`):** indywidualna godzina i wyprzedzenie przypomnienia (0/1/2/3/7 dni), cisza 22:00–07:00 i opt-in. Starsze zadania nadal mają przypomnienie około 09:00. SQLite v10, kopie v2–v10. Powiadomień nie gwarantuje się co do minuty (Android/Doze). Beta bez PIN-u, Stable z PIN-em. Test na telefonie odrębnym kryterium odbioru. Źródło wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+> **Stan 0.3.2-beta.2 (`beta`):** indywidualna godzina i wyprzedzenie przypomnienia (0/1/2/3/7 dni), cisza 22:00–07:00 i opt-in. Starsze zadania nadal mają przypomnienie około 09:00. SQLite v10, kopie v2–v10. Powiadomień nie gwarantuje się co do minuty (Android/Doze). Beta bez PIN-u, Stable z PIN-em. Test na telefonie odrębnym kryterium odbioru. Źródło wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
