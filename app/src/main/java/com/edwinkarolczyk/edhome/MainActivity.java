@@ -3106,11 +3106,13 @@ public final class MainActivity extends Activity {
                             for (String key : prefs.getAll().keySet()) {
                                 if (key.startsWith("reminder_fired_")
                                         || key.startsWith("reminder_custom_day_")
-                                        || "reminder_legacy_day".equals(key))
+                                        || "reminder_legacy_day".equals(key)
+                                        || key.startsWith("timer_notified_"))
                                     reminderReset.remove(key);
                             }
                             reminderReset.apply();
                             ReminderReceiver.schedule(this);
+                            DeviceTimerReceiver.scheduleAll(this);
                             DiagnosticLog.event("DATA_BACKUP_RESTORED");
                             screen = "home";
                             unlocked = BetaUpdater.isBeta();
