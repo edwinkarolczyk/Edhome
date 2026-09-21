@@ -157,13 +157,13 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 
 ## Domowy dysk / NAS — EDHOME Hub i API (warunkowy kierunek)
 
-**Nie jest to działająca integracja ani potwierdzenie możliwości urządzenia ze zdjęcia.** [Specyfikacja §25](SPECYFIKACJA_CALOSC.md#25-własny-dysk-sieciowy--nas-jako-edhome-hub-i-lokalne-api--analiza-warunkowa-21092026).
+**Nie jest to działająca integracja. Edwin potwierdził model D-Link DNS-320L; zalecany wariant B — NAS na kopie, EDHOME Hub na osobnym hoście. Nie zweryfikowano firmware, stanu dysków ani bezpiecznych protokołów.** [Specyfikacja §25](SPECYFIKACJA_CALOSC.md#25-własny-dysk-sieciowy--nas-jako-edhome-hub-i-lokalne-api--analiza-warunkowa-21092026).
 
 | Kiedy | Rezultat | Warunek odbioru |
 |---|---|---|
-| Teraz — projekt / bez zmian kodu | Ustalić model, OS/firmware, RAM, CPU i czy NAS uruchamia Docker/usługi. Rozróżnić serwer NAS od zwykłego dysku sieciowego/USB przy routerze. | Zweryfikowana instrukcja producenta lub dane z panelu sprzętu; nie zakładać funkcji po samej nazwie „serwer”. |
+| Teraz — projekt / bez zmian kodu | **Model: D-Link DNS-320L.** Zweryfikować firmware, stan dysków, protokoły SMB i aktualne możliwości urządzenia; nie zakładać Dockera ani nowoczesnych pakietów API. | Potwierdzenie z panelu/testu sieci; żadnych haseł, adresów i numerów seryjnych w publicznym repo. |
 | Fundament danych równolegle z modułami | Wspólne ID, wersje, kolejka zdarzeń, uprawnienia i eksport; API może działać na NAS **albo** na oddzielnym mini-PC, z NAS jako magazynem backupów. | Offline działa bez Huba, brak współdzielonego pliku SQLite po SMB, brak prywatnego PayCheck w cache tabletu. |
 | Etap 0.8 — synchronizacja LAN / Hub | Lokalny proces API, autoryzacja osób i urządzeń, przyjęcia/wyjęcia, zakupy, ceny, remanent, konflikty i idempotencja; później panel PC. | Dwa urządzenia po pracy offline nie nadpisują zmian, nie dublują kosztów i mogą wznowić synchronizację. |
 | Utwardzenie i eksploatacja | Backup wersjonowany na osobny nośnik, test przywrócenia, migracje, aktualizacja usługi, zasilanie oraz opcjonalny VPN do dostępu zdalnego. | Awaria NAS/Huba nie kasuje jedynych danych; API/SMB nie są otwarte wprost do internetu. |
 
-**Decyzja A/B dopiero po rozpoznaniu konkretnego modelu:** A — hostowanie API bezpośrednio na NAS, jeśli obsługuje usługi i ma zasoby; B — dysk tylko na dane/backup, API na mini-PC lub innym zgodnym urządzeniu. W tym czacie jedynie teoria i dokumentacja na `beta`; nie zmieniać APK, kodu ani `main`.
+**Dla wskazanego D-Link DNS-320L rekomendowany wariant B:** NAS wyłącznie na backupy/eksporty/załączniki po weryfikacji bezpieczeństwa, API na mini-PC lub innym zgodnym i aktualizowanym urządzeniu. Alternatywne uruchamianie niestandardowego oprogramowania na NAS pozostaje eksperymentem, nie bazową architekturą. Nie polegać na starym SMB1 ani jednym nośniku backupu. W tym czacie jedynie teoria i dokumentacja na `beta`; nie zmieniać APK, kodu ani `main`.
