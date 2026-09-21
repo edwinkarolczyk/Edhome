@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 35,
-  "versionName": "0.4.0-beta.5",
-  "changelog": "EDHOME Beta 0.4.0-beta.5 — kategorie spiżarni, filtr i przypisywanie produktów; SQLite v16.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.5/edhome-beta.apk",
-  "sha256": "c1f48d5beb3a380ce29e9f8a4a06dda54e76f1837424f06466e9f26661197b2c"
+  "versionCode": 36,
+  "versionName": "0.4.0-beta.6",
+  "changelog": "EDHOME Beta 0.4.0-beta.6 — liczba opakowań i zawartość jednego opakowania (szt./kg/l); SQLite v17.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.6/edhome-beta.apk",
+  "sha256": "4bf9a6b8fedf63f0c66a44a24f59eee768386e506585442537ee463d893380db"
 }
