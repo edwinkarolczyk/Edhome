@@ -144,10 +144,10 @@ jobs:
       - name: Pantry category regression
         run: |
           mkdir -p "$RUNNER_TEMP/pantry-categories"
-          javac -d "$RUNNER_TEMP/pantry-categories" \\
-            app/src/main/java/com/edwinkarolczyk/edhome/PantryCategories.java \\
+          javac -d "$RUNNER_TEMP/pantry-categories" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryCategories.java \
             tests/task_rules/PantryCategoriesSmoke.java
-          java -cp "$RUNNER_TEMP/pantry-categories" \\
+          java -cp "$RUNNER_TEMP/pantry-categories" \
             com.edwinkarolczyk.edhome.PantryCategoriesSmoke
       - name: Pantry category and backup contract
         run: python3 tests/check_pantry_categories_contract.py
