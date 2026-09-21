@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 36,
-  "versionName": "0.4.0-beta.6",
-  "changelog": "EDHOME Beta 0.4.0-beta.6 — liczba opakowań i zawartość jednego opakowania (szt./kg/l); SQLite v17.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.6/edhome-beta.apk",
-  "sha256": "4bf9a6b8fedf63f0c66a44a24f59eee768386e506585442537ee463d893380db"
+  "versionCode": 37,
+  "versionName": "0.4.0-beta.7",
+  "changelog": "EDHOME Beta 0.4.0-beta.7 — seryjne skanowanie spiżarni, ponowienie aparatu po zapisie i ochrona przed podwójnym naliczeniem; SQLite v17.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.7/edhome-beta.apk",
+  "sha256": "be99f13c10fbaccfae1fd0a99482728fa2bc2b81920e53bddf8f2aa229a6d073"
 }
