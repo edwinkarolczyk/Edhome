@@ -39,10 +39,9 @@ final class WasteRules {
         } catch (DateTimeParseException error) {
             return "Nieprawidłowy dzień wystawienia.";
         }
-        if (!(("once".equals(rule) || "weekly".equals(rule)
-                    || "monthly".equals(rule)) && every == 1)
-                && !("every_weeks".equals(rule) && every == 2))
-            return "Nieprawidłowa częstotliwość odpadów.";
-        return null;
+        // The quick-add offers four intervals. Existing waste tasks may later
+        // be edited with the complete ordinary-task recurrence editor.
+        return TaskRules.validate("Wystaw: " + label(fraction),
+            due, rule, every);
     }
 }
