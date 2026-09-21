@@ -104,6 +104,11 @@ public final class MainActivity extends Activity {
     private UiSkin skin;
     private boolean homeEditMode;
     private ScrollView pageScroll;
+    private final java.util.Map<String, LinearLayout> homeTileViews =
+        new java.util.LinkedHashMap<>();
+    private String homeDragSource;
+    private String homeDragTarget;
+    private TextView homeDragHint;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -421,6 +426,8 @@ public final class MainActivity extends Activity {
             : "✥  Dotknij, aby otworzyć • przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij", 13, false);
         editHint.setTextColor(homeEditMode ? accent : subdued);
         body.addView(editHint);
+        homeDragHint = editHint;
+        homeTileViews.clear();
         if (homeEditMode) button("✓  Zakończ układanie", () -> {
             homeEditMode = false;
             render();
@@ -429,6 +436,7 @@ public final class MainActivity extends Activity {
         for (String tileId : homeTileOrder()) {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
+            homeTileViews.put(tileId, tile);
             TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
             caption.setText(homeTileLabel(tileId));
             tile.setContentDescription(homeTileLabel(tileId)
@@ -448,23 +456,19 @@ public final class MainActivity extends Activity {
                             && event.getClipDescription().hasMimeType(
                                 android.content.ClipDescription.MIMETYPE_TEXT_PLAIN);
                     case DragEvent.ACTION_DRAG_ENTERED:
-                        tile.setScaleX(1.04f);
-                        tile.setScaleY(1.04f);
-                        tile.setAlpha(0.83f);
+                        previewHomeTilePlacement(homeDragSource, tileId);
                         return true;
                     case DragEvent.ACTION_DRAG_LOCATION:
+                        previewHomeTilePlacement(homeDragSource, tileId);
                         scrollHomeDuringDrag(tile, event.getY());
                         return true;
                     case DragEvent.ACTION_DRAG_EXITED:
+                        // Keep the gap visible while passing between tile boundaries.
+                        return true;
                     case DragEvent.ACTION_DRAG_ENDED:
-                        tile.setScaleX(1f);
-                        tile.setScaleY(1f);
-                        tile.setAlpha(1f);
+                        if (tileId.equals(homeDragSource)) resetHomeDragPreview();
                         return true;
                     case DragEvent.ACTION_DROP:
-                        tile.setScaleX(1f);
-                        tile.setScaleY(1f);
-                        tile.setAlpha(1f);
                         if (event.getClipData() == null
                                 || event.getClipData().getItemCount() != 1)
                             return false;
@@ -522,13 +526,79 @@ public final class MainActivity extends Activity {
     private boolean beginHomeDrag(View tile, String id) {
         if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)) return false;
         ClipData data = ClipData.newPlainText("edhome-home-tile", id);
+        homeDragSource = id;
+        homeDragTarget = null;
         boolean started = tile.startDragAndDrop(data,
-            new View.DragShadowBuilder(tile), null, View.DRAG_FLAG_GLOBAL);
+            new View.DragShadowBuilder(tile), null, 0);
         if (started) {
+            tile.setAlpha(0.16f);
             tile.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             DiagnosticLog.event("HOME_TILE_DRAG_STARTED");
+        } else {
+            homeDragSource = null;
         }
         return started;
+    }
+
+    /** Live reorder preview: animate siblings into prospective positions; save only on drop. */
+    private void previewHomeTilePlacement(String source, String target) {
+        if (source == null || target == null || !homeTileViews.containsKey(source)
+                || !homeTileViews.containsKey(target)
+                || target.equals(homeDragTarget)) return;
+        java.util.List<String> original = homeTileOrder();
+        if (!original.contains(source) || !original.contains(target)) return;
+        java.util.List<String> preview = new java.util.ArrayList<>(original);
+        preview.remove(source);
+        preview.add(preview.indexOf(target), source);
+        java.util.Map<String, int[]> slots = new java.util.HashMap<>();
+        for (String id : original) {
+            int[] location = new int[2];
+            homeTileViews.get(id).getLocationOnScreen(location);
+            // Remove prior animations, otherwise the new slot would drift.
+            View tile = homeTileViews.get(id);
+            slots.put(id, new int[]{
+                Math.round(location[0] - tile.getTranslationX()),
+                Math.round(location[1] - tile.getTranslationY())
+            });
+        }
+        for (int i = 0; i < preview.size(); i++) {
+            String id = preview.get(i);
+            View tile = homeTileViews.get(id);
+            tile.animate().cancel();
+            if (source.equals(id)) {
+                tile.setAlpha(0.16f); // The drag shadow carries the item.
+                continue;
+            }
+            int[] destination = slots.get(original.get(i));
+            int[] position = slots.get(id);
+            tile.animate()
+                .translationX(destination[0] - position[0])
+                .translationY(destination[1] - position[1])
+                .setDuration(145)
+                .start();
+        }
+        homeDragTarget = target;
+        if (homeDragHint != null) {
+            homeDragHint.setText("✥  Upuść tutaj: pozycja "
+                + (preview.indexOf(source) + 1) + " z 9 • "
+                + homeTileLabel(source));
+            homeDragHint.setTextColor(accent);
+        }
+    }
+
+    private void resetHomeDragPreview() {
+        for (View tile : homeTileViews.values()) {
+            tile.animate().cancel();
+            tile.animate().translationX(0f).translationY(0f)
+                .alpha(1f).setDuration(150).start();
+        }
+        homeDragSource = null;
+        homeDragTarget = null;
+        if (homeDragHint != null) {
+            homeDragHint.setText("✥  Dotknij, aby otworzyć • "
+                + "przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij");
+            homeDragHint.setTextColor(subdued);
+        }
     }
 
     private void scrollHomeDuringDrag(View tile, float localY) {
