@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 39,
-  "versionName": "0.4.0-beta.9",
-  "changelog": "EDHOME Beta 0.4.0-beta.9 — wyszukiwanie po nazwie w czterech katalogach po nierozpoznanym kodzie; SQLite v17.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.9/edhome-beta.apk",
-  "sha256": "58c7908c164629f4e1f9aba4faac919ece6564a2175b2bd3a446594a8c7cfd14"
+  "versionCode": 40,
+  "versionName": "0.4.0-beta.10",
+  "changelog": "EDHOME Beta 0.4.0-beta.10 — przypisywanie nowych kodów do istniejących produktów bez dublowania stanu; SQLite v17.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.10/edhome-beta.apk",
+  "sha256": "2610db6642fd7b356d3bcf2fd5f405e7245969011674883f098a15e2c00cd1f0"
 }
