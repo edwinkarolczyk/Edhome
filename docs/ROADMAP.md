@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.4-beta.1 (`beta`):** hierarchia Miejsc z własnymi nazwami, opcjonalnymi rodzajami i ikonami; ścieżki Dom → Kuchnia → Półka; SQLite v11 z zachowaniem istniejących ID i czynności, kopie JSON v2–v11. Beta bez PIN-u, Stable z PIN-em. [Odbiór Miejsc](BETA_0_3_4.md).
+> **Stan 0.3.4-beta.2 (`beta`):** hierarchia Miejsc z własnymi nazwami, opcjonalnymi rodzajami i ikonami; ścieżki Dom → Kuchnia → Półka; SQLite v11 z zachowaniem istniejących ID i czynności, kopie JSON v2–v11. Beta bez PIN-u, Stable z PIN-em. [Odbiór Miejsc](BETA_0_3_4.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
