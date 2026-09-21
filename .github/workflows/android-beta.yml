@@ -80,6 +80,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/reminders"
           javac -d "$RUNNER_TEMP/reminders" \
+            app/src/main/java/com/edwinkarolczyk/edhome/QuietHoursRules.java \
             app/src/main/java/com/edwinkarolczyk/edhome/ReminderRules.java \
             tests/task_rules/ReminderRulesSmoke.java
           java -cp "$RUNNER_TEMP/reminders" \
