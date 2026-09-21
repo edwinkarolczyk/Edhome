@@ -345,7 +345,7 @@ public final class MainActivity extends Activity {
     }
 
     private void setupPin() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
         note("Pierwsze uruchomienie. Ustaw lokalny PIN 4–8 cyfr.");
         EditText a = field("PIN", true);
         EditText b = field("Powtórz PIN", true);
@@ -373,11 +373,11 @@ public final class MainActivity extends Activity {
                 alert("Błąd zabezpieczenia PIN. Spróbuj ponownie.");
             }
         });
-        note("To tylko prototyp blokady. Brak odzyskiwania PIN i kopii danych — używaj danych testowych.");
+        note("Zachowaj PIN w bezpiecznym miejscu i wykonuj regularne kopie danych.");
     }
 
     private void unlockPin() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
         note("Odblokuj lokalną instalację.");
         EditText input = field("PIN", true);
         button("Odblokuj", () -> {
@@ -402,13 +402,13 @@ public final class MainActivity extends Activity {
     }
 
     private void header(String subtitle) {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
         note(subtitle);
         button("← Panel główny", () -> go("home"));
     }
 
     private void home() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
         note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
         title(prefs.getString("household", "Moje gospodarstwo"));
 
