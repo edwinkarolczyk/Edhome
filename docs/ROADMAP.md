@@ -1,3 +1,5 @@
+> **Stan nowszy od historycznego nagłówka niżej:** wydania 0.4.0-beta.11/12/13 obejmują przyjęcia zakupów, pudełka, QR i ochronę miejsc. Pierwszy PayCheck tylko dla wspólnego budżetu zaczyna się w 0.5.0-beta.1 (SQLite v20); prywatne dane nie są dostępne w Becie bez ochrony. Datowane fragmenty niżej są historią planu, nie bieżącą wersją APK.
+
 # EDHOME — roadmapa (propozycja)
 
 > **Stan 0.3.7-beta.1 (`beta`):** rotacyjne obowiązki, konfigurowalne godziny ciszy dla czynności i minutników oraz bardziej widoczny tryb układania kafelków. SQLite v13, kopie v2–v13. Beta bez PIN-u, Stable z PIN-em. [Odbiór 0.3.7](BETA_0_3_7.md).

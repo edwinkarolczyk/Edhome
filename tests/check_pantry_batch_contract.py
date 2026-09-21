@@ -41,5 +41,5 @@ assert 'if (!active || !cameraPending) return false;' in state
 assert 'if (!active || !awaitingConfirmation || barcode == null) return false;' in state
 assert 'operationExists(db, operationId)' in store
 assert 'db.beginTransaction();' in store and 'movement.put("qty", 1);' in store
-assert "versionCode 43" in gradle and "versionNameSuffix '-beta.13'" in gradle
+assert "versionCode 44" in gradle and "versionNameSuffix '-beta.1'" in gradle
 print("Batch scan UI, double-result guard, explicit confirmation, idempotence: PASS")

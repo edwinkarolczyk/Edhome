@@ -196,6 +196,15 @@ jobs:
           python3 tests/check_storage_qr_contract.py
       - name: Storage location and place deletion regression
         run: python3 tests/check_storage_integrity_contract.py
+      - name: PayCheck grosze and shared-only ledger contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/edhome-paycheck"
+          javac -d "$RUNNER_TEMP/edhome-paycheck" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            tests/task_rules/MoneyRulesSmoke.java
+          java -cp "$RUNNER_TEMP/edhome-paycheck" \
+            com.edwinkarolczyk.edhome.MoneyRulesSmoke
+          python3 tests/check_paycheck_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -254,14 +263,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.4.0-beta.13-signed-apk
+          name: EDHOME-0.5.0-beta.1-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.13 — ochrona rzeczy podczas usuwania miejsc i pełne ścieżki lokalizacji; SQLite v19."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.1 — PayCheck: wspólny budżet, potwierdzane transakcje bez prywatnych kont; SQLite v20."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

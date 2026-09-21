@@ -331,6 +331,7 @@ public final class MainActivity extends Activity {
                 case "shopping": shopping(); break;
                 case "places": places(); break;
                 case "storage": storage(); break;
+                case "paycheck": paycheck(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
@@ -554,6 +555,7 @@ public final class MainActivity extends Activity {
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
         smallButton(today, "Minutniki urządzeń →", () -> go("timers"));
         smallButton(today, "Lista zakupów →", () -> go("shopping"));
+        smallButton(today, "PayCheck • wspólny budżet →", () -> go("paycheck"));
         smallButton(today, "Odpady i terminy wystawienia →", () -> go("waste"));
         smallButton(today, "Zobacz wszystkie czynności →", () -> {
             tasksFilter = "all";
@@ -2681,6 +2683,83 @@ public final class MainActivity extends Activity {
             .setPositiveButton("Magazyn",(d,w)->go("storage")).show();
     }
 
+    private void paycheck() {
+        header("PayCheck • wspólny budżet");
+        note("Pierwszy etap: tylko wspólne, ręcznie zatwierdzane transakcje. "
+            + "Prywatne profile pozostają niedostępne, dopóki nie mają "
+            + "własnej ochrony przed dostępem ze wspólnego tabletu.");
+        note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
+            + "Podaj rzeczywistą kwotę dopiero po dokonanej płatności.");
+        title("Saldo wspólne: " + MoneyRules.format(
+            PaycheckStore.sharedBalance(db.getReadableDatabase())));
+        Spinner kind=new Spinner(this);
+        kind.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList("Wydatek −","Przychód +")));
+        body.addView(kind);
+        Spinner category=new Spinner(this);
+        category.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        body.addView(category);
+        EditText amount=field("Kwota w PLN, np. 12,50",false);
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText noteField=field("Opis (opcjonalnie, maks. 160 znaków)",false);
+        button("Dodaj transakcję do wspólnego budżetu",()->{
+            long grosz;
+            try{grosz=MoneyRules.parse(amount.getText().toString());}
+            catch(IllegalArgumentException error){amount.setError(error.getMessage());return;}
+            String description=noteField.getText().toString().trim();
+            if(description.length()>160){
+                noteField.setError("Opis ma maksymalnie 160 znaków.");return;
+            }
+            String type=kind.getSelectedItemPosition()==1?"income":"expense";
+            String group=MoneyRules.CATEGORIES[category.getSelectedItemPosition()];
+            String operationId=java.util.UUID.randomUUID().toString();
+            new AlertDialog.Builder(this)
+                .setTitle("Potwierdź transakcję wspólną")
+                .setMessage(("income".equals(type)?"Przychód: ":"Wydatek: ")
+                    +MoneyRules.format(grosz)+"\n"
+                    +MoneyRules.categoryLabel(group)
+                    +(description.isEmpty()?"":"\n"+description)
+                    +"\n\nBez automatycznego powiązania z zakupami.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Zapisz",(d,w)->{
+                    try{
+                        String outcome=PaycheckStore.add(
+                            db.getWritableDatabase(),operationId,
+                            type,group,grosz,description);
+                        if("COMMITTED".equals(outcome)){
+                            DiagnosticLog.event("PAYCHECK_SHARED_COMMITTED");
+                            render();
+                        }else alert("Ta operacja była już zapisana.");
+                    }catch(Exception problem){
+                        DiagnosticLog.error("PAYCHECK_SHARED",problem);
+                        alert("Nie zapisano transakcji.");
+                    }
+                }).show();
+        });
+        title("Historia wspólna");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT kind,category,amount_grosz,note,created_at "
+                +"FROM paycheck_transactions WHERE scope='shared' "
+                +"ORDER BY id DESC LIMIT 40",null)){
+            while(c.moveToNext()){
+                count++;
+                LinearLayout entry=card();
+                boolean income="income".equals(c.getString(0));
+                entry.addView(text((income?"+ ":"− ")
+                    +MoneyRules.format(c.getLong(2)),18,true));
+                entry.addView(text(MoneyRules.categoryLabel(c.getString(1))
+                    +(c.getString(3).isEmpty()?"":" • "+c.getString(3)),14,false));
+                entry.addView(text(Instant.ofEpochMilli(c.getLong(4))
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
+                    12,false));
+            }
+        }
+        if(count==0)note("Brak transakcji wspólnych. Niczego nie księgujemy automatycznie.");
+    }
+
     private void shopping() {
         header("Lista zakupów • offline");
         note("Kupione ≠ przyjęte. Samo zaznaczenie nie zmienia stanu; "
@@ -4406,7 +4485,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 19);
+            super(context, "edhome-beta-preview.db", null, 20);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -4431,6 +4510,7 @@ public final class MainActivity extends Activity {
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            PaycheckStore.create(database);
             addDeviceTimers(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
@@ -4440,7 +4520,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 19) {
+            if (oldVersion < 1 || newVersion > 20) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -4540,6 +4620,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 19) {
                 StorageStore.createTables(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_18_TO_19_STORAGE_QR");
+            }
+            if (oldVersion < 20) {
+                PaycheckStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED");
             }
         }
 
