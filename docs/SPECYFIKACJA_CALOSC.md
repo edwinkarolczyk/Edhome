@@ -1,6 +1,6 @@
 # EDHOME — pełny rejestr ustaleń koncepcyjnych
 
-> **Główne źródło ustaleń EDHOME — Idea by Edwin.** Wymagania nie są automatycznie gotowymi funkcjami. Stan implementacji i kolejność dostaw: [ROADMAP.md](ROADMAP.md) oraz [README.md](../README.md). Rzeczywiste repo to `edwinkarolczyk/Edhome` (obecnie **publiczne**), a prace rozwojowe odbywają się wyłącznie na `beta`; `main` bez zmian. Beta 0.2.8 ma **celowo wyłączony PIN wyłącznie w Beta**, opcjonalnego wykonawcę czynności, tygodniowy grafik z wyjątkami dat i SQLite v7; Stable zachowuje wymaganie PIN. Priorytet i czas czynności wprowadzono w 0.2.6, wykonawców w 0.2.7. Dawne wpisy „Edhime”/„prywatne repo” poniżej są opisem historycznych ustaleń, nie aktualną konfiguracją GitHub. Nie kopiujemy automatycznie kodu innych aplikacji.
+> **Główne źródło ustaleń EDHOME — Idea by Edwin.** Wymagania nie są automatycznie gotowymi funkcjami. Stan implementacji i kolejność dostaw: [ROADMAP.md](ROADMAP.md) oraz [README.md](../README.md). Rzeczywiste repo to `edwinkarolczyk/Edhome` (obecnie **publiczne**), a prace rozwojowe odbywają się wyłącznie na `beta`; `main` bez zmian. Beta 0.2.9 ma **celowo wyłączony PIN wyłącznie w Beta**, opcjonalnego wykonawcę, tygodniowy grafik z wyjątkami oraz trzy orientacyjne propozycje terminu; SQLite v7 bez zmian. Stable zachowuje PIN. Priorytet i czas wprowadzono w 0.2.6, wykonawców w 0.2.7, grafik w 0.2.8. Dawne wpisy „Edhime”/„prywatne repo” poniżej są opisem historycznych ustaleń, nie aktualną konfiguracją GitHub. Nie kopiujemy automatycznie kodu innych aplikacji.
 
 ## 1. Wizja
 
@@ -184,3 +184,10 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Każdy domownik ma niezależny tygodniowy grafik poniedziałek–niedziela. `Nie ustawiono` nie znaczy `Wolne`. Zmiany początkowe: 06–14, 14–22, 22–06, wolne; nie oznacza to automatycznej rotacji.
 - Wyjątek na datę ma pierwszeństwo przed grafikiem tygodniowym. Usunięcie wyjątku przywraca tygodniową regułę bez naruszania innych dat.
 - Nie przypisuj czynności ani terminu automatycznie na podstawie samego grafiku. W kolejnej wersji planer ma **proponować trzy terminy**, dopiero na jawnych danych i po potwierdzeniu człowieka.
+
+
+## 17. Dostarczony pierwszy planer dat — 0.2.9-beta.1
+
+- Propozycje wyłącznie dla jawnie wybranego wykonawcy, z grafikiem i wyjątkami w ciągu najbliższych 28 dni. Do trzech osobnych dat. `Nie ustawiono` nie staje się sztucznie dniem wolnym.
+- Początkowa lista okien 08:00–21:00, poza godzinami zmian z zapasem i odpoczynkiem po nocnej. Zapis do bazy obejmuje **wybraną datę** dopiero po naciśnięciu `Zapisz`; orientacyjna godzina pozostaje niezapisywaną sugestią.
+- Brak pełnej analizy kolizji z innymi zadaniami, wydarzeniami i dojazdem. Nie nazywać sugestii potwierdzoną dostępnością; to następny etap z przechowywaniem godzin i danymi kalendarza.
