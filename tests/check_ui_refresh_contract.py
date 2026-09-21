@@ -15,7 +15,8 @@ assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
 assert 'super(context, "edhome-beta-preview.db", null, 10)' in main
 assert 'private static final int DB_VERSION = 10;' in backup
 assert "newVersion > 10" in main
-assert len(re.findall(r'^\s*"(?:(?:tasks|calendar|places|pantry|audit)|(?:updates|backup|settings|today))"', main, re.M)) >= 9
+home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
+assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
 assert 'text("✎  Edytuj kafelek"' in main
 assert 'text("✥  Przesuń kafelek"' in main
