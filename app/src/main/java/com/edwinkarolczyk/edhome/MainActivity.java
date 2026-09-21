@@ -102,6 +102,8 @@ public final class MainActivity extends Activity {
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
+        // Upgrade schema before reading reminder columns for rearming alarms.
+        db.getWritableDatabase();
         ReminderReceiver.schedule(this);
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
