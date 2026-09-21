@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 33,
-  "versionName": "0.4.0-beta.3",
-  "changelog": "EDHOME Beta 0.4.0-beta.3 — opcjonalne rozpoznawanie produktu i zdjęcia Open Food Facts; SQLite v15.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.3/edhome-beta.apk",
-  "sha256": "6b426f89d5ca59a8a999c77ff25f559febe0ab21ae0100900c44b64ea66ea923"
+  "versionCode": 34,
+  "versionName": "0.4.0-beta.4",
+  "changelog": "EDHOME Beta 0.4.0-beta.4 — automatyczna nazwa i kilka katalogów Open Facts dla chemii, kosmetyków, karmy i żywności; SQLite v15.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.4/edhome-beta.apk",
+  "sha256": "22f5f413998b978e2a3b1d81b4ef4461abe33211c1501602eaa373fe37fad20d"
 }
