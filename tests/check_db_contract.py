@@ -222,7 +222,7 @@ assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' i
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
 assert '"assignee_id".equals(key)' in backup
 assert 'inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])' in backup
-assert '"member_id".equals(column) || "weekday".equals(column)' in backup
+assert '"member_id".equals(column)' in backup and '"weekday".equals(column)' in backup
 assert 'inputVersion < 8 && "shopping_items".equals(definition[0])' in backup
 assert '"qty_milli".equals(key)' in backup
 assert 'inputVersion < 9 && "tasks".equals(definition[0])' in backup
