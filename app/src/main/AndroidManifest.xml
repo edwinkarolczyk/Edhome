@@ -19,6 +19,16 @@
             </intent-filter>
         </activity>
         <receiver
+            android:name=".DeviceTimerReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+            </intent-filter>
+        </receiver>
+        <receiver
             android:name=".ReminderReceiver"
             android:exported="false">
             <intent-filter>
