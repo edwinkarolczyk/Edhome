@@ -1,4 +1,4 @@
-# EDHOME 0.3.2-beta.1 — indywidualna godzina i wyprzedzenie przypomnień
+# EDHOME 0.3.2-beta.2 — indywidualna godzina i wyprzedzenie przypomnień
 
 ## Zmiany na `beta`
 
