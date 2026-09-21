@@ -41,7 +41,7 @@ android {
             applicationId 'com.edwinkarolczyk.edhome'
             versionNameSuffix ''
             signingConfig signingConfigs.betaRelease
-            manifestPlaceholders = [appLabel: 'EDHOME Stable']
+            manifestPlaceholders = [appLabel: 'EDHOME']
             buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         }
         beta {
