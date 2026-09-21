@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.4-beta.2 (`beta`):** hierarchia Miejsc z własnymi nazwami, opcjonalnymi rodzajami i ikonami; ścieżki Dom → Kuchnia → Półka; SQLite v11 z zachowaniem istniejących ID i czynności, kopie JSON v2–v11. Beta bez PIN-u, Stable z PIN-em. [Odbiór Miejsc](BETA_0_3_4.md).
+> **Stan 0.3.5-beta.1 (`beta`):** lokalne minutniki pralki/suszarki/zmywarki, potwierdzenie zakończenia i niezależne powiadomienia opt-in. SQLite v12, kopie v2–v12, zachowane Miejsca i 9 kafelków. Beta bez PIN-u, Stable z PIN-em. Test alarmów na fizycznym telefonie wymagany. [Odbiór minutników](BETA_0_3_5.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,10 +80,10 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.5-beta.1
+## Następny inkrement — 0.3.6-beta.1
 
-- Lokalne minutniki sprzętów (pralka, suszarka, zmywarka) z zakończeniem i prostym potwierdzeniem, oddzielone od niepewnych dokładnych powiadomień Androida.
-- Rotacyjne obowiązki i dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 w 0.3.2 są stałe, jeszcze nie konfigurowalne.
+- Rotacyjne obowiązki domowników, przypisania i zmiany wykonawcy w kolejnych terminach (po odbiorze minutników).
+- Dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 są stałe, jeszcze nie konfigurowalne.
 - Nie włączać synchronizacji kilku urządzeń przed etapem 0.8. Weryfikować CI, podpis, manifest i zachowanie na fizycznym Androidzie.
 
 
