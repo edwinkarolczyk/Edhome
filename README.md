@@ -71,6 +71,6 @@
 
 ## Następne kroki
 
-Na `beta`: przetestować 0.2.9 → 0.3.0 i nowe zakupy na telefonie bez PIN-u, bez utraty danych. Dalej etap 0.3 obejmuje śmieci, codzienne obowiązki, minutniki i przypomnienia; pełne godziny terminu i kolizje z innymi czynnościami nadal wymagają osobnego inkrementu. Nie oznaczać listy zakupów jako zsynchronizowanej na dwóch urządzeniach (Wi-Fi później). Utrzymać kopie danych i testy migracji. Przed przenoszeniem PayCheck lub Trenera 2 sprawdzić kod oraz licencje ich zależności.
+Na `beta`: sprawdzić aktualizację 0.3.0 → 0.3.1 oraz odpady, wspólny kalendarz, przypomnienie opt-in i kopie na fizycznym telefonie bez PIN-u. Kolejne 0.3.2: indywidualna godzina i wyprzedzenie przypomnień; dalej minutniki i obowiązki. Nie oznaczać zakupów ani zadań jako zsynchronizowanych między urządzeniami (Wi-Fi później). Zachować testy migracji. Przed przenoszeniem PayCheck lub Trenera 2 sprawdzić kod i licencje.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.
