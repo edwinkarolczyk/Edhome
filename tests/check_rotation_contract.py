@@ -40,6 +40,6 @@ for token in (
 
 # Rotation rows have a composite key and deliberately no synthetic "id".
 assert 'if (!"task_rotation_members".equals(definition[0])) {' in backup
-assert 'private static final int DB_VERSION = 14;' in backup
-assert 'super(context, "edhome-beta-preview.db", null, 14)' in main
-print("Rotation DB v14, next-assignee history, deletion and backup contract: PASS")
+assert 'private static final int DB_VERSION = 15;' in backup
+assert 'super(context, "edhome-beta-preview.db", null, 15)' in main
+print("Rotation DB v15, next-assignee history, deletion and backup contract: PASS")

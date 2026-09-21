@@ -38,6 +38,46 @@ final class PantryBarcodeStore {
             + "ON pantry_movements(pantry_id,id)");
     }
 
+    /** Photo metadata only; cached files are optional and can be downloaded again. */
+    static void createDetails(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE pantry_product_details ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + "pantry_id INTEGER NOT NULL UNIQUE, "
+            + "brand TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '')");
+    }
+
+    static final class Details {
+        final String brand;
+        final String imageUrl;
+        Details(String brand, String imageUrl) {
+            this.brand = brand;
+            this.imageUrl = imageUrl;
+        }
+    }
+
+    static Details details(SQLiteDatabase db, long pantryId) {
+        try (Cursor cursor = db.rawQuery(
+                "SELECT brand,image_url FROM pantry_product_details WHERE pantry_id=?",
+                new String[]{Long.toString(pantryId)})) {
+            return cursor.moveToFirst() ? new Details(
+                cursor.getString(0), cursor.getString(1)) : null;
+        }
+    }
+
+    static void saveDetails(SQLiteDatabase db, long pantryId, String brand, String imageUrl) {
+        if (brand == null || brand.length() > 100
+                || imageUrl == null || !imageUrl.isEmpty()
+                    && !PantryProductLookup.safeImageUrl(imageUrl))
+            throw new IllegalArgumentException("Nieprawidłowe dane produktu.");
+        ContentValues values = new ContentValues();
+        values.put("brand", brand);
+        values.put("image_url", imageUrl);
+        if (db.update("pantry_product_details", values, "pantry_id=?",
+                new String[]{Long.toString(pantryId)}) != 0) return;
+        values.put("pantry_id", pantryId);
+        db.insertOrThrow("pantry_product_details", null, values);
+    }
+
     static Item find(SQLiteDatabase db, String barcode) {
         try (Cursor cursor = db.rawQuery(
                 "SELECT p.id,p.name,p.qty FROM pantry_barcodes b "

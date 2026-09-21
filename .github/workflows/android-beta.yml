@@ -139,6 +139,8 @@ jobs:
             tests/task_rules/PantryScanRulesSmoke.java
           java -cp "$RUNNER_TEMP/pantry-scan" \
             com.edwinkarolczyk.edhome.PantryScanRulesSmoke
+      - name: Pantry Open Food Facts integration contract
+        run: python3 tests/check_pantry_off_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -197,14 +199,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.4.0-beta.2-signed-apk
+          name: EDHOME-0.4.0-beta.3-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.2 — poprawka uruchamiania aparatu skanera (AndroidX Core); SQLite v14."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.3 — opcjonalne rozpoznawanie produktu i zdjęcia Open Food Facts; SQLite v15."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

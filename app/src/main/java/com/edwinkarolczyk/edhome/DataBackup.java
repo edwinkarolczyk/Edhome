@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 14;
+    private static final int DB_VERSION = 15;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -52,7 +52,8 @@ final class DataBackup {
             "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"},
         {"pantry_barcodes", "id", "pantry_id", "barcode"},
         {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
-            "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"}
+            "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
+        {"pantry_product_details", "id", "pantry_id", "brand", "image_url"}
     };
 
     private DataBackup() { }
@@ -140,7 +141,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -221,6 +222,7 @@ final class DataBackup {
                 || (inputVersion < 13 && "task_rotation_members".equals(definition[0]))
                 || (inputVersion < 14 && ("pantry_barcodes".equals(definition[0])
                     || "pantry_movements".equals(definition[0])))
+                || (inputVersion < 15 && "pantry_product_details".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -395,6 +397,14 @@ final class DataBackup {
                 if ("pantry_barcodes".equals(definition[0])
                         && !PantryScanRules.validBarcode(values.getAsString("barcode")))
                     throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                if ("pantry_product_details".equals(definition[0])) {
+                    String brand = values.getAsString("brand");
+                    String imageUrl = values.getAsString("image_url");
+                    if (brand == null || brand.length() > 100 || imageUrl == null
+                            || !imageUrl.isEmpty()
+                                && !PantryProductLookup.safeImageUrl(imageUrl))
+                        throw new IllegalArgumentException("Nieprawidłowe dane zdjęcia w kopii.");
+                }
                 if ("pantry_movements".equals(definition[0])) {
                     Long before = values.getAsLong("before_qty");
                     Long after = values.getAsLong("after_qty");
@@ -482,6 +492,12 @@ final class DataBackup {
             if (!pantryIds.contains(b.getAsLong("pantry_id"))
                     || !codes.add(b.getAsString("barcode")))
                 throw new IllegalArgumentException("Nieprawidłowe powiązanie kodu.");
+        }
+        Set<Long> detailedProducts = new HashSet<>();
+        for (ContentValues detail : parsed.get("pantry_product_details")) {
+            Long pid = detail.getAsLong("pantry_id");
+            if (!pantryIds.contains(pid) || !detailedProducts.add(pid))
+                throw new IllegalArgumentException("Nieprawidłowe powiązanie zdjęcia.");
         }
         Set<String> movements = new HashSet<>();
         for (ContentValues m : parsed.get("pantry_movements"))

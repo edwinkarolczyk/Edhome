@@ -59,7 +59,8 @@ step10 = statements(section(upgrade, "if (oldVersion < 10)", "if (oldVersion < 1
 step11 = statements(section(upgrade, "if (oldVersion < 11 && oldVersion >= 4)", "if (oldVersion < 12)"))
 step12 = statements(section(upgrade, "if (oldVersion < 12)", "if (oldVersion < 13)"))
 step13 = statements(section(upgrade, "if (oldVersion < 13)", "if (oldVersion < 14)"))
-pantry14 = statements(section(pantry_store, "static void createTables(SQLiteDatabase db)", "static Item find(").replace("db.execSQL(", "database.execSQL("))
+pantry14 = statements(section(pantry_store, "static void createTables(SQLiteDatabase db)", "static void createDetails(").replace("db.execSQL(", "database.execSQL("))
+pantry15 = statements(section(pantry_store, "static void createDetails(SQLiteDatabase db)", "static final class Details").replace("db.execSQL(", "database.execSQL("))
 
 def execute(database, sql):
     for statement in sql:
@@ -75,12 +76,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 14, "Database version and backup format differ"
+assert version == backup_version == 15, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15)
 expected = schema(fresh)
-assert len(expected) == 15 and len(pantry14) == 4, "Unexpected number of tables"
+assert len(expected) == 16 and len(pantry14) == 4 and len(pantry15) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -137,6 +138,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
             if statement.startswith("ALTER TABLE task_history"):
                 db.execute(statement)
     execute(db, pantry14)  # v13 to v14, also after older migrations
+    execute(db, pantry15)  # v14 to v15, preserves existing pantry rows
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -219,7 +221,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
@@ -243,4 +245,16 @@ assert '"task_rotation_members", "task_id", "member_id", "position"' in backup
 assert '"assignee_id", "assignee_name_snapshot"' in backup
 assert '"task_rotation_members".equals(definition[0])' in backup
 assert 'task_id ASC, position ASC' in backup
-print("SQLite migrations v1–v12→v14: PASS; barcodes, rotations, timers, places and backup: PASS")
+# An already-upgraded v14 installation must preserve barcode links and inventory.
+existing14 = sqlite3.connect(":memory:")
+execute(existing14, create + audit + history + rotations + places + sibling_index
+        + members + shifts + shopping + timers + pantry14)
+existing14.execute("INSERT INTO pantry(id,name,qty) VALUES (2,'Mleko',7)")
+existing14.execute("INSERT INTO pantry_barcodes(pantry_id,barcode) "
+                   "VALUES(2,'5901234123457')")
+execute(existing14, pantry15)
+assert schema(existing14) == expected
+assert existing14.execute("SELECT id,name,qty FROM pantry").fetchone() == (2,'Mleko',7)
+assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
+existing14.close()
+print("SQLite migrations v1–v14→v15: PASS; OFF metadata, barcodes, timers and backup: PASS")

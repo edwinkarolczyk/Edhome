@@ -16,6 +16,8 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -2593,7 +2595,25 @@ public final class MainActivity extends Activity {
                 matched++;
                 int qty = cursor.getInt(2);
                 LinearLayout box = card();
+                PantryBarcodeStore.Details details = PantryBarcodeStore.details(
+                    db.getReadableDatabase(), id);
+                if (details != null && !details.imageUrl.isEmpty()) {
+                    Bitmap thumbnail = PantryProductLookup.cached(this, details.imageUrl);
+                    if (thumbnail != null) {
+                        ImageView photo = new ImageView(this);
+                        int px = (int) (getResources().getDisplayMetrics().density * 88);
+                        photo.setLayoutParams(new LinearLayout.LayoutParams(px, px));
+                        photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                        photo.setImageBitmap(thumbnail);
+                        box.addView(photo);
+                    } else {
+                        taskAction(box, "⬇ Pobierz zdjęcie produktu",
+                            () -> refreshPantryPhoto(details.imageUrl));
+                    }
+                }
                 box.addView(text(name + "  •  " + qty + " szt.", 18, true));
+                if (details != null && !details.brand.isEmpty())
+                    box.addView(text("Marka: " + details.brand, 13, false));
                 LinearLayout quick = new LinearLayout(this);
                 quick.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(quick);
@@ -2653,8 +2673,8 @@ public final class MainActivity extends Activity {
         if (matched == 0) note(pantrySearch.isEmpty()
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
             : "Nie znaleziono produktów. Wyczyść wyszukiwanie.");
-        note("Etap 0.4: skan kodu offline i potwierdzanie ±1 szt. Zdjęcia, kg/l "
-            + "oraz automatyczny licznik odjęcia są kolejnymi krokami.");
+        note("Skanowanie i zapasy działają offline. Open Food Facts jest opcjonalne; "
+            + "zdjęcia pobieramy na żądanie. Jednostki kg/l i licznik odjęcia: kolejny etap.");
     }
 
 
@@ -2696,15 +2716,16 @@ public final class MainActivity extends Activity {
             return;
         }
         if (item == null) {
-            EditText name = new EditText(this);
-            name.setSingleLine(true);
-            name.setHint("Nazwa produktu / opakowania");
-            new AlertDialog.Builder(this).setTitle("Nowy kod: " + barcode)
-                .setMessage("Nie ma go w lokalnej kartotece. Wpisz nazwę "
-                    + "istniejącego produktu lub podaj nową. Zapis zwiększy stan o 1.")
-                .setView(name).setNegativeButton("Anuluj", null)
-                .setPositiveButton("Dodaj +1", (d,w) -> commitPantryBarcode(
-                    barcode, name.getText().toString(), "ADD", operationId)).show();
+            new AlertDialog.Builder(this).setTitle("Nieznany kod: " + barcode)
+                .setMessage("Jak dodać produkt? Open Food Facts wymaga internetu "
+                    + "i wyśle tylko ten kod do publicznej bazy. "
+                    + "Ręczny wpis działa całkowicie offline.")
+                .setNegativeButton("Anuluj", null)
+                .setNeutralButton("Wpisz ręcznie", (d,w) ->
+                    showNewPantryProductDialog(barcode, operationId, null))
+                .setPositiveButton("Open Food Facts", (d,w) ->
+                    lookupPantryProduct(barcode, operationId))
+                .show();
             return;
         }
         String question = "TAKE".equals(mode) ? "Wyciągnąć 1 szt.?" : "Dodać 1 szt.?";
@@ -2717,13 +2738,149 @@ public final class MainActivity extends Activity {
             .show();
     }
 
+
+    private void lookupPantryProduct(String barcode, String operationId) {
+        java.util.concurrent.atomic.AtomicBoolean cancelled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        AlertDialog loading = new AlertDialog.Builder(this)
+            .setTitle("Open Food Facts")
+            .setMessage("Szukam nazwy i zdjęcia dla kodu " + barcode + "…")
+            .setNegativeButton("Anuluj", (d,w) -> cancelled.set(true))
+            .create();
+        loading.setOnCancelListener(d -> cancelled.set(true));
+        loading.show();
+        new Thread(() -> {
+            PantryProductLookup.Product product = null;
+            Exception failure = null;
+            try {
+                product = PantryProductLookup.lookup(barcode);
+                if (product != null && product.image != null
+                        && !product.imageUrl.isEmpty()) {
+                    try {
+                        PantryProductLookup.cache(this, product.imageUrl, product.image);
+                    } catch (Exception photoError) {
+                        DiagnosticLog.error("PANTRY_OFF_PHOTO_CACHE", photoError);
+                    }
+                }
+            } catch (Exception error) {
+                failure = error;
+            }
+            final PantryProductLookup.Product found = product;
+            final Exception problem = failure;
+            runOnUiThread(() -> {
+                loading.dismiss();
+                if (cancelled.get() || isFinishing() || isDestroyed()) return;
+                if (problem != null) {
+                    DiagnosticLog.error("PANTRY_OFF_LOOKUP", problem);
+                    new AlertDialog.Builder(this).setTitle("Brak połączenia z bazą")
+                        .setMessage("Możesz dodać produkt ręcznie. Nie zmieniono stanu.")
+                        .setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(barcode, operationId, null))
+                        .show();
+                } else if (found == null) {
+                    new AlertDialog.Builder(this).setTitle("Brak produktu w bazie")
+                        .setMessage("Nie znaleziono nazwy dla kodu " + barcode
+                            + ". Możesz wprowadzić produkt samodzielnie.")
+                        .setNegativeButton("Anuluj", null)
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(barcode, operationId, null))
+                        .show();
+                } else {
+                    DiagnosticLog.event("PANTRY_OFF_FOUND");
+                    showNewPantryProductDialog(barcode, operationId, found);
+                }
+            });
+        }, "edhome-off-lookup").start();
+    }
+
+    /** No stock change until this confirmation, even if Open Food Facts responded. */
+    private void showNewPantryProductDialog(String barcode, String operationId,
+            PantryProductLookup.Product found) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(padding, padding, padding, padding);
+        if (found != null && found.image != null) {
+            Bitmap thumbnail = PantryProductLookup.thumbnail(found.image);
+            if (thumbnail != null) {
+                ImageView picture = new ImageView(this);
+                int px = (int) (120 * getResources().getDisplayMetrics().density);
+                picture.setLayoutParams(new LinearLayout.LayoutParams(px, px));
+                picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                picture.setImageBitmap(thumbnail);
+                form.addView(picture);
+            }
+        }
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa produktu / opakowania");
+        name.setText(found == null ? "" : found.name);
+        form.addView(name);
+        if (found != null && !found.brand.isEmpty())
+            form.addView(text("Marka: " + found.brand, 14, false));
+        form.addView(text(found == null
+            ? "Kod: " + barcode + " • ręczny wpis, offline"
+            : "Źródło: Open Food Facts • " + barcode
+                + " • zweryfikuj nazwę i zdjęcie przed zapisem.", 13, false));
+        new AlertDialog.Builder(this)
+            .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Dodaj +1", (d,w) -> {
+                String entered = name.getText().toString().trim();
+                if (entered.isEmpty() || entered.length() > 160) {
+                    alert("Nazwa produktu musi mieć 1–160 znaków.");
+                    return;
+                }
+                commitPantryBarcode(barcode, entered, "ADD", operationId,
+                    found);
+            }).show();
+    }
+
+    private void refreshPantryPhoto(String imageUrl) {
+        if (!PantryProductLookup.safeImageUrl(imageUrl)) return;
+        new Thread(() -> {
+            try {
+                byte[] data = PantryProductLookup.fetchImage(imageUrl);
+                PantryProductLookup.cache(this, imageUrl, data);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        DiagnosticLog.event("PANTRY_OFF_PHOTO_CACHED");
+                        if ("pantry".equals(screen)) render();
+                    }
+                });
+            } catch (Exception problem) {
+                DiagnosticLog.error("PANTRY_OFF_PHOTO", problem);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                        alert("Nie udało się pobrać zdjęcia. Produkt nadal działa offline.");
+                });
+            }
+        }, "edhome-off-photo").start();
+    }
+
     private void commitPantryBarcode(String barcode, String name,
             String mode, String operationId) {
+        commitPantryBarcode(barcode, name, mode, operationId, null);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found) {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
                 barcode, name, mode, operationId);
             DiagnosticLog.event("COMMITTED".equals(result) ?
                 "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
+            if (found != null && "COMMITTED".equals(result)) {
+                try {
+                    PantryBarcodeStore.Item product = PantryBarcodeStore.find(
+                        db.getReadableDatabase(), barcode);
+                    if (product != null) PantryBarcodeStore.saveDetails(
+                        db.getWritableDatabase(), product.id, found.brand, found.imageUrl);
+                } catch (Exception detailsError) {
+                    DiagnosticLog.error("PANTRY_OFF_DETAILS", detailsError);
+                }
+            }
             render();
         } catch (Exception problem) {
             DiagnosticLog.error("PANTRY_SCAN_COMMIT", problem);
@@ -3518,7 +3675,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 14);
+            super(context, "edhome-beta-preview.db", null, 15);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -3541,11 +3698,12 @@ public final class MainActivity extends Activity {
             addDeviceTimers(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
+            PantryBarcodeStore.createDetails(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 14) {
+            if (oldVersion < 1 || newVersion > 15) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3622,6 +3780,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 14) {
                 PantryBarcodeStore.createTables(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_13_TO_14_PANTRY_BARCODES");
+            }
+            if (oldVersion < 15) {
+                PantryBarcodeStore.createDetails(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS");
             }
         }
 
@@ -4511,6 +4673,8 @@ public final class MainActivity extends Activity {
             database.beginTransaction();
             try {
                 database.delete("pantry_barcodes", "pantry_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("pantry_product_details", "pantry_id=?",
                     new String[]{Long.toString(id)});
                 database.delete("pantry", "id=?",
                     new String[]{Long.toString(id)});

@@ -1,0 +1,20 @@
+# EDHOME 0.4.0-beta.3 — Open Food Facts w spiżarni
+
+Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 bez usuwania zapasów i remanentów. `main` pozostaje bez zmian.
+
+## Odbiór na Androidzie
+1. W aplikacji 0.4.0-beta.2 wykonaj eksport kopii zapasowej.
+2. Zainstaluj podpisane 0.4.0-beta.3 na obecną Betę — **nie odinstalowuj**.
+3. Otwórz Spiżarnię, sprawdź ilości, kartę produktu i historię skanów.
+4. Zeskanuj nieznany kod w trybie „Dodaj +1”. Wybierz **Open Food Facts** (internet, wysłanie samego kodu produktu). Jeżeli baza ma nazwę, popraw ją w formularzu, zobacz zdjęcie jeśli dostępne i świadomie potwierdź +1.
+5. Zeskanuj ten sam kod drugi raz. Powinien działać z lokalnej kartoteki bez internetu, bez ponownego wyszukiwania.
+6. W przypadku braku produktu lub internetu wybierz „Wpisz ręcznie”. Sprawdź wyciąganie, brak zejścia poniżej zera i ponowną próbę po restarcie.
+7. Sprawdź eksport/przywrócenie kopii. Backup JSON zapisuje markę i adres zdjęcia, lecz **nie zawiera plików zdjęć**. Po przywróceniu można użyć „Pobierz zdjęcie produktu”, jeśli internet jest dostępny.
+
+## Prywatność i ograniczenia
+- Open Food Facts jest opcjonalne. Automatyczne wysyłanie kodów do bazy nie jest włączone.
+- Zapytanie HTTPS wysyła kod tylko po świadomym wybraniu „Open Food Facts”; rozpoznane lokalnie kody nie wymagają internetu.
+- Źródło nazw i zdjęć: Open Food Facts; nazwy, marki i zdjęcia mogą być niepełne lub błędne. Weryfikuj etykietę. Zdjęcie przechowujemy jako prywatny lokalny cache, pobieramy tylko z images.openfoodfacts.org.
+- Dane użytkownika (zapasy, członkowie domu, lokalizacje) nie są przesyłane do Open Food Facts.
+- Ilości spiżarni pozostają w sztukach. Jednostki kg/l i automatyczny licznik odjęcia nie są jeszcze implementowane.
+- Nie deklarować sukcesu aparatu na fizycznym telefonie bez testu Edwina.
