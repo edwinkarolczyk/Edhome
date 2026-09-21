@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 9;
+    private static final int DB_VERSION = 10;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
@@ -33,7 +33,7 @@ final class DataBackup {
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
-            "task_kind", "waste_fraction"},
+            "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
         {"pantry", "id", "name", "qty"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
@@ -110,7 +110,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -186,6 +186,16 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 10 && "tasks".equals(definition[0])) {
+                            if ("remind_time".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                            if ("reminder_lead_days".equals(key)) {
+                                values.put(key, 0);
+                                continue;
+                            }
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
@@ -193,7 +203,8 @@ final class DataBackup {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
                             || "place_id".equals(key) || "assignee_id".equals(key)
-                            || "qty_milli".equals(key) || "waste_fraction".equals(key)))
+                            || "qty_milli".equals(key) || "waste_fraction".equals(key)
+                            || "remind_time".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -310,6 +321,14 @@ final class DataBackup {
                                 every == null ? 0 : every) != null)
                             throw new IllegalArgumentException("Nieprawidłowy termin odpadów.");
                     } else throw new IllegalArgumentException("Nieznany typ czynności.");
+                    String remindAt = values.getAsString("remind_time");
+                    Long lead = values.getAsLong("reminder_lead_days");
+                    if (lead == null || !ReminderRules.allowedLead(lead.intValue())
+                            || (remindAt == null && lead != 0)
+                            || (remindAt != null
+                                && (!ReminderRules.validTime(remindAt) || due == null)))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowa godzina lub wyprzedzenie przypomnienia.");
                     String priority = values.getAsString("priority");
                     Long minutes = values.getAsLong("duration_minutes");
                     if (priority == null
@@ -414,6 +433,7 @@ final class DataBackup {
             || "checked".equals(column) || "qty_milli".equals(column)
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
+            || "reminder_lead_days".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "assignee_id".equals(column)
             || "member_id".equals(column) || "weekday".equals(column)
