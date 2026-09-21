@@ -65,6 +65,17 @@ jobs:
             tests/task_rules/ShoppingRulesSmoke.java
           java -cp "$RUNNER_TEMP/shopping" \
             com.edwinkarolczyk.edhome.ShoppingRulesSmoke
+      - name: Waste task recurrence regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/waste"
+          javac -d "$RUNNER_TEMP/waste" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TaskRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/WasteRules.java \
+            tests/task_rules/WasteRulesSmoke.java
+          java -cp "$RUNNER_TEMP/waste" \
+            com.edwinkarolczyk.edhome.WasteRulesSmoke
+      - name: Waste shared-task/notification contract
+        run: python3 tests/check_waste_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Beta without PIN contract
@@ -109,14 +120,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.3.0-beta.1-signed-apk
+          name: EDHOME-0.3.1-beta.1-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.0 — lokalna lista zakupów, opcjonalne ilości, SQLite v8."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.1 — odpady, daty wystawienia, wspólne Czynności i przypomnienia, SQLite v9."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
