@@ -2230,7 +2230,7 @@ public final class MainActivity extends Activity {
             : "Stable: możesz wybrać Aktualizuj lub Później.");
     }
 
-    /** Exactly three square tiles per row; the outer page owns vertical scrolling. */
+    /** Three rounded tiles per row; the outer page owns vertical scrolling. */
     private LinearLayout tileGrid() {
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
@@ -2248,7 +2248,7 @@ public final class MainActivity extends Activity {
             row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-            rowParams.setMargins(0, 0, 0, dp(8));
+            rowParams.setMargins(0, 0, 0, dp(9));
             grid.addView(row, rowParams);
         } else {
             row = (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
@@ -2256,37 +2256,113 @@ public final class MainActivity extends Activity {
 
         int width = getResources().getDisplayMetrics().widthPixels;
         int height = getResources().getDisplayMetrics().heightPixels;
-        // Page padding: 18dp left + 18dp right. Two gaps: 8dp each.
-        int widthSide = (width - dp(52)) / 3;
+        // Page margin 16dp each; two gaps 9dp. Keep three visible columns.
+        int widthSide = (width - dp(50)) / 3;
         int heightSide = (height - dp(340)) / 3;
-        int side = Math.max(dp(76), Math.min(widthSide, heightSide));
+        int side = Math.max(dp(78), Math.min(widthSide, heightSide));
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
-        tile.setPadding(dp(4), dp(7), dp(4), dp(7));
-        tile.setBackground(rounded(primary ? accent : surface));
+        tile.setPadding(dp(4), dp(3), dp(4), dp(5));
+
+        boolean isHome = "home".equals(screen);
+        boolean customTint = false;
+        int tileTint = accent;
+        if (isHome) {
+            String id = captionToHomeTileId(caption);
+            String selected = prefs.getString("tile_tint_" + id, "default");
+            customTint = !"default".equals(selected);
+            if (customTint) tileTint = skin.tileTint(selected);
+        }
+        boolean highlighted = primary || customTint;
+        tile.setBackground(skin.tile(this, highlighted, tileTint));
+        tile.setElevation(dp(highlighted ? 5 : 3));
         tile.setOnClickListener(v -> callback.run());
+        touchFeedback(tile);
         tile.setClickable(true);
         tile.setFocusable(true);
         tile.setContentDescription(caption.replace("\n", " "));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(side, side);
-        if (row.getChildCount() > 0) params.setMargins(dp(8), 0, 0, 0);
+        if (row.getChildCount() > 0) params.setMargins(dp(9), 0, 0, 0);
         row.addView(tile, params);
 
-        TextView pictogram = text(symbol, 27, true);
-        pictogram.setTextColor(primary
-            ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-                ? Color.WHITE : bg) : accent);
+        if (isHome) {
+            TextView handle = text("⋮⋮", 17, true);
+            handle.setTextColor(highlighted ? skin.tileText(tileTint) : subdued);
+            handle.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            handle.setPadding(dp(3), 0, dp(8), 0);
+            handle.setContentDescription("Edytuj lub przeciągnij " + caption);
+            tile.addView(handle, new LinearLayout.LayoutParams(-1, dp(19)));
+            handle.setOnClickListener(v -> {
+                Object id = tile.getTag();
+                if (id instanceof String) showTileActions(tile, (String) id);
+            });
+            handle.setOnTouchListener(new View.OnTouchListener() {
+                private float startX, startY;
+                private boolean dragging;
+                @Override public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            startX = event.getRawX();
+                            startY = event.getRawY();
+                            dragging = false;
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            if (!dragging && (Math.abs(event.getRawX() - startX)
+                                    > ViewConfiguration.get(MainActivity.this)
+                                        .getScaledTouchSlop()
+                                    || Math.abs(event.getRawY() - startY)
+                                    > ViewConfiguration.get(MainActivity.this)
+                                        .getScaledTouchSlop())) {
+                                Object id = tile.getTag();
+                                if (id instanceof String)
+                                    dragging = beginHomeDrag(tile, (String) id);
+                            }
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                            if (!dragging) v.performClick();
+                            return true;
+                        case MotionEvent.ACTION_CANCEL:
+                            return true;
+                        default: return false;
+                    }
+                }
+            });
+        }
+
+        TextView pictogram = text(symbol, 29, true);
+        pictogram.setTextColor(highlighted && skin.light
+            ? skin.accentInk : accent);
         pictogram.setGravity(Gravity.CENTER);
-        tile.addView(pictogram, new LinearLayout.LayoutParams(-1, dp(39)));
+        pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
+        LinearLayout.LayoutParams iconParams =
+            new LinearLayout.LayoutParams(dp(46), dp(46));
+        iconParams.gravity = Gravity.CENTER_HORIZONTAL;
+        tile.addView(pictogram, iconParams);
         TextView captionView = text(caption, 12, true);
-        captionView.setTextColor(primary
-            ? ("Trener 2".equals(prefs.getString("theme", "Grafitowy"))
-                ? Color.WHITE : bg) : ink);
+        captionView.setTextColor(highlighted
+            ? skin.tileText(tileTint) : ink);
         captionView.setGravity(Gravity.CENTER);
-        captionView.setMaxLines(3);
-        tile.addView(captionView);
+        captionView.setMaxLines(2);
+        captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tile.addView(captionView,
+            new LinearLayout.LayoutParams(-1, dp(31)));
         return tile;
+    }
+
+    private String captionToHomeTileId(String caption) {
+        switch (caption) {
+            case "Czynności": return "tasks";
+            case "Kalendarz": return "calendar";
+            case "Miejsca": return "places";
+            case "Spiżarnia": return "pantry";
+            case "Remanent": return "audit";
+            case "Aktualizacje": return "updates";
+            case "Kopia danych": return "backup";
+            case "Ustawienia": return "settings";
+            case "Na dziś": return "today";
+            default: return "";
+        }
     }
 
     private void updatesAdvanced() {
