@@ -440,8 +440,23 @@ public final class MainActivity extends Activity {
 
         TextView editHint = text(homeEditMode
             ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
-            : "✥  Dotknij, aby otworzyć • przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij", 13, false);
-        editHint.setTextColor(homeEditMode ? accent : subdued);
+            : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać", 13, false);
+        editHint.setTextColor(homeEditMode ? accent : ink);
+        editHint.setMinHeight(dp(48));
+        editHint.setGravity(Gravity.CENTER_VERTICAL);
+        editHint.setPadding(dp(12), dp(8), dp(12), dp(8));
+        editHint.setBackground(skin.panel(this, skin.tileTop, 22));
+        editHint.setClickable(true);
+        editHint.setFocusable(true);
+        editHint.setContentDescription(homeEditMode
+            ? "Zakończ układanie kafelków"
+            : "Uruchom układanie kafelków. Przytrzymaj kafelek, aby edytować.");
+        editHint.setOnClickListener(v -> {
+            if (homeDragSource != null) return;
+            homeEditMode = !homeEditMode;
+            render();
+        });
+        touchFeedback(editHint);
         body.addView(editHint);
         homeDragHint = editHint;
         homeTileViews.clear();
@@ -704,8 +719,9 @@ public final class MainActivity extends Activity {
         homeDragFinishQueued = false;
         homeTileSlots.clear();
         if (homeDragHint != null) {
-            homeDragHint.setText("✥  Dotknij, aby otworzyć • "
-                + "przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij");
+            homeDragHint.setText(homeEditMode
+                ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
+                : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać");
             homeDragHint.setTextColor(subdued);
         }
     }
