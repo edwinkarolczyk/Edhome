@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 19,
-  "versionName": "0.2.9-beta.1",
-  "changelog": "EDHOME Beta 0.2.9 — trzy opcjonalne propozycje terminu według grafiku, bez automatycznego zapisu.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.2.9-beta.1/edhome-beta.apk",
-  "sha256": "a01c8b647d071dd824a83794b3b89a93c6b24bbba3dddb9837c2ae6da5ed4827"
+  "versionCode": 20,
+  "versionName": "0.3.0-beta.1",
+  "changelog": "EDHOME Beta 0.3.0 — lokalna lista zakupów, opcjonalne ilości, SQLite v8.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.0-beta.1/edhome-beta.apk",
+  "sha256": "219de30cd76b4c7b69765e1f39f7ddaab81708dbd38dbc2ea6b4e0fb3ae39f18"
 }
