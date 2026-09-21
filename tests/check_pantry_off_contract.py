@@ -10,12 +10,12 @@ required = {
     "offline existing": "PantryBarcodeStore.find(",
     "opt-in database button": '.setPositiveButton("Szukaj produktu"',
     "offline manual fallback": '.setPositiveButton("Wpisz ręcznie"',
-    "no inventory mutation on lookup": "showNewPantryProductDialog(barcode, operationId, found);",
+    "no inventory mutation on lookup": "checked.product, checked.details);",
     "confirmation before inventory update": '.setPositiveButton("Dodaj +1", (d,w) -> {',
     "transactional scanner reuse": 'PantryBarcodeStore.commit(db.getWritableDatabase()',
     "metadata insert": "PantryBarcodeStore.saveDetails(",
     "migration 14 to 15": "DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS",
-    "manual fallback on connection failure": "Nie udało się sprawdzić wszystkich baz",
+    "manual fallback on connection failure": "Nie wszystkie bazy odpowiedziały",
     "photo user refresh": "refreshPantryPhoto(details.imageUrl)",
 }
 for label, token in required.items():
