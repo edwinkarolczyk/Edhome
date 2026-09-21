@@ -286,3 +286,11 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 5. Dopiero później rozważyć jawnie dopuszczone polecenia i priorytety nadwyżek PV.
 
 **Status:** kierunek i wymagania zaakceptowane; ekran SUPLA nie jest potwierdzoną działającą integracją w APK.
+
+
+## Miejsca 0.3.4 — własna hierarchia lokalizacji
+
+- Nazwy nadaje użytkownik, osobno od rodzaju: np. Dom → Kuchnia → Szafka → Półka 1. Rodzaj jest opcjonalnym opisem (dom, pomieszczenie, regał, półka itp.), a nie sztywną listą nazw. Miejsca mogą być zagnieżdżane; nazwy powtarzają się w różnych gałęziach, lecz nie pod tym samym rodzicem.
+- Każde miejsce ma własne ID i może mieć ikonę z lokalnej biblioteki. Edycja/przenoszenie nie zmienia ID ani przypisanych czynności. W ich widokach prezentować pełne ścieżki, by rozróżnić jednakowe nazwy półek.
+- Przenoszenie do siebie lub potomka jest zabronione. Usuwanie miejsca z podmiejscami wymaga najpierw przeniesienia/usunięcia dzieci; nie kasować całej gałęzi przypadkiem. Usunięcie pojedynczego miejsca nie usuwa czynności ani historii, tylko usuwa ich opcjonalne przypisanie miejsca.
+- SQLite v11 i backup JSON v11 przechowują parent_id i icon; starsze kopie importują swoje miejsca na poziom główny i dostają neutralną ikonę. Motyw nadal jest lokalny dla instalacji EDHOME, a nie dla domownika.
