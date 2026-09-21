@@ -43,7 +43,8 @@ jobs:
           # This Stable is 0.3.4; the shared Beta-only UI guard requires 0.3.5.
           grep -Fq "versionCode 27" app/build.gradle
           grep -Fq "versionName '0.3.4'" app/build.gradle
-          grep -Fq "manifestPlaceholders = [appLabel: 'EDHOME Stable']" app/build.gradle
+          grep -Fq "manifestPlaceholders = [appLabel: 'EDHOME']" app/build.gradle
+          test "$(grep -Fc 'title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");' app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java)" -eq 4
           grep -Fq "super(context, \"edhome-beta-preview.db\", null, 12)" app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java
           grep -Fq "private static final int DB_VERSION = 12;" app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java
           mkdir -p "$RUNNER_TEMP/home-tile-order"
@@ -83,6 +84,7 @@ jobs:
           APK="app/build/outputs/apk/stable/release/app-stable-release.apk"
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "^package: name='com.edwinkarolczyk.edhome' versionCode='27' versionName='0.3.4'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -Fq "application-label:'EDHOME'"
           EXPECTED="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
           ACTUAL=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print toupper($2); exit}' | sed 's/../&:/g;s/:$//')
           if [[ "$ACTUAL" != "$EXPECTED" ]]; then
