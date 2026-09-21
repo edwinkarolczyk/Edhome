@@ -607,6 +607,32 @@ public final class MainActivity extends Activity {
         color.setSelection(Math.max(0,
             java.util.Arrays.asList(codes).indexOf(selected)));
         form.addView(color);
+        form.addView(text("Ikona — wybierz z lokalnej biblioteki", 15, true));
+        Spinner icon = new Spinner(this);
+        icon.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(TileIcon.ICON_NAMES)));
+        String previousIcon = prefs.getString("tile_icon_" + id, id);
+        icon.setSelection(Math.max(0,
+            java.util.Arrays.asList(TileIcon.ICON_IDS).indexOf(previousIcon)));
+        form.addView(icon);
+        LinearLayout previewFrame = new LinearLayout(this);
+        previewFrame.setGravity(Gravity.CENTER);
+        previewFrame.setPadding(0, dp(9), 0, dp(9));
+        form.addView(previewFrame);
+        icon.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p) { }
+            @Override public void onItemSelected(android.widget.AdapterView<?> p,
+                    View view, int position, long rowId) {
+                previewFrame.removeAllViews();
+                TileIcon pictogram = new TileIcon(MainActivity.this,
+                    TileIcon.ICON_IDS[position], accent);
+                pictogram.setPadding(dp(8), dp(8), dp(8), dp(8));
+                pictogram.setBackground(skin.panel(MainActivity.this,
+                    skin.iconBacking, 24));
+                previewFrame.addView(pictogram,
+                    new LinearLayout.LayoutParams(dp(64), dp(64)));
+            }
+        });
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setView(form)
             .setNegativeButton("Anuluj", null)
@@ -630,6 +656,10 @@ public final class MainActivity extends Activity {
                     String code = codes[color.getSelectedItemPosition()];
                     if ("default".equals(code)) change.remove("tile_tint_" + id);
                     else change.putString("tile_tint_" + id, code);
+                    String iconId = TileIcon.ICON_IDS[
+                        icon.getSelectedItemPosition()];
+                    if (id.equals(iconId)) change.remove("tile_icon_" + id);
+                    else change.putString("tile_icon_" + id, iconId);
                     change.apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_SAVED");
                     dialog.dismiss();
@@ -638,7 +668,8 @@ public final class MainActivity extends Activity {
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
                 .setOnClickListener(v -> {
                     prefs.edit().remove("tile_label_" + id)
-                        .remove("tile_tint_" + id).apply();
+                        .remove("tile_tint_" + id)
+                        .remove("tile_icon_" + id).apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_RESET");
                     dialog.dismiss();
                     render();
@@ -2335,7 +2366,9 @@ public final class MainActivity extends Activity {
             new LinearLayout.LayoutParams(dp(46), dp(46));
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
-            String iconId = captionToHomeTileId(caption);
+            String moduleId = captionToHomeTileId(caption);
+            String iconId = prefs.getString("tile_icon_" + moduleId, moduleId);
+            if (!TileIcon.known(iconId)) iconId = moduleId;
             TileIcon pictogram = new TileIcon(this, iconId,
                 highlighted && skin.light ? skin.accentInk : accent);
             pictogram.setPadding(dp(5), dp(5), dp(5), dp(5));
