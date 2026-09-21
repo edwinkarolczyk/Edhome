@@ -2343,7 +2343,7 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
-                    alert("Miejsce ma podmiejsca. Przenieś je najpierw.");
+                    alert("Miejsce ma podmiejsca lub rzeczy/pudełka. Przenieś je najpierw.");
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
@@ -5284,6 +5284,11 @@ public final class MainActivity extends Activity {
                         new String[]{Long.toString(id)})) {
                     if (children.moveToFirst() && children.getInt(0) != 0)
                         return false;
+                }
+                try (Cursor occupied = database.rawQuery(
+                        "SELECT 1 FROM storage_items WHERE place_id=? LIMIT 1",
+                        new String[]{Long.toString(id)})) {
+                    if (occupied.moveToFirst()) return false;
                 }
                 database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});

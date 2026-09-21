@@ -49,6 +49,6 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 42" in gradle
+assert "versionCode 43" in gradle
 assert "versionName '0.4.0'" in gradle
 print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v19: PASS")

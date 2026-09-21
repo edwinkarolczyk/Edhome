@@ -90,3 +90,9 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Wypożyczanie i zwroty rzeczy zapisywane są w historii lokalnej. Pudełka nie są wypożyczane. W czasie wypożyczenia rzecz nie może być przeniesiona/usunięta bez zwrotu.
 - SQLite v18→v19, eksport i import JSON zawierają rzeczy oraz historię. Naprawiono też sortowanie `pantry_packages` przy eksporcie: ta tabela ma `pantry_id`, nie `id`.
 - Testy automatyczne nie zastępują fizycznego testu skanera i wydruku QR.
+
+## 0.4.0-beta.13 — integralność miejsc
+
+- Nie można usunąć miejsca, które ma podmiejsca albo bezpośrednio przypisane rzeczy/pudełka. Zabezpieczenie jest w transakcji SQLite, a nie tylko w przycisku.
+- Lokalizacja rzeczy wewnątrz pudełka pokazuje pełną ścieżkę miejsca (np. Dom / Garaż / Regał / Pudełko / Narzędzie); przeniesienie pudełka nie zmienia identyfikatorów QR zawartości.
+- SQLite pozostaje v19; stany i kopie bez kolejnej migracji.

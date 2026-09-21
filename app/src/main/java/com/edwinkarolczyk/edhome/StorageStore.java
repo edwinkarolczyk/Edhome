@@ -186,6 +186,24 @@ final class StorageStore {
         }finally{db.endTransaction();}
     }
 
+    private static String placePath(SQLiteDatabase db,long placeId) {
+        StringBuilder result=new StringBuilder();
+        Set<Long> seen=new HashSet<>();
+        Long id=placeId;
+        for(int depth=0;id!=null && depth<128;depth++){
+            if(!seen.add(id))return "Błąd: cykl miejsc";
+            try(Cursor c=db.rawQuery(
+                    "SELECT name,parent_id FROM places WHERE id=?",
+                    new String[]{Long.toString(id)})){
+                if(!c.moveToFirst())return "Nieznane miejsce";
+                if(result.length()>0)result.insert(0," / ");
+                result.insert(0,c.getString(0));
+                id=c.isNull(1)?null:c.getLong(1);
+            }
+        }
+        return id==null?result.toString():"Zbyt głęboka hierarchia miejsc";
+    }
+
     static String location(SQLiteDatabase db,Item item) {
         if(item==null)return "Nie znaleziono";
         StringBuilder path=new StringBuilder();
@@ -196,10 +214,7 @@ final class StorageStore {
             if(path.length()>0)path.insert(0," / ");
             path.insert(0,current.name);
             if(current.placeId!=null){
-                try(Cursor c=db.rawQuery("SELECT name FROM places WHERE id=?",
-                        new String[]{Long.toString(current.placeId)})){
-                    if(c.moveToFirst())path.insert(0,c.getString(0)+" / ");
-                }
+                path.insert(0,placePath(db,current.placeId)+" / ");
                 return path.toString();
             }
             if(current.boxId==null)return "Bez miejsca / "+path;
