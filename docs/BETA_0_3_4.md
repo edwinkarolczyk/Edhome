@@ -20,3 +20,12 @@
 6. Wyeksportuj/importuj kopię na **testowej instalacji**: przetestuj JSON v10 i v11, a także sprawdź, czy starsze wpisy bez rodzica pozostają na poziomie głównym.
 
 CI weryfikuje model, migracje i podpis APK. Fizyczne gesty, czytelność i scenariusz przywracania wymagają testu użytkownika na Androidzie.
+
+
+## 0.3.4-beta.2 — naprawa gestów kafelków
+
+- Naprawa zgłoszenia Edwina: upuszczony kafelek lądował w innym miejscu niż animowany podgląd; czasem widoczne było 8 zamiast 9 kafelków.
+- Podgląd i zapis używają **tego samego indeksu docelowego 0–8**, ustalanego względem stabilnych dziewięciu miejsc siatki, nie względem przesuniętej wizualnie karty. Upuszczanie na przestrzeni siatki działa również poza samym kafelkiem.
+- Kafelek podczas przeciągania zostaje widocznym półprzezroczystym znacznikiem miejsca; każde zakończenie przeciągania (także poza siatką lub anulowane) natychmiast przywraca alfę, widoczność, skalę i przesunięcie **wszystkich 9** kart. Zapis tylko po poprawnym upuszczeniu, synchronicznie w SharedPreferences, a ekran renderowany z potwierdzonej kolejności.
+- Test regresji sprawdza wszystkie 9 × 9 kombinacji kafelków i pól oraz odzyskiwanie uszkodzonego zapisu listy (duplikaty/brak elementów). Nie zmienia SQLite v11 ani danych Miejsc.
+- Test na telefonie: przeciągnij pierwszy kafelek na dziewiąte miejsce, dziewiąty na pierwsze, między rzędami, a następnie anuluj gest poza siatką. **Zawsze ma być 9**, z kolejnością taką jak podgląd; po restarcie ma pozostać zapisana. Automatyczne testy kodu nie zastępują weryfikacji gestów na urządzeniu.
