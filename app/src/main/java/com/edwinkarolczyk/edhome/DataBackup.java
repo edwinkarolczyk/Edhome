@@ -24,14 +24,14 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 10;
+    private static final int DB_VERSION = 11;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
     };
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
-        {"places", "id", "name", "kind"},
+        {"places", "id", "name", "kind", "parent_id", "icon"},
         {"household_members", "id", "name"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
@@ -126,7 +126,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -235,6 +235,16 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 11 && "places".equals(definition[0])) {
+                            if ("parent_id".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                            if ("icon".equals(key)) {
+                                values.put(key, "places");
+                                continue;
+                            }
+                        }
                         if (inputVersion < 10 && "tasks".equals(definition[0])) {
                             if ("remind_time".equals(key)) {
                                 values.putNull(key);
@@ -251,7 +261,7 @@ final class DataBackup {
                     if (value == JSONObject.NULL) {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
-                            || "place_id".equals(key) || "assignee_id".equals(key)
+                            || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
@@ -275,9 +285,8 @@ final class DataBackup {
                 if ("places".equals(definition[0])) {
                     String name = values.getAsString("name");
                     String kind = values.getAsString("kind");
-                    if (name == null || name.trim().isEmpty() || name.length() > 160
-                            || !java.util.Arrays.asList("Dom", "Ogród", "Garaż",
-                                "Warsztat", "Pomieszczenie", "Inne").contains(kind))
+                    if (PlaceRules.validateFields(name, kind,
+                            values.getAsString("icon")) != null)
                         throw new IllegalArgumentException("Nieprawidłowe miejsce w kopii.");
                 }
                 if ("household_members".equals(definition[0])) {
@@ -428,12 +437,22 @@ final class DataBackup {
         }
         Set<Long> places = new HashSet<>();
         Set<String> placeNames = new HashSet<>();
+        Map<Long, Long> hierarchy = new HashMap<>();
         for (ContentValues place : parsed.get("places")) {
-            places.add(place.getAsLong("id"));
-            if (!placeNames.add(place.getAsString("name").toLowerCase(
-                    java.util.Locale.ROOT)))
-                throw new IllegalArgumentException("Powielone nazwy miejsc w kopii.");
+            Long id = place.getAsLong("id");
+            Long parentId = place.getAsLong("parent_id");
+            places.add(id);
+            hierarchy.put(id, parentId);
+            String siblingKey = (parentId == null ? 0 : parentId)
+                + ":" + place.getAsString("name").toLowerCase(
+                    java.util.Locale.ROOT);
+            if (!placeNames.add(siblingKey))
+                throw new IllegalArgumentException(
+                    "Powielone nazwy miejsc w jednej lokalizacji.");
         }
+        if (!PlaceRules.validForest(hierarchy))
+            throw new IllegalArgumentException(
+                "Kopia zawiera nieistniejące miejsce nadrzędne lub zapętlenie.");
         for (ContentValues task : parsed.get("tasks")) {
             Long placeId = task.getAsLong("place_id");
             if (placeId != null && !places.contains(placeId))
@@ -497,7 +516,7 @@ final class DataBackup {
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "reminder_lead_days".equals(column)
             || "task_id".equals(column)
-            || "place_id".equals(column) || "assignee_id".equals(column)
+            || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
             || "member_id".equals(column) || "weekday".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
