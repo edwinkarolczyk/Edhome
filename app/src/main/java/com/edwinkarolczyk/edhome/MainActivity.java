@@ -946,6 +946,64 @@ public final class MainActivity extends Activity {
         form.addView(text("Osoby dodasz w Czynności → Domownicy. "
             + "Bez wykonawcy czynność nadal działa.", 12, false));
 
+        form.addView(text("Propozycje terminu (opcjonalnie)", 16, true));
+        form.addView(text("Do 3 dat w najbliższych 28 dniach, według grafiku "
+            + "wybranej osoby, wyjątków i czasu wykonania. Godziny są orientacyjne: "
+            + "nie sprawdzamy jeszcze innych czynności, dojazdu ani prywatnego "
+            + "kalendarza. Wybranie daty NIE zapisuje zadania — kliknij Zapisz.",
+            12, false));
+        LinearLayout proposals = new LinearLayout(this);
+        proposals.setOrientation(LinearLayout.VERTICAL);
+        form.addView(proposals);
+        smallButton(form, "Zaproponuj 3 terminy", () -> {
+            proposals.removeAllViews();
+            Long chosen = memberIds.get(chosenMember.getSelectedItemPosition());
+            if (chosen == null) {
+                proposals.addView(text("Wybierz wykonawcę. Bez jego grafiku "
+                    + "nie wyznaczam fikcyjnych wolnych terminów.", 13, false));
+                return;
+            }
+            int minutes;
+            try {
+                minutes = Integer.parseInt(
+                    duration.getText().toString().trim());
+            } catch (NumberFormatException error) {
+                duration.setError("Podaj czas od 1 do 480 minut.");
+                return;
+            }
+            if (minutes < MIN_TASK_MINUTES || minutes > MAX_TASK_MINUTES) {
+                duration.setError("Podaj czas od 1 do 480 minut.");
+                return;
+            }
+            java.util.List<TimeSuggestions.Option> candidates =
+                TimeSuggestions.propose(java.time.LocalDateTime.now(), minutes,
+                    day -> db.effectiveShift(chosen, day.toString()));
+            if (candidates.isEmpty()) {
+                proposals.addView(text("Brak potwierdzonych okien w grafiku "
+                    + "tej osoby przez 28 dni. Ustaw dni pracy/wolne i wyjątki "
+                    + "lub wybierz termin ręcznie.", 13, false));
+            } else {
+                for (TimeSuggestions.Option option : candidates) {
+                    String caption = option.date
+                        + " • orientacyjnie " + option.start
+                        + "–" + option.end;
+                    smallButton(proposals, "Wybierz " + caption, () -> {
+                        date.setText(option.date.toString());
+                        proposals.removeAllViews();
+                        proposals.addView(text("Wybrano " + caption
+                            + ". Zapisz formularz, aby zatwierdzić termin.",
+                            13, false));
+                        DiagnosticLog.event("TASK_DATE_SUGGESTION_CHOSEN");
+                    });
+                }
+                if (candidates.size() < 3)
+                    proposals.addView(text("W grafiku znaleziono tylko "
+                        + candidates.size() + " terminy. Nie dopisuję "
+                        + "nieznanych dni jako wolnych.", 13, false));
+            }
+            DiagnosticLog.event("TASK_DATE_SUGGESTIONS_VIEWED");
+        });
+
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
