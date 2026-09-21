@@ -2627,7 +2627,11 @@ public final class MainActivity extends Activity {
                             () -> refreshPantryPhoto(details.imageUrl));
                     }
                 }
-                box.addView(text(name + "  •  " + qty + " szt.", 18, true));
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+                box.addView(text(name + " • " + qty + " opak.", 18, true));
+                box.addView(text(PantryPackageRules.summary(
+                    qty, pack.unit, pack.sizeMilli), 14, false));
                 box.addView(text(PantryCategories.label(category), 13, false));
                 if (details != null && !details.brand.isEmpty())
                     box.addView(text("Marka: " + details.brand, 13, false));
@@ -2649,7 +2653,7 @@ public final class MainActivity extends Activity {
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
-                    new AlertDialog.Builder(this).setTitle(name + " • ilość")
+                    new AlertDialog.Builder(this).setTitle(name + " • liczba opakowań")
                         .setView(count).setNegativeButton("Anuluj", null)
                         .setPositiveButton("Zapisz", (d, w) -> {
                             try {
@@ -2677,7 +2681,7 @@ public final class MainActivity extends Activity {
                         return;
                     }
                     new AlertDialog.Builder(this).setTitle("Usunąć produkt?")
-                        .setMessage(name + " • " + qty + " szt.")
+                        .setMessage(name + " • " + qty + " opak.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Usuń", (d, w) -> {
                             db.deleteStock(id);
@@ -2690,9 +2694,9 @@ public final class MainActivity extends Activity {
         if (matched == 0) note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
             : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
-        note("Kategorie: żywność, chemia, kosmetyki, karma i pozostałe. "
-            + "Można je zmienić w Edytuj. Ogólna baza Open Products Facts "
-            + "nie przesądza, czy produkt jest chemią domową. Kg/l: kolejny etap.");
+        note("Stan zapisujemy w pełnych opakowaniach; np. 3 × 0,5 l = 1,5 l. "
+            + "Skan dodaje lub odejmuje jedno całe opakowanie. "
+            + "Zawartość, jednostkę i kategorię zmienisz przez Edytuj.");
     }
 
 
@@ -2745,10 +2749,13 @@ public final class MainActivity extends Activity {
                 .show();
             return;
         }
-        String question = "TAKE".equals(mode) ? "Wyciągnąć 1 szt.?" : "Dodać 1 szt.?";
+        PantryPackageStore.Pack pack = PantryPackageStore.find(
+            db.getReadableDatabase(), item.id);
+        String question = "TAKE".equals(mode) ? "Wyciągnąć 1 opak.?" : "Dodać 1 opak.?";
         new AlertDialog.Builder(this).setTitle(item.name)
-            .setMessage("Kod: " + barcode + "\nObecny stan: " + item.qty
-                + " szt.\n" + question)
+            .setMessage("Kod: " + barcode + "\nObecny stan: "
+                + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli)
+                + "\n" + question)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("TAKE".equals(mode) ? "Wyciągnij −1" : "Dodaj +1",
                 (d,w) -> commitPantryBarcode(barcode, null, mode, operationId))
@@ -2852,6 +2859,16 @@ public final class MainActivity extends Activity {
             found == null ? "other" : PantryCategories.fromSource(found.source));
         form.addView(text("Kategoria produktu", 14, false));
         form.addView(categorySpinner);
+        form.addView(text("Zawartość jednego opakowania", 14, false));
+        final Spinner packUnit = pantryPackageUnitSpinner("szt.");
+        final EditText packSize = new EditText(this);
+        packSize.setSingleLine(true);
+        packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        packSize.setText("1");
+        packSize.setHint("np. 0,5");
+        form.addView(packUnit);
+        form.addView(packSize);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", null)
@@ -2862,8 +2879,19 @@ public final class MainActivity extends Activity {
                     alert("Nazwa produktu musi mieć 1–160 znaków.");
                     return;
                 }
+                String unit = PantryPackageRules.UNITS[
+                    packUnit.getSelectedItemPosition()];
+                long sizeMilli;
+                try {
+                    sizeMilli = PantryPackageRules.parse(
+                        packSize.getText().toString(), unit);
+                } catch (IllegalArgumentException wrong) {
+                    alert(wrong.getMessage());
+                    return;
+                }
                 commitPantryBarcode(barcode, entered, "ADD", operationId,
-                    found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()]);
+                    found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()],
+                    unit, sizeMilli);
             }).show();
     }
 
@@ -2902,9 +2930,16 @@ public final class MainActivity extends Activity {
     private void commitPantryBarcode(String barcode, String name,
             String mode, String operationId, PantryProductLookup.Product found,
             String newCategory) {
+        commitPantryBarcode(barcode, name, mode, operationId, found, newCategory,
+            "szt.", 1000);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory, String unit, long sizeMilli) {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
-                barcode, name, mode, operationId);
+                barcode, name, mode, operationId, unit, sizeMilli);
             DiagnosticLog.event("COMMITTED".equals(result) ?
                 "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
             if (newCategory != null && "COMMITTED".equals(result)) {
@@ -2936,10 +2971,10 @@ public final class MainActivity extends Activity {
                 "SELECT name_snapshot,kind,before_qty,after_qty "
                 + "FROM pantry_movements ORDER BY id DESC LIMIT 30", null)) {
             while (cursor.moveToNext()) {
-                history.append("TAKE".equals(cursor.getString(1)) ? "−1 " : "+1 ")
+                history.append("TAKE".equals(cursor.getString(1)) ? "−1 opak. " : "+1 opak. ")
                     .append(cursor.getString(0)).append(" • ")
                     .append(cursor.getInt(2)).append(" → ").append(cursor.getInt(3))
-                    .append(" szt.\n");
+                    .append(" opak.\n");
             }
         }
         new AlertDialog.Builder(this).setTitle("Ostatnie skany")
@@ -2960,6 +2995,19 @@ public final class MainActivity extends Activity {
         return spinner;
     }
 
+    private Spinner pantryPackageUnitSpinner(String initialUnit) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_item, PantryPackageRules.UNITS);
+        adapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        int chosen = java.util.Arrays.asList(PantryPackageRules.UNITS)
+            .indexOf(initialUnit);
+        spinner.setSelection(Math.max(0, chosen));
+        return spinner;
+    }
+
     private void pantryProductDialog(Long id, String existingName) {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -2975,6 +3023,19 @@ public final class MainActivity extends Activity {
         form.addView(text("Kategoria", 14, false));
         Spinner category = pantryCategorySpinner(oldCategory);
         form.addView(category);
+        PantryPackageStore.Pack current = id == null
+            ? new PantryPackageStore.Pack("szt.", 1000)
+            : PantryPackageStore.find(db.getReadableDatabase(), id);
+        form.addView(text("Zawartość jednego opakowania", 14, false));
+        Spinner packUnit = pantryPackageUnitSpinner(current.unit);
+        EditText packSize = new EditText(this);
+        packSize.setSingleLine(true);
+        packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        packSize.setText(PantryPackageRules.format(current.sizeMilli));
+        packSize.setHint("np. 0,5");
+        form.addView(packUnit);
+        form.addView(packSize);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(id == null ? "Dodaj do spiżarni" : "Edytuj produkt")
             .setView(form).setNegativeButton("Anuluj", null)
@@ -2987,15 +3048,21 @@ public final class MainActivity extends Activity {
                     input.setError("Podaj nazwę (maks. 160 znaków).");
                     return;
                 }
-                if (id == null) {
-                    db.addStock(name, categoryId);
-                    DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
-                } else if (!db.renameStock(id, name)) {
-                    input.setError("Produkt o tej nazwie już istnieje.");
+                String unit = PantryPackageRules.UNITS[
+                    packUnit.getSelectedItemPosition()];
+                long milli;
+                try {
+                    milli = PantryPackageRules.parse(packSize.getText().toString(), unit);
+                    if (id == null) {
+                        db.addStock(name, categoryId, unit, milli);
+                        DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
+                    } else if (!db.editStock(id, name, categoryId, unit, milli)) {
+                        input.setError("Produkt o tej nazwie już istnieje.");
+                        return;
+                    } else DiagnosticLog.event("PANTRY_PRODUCT_EDITED");
+                } catch (IllegalArgumentException problem) {
+                    packSize.setError(problem.getMessage());
                     return;
-                } else {
-                    PantryCategoriesStore.set(db.getWritableDatabase(), id, categoryId);
-                    DiagnosticLog.event("PANTRY_PRODUCT_EDITED");
                 }
                 dialog.dismiss();
                 render();
@@ -3741,7 +3808,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 16);
+            super(context, "edhome-beta-preview.db", null, 17);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -3768,11 +3835,12 @@ public final class MainActivity extends Activity {
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
+            PantryPackageStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 16) {
+            if (oldVersion < 1 || newVersion > 17) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3859,6 +3927,11 @@ public final class MainActivity extends Activity {
                     + "NOT NULL DEFAULT 'other' CHECK(category IN "
                     + "('other','food','household','beauty','pet'))");
                 DiagnosticLog.event("DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES");
+            }
+            if (oldVersion < 17) {
+                PantryPackageStore.create(database);
+                PantryPackageStore.fillLegacy(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_16_TO_17_PANTRY_PACKAGES");
             }
         }
 
@@ -4685,7 +4758,9 @@ public final class MainActivity extends Activity {
                 new String[]{Long.toString(id)});
         }
 
-        void addStock(String name, String category) {
+        void addStock(String name, String category, String unit, long milli) {
+            if (!PantryPackageRules.valid(unit, milli))
+                throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
             if (!PantryCategories.known(category))
                 throw new IllegalArgumentException("Nieznana kategoria.");
             SQLiteDatabase database = getWritableDatabase();
@@ -4698,6 +4773,7 @@ public final class MainActivity extends Activity {
                     if (c.moveToFirst()) existing = c.getLong(0);
                 }
                 if (existing > 0) {
+                    PantryPackageStore.requireSame(database, existing, unit, milli);
                     database.execSQL(
                         "UPDATE pantry SET qty=qty+1 WHERE id=? AND qty<100000000",
                         new Object[]{existing});
@@ -4706,7 +4782,8 @@ public final class MainActivity extends Activity {
                     values.put("name", name);
                     values.put("qty", 1);
                     values.put("category", category);
-                    database.insertOrThrow("pantry", null, values);
+                    long newId = database.insertOrThrow("pantry", null, values);
+                    PantryPackageStore.set(database, newId, unit, milli);
                 }
                 database.setTransactionSuccessful();
             } finally {
@@ -4731,6 +4808,31 @@ public final class MainActivity extends Activity {
                 new String[]{Long.toString(id)});
         }
 
+        boolean editStock(long id, String name, String category, String unit,
+                          long milli) {
+            if (!PantryCategories.known(category)
+                    || !PantryPackageRules.valid(unit, milli))
+                throw new IllegalArgumentException("Nieprawidłowe dane opakowania.");
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                try (Cursor c = database.rawQuery(
+                        "SELECT id FROM pantry WHERE name=? COLLATE NOCASE AND id!=? LIMIT 1",
+                        new String[]{name, Long.toString(id)})) {
+                    if (c.moveToFirst()) return false;
+                }
+                ContentValues values = new ContentValues();
+                values.put("name", name);
+                values.put("category", category);
+                if (database.update("pantry", values, "id=?",
+                        new String[]{Long.toString(id)}) != 1)
+                    throw new IllegalArgumentException("Nie znaleziono produktu.");
+                PantryPackageStore.set(database, id, unit, milli);
+                database.setTransactionSuccessful();
+                return true;
+            } finally { database.endTransaction(); }
+        }
+
         boolean renameStock(long id, String name) {
             SQLiteDatabase database = getWritableDatabase();
             try (Cursor c = database.rawQuery(
@@ -4753,6 +4855,8 @@ public final class MainActivity extends Activity {
                 database.delete("pantry_barcodes", "pantry_id=?",
                     new String[]{Long.toString(id)});
                 database.delete("pantry_product_details", "pantry_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("pantry_packages", "pantry_id=?",
                     new String[]{Long.toString(id)});
                 database.delete("pantry", "id=?",
                     new String[]{Long.toString(id)});

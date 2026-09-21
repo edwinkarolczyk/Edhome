@@ -19,11 +19,11 @@ for token in (
     'PantryCategoriesStore.set(db.getWritableDatabase(), id, categoryId)',
     '"DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES"',
     'ALTER TABLE pantry ADD COLUMN category TEXT',
-    'super(context, "edhome-beta-preview.db", null, 16)',
+    'super(context, "edhome-beta-preview.db", null, 17)',
 ):
     assert token in main, "Missing main contract: " + token
 for token in (
-    'DB_VERSION = 16;',
+    'DB_VERSION = 17;',
     '{"pantry", "id", "name", "qty", "category"}',
     'inputVersion < 16 && "pantry".equals(definition[0])',
     'values.put(key, "other");',
@@ -38,4 +38,4 @@ for token in (
 ):
     assert token in categories, "Missing source mapping: " + token
 assert 'category=\'other\'' in store
-print("Pantry categories UI, backup v16, and classification: PASS")
+print("Pantry categories UI, backup v17, and classification: PASS")

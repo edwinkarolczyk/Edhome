@@ -33,3 +33,11 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Po rozpoznaniu w Open Food Facts, Open Beauty Facts lub Open Pet Food Facts domyślna kategoria jest ustawiana automatycznie. Open Products Facts jest katalogiem ogólnym: domyślnie Pozostałe; użytkownik może jawnie wybrać Chemia domowa lub inną kategorię. Nie ma zgadywania po nazwie.
 - Zastane produkty otrzymują kategorię Pozostałe. Migrujemy bazę SQLite v15 → v16 bez utraty ID, ilości, kodów kreskowych, historii i zdjęć; kopia JSON ma pole kategorii, starsze kopie ustawiają Pozostałe.
 - Jednostki kg/l, zmienne opakowania i seryjne skanowanie nie są jeszcze w tej wersji.
+
+## 0.4.0-beta.6 — pełne opakowania a zawartość
+
+- `pantry.qty` w dalszym ciągu liczy **pełne opakowania**. W obrębie tego wydania jeden produkt ma jedną aktualną specyfikację opakowania: `unit` = `szt.` / `kg` / `l`, `size_milli` = zawartość jednego opakowania × 1000. Np. 3 × 0,5 l = 1,5 l. Skan nadal ±1 **opakowanie**.
+- Przy ręcznym utworzeniu oraz pierwszym skanie: wybór jednostki i wielkości opakowania. Dla produktów rozpoznanych w Open Facts nazwę wciąż wypełnia baza, bez ręcznego wpisywania.
+- Edycja istniejącej pozycji pozwala zmienić nazwę, kategorię i zawartość opakowania. Widok oraz dialog skanu pokazują liczby opakowań i sumaryczną zawartość. Sztuki nie mogą mieć ułamkowej zawartości; kg/l obsługują do trzech miejsc po przecinku. Przed dodaniem znanej nazwy z inną specyfikacją opakowania aplikacja odrzuca niejawne scalanie.
+- SQLite v16 → v17 dodaje `pantry_packages` bez zmiany ID ani `pantry.qty`; starsze towary otrzymują 1 szt. na opakowanie. Backup JSON zawiera specyfikację i potrafi przywrócić starszą kopię z takimi wartościami domyślnymi.
+- Ten etap **nie** obsługuje otwartych opakowań, wag cząstkowych, czy mieszanych rozmiarów pod jedną kartą produktu.

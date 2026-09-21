@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 16;
+    private static final int DB_VERSION = 17;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -53,7 +53,8 @@ final class DataBackup {
         {"pantry_barcodes", "id", "pantry_id", "barcode"},
         {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
             "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
-        {"pantry_product_details", "id", "pantry_id", "brand", "image_url"}
+        {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
+        {"pantry_packages", "pantry_id", "unit", "size_milli"}
     };
 
     private DataBackup() { }
@@ -141,7 +142,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -223,6 +224,7 @@ final class DataBackup {
                 || (inputVersion < 14 && ("pantry_barcodes".equals(definition[0])
                     || "pantry_movements".equals(definition[0])))
                 || (inputVersion < 15 && "pantry_product_details".equals(definition[0]))
+                || (inputVersion < 17 && "pantry_packages".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -325,7 +327,8 @@ final class DataBackup {
                         throw new IllegalArgumentException("Nieprawidłowy typ pola: " + key);
                     }
                 }
-                if (!"task_rotation_members".equals(definition[0])) {
+                if (!"task_rotation_members".equals(definition[0])
+                        && !"pantry_packages".equals(definition[0])) {
                     Long id = values.getAsLong("id");
                     if (id == null || id <= 0 || !ids.add(id))
                         throw new IllegalArgumentException(
@@ -399,6 +402,12 @@ final class DataBackup {
                         || values.getAsString("name").length() > 160
                         || !PantryCategories.known(values.getAsString("category")))
                         throw new IllegalArgumentException("Nieprawidłowy produkt w kopii.");
+                }
+                if ("pantry_packages".equals(definition[0])) {
+                    Long amount = values.getAsLong("size_milli");
+                    if (amount == null || !PantryPackageRules.valid(
+                            values.getAsString("unit"), amount))
+                        throw new IllegalArgumentException("Nieprawidłowe opakowanie w kopii.");
                 }
                 if ("pantry_barcodes".equals(definition[0])
                         && !PantryScanRules.validBarcode(values.getAsString("barcode")))
@@ -493,6 +502,14 @@ final class DataBackup {
         Set<Long> pantryIds = new HashSet<>();
         for (ContentValues p : parsed.get("pantry"))
             pantryIds.add(p.getAsLong("id"));
+        Set<Long> packagedProducts = new HashSet<>();
+        for (ContentValues packageRow : parsed.get("pantry_packages")) {
+            Long pid = packageRow.getAsLong("pantry_id");
+            if (!pantryIds.contains(pid) || !packagedProducts.add(pid))
+                throw new IllegalArgumentException("Nieprawidłowe przypisanie opakowania.");
+        }
+        if (inputVersion >= 17 && packagedProducts.size() != pantryIds.size())
+            throw new IllegalArgumentException("Brakuje wielkości opakowania w kopii.");
         Set<String> codes = new HashSet<>();
         for (ContentValues b : parsed.get("pantry_barcodes")) {
             if (!pantryIds.contains(b.getAsLong("pantry_id"))
@@ -627,6 +644,7 @@ final class DataBackup {
                 for (ContentValues values : parsed.get(definition[0]))
                     database.insertOrThrow(definition[0], null, values);
             }
+            if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
@@ -674,7 +692,8 @@ final class DataBackup {
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
-            || "changed_at".equals(column) || "before_qty".equals(column)
+            || "changed_at".equals(column) || "size_milli".equals(column)
+            || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column);
     }
 }

@@ -103,6 +103,13 @@ final class PantryBarcodeStore {
      */
     static String commit(SQLiteDatabase db, String barcode, String nameIfNew,
                          String mode, String operationId) {
+        return commit(db, barcode, nameIfNew, mode, operationId, "szt.", 1000);
+    }
+
+    static String commit(SQLiteDatabase db, String barcode, String nameIfNew,
+                         String mode, String operationId, String unit, long sizeMilli) {
+        if (!PantryPackageRules.valid(unit, sizeMilli))
+            throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
         if (!PantryScanRules.validBarcode(barcode)
                 || !("ADD".equals(mode) || "TAKE".equals(mode))
                 || operationId == null || operationId.trim().isEmpty())
@@ -131,6 +138,9 @@ final class PantryBarcodeStore {
                     product.put("name", name);
                     product.put("qty", 0);
                     pantryId = db.insertOrThrow("pantry", null, product);
+                    PantryPackageStore.set(db, pantryId, unit, sizeMilli);
+                } else {
+                    PantryPackageStore.requireSame(db, pantryId, unit, sizeMilli);
                 }
                 ContentValues barcodeLink = new ContentValues();
                 barcodeLink.put("pantry_id", pantryId);

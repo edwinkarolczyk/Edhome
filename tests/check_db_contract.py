@@ -8,6 +8,7 @@ from pathlib import Path
 main = Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 backup = Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
 pantry_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text(encoding="utf-8")
+package_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryPackageStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -61,6 +62,8 @@ step12 = statements(section(upgrade, "if (oldVersion < 12)", "if (oldVersion < 1
 step13 = statements(section(upgrade, "if (oldVersion < 13)", "if (oldVersion < 14)"))
 pantry14 = statements(section(pantry_store, "static void createTables(SQLiteDatabase db)", "static void createDetails(").replace("db.execSQL(", "database.execSQL("))
 pantry15 = statements(section(pantry_store, "static void createDetails(SQLiteDatabase db)", "static final class Details").replace("db.execSQL(", "database.execSQL("))
+pantry17 = statements(section(package_store, "static void create(SQLiteDatabase db)", "static void fillLegacy(").replace("db.execSQL(", "database.execSQL("))
+legacy17 = statements(section(package_store, "static void fillLegacy(SQLiteDatabase db)", "static final class Pack").replace("db.execSQL(", "database.execSQL("))
 step16 = statements(section(upgrade, "if (oldVersion < 16)", 'DiagnosticLog.event("DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES")'))
 legacy_create = [sql.split(", category TEXT NOT NULL DEFAULT")[0] + ")"
                  if sql.startswith("CREATE TABLE pantry (") else sql for sql in create]
@@ -79,12 +82,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 16, "Database version and backup format differ"
+assert version == backup_version == 17, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17)
 expected = schema(fresh)
-assert len(expected) == 16 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1, "Unexpected number of tables"
+assert len(expected) == 17 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -143,6 +146,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, pantry14)  # v13 to v14, also after older migrations
     execute(db, pantry15)  # v14 to v15, preserves existing pantry rows
     execute(db, step16)  # v15 to v16, default unknown products to other
+    execute(db, pantry17 + legacy17)  # v16 to v17, one szt. per legacy pack
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -155,6 +159,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     assert db.execute("SELECT status FROM device_timers WHERE id=3"
                       ).fetchone() == ('acknowledged',)
     assert db.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (3, "Ryż", 4, "other")
+    assert db.execute("SELECT pantry_id,unit,size_milli FROM pantry_packages").fetchone() == (3, "szt.", 1000)
     assert db.execute("SELECT repeat_rule,repeat_every,place_id FROM tasks").fetchone() == (
         "once", 1, None)
     assert db.execute("SELECT priority,duration_minutes FROM tasks").fetchone() == (
@@ -225,7 +230,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 16 && "pantry".equals(definition[0])' in backup
 assert 'PantryCategories.known(values.getAsString("category"))' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
@@ -260,8 +265,10 @@ existing14.execute("INSERT INTO pantry_barcodes(pantry_id,barcode) "
                    "VALUES(2,'5901234123457')")
 execute(existing14, pantry15)
 execute(existing14, step16)
+execute(existing14, pantry17 + legacy17)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
+assert existing14.execute("SELECT pantry_id,unit,size_milli FROM pantry_packages").fetchone() == (2,"szt.",1000)
 existing14.close()
-print("SQLite migrations v1–v15→v16: PASS; categories, OFF metadata, barcodes and backup: PASS")
+print("SQLite migrations v1–v16→v17: PASS; package size, categories, barcodes and backup: PASS")
