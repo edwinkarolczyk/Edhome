@@ -647,6 +647,93 @@ public final class MainActivity extends Activity {
                 + "tygodniowego lub jest nieustalona.", 13, false));
     }
 
+    private void waste() {
+        header("Odpady • wystawianie i terminy");
+        note("Ustaw dzień WYSTAWIENIA pojemnika, nie datę odbioru śmieci. "
+            + "Czynności pojawiają się także w kalendarzu i głównej liście. "
+            + "Wykonanie odnotowuje historię, a reguła cykliczna "
+            + "wyznacza kolejny termin.");
+        note("Powiadomienia są opcjonalne: włącz je w Ustawieniach. "
+            + "Android sprawdza zaległe i dzisiejsze zadania około 9:00 "
+            + "(system może opóźnić powiadomienie). "
+            + "Harmonogram gminy nie jest pobierany automatycznie.");
+        LinearLayout form = card();
+        form.addView(text("Nowy termin wystawienia", 19, true));
+        form.addView(text("Frakcja", 15, true));
+        Spinner fraction = new Spinner(this);
+        fraction.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(WasteRules.LABELS)));
+        form.addView(fraction);
+        form.addView(text("Pierwszy dzień wystawienia", 15, true));
+        EditText date = new EditText(this);
+        date.setSingleLine(true);
+        date.setFocusable(false);
+        date.setText(LocalDate.now().toString());
+        date.setTextColor(ink);
+        date.setOnClickListener(v -> {
+            LocalDate initial = LocalDate.parse(date.getText().toString());
+            new DatePickerDialog(this, (picker, year, month, day) ->
+                date.setText(LocalDate.of(year, month + 1, day).toString()),
+                initial.getYear(), initial.getMonthValue() - 1,
+                initial.getDayOfMonth()).show();
+        });
+        form.addView(date);
+        smallButton(form, "Wybierz datę", () -> date.performClick());
+        form.addView(text("Powtarzanie", 15, true));
+        Spinner cycle = new Spinner(this);
+        cycle.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(WasteRules.CYCLES)));
+        form.addView(cycle);
+        smallButton(form, "+ Dodaj do Czynności i kalendarza", () -> {
+            String rule;
+            int every = 1;
+            switch (cycle.getSelectedItemPosition()) {
+                case 1: rule = "weekly"; break;
+                case 2: rule = "every_weeks"; every = 2; break;
+                case 3: rule = "monthly"; break;
+                default: rule = "once"; break;
+            }
+            String selectedFraction = WasteRules.FRACTIONS[
+                fraction.getSelectedItemPosition()];
+            String due = date.getText().toString();
+            String error = WasteRules.validate(
+                selectedFraction, due, rule, every);
+            if (error != null) {
+                date.setError(error);
+                alert(error);
+                return;
+            }
+            if (!db.createWasteTask(selectedFraction, due, rule, every)) {
+                alert("Ta frakcja ma już niezakończoną czynność "
+                    + "z tą datą. Edytuj istniejącą zamiast tworzyć duplikat.");
+                return;
+            }
+            ReminderReceiver.schedule(this);
+            DiagnosticLog.event("WASTE_TASK_ADDED");
+            render();
+        });
+        button("▦ Zobacz w kalendarzu", () -> go("calendar"));
+        button("✓ Wszystkie czynności", () -> {
+            tasksFilter = "all";
+            go("tasks");
+        });
+        title("Terminy i potwierdzenia");
+        int count = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,title,done,due_date,repeat_rule,repeat_every "
+                + "FROM tasks WHERE task_kind='waste' "
+                + "ORDER BY done ASC,due_date ASC,id DESC", null)) {
+            while (c.moveToNext()) {
+                count++;
+                drawTask(c.getLong(0), c.getString(1),
+                    c.getInt(2) == 1, c.isNull(3) ? "" : c.getString(3),
+                    c.getString(4), c.getInt(5));
+            }
+        }
+        if (count == 0) note("Brak terminów. Dodaj pierwszą frakcję i dzień "
+            + "wystawienia z lokalnego harmonogramu odbioru.");
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
