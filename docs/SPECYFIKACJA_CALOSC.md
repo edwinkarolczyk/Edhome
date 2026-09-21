@@ -213,3 +213,33 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Cisza w tym inkremencie jest stała: 22:00–07:00. Ustawienie wieczorne przesuwa się na 21:00, wczesnoporanne na 07:00, a alarm spóźniony do ciszy nie powinien wybudzić użytkownika. Bez obietnic dokładnej minuty w Androidzie.
 - Doręczenia wymagają zgody Androida i globalnego opt-in, mają osobną identyfikację daty/godziny; po wykonaniu zadania cyklicznego wyznaczany jest nowy termin i alarm.
 - Backup v10 zachowuje ustawienia na zadaniach, import starszych kopii daje bezpieczne wartości domyślne. Beta bez PIN-u, Stable z PIN-em, a synchronizacja między telefonami później.
+
+
+## 21. EDHOME — panel zarządzania energią i priorytetami nadwyżek PV (uzgodnienie)
+
+**Cel:** jeden wspólny ekran pokazujący bilans energii domu oraz priorytety wykorzystania realnej nadwyżki. Panel stanowi część modułu Energia, a nie osobną niezależną aplikację.
+
+### Widok bilansu (na telefonie i tablecie)
+
+- Produkcja PV teraz i w czasie (kW/kWh), zużycie domu, pobór z sieci, oddawanie do sieci, bieżąca nadwyżka i zużycie własne — tylko dla wielkości rzeczywiście mierzonych; odróżnić pomiary od szacunków i prognoz. Gdy dane są niepełne, wyświetlić „brak danych”, nie pozorować dokładności.
+- Zestawienie „dokąd trafia energia”: domowe odbiorniki, CWU, ogrzewanie/bufor, opcjonalny magazyn energii (jeśli istnieje), sieć. Nie twierdzić, że aplikacja zna udział każdego odbiornika bez licznika/czujnika danego obwodu.
+- Wykresy godzinowe/dobowe/miesięczne, historia uruchomień odbiorników i oszczędności wyłącznie na podstawie jawnych założeń taryfy/kosztu; kWh, kW, zł oraz temperatura bufora i CWU mają właściwe jednostki i źródła.
+- Czytelny wskaźnik: „Nadwyżka do dyspozycji”, „Ograniczenie mocy”, „Odbiorniki aktualnie aktywne”, „Dlaczego odbiornik nie został uruchomiony?”.
+
+### Priorytety i reguły (konfigurowalne przez użytkownika)
+
+1. Obciążenia podstawowe domu mają pierwszeństwo: panel nie może wyłączać przypadkowych urządzeń, żeby wymuszać autokonsumpcję.
+2. Użytkownik może ustawić kolejność uprawnionych odbiorników, np. grzałka CWU → pompa ciepła/bufor w dopuszczalnym zakresie → inne dopuszczone urządzenia → pozostała nadwyżka do sieci. To **przykład**, nie narzucona konfiguracja ani polecenie grzania PC do 90°C.
+3. Każdy odbiornik ma osobny tryb: tylko monitoruj / zaproponuj uruchomienie / automatyczne sterowanie (dopiero po technicznej weryfikacji i zgodzie); minimalna nadwyżka i czas utrzymania warunku, maksymalny pobór/moc, zakres godzin, priorytet, minimalny czas pracy i postoju, wyprzedzenie, histereza oraz ręczne wstrzymanie.
+4. Odrębne ograniczenia: docelowy maksymalny eksport/pobór względem warunków przyłączenia, limity mocy urządzeń i obwodów, temperatury CWU/bufora, zabezpieczenia przeciwprzegrzaniu i awaryjne, minimalna rezerwa ciepłej wody, tryb sezonowy oraz możliwość ręcznego nadpisania. Ustawienie limitu eksportu nie zmienia formalnie zgłoszonej mocy instalacji PV i nie zastępuje wymogów operatora.
+5. Zachowanie przy utracie internetu, LAN, SUPLA, telemetrii czy komunikacji: nie zgadywać aktualnych wartości i nie przełączać odbiorników na podstawie nieaktualnej nadwyżki; bezpieczny stan wynika z lokalnego sterownika i zabezpieczeń sprzętowych, nie tylko z aplikacji Android.
+6. Najpierw **monitoring i rekomendacje**; zdalne sterowanie dopiero po identyfikacji rzeczywistego falownika, licznika, czujników, SUPLA i rodzaju sterowania urządzeń (np. wejście SG Ready vs odcinanie zasilania). Zwykły przekaźnik nie może bez analizy odcinać zasilania sprężarki pompy ciepła, pralki czy innego nieprzystosowanego urządzenia.
+7. Ręczne decyzje i faktyczne załączenia trafiają do historii oraz wspólnego silnika zdarzeń. Połączenia z Czynnościami (np. sezonowy przegląd PV), kalendarzem, powiadomieniami oraz PayCheck (faktyczne rachunki, szacunki oddzielnie) bez dublowania kosztów.
+
+### Architektura przyszłego sterowania
+
+- EDHOME pokazuje bilans i pozwala edytować priorytety; **właściwy automat powinien działać w lokalnym, stale dostępnym sterowniku/bramce**, jeśli ma reagować wtedy, gdy telefon jest zamknięty. Tablet nie musi pozostawać włączony przez całą dobę.
+- Adaptery źródeł pomiaru i wykonawców są rozdzielone: falownik/licznik/SUPLA → warstwa pomiarowa → algorytm priorytetów → bezpieczne polecenie → potwierdzony stan urządzenia. Identyfikator, czas pomiaru, źródło, dostępność, przyczyna decyzji i stan wykonania są jawne.
+- Nie zakładać dostępności lokalnego API, pomiaru każdego obwodu ani możliwości płynnej regulacji mocy grzałek bez sprawdzenia konkretnego osprzętu. Prawdziwe sterowanie może wymagać dodatkowego licznika energii, sterownika lub czujników i fachowego projektu elektrycznego.
+
+**Status:** ustalenie koncepcyjne. Panel, priorytety i sterowanie nie są automatycznie wdrożone przez dodanie tego opisu; kolejność poniżej w roadmapie.
