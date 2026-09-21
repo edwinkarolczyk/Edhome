@@ -52,3 +52,10 @@ Remanent jest cykliczną czynnością połączoną z **sesją liczenia**, a nie 
 Na końcu powstaje propozycja korekt, którą użytkownik **osobno zatwierdza**; wtedy transakcyjnie aktualizować stany i historię. Każda korekta ma trwałe ID operacji, powiązaną sesję, ilość przed/po, jednostkę i wykonawcę; ponowne dostarczenie przez synchronizację nie może wykonać jej drugi raz. Zmiany na drugim urządzeniu od chwili snapshotu wymagają uzgodnienia konfliktu przed zastosowaniem różnic. Sesję można wznowić i zachować pominięte pozycje.
 
 Pełny scenariusz i opcje UI opisuje [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#11-nowe-ustalenie--kreator-okresowego-remanentu-spiżarni-na-tablecie).
+
+
+## Moduł Energia — bilans, priorytety i sterowanie (plan)
+
+Adaptery danych (PV, licznik sieciowy, SUPLA, czujniki temperatury) przekazują wartości z jednostką, znacznikiem czasu i informacją o jakości/dostępności. Warstwa bilansu rozdziela produkcję, zużycie, import i eksport, a braków nie traktuje jak 0. Warstwa reguł dysponuje tylko **potwierdzoną, aktualną** nadwyżką i uprawnionymi odbiornikami; osobny adapter wykonawczy wysyła polecenia dopiero w trybie wyraźnie włączonym przez użytkownika. Odbiorniki opisują limity elektryczne/termiczne, warunki pracy, kolejność priorytetów, minimalne czasy/histerezę, przyczynę odrzucenia i stan wykonania.
+
+Automatyka wymagająca ciągłego działania nie może polegać na procesie Androida pozostającym w tle — docelowo sterownik/bramka lokalna. Awaria danych/sieci nie może prowadzić do przełączania na podstawie nieaktualnych wskazań. Historia, powiadomienia, Czynności i PayCheck korzystają z jednego potwierdzonego zdarzenia; wyliczony koszt nie jest drugą transakcją księgową. Lokalność API SUPLA, typ czujników, sposób sterowania CWU/PC i zgodność z warunkami przyłączenia wymagają audytu. Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#21-edhome--panel-zarządzania-energią-i-priorytetami-nadwyżek-pv-uzgodnienie).
