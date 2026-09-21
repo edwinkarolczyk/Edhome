@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 20,
-  "versionName": "0.3.0-beta.1",
-  "changelog": "EDHOME Beta 0.3.0 — lokalna lista zakupów, opcjonalne ilości, SQLite v8.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.0-beta.1/edhome-beta.apk",
-  "sha256": "219de30cd76b4c7b69765e1f39f7ddaab81708dbd38dbc2ea6b4e0fb3ae39f18"
+  "versionCode": 21,
+  "versionName": "0.3.1-beta.1",
+  "changelog": "EDHOME Beta 0.3.1 — odpady, daty wystawienia, wspólne Czynności i przypomnienia, SQLite v9.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.1-beta.1/edhome-beta.apk",
+  "sha256": "2237540f3fd8c0052e3b4aa4fb835d8f8b14664abd65332cd37ca11a7b20f5c3"
 }
