@@ -90,6 +90,8 @@ jobs:
         run: python3 tests/check_db_contract.py
       - name: Beta without PIN contract
         run: python3 tests/check_beta_pin_contract.py
+      - name: Four-theme UI-only and drag-edit contract
+        run: python3 tests/check_ui_refresh_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -130,14 +132,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.3.2-beta.2-signed-apk
+          name: EDHOME-0.3.3-beta.1-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.2-beta.2 — godzina i wyprzedzenie przypomnień, cisza 22–07, poprawka migracji SQLite v10."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.3 — cztery motywy UI, zaokrąglone kafelki, edytuj/przeciągnij, kopie wyglądu; bez zmian SQLite."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
