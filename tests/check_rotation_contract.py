@@ -39,7 +39,8 @@ for token in (
     assert token in backup, "Missing rotation backup contract: " + token
 
 # Rotation rows have a composite key and deliberately no synthetic "id".
-assert 'if (!"task_rotation_members".equals(definition[0])) {' in backup
+assert 'if (!"task_rotation_members".equals(definition[0])' in backup
+assert '&& !"pantry_packages".equals(definition[0]))' in backup
 assert 'private static final int DB_VERSION = 17;' in backup
 assert 'super(context, "edhome-beta-preview.db", null, 17' in main
 print("Rotation DB v17, next-assignee history, deletion and backup contract: PASS")
