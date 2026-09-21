@@ -92,6 +92,8 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
         execute(db, step8 + shopping)
     if old >= 9:
         execute(db, step9)
+    if old >= 10:
+        execute(db, step10)
     if old < 2:
         execute(db, step2 + audit)
     if old < 3:
