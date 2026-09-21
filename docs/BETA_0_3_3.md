@@ -1,4 +1,4 @@
-# EDHOME 0.3.3-beta.1 — UI Refresh (tylko wygląd i interakcje)
+# EDHOME 0.3.3-beta.2 — UI Refresh (tylko wygląd i interakcje)
 
 ## Zakres
 
