@@ -125,6 +125,9 @@ public final class MainActivity extends Activity {
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
         ReminderReceiver.schedule(this);
+        DeviceTimerReceiver.scheduleAll(this);
+        if (getIntent() != null && getIntent().getBooleanExtra("open_timers", false))
+            screen = "timers";
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -146,6 +149,14 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta()) unlocked = true;
         if (root != null && !unlocked) render();
         if (unlocked && updater != null) updater.start();
+        if (unlocked && root != null && "timers".equals(screen)) render();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getBooleanExtra("open_timers", false))
+            go("timers");
     }
 
     @Override public void onBackPressed() {
@@ -301,6 +312,7 @@ public final class MainActivity extends Activity {
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
+                case "timers": timers(); break;
                 case "waste": waste(); break;
                 case "members": members(); break;
                 case "member_schedule": memberSchedule(); break;
@@ -514,6 +526,7 @@ public final class MainActivity extends Activity {
         }
         if (displayed == 0)
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
+        smallButton(today, "Minutniki urządzeń →", () -> go("timers"));
         smallButton(today, "Lista zakupów →", () -> go("shopping"));
         smallButton(today, "Odpady i terminy wystawienia →", () -> go("waste"));
         smallButton(today, "Zobacz wszystkie czynności →", () -> {
@@ -1132,6 +1145,7 @@ public final class MainActivity extends Activity {
         header("Czynności • plan i wykonania");
         note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
         button("⌂ Miejsca", () -> go("places"));
+        button("◷ Minutniki urządzeń", () -> go("timers"));
         button("♻ Odpady i wystawianie", () -> go("waste"));
         button("♙ Domownicy / wykonawcy", () -> go("members"));
         button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
@@ -2960,7 +2974,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 11);
+            super(context, "edhome-beta-preview.db", null, 12);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -2980,11 +2994,12 @@ public final class MainActivity extends Activity {
             addMembers(database);
             addMemberSchedules(database);
             addShopping(database);
+            addDeviceTimers(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 11) {
+            if (oldVersion < 1 || newVersion > 12) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3046,6 +3061,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE places_v11 RENAME TO places");
                 addPlaceSiblingIndex(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_10_TO_11_PLACES");
+            }
+            if (oldVersion < 12) {
+                addDeviceTimers(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_11_TO_12_DEVICE_TIMERS");
             }
         }
 
@@ -3645,6 +3664,51 @@ public final class MainActivity extends Activity {
             } finally {
                 database.endTransaction();
             }
+        }
+
+        private static void addDeviceTimers(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE device_timers ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "device_type TEXT NOT NULL, title TEXT NOT NULL, "
+                + "start_at INTEGER NOT NULL, end_at INTEGER NOT NULL, "
+                + "status TEXT NOT NULL DEFAULT 'running', "
+                + "acknowledged_at INTEGER)");
+            database.execSQL("CREATE INDEX device_timers_status_end_idx "
+                + "ON device_timers(status,end_at)");
+        }
+
+        long startDeviceTimer(String type, String title, int minutes) {
+            long now = System.currentTimeMillis();
+            long end = DeviceTimerRules.endAt(now, minutes);
+            if (!DeviceTimerRules.validType(type)
+                    || !DeviceTimerRules.validTitle(title))
+                throw new IllegalArgumentException("Wybierz urządzenie i nazwę.");
+            ContentValues values = new ContentValues();
+            values.put("device_type", type);
+            values.put("title", title.trim());
+            values.put("start_at", now);
+            values.put("end_at", end);
+            values.put("status", "running");
+            return getWritableDatabase().insertOrThrow(
+                "device_timers", null, values);
+        }
+
+        boolean updateDeviceTimer(long id, String nextStatus, long now) {
+            if (!"acknowledged".equals(nextStatus)
+                    && !"cancelled".equals(nextStatus))
+                throw new IllegalArgumentException("Nieznany stan minutnika.");
+            ContentValues values = new ContentValues();
+            values.put("status", nextStatus);
+            if ("acknowledged".equals(nextStatus))
+                values.put("acknowledged_at", now);
+            else values.putNull("acknowledged_at");
+            return getWritableDatabase().update("device_timers", values,
+                "id=? AND status='running'"
+                    + ("acknowledged".equals(nextStatus)
+                        ? " AND end_at<=?" : ""),
+                "acknowledged".equals(nextStatus)
+                    ? new String[]{Long.toString(id), Long.toString(now)}
+                    : new String[]{Long.toString(id)}) == 1;
         }
 
         boolean addShoppingItem(String name, Long amount, String unit) {
