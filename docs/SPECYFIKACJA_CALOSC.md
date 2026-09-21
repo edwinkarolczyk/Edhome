@@ -252,3 +252,37 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Kliknięcie otwiera moduł; **przytrzymanie wyświetla Edytuj / Przesuń**; przeciąganie za uchwyt zmienia kolejność. Edycja prezentacji pozwala zmienić podpis i kolor kafelka, ale **nigdy powiązanie ID/modułu ani dane**. Nie usuwamy systemowych 9 kafelków.
 - Po ponownym uruchomieniu zachowuje się kolejność, motyw i wygląd. Kopia JSON uwzględnia edycje wizualne. Wersja bazy SQLite pozostaje v10; Beta bez PIN-u, Stable z PIN-em, repo i kanał aktualizacji bez zmian.
 - Obrazy koncepcyjne są inspiracją, nie zrzutem z uruchomionego Androida; wykonanie UI w aplikacji wymaga kompilacji i osobnego testu na telefonie. Dalsze 0.3.4: minutniki urządzeń.
+
+## 22. Integracja SUPLA — Cloud API, OAuth2 i broker MQTT (doprecyzowanie na podstawie zrzutów 21.09.2026)
+
+**Zrzuty pokazują dostępne na koncie użytkownika:** Swagger/OpenAPI SUPLA Cloud, formularz rejestracji aplikacji OAuth, broker MQTT włączony z serwerem, TLS i przyciskiem generowania hasła, a także katalog integracji. To potwierdza istnienie tych dróg integracyjnych, **nie** dostępność konkretnego pomiaru ani działającego połączenia EDHOME. Nie zapisywać w repo identyfikatora konta MQTT, haseł, tokenów, client secret ani dokładnych danych urządzeń użytkownika.
+
+### Trzy rozdzielone kanały
+
+| Kanał | Do czego w EDHOME | Ważne ograniczenie |
+|---|---|---|
+| SUPLA Cloud API / OpenAPI | Odkrywanie uprawnionych kanałów i lokalizacji, stany, pomiary/historia o ile endpointy i dany typ kanału je oferują | Wymaga internetu i ważnego uwierzytelnienia; serwer instancji SUPLA musi zgadzać się z kontem |
+| OAuth2 SUPLA | Połączenie konta z EDHOME z odpowiednimi zakresami uprawnień i odwoływaniem dostępu | Nie umieszczać client secret/PAT w APK; użyć właściwego przepływu dla natywnej aplikacji z PKCE, jeśli wspierany, z poprawnym redirect URI; zakres minimalny, najpierw odczyt |
+| Broker MQTT SUPLA | Aktualizacje stanów/pomiarów w miarę ich publikacji dla uprawnionych kanałów | Pokazany broker jest adresem **chmurowym**, a nie lokalnym MQTT/LAN; wymaga internetu oraz bezpiecznej obsługi konta, TLS i ponownego połączenia |
+
+SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mechanizmem automatycznie zapewniającym dostęp do urządzeń. Swaggerowe operacje zmieniające stan mogą działać na prawdziwym koncie; nie używać „Wypróbuj” na endpointach zapisu/sterowania do testu odczytu.
+
+### Ekran konfiguracji EDHOME → Integracje → SUPLA
+
+- Status: rozłączono / łączenie / połączono / brak uprawnień / dane nieaktualne. Wybór instancji SUPLA, połączenie konta i ewentualny lokalny adapter po odrębnej konfiguracji.
+- Pokaż **tylko uprawnione kanały** i umożliw ich mapowanie do trwałych obiektów EDHOME, np. licznik energii, temperatury CWU, bufor, obwód grzałki, pompa ciepła, pozostałe odbiorniki. Żaden sensor nie jest obiecywany, jeśli nie istnieje na konkretnym koncie/urządzeniu.
+- Dane źródłowe rozdzielone od wartości obliczanych; prezentować wartość, jednostkę, czas pomiaru, źródło i status jakości. MQTT nie zastępuje API, jeśli potrzebny jest odczyt historyczny lub odkrywanie kanałów.
+- Początkowo **tylko odczyt i bilans**. Sterowanie jako oddzielny etap po mapowaniu zdolności konkretnych kanałów, zgodzie użytkownika i weryfikacji zabezpieczeń. Nie traktować kanału „włącz/wyłącz” jako pozwolenia na odcinanie zasilania PC lub urządzeń nieprzystosowanych.
+- Chmura SUPLA nie spełnia sama z siebie założenia pełnej pracy offline: przy braku internetu wyświetlić ostatni pomiar z datą i oznaczeniem „nieaktualny”, bez automatyzacji na nieświeżych danych. Lokalność badać osobno dla konkretnego modułu/protokołu.
+- Nie udostępniać konta użytkownika ani danych SUPLA wszystkim domownikom przez samo ukrycie UI; uprawnienia gospodarstwa, osobna obsługa tokenów, szyfrowanie i wylogowanie/cofnięcie zgody. Dziennik diagnostyczny beta nie może zawierać sekretów.
+- Repozytorium EDHOME może być publiczne; **żadne dane uwierzytelniające SUPLA ani identyfikatory konta nie trafiają do kodu, dokumentacji ani commitów**.
+
+### Plan akceptacyjny
+
+1. Sprawdzić aktualną dokumentację SUPLA i rzeczywiste typy kanałów dostępne na koncie; wybrać minimalne tylko-do-odczytu uprawnienia.
+2. Połączyć konto w bezpiecznym flow; pokazać listę kanałów bez uruchamiania urządzeń.
+3. Zmapować rzeczywiste dane energii, temperatur i stanów, oznaczyć brakujące pomiary.
+4. Dodać opcjonalne MQTT i odporność na zerwanie łączności; rozróżnić chmurę od lokalnego adaptera.
+5. Dopiero później rozważyć jawnie dopuszczone polecenia i priorytety nadwyżek PV.
+
+**Status:** kierunek i wymagania zaakceptowane; ekran SUPLA nie jest potwierdzoną działającą integracją w APK.
