@@ -36,7 +36,8 @@ step4 = statements(section(upgrade, "if (oldVersion < 4)", "if (oldVersion < 5)"
 step5 = statements(section(upgrade, "if (oldVersion < 5)", "if (oldVersion < 6)"))
 step6 = statements(section(upgrade, "if (oldVersion < 6)", "if (oldVersion < 7)"))
 step7 = statements(section(upgrade, "if (oldVersion < 7)", "if (oldVersion < 8)"))
-step8 = statements(upgrade.split("if (oldVersion < 8)", 1)[1])
+step8 = statements(section(upgrade, "if (oldVersion < 8)", "if (oldVersion < 9)"))
+step9 = statements(upgrade.split("if (oldVersion < 9)", 1)[1])
 
 def execute(database, sql):
     for statement in sql:
@@ -52,13 +53,13 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(places) == 1 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 8, "Database version and backup format differ"
+assert version == backup_version == 9, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + places + members + shifts + shopping)
 expected = schema(fresh)
 assert len(expected) == 11, "Unexpected number of tables"
-for old in (1, 2, 3, 4, 5, 6, 7):
+for old in (1, 2, 3, 4, 5, 6, 7, 8):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                "title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
@@ -78,6 +79,8 @@ for old in (1, 2, 3, 4, 5, 6, 7):
         execute(db, step6 + members)
     if old >= 7:
         execute(db, step7 + shifts)
+    if old >= 8:
+        execute(db, step8 + shopping)
     if old < 2:
         execute(db, step2 + audit)
     if old < 3:
@@ -90,7 +93,9 @@ for old in (1, 2, 3, 4, 5, 6, 7):
         execute(db, step6 + members)
     if old < 7:
         execute(db, step7 + shifts)
-    execute(db, step8 + shopping)
+    if old < 8:
+        execute(db, step8 + shopping)
+    execute(db, step9)
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     assert db.execute("SELECT id,name,qty FROM pantry").fetchone() == (3, "Ryż", 4)
@@ -98,6 +103,9 @@ for old in (1, 2, 3, 4, 5, 6, 7):
         "once", 1, None)
     assert db.execute("SELECT priority,duration_minutes FROM tasks").fetchone() == (
         "normal", 30), "Migration must preserve task with planning defaults"
+    assert db.execute(
+        "SELECT task_kind,waste_fraction FROM tasks WHERE id=7"
+    ).fetchone() == ("general", None)
     assert db.execute("SELECT assignee_id FROM tasks").fetchone() == (None,)
     db.execute("INSERT INTO household_members (id,name) VALUES (4,'Edwin')")
     db.execute("UPDATE tasks SET assignee_id=4 WHERE id=7")
@@ -120,6 +128,11 @@ for old in (1, 2, 3, 4, 5, 6, 7):
                       "WHERE id=10").fetchone() == (1500, "l")
     assert db.execute("SELECT qty_milli,checked FROM shopping_items "
                       "WHERE id=11").fetchone() == (None, 1)
+    db.execute("INSERT INTO tasks (title,due_date,repeat_rule,repeat_every,"
+               "task_kind,waste_fraction) VALUES "
+               "('Wystaw: Papier','2026-09-23','weekly',1,'waste','paper')")
+    assert db.execute("SELECT waste_fraction FROM tasks WHERE task_kind='waste'"
+                      ).fetchone() == ("paper",)
     db.close()
 
 definitions = section(backup, "private static final String[][] TABLES = {", "};")
@@ -130,7 +143,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
@@ -139,4 +152,8 @@ assert 'inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])' in ba
 assert '"member_id".equals(column) || "weekday".equals(column)' in backup
 assert 'inputVersion < 8 && "shopping_items".equals(definition[0])' in backup
 assert '"qty_milli".equals(key)' in backup
-print("SQLite migrations v1–v7→v8: PASS; shopping optional quantity and backup: PASS")
+assert 'inputVersion < 9 && "tasks".equals(definition[0])' in backup
+assert '"task_kind".equals(key)' in backup
+assert '"waste_fraction".equals(key)' in backup
+assert 'WasteRules.validate(fraction, due, rule,' in backup
+print("SQLite migrations v1–v8→v9: PASS; typed waste tasks and backup defaults: PASS")
