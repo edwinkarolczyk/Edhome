@@ -39,8 +39,9 @@ android {
         stable {
             dimension 'channel'
             applicationId 'com.edwinkarolczyk.edhome'
-            versionNameSuffix '-prototype'
-            manifestPlaceholders = [appLabel: 'EDHOME Prototype']
+            versionNameSuffix ''
+            signingConfig signingConfigs.betaRelease
+            manifestPlaceholders = [appLabel: 'EDHOME Stable']
             buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         }
         beta {
