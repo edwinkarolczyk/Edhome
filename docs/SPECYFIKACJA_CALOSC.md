@@ -205,3 +205,11 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Odpady są typowaną czynnością, nie oddzielnym zbiorem przypomnień. Mają frakcję, datę **wystawienia** (nie wymyśloną datę odbioru) i regułę powtarzania; działają w tym samym kalendarzu, historii i powiadomieniach.
 - Potwierdzenie wystawienia oznacza wykonanie konkretnej czynności. Cykliczna wyznacza kolejny termin; nie powstaje drugi rekord przy każdym wykonaniu. Duplikat niezakończonej tej samej frakcji na tę samą datę jest blokowany.
 - Powiadomienia wymagają jawnego włączenia i zgody Androida; początkowy wspólny alert jest około 09:00 na dzień terminu i zaległe. Indywidualne godziny, wyprzedzenie przed terminem i harmonogramy gminy to odrębny etap, nie deklaracja gotowej integracji.
+
+
+## 20. Inkrement 0.3.2 — indywidualne przypomnienia
+
+- Czynność, także odpady, może mieć własne HH:mm i wyprzedzenie 0/1/2/3/7 dni względem daty wykonania/wystawienia. Brak własnej godziny zachowuje wspólne przypomnienie około 09:00; czynność bez daty jest nadal dopuszczalna, ale nie ma indywidualnego alarmu.
+- Cisza w tym inkremencie jest stała: 22:00–07:00. Ustawienie wieczorne przesuwa się na 21:00, wczesnoporanne na 07:00, a alarm spóźniony do ciszy nie powinien wybudzić użytkownika. Bez obietnic dokładnej minuty w Androidzie.
+- Doręczenia wymagają zgody Androida i globalnego opt-in, mają osobną identyfikację daty/godziny; po wykonaniu zadania cyklicznego wyznaczany jest nowy termin i alarm.
+- Backup v10 zachowuje ustawienia na zadaniach, import starszych kopii daje bezpieczne wartości domyślne. Beta bez PIN-u, Stable z PIN-em, a synchronizacja między telefonami później.
