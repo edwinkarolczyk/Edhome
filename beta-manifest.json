@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 24,
-  "versionName": "0.3.3-beta.2",
-  "changelog": "EDHOME Beta 0.3.3 — cztery motywy UI, zaokrąglone kafelki, edytuj/przeciągnij, kopie wyglądu; bez zmian SQLite.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.3-beta.2/edhome-beta.apk",
-  "sha256": "7438630ef2e9b2b4b6e2b1a895e2f39614b6137a8c6c09778ef721c638c11671"
+  "versionCode": 25,
+  "versionName": "0.3.3-beta.3",
+  "changelog": "EDHOME Beta 0.3.3-beta.3 — dwa dodatkowe motywy WMM i Trener 2, biblioteka ikon, animowany podgląd przeciągania; SQLite bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.3-beta.3/edhome-beta.apk",
+  "sha256": "cf5954530372e04f92cb270e121a4846632923b01092cef1018a2e159b84d58a"
 }
