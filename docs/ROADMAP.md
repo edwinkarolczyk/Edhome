@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan bieżący 0.2.9-beta.1 na `beta`:** publiczne `edwinkarolczyk/Edhome`, GitHub Releases i manifest `beta`. Beta bez PIN-u, z opcjonalnym wykonawcą i grafikiem; do 3 orientacyjnych propozycji dat na podstawie jawnego grafiku i czasu. Zapis terminu wyłącznie po zatwierdzeniu. SQLite v7, import kopii v2–v7. Test na telefonie osobnym kryterium odbioru. Główne wymagania: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+> **Stan bieżący 0.3.0-beta.1 na `beta`:** pierwszy pakiet etapu 0.3 — lokalna lista zakupów, opcjonalna ilość szt./kg/l, oznaczanie kupionych. SQLite v8, import v2–v8; dotychczasowe zadania i grafik pozostają. Beta bez PIN-u, Stable z PIN-em, publiczny GitHub Release i manifest Beta. Nie deklarować gotowej synchronizacji, śmieci ani minutników. Test urządzenia pozostaje odrębnym warunkiem odbioru. Główna specyfikacja: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,8 +80,9 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.0-beta.1 (po odbiorze 0.2.9)
+## Następny inkrement — 0.3.1-beta.1
 
-- Zapisywalna godzina rozpoczęcia i zakończenia terminu oraz wykrywanie kolizji z innymi zaplanowanymi czynnościami, bez narzucania terminu.
-- Dalsza obsługa domowych obowiązków i przypomnień według sekcji 0.3.0; własne godziny zmian i rotację planować osobno, nie udawać gotowej integracji.
-- Testy aktualizacji i kopii na telefonie przed rozbudową schematu.
+- Przypomnienia o wystawianiu śmieci i potwierdzanie wykonania, jako specjalizacja istniejących samodzielnych czynności (nie dublować zadań w kalendarzu).
+- Zapisywalna godzina terminu oraz wykrywanie kolizji z innymi czynnościami w kolejnych inkrementach etapu 0.3; 0.2.9 ma wyłącznie orientacyjne okna, a nie gwarantowany wolny czas.
+- Dalej: minutniki prania/suszenia/zmywarki i rotacyjne obowiązki domowników. Synchronizacja wielu urządzeń dopiero wraz z etapem 0.8.
+- Każdą wersję publikować po testach CI i sprawdzeniu manifestu; telefon użytkownika wymaga osobnego potwierdzenia.
