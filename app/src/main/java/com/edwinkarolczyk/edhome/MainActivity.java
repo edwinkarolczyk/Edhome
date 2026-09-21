@@ -1419,6 +1419,8 @@ public final class MainActivity extends Activity {
         if (!place.isEmpty()) description += " • " + place;
         String assignee = db.assigneeLabel(id);
         if (!assignee.isEmpty()) description += " • Wykonawca: " + assignee;
+        String rotation = db.rotationLabel(id);
+        if (!rotation.isEmpty()) description += " • Rotacja: " + rotation;
         String[] alertTime = db.taskReminder(id);
         if (!alertTime[0].isEmpty()) {
             java.time.LocalDateTime when = ReminderRules.target(
@@ -3766,18 +3768,36 @@ public final class MainActivity extends Activity {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try (Cursor cursor = database.rawQuery(
-                    "SELECT title,done,due_date,repeat_rule,repeat_every FROM tasks WHERE id=?",
+                    "SELECT title,done,due_date,repeat_rule,repeat_every,assignee_id "
+                    + "FROM tasks WHERE id=?",
                     new String[]{Long.toString(id)})) {
                 if (!cursor.moveToFirst() || cursor.getInt(1) != 0) return;
                 String title = cursor.getString(0);
                 String due = cursor.isNull(2) ? null : cursor.getString(2);
                 String rule = cursor.getString(3);
                 int every = cursor.getInt(4);
+                Long completedBy = cursor.isNull(5) ? null : cursor.getLong(5);
+                String completedByName = null;
+                if (completedBy != null) {
+                    try (Cursor person = database.rawQuery(
+                            "SELECT name FROM household_members WHERE id=?",
+                            new String[]{Long.toString(completedBy)})) {
+                        if (person.moveToFirst()) completedByName = person.getString(0);
+                    }
+                }
                 String next = TaskRules.recurring(rule)
                     ? TaskRules.nextDue(due, rule, every, LocalDate.now()) : null;
                 ContentValues changed = new ContentValues();
                 changed.put("done", next == null ? 1 : 0);
-                if (next != null) changed.put("due_date", next);
+                if (next != null) {
+                    changed.put("due_date", next);
+                    java.util.ArrayList<Long> rotation = taskRotation(id);
+                    if (rotation.size() >= 2) {
+                        Long nextAssignee = RotationRules.next(rotation, completedBy);
+                        if (nextAssignee == null) changed.putNull("assignee_id");
+                        else changed.put("assignee_id", nextAssignee);
+                    }
+                }
                 int affected = database.update("tasks", changed, "id=? AND done=0",
                     new String[]{Long.toString(id)});
                 if (affected != 1) return;
@@ -3789,6 +3809,10 @@ public final class MainActivity extends Activity {
                 else history.put("due_date", due);
                 if (next == null) history.putNull("next_due_date");
                 else history.put("next_due_date", next);
+                if (completedBy == null) history.putNull("assignee_id");
+                else history.put("assignee_id", completedBy);
+                if (completedByName == null) history.putNull("assignee_name_snapshot");
+                else history.put("assignee_name_snapshot", completedByName);
                 database.insertOrThrow("task_history", null, history);
                 database.setTransactionSuccessful();
             } finally {
@@ -3804,7 +3828,16 @@ public final class MainActivity extends Activity {
         }
 
         void deleteTask(long id) {
-            getWritableDatabase().delete("tasks", "id=?", new String[]{Long.toString(id)});
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                database.delete("task_rotation_members", "task_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("tasks", "id=?", new String[]{Long.toString(id)});
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
+            }
         }
 
         String[] taskReminder(long taskId) {
