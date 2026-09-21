@@ -65,3 +65,19 @@ Automatyka wymagająca ciągłego działania nie może polegać na procesie Andr
 `CloudDiscoveryReader` (HTTPS API + OAuth2), `CloudMqttReader` (TLS, opcjonalny odbiór bieżących zmian) i `LocalDeviceAdapter` (tylko potwierdzone protokoły LAN) mają osobne statusy i identyfikację źródeł. Wszystkie przekazują do wspólnej warstwy pomiarów trwałe mapowanie do kanału/obiektu, jednostkę, czas, ważność i status połączenia. Nie wyliczać ani nie sterować na podstawie nieświeżych wskazań. Pierwszy etap jest wyłącznie read-only, a adapter poleceń powstanie później z uprawnieniami, audytem, limitami i niezależnym zabezpieczeniem urządzenia.
 
 Dla aplikacji natywnej zweryfikować OAuth2 Authorization Code + PKCE i redirect/deep link zgodny z dostawcą; nie osadzać haseł, PAT lub client secret w kliencie Android ani w publicznym repo. Lokalny sterownik ciągłych automatyzacji nie może zależeć od aktywności Androida. Chmurowy MQTT nie dowodzi działania offline.
+
+
+## Decyzje 21.09.2026 — konsekwencje dla wspólnego rdzenia
+
+[Rejestr odpowiedzi na 30 pytań](DECYZJE_2026-09-21_FORMULARZ_30.md) określa aktualny zakres. Rozwijaj **fundament równolegle z funkcjami**; głównym ryzykiem zgłoszonym przez użytkownika jest brak prawdziwych powiązań między modułami.
+
+- **Tablet:** tryb tej samej aplikacji i APK, nie drugi klient. Zmiana układu/kafelków ogranicza UI, ale prywatne dane kontrolować także na poziomie przechowywania, API, synchronizacji i uprawnień.
+- **Kafelki:** kolekcja z własnym identyfikatorem i kolejnością, widocznością, rozmiarem, ikoną, kolorem, etykietą oraz wariantem urządzenia/trybu. Dziewięć dotychczasowych kafelków to stan startowy, nie limit.
+- **Lokalizacje:** użytkownik definiuje nazwę i rodzaj, typowane krawędzie miejsca/pudełka/przedmiotu, dowolne zagnieżdżanie pudełek bez cykli; stałe ID i QR niezależne od ruchu.
+- **Skaner:** jawny tryb Dodaj albo Wyciągnij; odczyt to zdarzenie wejściowe, dla wyciągania przekształcone w *jedną* oczekującą operację o stabilnym ID, domyślnie -1, timer konfigurowalny; zmiana ilości resetuje timer, ponowny ten sam kod podczas aktywnego timera ignorowany; anulowanie lub cofnięcie zapisuje historię zgodnie z polityką. Nie dublować odjęć po ponownym odczycie/restarcie/synchronizacji.
+- **Zakupy:** pending putaway powiązany z konkretną pozycją zakupu i wybranym wtedy docelowym miejscem; dopiero potwierdzony ruch aktualizuje magazyn. Produkt globalny nie ma na stałe przypisanej spiżarni.
+- **Remanent:** snapshot, stany innych urządzeń i konflikt **per pozycja**; ponowna weryfikacja tylko zmienionego towaru, pozostałe wyniki i historia zachowane. Transakcyjna korekta z trwałym ID.
+- **Sieć:** wskazane operacje wymagające połączenia: przenoszenie rzeczy między urządzeniami, sterowanie SUPLA/energią i rozliczenia wspólnego budżetu. Szczegółowa semantyka do ustalenia, pozostałych danych nie czynić automatycznie online-only.
+- **PayCheck:** następny duży moduł; wspólny budżet publikuje wkłady i sumy bez kopiowania całych prywatnych ksiąg. Proponowana transakcja nie jest zaksięgowanym wydatkiem; zdarzenie akceptacji jest idempotentne.
+
+**Otwarte:** pyt. 13 i 28. Nie wdrażać domyślnego dziedziczenia czynności ani sezonowych priorytetów PV jako rzekomo zaakceptowanych.
