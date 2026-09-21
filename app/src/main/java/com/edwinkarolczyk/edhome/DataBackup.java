@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 11;
+    private static final int DB_VERSION = 12;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -40,6 +40,8 @@ final class DataBackup {
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
         {"pantry", "id", "name", "qty"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
+        {"device_timers", "id", "device_type", "title", "start_at", "end_at",
+            "status", "acknowledged_at"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
         {"audit_rows", "id", "session_id", "pantry_id", "name_snapshot",
             "expected_qty", "counted_qty", "status"},
@@ -63,6 +65,8 @@ final class DataBackup {
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
+        settings.put("timerNotificationsEnabled",
+            prefs.getBoolean("timer_notifications_enabled", false));
         JSONObject appearance = new JSONObject();
         for (String id : HOME_TILE_IDS) {
             JSONObject tile = new JSONObject();
@@ -126,13 +130,18 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
         String household = settings.getString("household");
         String theme = settings.getString("theme");
         String tileOrder = settings.optString("homeTileOrder", "");
+        boolean timerNotifications = settings.optBoolean(
+            "timerNotificationsEnabled", false);
+        if (settings.has("timerNotificationsEnabled")
+                && !(settings.get("timerNotificationsEnabled") instanceof Boolean))
+            throw new IllegalArgumentException("Nieprawidłowe ustawienia minutników.");
         if (household.trim().isEmpty() || household.length() > 200
                 || !UiSkin.accepted(theme))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia kopii.");
@@ -191,6 +200,7 @@ final class DataBackup {
                 || (inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])
                     || "member_shift_exceptions".equals(definition[0])))
                 || (inputVersion < 8 && "shopping_items".equals(definition[0]))
+                || (inputVersion < 12 && "device_timers".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -263,7 +273,8 @@ final class DataBackup {
                             || "due_date".equals(key) || "next_due_date".equals(key)
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
-                            || "remind_time".equals(key)))
+                            || "remind_time".equals(key)
+                             || "acknowledged_at".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -315,6 +326,18 @@ final class DataBackup {
                             throw new IllegalArgumentException("Nieprawidłowa data wyjątku.");
                         }
                     }
+                }
+                if ("device_timers".equals(definition[0])) {
+                    Long started = values.getAsLong("start_at");
+                    Long ends = values.getAsLong("end_at");
+                    if (started == null || ends == null
+                            || !DeviceTimerRules.validRecord(
+                                values.getAsString("device_type"),
+                                values.getAsString("title"), started, ends,
+                                values.getAsString("status"),
+                                values.getAsLong("acknowledged_at")))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy minutnik w kopii.");
                 }
                 if ("shopping_items".equals(definition[0])) {
                     String itemName = values.getAsString("name");
@@ -488,7 +511,8 @@ final class DataBackup {
         SharedPreferences.Editor restored = prefs.edit()
             .putString("household", household)
             .putString("theme", theme)
-            .putString("home_tile_order", tileOrder);
+            .putString("home_tile_order", tileOrder)
+            .putBoolean("timer_notifications_enabled", timerNotifications);
         for (String id : HOME_TILE_IDS) {
             restored.remove("tile_label_" + id)
                 .remove("tile_tint_" + id).remove("tile_icon_" + id);
@@ -515,6 +539,8 @@ final class DataBackup {
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "reminder_lead_days".equals(column)
+            || "start_at".equals(column) || "end_at".equals(column)
+            || "acknowledged_at".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
             || "member_id".equals(column) || "weekday".equals(column)
