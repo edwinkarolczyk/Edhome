@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 37,
-  "versionName": "0.4.0-beta.7",
-  "changelog": "EDHOME Beta 0.4.0-beta.7 — seryjne skanowanie spiżarni, ponowienie aparatu po zapisie i ochrona przed podwójnym naliczeniem; SQLite v17.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.7/edhome-beta.apk",
-  "sha256": "be99f13c10fbaccfae1fd0a99482728fa2bc2b81920e53bddf8f2aa229a6d073"
+  "versionCode": 38,
+  "versionName": "0.4.0-beta.8",
+  "changelog": "EDHOME Beta 0.4.0-beta.8 — poprawka katalogów Open Facts, kody UPC/EAN i raport wyszukiwania; SQLite v17.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.8/edhome-beta.apk",
+  "sha256": "8d55596d8695bee4820910850bc7946ec6e5c17a4f9eb91ba7523ef3138f5024"
 }
