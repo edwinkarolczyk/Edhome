@@ -70,6 +70,8 @@ final class DataBackup {
                 tile.put("label", prefs.getString("tile_label_" + id, ""));
             if (prefs.contains("tile_tint_" + id))
                 tile.put("tint", prefs.getString("tile_tint_" + id, "default"));
+            if (prefs.contains("tile_icon_" + id))
+                tile.put("icon", prefs.getString("tile_icon_" + id, id));
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
@@ -149,6 +151,7 @@ final class DataBackup {
         JSONObject appearance = settings.optJSONObject("homeTileAppearance");
         Map<String, String> labels = new HashMap<>();
         Map<String, String> tints = new HashMap<>();
+        Map<String, String> icons = new HashMap<>();
         if (appearance != null) {
             java.util.Iterator<String> keys = appearance.keys();
             while (keys.hasNext()) {
@@ -169,6 +172,12 @@ final class DataBackup {
                             "blue", "amber", "violet").contains(tint))
                         throw new IllegalArgumentException("Nieznany kolor kafelka.");
                     tints.put(id, tint);
+                }
+                if (tile.has("icon")) {
+                    String iconId = tile.getString("icon");
+                    if (!TileIcon.known(iconId))
+                        throw new IllegalArgumentException("Nieznana ikona kafelka.");
+                    icons.put(id, iconId);
                 }
             }
         }
@@ -462,11 +471,14 @@ final class DataBackup {
             .putString("theme", theme)
             .putString("home_tile_order", tileOrder);
         for (String id : HOME_TILE_IDS) {
-            restored.remove("tile_label_" + id).remove("tile_tint_" + id);
+            restored.remove("tile_label_" + id)
+                .remove("tile_tint_" + id).remove("tile_icon_" + id);
             if (labels.containsKey(id))
                 restored.putString("tile_label_" + id, labels.get(id));
             if (tints.containsKey(id))
                 restored.putString("tile_tint_" + id, tints.get(id));
+            if (icons.containsKey(id))
+                restored.putString("tile_icon_" + id, icons.get(id));
         }
         if (!restored.commit())
             throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
