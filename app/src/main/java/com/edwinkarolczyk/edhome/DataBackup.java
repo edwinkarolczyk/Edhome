@@ -323,7 +323,8 @@ final class DataBackup {
                     } else throw new IllegalArgumentException("Nieznany typ czynności.");
                     String remindAt = values.getAsString("remind_time");
                     Long lead = values.getAsLong("reminder_lead_days");
-                    if (lead == null || !ReminderRules.allowedLead(lead.intValue())
+                    if (lead == null || lead < 0 || lead > 7
+                            || !ReminderRules.allowedLead(lead.intValue())
                             || (remindAt == null && lead != 0)
                             || (remindAt != null
                                 && (!ReminderRules.validTime(remindAt) || due == null)))
