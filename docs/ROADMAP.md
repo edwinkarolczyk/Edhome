@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.3-beta.1 (`beta`):** cztery motywy UI, zaokrąglone kafelki, edycja po przytrzymaniu i przeciąganie. SQLite v10 bez migracji. Beta bez PIN-u, Stable z PIN-em. Test telefonu pozostaje osobnym kryterium. [Odbiór UI](BETA_0_3_3.md).
+> **Stan 0.3.3-beta.2 (`beta`):** cztery motywy UI, zaokrąglone kafelki, edycja po przytrzymaniu i przeciąganie. SQLite v10 bez migracji. Beta bez PIN-u, Stable z PIN-em. Test telefonu pozostaje osobnym kryterium. [Odbiór UI](BETA_0_3_3.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
