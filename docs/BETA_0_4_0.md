@@ -57,3 +57,11 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Każdy realnie sprawdzony katalog Open Food Facts / Open Products Facts / Open Beauty Facts / Open Pet Food Facts raportuje „znaleziono / brak rekordu / rekord bez nazwy / problem HTTP”. Raport zawiera liczbę wariantów kodu. Diagnostyka zapisuje status źródła, ale nie kod kreskowy użytkownika.
 - Potwierdzanie zmiany stanu pozostaje wymagane; istniejące dane, historia, zdjęcia i baza SQLite v17 pozostają bez zmian. Po zgodzie użytkownika do baz przesyłany jest tylko kod produktu.
 - Dostępność i aktualność zewnętrznych baz nie są pod naszą kontrolą. Nie zakładamy, że każda baza zawiera wszystkie polskie produkty lub chemię domową.
+
+## 0.4.0-beta.9 — propozycje produktów po nazwie
+
+- Po nieudanym rozpoznaniu kodu dostępne „Szukaj po nazwie” oraz dotychczasowe „Wpisz ręcznie”. Wpisana fraza (3–80 znaków) jest świadomie wysyłana do czterech katalogów Open Facts; nie jest wysyłana automatycznie przy skanowaniu.
+- Każdy katalog zwraca do 6 propozycji. Wynik pokazuje nazwę, markę i bazę; wybór propozycji otwiera dopiero formularz „Potwierdź produkt”. Wcześniej nie aktualizuje stanów, nie zmienia skanowanego kodu i nie łączy go z kodem wyszukanego towaru. Przed zatwierdzeniem należy sprawdzić, czy znaleziony wariant odpowiada rzeczywistemu produktowi.
+- Nazwa nie jest wpisywana ręcznie, gdy użytkownik wybierze propozycję; ręczna nazwa pozostaje opcją przy braku trafnego wyniku. Zdjęcie jest pobierane dopiero po wyborze propozycji; jego brak nie blokuje dodania.
+- Katalogi mogą nie obsługiwać identycznie API wyszukiwania po nazwie. EDHOME pokazuje status każdego katalogu, nie gwarantuje pełnej dostępności katalogów ani kompletności polskich produktów.
+- SQLite pozostaje v17; ilości, kody, historia, zdjęcia i dotychczasowy backup nie wymagają migracji. Stable main bez zmian.

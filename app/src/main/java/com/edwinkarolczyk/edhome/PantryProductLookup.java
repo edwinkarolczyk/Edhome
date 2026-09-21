@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -12,6 +13,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -257,6 +259,83 @@ final class PantryProductLookup {
             catch (Exception ignored) { /* A photo must not hide a recognized name. */ }
         }
         return new Attempt(new Product(name, source, brand, url, image), false);
+    }
+
+
+    /** User-initiated name search; never writes inventory or links a search-result GTIN. */
+    static final class NameSearchReport {
+        final List<Product> products;
+        final String details;
+        final boolean partialFailure;
+        NameSearchReport(List<Product> products, String details, boolean partialFailure) {
+            this.products = products;
+            this.details = details;
+            this.partialFailure = partialFailure;
+        }
+    }
+
+    static NameSearchReport searchByName(String rawQuery, Progress progress) {
+        String query = rawQuery == null ? "" : rawQuery.trim();
+        if (query.length() < 3 || query.length() > 80)
+            throw new IllegalArgumentException("Wpisz od 3 do 80 znaków nazwy.");
+        List<Product> results = new ArrayList<>();
+        List<String> statuses = new ArrayList<>();
+        boolean partialFailure = false;
+        for (String[] catalogue : CATALOGUES) {
+            String label = catalogue[1];
+            if (progress != null) progress.catalogue(label, "sprawdzam…");
+            int found = 0;
+            String status;
+            try {
+                // API v2 search support can vary across projects; errors are reported per source.
+                String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name());
+                URL endpoint = new URL("https://" + catalogue[0]
+                    + "/api/v2/search?search_terms=" + encoded
+                    + "&page_size=6&fields=code,product_name_pl,product_name,"
+                    + "product_name_en,generic_name_pl,generic_name,brands,"
+                    + "image_front_url,image_url");
+                byte[] response = get(endpoint, MAX_JSON_BYTES, false);
+                JSONObject root = response == null ? null
+                    : new JSONObject(new String(response, StandardCharsets.UTF_8));
+                JSONArray products = root == null ? null : root.optJSONArray("products");
+                if (products != null) {
+                    for (int i = 0; i < products.length(); i++) {
+                        JSONObject row = products.optJSONObject(i);
+                        if (row == null) continue;
+                        String name = readProductName(row);
+                        if (name.isEmpty()) continue;
+                        String brand = clip(row.optString("brands", ""), 100);
+                        String imageUrl = readImageUrl(row);
+                        results.add(new Product(name, label, brand, imageUrl, null));
+                        found++;
+                    }
+                }
+                status = found == 0 ? "brak nazw" : "wyników: " + found;
+            } catch (Exception error) {
+                status = "problem (" + shortError(error) + ")";
+                partialFailure = true;
+            }
+            statuses.add(label + ": " + status);
+            if (progress != null) progress.catalogue(label, status);
+            DiagnosticLog.event("PANTRY_NAME_SEARCH_" + catalogueKey(label)
+                + (status.startsWith("problem") ? "_ERROR" : "_COMPLETE"));
+        }
+        return new NameSearchReport(results, joinResults(statuses), partialFailure);
+    }
+
+    private static String readProductName(JSONObject row) {
+        String name = clip(row.optString("product_name_pl", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("product_name", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("product_name_en", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("generic_name_pl", ""), 160);
+        if (name.isEmpty()) name = clip(row.optString("generic_name", ""), 160);
+        return name;
+    }
+
+    private static String readImageUrl(JSONObject row) {
+        String url = row.optString("image_front_url", "");
+        if (!safeImageUrl(url)) url = row.optString("image_url", "");
+        return safeImageUrl(url) ? url : "";
     }
 
     static byte[] fetchImage(String imageUrl) throws Exception {

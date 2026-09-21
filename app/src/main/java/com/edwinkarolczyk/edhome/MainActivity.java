@@ -2889,6 +2889,8 @@ public final class MainActivity extends Activity {
                             + "Stan spiżarni nie został zmieniony.\n\n"
                             + details + "\n\nMożesz spróbować później albo wpisać nazwę ręcznie.")
                         .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                        .setNeutralButton("Szukaj po nazwie", (d,w) ->
+                            promptPantryNameSearch(barcode, operationId))
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
                         .setOnCancelListener(d -> finishPantryBatch()).show();
@@ -2898,6 +2900,8 @@ public final class MainActivity extends Activity {
                             + checked.details + "\n\nStan nie został zmieniony. "
                             + "Możesz wpisać nazwę ręcznie.")
                         .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                        .setNeutralButton("Szukaj po nazwie", (d,w) ->
+                            promptPantryNameSearch(barcode, operationId))
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
                         .setOnCancelListener(d -> finishPantryBatch()).show();
@@ -2908,6 +2912,134 @@ public final class MainActivity extends Activity {
                 }
             });
         }, "edhome-off-lookup").start();
+    }
+
+
+    /** Search after GTIN lookup fails. Query is never treated as a confirmed name. */
+    private void promptPantryNameSearch(String scannedBarcode, String operationId) {
+        EditText query = new EditText(this);
+        query.setSingleLine(true);
+        query.setHint("np. proszek do prania, marka");
+        new AlertDialog.Builder(this).setTitle("Szukaj produktu po nazwie")
+            .setMessage("Wyślij wpisaną frazę do katalogów Open Facts. "
+                + "Wybór podobnego produktu nie potwierdza jego zgodności z kodem — "
+                + "sprawdź nazwę na opakowaniu.")
+            .setView(query)
+            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+            .setNeutralButton("Wpisz ręcznie", (d,w) ->
+                showNewPantryProductDialog(scannedBarcode, operationId, null))
+            .setPositiveButton("Szukaj", (d,w) ->
+                searchPantryName(scannedBarcode, operationId,
+                    query.getText().toString()))
+            .setOnCancelListener(d -> finishPantryBatch()).show();
+    }
+
+    private void searchPantryName(String scannedBarcode, String operationId,
+            String rawQuery) {
+        String query = rawQuery.trim();
+        if (query.length() < 3 || query.length() > 80) {
+            alert("Wpisz od 3 do 80 znaków nazwy produktu.");
+            promptPantryNameSearch(scannedBarcode, operationId);
+            return;
+        }
+        java.util.concurrent.atomic.AtomicBoolean cancelled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        AlertDialog loading = new AlertDialog.Builder(this)
+            .setTitle("Szukam po nazwie")
+            .setMessage("Sprawdzam katalogi produktów…")
+            .setNegativeButton("Anuluj", (d,w) -> {
+                cancelled.set(true);
+                finishPantryBatch();
+            }).create();
+        loading.setOnCancelListener(d -> {
+            cancelled.set(true);
+            finishPantryBatch();
+        });
+        loading.show();
+        new Thread(() -> {
+            PantryProductLookup.NameSearchReport report = null;
+            Exception failure = null;
+            try {
+                report = PantryProductLookup.searchByName(query,
+                    (catalogue, status) -> runOnUiThread(() -> {
+                        if (!cancelled.get() && loading.isShowing())
+                            loading.setMessage(catalogue + ": " + status);
+                    }));
+            } catch (Exception problem) {
+                failure = problem;
+            }
+            final PantryProductLookup.NameSearchReport checked = report;
+            final Exception problem = failure;
+            runOnUiThread(() -> {
+                loading.dismiss();
+                if (cancelled.get() || isFinishing() || isDestroyed()) return;
+                if (problem != null || checked == null) {
+                    DiagnosticLog.error("PANTRY_NAME_SEARCH", problem == null
+                        ? new IllegalStateException("Empty search report") : problem);
+                    new AlertDialog.Builder(this).setTitle("Nie udało się wyszukać")
+                        .setMessage("Możesz wpisać produkt ręcznie. Stan jest bez zmian.")
+                        .setNegativeButton("Zakończ", (d,w) -> finishPantryBatch())
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(scannedBarcode, operationId, null))
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
+                    return;
+                }
+                if (checked.products.isEmpty()) {
+                    new AlertDialog.Builder(this).setTitle("Brak wyników po nazwie")
+                        .setMessage(checked.details + "\n\nNie znaleziono propozycji. "
+                            + "Możesz spróbować innej frazy lub wpisać nazwę ręcznie.")
+                        .setNegativeButton("Zakończ", (d,w) -> finishPantryBatch())
+                        .setNeutralButton("Szukaj ponownie", (d,w) ->
+                            promptPantryNameSearch(scannedBarcode, operationId))
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(scannedBarcode, operationId, null))
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
+                    return;
+                }
+                String[] options = new String[checked.products.size()];
+                for (int i = 0; i < options.length; i++) {
+                    PantryProductLookup.Product candidate = checked.products.get(i);
+                    options[i] = candidate.name + (candidate.brand.isEmpty()
+                        ? "" : " • " + candidate.brand) + "\n" + candidate.source;
+                }
+                new AlertDialog.Builder(this).setTitle("Wybierz zgodny produkt")
+                    .setMessage("Wyniki są propozycjami po nazwie. "
+                        + "Sprawdź markę i wariant z opakowaniem.")
+                    .setItems(options, (d, which) ->
+                        previewNameSearchProduct(scannedBarcode, operationId,
+                            checked.products.get(which), checked.details))
+                    .setNegativeButton("Zakończ", (d,w) -> finishPantryBatch())
+                    .setNeutralButton("Szukaj ponownie", (d,w) ->
+                        promptPantryNameSearch(scannedBarcode, operationId))
+                    .setOnCancelListener(d -> finishPantryBatch()).show();
+            });
+        }, "edhome-name-search").start();
+    }
+
+    private void previewNameSearchProduct(String scannedBarcode,
+            String operationId, PantryProductLookup.Product candidate,
+            String sourceDetails) {
+        // Fetching a photo is optional; it must not prevent selecting a named product.
+        new Thread(() -> {
+            byte[] image = null;
+            if (!candidate.imageUrl.isEmpty()) {
+                try {
+                    image = PantryProductLookup.fetchImage(candidate.imageUrl);
+                    PantryProductLookup.cache(this, candidate.imageUrl, image);
+                } catch (Exception ignored) {
+                    DiagnosticLog.event("PANTRY_NAME_SEARCH_PHOTO_UNAVAILABLE");
+                }
+            }
+            final PantryProductLookup.Product selected =
+                new PantryProductLookup.Product(candidate.name, candidate.source,
+                    candidate.brand, candidate.imageUrl, image);
+            runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed())
+                    showNewPantryProductDialog(scannedBarcode, operationId,
+                        selected, sourceDetails + "\nDopasowano po nazwie; "
+                            + "sprawdź zgodność z kodem na opakowaniu.");
+            });
+        }, "edhome-name-search-photo").start();
     }
 
     /** No stock change until this confirmation, even if Open Food Facts responded. */
