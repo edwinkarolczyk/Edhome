@@ -3150,7 +3150,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 12);
+            super(context, "edhome-beta-preview.db", null, 13);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -3171,11 +3171,12 @@ public final class MainActivity extends Activity {
             addMemberSchedules(database);
             addShopping(database);
             addDeviceTimers(database);
+            addTaskRotations(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 12) {
+            if (oldVersion < 1 || newVersion > 13) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3242,6 +3243,13 @@ public final class MainActivity extends Activity {
                 addDeviceTimers(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_11_TO_12_DEVICE_TIMERS");
             }
+            if (oldVersion < 13) {
+                addTaskRotations(database);
+                database.execSQL("ALTER TABLE task_history ADD COLUMN assignee_id INTEGER");
+                database.execSQL("ALTER TABLE task_history ADD COLUMN "
+                    + "assignee_name_snapshot TEXT");
+                DiagnosticLog.event("DATABASE_MIGRATED_12_TO_13_TASK_ROTATION");
+            }
         }
 
         private static void addPlaceSiblingIndex(SQLiteDatabase database) {
@@ -3261,10 +3269,20 @@ public final class MainActivity extends Activity {
             database.execSQL("CREATE TABLE task_history ("
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, "
                 + "title_snapshot TEXT NOT NULL, completed_at INTEGER NOT NULL, "
-                + "due_date TEXT, next_due_date TEXT)");
+                + "due_date TEXT, next_due_date TEXT, "
+                + "assignee_id INTEGER, assignee_name_snapshot TEXT)");
             database.execSQL("CREATE INDEX task_history_task_idx ON task_history(task_id,id)");
         }
 
+
+        private static void addTaskRotations(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE task_rotation_members ("
+                + "task_id INTEGER NOT NULL, member_id INTEGER NOT NULL, "
+                + "position INTEGER NOT NULL CHECK(position>=0), "
+                + "PRIMARY KEY(task_id,member_id), UNIQUE(task_id,position))");
+            database.execSQL("CREATE INDEX task_rotation_task_idx "
+                + "ON task_rotation_members(task_id,position)");
+        }
 
         private static void addShopping(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE shopping_items ("
