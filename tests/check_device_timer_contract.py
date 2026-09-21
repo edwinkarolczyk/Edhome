@@ -37,7 +37,7 @@ assert 'context.getDatabasePath(DB)' in receiver
 assert '"WHERE id=? AND status=\'running\'"' in receiver
 assert "c.getLong(2) != expected" in receiver
 assert 'timer_notified_" + id' in receiver
-assert "newVersion > 12" in main and "DB_VERSION = 12;" in backup
+assert "newVersion > 13" in main and "DB_VERSION = 13;" in backup
 assert '.DeviceTimerReceiver"' in manifest and "RECEIVE_BOOT_COMPLETED" in manifest
 assert "MIN_MINUTES = 1" in rules and "MAX_MINUTES = 1440" in rules
 assert "DeviceTimerReceiver.scheduleAll(this);" in main
