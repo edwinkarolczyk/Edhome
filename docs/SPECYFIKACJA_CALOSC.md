@@ -362,3 +362,23 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 5. Po synchronizacji Wi-Fi zdarzenia mają identyfikator, źródło i idempotencję; równoległe zmiany i korekty ceny nie niszczą historii.
 
 **Zatwierdzone przez Edwina — 21.09.2026:** (1) cena jest **opcjonalna przy oznaczaniu pozycji listy jako „kupione”** i nigdy nie blokuje skanowania/wyciągania; (2) wspólny tablet pokazuje **wszystkie ceny produktów**, ale **żadnych danych kont ani osobistej księgowości PayCheck**; (3) **wartość całego zapasu dopiero w późniejszym etapie**, po historii zakupów i cen. Nadal otwarta jest szczegółowa metoda późniejszej wyceny (partie/FIFO/średnia) i polityka niepełnych danych; nie zastępować nieznanej ceny zerem.
+
+
+## 25. Własny dysk sieciowy / NAS jako EDHOME Hub i lokalne API — analiza warunkowa 21.09.2026
+
+**Status: koncepcja, nie wdrożono ani nie potwierdzono modelu i możliwości urządzenia ze zdjęcia.** Użytkownik ma własny dysk/serwer domowy i chce rozważyć jego użycie do EDHOME. Nie utożsamiać samego udziału sieciowego SMB z serwerem aplikacji; specyfikacja zależy od modelu, CPU/RAM, systemu, możliwości Docker/Container Manager, pakietów/SSH i stabilności pracy 24/7. Bez danych technicznych nie obiecywać instalacji API bezpośrednio na tym urządzeniu.
+
+### Docelowa topologia
+
+- Telefon Android, tablet w trybie wspólnym i panel PC są klientami; zachowują lokalną bazę/cache zgodnie z uprawnieniami, kolejkę zmian i działają w podstawowym zakresie **offline**.
+- **EDHOME Hub** w domowym LAN udostępnia autoryzowane API dla zmian i odczytów wspólnych, np. gospodarstwo, produkty, miejsca, zakupy, ruchy spiżarni, remanenty i czynności. Hub ma własne trwałe ID zdarzeń, walidację i idempotencję, a nie udostępnia urządzeniom do równoczesnego zapisu jednego pliku SQLite przez SMB.
+- Wariant A, jeśli NAS potrafi uruchomić kontenery/usługi i ma zasoby: API oraz serwerowa baza na urządzeniu, media, harmonogram backupów; szczegółowy silnik bazy dobrać po audycie sprzętu/obciążenia.
+- Wariant B, jeśli jest to prosty dysk sieciowy/router USB albo NAS bez uruchamiania usług: dysk przechowuje **backupy, eksporty i załączniki**, zaś EDHOME Hub działa na mini-PC, komputerze pracującym stale albo innym zgodnym hoście. Samo podłączenie dysku nie tworzy API.
+- Zdalny dostęp poza domem jest **osobnym, opcjonalnym** zadaniem (np. VPN po audycie). Nie wystawiać wprost portu API, panelu administratora, SMB ani bazy do publicznego internetu.
+- Domyślnie autoryzacja urządzeń i osób, rozdzielenie profili prywatnych i wspólnych, minimalne uprawnienia tabletu, transport chroniony przed podsłuchem, bez sekretów w repo/APK/logach i bez kopiowania całego prywatnego PayCheck na wspólny serwer/tablet „bo ukryliśmy widok”. Dostęp przez LAN nie znaczy automatycznie „bezpieczne”.
+- API musi rozwiązywać konflikty po powrocie urządzenia z offline: każda zmiana ma ID/źródło/wersję, deduplikację, jawne reguły dla korekt remanentu, cen i ruchów; nie księgować powtórnie transakcji PayCheck. Klienci mogą mieć nieaktualne dane i muszą pokazywać stan synchronizacji.
+- **NAS to nie jedyna kopia bezpieczeństwa.** Osobny, wersjonowany backup na inne urządzenie/nośnik, test odtwarzania, bezpieczna aktualizacja/migracja Huba i plan awarii zasilania/serwera; UPS opcjonalnie wg sprzętu.
+
+### Weryfikacja przed decyzją wdrożeniową
+
+Potrzebne: producent i dokładny model ze spodu/etykiety lub panelu WWW, wersja firmware/systemu, CPU/architektura, RAM, obsługa kontenerów/aplikacji/SSH, typ udziału (NAS czy zwykły dysk USB przy routerze), dostępne miejsce/dyski i sieć LAN. **Nie umieszczać na publicznym GitHubie adresów IP, loginów, numerów seryjnych ani zdjęć z danymi dostępu.** Po ustaleniu sprzętu wybrać A albo B, dopiero później porty, bazę, API, kopie i test dwóch urządzeń. Obecnie brak potwierdzenia, że konkretny pokazany dysk obsłuży serwer API.
