@@ -2491,9 +2491,9 @@ public final class MainActivity extends Activity {
 
     private void shopping() {
         header("Lista zakupów • offline");
-        note("W tej wersji lista jest lokalna na tym urządzeniu. "
-            + "Zaznaczenie zakupu nie zmienia automatycznie stanu spiżarni. "
-            + "Ilość możesz zostawić pustą, co nie oznacza zera.");
+        note("Kupione ≠ przyjęte. Samo zaznaczenie nie zmienia stanu; "
+            + "dopiero osobny przycisk Przyjmij dopisuje wybrane opakowania "
+            + "do wskazanego produktu w spiżarni. Bez automatycznej ceny.");
         button("← Spiżarnia", () -> go("pantry"));
         EditText item = field("Co kupić?", false);
         EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
@@ -2532,6 +2532,8 @@ public final class MainActivity extends Activity {
                 final Long amount = cursor.isNull(2)
                     ? null : cursor.getLong(2);
                 final boolean done = cursor.getInt(4) == 1;
+                final boolean received = ShoppingReceiptStore.received(
+                    db.getReadableDatabase(), shoppingId);
                 LinearLayout box = card();
                 CheckBox check = new CheckBox(this);
                 check.setText(name + " • " + ShoppingRules.formatQuantity(amount)
@@ -2541,6 +2543,13 @@ public final class MainActivity extends Activity {
                 check.setButtonTintList(ColorStateList.valueOf(accent));
                 check.setChecked(done);
                 box.addView(check);
+                if (received) {
+                    box.addView(text("✓ Przyjęte do spiżarni — zapisano historię",
+                        13, false));
+                } else if (done) {
+                    smallButton(box, "Przyjmij do spiżarni", () ->
+                        chooseShoppingReceipt(shoppingId, name));
+                }
                 check.setOnCheckedChangeListener((view, isChecked) -> {
                     db.setShoppingChecked(shoppingId, isChecked);
                     DiagnosticLog.event("SHOPPING_ITEM_CHECKED");
@@ -2559,6 +2568,81 @@ public final class MainActivity extends Activity {
             }
         }
         if (count == 0) note("Lista jest pusta. Dodaj pierwszy produkt.");
+    }
+
+    private void chooseShoppingReceipt(long shoppingId, String shoppingName) {
+        java.util.List<Long> productIds = new java.util.ArrayList<>();
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        try (Cursor items = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE", null)) {
+            while (items.moveToNext()) {
+                long id = items.getLong(0);
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+                productIds.add(id);
+                labels.add(items.getString(1) + " • "
+                    + PantryPackageRules.summary(items.getInt(2),
+                        pack.unit, pack.sizeMilli));
+            }
+        }
+        if (productIds.isEmpty()) {
+            alert("Najpierw utwórz produkt w Spiżarni; niczego nie przyjęto.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Do którego produktu przyjąć: " + shoppingName + "?")
+            .setItems(labels.toArray(new String[0]), (dialog, which) ->
+                confirmShoppingReceipt(shoppingId, shoppingName,
+                    productIds.get(which), labels.get(which)))
+            .setNegativeButton("Anuluj", null).show();
+    }
+
+    private void confirmShoppingReceipt(long shoppingId, String shoppingName,
+            long pantryId, String productLabel) {
+        EditText count = new EditText(this);
+        count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        count.setText("1");
+        count.setSelectAllOnFocus(true);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(14), dp(18), dp(14));
+        form.addView(text(shoppingName + "\n→ " + productLabel
+            + "\nSamo „kupione” nie dodaje zapasu. Potwierdź liczbę "
+            + "pełnych opakowań.", 15, false));
+        form.addView(count);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Potwierdź przyjęcie")
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Przyjmij", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    int packages = Integer.parseInt(count.getText().toString().trim());
+                    String outcome = ShoppingReceiptStore.accept(
+                        db.getWritableDatabase(), shoppingId, pantryId, packages);
+                    if ("COMMITTED".equals(outcome)) {
+                        DiagnosticLog.event("SHOPPING_RECEIPT_COMMITTED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("ALREADY_RECEIVED".equals(outcome)) {
+                        dialog.dismiss();
+                        alert("Ta pozycja była już przyjęta — nie dodano jej ponownie.");
+                        render();
+                    } else alert("Nie przyjęto: "
+                        + ("NOT_PURCHASED".equals(outcome) ? "pozycja nie jest kupiona."
+                        : "MISSING_PRODUCT".equals(outcome)
+                            ? "produkt już nie istnieje." : "przekroczony limit."));
+                } catch (NumberFormatException invalid) {
+                    count.setError("Podaj całkowitą liczbę opakowań.");
+                } catch (IllegalArgumentException invalid) {
+                    count.setError(invalid.getMessage());
+                } catch (Exception problem) {
+                    DiagnosticLog.error("SHOPPING_RECEIPT", problem);
+                    alert("Nie udało się przyjąć produktu. Stan nie został zmieniony.");
+                }
+            }));
+        dialog.show();
     }
 
     private void pantry() {
@@ -4125,7 +4209,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 17);
+            super(context, "edhome-beta-preview.db", null, 18);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -4148,6 +4232,7 @@ public final class MainActivity extends Activity {
             addMembers(database);
             addMemberSchedules(database);
             addShopping(database);
+            ShoppingReceiptStore.create(database);
             addDeviceTimers(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
@@ -4157,7 +4242,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 17) {
+            if (oldVersion < 1 || newVersion > 18) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -4249,6 +4334,10 @@ public final class MainActivity extends Activity {
                 PantryPackageStore.create(database);
                 PantryPackageStore.fillLegacy(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_16_TO_17_PANTRY_PACKAGES");
+            }
+            if (oldVersion < 18) {
+                ShoppingReceiptStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS");
             }
         }
 

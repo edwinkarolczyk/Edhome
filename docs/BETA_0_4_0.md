@@ -72,3 +72,12 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Przy wyborze widoczne są nazwa i aktualny stan wraz z jednostką. Operacja wskazuje ID produktu, weryfikuje, że produkt nadal istnieje i że kod nie należy do innego produktu; powiązanie, zmiana stanu i zapis historii następują w jednej transakcji, z ochroną UUID przed ponownym naliczeniem.
 - Przypisanie nie zmienia nazwy, kategorii, specyfikacji opakowania ani zdjęć dotychczasowego produktu. Jeśli w katalogach nie było nazwy, można skorzystać z własnego produktu bez dodatkowego internetu.
 - SQLite v17: brak migracji i zmian formatu kopii zapasowej. Stable main pozostaje bez zmian.
+
+## 0.4.0-beta.11 — kupione nie oznacza przyjęte
+
+- Zaznaczenie zakupu nie dopisuje zapasu. Przy kupionej pozycji pojawia się przycisk „Przyjmij do spiżarni”: użytkownik wskazuje istniejący produkt oraz liczbę pełnych opakowań i potwierdza osobną operację.
+- Unikalny identyfikator pozycji listy zakupów blokuje ponowne naliczenie przyjęcia. Historia `shopping_receipts` zapisuje stan przed/po, liczbę opakowań i nazwę produktu w jednej transakcji SQLite; usunięcie pozycji z listy nie usuwa historii przyjęcia.
+- SQLite v18, migracja v17→v18 bez zmiany istniejących danych; kopia JSON zawiera przyjęcia i nadal importuje starsze wersje.
+- Kupno to nie księgowanie wydatku. Brak cen i automatycznego PayCheck w tym przyjęciu.
+
+**Pozostały zakres 0.4:** pełne QR rzeczy/pudełek, pożyczki, przypisanie miejsca na zakupy i zakres remanentu. Nie oznaczać 0.4 jako ukończonego na podstawie samego zielonego CI.

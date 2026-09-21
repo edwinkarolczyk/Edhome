@@ -12,9 +12,9 @@ assert all('"' + name + '"' in skin for name in
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
-assert 'super(context, "edhome-beta-preview.db", null, 17' in main
-assert 'private static final int DB_VERSION = 17;' in backup
-assert "newVersion > 17" in main
+assert 'super(context, "edhome-beta-preview.db", null, 18' in main
+assert 'private static final int DB_VERSION = 18;' in backup
+assert "newVersion > 18" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
@@ -49,6 +49,6 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 40" in gradle
+assert "versionCode 41" in gradle
 assert "versionName '0.4.0'" in gradle
-print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v17: PASS")
+print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v18: PASS")

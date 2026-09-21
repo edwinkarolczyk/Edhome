@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 17;
+    private static final int DB_VERSION = 18;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -41,6 +41,8 @@ final class DataBackup {
         {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty", "category"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
+        {"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",
+            "packages", "before_qty", "after_qty", "happened_at"},
         {"device_timers", "id", "device_type", "title", "start_at", "end_at",
             "status", "acknowledged_at"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
@@ -142,7 +144,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -225,6 +227,7 @@ final class DataBackup {
                     || "pantry_movements".equals(definition[0])))
                 || (inputVersion < 15 && "pantry_product_details".equals(definition[0]))
                 || (inputVersion < 17 && "pantry_packages".equals(definition[0]))
+                || (inputVersion < 18 && "shopping_receipts".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -394,6 +397,22 @@ final class DataBackup {
                         throw new IllegalArgumentException(
                             "Nieprawidłowa pozycja listy zakupów.");
                 }
+                if ("shopping_receipts".equals(definition[0])) {
+                    Long shopping = values.getAsLong("shopping_id");
+                    Long pantry = values.getAsLong("pantry_id");
+                    Long packages = values.getAsLong("packages");
+                    Long before = values.getAsLong("before_qty");
+                    Long after = values.getAsLong("after_qty");
+                    Long stamp = values.getAsLong("happened_at");
+                    String name = values.getAsString("name_snapshot");
+                    if (shopping == null || shopping < 1 || pantry == null || pantry < 1
+                            || packages == null || packages < 1 || packages > 100000000
+                            || before == null || before < 0 || before > 100000000
+                            || after == null || after != before + packages
+                            || after > 100000000 || stamp == null || stamp <= 0
+                            || name == null || name.trim().isEmpty() || name.length() > 160)
+                        throw new IllegalArgumentException("Nieprawidłowe przyjęcie zakupów.");
+                }
                 if ("pantry".equals(definition[0])) {
                     Long qty = values.getAsLong("qty");
                     if (qty == null || qty > 100000000L ||
@@ -526,6 +545,12 @@ final class DataBackup {
         for (ContentValues m : parsed.get("pantry_movements"))
             if (!movements.add(m.getAsString("operation_id")))
                 throw new IllegalArgumentException("Powielona operacja skanu.");
+        Set<Long> receivedShoppingIds = new HashSet<>();
+        for (ContentValues receipt : parsed.get("shopping_receipts")) {
+            Long shopping = receipt.getAsLong("shopping_id");
+            if (!receivedShoppingIds.add(shopping))
+                throw new IllegalArgumentException("Podwójne przyjęcie zakupów w kopii.");
+        }
         Set<String> shoppingNames = new HashSet<>();
         for (ContentValues item : parsed.get("shopping_items")) {
             if (!shoppingNames.add(item.getAsString("name").toLowerCase(
@@ -693,6 +718,7 @@ final class DataBackup {
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
             || "changed_at".equals(column) || "size_milli".equals(column)
+            || "shopping_id".equals(column) || "packages".equals(column)
             || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column);
     }
