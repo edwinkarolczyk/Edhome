@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.1-beta.1 (`beta`):** odpady jako specjalizacja Czynności z datą wystawienia, frakcją i wspólną historią, powtarzaniem, kalendarzem i lokalnym przypomnieniem opt-in. SQLite v9, kopie v2–v9. Nie deklarować synchronizacji domowników, importu harmonogramów gminy ani indywidualnych godzin alertów. Beta bez PIN-u, Stable z PIN-em. Test na telefonie pozostaje odrębnym kryterium odbioru. Źródło wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+> **Stan 0.3.2-beta.1 (`beta`):** indywidualna godzina i wyprzedzenie przypomnienia (0/1/2/3/7 dni), cisza 22:00–07:00 i opt-in. Starsze zadania nadal mają przypomnienie około 09:00. SQLite v10, kopie v2–v10. Powiadomień nie gwarantuje się co do minuty (Android/Doze). Beta bez PIN-u, Stable z PIN-em. Test na telefonie odrębnym kryterium odbioru. Źródło wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,9 +80,8 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.2-beta.1
+## Następny inkrement — 0.3.3-beta.1
 
-- Użytkownik ustawia **godzinę i wyprzedzenie** przypomnień na konkretną czynność, zwłaszcza na wystawianie odpadów. Uwzględniać godziny ciszy, opt-in i ograniczenia powiadomień Androida.
-- Planowany odbiór a dzień wystawienia odpadów to różne pojęcia; nie wymyślać dat odbioru ani nie ściągać automatycznie harmonogramów gmin bez zatwierdzonego źródła.
-- Kolejne wersje etapu 0.3: minutniki sprzętów, rotacyjne obowiązki. Synchronizacja wielu urządzeń dopiero etap 0.8.
-- Każdą wersję publikować po testach CI, podpisu i manifestu; test na telefonie osobno.
+- Lokalne minutniki sprzętów (pralka, suszarka, zmywarka) z zakończeniem i prostym potwierdzeniem, oddzielone od niepewnych dokładnych powiadomień Androida.
+- Rotacyjne obowiązki i dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 w 0.3.2 są stałe, jeszcze nie konfigurowalne.
+- Nie włączać synchronizacji kilku urządzeń przed etapem 0.8. Weryfikować CI, podpis, manifest i zachowanie na fizycznym Androidzie.
