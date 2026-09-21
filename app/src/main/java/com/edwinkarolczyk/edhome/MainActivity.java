@@ -2215,6 +2215,17 @@ public final class MainActivity extends Activity {
                     .setPositiveButton("Przywróć", (dialog, which) -> {
                         try {
                             DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
+                            // Imported IDs can refer to different tasks/occurrences.
+                            // Reset only reminder delivery receipts, never user settings.
+                            SharedPreferences.Editor reminderReset = prefs.edit();
+                            for (String key : prefs.getAll().keySet()) {
+                                if (key.startsWith("reminder_fired_")
+                                        || key.startsWith("reminder_custom_day_")
+                                        || "reminder_legacy_day".equals(key))
+                                    reminderReset.remove(key);
+                            }
+                            reminderReset.apply();
+                            ReminderReceiver.schedule(this);
                             DiagnosticLog.event("DATA_BACKUP_RESTORED");
                             screen = "home";
                             unlocked = BetaUpdater.isBeta();
