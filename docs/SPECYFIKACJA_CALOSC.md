@@ -294,3 +294,21 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 - Każde miejsce ma własne ID i może mieć ikonę z lokalnej biblioteki. Edycja/przenoszenie nie zmienia ID ani przypisanych czynności. W ich widokach prezentować pełne ścieżki, by rozróżnić jednakowe nazwy półek.
 - Przenoszenie do siebie lub potomka jest zabronione. Usuwanie miejsca z podmiejscami wymaga najpierw przeniesienia/usunięcia dzieci; nie kasować całej gałęzi przypadkiem. Usunięcie pojedynczego miejsca nie usuwa czynności ani historii, tylko usuwa ich opcjonalne przypisanie miejsca.
 - SQLite v11 i backup JSON v11 przechowują parent_id i icon; starsze kopie importują swoje miejsca na poziom główny i dostają neutralną ikonę. Motyw nadal jest lokalny dla instalacji EDHOME, a nie dla domownika.
+
+
+## 23. Obowiązujące decyzje po formularzu 30 pytań — 21.09.2026
+
+**[Pełny rejestr 30 decyzji i nierozstrzygniętych pytań](DECYZJE_2026-09-21_FORMULARZ_30.md) ma pierwszeństwo przed wcześniejszymi, sprzecznymi wariantami koncepcyjnymi w tym pliku.** Zapis decyzji oznacza zakres do wdrożenia, nie potwierdzenie ukończenia w aplikacji.
+
+- Wszystkie sześć motywów. Dowolna liczba kafelków (dodawanie/ukrywanie), małe i podwójne kafelki, przeciąganie całego kafelka po przytrzymaniu.
+- **Tablet = przełączany tryb tej samej aplikacji EDHOME**, z uproszczonym/współdzielonym zestawem funkcji i prawidłowymi uprawnieniami; nie oddzielny program lub APK. Użytkownik wybiera tryb/układ.
+- Czynności: szybkie/zaawansowane dodawanie, data/przedział/sezon, liczenie terminu od planu lub wykonania per czynność. Kalendarz najpierw łączyć z innymi modułami.
+- Nazwa **i rodzaj** miejsca definiowane przez użytkownika. Pudełka mogą być w innych pudełkach, z niezmiennym ID/QR i bez cykli hierarchii.
+- Dwa tryby skanera: **Dodaj produkty do spiżarni** (seryjny odczyt i legalna otwarta baza danych produktów, gdy brak lokalnej karty) oraz **Wyciągnij** (pokaż stan, proponuj -1 szt./paczkę, automatycznie zatwierdzaj po konfigurowalnej ciszy bez zmian; zmiana ilości restartuje odliczanie; powtórny odczyt tego samego kodu w trakcie odliczania **ignoruj**). Zapewnić Anuluj/Cofnij, historię i idempotencję; starsza reguła bezwzględnego ręcznego potwierdzania każdej pozycji **nie obowiązuje** w tym ustalonym trybie.
+- Zakupy mogą oczekiwać jako **„Do dodania do [wybrane miejsce]”**. Miejsce docelowe określane **dla pozycji zakupu**, nie jako stała właściwość produktu; „Spiżarnia” to przykładowa edytowalna lokalizacja.
+- Konflikty remanentu: ponownie sprawdzać zmienione pozycje, pozostały postęp zachować. Powiadomienia per domownik i rodzaj; niewykonane zadanie stale widoczne do potwierdzenia.
+- Kopie: JSON ręczny, lokalna automatyczna i NAS. Aktualizacje użytkownik ocenia jako działające z zachowaniem danych, co nie zastępuje testów migracji.
+- Profil osobisty na telefonie i tryb wspólny tabletu; wkłady osób i sumy wspólne w budżecie; PayCheck **proponuje** transakcję do akceptacji. Połączenia wymagać dla konkretnie wskazanych operacji: transferów między urządzeniami, sterowania SUPLA/energią, rozliczeń wspólnego budżetu; pozostały tryb offline nie jest przez to anulowany.
+- **PayCheck pierwszy duży kolejny moduł**. SUPLA najpierw lista urządzeń i stanów, automatyka PV etapami. Rozwój fundamentu równolegle z funkcjami. Największa obawa: brak powiązań między modułami — każdy inkrement musi wykazać wspólne ID, właściciela danych, relacje i testy integracji.
+
+**Otwarte bez decyzji:** dziedziczenie widoczności czynności z miejsc nadrzędnych (pytanie 13), model priorytetów PV (28), dokładny czas odliczania i zachowanie skanera dla innego kodu, szczegółowa lista ograniczeń tabletu i precyzyjny zakres operacji wymagających połączenia. Nie wypełniać ich domysłami.
