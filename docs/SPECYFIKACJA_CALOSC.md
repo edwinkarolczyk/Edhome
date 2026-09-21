@@ -198,3 +198,10 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 - Lokalna lista zakupów jest niezależna od stanów spiżarni; oznaczenie zakupione nie zwiększa automatycznie zapasu. Nie należy deklarować wspólnej synchronizowanej listy przed etapem Wi-Fi.
 - Ilość opcjonalna: `NULL` jest nieokreśloną ilością, nie zerem; `0` i ujemne ilości są odrzucane. Jednostki na start: szt., kg, l; precyzja maks. trzy miejsca po przecinku w przeliczeniu na całkowite tysięczne.
 - Pozycje można oznaczać i usuwać; nowe zakupy bez zmiany stałego układu dziewięciu kafelków. Etap 0.3 obejmuje także śmieci, obowiązki, minutniki i przypomnienia — te funkcje nie są automatycznie ukończone przez samą listę.
+
+
+## 19. Inkrement 0.3.1 — odpady w jednym rejestrze Czynności
+
+- Odpady są typowaną czynnością, nie oddzielnym zbiorem przypomnień. Mają frakcję, datę **wystawienia** (nie wymyśloną datę odbioru) i regułę powtarzania; działają w tym samym kalendarzu, historii i powiadomieniach.
+- Potwierdzenie wystawienia oznacza wykonanie konkretnej czynności. Cykliczna wyznacza kolejny termin; nie powstaje drugi rekord przy każdym wykonaniu. Duplikat niezakończonej tej samej frakcji na tę samą datę jest blokowany.
+- Powiadomienia wymagają jawnego włączenia i zgody Androida; początkowy wspólny alert jest około 09:00 na dzień terminu i zaległe. Indywidualne godziny, wyprzedzenie przed terminem i harmonogramy gminy to odrębny etap, nie deklaracja gotowej integracji.
