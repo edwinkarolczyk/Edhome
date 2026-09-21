@@ -25,6 +25,8 @@ import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import android.view.DragEvent;
 import android.widget.PopupMenu;
+import android.widget.PopupWindow;
+import android.view.HapticFeedbackConstants;
 import android.graphics.drawable.RippleDrawable;
 import android.view.WindowInsets;
 import android.widget.Button;
@@ -429,6 +431,11 @@ public final class MainActivity extends Activity {
         for (String tileId : homeTileOrder()) {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
+            TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
+            caption.setText(homeTileLabel(tileId));
+            tile.setContentDescription(homeTileLabel(tileId)
+                + ". Dotknij, aby otworzyć. Przytrzymaj, aby edytować "
+                + "lub przesuń za uchwyt.");
             tile.setOnLongClickListener(v -> {
                 if (homeEditMode) return beginHomeDrag(tile, tileId);
                 showTileActions(tile, tileId);
@@ -500,6 +507,148 @@ public final class MainActivity extends Activity {
             + "i synchronizacja są w kolejnych etapach.");
     }
 
+    private String defaultHomeTileLabel(String id) {
+        int index = java.util.Arrays.asList(HOME_TILE_IDS).indexOf(id);
+        String[] labels = {"Czynności", "Kalendarz", "Miejsca",
+            "Spiżarnia", "Remanent", "Aktualizacje",
+            "Kopia danych", "Ustawienia", "Na dziś"};
+        if (index < 0) throw new IllegalArgumentException("Unknown tile ID");
+        return labels[index];
+    }
+
+    private String homeTileLabel(String id) {
+        String label = prefs.getString("tile_label_" + id, defaultHomeTileLabel(id));
+        return label.trim().isEmpty() ? defaultHomeTileLabel(id) : label;
+    }
+
+    private boolean beginHomeDrag(View tile, String id) {
+        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)) return false;
+        ClipData data = ClipData.newPlainText("edhome-home-tile", id);
+        boolean started = tile.startDragAndDrop(data,
+            new View.DragShadowBuilder(tile), null, View.DRAG_FLAG_GLOBAL);
+        if (started) {
+            tile.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            DiagnosticLog.event("HOME_TILE_DRAG_STARTED");
+        }
+        return started;
+    }
+
+    private void scrollHomeDuringDrag(View tile, float localY) {
+        if (pageScroll == null || !"home".equals(screen)) return;
+        int[] tileLocation = new int[2];
+        int[] scrollLocation = new int[2];
+        tile.getLocationOnScreen(tileLocation);
+        pageScroll.getLocationOnScreen(scrollLocation);
+        float y = tileLocation[1] + localY;
+        if (y < scrollLocation[1] + dp(70)) {
+            pageScroll.scrollBy(0, -dp(14));
+        } else if (y > scrollLocation[1] + pageScroll.getHeight() - dp(70)) {
+            pageScroll.scrollBy(0, dp(14));
+        }
+    }
+
+    private void showTileActions(View anchor, String id) {
+        if (!"home".equals(screen)) return;
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.setPadding(dp(10), dp(10), dp(10), dp(10));
+        menu.setBackground(skin.panel(this, surface, 24));
+        PopupWindow popup = new PopupWindow(menu, dp(226), -2, true);
+        popup.setBackgroundDrawable(skin.panel(this, surface, 24));
+        popup.setElevation(dp(12));
+        popup.setOutsideTouchable(true);
+        TextView heading = text(homeTileLabel(id), 16, true);
+        heading.setPadding(dp(12), dp(6), dp(12), dp(8));
+        menu.addView(heading);
+        TextView edit = text("✎  Edytuj kafelek", 16, true);
+        edit.setPadding(dp(14), dp(13), dp(14), dp(13));
+        edit.setBackground(skin.panel(this, skin.tileTop, 18));
+        menu.addView(edit);
+        edit.setOnClickListener(v -> {
+            popup.dismiss();
+            editHomeTile(id);
+        });
+        TextView move = text("✥  Przesuń kafelek", 16, true);
+        move.setPadding(dp(14), dp(13), dp(14), dp(13));
+        move.setBackground(skin.panel(this, skin.tileTop, 18));
+        menu.addView(move);
+        move.setOnClickListener(v -> {
+            popup.dismiss();
+            homeEditMode = true;
+            render();
+            android.widget.Toast.makeText(this,
+                "Przeciągnij kafelek za uchwyt ⋮⋮ lub przytrzymaj kafelek.",
+                android.widget.Toast.LENGTH_LONG).show();
+        });
+        popup.showAsDropDown(anchor, 0, -dp(14));
+        DiagnosticLog.event("HOME_TILE_ACTIONS_OPENED");
+    }
+
+    private void editHomeTile(String id) {
+        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)) return;
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(16), dp(20), dp(8));
+        form.addView(text("Edytuj kafelek", 21, true));
+        form.addView(text("Zmieniasz wyłącznie wygląd. Moduł, dane "
+            + "i działanie pozostają bez zmian.", 13, false));
+        form.addView(text("Podpis (maks. 24 znaki)", 15, true));
+        EditText label = new EditText(this);
+        label.setSingleLine(true);
+        label.setText(homeTileLabel(id));
+        label.setTextColor(ink);
+        label.setHintTextColor(subdued);
+        form.addView(label);
+        form.addView(text("Kolor kafelka", 15, true));
+        String[] tints = {"Domyślny", "Miętowy", "Niebieski",
+            "Bursztynowy", "Fioletowy"};
+        String[] codes = {"default", "mint", "blue", "amber", "violet"};
+        Spinner color = new Spinner(this);
+        color.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(tints)));
+        String selected = prefs.getString("tile_tint_" + id, "default");
+        color.setSelection(Math.max(0,
+            java.util.Arrays.asList(codes).indexOf(selected)));
+        form.addView(color);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setNeutralButton("Przywróć wygląd", null)
+            .setPositiveButton("Zapisz", null)
+            .create();
+        dialog.setOnShowListener(ignore -> {
+            dialog.getWindow().setBackgroundDrawable(skin.panel(this, surface, 28));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String newLabel = label.getText().toString().trim();
+                    if (newLabel.isEmpty() || newLabel.length() > 24
+                            || newLabel.contains("\n")) {
+                        label.setError("Wpisz od 1 do 24 znaków.");
+                        return;
+                    }
+                    SharedPreferences.Editor change = prefs.edit();
+                    if (newLabel.equals(defaultHomeTileLabel(id)))
+                        change.remove("tile_label_" + id);
+                    else change.putString("tile_label_" + id, newLabel);
+                    String code = codes[color.getSelectedItemPosition()];
+                    if ("default".equals(code)) change.remove("tile_tint_" + id);
+                    else change.putString("tile_tint_" + id, code);
+                    change.apply();
+                    DiagnosticLog.event("HOME_TILE_APPEARANCE_SAVED");
+                    dialog.dismiss();
+                    render();
+                });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+                .setOnClickListener(v -> {
+                    prefs.edit().remove("tile_label_" + id)
+                        .remove("tile_tint_" + id).apply();
+                    DiagnosticLog.event("HOME_TILE_APPEARANCE_RESET");
+                    dialog.dismiss();
+                    render();
+                });
+        });
+        dialog.show();
+    }
+
     /** A validated, persisted nine-tile order; unknown and repeated IDs are ignored. */
     private java.util.List<String> homeTileOrder() {
         java.util.ArrayList<String> result = new java.util.ArrayList<>();
@@ -521,6 +670,8 @@ public final class MainActivity extends Activity {
         prefs.edit().putString("home_tile_order", android.text.TextUtils.join(",", order))
             .apply();
         DiagnosticLog.event("HOME_TILES_REORDERED");
+        android.widget.Toast.makeText(this, "Zmieniono kolejność kafelków",
+            android.widget.Toast.LENGTH_SHORT).show();
         render();
         return true;
     }
