@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.3-beta.3 (`beta`):** sześć motywów UI (w tym WMM i Trener 2), edycja ikon i animowane rozsuwanie kafelków podczas przeciągania. SQLite v10 bez migracji. Beta bez PIN-u, Stable z PIN-em. Test telefonu pozostaje osobnym kryterium. [Odbiór UI](BETA_0_3_3.md).
+> **Stan 0.3.4-beta.1 (`beta`):** hierarchia Miejsc z własnymi nazwami, opcjonalnymi rodzajami i ikonami; ścieżki Dom → Kuchnia → Półka; SQLite v11 z zachowaniem istniejących ID i czynności, kopie JSON v2–v11. Beta bez PIN-u, Stable z PIN-em. [Odbiór Miejsc](BETA_0_3_4.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,7 +80,7 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.4-beta.1
+## Następny inkrement — 0.3.5-beta.1
 
 - Lokalne minutniki sprzętów (pralka, suszarka, zmywarka) z zakończeniem i prostym potwierdzeniem, oddzielone od niepewnych dokładnych powiadomień Androida.
 - Rotacyjne obowiązki i dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 w 0.3.2 są stałe, jeszcze nie konfigurowalne.
