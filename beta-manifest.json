@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 43,
-  "versionName": "0.4.0-beta.13",
-  "changelog": "EDHOME Beta 0.4.0-beta.13 — ochrona rzeczy podczas usuwania miejsc i pełne ścieżki lokalizacji; SQLite v19.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.13/edhome-beta.apk",
-  "sha256": "d56e272287f7fd631cd745035c9e1dcbffe012cf04a5882b0d57d295b36b0c6b"
+  "versionCode": 44,
+  "versionName": "0.5.0-beta.1",
+  "changelog": "EDHOME Beta 0.5.0-beta.1 — PayCheck: wspólny budżet, potwierdzane transakcje bez prywatnych kont; SQLite v20.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.1/edhome-beta.apk",
+  "sha256": "5b9e818422fb1d8a9a4e4d48578457679608fedd7e954ede20dbe4c3334e9373"
 }
