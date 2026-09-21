@@ -1,6 +1,6 @@
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.5-beta.1 (`beta`):** lokalne minutniki pralki/suszarki/zmywarki, potwierdzenie zakończenia i niezależne powiadomienia opt-in. SQLite v12, kopie v2–v12, zachowane Miejsca i 9 kafelków. Beta bez PIN-u, Stable z PIN-em. Test alarmów na fizycznym telefonie wymagany. [Odbiór minutników](BETA_0_3_5.md).
+> **Stan 0.3.6-beta.1 (`beta`):** rotacyjne obowiązki domowników, automatyczna zmiana wykonawcy na kolejnym terminie oraz historia osoby wykonującej. SQLite v13, kopie v2–v13; minutniki, Miejsca i 9 kafelków zachowane. Beta bez PIN-u, Stable z PIN-em. [Odbiór rotacji](BETA_0_3_6.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,10 +80,10 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.6-beta.1
+## Następny inkrement — 0.3.7-beta.1
 
-- Rotacyjne obowiązki domowników, przypisania i zmiany wykonawcy w kolejnych terminach (po odbiorze minutników).
-- Dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 są stałe, jeszcze nie konfigurowalne.
+- Dalsze ustawienia przypomnień: konfigurowalne godziny ciszy i czytelny podgląd, co stanie się z alarmem poza dozwolonym oknem.
+- Rotacyjne obowiązki pozostają w 0.3.6; nie mieszać ich z kolejną zmianą schematu bez potrzeby.
 - Nie włączać synchronizacji kilku urządzeń przed etapem 0.8. Weryfikować CI, podpis, manifest i zachowanie na fizycznym Androidzie.
 
 
