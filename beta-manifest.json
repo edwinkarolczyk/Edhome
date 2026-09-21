@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 27,
-  "versionName": "0.3.4-beta.2",
-  "changelog": "EDHOME Beta 0.3.4-beta.2 — naprawa przeciągania kafelków: podgląd = zapis, zawsze 9 widocznych kafelków, bez zmian danych.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.4-beta.2/edhome-beta.apk",
-  "sha256": "f7ba7a3dc3ae7997cc0a039726c88a37a09fbd4d83a071388e4e9031239a2301"
+  "versionCode": 28,
+  "versionName": "0.3.5-beta.1",
+  "changelog": "EDHOME Beta 0.3.5-beta.1 — lokalne minutniki pralki, suszarki i zmywarki, potwierdzenie zakończenia, opcjonalne powiadomienia; SQLite v12.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.3.5-beta.1/edhome-beta.apk",
+  "sha256": "c9f3b8f1268c247686d0ae15b9fb3e080afd33d8c608b3102f493330f9fe3ba1"
 }
