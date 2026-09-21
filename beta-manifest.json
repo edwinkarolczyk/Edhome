@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 38,
-  "versionName": "0.4.0-beta.8",
-  "changelog": "EDHOME Beta 0.4.0-beta.8 — poprawka katalogów Open Facts, kody UPC/EAN i raport wyszukiwania; SQLite v17.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.8/edhome-beta.apk",
-  "sha256": "8d55596d8695bee4820910850bc7946ec6e5c17a4f9eb91ba7523ef3138f5024"
+  "versionCode": 39,
+  "versionName": "0.4.0-beta.9",
+  "changelog": "EDHOME Beta 0.4.0-beta.9 — wyszukiwanie po nazwie w czterech katalogach po nierozpoznanym kodzie; SQLite v17.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.9/edhome-beta.apk",
+  "sha256": "58c7908c164629f4e1f9aba4faac919ece6564a2175b2bd3a446594a8c7cfd14"
 }
