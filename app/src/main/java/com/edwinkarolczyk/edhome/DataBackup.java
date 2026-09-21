@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 12;
+    private static final int DB_VERSION = 13;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -38,6 +38,7 @@ final class DataBackup {
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
+        {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"device_timers", "id", "device_type", "title", "start_at", "end_at",
@@ -48,7 +49,7 @@ final class DataBackup {
         {"audit_corrections", "id", "session_id", "pantry_id", "old_qty",
             "new_qty", "changed_at"},
         {"task_history", "id", "task_id", "title_snapshot", "completed_at",
-            "due_date", "next_due_date"}
+            "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"}
     };
 
     private DataBackup() { }
@@ -130,7 +131,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -201,6 +202,7 @@ final class DataBackup {
                     || "member_shift_exceptions".equals(definition[0])))
                 || (inputVersion < 8 && "shopping_items".equals(definition[0]))
                 || (inputVersion < 12 && "device_timers".equals(definition[0]))
+                || (inputVersion < 13 && "task_rotation_members".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -255,6 +257,13 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 13 && "task_history".equals(definition[0])) {
+                            if ("assignee_id".equals(key)
+                                    || "assignee_name_snapshot".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                        }
                         if (inputVersion < 10 && "tasks".equals(definition[0])) {
                             if ("remind_time".equals(key)) {
                                 values.putNull(key);
@@ -274,6 +283,7 @@ final class DataBackup {
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)
+                             || "assignee_name_snapshot".equals(key)
                              || "acknowledged_at".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
@@ -476,7 +486,14 @@ final class DataBackup {
         if (!PlaceRules.validForest(hierarchy))
             throw new IllegalArgumentException(
                 "Kopia zawiera nieistniejące miejsce nadrzędne lub zapętlenie.");
+        Set<Long> tasks = new HashSet<>();
+        Map<Long, String> taskRules = new HashMap<>();
+        Map<Long, Long> taskAssignees = new HashMap<>();
         for (ContentValues task : parsed.get("tasks")) {
+            Long taskId = task.getAsLong("id");
+            tasks.add(taskId);
+            taskRules.put(taskId, task.getAsString("repeat_rule"));
+            taskAssignees.put(taskId, task.getAsLong("assignee_id"));
             Long placeId = task.getAsLong("place_id");
             if (placeId != null && !places.contains(placeId))
                 throw new IllegalArgumentException("Czynność wskazuje nieistniejące miejsce.");
@@ -485,6 +502,39 @@ final class DataBackup {
                 throw new IllegalArgumentException(
                     "Czynność wskazuje nieistniejącego domownika.");
         }
+        Map<Long, Set<Long>> rotationMembers = new HashMap<>();
+        Map<Long, Set<Long>> rotationPositions = new HashMap<>();
+        for (ContentValues row : parsed.get("task_rotation_members")) {
+            Long taskId = row.getAsLong("task_id");
+            Long memberId = row.getAsLong("member_id");
+            Long position = row.getAsLong("position");
+            if (!tasks.contains(taskId) || !members.contains(memberId)
+                    || position == null || position < 0
+                    || !TaskRules.recurring(taskRules.get(taskId)))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa rotacja wykonawców w kopii.");
+            if (!rotationMembers.computeIfAbsent(taskId,
+                    ignored -> new HashSet<>()).add(memberId)
+                    || !rotationPositions.computeIfAbsent(taskId,
+                    ignored -> new HashSet<>()).add(position))
+                throw new IllegalArgumentException(
+                    "Powielona osoba lub pozycja w rotacji.");
+        }
+        for (Map.Entry<Long, Set<Long>> entry : rotationMembers.entrySet()) {
+            if (entry.getValue().size() < 2)
+                throw new IllegalArgumentException(
+                    "Rotacja musi zawierać co najmniej dwie osoby.");
+            Long assigned = taskAssignees.get(entry.getKey());
+            if (assigned == null || !entry.getValue().contains(assigned))
+                throw new IllegalArgumentException(
+                    "Aktualny wykonawca nie należy do rotacji.");
+            Set<Long> positions = rotationPositions.get(entry.getKey());
+            for (long i = 0; i < positions.size(); i++)
+                if (!positions.contains(i))
+                    throw new IllegalArgumentException(
+                        "Rotacja ma nieciągłą kolejność.");
+        }
+
         Set<Long> sessions = new HashSet<>();
         for (ContentValues session : parsed.get("audit_sessions"))
             sessions.add(session.getAsLong("id"));
@@ -543,7 +593,7 @@ final class DataBackup {
             || "acknowledged_at".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
-            || "member_id".equals(column) || "weekday".equals(column)
+            || "member_id".equals(column) || "position".equals(column) || "weekday".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
