@@ -50,5 +50,5 @@ assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
 assert "versionCode 44" in gradle
-assert "versionName '0.4.0'" in gradle
+assert "versionName '0.5.0'" in gradle
 print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v20: PASS")
