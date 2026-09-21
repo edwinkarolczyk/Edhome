@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 41,
-  "versionName": "0.4.0-beta.11",
-  "changelog": "EDHOME Beta 0.4.0-beta.11 — potwierdzane przyjmowanie zakupów do spiżarni bez dubli; SQLite v18.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.11/edhome-beta.apk",
-  "sha256": "93a22d796ebf7ba5f3c58210d48b06ab94694062886fc2bd85590b12669a092f"
+  "versionCode": 42,
+  "versionName": "0.4.0-beta.12",
+  "changelog": "EDHOME Beta 0.4.0-beta.12 — rzeczy, pudełka, QR, przeniesienia i wypożyczenia; SQLite v19.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.12/edhome-beta.apk",
+  "sha256": "28788ef28a4dbe6b80447b3df8749904a842c4bfb9d5d6cae98960671e081e50"
 }
