@@ -3471,7 +3471,8 @@ public final class MainActivity extends Activity {
 
         void saveTask(Long id, String title, String dueDate, String rule, int every,
                 Long placeId, String priority, int durationMinutes,
-                Long assigneeId, String customTime, int reminderLeadDays) {
+                Long assigneeId, String customTime, int reminderLeadDays,
+                java.util.List<Long> rotationMembers) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (id != null && isWasteTask(id) && dueDate.isEmpty())
@@ -3480,6 +3481,13 @@ public final class MainActivity extends Activity {
                     || dueDate.isEmpty()
                     || !ReminderRules.allowedLead(reminderLeadDays)))
                 throw new IllegalArgumentException("Nieprawidłowe przypomnienie.");
+            String rotationError = RotationRules.validate(rotationMembers,
+                TaskRules.recurring(rule));
+            if (rotationError != null) throw new IllegalArgumentException(rotationError);
+            if (rotationMembers != null && !rotationMembers.isEmpty()
+                    && (assigneeId == null || !rotationMembers.contains(assigneeId)))
+                throw new IllegalArgumentException(
+                    "Aktualny wykonawca musi należeć do rotacji.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
             if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
@@ -3515,13 +3523,68 @@ public final class MainActivity extends Activity {
                 }
                 values.put("place_id", placeId);
             }
-            if (id == null) getWritableDatabase().insertOrThrow("tasks", null, values);
-            else {
-                // Editing a completed one-off into a recurring task reopens it.
-                if (TaskRules.recurring(rule)) values.put("done", 0);
-                getWritableDatabase().update("tasks", values, "id=?",
-                    new String[]{Long.toString(id)});
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                long taskId;
+                if (id == null) {
+                    taskId = database.insertOrThrow("tasks", null, values);
+                } else {
+                    taskId = id;
+                    // Editing a completed one-off into a recurring task reopens it.
+                    if (TaskRules.recurring(rule)) values.put("done", 0);
+                    database.update("tasks", values, "id=?",
+                        new String[]{Long.toString(id)});
+                }
+                database.delete("task_rotation_members", "task_id=?",
+                    new String[]{Long.toString(taskId)});
+                if (rotationMembers != null) {
+                    for (int position = 0; position < rotationMembers.size(); position++) {
+                        Long memberId = rotationMembers.get(position);
+                        try (Cursor person = database.rawQuery(
+                                "SELECT id FROM household_members WHERE id=?",
+                                new String[]{Long.toString(memberId)})) {
+                            if (!person.moveToFirst())
+                                throw new IllegalArgumentException(
+                                    "Osoba w rotacji już nie istnieje.");
+                        }
+                        ContentValues rotation = new ContentValues();
+                        rotation.put("task_id", taskId);
+                        rotation.put("member_id", memberId);
+                        rotation.put("position", position);
+                        database.insertOrThrow("task_rotation_members", null, rotation);
+                    }
+                }
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
             }
+        }
+
+        java.util.ArrayList<Long> taskRotation(long taskId) {
+            java.util.ArrayList<Long> result = new java.util.ArrayList<>();
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT member_id FROM task_rotation_members WHERE task_id=? "
+                    + "ORDER BY position ASC",
+                    new String[]{Long.toString(taskId)})) {
+                while (cursor.moveToNext()) result.add(cursor.getLong(0));
+            }
+            return result;
+        }
+
+        String rotationLabel(long taskId) {
+            StringBuilder result = new StringBuilder();
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT m.name FROM task_rotation_members r "
+                    + "JOIN household_members m ON m.id=r.member_id "
+                    + "WHERE r.task_id=? ORDER BY r.position ASC",
+                    new String[]{Long.toString(taskId)})) {
+                while (cursor.moveToNext()) {
+                    if (result.length() > 0) result.append(" → ");
+                    result.append(cursor.getString(0));
+                }
+            }
+            return result.toString();
         }
 
         boolean isWasteTask(long id) {
