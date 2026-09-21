@@ -101,6 +101,7 @@ public final class MainActivity extends Activity {
     private int bg, surface, ink, subdued, accent;
     private UiSkin skin;
     private boolean homeEditMode;
+    private ScrollView pageScroll;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -251,6 +252,7 @@ public final class MainActivity extends Activity {
 
     private void go(String destination) {
         screen = destination;
+        if (!"home".equals(destination)) homeEditMode = false;
         if (unlocked && updater != null) updater.start();
         if (unlocked && !BetaUpdater.isBeta() && !stableUpdateChecked) {
             stableUpdateChecked = true;
@@ -273,6 +275,7 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(systemBarFlags);
 
         ScrollView scroll = new ScrollView(this);
+        pageScroll = scroll;
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
         body = new LinearLayout(this);
@@ -386,7 +389,16 @@ public final class MainActivity extends Activity {
         title(prefs.getString("household", "Moje gospodarstwo"));
 
         LinearLayout summary = card();
-        summary.addView(text("Twój domowy plan", 21, true));
+        LinearLayout planHeader = new LinearLayout(this);
+        planHeader.setOrientation(LinearLayout.HORIZONTAL);
+        planHeader.setGravity(Gravity.CENTER_VERTICAL);
+        TextView planTitle = text("Twój domowy plan", 21, true);
+        planHeader.addView(planTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView homeMark = text("⌂", 39, true);
+        homeMark.setGravity(Gravity.CENTER);
+        homeMark.setTextColor(accent);
+        planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        summary.addView(planHeader);
         int overdue = db.overdueTasks();
         summary.addView(text("Do zrobienia: " + db.openTasks()
             + "     Zaległe: " + overdue, 16, true));
@@ -399,30 +411,67 @@ public final class MainActivity extends Activity {
             tasksFilter = overdue == 0 ? "today" : "overdue";
             go("tasks");
         });
+        touchFeedback(summary);
+        summary.setContentDescription("Twój domowy plan. Do zrobienia: "
+            + db.openTasks() + ". Zaległe: " + overdue
+            + ". Dotknij, aby przejść do czynności.");
 
-        note("Menu • przytrzymaj kafelek, aby zmienić kolejność; przewijaj góra–dół ↓");
+        TextView editHint = text(homeEditMode
+            ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
+            : "✥  Dotknij, aby otworzyć • przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij", 13, false);
+        editHint.setTextColor(homeEditMode ? accent : subdued);
+        body.addView(editHint);
+        if (homeEditMode) button("✓  Zakończ układanie", () -> {
+            homeEditMode = false;
+            render();
+        });
         LinearLayout tiles = tileGrid();
         for (String tileId : homeTileOrder()) {
             LinearLayout tile = homeTile(tiles, tileId);
+            tile.setTag(tileId);
             tile.setOnLongClickListener(v -> {
-                android.content.ClipData data = android.content.ClipData.newPlainText(
-                    "edhome-home-tile", tileId);
-                return tile.startDragAndDrop(data, new View.DragShadowBuilder(tile),
-                    null, 0);
+                if (homeEditMode) return beginHomeDrag(tile, tileId);
+                showTileActions(tile, tileId);
+                return true;
             });
             tile.setOnDragListener((v, event) -> {
-                if (event.getAction() == android.view.DragEvent.ACTION_DRAG_STARTED)
-                    return event.getClipDescription() != null
-                        && event.getClipDescription().hasMimeType(
-                            android.content.ClipDescription.MIMETYPE_TEXT_PLAIN);
-                if (event.getAction() == android.view.DragEvent.ACTION_DROP) {
-                    if (event.getClipData() == null
-                            || event.getClipData().getItemCount() == 0) return false;
-                    CharSequence item = event.getClipData().getItemAt(0).getText();
-                    if (item == null) return false;
-                    return moveHomeTile(item.toString(), tileId);
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_STARTED:
+                        return event.getClipDescription() != null
+                            && "edhome-home-tile".equals(
+                                event.getClipDescription().getLabel())
+                            && event.getClipDescription().hasMimeType(
+                                android.content.ClipDescription.MIMETYPE_TEXT_PLAIN);
+                    case DragEvent.ACTION_DRAG_ENTERED:
+                        tile.setScaleX(1.04f);
+                        tile.setScaleY(1.04f);
+                        tile.setAlpha(0.83f);
+                        return true;
+                    case DragEvent.ACTION_DRAG_LOCATION:
+                        scrollHomeDuringDrag(tile, event.getY());
+                        return true;
+                    case DragEvent.ACTION_DRAG_EXITED:
+                    case DragEvent.ACTION_DRAG_ENDED:
+                        tile.setScaleX(1f);
+                        tile.setScaleY(1f);
+                        tile.setAlpha(1f);
+                        return true;
+                    case DragEvent.ACTION_DROP:
+                        tile.setScaleX(1f);
+                        tile.setScaleY(1f);
+                        tile.setAlpha(1f);
+                        if (event.getClipData() == null
+                                || event.getClipData().getItemCount() != 1)
+                            return false;
+                        CharSequence item = event.getClipData().getItemAt(0).getText();
+                        if (item == null) return false;
+                        String sourceId = item.toString();
+                        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(sourceId))
+                            return false;
+                        tile.post(() -> moveHomeTile(sourceId, tileId));
+                        return true;
+                    default: return true;
                 }
-                return true;
             });
         }
 
