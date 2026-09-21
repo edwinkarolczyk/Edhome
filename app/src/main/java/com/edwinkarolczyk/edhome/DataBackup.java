@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 8;
+    private static final int DB_VERSION = 9;
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind"},
@@ -32,7 +32,8 @@ final class DataBackup {
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
-            "place_id", "priority", "duration_minutes", "assignee_id"},
+            "place_id", "priority", "duration_minutes", "assignee_id",
+            "task_kind", "waste_fraction"},
         {"pantry", "id", "name", "qty"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
@@ -109,7 +110,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -175,6 +176,16 @@ final class DataBackup {
                             values.putNull(key);
                             continue;
                         }
+                        if (inputVersion < 9 && "tasks".equals(definition[0])) {
+                            if ("task_kind".equals(key)) {
+                                values.put(key, "general");
+                                continue;
+                            }
+                            if ("waste_fraction".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
@@ -182,7 +193,7 @@ final class DataBackup {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
                             || "place_id".equals(key) || "assignee_id".equals(key)
-                            || "qty_milli".equals(key)))
+                            || "qty_milli".equals(key) || "waste_fraction".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -289,6 +300,16 @@ final class DataBackup {
                     String error = TaskRules.validate(values.getAsString("title"),
                         due == null ? "" : due, rule, every == null ? 0 : every);
                     if (error != null) throw new IllegalArgumentException(error);
+                    String kind = values.getAsString("task_kind");
+                    String fraction = values.getAsString("waste_fraction");
+                    if ("general".equals(kind)) {
+                        if (fraction != null)
+                            throw new IllegalArgumentException("Zwykła czynność ma frakcję odpadów.");
+                    } else if ("waste".equals(kind)) {
+                        if (WasteRules.validate(fraction, due, rule,
+                                every == null ? 0 : every) != null)
+                            throw new IllegalArgumentException("Nieprawidłowy termin odpadów.");
+                    } else throw new IllegalArgumentException("Nieznany typ czynności.");
                     String priority = values.getAsString("priority");
                     Long minutes = values.getAsLong("duration_minutes");
                     if (priority == null
