@@ -1467,6 +1467,119 @@ public final class MainActivity extends Activity {
         action.setOnClickListener(v -> run.run());
     }
 
+    private String memberNameFromLists(Long id,
+            java.util.ArrayList<Long> memberIds,
+            java.util.ArrayList<String> memberNames) {
+        int index = memberIds.indexOf(id);
+        return index >= 0 && index < memberNames.size()
+            ? memberNames.get(index) : "Nieznana osoba";
+    }
+
+    private void renderRotationEditor(LinearLayout container,
+            java.util.ArrayList<Long> rotationIds,
+            java.util.ArrayList<Long> memberIds,
+            java.util.ArrayList<String> memberNames,
+            Spinner chosenMember) {
+        container.removeAllViews();
+        if (rotationIds.isEmpty()) {
+            TextView off = text("Rotacja wyłączona. Wykonawca pozostaje stały.", 13, false);
+            off.setTextColor(subdued);
+            container.addView(off);
+        } else {
+            TextView on = text("Kolejność rotacji • następna osoba po wykonaniu:", 13, true);
+            on.setTextColor(accent);
+            container.addView(on);
+            for (int i = 0; i < rotationIds.size(); i++) {
+                final int index = i;
+                Long memberId = rotationIds.get(i);
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView name = text((i + 1) + ". "
+                    + memberNameFromLists(memberId, memberIds, memberNames), 14, true);
+                row.addView(name, new LinearLayout.LayoutParams(0, dp(44), 1f));
+                if (i > 0) {
+                    TextView up = text("↑", 18, true);
+                    up.setGravity(Gravity.CENTER);
+                    row.addView(up, new LinearLayout.LayoutParams(dp(44), dp(44)));
+                    up.setOnClickListener(v -> {
+                        java.util.List<Long> moved = RotationRules.moved(
+                            rotationIds, index, index - 1);
+                        rotationIds.clear();
+                        rotationIds.addAll(moved);
+                        renderRotationEditor(container, rotationIds,
+                            memberIds, memberNames, chosenMember);
+                    });
+                }
+                if (i < rotationIds.size() - 1) {
+                    TextView down = text("↓", 18, true);
+                    down.setGravity(Gravity.CENTER);
+                    row.addView(down, new LinearLayout.LayoutParams(dp(44), dp(44)));
+                    down.setOnClickListener(v -> {
+                        java.util.List<Long> moved = RotationRules.moved(
+                            rotationIds, index, index + 1);
+                        rotationIds.clear();
+                        rotationIds.addAll(moved);
+                        renderRotationEditor(container, rotationIds,
+                            memberIds, memberNames, chosenMember);
+                    });
+                }
+                TextView remove = text("Usuń", 12, true);
+                remove.setGravity(Gravity.CENTER);
+                row.addView(remove, new LinearLayout.LayoutParams(dp(62), dp(44)));
+                remove.setOnClickListener(v -> {
+                    rotationIds.remove(index);
+                    if (!rotationIds.isEmpty()) {
+                        Long current = memberIds.get(chosenMember.getSelectedItemPosition());
+                        if (current == null || !rotationIds.contains(current)) {
+                            int selected = memberIds.indexOf(rotationIds.get(0));
+                            if (selected >= 0) chosenMember.setSelection(selected);
+                        }
+                    }
+                    renderRotationEditor(container, rotationIds,
+                        memberIds, memberNames, chosenMember);
+                });
+                container.addView(row);
+            }
+        }
+
+        smallButton(container, "+ Dodaj osobę do rotacji", () -> {
+            java.util.ArrayList<Long> availableIds = new java.util.ArrayList<>();
+            java.util.ArrayList<String> availableNames = new java.util.ArrayList<>();
+            for (int i = 1; i < memberIds.size(); i++) {
+                if (!rotationIds.contains(memberIds.get(i))) {
+                    availableIds.add(memberIds.get(i));
+                    availableNames.add(memberNames.get(i));
+                }
+            }
+            if (availableIds.isEmpty()) {
+                alert(memberIds.size() <= 1
+                    ? "Najpierw dodaj domowników w Czynności → Domownicy."
+                    : "Wszyscy domownicy są już w rotacji.");
+                return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("Dodaj do rotacji")
+                .setItems(availableNames.toArray(new String[0]), (dialog, which) -> {
+                    Long added = availableIds.get(which);
+                    rotationIds.add(added);
+                    if (rotationIds.size() == 1) {
+                        int selected = memberIds.indexOf(added);
+                        if (selected >= 0) chosenMember.setSelection(selected);
+                    }
+                    renderRotationEditor(container, rotationIds,
+                        memberIds, memberNames, chosenMember);
+                }).show();
+        });
+        if (!rotationIds.isEmpty()) {
+            smallButton(container, "Wyłącz rotację", () -> {
+                rotationIds.clear();
+                renderRotationEditor(container, rotationIds,
+                    memberIds, memberNames, chosenMember);
+            });
+        }
+    }
+
     private ArrayAdapter<String> themeSpinnerAdapter(java.util.List<String> items) {
         return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
             @Override public View getView(int position, View convertView,
@@ -1634,6 +1747,18 @@ public final class MainActivity extends Activity {
         form.addView(text("Osoby dodasz w Czynności → Domownicy. "
             + "Bez wykonawcy czynność nadal działa.", 12, false));
 
+        form.addView(text("Rotacja wykonawców (opcjonalnie)", 16, true));
+        form.addView(text("Działa tylko dla czynności powtarzalnych. "
+            + "Po wykonaniu kolejny termin automatycznie dostaje następną "
+            + "osobę z ustawionej kolejki.", 12, false));
+        java.util.ArrayList<Long> rotationIds = id == null
+            ? new java.util.ArrayList<>() : db.taskRotation(id);
+        LinearLayout rotationEditor = new LinearLayout(this);
+        rotationEditor.setOrientation(LinearLayout.VERTICAL);
+        form.addView(rotationEditor);
+        renderRotationEditor(rotationEditor, rotationIds,
+            memberIds, memberNames, chosenMember);
+
         form.addView(text("Przypomnienie dla tej czynności", 16, true));
         form.addView(text("Standardowe: około 09:00 w dniu terminu lub dla "
             + "zaległych. Własne: wybrana godzina i wyprzedzenie. "
@@ -1782,11 +1907,25 @@ public final class MainActivity extends Activity {
                     return;
                 }
                 if (id != null) ReminderReceiver.cancelTask(this, id);
+                Long selectedAssignee =
+                    memberIds.get(chosenMember.getSelectedItemPosition());
+                String rotationError = RotationRules.validate(rotationIds,
+                    TaskRules.recurring(rule));
+                if (rotationError != null) {
+                    alert(rotationError);
+                    return;
+                }
+                if (!rotationIds.isEmpty()
+                        && (selectedAssignee == null
+                            || !rotationIds.contains(selectedAssignee))) {
+                    alert("Aktualny wykonawca musi należeć do rotacji.");
+                    return;
+                }
                 db.saveTask(id, title, due, rule, every,
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
                     selectedPriority, estimatedMinutes,
-                    memberIds.get(chosenMember.getSelectedItemPosition()),
-                    customTime, leadDays);
+                    selectedAssignee, customTime, leadDays,
+                    new java.util.ArrayList<>(rotationIds));
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
