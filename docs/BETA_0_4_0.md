@@ -41,3 +41,11 @@ Wydanie Beta (gałąź `beta`). Baza SQLite v15, aktualizacja danych v14→v15 b
 - Edycja istniejącej pozycji pozwala zmienić nazwę, kategorię i zawartość opakowania. Widok oraz dialog skanu pokazują liczby opakowań i sumaryczną zawartość. Sztuki nie mogą mieć ułamkowej zawartości; kg/l obsługują do trzech miejsc po przecinku. Przed dodaniem znanej nazwy z inną specyfikacją opakowania aplikacja odrzuca niejawne scalanie.
 - SQLite v16 → v17 dodaje `pantry_packages` bez zmiany ID ani `pantry.qty`; starsze towary otrzymują 1 szt. na opakowanie. Backup JSON zawiera specyfikację i potrafi przywrócić starszą kopię z takimi wartościami domyślnymi.
 - Ten etap **nie** obsługuje otwartych opakowań, wag cząstkowych, czy mieszanych rozmiarów pod jedną kartą produktu.
+
+## 0.4.0-beta.7 — seryjne skanowanie
+
+- Oddzielne przyciski „Skanuj serię — dodawaj +1” i „Skanuj serię — wyciągaj −1”. Po **świadomym zatwierdzeniu i udanym zapisie** każdej operacji aparat wraca do kolejnego produktu. Back/Anuluj kończy serię i pokazuje liczbę zapisanych ruchów.
+- Zdublowany wynik *tego samego wywołania kamery* jest ignorowany. Jeśli kolejny, osobny skan odczyta ten sam kod co poprzednio, przed zwykłym potwierdzeniem produktu pojawia się pytanie „Ten sam kod co poprzednio”: użytkownik wybiera kolejne opakowanie, skan innego kodu bez naliczania albo zakończenie serii.
+- Wciąż jeden skan to **jedno całe opakowanie**, bez samoczynnego odejmowania. UUID operacji i zapis ilości wraz z ruchem w transakcji SQLite pozostają bez zmian. Licznik serii rośnie wyłącznie przy COMMITTED, nie przy DUPLICATE_IGNORED.
+- Seria pozostaje w pamięci MainActivity, bez automatycznego wznowienia aparatu po restarcie procesu. Brak migracji bazy: SQLite v17, kopia zapasowa zgodna z 0.4.0-beta.6.
+- CI sprawdza stany i odporność na powtórny wynik callbacku, ale fizyczne działanie aparatu, uprawnień i reakcji telefonu należy zweryfikować po instalacji.

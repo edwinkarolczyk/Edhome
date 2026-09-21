@@ -53,7 +53,7 @@ for token in ('{"pantry_product_details", "id", "pantry_id", "brand", "image_url
               "Nieprawidłowe dane zdjęcia w kopii.",
               "DB_VERSION = 17;"):
     assert token in backup, "Missing backup contract: " + token
-assert "versionCode 36" in gradle and "versionNameSuffix '-beta.6'" in gradle
+assert "versionCode 37" in gradle and "versionNameSuffix '-beta.7'" in gradle
 assert "if (found == null) {\n            name = new EditText(this);" in main
 assert "String entered = found != null ? found.name" in main
 assert "Źródło: \" + found.source" in main

@@ -84,6 +84,8 @@ public final class MainActivity extends Activity {
     private String pantrySearch = "";
     private String pantryCategoryFilter = "";
     private static final String SCAN_MODE_PREF = "pantry_scan_mode";
+    private final PantryBatchSession pantryBatch = new PantryBatchSession();
+    private boolean pantrySingleCameraPending;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -2575,8 +2577,21 @@ public final class MainActivity extends Activity {
                         render();
                     }).setNegativeButton("Anuluj", null).show();
         });
-        button("📷 Skanuj i dodaj +1", () -> openPantryCamera(false));
-        button("📷 Skanuj i wyciągnij −1", () -> openPantryCamera(true));
+        button("📷 Skanuj i dodaj +1", () -> {
+            finishPantryBatch();
+            openPantryCamera(false);
+        });
+        button("📷 Skanuj i wyciągnij −1", () -> {
+            finishPantryBatch();
+            openPantryCamera(true);
+        });
+        if (!pantryBatch.active()) {
+            button("📷 Skanuj serię — dodawaj +1", () -> startPantryBatch("ADD"));
+            button("📷 Skanuj serię — wyciągaj −1", () -> startPantryBatch("TAKE"));
+        } else {
+            button("⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
+                this::finishPantryBatch);
+        }
         button("⌨ Wpisz kod ręcznie", this::manualPantryBarcode);
         button("Historia skanów", this::showPantryScanHistory);
         button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
@@ -2695,13 +2710,50 @@ public final class MainActivity extends Activity {
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
             : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
         note("Stan zapisujemy w pełnych opakowaniach; np. 3 × 0,5 l = 1,5 l. "
-            + "Skan dodaje lub odejmuje jedno całe opakowanie. "
-            + "Zawartość, jednostkę i kategorię zmienisz przez Edytuj.");
+            + "W serii aparat wraca po każdym zatwierdzonym skanie; "
+            + "ten sam kod wymaga dodatkowego potwierdzenia.");
     }
 
 
+    private void startPantryBatch(String mode) {
+        if (pantryBatch.active()) return;
+        pantryBatch.start(mode);
+        DiagnosticLog.event("PANTRY_BATCH_STARTED");
+        render();
+        root.post(() -> {
+            if (pantryBatch.active() && !isFinishing() && !isDestroyed())
+                openPantryCamera("TAKE".equals(pantryBatch.mode()));
+        });
+    }
+
+    private void finishPantryBatch() {
+        if (!pantryBatch.active()) return;
+        int saved = pantryBatch.stop();
+        DiagnosticLog.event("PANTRY_BATCH_FINISHED");
+        if ("pantry".equals(screen)) render();
+        alert("Seria zakończona. Zapisane operacje: " + saved + ".");
+    }
+
+    private void continuePantryBatch() {
+        if (!pantryBatch.active()) return;
+        root.post(() -> {
+            if (!pantryBatch.active() || isFinishing() || isDestroyed()) return;
+            if (!"pantry".equals(screen)) {
+                finishPantryBatch();
+                return;
+            }
+            openPantryCamera("TAKE".equals(pantryBatch.mode()));
+        });
+    }
+
     /** Start an offline barcode scan; never mutate stock in the camera callback. */
     private void openPantryCamera(boolean take) {
+        if (pantryBatch.active()) {
+            if (!pantryBatch.launchCamera()) return;
+        } else {
+            if (pantrySingleCameraPending) return;
+            pantrySingleCameraPending = true;
+        }
         prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
         IntentIntegrator scanner = new IntentIntegrator(this);
         scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
@@ -2712,6 +2764,7 @@ public final class MainActivity extends Activity {
     }
 
     private void manualPantryBarcode() {
+        finishPantryBatch();
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
@@ -2725,15 +2778,34 @@ public final class MainActivity extends Activity {
     }
 
     private void onPantryBarcode(String barcode, String mode) {
+        onPantryBarcode(barcode, mode, false);
+    }
+
+    private void onPantryBarcode(String barcode, String mode, boolean repeatedApproved) {
         if (!PantryScanRules.validBarcode(barcode)) {
             alert("Niepoprawny kod EAN/UPC/GTIN — sprawdź cyfrę kontrolną.");
             DiagnosticLog.event("PANTRY_BARCODE_INVALID");
+            finishPantryBatch();
+            return;
+        }
+        if (!repeatedApproved && pantryBatch.repeated(barcode)) {
+            new AlertDialog.Builder(this).setTitle("Ten sam kod co poprzednio")
+                .setMessage("Czy to kolejne opakowanie tego samego produktu? "
+                    + "Nie naliczam go ponownie bez Twojego potwierdzenia.")
+                .setNegativeButton("Zakończ serię", (d,w) -> finishPantryBatch())
+                .setNeutralButton("Skanuj inny", (d,w) -> {
+                    if (pantryBatch.skip()) continuePantryBatch();
+                })
+                .setPositiveButton("Tak, kolejne opakowanie", (d,w) ->
+                    onPantryBarcode(barcode, mode, true))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
             return;
         }
         PantryBarcodeStore.Item item = PantryBarcodeStore.find(
             db.getReadableDatabase(), barcode);
         String operationId = java.util.UUID.randomUUID().toString();
         if (item == null && "TAKE".equals(mode)) {
+            finishPantryBatch();
             alert("Nieznany kod. Najpierw dodaj produkt do spiżarni.");
             return;
         }
@@ -2743,10 +2815,10 @@ public final class MainActivity extends Activity {
                     + "proszki do prania, kosmetyki i karmę. Do baz zostanie "
                     + "wysłany tylko kod kreskowy. Jeśli nazwy nie będzie, "
                     + "aplikacja zaproponuje ręczny wpis.")
-                .setNegativeButton("Anuluj", null)
+                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
                 .setPositiveButton("Szukaj produktu", (d,w) ->
                     lookupPantryProduct(barcode, operationId))
-                .show();
+                .setOnCancelListener(d -> finishPantryBatch()).show();
             return;
         }
         PantryPackageStore.Pack pack = PantryPackageStore.find(
@@ -2756,10 +2828,10 @@ public final class MainActivity extends Activity {
             .setMessage("Kod: " + barcode + "\nObecny stan: "
                 + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli)
                 + "\n" + question)
-            .setNegativeButton("Anuluj", null)
+            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
             .setPositiveButton("TAKE".equals(mode) ? "Wyciągnij −1" : "Dodaj +1",
                 (d,w) -> commitPantryBarcode(barcode, null, mode, operationId))
-            .show();
+            .setOnCancelListener(d -> finishPantryBatch()).show();
     }
 
 
@@ -2769,9 +2841,15 @@ public final class MainActivity extends Activity {
         AlertDialog loading = new AlertDialog.Builder(this)
             .setTitle("Bazy Open Facts")
             .setMessage("Szukam nazwy i zdjęcia dla kodu " + barcode + "…")
-            .setNegativeButton("Anuluj", (d,w) -> cancelled.set(true))
+            .setNegativeButton("Anuluj", (d,w) -> {
+                cancelled.set(true);
+                finishPantryBatch();
+            })
             .create();
-        loading.setOnCancelListener(d -> cancelled.set(true));
+        loading.setOnCancelListener(d -> {
+            cancelled.set(true);
+            finishPantryBatch();
+        });
         loading.show();
         new Thread(() -> {
             PantryProductLookup.Product product = null;
@@ -2801,18 +2879,18 @@ public final class MainActivity extends Activity {
                             + "Nie mogę potwierdzić, czy produkt w niej występuje. "
                             + "Możesz spróbować później albo wpisać nazwę ręcznie. "
                             + "Stan spiżarni nie został zmieniony.")
-                        .setNegativeButton("Anuluj", null)
+                        .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
-                        .show();
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
                 } else if (found == null) {
                     new AlertDialog.Builder(this).setTitle("Nie znaleziono nazwy produktu")
                         .setMessage("Żadna dostępna baza nie rozpoznała kodu " + barcode
                             + ". Wpisz nazwę ręcznie. Stan nie został zmieniony.")
-                        .setNegativeButton("Anuluj", null)
+                        .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
                         .setPositiveButton("Wpisz ręcznie", (d,w) ->
                             showNewPantryProductDialog(barcode, operationId, null))
-                        .show();
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
                 } else {
                     DiagnosticLog.event("PANTRY_OPEN_FACTS_FOUND");
                     showNewPantryProductDialog(barcode, operationId, found);
@@ -2871,7 +2949,7 @@ public final class MainActivity extends Activity {
         form.addView(packSize);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
-            .setView(form).setNegativeButton("Anuluj", null)
+            .setView(form).setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
             .setPositiveButton("Dodaj +1", (d,w) -> {
                 String entered = found != null ? found.name
                     : manualName.getText().toString().trim();
@@ -2892,7 +2970,7 @@ public final class MainActivity extends Activity {
                 commitPantryBarcode(barcode, entered, "ADD", operationId,
                     found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()],
                     unit, sizeMilli);
-            }).show();
+            }).setOnCancelListener(d -> finishPantryBatch()).show();
     }
 
     private void refreshPantryPhoto(String imageUrl) {
@@ -2957,8 +3035,15 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.error("PANTRY_CATEGORY_DETAILS", detailsError);
                 }
             }
-            render();
+            if (pantryBatch.active()) {
+                if ("COMMITTED".equals(result) && pantryBatch.commit(barcode)) {
+                    DiagnosticLog.event("PANTRY_BATCH_ITEM_COMMITTED");
+                    render();
+                    continuePantryBatch();
+                } else finishPantryBatch();
+            } else render();
         } catch (Exception problem) {
+            finishPantryBatch();
             DiagnosticLog.error("PANTRY_SCAN_COMMIT", problem);
             alert(problem.getMessage() == null ? "Nie udało się zapisać skanu."
                 : problem.getMessage());
@@ -3708,8 +3793,18 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request, result, data);
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
-            if (scan.getContents() != null) onPantryBarcode(scan.getContents(),
-                prefs.getString(SCAN_MODE_PREF, "ADD"));
+            if (pantryBatch.active()) {
+                if (!pantryBatch.receiveScan(scan.getContents())) {
+                    if (scan.getContents() == null) finishPantryBatch();
+                    else DiagnosticLog.event("PANTRY_BATCH_DUPLICATE_RESULT_IGNORED");
+                    return;
+                }
+                onPantryBarcode(scan.getContents(), pantryBatch.mode());
+            } else if (pantrySingleCameraPending) {
+                pantrySingleCameraPending = false;
+                if (scan.getContents() != null) onPantryBarcode(scan.getContents(),
+                    prefs.getString(SCAN_MODE_PREF, "ADD"));
+            } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
             return;
         }
         if (request == IMPORT_BETA_APK) {
