@@ -127,3 +127,18 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 **Prace przekrojowe przy KAŻDYM etapie:** wspólne ID i relacje, jeden właściciel danych, migracja/backup, prywatność, log Beta, CI i regresja. Bez zamrażania rozwoju na samą architekturę.
 
 **Nierozstrzygnięte:** pyt. 13 (dziedziczenie czynności miejsca), 28 (model PV); szczegóły trybu tabletu, czas domyślny odliczania, zachowanie innego kodu w trakcie licznika i semantyka wymaganych połączeń. Nie wybierać ich za użytkownika.
+
+
+## Spiżarnia — historia kosztów zakupów i cen (koncepcja, 21.09.2026)
+
+**Status:** propozycja dokumentacyjna, nie zaimplementowana. Szczegółowy model i pytania: [specyfikacja §24](SPECYFIKACJA_CALOSC.md#24-spiżarnia--koszt-produktu-i-historia-cen-propozycja-koncepcyjna-21092026). Zachować priorytet **PayCheck jako pierwszy duży nowy moduł** z decyzji 30 odpowiedzi; kosztów spiżarni nie robić drugą, konkurencyjną księgowością.
+
+| Kolejność względem obecnego 0.3.6 | Zakres koncepcyjny | Kryterium |
+|---|---|---|
+| Fundament kartoteki / Miejsca / zakupy / skaner (obecne etapy 0.3→0.4) | Przygotować ID produktu i wariantu opakowania, jednostki oraz rozdzielenie zakupu, przyjęcia i ruchu magazynowego; nie wymuszać ceny przy skanie. | „Kupione” nie dodaje zapasu, „Wyciągnij” nie tworzy wydatku, brak ceny != 0 zł; historia nie ginie przy zmianie nazwy produktu/miejsca. |
+| Pierwszy inkrement cen przy spiżarni (po stabilizacji podstawowych operacji) | Opcjonalna rzeczywista cena, ilość, data i sklep przy zakupie, historia cen i ostatnia cena na karcie; link do pozycji listy zakupów. | Ten sam produkt w kilku zakupach po innych cenach ma pełną historię; szybki skaner działa bez formularza ceny. |
+| **PayCheck — nadal pierwszy duży kolejny moduł**, zgodnie z ustaleniami | Jeden paragon → wiele pozycji, jedna powiązana transakcja finansowa; uzgodnienie danych ręcznych, powiadomienia i wyciągu; osobiste i wspólne uprawnienia. | Brak drugiego zaksięgowania zakupów lub wyjęcia; na tablecie nie ma prywatnych danych finansowych. |
+| Rozszerzenie raportów spiżarni (późniejszy inkrement) | Ceny za kg/l, rabaty, porównania w czasie, zwroty, częściowe opakowania, **oznaczona jako szacunkowa** wartość zapasu na podstawie jawnej metody i jakości danych. | Partie bez ceny i nieporównywalne jednostki nie stają się pozorną precyzyjną kwotą; raport nie jest saldem PayCheck. |
+| Etap Wi-Fi / 0.8 | Przesyłanie zakupów i ruchów po uprawnieniach, idempotencja przyjęć, spójne korekty ceny i remanentu. | Bez dubli i nadpisania historii po pracy offline na kilku urządzeniach. |
+
+**Otwarte przed implementacją:** kiedy prosić o wpis ceny, widoczność cen na wspólnym tablecie, domyślna metoda wyceny stanu oraz decyzja, czy szacunkowa wartość zapasu należy do pierwszego inkrementu czy etapu raportów. Nie zmieniać kodu, APK ani `main` w tym wątku bez wyraźnego osobnego polecenia.
