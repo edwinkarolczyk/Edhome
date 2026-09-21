@@ -85,3 +85,13 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 - Lokalne minutniki sprzętów (pralka, suszarka, zmywarka) z zakończeniem i prostym potwierdzeniem, oddzielone od niepewnych dokładnych powiadomień Androida.
 - Rotacyjne obowiązki i dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 w 0.3.2 są stałe, jeszcze nie konfigurowalne.
 - Nie włączać synchronizacji kilku urządzeń przed etapem 0.8. Weryfikować CI, podpis, manifest i zachowanie na fizycznym Androidzie.
+
+
+## Energia — panel nadwyżek PV i priorytety odbiorników (zakres docelowy)
+
+- **Etap Energia / pierwszy inkrement:** ekran bilansu: PV, zużycie, import, eksport, dostępna nadwyżka, CWU/bufor i pomiary z podaniem źródła oraz czasu ostatniej aktualizacji. Nie wypełniać braków fikcyjnymi wartościami.
+- **Następny inkrement:** edytowalna kolejka priorytetów uprawnionych odbiorników, wyjaśnienie propozycji, scenariusze/symulacja bez wysyłania poleceń, historia zmian, ręczne zatwierdzanie.
+- **Po audycie sprzętu i bezpieczeństwa:** lokalny adapter SUPLA/falownik/licznik oraz sterownik, który może wykonywać jawnie dopuszczone automatyzacje w granicach mocy i temperatury; tryb awaryjny oraz ręczny override. Automatyka nie może zależeć od otwartej aplikacji w telefonie.
+- **Testy odbiorowe:** bilans kW vs kWh, świeżość telemetrii, brak pomiaru, spadek PV, import sieciowy, utrata LAN, histereza, priorytety, maksymalna moc/temperatura, brak podwójnego księgowania w PayCheck. Limit eksportu nie zastępuje zgłoszeń do operatora.
+
+Szczegóły wymagań: [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#21-edhome--panel-zarządzania-energią-i-priorytetami-nadwyżek-pv-uzgodnienie). **To jest zakres planowany, nie funkcja już dostępna w APK.**
