@@ -10,7 +10,9 @@ final class UiSkin {
     static final String NATURE = "Naturalny";
     static final String PASTEL = "Pastelowy";
     static final String GLASS = "Szklany";
-    static final String[] THEMES = {NEON, NATURE, PASTEL, GLASS};
+    static final String WMM = "WMM";
+    static final String TRAINER = "Trener 2";
+    static final String[] THEMES = {NEON, NATURE, PASTEL, GLASS, WMM, TRAINER};
 
     final String name;
     final int background, surface, foreground, secondary, accent, accentInk;
@@ -60,7 +62,18 @@ final class UiSkin {
                 "#B6CEDD", "#82EBDF", "#0D2432", "#274A64", "#162D48",
                 "#527A97", "#24445D", "#102D3B", false);
         }
-        // Old Grafitowy and Trener 2 choose the new dark default; data survives.
+        // EDHOME-only palettes inspired by the other apps, not shared preferences.
+        if (WMM.equals(requested)) {
+            return new UiSkin(WMM, "#11171E", "#232C35", "#F3F6F9",
+                "#B7C6D0", "#67C7B9", "#102522", "#303B45", "#1D262E",
+                "#4B6473", "#24323D", "#12282C", false);
+        }
+        if (TRAINER.equals(requested)) {
+            return new UiSkin(TRAINER, "#090909", "#171717", "#F4F4F4",
+                "#B4B4B4", "#EF2B2D", "#FFFFFF", "#282828", "#161616",
+                "#494949", "#242424", "#FFFFFF", false);
+        }
+        // Old Grafitowy chooses the new dark default; data survives.
         return new UiSkin(NEON, "#111C2A", "#24374B", "#F4F9FF",
             "#AAC5D8", "#8DE8CE", "#12312D", "#2B4259", "#203247",
             "#425E79", "#1B2D40", "#112A2B", false);
