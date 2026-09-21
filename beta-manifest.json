@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 31,
-  "versionName": "0.4.0-beta.1",
-  "changelog": "EDHOME Beta 0.4.0-beta.1 — skaner kodów kreskowych, lokalna kartoteka i historia ruchów; SQLite v14.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.1/edhome-beta.apk",
-  "sha256": "2851999adff103e19414d2b1747f08681bac12f2856edafef08089d03614eca0"
+  "versionCode": 32,
+  "versionName": "0.4.0-beta.2",
+  "changelog": "EDHOME Beta 0.4.0-beta.2 — poprawka uruchamiania aparatu skanera (AndroidX Core); SQLite v14.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.2/edhome-beta.apk",
+  "sha256": "0bef762b7a559be78e6b264068605a78e4608a6a2e7d5e7ee7bf32358f3615e0"
 }
