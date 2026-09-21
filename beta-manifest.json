@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 32,
-  "versionName": "0.4.0-beta.2",
-  "changelog": "EDHOME Beta 0.4.0-beta.2 — poprawka uruchamiania aparatu skanera (AndroidX Core); SQLite v14.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.2/edhome-beta.apk",
-  "sha256": "0bef762b7a559be78e6b264068605a78e4608a6a2e7d5e7ee7bf32358f3615e0"
+  "versionCode": 33,
+  "versionName": "0.4.0-beta.3",
+  "changelog": "EDHOME Beta 0.4.0-beta.3 — opcjonalne rozpoznawanie produktu i zdjęcia Open Food Facts; SQLite v15.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.4.0-beta.3/edhome-beta.apk",
+  "sha256": "6b426f89d5ca59a8a999c77ff25f559febe0ab21ae0100900c44b64ea66ea923"
 }
