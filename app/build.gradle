@@ -14,7 +14,7 @@ android {
         applicationId 'com.edwinkarolczyk.edhome'
         minSdk 26
         targetSdk 35
-        versionCode 31
+        versionCode 32
         versionName '0.4.0'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
@@ -46,7 +46,7 @@ android {
         beta {
             dimension 'channel'
             applicationId 'com.edwinkarolczyk.edhome.beta'
-            versionNameSuffix '-beta.1'
+            versionNameSuffix '-beta.2'
             signingConfig signingConfigs.betaRelease
             manifestPlaceholders = [appLabel: 'EDHOME Beta']
             buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'true'
@@ -69,6 +69,9 @@ android {
 dependencies {
     // Offline camera barcode scanning; shared code compiles for both Android flavors.
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    // JourneyApps CaptureManager calls androidx.core.content.ContextCompat at runtime.
+    // Explicitly package AndroidX Core in Beta; javac alone does not detect a missing runtime class.
+    betaImplementation 'androidx.core:core:1.13.1'
     // Stable only; beta uses a separate direct-update path with no Play dependency.
     stableImplementation 'com.google.android.play:app-update:2.1.0'
 }

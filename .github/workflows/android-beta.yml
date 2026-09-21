@@ -176,17 +176,35 @@ jobs:
             echo "::error::Signed APK has an unexpected certificate."
             exit 1
           fi
+      - name: Require AndroidX ContextCompat in signed Beta APK
+        run: |
+          APK="app/build/outputs/apk/beta/release/app-beta-release.apk"
+          mkdir -p "$RUNNER_TEMP/edhome-dex"
+          FOUND=0
+          for DEX in $(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?[.]dex$'); do
+            unzip -p "$APK" "$DEX" > "$RUNNER_TEMP/edhome-dex/$DEX"
+            "$ANDROID_HOME/build-tools/35.0.0/dexdump" -f "$RUNNER_TEMP/edhome-dex/$DEX" > "$RUNNER_TEMP/edhome-dex/$DEX.txt"
+            if grep -Fq "Landroidx/core/content/ContextCompat;" "$RUNNER_TEMP/edhome-dex/$DEX.txt"; then
+              FOUND=1
+              break
+            fi
+          done
+          if [[ "$FOUND" -ne 1 ]]; then
+            echo "::error::ContextCompat is absent from the Beta APK; camera will crash on Android."
+            exit 1
+          fi
+          echo "AndroidX ContextCompat present in Beta APK"
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.4.0-beta.1-signed-apk
+          name: EDHOME-0.4.0-beta.2-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.1 — skaner kodów kreskowych, lokalna kartoteka i historia ruchów; SQLite v14."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.4.0-beta.2 — poprawka uruchamiania aparatu skanera (AndroidX Core); SQLite v14."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
