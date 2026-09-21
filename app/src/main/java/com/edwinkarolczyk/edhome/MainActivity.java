@@ -1742,88 +1742,288 @@ public final class MainActivity extends Activity {
             + "Planowanie dostępności domowników będzie rozwijane osobno.");
     }
 
-    private void places() {
-        header("Miejsca • gospodarstwo");
-        note("Miejsca są opcjonalnym powiązaniem czynności. "
-            + "Usunięcie miejsca nie usunie przypisanych czynności.");
-        button("+ Dodaj miejsce", () -> placeEditor(null, "", "Dom"));
-        int count = 0;
-        try (Cursor c = db.getReadableDatabase().rawQuery(
-                "SELECT id,name,kind FROM places ORDER BY name COLLATE NOCASE", null)) {
-            while (c.moveToNext()) {
-                count++;
-                long id = c.getLong(0);
-                String name = c.getString(1), kind = c.getString(2);
-                LinearLayout card = card();
-                card.addView(text(name, 19, true));
-                card.addView(text(kind, 13, false));
-                try (Cursor countTasks = db.getReadableDatabase().rawQuery(
-                        "SELECT COUNT(*) FROM tasks WHERE place_id=?",
-                        new String[]{Long.toString(id)})) {
-                    if (countTasks.moveToFirst())
-                        card.addView(text("Przypisane czynności: "
-                            + countTasks.getInt(0), 14, false));
-                }
-                LinearLayout actions = new LinearLayout(this);
-                actions.setOrientation(LinearLayout.HORIZONTAL);
-                card.addView(actions);
-                taskAction(actions, "Edytuj", () -> placeEditor(id, name, kind));
-                taskAction(actions, "Usuń", () -> new AlertDialog.Builder(this)
-                    .setTitle("Usunąć miejsce?")
-                    .setMessage(name + "\\nCzynności pozostaną bez przypisania.")
-                    .setNegativeButton("Anuluj", null)
-                    .setPositiveButton("Usuń", (d, w) -> {
-                        db.deletePlace(id);
-                        DiagnosticLog.event("PLACE_DELETED");
-                        render();
-                    }).show());
-            }
+    private static final class PlaceEntry {
+        final long id;
+        final String name, kind, icon;
+        final Long parent;
+        PlaceEntry(long id, String name, String kind, Long parent, String icon) {
+            this.id = id;
+            this.name = name;
+            this.kind = kind;
+            this.parent = parent;
+            this.icon = icon;
         }
-        if (count == 0) note("Dodaj np. Ogród, Garaż lub Kuchnia.");
+    }
+
+    private java.util.List<PlaceEntry> readPlaces() {
+        java.util.List<PlaceEntry> entries = new java.util.ArrayList<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,kind,parent_id,icon FROM places "
+                + "ORDER BY name COLLATE NOCASE,id", null)) {
+            while (c.moveToNext()) entries.add(new PlaceEntry(
+                c.getLong(0), c.getString(1), c.getString(2),
+                c.isNull(3) ? null : c.getLong(3), c.getString(4)));
+        }
+        return entries;
+    }
+
+    private void places() {
+        header("Miejsca • moje gospodarstwo");
+        note("Ty nazywasz lokalizacje. Dom → Kuchnia → Szafka → "
+            + "Półka to przykładowa ścieżka, nie narzucona lista. "
+            + "Rodzaj jest opcjonalny; miejsce może mieć dowolną liczbę podmiejsc.");
+        button("+ Dodaj miejsce główne", () ->
+            placeEditor(null, "", "", null, "places"));
+        java.util.List<PlaceEntry> entries = readPlaces();
+        java.util.Set<Long> drawn = new java.util.HashSet<>();
+        for (PlaceEntry entry : entries) {
+            if (entry.parent == null)
+                renderPlaceBranch(entry, entries, drawn, 0);
+        }
+        // Display orphaned records too; the editor still validates any new move.
+        for (PlaceEntry entry : entries) {
+            if (!drawn.contains(entry.id))
+                renderPlaceBranch(entry, entries, drawn, 0);
+        }
+        if (entries.isEmpty())
+            note("Najpierw dodaj Dom, Ogród lub Garaż. Później wejdź "
+                + "w miejsce i dodaj Kuchnię, regał lub półkę.");
         button("Wróć do czynności", () -> go("tasks"));
     }
 
-    private void placeEditor(Long id, String name, String kind) {
+    private void renderPlaceBranch(PlaceEntry entry,
+            java.util.List<PlaceEntry> all, java.util.Set<Long> drawn,
+            int depth) {
+        if (!drawn.add(entry.id)) return;
+        LinearLayout box = card();
+        if (depth > 0) {
+            TextView indent = text("↳  Poziom " + (depth + 1), 12, false);
+            indent.setTextColor(subdued);
+            box.addView(indent);
+        }
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TileIcon pictogram = new TileIcon(this, entry.icon, accent);
+        pictogram.setPadding(dp(7), dp(7), dp(7), dp(7));
+        pictogram.setBackground(skin.panel(this, skin.iconBacking, 20));
+        row.addView(pictogram,
+            new LinearLayout.LayoutParams(dp(47), dp(47)));
+        TextView heading = text(entry.name, 19, true);
+        LinearLayout.LayoutParams headingParams =
+            new LinearLayout.LayoutParams(0, -2, 1);
+        headingParams.setMargins(dp(12), 0, 0, 0);
+        row.addView(heading, headingParams);
+        box.addView(row);
+        TextView path = text(db.placePath(entry.id), 13, false);
+        path.setTextColor(subdued);
+        box.addView(path);
+        if (!entry.kind.isEmpty()) {
+            TextView category = text("Rodzaj: " + entry.kind, 12, false);
+            category.setTextColor(subdued);
+            box.addView(category);
+        }
+        int children = 0;
+        for (PlaceEntry candidate : all)
+            if (candidate.parent != null && candidate.parent == entry.id)
+                children++;
+        final int childCount = children;
+        try (Cursor tasks = db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM tasks WHERE place_id=?",
+                new String[]{Long.toString(entry.id)})) {
+            if (tasks.moveToFirst() && tasks.getInt(0) > 0)
+                box.addView(text("Przypisane czynności: "
+                    + tasks.getInt(0), 13, false));
+        }
+        box.addView(text("Podmiejsca: " + childCount, 13, false));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        box.addView(actions);
+        taskAction(actions, "+ Wewnątrz", () ->
+            placeEditor(null, "", "", entry.id, "places"));
+        taskAction(actions, "Edytuj", () -> placeEditor(entry.id,
+            entry.name, entry.kind, entry.parent, entry.icon));
+        box.setOnLongClickListener(v -> {
+            String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
+                "Usuń"};
+            new AlertDialog.Builder(this)
+                .setTitle(db.placePath(entry.id))
+                .setItems(options, (dialog, choice) -> {
+                    if (choice == 0 || choice == 1)
+                        placeEditor(entry.id, entry.name, entry.kind,
+                            entry.parent, entry.icon);
+                    else if (choice == 2)
+                        placeEditor(null, "", "", entry.id, "places");
+                    else confirmDeletePlace(entry, childCount);
+                }).show();
+            return true;
+        });
+        for (PlaceEntry child : all) {
+            if (child.parent != null && child.parent == entry.id)
+                renderPlaceBranch(child, all, drawn, depth + 1);
+        }
+    }
+
+    private void confirmDeletePlace(PlaceEntry entry, int childCount) {
+        if (childCount > 0) {
+            alert("Najpierw przenieś lub usuń podmiejsca. "
+                + "Nie usuwamy całej gałęzi przypadkowo.");
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Usunąć miejsce?")
+            .setMessage(db.placePath(entry.id)
+                + "\nPrzypisane czynności pozostaną bez miejsca. "
+                + "Historia wykonań zostanie zachowana.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Usuń", (dialog, which) -> {
+                if (!db.deletePlace(entry.id)) {
+                    alert("Miejsce ma podmiejsca. Przenieś je najpierw.");
+                    return;
+                }
+                DiagnosticLog.event("PLACE_DELETED");
+                render();
+            }).show();
+    }
+
+    private void placeEditor(Long id, String name, String kind,
+            Long selectedParent, String currentIcon) {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(18), dp(8), dp(18), dp(8));
+        layout.setPadding(dp(20), dp(12), dp(20), dp(12));
+        layout.addView(text("Nazwa miejsca • dowolna, Twoja", 16, true));
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setText(name);
-        input.setHint("Nazwa miejsca");
+        input.setTextColor(ink);
+        input.setHintTextColor(subdued);
+        input.setHint("np. Kuchnia, Regał A, Półka 1");
         layout.addView(input);
-        Spinner type = new Spinner(this);
-        type.setAdapter(new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item, PLACE_TYPES));
-        for (int i = 0; i < PLACE_TYPES.length; i++)
-            if (PLACE_TYPES[i].equals(kind)) type.setSelection(i);
+        layout.addView(text("Znajduje się w (opcjonalnie)", 16, true));
+        java.util.ArrayList<Long> parents = new java.util.ArrayList<>();
+        java.util.ArrayList<String> paths = new java.util.ArrayList<>();
+        parents.add(null);
+        paths.add("Brak • poziom główny");
+        for (PlaceEntry candidate : readPlaces()) {
+            if (db.canPlaceWithin(id, candidate.id)) {
+                parents.add(candidate.id);
+                paths.add(db.placePath(candidate.id));
+            }
+        }
+        Spinner parent = new Spinner(this);
+        parent.setAdapter(themeSpinnerAdapter(paths));
+        for (int i = 0; i < parents.size(); i++) {
+            if (java.util.Objects.equals(parents.get(i), selectedParent)) {
+                parent.setSelection(i);
+                break;
+            }
+        }
+        layout.addView(parent);
+        layout.addView(text("Rodzaj (opcjonalnie, własny opis)", 16, true));
+        EditText type = new EditText(this);
+        type.setSingleLine(true);
+        type.setText(kind);
+        type.setTextColor(ink);
+        type.setHintTextColor(subdued);
+        type.setHint("np. pomieszczenie, półka, szafka, regał");
         layout.addView(type);
+        layout.addView(text("Ikona", 16, true));
+        Spinner icon = new Spinner(this);
+        icon.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(TileIcon.ICON_NAMES)));
+        icon.setSelection(Math.max(0,
+            java.util.Arrays.asList(TileIcon.ICON_IDS).indexOf(currentIcon)));
+        layout.addView(icon);
+        LinearLayout preview = new LinearLayout(this);
+        preview.setGravity(Gravity.CENTER);
+        preview.setPadding(0, dp(9), 0, dp(9));
+        layout.addView(preview);
+        icon.setOnItemSelectedListener(
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> view) { }
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> view, View v,
+                        int index, long rowId) {
+                    preview.removeAllViews();
+                    TileIcon picture = new TileIcon(MainActivity.this,
+                        TileIcon.ICON_IDS[index], accent);
+                    picture.setPadding(dp(8), dp(8), dp(8), dp(8));
+                    picture.setBackground(skin.panel(MainActivity.this,
+                        skin.iconBacking, 24));
+                    preview.addView(picture,
+                        new LinearLayout.LayoutParams(dp(60), dp(60)));
+                }
+            });
+        TextView pathPreview = text("Nowa ścieżka: …", 13, true);
+        pathPreview.setTextColor(accent);
+        layout.addView(pathPreview);
+        Runnable refresh = () -> {
+            String segment = input.getText().toString().trim();
+            String prefix = parents.get(parent.getSelectedItemPosition()) == null
+                ? "" : paths.get(parent.getSelectedItemPosition()) + " → ";
+            pathPreview.setText("Nowa ścieżka: " + prefix
+                + (segment.isEmpty() ? "(nazwa miejsca)" : segment));
+        };
+        parent.setOnItemSelectedListener(
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> view) { }
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> view, View v,
+                        int index, long rowId) { refresh.run(); }
+            });
+        input.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s,
+                    int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s,
+                    int start, int before, int count) { refresh.run(); }
+            @Override public void afterTextChanged(
+                    android.text.Editable value) { }
+        });
+        refresh.run();
+        ScrollView scroller = new ScrollView(this);
+        scroller.setFillViewport(false);
+        scroller.addView(layout);
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(id == null ? "Nowe miejsce" : "Edycja miejsca")
-            .setView(layout)
+            .setTitle(id == null ? "Nowe miejsce" : "Edytuj / przenieś miejsce")
+            .setView(scroller)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz", null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            .setOnClickListener(v -> {
-                String value = input.getText().toString().trim();
-                if (value.isEmpty() || value.length() > 160) {
-                    input.setError("Podaj nazwę (maks. 160 znaków).");
-                    return;
-                }
-                try {
-                    if (!db.savePlace(id, value,
-                            PLACE_TYPES[type.getSelectedItemPosition()])) {
-                        input.setError("Miejsce o tej nazwie już istnieje.");
+        dialog.setOnShowListener(ignored -> {
+            dialog.getWindow().setBackgroundDrawable(
+                skin.panel(this, surface, 28));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String value = input.getText().toString().trim();
+                    String category = type.getText().toString().trim();
+                    Long parentId = parents.get(parent.getSelectedItemPosition());
+                    String iconId = TileIcon.ICON_IDS[
+                        icon.getSelectedItemPosition()];
+                    String problem = PlaceRules.validateFields(
+                        value, category, iconId);
+                    if (problem != null) {
+                        input.setError(problem);
                         return;
                     }
-                    DiagnosticLog.event(id == null ? "PLACE_ADDED" : "PLACE_EDITED");
-                    dialog.dismiss();
-                    render();
-                } catch (Exception error) {
-                    DiagnosticLog.error("PLACE_SAVE", error);
-                    alert("Nie można zapisać miejsca.");
-                }
-            }));
+                    try {
+                        if (!db.savePlace(id, value, category,
+                                parentId, iconId)) {
+                            input.setError("Ta nazwa już istnieje w "
+                                + "wybranej lokalizacji.");
+                            return;
+                        }
+                        DiagnosticLog.event(id == null
+                            ? "PLACE_ADDED" : "PLACE_EDITED");
+                        dialog.dismiss();
+                        render();
+                    } catch (IllegalArgumentException error) {
+                        alert(error.getMessage());
+                    } catch (Exception error) {
+                        DiagnosticLog.error("PLACE_SAVE", error);
+                        alert("Nie można zapisać miejsca.");
+                    }
+                });
+        });
         dialog.show();
     }
 
