@@ -153,3 +153,17 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 - **Prywatność:** logowanie/sesja i role domowników, finansów prywatnych nie udostępniać z automatu na wspólnym PC/tablecie. Domyślnie bez publicznego wystawiania Huba do internetu.
 
 Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `main`.
+
+
+## Domowy dysk / NAS — EDHOME Hub i API (warunkowy kierunek)
+
+**Nie jest to działająca integracja ani potwierdzenie możliwości urządzenia ze zdjęcia.** [Specyfikacja §25](SPECYFIKACJA_CALOSC.md#25-własny-dysk-sieciowy--nas-jako-edhome-hub-i-lokalne-api--analiza-warunkowa-21092026).
+
+| Kiedy | Rezultat | Warunek odbioru |
+|---|---|---|
+| Teraz — projekt / bez zmian kodu | Ustalić model, OS/firmware, RAM, CPU i czy NAS uruchamia Docker/usługi. Rozróżnić serwer NAS od zwykłego dysku sieciowego/USB przy routerze. | Zweryfikowana instrukcja producenta lub dane z panelu sprzętu; nie zakładać funkcji po samej nazwie „serwer”. |
+| Fundament danych równolegle z modułami | Wspólne ID, wersje, kolejka zdarzeń, uprawnienia i eksport; API może działać na NAS **albo** na oddzielnym mini-PC, z NAS jako magazynem backupów. | Offline działa bez Huba, brak współdzielonego pliku SQLite po SMB, brak prywatnego PayCheck w cache tabletu. |
+| Etap 0.8 — synchronizacja LAN / Hub | Lokalny proces API, autoryzacja osób i urządzeń, przyjęcia/wyjęcia, zakupy, ceny, remanent, konflikty i idempotencja; później panel PC. | Dwa urządzenia po pracy offline nie nadpisują zmian, nie dublują kosztów i mogą wznowić synchronizację. |
+| Utwardzenie i eksploatacja | Backup wersjonowany na osobny nośnik, test przywrócenia, migracje, aktualizacja usługi, zasilanie oraz opcjonalny VPN do dostępu zdalnego. | Awaria NAS/Huba nie kasuje jedynych danych; API/SMB nie są otwarte wprost do internetu. |
+
+**Decyzja A/B dopiero po rozpoznaniu konkretnego modelu:** A — hostowanie API bezpośrednio na NAS, jeśli obsługuje usługi i ma zasoby; B — dysk tylko na dane/backup, API na mini-PC lub innym zgodnym urządzeniu. W tym czacie jedynie teoria i dokumentacja na `beta`; nie zmieniać APK, kodu ani `main`.
