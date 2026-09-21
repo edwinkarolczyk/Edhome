@@ -16,7 +16,8 @@ for value in (
     'PantryPackageRules.parse(packSize.getText().toString(), unit)',
     'db.addStock(name, categoryId, unit, milli)',
     'db.editStock(id, name, categoryId, unit, milli)',
-    'PantryPackageStore.find(db.getReadableDatabase(), item.id)',
+    'PantryPackageStore.Pack pack = PantryPackageStore.find(',
+    'db.getReadableDatabase(), item.id)',
     'PantryPackageStore.requireSame(database, existing, unit, milli)',
     'database.delete("pantry_packages", "pantry_id=?"',
 ):
