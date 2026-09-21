@@ -47,7 +47,7 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             intent, flags | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    static void cancel(Context context, long id) {
+    private static void cancelAlarm(Context context, long id) {
         AlarmManager manager = (AlarmManager)
             context.getSystemService(Context.ALARM_SERVICE);
         PendingIntent pending = alarm(context, id, 0L,
@@ -56,6 +56,10 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             if (manager != null) manager.cancel(pending);
             pending.cancel();
         }
+    }
+
+    static void cancel(Context context, long id) {
+        cancelAlarm(context, id);
         NotificationManager notifications = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (notifications != null) notifications.cancel(notificationId(id));
@@ -78,7 +82,7 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
     }
 
     static void scheduleOne(Context context, long id, long end) {
-        cancel(context, id);
+        cancelAlarm(context, id);
         if (!preferences(context).getBoolean("timer_notifications_enabled",
                 false) || end <= System.currentTimeMillis()) return;
         AlarmManager manager = (AlarmManager)
