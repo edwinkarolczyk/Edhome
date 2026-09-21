@@ -1165,8 +1165,8 @@ public final class MainActivity extends Activity {
             render();
         });
         note("Powiadomienia są opcjonalne i niezależne od przypomnień czynności. "
-            + "Obowiązuje cisza 22:00–07:00. Minutnik działa i kończy się "
-            + "również bez zgody na powiadomienia.");
+            + "Cisza: " + quietHoursStart() + "–" + quietHoursEnd()
+            + ". Minutnik działa i kończy się również bez zgody na powiadomienia.");
         LinearLayout editor = card();
         editor.addView(text("Uruchom minutnik", 20, true));
         editor.addView(text("Urządzenie", 15, true));
@@ -1424,7 +1424,8 @@ public final class MainActivity extends Activity {
         String[] alertTime = db.taskReminder(id);
         if (!alertTime[0].isEmpty()) {
             java.time.LocalDateTime when = ReminderRules.target(
-                due, alertTime[0], Integer.parseInt(alertTime[1]));
+                due, alertTime[0], Integer.parseInt(alertTime[1]),
+                quietHoursStart(), quietHoursEnd());
             description += " • Przypomnienie: " + when.toLocalDate()
                 + " " + when.toLocalTime() + " (orientacyjnie)";
         }
@@ -1764,10 +1765,10 @@ public final class MainActivity extends Activity {
         form.addView(text("Przypomnienie dla tej czynności", 16, true));
         form.addView(text("Standardowe: około 09:00 w dniu terminu lub dla "
             + "zaległych. Własne: wybrana godzina i wyprzedzenie. "
-            + "Nie wysyłamy alertów w ciszy 22:00–07:00: "
-            + "godziny 22:00–23:59 przesuwamy na 21:00 tego dnia, "
-            + "00:00–06:59 na 07:00. Android może opóźnić alarm.",
-            12, false));
+            + "Aktualna cisza: " + quietHoursStart() + "–" + quietHoursEnd()
+            + ". Alert ustawiony po początku ciszy przesuwamy godzinę przed "
+            + "jej początkiem; po północy — na koniec ciszy. "
+            + "Android może opóźnić alarm.", 12, false));
         String[] savedReminder = id == null
             ? new String[]{"", "0"} : db.taskReminder(id);
         Spinner reminderMode = new Spinner(this);
@@ -2790,6 +2791,86 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("PLACEHOLDER_VIEW");
     }
 
+    private String quietHoursStart() {
+        String value = prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String end = prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        return QuietHoursRules.validWindow(value, end)
+            ? value : QuietHoursRules.DEFAULT_START;
+    }
+
+    private String quietHoursEnd() {
+        String start = prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String value = prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        return QuietHoursRules.validWindow(start, value)
+            ? value : QuietHoursRules.DEFAULT_END;
+    }
+
+    private void editQuietHours() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(16), dp(20), dp(10));
+        form.addView(text("Cisza powiadomień", 21, true));
+        form.addView(text("W tym czasie EDHOME nie pokazuje nowych "
+            + "powiadomień czynności ani minutników. Minutniki i terminy "
+            + "nadal biegną normalnie.", 13, false));
+        final String[] start = {quietHoursStart()};
+        final String[] end = {quietHoursEnd()};
+        Button startButton = new Button(this);
+        startButton.setAllCaps(false);
+        startButton.setText("Początek: " + start[0]);
+        startButton.setOnClickListener(v -> {
+            java.time.LocalTime time = java.time.LocalTime.parse(start[0]);
+            new android.app.TimePickerDialog(this, (picker, hour, minute) -> {
+                start[0] = String.format(java.util.Locale.ROOT,
+                    "%02d:%02d", hour, minute);
+                startButton.setText("Początek: " + start[0]);
+            }, time.getHour(), time.getMinute(), true).show();
+        });
+        form.addView(startButton);
+        Button endButton = new Button(this);
+        endButton.setAllCaps(false);
+        endButton.setText("Koniec: " + end[0]);
+        endButton.setOnClickListener(v -> {
+            java.time.LocalTime time = java.time.LocalTime.parse(end[0]);
+            new android.app.TimePickerDialog(this, (picker, hour, minute) -> {
+                end[0] = String.format(java.util.Locale.ROOT,
+                    "%02d:%02d", hour, minute);
+                endButton.setText("Koniec: " + end[0]);
+            }, time.getHour(), time.getMinute(), true).show();
+        });
+        form.addView(endButton);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null)
+            .create();
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null)
+                dialog.getWindow().setBackgroundDrawable(rounded(surface));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    if (!QuietHoursRules.validWindow(start[0], end[0])) {
+                        alert("Godziny ciszy muszą tworzyć okno przez północ, "
+                            + "np. 22:00–07:00.");
+                        return;
+                    }
+                    prefs.edit()
+                        .putString("quiet_hours_start", start[0])
+                        .putString("quiet_hours_end", end[0]).apply();
+                    ReminderReceiver.schedule(this);
+                    DeviceTimerReceiver.scheduleAll(this);
+                    DiagnosticLog.event("QUIET_HOURS_CHANGED");
+                    dialog.dismiss();
+                    render();
+                });
+        });
+        dialog.show();
+    }
+
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name
@@ -2839,11 +2920,30 @@ public final class MainActivity extends Activity {
             ReminderReceiver.schedule(this);
             render();
         });
+        LinearLayout quiet = card();
+        quiet.addView(text("Cisza powiadomień", 19, true));
+        quiet.addView(text("Aktualnie: " + quietHoursStart() + "–"
+            + quietHoursEnd(), 15, true));
+        quiet.addView(text("Dotyczy przypomnień czynności i minutników. "
+            + "Okno musi przechodzić przez północ, np. 22:00–07:00.",
+            13, false));
+        smallButton(quiet, "Zmień godziny ciszy", this::editQuietHours);
+        smallButton(quiet, "Przywróć 22:00–07:00", () -> {
+            prefs.edit()
+                .putString("quiet_hours_start", QuietHoursRules.DEFAULT_START)
+                .putString("quiet_hours_end", QuietHoursRules.DEFAULT_END)
+                .apply();
+            ReminderReceiver.schedule(this);
+            DeviceTimerReceiver.scheduleAll(this);
+            DiagnosticLog.event("QUIET_HOURS_RESET");
+            render();
+        });
         note("Standardowo przypomnienia przychodzą około 09:00. "
             + "Dla poszczególnych czynności ustawisz godzinę i wyprzedzenie "
-            + "w ich edycji. Cisza 22:00–07:00. "
-            + "Android może opóźnić alarm przez oszczędzanie baterii. "
-            + "Tytuły czynności nie pojawiają się na ekranie blokady.");
+            + "w ich edycji. Aktualna cisza: " + quietHoursStart() + "–"
+            + quietHoursEnd() + ". Android może opóźnić alarm przez "
+            + "oszczędzanie baterii. Tytuły czynności nie pojawiają się "
+            + "na ekranie blokady.");
         if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
         button("Kopia danych / przenoszenie", () -> go("backup"));
         note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
