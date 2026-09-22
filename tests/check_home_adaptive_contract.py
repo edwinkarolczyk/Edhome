@@ -44,7 +44,7 @@ for token in (
     assert token in backup, token
 assert 'DEFAULT_SHORT_MS = 450' in layout
 assert 'DEFAULT_DRAG_MS = 1100' in layout
-assert 'versionCode 52' in gradle
-assert "versionNameSuffix '-beta.9'" in gradle
+assert 'versionCode 53' in gradle
+assert "versionNameSuffix '-beta.9.1'" in gradle
 assert 'DB_VERSION = 22;' in backup
 print("Adaptive home tiles, configurable drag/menu and backup settings: PASS")
