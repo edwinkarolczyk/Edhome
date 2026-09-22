@@ -5307,6 +5307,26 @@ public final class MainActivity extends Activity {
         card().addView(preview);
     }
 
+    /** Verify exactly the bytes written by the document provider; never log backup data. */
+    private boolean verifyDataBackupDocument(Uri uri, byte[] expected)
+            throws Exception {
+        byte[] expectedHash = MessageDigest.getInstance("SHA-256").digest(expected);
+        MessageDigest actualHash = MessageDigest.getInstance("SHA-256");
+        long actualLength = 0;
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in == null) throw new IllegalStateException("BACKUP_READBACK_UNAVAILABLE");
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = in.read(buffer)) != -1) {
+                actualLength += count;
+                if (actualLength > expected.length) return false;
+                actualHash.update(buffer, 0, count);
+            }
+        }
+        return actualLength == expected.length
+            && MessageDigest.isEqual(expectedHash, actualHash.digest());
+    }
+
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
@@ -5377,16 +5397,25 @@ public final class MainActivity extends Activity {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
             try {
                 String json = DataBackup.exportJson(db.getReadableDatabase(), prefs);
-                try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+                try (OutputStream out = getContentResolver().openOutputStream(
+                        data.getData(), "wt")) {
                     if (out == null) throw new IllegalStateException("Brak dostępu do pliku.");
-                    out.write(json.getBytes(StandardCharsets.UTF_8));
+                    out.write(bytes);
                     out.flush();
                 }
-                DiagnosticLog.event("DATA_BACKUP_EXPORTED");
-                alert("Zapisano kopię. Sprawdź, czy plik .json jest widoczny w wybranym miejscu, zanim usuniesz aplikację.");
+                // A successful write alone does not prove that the document
+                // provider saved the COMPLETE file. Read it back first.
+                if (!verifyDataBackupDocument(data.getData(), bytes)) {
+                    DiagnosticLog.event("DATA_BACKUP_VERIFY_FAILED");
+                    throw new IllegalStateException("BACKUP_READBACK_MISMATCH");
+                }
+                DiagnosticLog.event("DATA_BACKUP_EXPORTED",
+                    "bytes=" + bytes.length + " verified=true");
+                alert("Zapisano i sprawdzono kopię danych. Zachowaj ją poza telefonem. Prywatny sejf PayCheck wymaga osobnej zaszyfrowanej kopii.");
             } catch (Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_EXPORT", error);
-                alert("Eksport kopii nie powiódł się. Nie usuwaj aplikacji.");
+                alert("Nie udało się zapisać i zweryfikować pełnej kopii. Wybrany plik może być niekompletny — nie używaj go do przywracania i nie usuwaj aplikacji.");
             }
             return;
         }
