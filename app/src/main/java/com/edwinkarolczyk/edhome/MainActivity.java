@@ -71,6 +71,7 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_DATA_BACKUP = 1213;
     private static final int EXPORT_PRIVATE_BACKUP = 1214;
     private static final int IMPORT_PRIVATE_BACKUP = 1215;
+    private static final int TAKE_SCANNER_RESULT = 1216;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -3794,7 +3795,7 @@ public final class MainActivity extends Activity {
         });
         button("📷 Skanuj i wyciągnij −1", () -> {
             finishPantryBatch();
-            openPantryCamera(true);
+            launchTakeScanner(false);
         });
         if (!pantryBatch.active()) {
             button("📷 Skanuj serię — dodawaj +1", () -> startPantryBatch("ADD"));
@@ -3933,13 +3934,18 @@ public final class MainActivity extends Activity {
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
             : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
         note("Stan zapisujemy w pełnych opakowaniach; np. 3 × 0,5 l = 1,5 l. "
-            + "W serii aparat wraca po każdym zatwierdzonym skanie; "
-            + "ten sam kod wymaga dodatkowego potwierdzenia.");
+            + "Wyjmowanie −1: aparat pozostaje otwarty, odliczanie domyślnie 5 s; "
+            + "inny kod zastępuje poprzedni bez jego odjęcia. "
+            + "To samo opakowanie ponownie wymaga świadomego wyboru.");
     }
 
 
     private void startPantryBatch(String mode) {
         if (pantryBatch.active()) return;
+        if ("TAKE".equals(mode)) {
+            launchTakeScanner(true);
+            return;
+        }
         pantryBatch.start(mode);
         DiagnosticLog.event("PANTRY_BATCH_STARTED");
         render();
@@ -3969,8 +3975,26 @@ public final class MainActivity extends Activity {
         });
     }
 
-    /** Start an offline barcode scan; never mutate stock in the camera callback. */
+    private void launchTakeScanner(boolean series) {
+        // The old IntentIntegrator closes its camera after each code. TAKE needs
+        // continuous decoding so a new code can cancel an uncommitted countdown.
+        try {
+            Intent scanner = new Intent(this, PantryTakeCaptureActivity.class);
+            scanner.putExtra(PantryTakeCaptureActivity.EXTRA_BATCH, series);
+            startActivityForResult(scanner, TAKE_SCANNER_RESULT);
+        } catch (Exception problem) {
+            DiagnosticLog.error("PANTRY_TAKE_LAUNCH", problem);
+            alert("Nie można uruchomić skanera wyjmowania. "
+                + "Wpisz kod ręcznie; stan spiżarni nie został zmieniony.");
+        }
+    }
+
+    /** Start an offline ADD camera scan; TAKE uses the continuous camera. */
     private void openPantryCamera(boolean take) {
+        if (take) {
+            launchTakeScanner(pantryBatch.active());
+            return;
+        }
         if (pantryBatch.active()) {
             if (!pantryBatch.launchCamera()) return;
         } else {
@@ -4967,6 +4991,34 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("THEME_CHANGED");
             render();
         });
+        LinearLayout takeSettings = card();
+        takeSettings.addView(text("Skaner • czas wyjmowania", 19, true));
+        takeSettings.addView(text("Aparat pozostaje otwarty. Inny kod anuluje "
+            + "poprzednie odliczanie, a wyjście z aparatu nie odejmuje produktu.",
+            14, false));
+        Spinner takeDelay = new Spinner(this);
+        takeDelay.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "3 sekundy", "5 sekund", "8 sekund", "10 sekund")));
+        int savedDelay = prefs.getInt(PantryTakeCountdown.DELAY_PREF,
+            PantryTakeCountdown.DEFAULT_SECONDS);
+        int delayChoice = 1;
+        for (int i = 0; i < PantryTakeCountdown.DELAY_OPTIONS.length; i++)
+            if (PantryTakeCountdown.DELAY_OPTIONS[i] == savedDelay)
+                delayChoice = i;
+        takeDelay.setSelection(delayChoice);
+        takeSettings.addView(takeDelay);
+        smallButton(takeSettings, "Zapisz czas wyjmowania", () -> {
+            int choice = takeDelay.getSelectedItemPosition();
+            if (choice < 0 || choice >= PantryTakeCountdown.DELAY_OPTIONS.length)
+                return;
+            if (!prefs.edit().putInt(PantryTakeCountdown.DELAY_PREF,
+                    PantryTakeCountdown.DELAY_OPTIONS[choice]).commit()) {
+                alert("Nie udało się zapisać czasu wyjmowania.");
+                return;
+            }
+            DiagnosticLog.event("PANTRY_TAKE_DELAY_SAVED");
+            render();
+        });
         note("Nazwa gospodarstwa");
         EditText name = field("Nazwa gospodarstwa", false);
         name.setText(prefs.getString("household", "Moje gospodarstwo"));
@@ -5404,6 +5456,14 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == TAKE_SCANNER_RESULT) {
+            if ("pantry".equals(screen)) render();
+            if (result == RESULT_OK && data != null)
+                DiagnosticLog.event("PANTRY_TAKE_SESSION_RETURNED",
+                    "committed=" + Math.max(0, data.getIntExtra(
+                        PantryTakeCaptureActivity.EXTRA_COMMITTED, 0)));
+            return;
+        }
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
             if (storageQrCameraPending) {
