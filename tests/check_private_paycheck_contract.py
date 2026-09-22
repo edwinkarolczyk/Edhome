@@ -69,7 +69,7 @@ assert 'edhome_private_paycheck' not in backup
 assert "private_paycheck_entries" not in shared
 assert "CHECK(scope='shared')" in shared
 assert 'android:allowBackup="false"' in manifest
-assert 'versionCode 47' in gradle and "versionNameSuffix '-beta.4'" in gradle
-assert 'super(context, "edhome-beta-preview.db", null, 21)' in ui
-assert 'DB_VERSION = 21;' in backup
+assert 'versionCode 48' in gradle and "versionNameSuffix '-beta.5'" in gradle
+assert 'super(context, "edhome-beta-preview.db", null, 22)' in ui
+assert 'DB_VERSION = 22;' in backup
 print("Private vault isolated, encrypted, locked on background and excluded from JSON: PASS")
