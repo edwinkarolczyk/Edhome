@@ -414,7 +414,11 @@ final class DataBackup {
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)
                              || "assignee_name_snapshot".equals(key)
-                             || "acknowledged_at".equals(key)))
+                             || "acknowledged_at".equals(key)
+                            || ("pantry_purchase_prices".equals(definition[0])
+                                && ("shopping_id".equals(key)
+                                    || "pantry_id".equals(key)
+                                    || "quantity_milli".equals(key)))))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -918,11 +922,10 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
-            database.setTransactionSuccessful();
-        } finally {
-            database.endTransaction();
-        }
-        // Keep the new installation's PIN and update-source configuration untouched.
+            // Preferences and SQL are separate stores. Save preferences BEFORE
+            // committing SQL, so a failed preference write rolls SQL back.
+            // Never clear the installed PIN, private vault or update channel.
+            // Keep the new installation's PIN and update-source configuration untouched.
         SharedPreferences.Editor restored = prefs.edit()
             .putString("household", household)
             .putString("theme", theme)
@@ -952,7 +955,11 @@ final class DataBackup {
         for (String id : widths.keySet())
             restored.putString("tile_width_" + id, widths.get(id));
         if (!restored.commit())
-            throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
+            throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
+            database.setTransactionSuccessful();
+        } finally {
+            database.endTransaction();
+        }
     }
 
     private static String[] columns(String[] table) {
@@ -979,6 +986,7 @@ final class DataBackup {
             || "changed_at".equals(column) || "size_milli".equals(column)
             || "shopping_id".equals(column) || "packages".equals(column)
             || "amount_grosz".equals(column)
+            || "quantity_milli".equals(column) || "unit_price_grosz".equals(column)
             || "target_grosz".equals(column) || "goal_id".equals(column)
             || "parent_box_id".equals(column) || "lent_at".equals(column)
             || "created_at".equals(column) || "item_id".equals(column)
