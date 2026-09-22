@@ -10,7 +10,7 @@ backup=(root/"DataBackup.java").read_text(encoding="utf-8")
 cost=(root/"ShoppingCostRules.java").read_text(encoding="utf-8")
 gradle=Path("app/build.gradle").read_text(encoding="utf-8")
 for phrase in (
-    '"checked INTEGER NOT NULL DEFAULT 0, place_id INTEGER"',
+    'checked INTEGER NOT NULL DEFAULT 0, place_id INTEGER',
     'ALTER TABLE shopping_items ADD COLUMN place_id INTEGER',
     'ALTER TABLE shopping_receipts ADD COLUMN place_id INTEGER',
     'ADD COLUMN place_name_snapshot TEXT NOT NULL DEFAULT',
