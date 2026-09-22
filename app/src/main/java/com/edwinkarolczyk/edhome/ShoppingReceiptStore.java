@@ -17,7 +17,8 @@ final class ShoppingReceiptStore {
             + "name_snapshot TEXT NOT NULL, "
             + "packages INTEGER NOT NULL CHECK(packages BETWEEN 1 AND 100000000), "
             + "before_qty INTEGER NOT NULL, after_qty INTEGER NOT NULL, "
-            + "happened_at INTEGER NOT NULL)");
+            + "happened_at INTEGER NOT NULL, place_id INTEGER, "
+            + "place_name_snapshot TEXT NOT NULL DEFAULT '')");
     }
 
     static boolean received(SQLiteDatabase db, long shoppingId) {
@@ -29,7 +30,9 @@ final class ShoppingReceiptStore {
     }
 
     static String accept(SQLiteDatabase db, long shoppingId, long pantryId,
-            int packages) {
+            int packages, Long placeId) {
+        if (placeId != null && placeId <= 0)
+            throw new IllegalArgumentException("Nieprawidłowe miejsce.");
         if (packages < 1 || packages > MAX_PACKAGES)
             throw new IllegalArgumentException("Podaj 1–100000000 całych opakowań.");
         db.beginTransaction();
@@ -51,6 +54,15 @@ final class ShoppingReceiptStore {
                 before = pantry.getInt(1);
             }
             if (before > MAX_PACKAGES - packages) return "LIMIT";
+            String placeName = "";
+            if (placeId != null) {
+                try (Cursor place = db.rawQuery(
+                        "SELECT name FROM places WHERE id=? LIMIT 1",
+                        new String[]{Long.toString(placeId)})) {
+                    if (!place.moveToFirst()) return "MISSING_PLACE";
+                    placeName = place.getString(0);
+                }
+            }
             ContentValues record = new ContentValues();
             record.put("shopping_id", shoppingId);
             record.put("pantry_id", pantryId);
@@ -59,6 +71,9 @@ final class ShoppingReceiptStore {
             record.put("before_qty", before);
             record.put("after_qty", before + packages);
             record.put("happened_at", System.currentTimeMillis());
+            if (placeId == null) record.putNull("place_id");
+            else record.put("place_id", placeId);
+            record.put("place_name_snapshot", placeName);
             db.insertOrThrow("shopping_receipts", null, record);
             // Price history follows the real product only on confirmed receipt.
             PantryPriceHistoryStore.linkReceived(db, shoppingId, pantryId);
