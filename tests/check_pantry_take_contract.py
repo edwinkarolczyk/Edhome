@@ -47,5 +47,5 @@ assert '"TAKE".equals(mode)' in main and "TAKE_SCANNER_RESULT" in main
 assert "PantryTakeCountdown.DELAY_PREF" in main
 assert "pantryTakeDelaySeconds" in backup and "validSeconds(takeDelaySeconds)" in backup
 assert '.putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)' in backup
-assert "versionCode 58" in gradle and "versionNameSuffix '-beta.11.2'" in gradle
+assert "versionCode 59" in gradle and "versionNameSuffix '-beta.12'" in gradle
 print("Continuous camera wiring, interruption, lifecycle cancellation, backup/version: PASS")
