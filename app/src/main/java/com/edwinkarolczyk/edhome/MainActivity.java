@@ -380,6 +380,7 @@ public final class MainActivity extends Activity {
                 case "shopping": shopping(); break;
                 case "places": places(); break;
                 case "storage": storage(); break;
+                case "vehicles": vehicles(); break;
                 case "paycheck": paycheck(); break;
                 case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
@@ -2490,6 +2491,177 @@ public final class MainActivity extends Activity {
         });
         note("Miesiąc, tydzień, dzień i agenda pokazują te same zapisane czynności. "
             + "Planowanie dostępności domowników będzie rozwijane osobno.");
+    }
+
+
+    /** Dates read directly from vehicles; no duplicate task or expense records. */
+    private void vehicles() {
+        header("Pojazdy • OC, przeglądy i serwis");
+        note("Pojazdy zapisujesz lokalnie. Terminy OC i przeglądu widoczne są "
+            + "również w kalendarzu — bez drugich kopii czynności. "
+            + "Historia serwisu nie księguje automatycznie wydatków PayCheck.");
+        button("+ Dodaj pojazd", () -> editVehicle(null));
+        int shown = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,registration,mileage,oc_until,inspection_until,notes "
+                + "FROM vehicles ORDER BY name COLLATE NOCASE,id", null)) {
+            while (c.moveToNext()) {
+                shown++;
+                long id = c.getLong(0);
+                VehicleStore.Vehicle item = VehicleStore.find(db.getReadableDatabase(), id);
+                if (item == null) continue;
+                LinearLayout box = card();
+                box.addView(text(item.name, 20, true));
+                if (!item.registration.isEmpty())
+                    box.addView(text("Rejestracja: " + item.registration, 14, false));
+                box.addView(text("Przebieg: " + item.mileage + " km", 14, false));
+                if (!item.ocUntil.isEmpty())
+                    box.addView(text("OC: " + item.ocUntil + " • "
+                        + vehicleDeadline(item.ocUntil), 15, false));
+                if (!item.inspectionUntil.isEmpty())
+                    box.addView(text("Przegląd: " + item.inspectionUntil + " • "
+                        + vehicleDeadline(item.inspectionUntil), 15, false));
+                if (!item.notes.isEmpty()) box.addView(text(item.notes, 13, false));
+                smallButton(box, "Edytuj pojazd", () -> editVehicle(item));
+                smallButton(box, "+ Zapisz serwis / opony / inne", () -> editVehicleEvent(item));
+                int events = 0;
+                try (Cursor history = db.getReadableDatabase().rawQuery(
+                        "SELECT kind,event_date,mileage,note FROM vehicle_events "
+                        + "WHERE vehicle_id=? ORDER BY event_date DESC,id DESC LIMIT 20",
+                        new String[]{Long.toString(id)})) {
+                    while (history.moveToNext()) {
+                        if (events++ == 0)
+                            box.addView(text("Historia pojazdu", 15, true));
+                        box.addView(text(history.getString(1) + " • "
+                            + VehicleRules.eventLabel(history.getString(0))
+                            + (history.isNull(2) ? "" : " • " + history.getLong(2) + " km")
+                            + "\n" + history.getString(3), 13, false));
+                    }
+                }
+            }
+        }
+        if (shown == 0)
+            note("Brak pojazdów. Dodaj pierwszy samochód lub inny pojazd.");
+    }
+
+    private String vehicleDeadline(String iso) {
+        long days = java.time.temporal.ChronoUnit.DAYS.between(
+            LocalDate.now(), LocalDate.parse(iso));
+        if (days < 0) return "po terminie o " + (-days) + " dni";
+        if (days == 0) return "dzisiaj";
+        return "za " + days + " dni";
+    }
+
+    private EditText vehicleInput(LinearLayout form, String hint, String value) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setTextColor(ink);
+        input.setHintTextColor(subdued);
+        input.setHint(hint);
+        input.setText(value);
+        form.addView(input);
+        return input;
+    }
+
+    private void editVehicle(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        EditText name = vehicleInput(form, "Nazwa, np. Audi A4",
+            vehicle == null ? "" : vehicle.name);
+        EditText plate = vehicleInput(form, "Rejestracja (opcjonalnie)",
+            vehicle == null ? "" : vehicle.registration);
+        EditText mileage = vehicleInput(form, "Aktualny przebieg [km]",
+            vehicle == null ? "0" : Long.toString(vehicle.mileage));
+        mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText oc = vehicleInput(form, "OC do: RRRR-MM-DD (opcjonalnie)",
+            vehicle == null ? "" : vehicle.ocUntil);
+        EditText inspection = vehicleInput(form, "Przegląd do: RRRR-MM-DD (opcjonalnie)",
+            vehicle == null ? "" : vehicle.inspectionUntil);
+        EditText notes = vehicleInput(form, "Notatka (opcjonalnie)",
+            vehicle == null ? "" : vehicle.notes);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(vehicle == null ? "Nowy pojazd" : "Edytuj pojazd")
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    long id = VehicleStore.save(db.getWritableDatabase(),
+                        vehicle == null ? 0 : vehicle.id,
+                        name.getText().toString(), plate.getText().toString(),
+                        VehicleRules.mileage(mileage.getText().toString()),
+                        oc.getText().toString(), inspection.getText().toString(),
+                        notes.getText().toString().trim());
+                    DiagnosticLog.event("VEHICLE_SAVED", "id=" + id);
+                    dialog.dismiss();
+                    render();
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception problem) {
+                    DiagnosticLog.error("VEHICLE_SAVE", problem);
+                    alert("Nie udało się zapisać pojazdu. Sprawdź dane i spróbuj ponownie.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void editVehicleEvent(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "Serwis / olej / filtry", "Opony", "Inne")));
+        form.addView(kind);
+        EditText date = vehicleInput(form, "Data RRRR-MM-DD",
+            LocalDate.now().toString());
+        EditText mileage = vehicleInput(form, "Przebieg [km] (opcjonalnie)", "");
+        mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText description = vehicleInput(form, "Co wykonano? (maks. 500 znaków)", "");
+        String operationId = java.util.UUID.randomUUID().toString();
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Wpis w historii • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz wykonanie", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String[] kinds = {"service", "tyres", "other"};
+                    String rawMileage = mileage.getText().toString().trim();
+                    Long distance = rawMileage.isEmpty()
+                        ? null : VehicleRules.mileage(rawMileage);
+                    String result = VehicleStore.addEvent(db.getWritableDatabase(),
+                        vehicle.id, operationId, kinds[kind.getSelectedItemPosition()],
+                        date.getText().toString(), distance,
+                        description.getText().toString());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_EVENT_COMMITTED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();
+                        alert("Ten wpis został już zapisany. Nie dodano go ponownie.");
+                        render();
+                    } else {
+                        alert("Pojazd nie istnieje. Nie zapisano wpisu.");
+                    }
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception problem) {
+                    DiagnosticLog.error("VEHICLE_EVENT", problem);
+                    alert("Nie potwierdzono zapisu. Sprawdź historię przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
     }
 
     private static final class PlaceEntry {
@@ -5726,7 +5898,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 23);
+            super(context, "edhome-beta-preview.db", null, 24);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -5755,6 +5927,7 @@ public final class MainActivity extends Activity {
             PaycheckGoalsStore.create(database);
             PantryPriceHistoryStore.create(database);
             addDeviceTimers(database);
+            VehicleStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
@@ -5763,7 +5936,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 23) {
+            if (oldVersion < 1 || newVersion > 24) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -5882,6 +6055,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE shopping_receipts "
                     + "ADD COLUMN place_name_snapshot TEXT NOT NULL DEFAULT ''");
                 DiagnosticLog.event("DATABASE_MIGRATED_22_TO_23_SHOPPING_PLACES");
+            }
+            if (oldVersion < 24) {
+                VehicleStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_23_TO_24_VEHICLES");
             }
         }
 
