@@ -835,6 +835,12 @@ public final class MainActivity extends Activity {
             String id = homeDragOrder.get(i);
             int[] slot = homeTileSlots.get(id);
             View tile = homeTileViews.get(id);
+            if (slot == null || tile == null) {
+                DiagnosticLog.event("HOME_TILE_DRAG_INVALID",
+                    "reason=missing_slot count=" + homeDragOrder.size());
+                resetHomeDragPreview();
+                return;
+            }
             double dx = x - (slot[0] + tile.getWidth() / 2.0);
             double dy = y - (slot[1] + tile.getHeight() / 2.0);
             double distance = dx * dx + dy * dy;
@@ -851,10 +857,26 @@ public final class MainActivity extends Activity {
         if (homeDragSource == null || homeDragOrder == null
                 || slot < 0 || slot >= homeDragOrder.size()
                 || slot == homeDragTargetIndex && homeDragDropped) return;
-        if (slot == homeDragTargetIndex
-                && homeTileViews.get(homeDragSource).getAlpha() < 1f) return;
-        java.util.List<String> next = HomeTileOrder.moved(
-            homeDragOrder, homeDragSource, slot);
+        View draggedTile = homeTileViews.get(homeDragSource);
+        if (draggedTile == null) {
+            DiagnosticLog.event("HOME_TILE_DRAG_INVALID",
+                "reason=missing_view count=" + homeDragOrder.size());
+            resetHomeDragPreview();
+            return;
+        }
+        if (slot == homeDragTargetIndex && draggedTile.getAlpha() < 1f) return;
+        // Preview and saved order MUST use the same dynamic catalog. The
+        // legacy nine-tile rule crashes as soon as more shortcuts are present.
+        final java.util.List<String> next;
+        try {
+            next = HomeTileCatalog.moved(homeDragOrder, homeDragSource, slot);
+        } catch (IllegalArgumentException error) {
+            DiagnosticLog.event("HOME_TILE_DRAG_INVALID",
+                "reason=invalid_order count=" + homeDragOrder.size()
+                + " slot=" + slot);
+            resetHomeDragPreview();
+            return;
+        }
         for (int i = 0; i < next.size(); i++) {
             String id = next.get(i);
             View tile = homeTileViews.get(id);
@@ -906,9 +928,17 @@ public final class MainActivity extends Activity {
             String source = homeDragSource;
             int slot = homeDragTargetIndex;
             boolean save = homeDragDropped;
+            java.util.List<String> original = homeDragOrder == null ? null
+                : new java.util.ArrayList<>(homeDragOrder);
             resetHomeDragPreview();
-            if (save && source != null && slot >= 0)
-                moveHomeTileAtIndex(source, slot);
+            if (save && source != null && slot >= 0) {
+                if (original == null || !original.equals(homeTileOrder())) {
+                    DiagnosticLog.event("HOME_TILE_DRAG_STALE");
+                    render(); // Never overwrite an order changed during dragging.
+                } else {
+                    moveHomeTileAtIndex(source, slot);
+                }
+            }
         });
     }
 
