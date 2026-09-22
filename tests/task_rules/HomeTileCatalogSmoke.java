@@ -9,17 +9,17 @@ import java.util.List;
 public final class HomeTileCatalogSmoke {
     public static void main(String[] args) {
         List<String> initial = HomeTileCatalog.canonical(null, "today,tasks,calendar", true);
-        check(initial.size() == 15, "starter Beta should expose 15 targets");
+        check(initial.size() == 16, "starter Beta should expose 16 targets");
         check(initial.get(0).equals("today"), "legacy tile order must survive");
         check(initial.containsAll(Arrays.asList("timers", "shopping",
-            "paycheck", "waste", "storage", "diagnostics")), "missing feature shortcuts");
+            "paycheck", "waste", "storage", "vehicles", "diagnostics")), "missing feature shortcuts");
         String extra = "tile_0123456789abcdef0123456789abcdef";
         List<String> custom = new ArrayList<>(initial);
         custom.add(extra);
         check(HomeTileCatalog.canonical(HomeTileCatalog.encode(custom), "", true)
             .equals(custom), "custom tile did not survive restart");
         List<String> moved = HomeTileCatalog.moved(custom, extra, 1);
-        check(moved.size() == 16 && moved.get(1).equals(extra),
+        check(moved.size() == 17 && moved.get(1).equals(extra),
             "dynamic reorder failed");
         check(new HashSet<>(moved).size() == moved.size(), "duplicate tile");
         check(HomeTileCatalog.canonical("tasks,tasks,invalid," + extra, "", true)
@@ -37,7 +37,7 @@ public final class HomeTileCatalogSmoke {
             HomeTileCatalog.moved(custom, extra, 99);
             throw new AssertionError("Invalid slot accepted");
         } catch (IllegalArgumentException expected) { }
-        System.out.println("Home tile catalog migration, 16 shortcuts, target guard, drag: PASS");
+        System.out.println("Home tile catalog migration, 17 shortcuts, target guard, drag: PASS");
     }
     private static void check(boolean result, String message) {
         if (!result) throw new AssertionError(message);
