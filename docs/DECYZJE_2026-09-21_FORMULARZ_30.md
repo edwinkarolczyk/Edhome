@@ -9,9 +9,9 @@
 | Nr | Zatwierdzona decyzja / stan |
 |---|---|
 | 1 | Wszystkie **sześć motywów** pozostają. |
-| 2 | **Dowolna liczba kafelków**, dodawanie i ukrywanie. Dziewięć nie jest limitem. |
+| 2 | **Dowolna liczba kafelków**, dodawanie/ukrywanie/usuwanie skrótów z panelu i przywracanie; dziewięć nie jest limitem. Kafelek można w pełni edytować (cel, nazwa, ikona, kolor, rozmiar, pozycja, widoczność). |
 | 3 | Kafelki w różnych rozmiarach, w tym duży zajmujący dwa pola. |
-| 4 | Przeciąganie po **przytrzymaniu całego kafelka**. |
+| 4 | Przeciąganie po **przytrzymaniu całego kafelka**, dodatkowo opcjonalny uchwyt i alternatywne sterowanie kolejnością. |
 | 5 | Użytkownik **wybiera układ/tryb**; w EDHOME przełącza na **tryb tabletu**. To ten sam program i jedna instalacja, nie oddzielne APK. Tryb tabletu ma **ograniczony zakres opcji** wspólnych dla gospodarstwa (np. spiżarnia, skaner, zakupy, obowiązki, SUPLA zależnie od uprawnień); szczegóły zestawu i powrotu z trybu wymagają dalszego projektu. |
 | 6 | Dwa formularze czynności: **szybki i zaawansowany**. |
 | 7 | Trzy sposoby terminu czynności sezonowej: **konkretna data**, **przedział dat**, **sezon z proponowanym terminem**. |
@@ -82,3 +82,14 @@ Ten plik zatwierdza **zakres**, nie implementację. Ostatnio sprawdzono kod `0.3
 - [Pełna specyfikacja](SPECYFIKACJA_CALOSC.md)
 - [Roadmapa](ROADMAP.md)
 - [Architektura](ARCHITEKTURA.md)
+
+
+## F. Nadrzędne doprecyzowanie — wszystkie funkcje w edytowalnych kafelkach (22.09.2026)
+
+**Obowiązująca decyzja Edwina; §26 pełnej specyfikacji oraz aktualna roadmapa mają pierwszeństwo przed zapisem historycznym 0.3.3-beta.2 o dziewięciu „systemowych” kafelkach i zakazie zmiany celu.** Układ 3×3 na screenshotach 0.5.0-beta.2 nie jest docelowym limitem. Nie oznacza to, że funkcja została już wdrożona.
+
+- Wszystkie wejścia modułowe, także **Minutniki urządzeń, Lista zakupów, PayCheck (wspólny budżet/osobisty po uprawnieniach), Odpady i terminy wystawienia, wszystkie Czynności**, oraz Diagnostyka Beta, mają być możliwymi do dodania kafelkami. Nie tworzyć osobnego, stałego menu skrótów pod dziewięcioma kafelkami.
+- **Pełny edytor każdego skrótu:** wybór celu otwierania (moduł/widok/dozwolony obiekt), własna nazwa, ikona, kolor, rozmiar, pozycja i widoczność. Zmiana celu jest wyraźnie dozwolona; nie zmienia jednak ID ani treści rzeczywistego obiektu/modułu. Ta sama funkcja może mieć kilka skrótów.
+- Przytrzymanie całego kafelka → Edytuj / Przesuń / Ukryj/Usuń skrót, przeciągnij w górę lub dół; lista przewijana i responsywna, dziewięć nie jest limitem ani liczbą nieusuwalnych pozycji. Usunięcie skrótu nigdy nie kasuje danych funkcji.
+- Własne układy telefonu i współdzielonego tabletu, backup/migracja konfiguracji; dozwolone cele i dane sprawdza się na poziomie uprawnień, nie tylko ukrycia kafelka. Diagnostyka tylko Beta; prywatne PayCheck nie staje się dostępne na tablecie przez przypisanie kafelka.
+- Odbiór: co najmniej 15 skrótów, dowolna zmiana celu, nazwy, ikony, koloru, położenia i rozmiaru, uruchomienie minutników/zakupów/PayCheck **z kafelka**, ukryj/przywróć i zachowaj całość po restarcie/odtworzeniu.
