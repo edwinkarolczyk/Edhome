@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 49,
-  "versionName": "0.5.0-beta.6",
-  "changelog": "EDHOME Beta 0.5.0-beta.6 — adaptacyjne kolumny kafelków i konfigurowalne czasy menu/przeciągania; układ i gesty w backupie. SQLite v22 bez migracji.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.6/edhome-beta.apk",
-  "sha256": "18c831cf81447421a39c61109d48081c2f1a4d7bcf7b92391c41847b98f31db2"
+  "versionCode": 50,
+  "versionName": "0.5.0-beta.7",
+  "changelog": "EDHOME Beta 0.5.0-beta.7 — naprawione przeciąganie dowolnej liczby kafelków i ochrona przed zmianą układu w trakcie gestu; adaptacyjne kolumny i regulowane przytrzymanie. SQLite v22 bez migracji.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.7/edhome-beta.apk",
+  "sha256": "2af46160a2ceb7b2d50a8d5d3e1675341a13077ba3a55fa66b3b7a12b8877bf2"
 }
