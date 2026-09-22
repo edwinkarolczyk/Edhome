@@ -4713,8 +4713,14 @@ public final class MainActivity extends Activity {
                 count++;
                 String date = Instant.ofEpochMilli(c.getLong(3))
                     .atZone(ZoneId.systemDefault()).toLocalDate().toString();
+                Long boughtQty = c.isNull(5) ? null : c.getLong(5);
+                Long total = ShoppingCostRules.totalGrosz(boughtQty, c.getLong(0));
                 entries.addView(text(date + " • " + MoneyRules.format(c.getLong(0))
-                    + " / " + c.getString(1)
+                    + " / 1 " + c.getString(1)
+                    + " • ilość: " + (boughtQty == null ? "nieokreślona"
+                        : ShoppingRules.formatQuantity(boughtQty))
+                    + " • razem: " + (total == null ? "nieznane"
+                        : MoneyRules.format(total))
                     + (c.getString(2).isEmpty() ? ""
                         : " • " + c.getString(2)), 15, false));
             }
