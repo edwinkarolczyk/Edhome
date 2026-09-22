@@ -2312,7 +2312,7 @@ public final class MainActivity extends Activity {
     }
 
     private void calendar() {
-        header("Kalendarz • czynności");
+        header("Kalendarz • czynności i pojazdy");
         YearMonth month = YearMonth.parse(calendarMonth);
         LocalDate selected = LocalDate.parse(calendarDay);
         note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
@@ -2404,6 +2404,18 @@ public final class MainActivity extends Activity {
                 new String[]{countStart.toString(), countEnd.toString()})) {
             while (c.moveToNext()) counts.put(c.getString(0), c.getInt(1));
         }
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT deadline,COUNT(*) FROM ("
+                + "SELECT oc_until AS deadline FROM vehicles WHERE oc_until!='' "
+                + "UNION ALL SELECT inspection_until FROM vehicles "
+                + "WHERE inspection_until!='') "
+                + "WHERE deadline>=? AND deadline<=? GROUP BY deadline",
+                new String[]{countStart.toString(), countEnd.toString()})) {
+            while (c.moveToNext()) {
+                String date = c.getString(0);
+                counts.put(date, counts.getOrDefault(date, 0) + c.getInt(1));
+            }
+        }
 
         if (!"day".equals(calendarView) && !"agenda".equals(calendarView)) {
         LinearLayout headings = new LinearLayout(this);
@@ -2468,6 +2480,21 @@ public final class MainActivity extends Activity {
                         14, false));
                 }
             }
+            try (Cursor c = db.getReadableDatabase().rawQuery(
+                    "SELECT deadline,kind,name FROM ("
+                    + "SELECT oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+                    + "WHERE oc_until!='' UNION ALL "
+                    + "SELECT inspection_until,'Przegląd',name FROM vehicles "
+                    + "WHERE inspection_until!='') WHERE deadline>=? "
+                    + "AND deadline<=? ORDER BY deadline,name LIMIT 100",
+                    new String[]{selected.toString(),
+                        selected.plusDays(29).toString()})) {
+                while (c.moveToNext()) {
+                    shown++;
+                    agenda.addView(text("• " + c.getString(0) + " — "
+                        + c.getString(1) + ": " + c.getString(2), 14, false));
+                }
+            }
             if (shown == 0) agenda.addView(text("Brak terminów.", 14, false));
         }
         title("Termin: " + selected.toString());
@@ -2482,14 +2509,32 @@ public final class MainActivity extends Activity {
                     c.getString(3), c.getString(4), c.getInt(5));
             }
         }
-        if (found == 0) note("Brak zaplanowanych czynności na ten dzień.");
+        int vehicleDates = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,kind,name FROM ("
+                + "SELECT id,oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+                + "WHERE oc_until!='' UNION ALL "
+                + "SELECT id,inspection_until,'Przegląd',name FROM vehicles "
+                + "WHERE inspection_until!='') WHERE deadline=? ORDER BY name,kind",
+                new String[]{selected.toString()})) {
+            while (c.moveToNext()) {
+                vehicleDates++;
+                LinearLayout event = card();
+                event.addView(text(c.getString(1) + " • " + c.getString(2),
+                    17, true));
+                smallButton(event, "Pokaż pojazdy", () -> go("vehicles"));
+            }
+        }
+        if (found == 0 && vehicleDates == 0)
+            note("Brak zaplanowanych czynności i terminów pojazdów na ten dzień.");
         button("+ Dodaj czynność", () ->
             editTask(null, "", selected.toString(), "once", 1));
         button("Wszystkie czynności", () -> {
             tasksFilter = "all";
             go("tasks");
         });
-        note("Miesiąc, tydzień, dzień i agenda pokazują te same zapisane czynności. "
+        note("Terminy OC i przeglądów pochodzą z kart pojazdów. "
+            + "Nie tworzą drugich czynności ani wydatków. "
             + "Planowanie dostępności domowników będzie rozwijane osobno.");
     }
 
