@@ -222,6 +222,7 @@ jobs:
           javac -d "$RUNNER_TEMP/private-paycheck" app/src/main/java/com/edwinkarolczyk/edhome/PrivatePaycheckCrypto.java tests/task_rules/PrivatePaycheckCryptoSmoke.java
           java -cp "$RUNNER_TEMP/private-paycheck" com.edwinkarolczyk.edhome.PrivatePaycheckCryptoSmoke
           python3 tests/check_private_paycheck_contract.py
+          python3 tests/check_private_backup_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
