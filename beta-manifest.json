@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 47,
-  "versionName": "0.5.0-beta.4",
+  "versionCode": 48,
+  "versionName": "0.5.0-beta.5",
   "changelog": "EDHOME Beta 0.5.0-beta.4 — panel: dowolna liczba kafelków, wybór celu, nazwy, ikony, koloru, rozmiaru, położenia, ukrywanie i kopia układu. PayCheck i dane SQLite v21 zachowane.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.4/edhome-beta.apk",
-  "sha256": "219d121c631aa29d5044979a277d369405bb4988cbd011943cdc503b95ea427c"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.5/edhome-beta.apk",
+  "sha256": "ee96739c9a6aec85fc4d9ef9474a7d4435e1c630261b03b848412c3aa56f59bf"
 }
