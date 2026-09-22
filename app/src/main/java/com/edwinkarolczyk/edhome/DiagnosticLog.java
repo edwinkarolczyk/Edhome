@@ -6,6 +6,7 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -21,6 +22,7 @@ public final class DiagnosticLog {
     private static final Object LOCK = new Object();
     private static final int MAX_BYTES = 1024 * 1024;
     private static final int MAX_EXPORT_CHARS = 160000;
+    private static final int MAX_CHAT_CHARS = 20000;
     private static File current;
     private static File previous;
 
@@ -113,30 +115,49 @@ public final class DiagnosticLog {
         }
     }
 
+    /** Legacy bounded preview; the full .txt export uses readFullText(). */
     public static String readText() {
+        String content = readFullText();
+        if (content.length() > MAX_EXPORT_CHARS)
+            return "[Older diagnostic lines omitted]\n"
+                + content.substring(content.length() - MAX_EXPORT_CHARS);
+        return content;
+    }
+
+    /** Full retained history: current and previous 1 MB segments, not a truncated preview. */
+    public static String readFullText() {
         if (!enabled()) return "";
         synchronized (LOCK) {
             if (current == null) return "";
             StringBuilder out = new StringBuilder();
             readInto(previous, out);
             readInto(current, out);
-            String content = out.toString();
-            if (content.length() > MAX_EXPORT_CHARS) {
-                return "[Older diagnostic lines omitted]\n"
-                    + content.substring(content.length() - MAX_EXPORT_CHARS);
-            }
-            return content;
+            return out.toString();
         }
+    }
+
+    /** Paste-safe newest complete lines, limited to 5k / 12k / 20k characters. */
+    public static String readForChat(int requestedChars) {
+        int limit = Math.max(1000, Math.min(MAX_CHAT_CHARS, requestedChars));
+        String content = readText();
+        if (content.length() <= limit) return content;
+        String header = "[EDHOME: starsze wpisy pominięte w kopii do czatu; "
+            + "pełna historia w eksporcie .txt]\n";
+        String tail = content.substring(content.length() - (limit - header.length()));
+        int firstNewline = tail.indexOf('\n');
+        if (firstNewline >= 0) tail = tail.substring(firstNewline + 1);
+        return header + tail;
     }
 
     private static void readInto(File file, StringBuilder out) {
         if (file == null || !file.exists()) return;
         byte[] buffer = new byte[8192];
-        try (FileInputStream input = new FileInputStream(file)) {
+        try (FileInputStream input = new FileInputStream(file);
+             ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
             int count;
-            while ((count = input.read(buffer)) != -1) {
-                out.append(new String(buffer, 0, count, StandardCharsets.UTF_8));
-            }
+            while ((count = input.read(buffer)) != -1)
+                bytes.write(buffer, 0, count);
+            out.append(new String(bytes.toByteArray(), StandardCharsets.UTF_8));
         } catch (Exception ignored) {
             out.append("\n[Unable to read one diagnostic segment]\n");
         }

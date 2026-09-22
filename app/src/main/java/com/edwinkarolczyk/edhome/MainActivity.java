@@ -4884,7 +4884,7 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
             render();
         });
-        body.addView(gestures);
+        // card() already attaches gestures to body. Adding it twice crashes Android.
         String[] descriptions = {
             "Ciemny granat • mięta • wyraźne kafle",
             "Leśna zieleń • ciepłe, naturalne akcenty",
@@ -5277,18 +5277,30 @@ public final class MainActivity extends Activity {
     private void diagnostics() {
         if (!DiagnosticLog.enabled()) { go("home"); return; }
         header("Diagnostyka • tylko BETA");
-        note("Zapis automatyczny w prywatnym pliku aplikacji. Maks. 1 MB + poprzedni segment.");
+        note("Pliki w aplikacji: do 1 MB każdy (bieżący i poprzedni segment). "
+            + "Wklejanie do czatu ma oddzielny limit znaków; pełny eksport .txt go nie ma.");
         note("Nie zapisujemy PIN-u, nazw produktów, treści finansów ani powiadomień. Log Androida całego telefonu nie jest zbierany.");
-        button("Kopiuj log do schowka", () -> {
-            DiagnosticLog.event("DIAGNOSTICS_COPIED");
-            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        note("Ile znaków skopiować do czatu?");
+        final int[] chatLimits = {5000, 12000, 20000};
+        Spinner chatSize = new Spinner(this);
+        chatSize.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "5 000 znaków", "12 000 znaków (domyślnie)", "20 000 znaków")));
+        chatSize.setSelection(1);
+        body.addView(chatSize);
+        button("Kopiuj ostatnie logi do czatu", () -> {
+            int limit = chatLimits[chatSize.getSelectedItemPosition()];
+            DiagnosticLog.event("DIAGNOSTICS_CHAT_COPIED", "limit=" + limit);
+            ClipboardManager clipboard = (ClipboardManager)
+                getSystemService(Context.CLIPBOARD_SERVICE);
             if (clipboard != null) {
-                clipboard.setPrimaryClip(ClipData.newPlainText("EDHOME beta diagnostics",
-                    DiagnosticLog.readText()));
-                alert("Log skopiowany. Możesz wkleić go do czatu.");
+                String report = DiagnosticLog.readForChat(limit);
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                    "EDHOME beta diagnostics (chat)", report));
+                alert("Skopiowano " + report.length() + " znaków (limit "
+                    + limit + "). Wklej do czatu. Pełną historię wyeksportuj jako .txt.");
             } else alert("Schowek jest niedostępny.");
         });
-        button("Eksportuj plik .txt", () -> {
+        button("Eksportuj pełne logi (.txt)", () -> {
             DiagnosticLog.event("DIAGNOSTICS_EXPORT_REQUESTED");
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -5302,7 +5314,8 @@ public final class MainActivity extends Activity {
             }
         });
         String log = DiagnosticLog.readText();
-        note("Podgląd: " + log.length() + " znaków");
+        note("Podgląd ostatnich wpisów: " + log.length()
+            + " znaków; eksport .txt obejmuje oba pełne segmenty.");
         TextView preview = text(log.substring(Math.max(0, log.length() - 5000)), 11, false);
         preview.setTextIsSelectable(true);
         card().addView(preview);
@@ -5483,7 +5496,7 @@ public final class MainActivity extends Activity {
         Uri destination = data.getData();
         try (OutputStream stream = getContentResolver().openOutputStream(destination)) {
             if (stream == null) throw new IllegalStateException("No output stream");
-            stream.write(DiagnosticLog.readText().getBytes(StandardCharsets.UTF_8));
+            stream.write(DiagnosticLog.readFullText().getBytes(StandardCharsets.UTF_8));
             DiagnosticLog.event("DIAGNOSTICS_EXPORTED");
             alert("Zapisano plik diagnostyczny.");
         } catch (Exception error) {

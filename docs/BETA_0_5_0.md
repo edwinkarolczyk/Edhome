@@ -94,3 +94,11 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Jeżeli zapis ustawień przy odtwarzaniu się nie uda, transakcja SQLite cofa dane. SQLite i SharedPreferences nie mają wspólnej gwarancji atomowości na wypadek nagłego wyłączenia urządzenia.
 - Nowy test zgodności typów/pustych kolumn i symulowany round-trip SQLite→JSON→SQLite. Odbiór na prawdziwym telefonie nadal osobno. Zwykły JSON nie zawiera prywatnego sejfu PayCheck, który ma własny szyfrowany eksport.
 - Bez migracji SQLite v22, Beta bez PIN, Stable `main` bez zmian.
+
+
+## 0.5.0-beta.9.1 — pilny fix Ustawień i diagnostyki
+
+- Crash `IllegalStateException` w `MainActivity#settings` naprawiony: `card()` podłącza `gestures` do ekranu, więc nie dodawać tej samej karty ponownie przez `body.addView(gestures)`.
+- Kopia do czatu ma konfigurowalny limit **5 000 / 12 000 (domyślnie) / 20 000 znaków**, pobiera najnowsze kompletne linie i opisuje pominięcie starszych wpisów. Nie zmienia limitu przechowywania diagnostyki: bieżący i poprzedni plik po 1 MB.
+- Eksport `.txt` zawiera całą zachowaną historię z obu segmentów (poprzednio używał podglądu obciętego do 160 tys. znaków); nie usuwa logów i nie zapisuje prywatnych danych w diagnostyce. Odczyt UTF-8 dekoduje cały segment, bez dzielenia polskich znaków między bloki.
+- Bez migracji SQLite v22; Stable `main` bez zmian. Testu Android UI na fizycznym telefonie CI nie zastępuje.
