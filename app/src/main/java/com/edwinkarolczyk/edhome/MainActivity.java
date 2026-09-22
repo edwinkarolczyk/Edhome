@@ -3773,6 +3773,18 @@ public final class MainActivity extends Activity {
                 box.addView(text(PantryCategories.label(category), 13, false));
                 if (details != null && !details.brand.isEmpty())
                     box.addView(text("Marka: " + details.brand, 13, false));
+                try (Cursor prices = PantryPriceHistoryStore.forProduct(
+                        db.getReadableDatabase(), id)) {
+                    if (prices.moveToFirst()) {
+                        box.addView(text("Ostatnia cena zakupu: "
+                            + MoneyRules.format(prices.getLong(0)) + " / "
+                            + prices.getString(1)
+                            + (prices.getString(2).isEmpty() ? ""
+                                : " • " + prices.getString(2)), 14, false));
+                        smallButton(box, "Historia cen", () ->
+                            showPantryPriceHistory(id, name));
+                    }
+                }
                 LinearLayout quick = new LinearLayout(this);
                 quick.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(quick);
@@ -4436,6 +4448,33 @@ public final class MainActivity extends Activity {
             .indexOf(initialUnit);
         spinner.setSelection(Math.max(0, chosen));
         return spinner;
+    }
+
+
+    private void showPantryPriceHistory(long pantryId, String productName) {
+        LinearLayout entries = new LinearLayout(this);
+        entries.setOrientation(LinearLayout.VERTICAL);
+        entries.setPadding(dp(16), dp(12), dp(16), dp(12));
+        entries.addView(text("Historia rzeczywistych zakupów; nie jest to "
+            + "wycena całego zapasu ani saldo PayCheck.", 14, false));
+        int count = 0;
+        try (Cursor c = PantryPriceHistoryStore.forProduct(
+                db.getReadableDatabase(), pantryId)) {
+            while (c.moveToNext()) {
+                count++;
+                String date = Instant.ofEpochMilli(c.getLong(3))
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString();
+                entries.addView(text(date + " • " + MoneyRules.format(c.getLong(0))
+                    + " / " + c.getString(1)
+                    + (c.getString(2).isEmpty() ? ""
+                        : " • " + c.getString(2)), 15, false));
+            }
+        }
+        if (count == 0) entries.addView(text("Nie ma zapisanych cen.", 14, false));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(entries);
+        new AlertDialog.Builder(this).setTitle("Historia cen: " + productName)
+            .setView(scroll).setPositiveButton("Zamknij", null).show();
     }
 
     private void pantryProductDialog(Long id, String existingName) {
