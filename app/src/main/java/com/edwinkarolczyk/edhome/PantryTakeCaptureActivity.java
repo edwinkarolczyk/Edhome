@@ -179,7 +179,8 @@ public final class PantryTakeCaptureActivity extends Activity {
 
     private void cancelPending(String event) {
         handler.removeCallbacks(tick);
-        if (countdown != null && countdown.pending() != null) {
+        if (countdown != null
+                && (countdown.pending() != null || countdown.needsApproval())) {
             countdown.cancel();
             DiagnosticLog.event(event);
         }
@@ -197,6 +198,15 @@ public final class PantryTakeCaptureActivity extends Activity {
             DiagnosticLog.event("PANTRY_TAKE_REPLACED");
         lastBarcode = barcode;
         another.setEnabled(false);
+        if (countdown.needsApproval()) {
+            takeNow.setEnabled(false);
+            another.setEnabled(true);
+            title.setText("Ten kod był ostatnio wyjęty. Potwierdź, że to "
+                + "kolejne opakowanie; poprzedni licznik anulowano.");
+            timer.setText("Oczekuje na potwierdzenie • niczego nie odejmuję");
+            DiagnosticLog.event("PANTRY_TAKE_REPEAT_REQUIRES_CONFIRMATION");
+            return;
+        }
         if (!PantryScanRules.validBarcode(barcode)) {
             cancelPending("PANTRY_TAKE_INVALID");
             title.setText("Niepoprawny EAN/UPC/GTIN. Skanuj inny kod.");
@@ -268,6 +278,7 @@ public final class PantryTakeCaptureActivity extends Activity {
                     return;
                 }
             } finally { db.close(); }
+            countdown.markCommitted(barcode);
             committed++;
             DiagnosticLog.event("PANTRY_TAKE_COMMITTED");
             title.setText("Zapisano −1 opakowanie. Możesz skanować następny kod.");
