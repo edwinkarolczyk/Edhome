@@ -184,6 +184,8 @@ jobs:
           python3 tests/check_pantry_packages_contract.py
       - name: Scanner failure recovery and duplicate suppression
         run: python3 tests/check_scanner_recovery_contract.py
+      - name: 0.5 TAKE scanner stabilization A-B-A safety
+        run: python3 tests/check_pantry_stabilization_contract.py
       - name: Continuous TAKE countdown and interruption regression
         run: |
           mkdir -p "$RUNNER_TEMP/pantry-take"
@@ -309,14 +311,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.5.0-beta.11-signed-apk
+          name: EDHOME-0.5.0-beta.11.1-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.11 — wyjmowanie z otwartym aparatem i przerywalnym licznikiem 5 sekund (ustawienia 3/5/8/10 s), nowy kod anuluje poprzedni; bez migracji SQLite v22."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.11.1 — stabilizacja skanera: A-B-A wymaga potwierdzenia ponownego wyjecia A, anulowanie nie proponuje ponowienia nieznanego kodu. SQLite v22 bez migracji."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

@@ -1,42 +1,61 @@
 package com.edwinkarolczyk.edhome;
 
 public final class PantryTakeCountdownSmoke {
-    private static int checks;
-    private static void check(boolean valid, String label) {
-        if (!valid) throw new AssertionError(label);
-        checks++;
+    private static int count;
+    private static void check(boolean result, String label) {
+        if (!result) throw new AssertionError(label);
+        count++;
     }
     public static void main(String[] args) {
-        check(PantryTakeCountdown.DEFAULT_SECONDS == 5, "default 5s");
-        check(PantryTakeCountdown.validSeconds(3) && PantryTakeCountdown.validSeconds(5)
-            && PantryTakeCountdown.validSeconds(8)
-            && PantryTakeCountdown.validSeconds(10), "settings options");
+        check(PantryTakeCountdown.DEFAULT_SECONDS == 5, "5s default");
+        for (int seconds : PantryTakeCountdown.DELAY_OPTIONS)
+            check(PantryTakeCountdown.validSeconds(seconds), "valid option " + seconds);
         check(!PantryTakeCountdown.validSeconds(0)
-            && !PantryTakeCountdown.validSeconds(11), "invalid delay");
+                && !PantryTakeCountdown.validSeconds(11), "invalid options");
         PantryTakeCountdown take = new PantryTakeCountdown(5);
-        check(!take.due(999999) && take.pending() == null, "idle does nothing");
-        check(take.observe("EAN_A", 1000), "first scan starts countdown");
+        check(!take.due(10000) && take.pending() == null, "idle");
+        check(take.observe("A", 1000), "start A");
         check(take.millisLeft(1000) == 5000 && !take.due(5999), "not early");
-        check(!take.observe("EAN_A", 3500) && take.millisLeft(3500) == 2500,
-            "duplicate camera frame cannot restart timer");
-        check(take.observe("EAN_B", 4700) && "EAN_B".equals(take.pending()),
-            "new code replaces old");
-        check(!take.due(6000) && take.due(9700), "new timer counts from new code");
-        check("EAN_B".equals(take.consume()), "exact new code consumed");
-        check(take.consume() == null, "same countdown cannot commit twice");
-        check(!take.observe("EAN_B", 9800), "camera frame cannot take second pack");
+        check(!take.observe("A", 3000) && take.millisLeft(3000) == 3000,
+            "same camera frame cannot reset timer");
+        check(take.observe("B", 4000) && "B".equals(take.pending()),
+            "new product replaces pending A");
+        check(!take.due(6000) && take.due(9000), "B timer is fresh");
+        check("B".equals(take.consume()) && take.consume() == null,
+            "only one take per timer");
+        take.markCommitted("B");
+        check(!take.observe("B", 9100) || take.needsApproval(),
+            "committed B cannot be taken silently again");
         take.allowSameAgain();
-        check(take.observe("EAN_B", 10000), "explicit second pack allowed");
+        check(take.observe("B", 10000), "explicit second B");
+        check("B".equals(take.consume()), "second B only after approval");
+        take.markCommitted("B");
+        check(take.observe("A", 11000), "A pending");
+        check("A".equals(take.consume()), "A committed");
+        take.markCommitted("A");
+
+        // Regression: frame A, then B, then A must NOT remove A twice.
+        check(take.observe("B", 12000), "B pending after A commit");
+        check(take.observe("A", 12100), "return to A interrupts B");
+        check(take.pending() == null && take.needsApproval()
+                && !take.due(100000), "A requires approval, B canceled");
+        check(!take.observe("A", 12200), "repeated A frames do not rearm");
+        check(take.consume() == null, "no stock operation before approval");
+        take.allowSameAgain();
+        check(take.observe("A", 13000) && !take.due(17999),
+            "explicit second A starts new 5s");
+        check("A".equals(take.consume()), "explicit A can be taken");
+        take.markCommitted("A");
+        check(take.observe("C", 19000), "C pending");
         take.cancel();
-        check(take.pending() == null && !take.due(100000),
-            "background/cancel cannot auto commit");
-        check(!take.observe("EAN_B", 11000), "cancelled code remains blocked");
-        check(take.observe("EAN_C", 11000), "different code starts new timer");
-        check("EAN_C".equals(take.consume()), "third code can commit");
-        check(take.pending() == null && !take.due(100000),
-            "no delayed action after consume");
-        check(new PantryTakeCountdown(3).millisLeft(0) == 0, "other setting idle");
-        System.out.println("PantryTakeCountdown lifecycle/replacement/single-use: PASS "
-            + checks);
+        check(take.pending() == null && !take.due(999999),
+            "background never commits");
+        check(!take.observe("C", 20000), "canceled C frame blocked");
+        check(take.observe("D", 20000), "new distinct D accepted");
+        check("D".equals(take.consume()), "D consumed");
+        take.markCommitted("D");
+        check(!take.observe("D", 21000) || take.needsApproval(),
+            "last committed never auto-repeats");
+        System.out.println("Take countdown A-B-A, cancel and single-use: PASS " + count);
     }
 }

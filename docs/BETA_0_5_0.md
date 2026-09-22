@@ -127,3 +127,11 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Ten sam kod z kolejnych klatek nie powoduje ponownych wyjęć: drugie opakowanie wymaga jawnego przycisku albo zeskanowania innego kodu. Opcja „Wyjmij teraz” omija tylko oczekiwanie, nigdy walidację i zapis transakcyjny. W trybie pojedynczym po jednym wyjęciu aparat się zamyka; w serii pozostaje do zakończenia.
 - Preferowany czas jest objęty zwykłą kopią JSON i walidacją importu; bez migracji SQLite v22. Czysty test Java sprawdza zastępowanie kodu, brak podwójnego skanu i anulowanie po tle; kompilacja Androida sprawdza dostępność klas skanera. Odbiór ciągłego skanowania na fizycznym telefonie pozostaje osobnym testem.
 - Stable `main` bez zmian.
+
+
+## 0.5.0-beta.11.1 — stabilizacja linii 0.5
+
+- Log z rzeczywistego telefonu pokazał jeden zatwierdzony `PANTRY_TAKE_COMMITTED`, bez `ERROR_UNCAUGHT` we wskazanym fragmencie; `PANTRY_TAKE_UNKNOWN` nie potwierdza usterki sam w sobie — oznacza kod bez powiązania z magazynem.
+- Naprawa sekwencji kamery A → B → A: powrót do ostatnio **rzeczywiście wyjętego** A przerywa licznik B i wymaga jawnego wyboru kolejnego opakowania A. Przy nieznanym, anulowanym lub błędnym kodzie przycisk ponowienia nie jest automatycznie odblokowywany.
+- Testy Java sprawdzają przerwanie, zatwierdzenie, anulowanie, klatki powtarzające kod, brak domyślnego drugiego ubytku i jawne ponowienie. Dodatkowa kontrola regresji kodu jest w CI.
+- Bez migracji SQLite v22 i bez nowych modułów; pozostaje osobny odbiór na fizycznym telefonie. Stable `main` bez zmian.
