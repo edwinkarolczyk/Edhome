@@ -49,7 +49,7 @@ assert 'PantryPriceHistoryStore.create(database);' in main
 assert 'DATABASE_MIGRATED_21_TO_22_PANTRY_PRICES' in main
 assert '"pantry_purchase_prices", "id", "operation_id", "shopping_id", "pantry_id"' in backup
 assert 'inputVersion < 22 && "pantry_purchase_prices".equals(definition[0])' in backup
-assert 'private static final int DB_VERSION = 22;' in backup
-assert 'versionCode 58' in gradle and "versionNameSuffix '-beta.11.2'" in gradle
+assert 'private static final int DB_VERSION = 23;' in backup
+assert 'versionCode 59' in gradle and "versionNameSuffix '-beta.12'" in gradle
 assert '"pantry_purchase_prices"' not in (base / "PaycheckStore.java").read_text(encoding="utf-8")
 print("Optional historical prices, v22 migration, backup, no automatic PayCheck: PASS")
