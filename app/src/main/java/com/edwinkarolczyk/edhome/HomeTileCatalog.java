@@ -103,6 +103,6 @@ final class HomeTileCatalog {
             throw new IllegalArgumentException("Invalid shortcuts");
         for (String id : ids) if (!validTileId(id))
             throw new IllegalArgumentException("Unknown shortcut");
-        return android.text.TextUtils.join(",", ids);
+        return String.join(",", ids);
     }
 }
