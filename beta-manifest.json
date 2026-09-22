@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 52,
-  "versionName": "0.5.0-beta.9",
-  "changelog": "EDHOME Beta 0.5.0-beta.9 — kopia danych z weryfikacja pliku, przywracanie historii cen i bezpieczna transakcja. SQLite v22 bez migracji.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.9/edhome-beta.apk",
-  "sha256": "e9dce7937b58fd9ab26ad6e63b8ff187ce5a1ad9d1d08042f22ff4cc1dca8032"
+  "versionCode": 53,
+  "versionName": "0.5.0-beta.9.1",
+  "changelog": "EDHOME Beta 0.5.0-beta.9.1 — naprawiono awarię Ustawień, kopiowanie logów do czatu z limitem 5/12/20 tys. znaków i pełny eksport .txt. SQLite v22 bez migracji.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.9.1/edhome-beta.apk",
+  "sha256": "95ec17fdc02b8b611d70ea41ad5d976e8c6ecf4685847caa761917a464c3e64b"
 }
