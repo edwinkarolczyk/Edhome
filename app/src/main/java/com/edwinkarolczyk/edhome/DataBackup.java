@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 22;
+    private static final int DB_VERSION = 23;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -40,9 +40,11 @@ final class DataBackup {
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
         {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty", "category"},
-        {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
+        {"shopping_items", "id", "name", "qty_milli", "unit", "checked",
+            "place_id"},
         {"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",
-            "packages", "before_qty", "after_qty", "happened_at"},
+            "packages", "before_qty", "after_qty", "happened_at",
+            "place_id", "place_name_snapshot"},
         {"pantry_purchase_prices", "id", "operation_id", "shopping_id", "pantry_id",
             "name_snapshot", "unit", "quantity_milli", "unit_price_grosz",
             "shop", "happened_at"},
@@ -414,6 +416,16 @@ final class DataBackup {
                             values.put(key, "other");
                             continue;
                         }
+                        if (inputVersion < 23
+                                && ("shopping_items".equals(definition[0])
+                                    || "shopping_receipts".equals(definition[0]))) {
+                            if ("place_id".equals(key)) {
+                                values.putNull(key); continue;
+                            }
+                            if ("place_name_snapshot".equals(key)) {
+                                values.put(key, ""); continue;
+                            }
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
@@ -622,12 +634,14 @@ final class DataBackup {
                     Long after = values.getAsLong("after_qty");
                     Long stamp = values.getAsLong("happened_at");
                     String name = values.getAsString("name_snapshot");
+                    String placeName = values.getAsString("place_name_snapshot");
                     if (shopping == null || shopping < 1 || pantry == null || pantry < 1
                             || packages == null || packages < 1 || packages > 100000000
                             || before == null || before < 0 || before > 100000000
                             || after == null || after != before + packages
                             || after > 100000000 || stamp == null || stamp <= 0
-                            || name == null || name.trim().isEmpty() || name.length() > 160)
+                            || name == null || name.trim().isEmpty() || name.length() > 160
+                            || placeName == null || placeName.length() > 160)
                         throw new IllegalArgumentException("Nieprawidłowe przyjęcie zakupów.");
                 }
                 if ("pantry".equals(definition[0])) {
@@ -739,6 +753,18 @@ final class DataBackup {
         Set<Long> validPlaces = new HashSet<>();
         for (ContentValues place : parsed.get("places"))
             validPlaces.add(place.getAsLong("id"));
+        for (ContentValues item : parsed.get("shopping_items")) {
+            Long place = item.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Zakup ma nieistniejące miejsce.");
+        }
+        for (ContentValues receipt : parsed.get("shopping_receipts")) {
+            Long place = receipt.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Przyjęcie ma nieistniejące miejsce.");
+            if (place != null && receipt.getAsString("place_name_snapshot").isEmpty())
+                throw new IllegalArgumentException("Przyjęcie nie ma nazwy miejsca.");
+        }
         for (ContentValues object : parsed.get("storage_items"))
             objects.put(object.getAsLong("id"), object);
         for (ContentValues object : parsed.get("storage_items")) {
