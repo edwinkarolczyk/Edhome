@@ -38,7 +38,7 @@ for value in (
 ):
     assert value in scan, "Missing atomic barcode/package contract: " + value
 for value in (
-    'DB_VERSION = 23;',
+    'DB_VERSION = 24;',
     '{"pantry_packages", "pantry_id", "unit", "size_milli"}',
     'inputVersion < 17 && "pantry_packages".equals(definition[0])',
     '"size_milli".equals(column)',
@@ -47,5 +47,5 @@ for value in (
     'packagedProducts.size() != pantryIds.size()',
 ):
     assert value in backup, "Missing backup contract: " + value
-assert 'versionCode 60' in gradle and "versionNameSuffix '-beta.12.1'" in gradle
+assert 'versionCode 61' in gradle and "versionNameSuffix '-beta.1'" in gradle
 print("Pantry packages UI, stock isolation, backup v17 and scanner: PASS")

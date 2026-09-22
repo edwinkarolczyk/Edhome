@@ -31,7 +31,7 @@ for token in (
 ):
     assert token in main, "Goal UI/schema missing: "+token
 for token in (
-    'DB_VERSION = 23;',
+    'DB_VERSION = 24;',
     '"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"',
     '"paycheck_goal_allocations", "id", "operation_id", "goal_id"',
     'inputVersion < 21 && ("paycheck_goals".equals(definition[0])',
@@ -40,7 +40,7 @@ for token in (
     '"target_grosz".equals(column) || "goal_id".equals(column)',
 ):
     assert token in backup, "Backup protection absent: "+token
-assert "versionCode 60" in gradle and "versionNameSuffix '-beta.12.1'" in gradle
+assert "versionCode 61" in gradle and "versionNameSuffix '-beta.1'" in gradle
 assert "PaycheckGoalsStore" not in (root/"ShoppingReceiptStore.java").read_text()
 assert "PaycheckGoalsStore" not in (root/"PantryBarcodeStore.java").read_text()
 body=source.split("static void create(SQLiteDatabase db)",1)[1].split("static long addGoal(",1)[0]

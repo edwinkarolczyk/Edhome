@@ -35,7 +35,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 23;',
+    'DB_VERSION = 24;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
@@ -45,8 +45,8 @@ for token in (
 ):
     assert token in backup,token
 assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
-assert "versionCode 60" in gradle and "versionNameSuffix '-beta.12.1'" in gradle
-assert "versionName '0.5.0'" in gradle
+assert "versionCode 61" in gradle and "versionNameSuffix '-beta.1'" in gradle
+assert "versionName '0.6.0'" in gradle
 # Receipt and barcode commit must never automatically post to PayCheck.
 receipt=Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text()
 barcode=Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text()
