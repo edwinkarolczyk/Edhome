@@ -13,8 +13,8 @@ assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
 assert 'super(context, "edhome-beta-preview.db", null, 23' in main
-assert 'private static final int DB_VERSION = 23;' in backup
-assert "newVersion > 23" in main
+assert 'private static final int DB_VERSION = 24;' in backup
+assert "newVersion > 24" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
@@ -64,8 +64,8 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 60" in gradle
-assert "versionName '0.5.0'" in gradle
+assert "versionCode 61" in gradle
+assert "versionName '0.6.0'" in gradle
 settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
 assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
 assert 'themeChoice.setSelection(Math.max(0, currentTheme));' in settings

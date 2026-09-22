@@ -5,7 +5,7 @@ import sqlite3
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text()
 store=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageStore.java").read_text()
 gradle=Path("app/build.gradle").read_text()
-assert 'versionCode 60' in gradle and "versionNameSuffix '-beta.12.1'" in gradle
+assert 'versionCode 61' in gradle and "versionNameSuffix '-beta.1'" in gradle
 method=main.split('boolean deletePlace(long id) {',1)[1].split('private static void addDeviceTimers(',1)[0]
 assert 'SELECT 1 FROM storage_items WHERE place_id=? LIMIT 1' in method
 assert method.index('SELECT 1 FROM storage_items WHERE place_id=? LIMIT 1') < method.index('UPDATE tasks SET place_id=NULL')

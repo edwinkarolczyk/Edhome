@@ -44,7 +44,7 @@ for token in (
     assert token in store, "Missing storage safety: "+token
 
 for token in (
-    'DB_VERSION = 23;',
+    'DB_VERSION = 24;',
     '{"storage_items", "id", "name", "kind", "parent_box_id", "place_id",',
     '{"storage_events", "id", "item_id", "name_snapshot", "action",',
     'inputVersion < 19 && ("storage_items".equals(definition[0])',
@@ -55,7 +55,7 @@ for token in (
 ):
     assert token in backup, "Missing storage backup: "+token
 assert 'EDHOME:STORAGE:1:' in qr
-assert "versionCode 60" in gradle and "versionNameSuffix '-beta.12.1'" in gradle
+assert "versionCode 61" in gradle and "versionNameSuffix '-beta.1'" in gradle
 
 expression=store.split('static void createTables(SQLiteDatabase db)',1)[1].split('static final class Item',1)[0]
 statements=[]
