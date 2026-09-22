@@ -14,6 +14,7 @@ storage_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageStore.j
 paycheck_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PaycheckStore.java").read_text(encoding="utf-8")
 goals_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PaycheckGoalsStore.java").read_text(encoding="utf-8")
 price_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryPriceHistoryStore.java").read_text(encoding="utf-8")
+vehicle_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -73,12 +74,14 @@ storage19 = statements(section(storage_store, "static void createTables(SQLiteDa
 paycheck20 = statements(section(paycheck_store, "static void create(SQLiteDatabase db)", "static String add(").replace("db.execSQL(", "database.execSQL("))
 goals21 = statements(section(goals_store, "static void create(SQLiteDatabase db)", "static long addGoal(").replace("db.execSQL(", "database.execSQL("))
 prices22 = statements(section(price_store, "static void create(SQLiteDatabase db)", "static String markBought(").replace("db.execSQL(", "database.execSQL("))
+vehicles24 = statements(section(vehicle_store, "static void create(SQLiteDatabase db)", "static final class Vehicle").replace("db.execSQL(", "database.execSQL("))
 # Historic installs: columns arrive only with the v23 migration.
 shopping22 = [sql.replace(", place_id INTEGER)", ")") for sql in shopping]
 receipts22 = [sql.replace(", place_id INTEGER, place_name_snapshot TEXT NOT NULL DEFAULT '')", ")")
               for sql in receipts18]
 step23 = statements(section(upgrade, "if (oldVersion < 23)",
                             'DiagnosticLog.event("DATABASE_MIGRATED_22_TO_23_SHOPPING_PLACES")'))
+step24 = vehicles24.copy()  # LocalDb delegates v23->24 to VehicleStore.create.
 legacy17 = statements(section(package_store, "static void fillLegacy(SQLiteDatabase db)", "static final class Pack").replace("db.execSQL(", "database.execSQL("))
 step16 = statements(section(upgrade, "if (oldVersion < 16)", 'DiagnosticLog.event("DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES")'))
 legacy_create = [sql.split(", category TEXT NOT NULL DEFAULT")[0] + ")"
@@ -98,12 +101,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 23, "Database version and backup format differ"
+assert version == backup_version == 24, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck20 + goals21 + prices22)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck20 + goals21 + prices22 + vehicles24)
 expected = schema(fresh)
-assert len(expected) == 24 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 26 and len(vehicles24) == 3 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -169,6 +172,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, goals21)  # v20 to v21, shared goals and allocations
     execute(db, prices22)  # v21 to v22, optional purchase price history
     execute(db, step23)  # v22 to v23, per-shopping destination
+    execute(db, step24)  # v23 to v24, vehicles
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -252,7 +256,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 16 && "pantry".equals(definition[0])' in backup
 assert 'PantryCategories.known(values.getAsString("category"))' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
@@ -294,9 +298,23 @@ execute(existing14, paycheck20)
 execute(existing14, goals21)
 execute(existing14, prices22)
 execute(existing14, step23)
+execute(existing14, step24)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
 assert existing14.execute("SELECT pantry_id,unit,size_milli FROM pantry_packages").fetchone() == (2,"szt.",1000)
 existing14.close()
-print("SQLite migrations v1–v22→v23: PASS; shopping places, prices, goals, QR, backup: PASS")
+# Existing SQLite v23 with populated objects and shopping history stays intact.
+existing23 = sqlite3.connect(":memory:")
+execute(existing23, create + audit + history + rotations + places
+        + sibling_index + members + shifts + shopping + timers + pantry14
+        + pantry15 + pantry17 + receipts18 + storage19 + paycheck20 + goals21
+        + prices22)
+existing23.execute("INSERT INTO pantry(id,name,qty) VALUES(9,'Ryż',6)")
+existing23.execute("INSERT INTO shopping_items(id,name) VALUES(42,'Ryż')")
+execute(existing23, step24)
+assert schema(existing23) == expected
+assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
+assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
+existing23.close()
+print("SQLite migrations v1–v23→v24: PASS; vehicles, shopping, pantry, backup: PASS")
