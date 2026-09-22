@@ -3438,7 +3438,8 @@ public final class MainActivity extends Activity {
         header("Lista zakupów • offline");
         note("Kupione ≠ przyjęte. Samo zaznaczenie nie zmienia stanu; "
             + "dopiero osobny przycisk Przyjmij dopisuje wybrane opakowania "
-            + "do wskazanego produktu w spiżarni. Bez automatycznej ceny.");
+            + "do wskazanego produktu w spiżarni. Cena zakupu jest opcjonalna; "
+            + "nie księgujemy jej automatycznie w PayCheck.");
         button("← Spiżarnia", () -> go("pantry"));
         EditText item = field("Co kupić?", false);
         EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
@@ -3476,18 +3477,30 @@ public final class MainActivity extends Activity {
                 final String name = cursor.getString(1);
                 final Long amount = cursor.isNull(2)
                     ? null : cursor.getLong(2);
+                final String purchaseUnit = cursor.getString(3);
                 final boolean done = cursor.getInt(4) == 1;
                 final boolean received = ShoppingReceiptStore.received(
                     db.getReadableDatabase(), shoppingId);
                 LinearLayout box = card();
                 CheckBox check = new CheckBox(this);
                 check.setText(name + " • " + ShoppingRules.formatQuantity(amount)
-                    + (amount == null ? "" : " " + cursor.getString(3)));
+                    + (amount == null ? "" : " " + purchaseUnit));
                 check.setTextColor(done ? subdued : ink);
                 check.setTextSize(17);
                 check.setButtonTintList(ColorStateList.valueOf(accent));
                 check.setChecked(done);
                 box.addView(check);
+                try (Cursor price = PantryPriceHistoryStore.forShoppingItem(
+                        db.getReadableDatabase(), shoppingId)) {
+                    if (price.moveToFirst()) {
+                        box.addView(text("Ostatnio zapłacono: "
+                            + MoneyRules.format(price.getLong(0)) + " / "
+                            + price.getString(1)
+                            + (price.getString(2).isEmpty() ? ""
+                                : " • " + price.getString(2)),
+                            13, false));
+                    }
+                }
                 if (received) {
                     box.addView(text("✓ Przyjęte do spiżarni — zapisano historię",
                         13, false));
@@ -3496,6 +3509,16 @@ public final class MainActivity extends Activity {
                         chooseShoppingReceipt(shoppingId, name));
                 }
                 check.setOnCheckedChangeListener((view, isChecked) -> {
+                    if (received) {
+                        render();
+                        alert("Ta pozycja była już przyjęta. Aby kupić ją ponownie, "
+                            + "usuń ją z listy i dodaj nową.");
+                        return;
+                    }
+                    if (isChecked && !done) {
+                        shoppingBoughtDialog(shoppingId, name, purchaseUnit);
+                        return;
+                    }
                     db.setShoppingChecked(shoppingId, isChecked);
                     DiagnosticLog.event("SHOPPING_ITEM_CHECKED");
                     render();
@@ -3513,6 +3536,77 @@ public final class MainActivity extends Activity {
             }
         }
         if (count == 0) note("Lista jest pusta. Dodaj pierwszy produkt.");
+    }
+
+
+    private void shoppingBoughtDialog(long shoppingId, String productName,
+            String purchaseUnit) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text("Oznaczasz „Kupione”: " + productName
+            + ". Cena jest DOBROWOLNA. Nie dodajemy tu zapasu ani wydatku PayCheck.",
+            14, false));
+        EditText price = new EditText(this);
+        price.setSingleLine(true);
+        price.setHint("Cena za 1 " + purchaseUnit + ", np. 6,49");
+        price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(price);
+        EditText shop = new EditText(this);
+        shop.setSingleLine(true);
+        shop.setHint("Sklep (opcjonalnie)");
+        form.addView(shop);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Zakup • cena opcjonalna").setView(form)
+            .setNegativeButton("Anuluj", (d,w) -> render())
+            .setNeutralButton("Kupione bez ceny", null)
+            .setPositiveButton("Kupione i zapisz cenę", null)
+            .create();
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                try {
+                    String status = PantryPriceHistoryStore.markBought(
+                        db.getWritableDatabase(), shoppingId, null, "");
+                    if (!"COMMITTED".equals(status)) {
+                        alert("Pozycja już kupiona albo została usunięta."); return;
+                    }
+                    DiagnosticLog.event("SHOPPING_BOUGHT_WITHOUT_PRICE");
+                    dialog.dismiss();
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.event("SHOPPING_BOUGHT_FAILED");
+                    alert("Nie zapisano zakupu. Spróbuj ponownie.");
+                }
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                final long grosz;
+                try {
+                    grosz = MoneyRules.parse(price.getText().toString());
+                } catch (IllegalArgumentException invalid) {
+                    price.setError("Podaj cenę większą od 0 w zł, np. 6,49.");
+                    return;
+                }
+                if (shop.getText().toString().trim().length() > 80) {
+                    shop.setError("Maksymalnie 80 znaków."); return;
+                }
+                try {
+                    String status = PantryPriceHistoryStore.markBought(
+                        db.getWritableDatabase(), shoppingId, grosz,
+                        shop.getText().toString());
+                    if (!"COMMITTED".equals(status)) {
+                        alert("Pozycja już kupiona albo została usunięta."); return;
+                    }
+                    DiagnosticLog.event("SHOPPING_BOUGHT_PRICE_RECORDED");
+                    dialog.dismiss();
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.event("SHOPPING_BOUGHT_PRICE_FAILED");
+                    alert("Nie zapisano zakupu ani ceny. Stan pozostał bez zmian.");
+                }
+            });
+        });
+        dialog.show();
     }
 
     private void chooseShoppingReceipt(long shoppingId, String shoppingName) {
