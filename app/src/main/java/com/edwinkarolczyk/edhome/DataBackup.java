@@ -962,6 +962,19 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            // Deleted shopping rows intentionally leave receipt/price history.
+            // After importing into a fresh database, AUTOINCREMENT would only
+            // know IDs still present in shopping_items and could reuse an ID
+            // referenced by an old receipt (falsely "ALREADY_RECEIVED").
+            // Reserve every historical shopping ID inside this same transaction.
+            database.execSQL("INSERT INTO sqlite_sequence(name,seq) "
+                + "SELECT 'shopping_items',0 WHERE NOT EXISTS "
+                + "(SELECT 1 FROM sqlite_sequence WHERE name='shopping_items')");
+            database.execSQL("UPDATE sqlite_sequence SET seq=MAX(seq,"
+                + "COALESCE((SELECT MAX(shopping_id) FROM shopping_receipts),0),"
+                + "COALESCE((SELECT MAX(shopping_id) FROM pantry_purchase_prices),0)) "
+                + "WHERE name='shopping_items'");
+
             // Preferences and SQL are separate stores. Save preferences BEFORE
             // committing SQL, so a failed preference write rolls SQL back.
             // Never clear the installed PIN, private vault or update channel.
