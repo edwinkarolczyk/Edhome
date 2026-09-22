@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 23;
+    private static final int DB_VERSION = 24;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -70,7 +70,11 @@ final class DataBackup {
         {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
             "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
         {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
-        {"pantry_packages", "pantry_id", "unit", "size_milli"}
+        {"pantry_packages", "pantry_id", "unit", "size_milli"},
+        {"vehicles", "id", "name", "registration", "mileage",
+            "oc_until", "inspection_until", "notes"},
+        {"vehicle_events", "id", "operation_id", "vehicle_id",
+            "kind", "event_date", "mileage", "note"}
     };
 
     private DataBackup() { }
@@ -183,7 +187,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -340,6 +344,8 @@ final class DataBackup {
                 || (inputVersion < 21 && ("paycheck_goals".equals(definition[0])
                     || "paycheck_goal_allocations".equals(definition[0])))
                 || (inputVersion < 22 && "pantry_purchase_prices".equals(definition[0]))
+                || (inputVersion < 24 && ("vehicles".equals(definition[0])
+                    || "vehicle_events".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -444,7 +450,9 @@ final class DataBackup {
                             || ("pantry_purchase_prices".equals(definition[0])
                                 && ("shopping_id".equals(key)
                                     || "pantry_id".equals(key)
-                                    || "quantity_milli".equals(key)))))
+                                    || "quantity_milli".equals(key)))
+                            || ("vehicle_events".equals(definition[0])
+                                && "mileage".equals(key))))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -526,6 +534,39 @@ final class DataBackup {
                             || checked == null || checked > 1)
                         throw new IllegalArgumentException(
                             "Nieprawidłowa pozycja listy zakupów.");
+                }
+                if ("vehicles".equals(definition[0])) {
+                    String title = values.getAsString("name");
+                    String plate = values.getAsString("registration");
+                    String oc = values.getAsString("oc_until");
+                    String inspection = values.getAsString("inspection_until");
+                    String notes = values.getAsString("notes");
+                    Long mileage = values.getAsLong("mileage");
+                    if (mileage == null || mileage > 999999999L || notes == null
+                            || notes.length() > 500
+                            || !VehicleRules.name(title).equals(title)
+                            || !VehicleRules.registration(plate).equals(plate)
+                            || !VehicleRules.optionalDate(oc).equals(oc)
+                            || !VehicleRules.optionalDate(inspection).equals(inspection))
+                        throw new IllegalArgumentException("Nieprawidłowy pojazd w kopii.");
+                }
+                if ("vehicle_events".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    Long mileage = values.getAsLong("mileage");
+                    String date = values.getAsString("event_date");
+                    String description = values.getAsString("note");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || mileage != null && mileage > 999999999L
+                            || !VehicleRules.optionalDate(date).equals(date)
+                            || date.isEmpty()
+                            || !VehicleRules.note(description).equals(description))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowa historia pojazdu w kopii.");
+                    VehicleRules.eventType(values.getAsString("kind"));
                 }
                 if ("pantry_purchase_prices".equals(definition[0])) {
                     String operation = values.getAsString("operation_id");
@@ -749,6 +790,16 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Set<Long> vehicleIds = new HashSet<>();
+        for (ContentValues vehicle : parsed.get("vehicles"))
+            vehicleIds.add(vehicle.getAsLong("id"));
+        Set<String> vehicleOperations = new HashSet<>();
+        for (ContentValues event : parsed.get("vehicle_events")) {
+            if (!vehicleIds.contains(event.getAsLong("vehicle_id"))
+                    || !vehicleOperations.add(event.getAsString("operation_id")))
+                throw new IllegalArgumentException(
+                    "Historia pojazdu bez pojazdu lub zduplikowany wpis.");
+        }
         Map<Long, ContentValues> objects = new HashMap<>();
         Set<Long> validPlaces = new HashSet<>();
         for (ContentValues place : parsed.get("places"))
@@ -1045,6 +1096,7 @@ final class DataBackup {
             || "parent_box_id".equals(column) || "lent_at".equals(column)
             || "created_at".equals(column) || "item_id".equals(column)
             || "before_qty".equals(column)
-            || "after_qty".equals(column) || "happened_at".equals(column);
+            || "after_qty".equals(column) || "happened_at".equals(column)
+            || "mileage".equals(column) || "vehicle_id".equals(column);
     }
 }
