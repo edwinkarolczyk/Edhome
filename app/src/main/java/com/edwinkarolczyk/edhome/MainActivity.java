@@ -946,6 +946,15 @@ public final class MainActivity extends Activity {
         icon.setSelection(Math.max(0,
             java.util.Arrays.asList(TileIcon.ICON_IDS).indexOf(previousIcon)));
         form.addView(icon);
+        form.addView(text("Rozmiar kafelka", 15, true));
+        String[] sizeLabels = {"Mały (1 pole)", "Podwójny (2 pola)"};
+        String[] sizeValues = {"small", "double"};
+        Spinner size = new Spinner(this);
+        size.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(sizeLabels)));
+        size.setSelection("double".equals(
+            prefs.getString("tile_width_" + id, "small")) ? 1 : 0);
+        form.addView(size);
         LinearLayout previewFrame = new LinearLayout(this);
         previewFrame.setGravity(Gravity.CENTER);
         previewFrame.setPadding(0, dp(9), 0, dp(9));
@@ -994,7 +1003,13 @@ public final class MainActivity extends Activity {
                     if (HomeTileCatalog.icon(target).equals(iconId))
                         change.remove("tile_icon_" + id);
                     else change.putString("tile_icon_" + id, iconId);
-                    change.apply();
+                    String tileSize = sizeValues[size.getSelectedItemPosition()];
+                    if ("small".equals(tileSize)) change.remove("tile_width_" + id);
+                    else change.putString("tile_width_" + id, tileSize);
+                    if (!change.commit()) {
+                        alert("Nie udało się zapisać ustawień kafelka.");
+                        return;
+                    }
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_SAVED");
                     dialog.dismiss();
                     render();
@@ -1003,7 +1018,8 @@ public final class MainActivity extends Activity {
                 .setOnClickListener(v -> {
                     prefs.edit().remove("tile_label_" + id)
                         .remove("tile_tint_" + id)
-                        .remove("tile_icon_" + id).apply();
+                        .remove("tile_icon_" + id)
+                        .remove("tile_width_" + id).apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_RESET");
                     dialog.dismiss();
                     render();
@@ -4588,18 +4604,23 @@ public final class MainActivity extends Activity {
 
     private LinearLayout updateTile(LinearLayout grid, String id, String symbol,
             String caption, boolean primary, Runnable callback) {
-        LinearLayout row;
-        if (grid.getChildCount() == 0
-                || ((LinearLayout) grid.getChildAt(grid.getChildCount() - 1))
-                    .getChildCount() == 3) {
+        boolean isHome = "home".equals(screen);
+        int span = isHome && "double".equals(
+            prefs.getString("tile_width_" + id, "small")) ? 2 : 1;
+        LinearLayout row = grid.getChildCount() == 0
+            ? null : (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
+        int used = row == null || !(row.getTag() instanceof Integer)
+            ? 0 : (Integer) row.getTag();
+        if (row == null || used + span > 3) {
             row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setTag(0);
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
             rowParams.setMargins(0, 0, 0, dp(9));
             grid.addView(row, rowParams);
-        } else {
-            row = (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
+            used = 0;
         }
+        row.setTag(used + span);
 
         int width = getResources().getDisplayMetrics().widthPixels;
         int height = getResources().getDisplayMetrics().heightPixels;
@@ -4612,7 +4633,6 @@ public final class MainActivity extends Activity {
         tile.setGravity(Gravity.CENTER);
         tile.setPadding(dp(4), dp(3), dp(4), dp(5));
 
-        boolean isHome = "home".equals(screen);
         boolean customTint = false;
         int tileTint = accent;
         if (isHome) {
@@ -4628,7 +4648,8 @@ public final class MainActivity extends Activity {
         tile.setClickable(true);
         tile.setFocusable(true);
         tile.setContentDescription(caption.replace("\n", " "));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(side, side);
+        LinearLayout.LayoutParams params =
+            new LinearLayout.LayoutParams(side * span + dp(9) * (span - 1), side);
         if (row.getChildCount() > 0) params.setMargins(dp(9), 0, 0, 0);
         row.addView(tile, params);
 
