@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 60,
-  "versionName": "0.5.0-beta.12.1",
-  "changelog": "EDHOME Beta 0.5.0-beta.12.1 — stabilizacja kopii: numery usunietych zakupow nie sa ponownie przydzielane po imporcie, gdy historia przyjec i cen zachowuje powiazania. SQLite v23 bez migracji.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.12.1/edhome-beta.apk",
-  "sha256": "fc37d8a35f7d4ed798ef17965ab3ead3e2cb7956b5ad7956ecac97750a272335"
+  "versionCode": 61,
+  "versionName": "0.6.0-beta.1",
+  "changelog": "EDHOME 0.6.0-beta.1 — poczatek Pojazdow: karty, przebieg, OC i przeglad w kalendarzu, historia serwisu z ochrona przed duplikatami; SQLite v24, import starszych kopii. Opony w kolejnym etapie; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.1/edhome-beta.apk",
+  "sha256": "15ace1e9f79ee77aff8909e217991830d1d24fbc769c9dbb5701afcace4fa6d6"
 }
