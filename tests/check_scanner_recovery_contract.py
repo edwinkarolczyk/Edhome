@@ -35,5 +35,5 @@ assert "operationExists(db, operationId)" in store
 assert "db.beginTransaction();" in store and "db.setTransactionSuccessful();" in store
 assert "db.endTransaction();" in store and "movement.put(\"operation_id\", operationId);" in store
 assert "if (!active || cameraPending || awaitingConfirmation) return false;" in batch
-assert "versionCode 55" in gradle and "versionNameSuffix '-beta.10'" in gradle
+assert "versionCode 56" in gradle and "versionNameSuffix '-beta.11'" in gradle
 print("Scanner camera/read/commit failure recovery, duplicate and SQLite guards: PASS")
