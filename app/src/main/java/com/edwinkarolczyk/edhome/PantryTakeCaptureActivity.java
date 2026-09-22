@@ -47,6 +47,10 @@ public final class PantryTakeCaptureActivity extends Activity {
     private boolean closing;
     private int committed;
     private String lastBarcode = "";
+    private String pendingStockBarcode;
+    private long pendingPantryId = -1;
+    private long lastCommittedPantryId = -1;
+    private boolean approvedRepeat;
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!resumed || closing || countdown == null
@@ -187,11 +191,16 @@ public final class PantryTakeCaptureActivity extends Activity {
         if (timer != null) timer.setText("Brak oczekującego wyjęcia");
         if (takeNow != null) takeNow.setEnabled(false);
         if (another != null) another.setEnabled(false);
+        pendingStockBarcode = null;
+        pendingPantryId = -1;
+        approvedRepeat = false;
     }
 
     private void onBarcode(String barcode) {
         if (!resumed || closing || busy || barcode == null) return;
         String previous = countdown.pending();
+        boolean userApprovedRepeat = approvedRepeat;
+        approvedRepeat = false;
         if (!countdown.observe(barcode, SystemClock.elapsedRealtime())) return;
         handler.removeCallbacks(tick);
         if (previous != null && !previous.equals(barcode))
@@ -217,12 +226,29 @@ public final class PantryTakeCaptureActivity extends Activity {
                 getDatabasePath("edhome-beta-preview.db").getPath(), null,
                 SQLiteDatabase.OPEN_READWRITE);
             try {
-                PantryBarcodeStore.Item item = PantryBarcodeStore.find(db, barcode);
-                if (item == null) {
+                PantryBarcodeStore.TakeCode known =
+                    PantryBarcodeStore.findTakeCode(db, barcode);
+                if (known == null) {
                     cancelPending("PANTRY_TAKE_UNKNOWN");
                     title.setText("Nieznany kod. Dodaj produkt w Spiżarni przed wyjęciem.");
                     return;
                 }
+                PantryBarcodeStore.Item item = known.item;
+                // A single physical product can be printed/decoded in several
+                // UPC/EAN forms; a changed raw string must not bypass consent.
+                if (item.id == lastCommittedPantryId && !userApprovedRepeat) {
+                    cancelPending("PANTRY_TAKE_ALIAS_REPEAT_BLOCKED");
+                    another.setEnabled(true);
+                    lastBarcode = barcode;
+                    title.setText("To opakowanie było już wyjęte. Potwierdź "
+                        + "kolejne opakowanie tego samego produktu.");
+                    timer.setText("Bez odjęcia • potrzebne potwierdzenie");
+                    return;
+                }
+                if (!known.linkedBarcode.equals(barcode))
+                    DiagnosticLog.event("PANTRY_TAKE_LOCAL_ALIAS_MATCH");
+                pendingStockBarcode = known.linkedBarcode;
+                pendingPantryId = item.id;
                 if (item.qty <= 0) {
                     cancelPending("PANTRY_TAKE_EMPTY");
                     title.setText(item.name + " • brak opakowań. Nie odejmuję.");
@@ -254,14 +280,24 @@ public final class PantryTakeCaptureActivity extends Activity {
         if (!resumed || closing || busy || lastBarcode.isEmpty()
                 || countdown.pending() != null) return;
         countdown.allowSameAgain();
+        approvedRepeat = true;
         onBarcode(lastBarcode);
     }
 
     private void commitTake() {
         if (!resumed || closing || busy || countdown.pending() == null) return;
         handler.removeCallbacks(tick);
-        String barcode = countdown.consume(); // single use before touching SQLite
-        if (barcode == null) return;
+        String scannedBarcode = countdown.consume(); // single use before touching SQLite
+        String barcode = pendingStockBarcode;
+        long pantryId = pendingPantryId;
+        pendingStockBarcode = null;
+        pendingPantryId = -1;
+        if (scannedBarcode == null || barcode == null || pantryId <= 0) {
+            title.setText("Nie potwierdzono produktu. Stan spiżarni bez zmian.");
+            timer.setText("Brak oczekującego wyjęcia");
+            takeNow.setEnabled(false);
+            return;
+        }
         busy = true;
         takeNow.setEnabled(false);
         try {
@@ -278,7 +314,8 @@ public final class PantryTakeCaptureActivity extends Activity {
                     return;
                 }
             } finally { db.close(); }
-            countdown.markCommitted(barcode);
+            countdown.markCommitted(scannedBarcode);
+            lastCommittedPantryId = pantryId;
             committed++;
             DiagnosticLog.event("PANTRY_TAKE_COMMITTED");
             title.setText("Zapisano −1 opakowanie. Możesz skanować następny kod.");
