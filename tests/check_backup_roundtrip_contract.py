@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==24
+assert len(manifest)==26
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
