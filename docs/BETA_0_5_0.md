@@ -135,3 +135,11 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Naprawa sekwencji kamery A → B → A: powrót do ostatnio **rzeczywiście wyjętego** A przerywa licznik B i wymaga jawnego wyboru kolejnego opakowania A. Przy nieznanym, anulowanym lub błędnym kodzie przycisk ponowienia nie jest automatycznie odblokowywany.
 - Testy Java sprawdzają przerwanie, zatwierdzenie, anulowanie, klatki powtarzające kod, brak domyślnego drugiego ubytku i jawne ponowienie. Dodatkowa kontrola regresji kodu jest w CI.
 - Bez migracji SQLite v22 i bez nowych modułów; pozostaje osobny odbiór na fizycznym telefonie. Stable `main` bez zmian.
+
+
+## 0.5.0-beta.11.2 — stabilizacja lokalnego rozpoznawania kodów
+
+- Wyjmowanie porównuje zapisany kod również z bezpiecznymi równoważnikami UPC-A / EAN-13 / GTIN-14 (wiodące zera), aby nie zgłaszać fałszywego „nieznany” wyłącznie z powodu sposobu odczytu kodu przez kamerę.
+- Pierwszeństwo ma dokładnie zapisany kod. Przy sprzecznych powiązaniach wariantów z różnymi produktami odjęcie jest blokowane. Zmienia się wyłącznie sposób szukania istniejącego lokalnego powiązania: żaden nieznany kod nie zakłada automatycznie nowej kartoteki.
+- Ponowny kod fizycznie tego samego produktu wymaga zatwierdzenia na podstawie ID produktu, nawet jeśli aparat zmieni zapis UPC na EAN. Do trwałego ruchu magazynowego przekazywany jest znaleziony lokalny kod, a identyfikator ostatniego produktu aktualizuje się dopiero po potwierdzonym `COMMITTED`.
+- Testy kontraktu oraz istniejące testy kandydatów UPC/EAN i odliczania; kompilacja nie zastępuje odbioru na telefonie. Nie ma nowych modułów ani migracji SQLite v22. Stable `main` nietknięty.

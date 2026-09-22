@@ -11,10 +11,10 @@ assert 'boolean needsApproval()' in state
 assert 'void markCommitted(String barcode)' in state
 assert 'countdown.needsApproval()' in camera
 assert 'PANTRY_TAKE_REPEAT_REQUIRES_CONFIRMATION' in camera
-assert 'countdown.markCommitted(barcode);' in camera
+assert 'countdown.markCommitted(scannedBarcode);' in camera
 assert camera.index('PantryBarcodeStore.commit(db, barcode, null, "TAKE",') < camera.index(
-    'countdown.markCommitted(barcode);')
+    'countdown.markCommitted(scannedBarcode);')
 assert 'if (another != null) another.setEnabled(false);' in camera
-assert "versionCode 57" in gradle
-assert "versionNameSuffix '-beta.11.1'" in gradle
+assert "versionCode 58" in gradle
+assert "versionNameSuffix '-beta.11.2'" in gradle
 print("A-B-A consent and cancellation after unsuccessful scan: PASS")
