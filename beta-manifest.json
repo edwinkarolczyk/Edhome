@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 58,
-  "versionName": "0.5.0-beta.11.2",
-  "changelog": "EDHOME Beta 0.5.0-beta.11.2 — stabilizacja: rozpoznawanie zapisanych kodow UPC/EAN/GTIN w trybie wyjmowania i blokada podwojnego -1 dla tego samego produktu. SQLite v22 bez migracji.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.11.2/edhome-beta.apk",
-  "sha256": "b9fe82136f1d7f0a4668013b951e13646b1a8bf43872991f5b18534011f468ed"
+  "versionCode": 59,
+  "versionName": "0.5.0-beta.12",
+  "changelog": "EDHOME Beta 0.5.0-beta.12 — zakupy: opcjonalne miejsce per pozycja, potwierdzenie przy przyjeciu i historyczny zapis miejsca; cena 1 jednostki razy ilosc. SQLite v23: migracja v22 bez utraty historii; kopie v22 importowalne.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.12/edhome-beta.apk",
+  "sha256": "cc297da7d3c8c803c392ed67b05273c316db1fcb3750643be26bd17bbe395d7d"
 }
