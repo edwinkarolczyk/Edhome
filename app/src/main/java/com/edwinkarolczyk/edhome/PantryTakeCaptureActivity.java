@@ -186,7 +186,7 @@ public final class PantryTakeCaptureActivity extends Activity {
         }
         if (timer != null) timer.setText("Brak oczekującego wyjęcia");
         if (takeNow != null) takeNow.setEnabled(false);
-        if (another != null) another.setEnabled(!lastBarcode.isEmpty());
+        if (another != null) another.setEnabled(false);
     }
 
     private void onBarcode(String barcode) {
