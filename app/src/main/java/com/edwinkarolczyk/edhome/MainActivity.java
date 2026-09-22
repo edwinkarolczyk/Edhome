@@ -4886,8 +4886,9 @@ public final class MainActivity extends Activity {
             handle.setContentDescription("Edytuj lub przeciągnij " + caption);
             tile.addView(handle, new LinearLayout.LayoutParams(-1, dp(19)));
             handle.setOnClickListener(v -> {
-                Object id = tile.getTag();
-                if (id instanceof String) showTileActions(tile, (String) id);
+                Object tileTag = tile.getTag();
+                if (tileTag instanceof String)
+                    showTileActions(tile, (String) tileTag);
             });
             handle.setOnTouchListener(new View.OnTouchListener() {
                 private float startX, startY;
@@ -4906,9 +4907,9 @@ public final class MainActivity extends Activity {
                                     || Math.abs(event.getRawY() - startY)
                                     > ViewConfiguration.get(MainActivity.this)
                                         .getScaledTouchSlop())) {
-                                Object id = tile.getTag();
-                                if (id instanceof String)
-                                    dragging = beginHomeDrag(tile, (String) id);
+                                Object tileTag = tile.getTag();
+                                if (tileTag instanceof String)
+                                    dragging = beginHomeDrag(tile, (String) tileTag);
                             }
                             return true;
                         case MotionEvent.ACTION_UP:
