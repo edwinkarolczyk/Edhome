@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 55,
-  "versionName": "0.5.0-beta.10",
-  "changelog": "EDHOME Beta 0.5.0-beta.10 — odpornosc skanera na blad uruchomienia aparatu, odczytu i zapisu; bez ponownego naliczania tej samej operacji. SQLite v22 bez migracji.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.10/edhome-beta.apk",
-  "sha256": "8b33f1713a403172b2f4418aebe9ab63d791c606ef06b2a33b82d9d725669b48"
+  "versionCode": 56,
+  "versionName": "0.5.0-beta.11",
+  "changelog": "EDHOME Beta 0.5.0-beta.11 — wyjmowanie z otwartym aparatem i przerywalnym licznikiem 5 sekund (ustawienia 3/5/8/10 s), nowy kod anuluje poprzedni; bez migracji SQLite v22.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.11/edhome-beta.apk",
+  "sha256": "c5c066ec38ec703dbf19af33675c007b2f5b4212892fc06ea14138cb160f7b34"
 }
