@@ -182,6 +182,8 @@ jobs:
           java -cp "$RUNNER_TEMP/pantry-packages" \
             com.edwinkarolczyk.edhome.PantryPackageRulesSmoke
           python3 tests/check_pantry_packages_contract.py
+      - name: Scanner failure recovery and duplicate suppression
+        run: python3 tests/check_scanner_recovery_contract.py
       - name: Batch barcode scan state and integration contract
         run: |
           mkdir -p "$RUNNER_TEMP/pantry-batch"
@@ -298,14 +300,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.5.0-beta.9.2-signed-apk
+          name: EDHOME-0.5.0-beta.10-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.9.2 — motywy w Ustawieniach zebrane w jedno rozwijane menu zamiast sześciu dużych kart; opis wybranego stylu i przycisk Zastosuj. SQLite v22 bez migracji."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.10 — odpornosc skanera na blad uruchomienia aparatu, odczytu i zapisu; bez ponownego naliczania tej samej operacji. SQLite v22 bez migracji."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

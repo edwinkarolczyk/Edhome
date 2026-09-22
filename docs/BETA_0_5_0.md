@@ -109,3 +109,12 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Ustawienia: sześć wysokich kart motywów zastąpiono pojedynczą kartą z rozwijaną listą, krótkim opisem wskazanego motywu i przyciskiem „Zastosuj styl”.
 - Początkowo zaznaczony jest aktualny motyw, zmiana wyboru w menu sama nie zapisuje ustawień; po zatwierdzeniu zostają te same nazwy w preferencjach i kopii JSON. Zmiana nie wymaga migracji SQLite v22.
 - Zachowano poprawkę zapobiegającą ponownemu dodaniu karty do widoku, limit kopiowania logów i pełny eksport .txt. Stable `main` bez zmian; test interakcji na urządzeniu pozostaje osobny.
+
+
+## 0.5.0-beta.10 — odporność skanera (bez zmiany działania licznika)
+
+- Start aparatu jest obsługiwany w `try/catch`: odmowa uruchomienia kamery zwalnia oczekujący wynik skanu, kończy serię bez nowej operacji magazynowej i oferuje ręczny wpis.
+- Odczyt kartoteki produktu oraz jego opakowania jest chroniony przed wyjątkami SQLite; wyjątek trafia do diagnostyki bez wrażliwej treści, a użytkownik otrzymuje czytelny komunikat.
+- Powtórzony identyfikator operacji daje jawny komunikat „nie zmieniono ponownie stanu”. Błąd zapisu nie powoduje automatycznego wznowienia aparatu ani podwójnego komunikatu „seria zakończona”; surowe komunikaty wyjątków SQLite nie trafiają do okna aplikacji.
+- Test kontraktu sprawdza ścieżki resetu, brak automatycznego ponowienia, atomową operację SQL oraz brak zmian SQLite v22. Odbiór aparatu i odmowy uprawnienia na prawdziwym Androidzie pozostaje osobno.
+- **Nie wprowadzono jeszcze odliczania 5 s** ani zmiany działania przy innym kodzie; to następny zatwierdzony etap. Stable `main` pozostaje bez zmian.
