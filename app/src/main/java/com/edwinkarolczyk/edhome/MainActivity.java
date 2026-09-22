@@ -3539,6 +3539,18 @@ public final class MainActivity extends Activity {
         unit.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList(ShoppingRules.UNITS)));
         body.addView(unit);
+        java.util.List<Long> destinationIds = new java.util.ArrayList<>();
+        java.util.List<String> destinationNames = new java.util.ArrayList<>();
+        destinationIds.add(null);
+        destinationNames.add("Wybiorę miejsce przy przyjęciu");
+        for (PlaceEntry place : readPlaces()) {
+            destinationIds.add(place.id);
+            destinationNames.add(db.placePath(place.id));
+        }
+        note("Miejsce docelowe • opcjonalne");
+        Spinner destination = new Spinner(this);
+        destination.setAdapter(themeSpinnerAdapter(destinationNames));
+        body.addView(destination);
         button("+ Dodaj do listy", () -> {
             try {
                 String name = ShoppingRules.validatedName(
@@ -3546,7 +3558,8 @@ public final class MainActivity extends Activity {
                 Long amount = ShoppingRules.parseQuantity(
                     quantity.getText().toString());
                 if (!db.addShoppingItem(name, amount,
-                        ShoppingRules.UNITS[unit.getSelectedItemPosition()])) {
+                        ShoppingRules.UNITS[unit.getSelectedItemPosition()],
+                        destinationIds.get(destination.getSelectedItemPosition()))) {
                     item.setError("Produkt jest już na liście.");
                     return;
                 }
@@ -3558,7 +3571,7 @@ public final class MainActivity extends Activity {
         });
         int count = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT id,name,qty_milli,unit,checked FROM shopping_items "
+                "SELECT id,name,qty_milli,unit,checked,place_id FROM shopping_items "
                 + "ORDER BY checked ASC,name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
                 count++;
@@ -3568,6 +3581,8 @@ public final class MainActivity extends Activity {
                     ? null : cursor.getLong(2);
                 final String purchaseUnit = cursor.getString(3);
                 final boolean done = cursor.getInt(4) == 1;
+                final Long intendedPlace = cursor.isNull(5)
+                    ? null : cursor.getLong(5);
                 final boolean received = ShoppingReceiptStore.received(
                     db.getReadableDatabase(), shoppingId);
                 LinearLayout box = card();
@@ -3579,20 +3594,38 @@ public final class MainActivity extends Activity {
                 check.setButtonTintList(ColorStateList.valueOf(accent));
                 check.setChecked(done);
                 box.addView(check);
+                if (!received && intendedPlace != null) {
+                    String path = db.placePath(intendedPlace);
+                    box.addView(text("Do miejsca: " + (path.isEmpty()
+                        ? "miejsce usunięte — wybierz przy przyjęciu" : path),
+                        13, false));
+                }
                 try (Cursor price = PantryPriceHistoryStore.forShoppingItem(
                         db.getReadableDatabase(), shoppingId)) {
                     if (price.moveToFirst()) {
-                        box.addView(text("Ostatnio zapłacono: "
-                            + MoneyRules.format(price.getLong(0)) + " / "
-                            + price.getString(1)
+                        Long total = ShoppingCostRules.totalGrosz(amount,
+                            price.getLong(0));
+                        box.addView(text("Cena 1 " + purchaseUnit + ": "
+                            + MoneyRules.format(price.getLong(0))
+                            + " • łącznie: " + (total == null
+                                ? "nieznane (brak ilości)"
+                                : MoneyRules.format(total))
                             + (price.getString(2).isEmpty() ? ""
                                 : " • " + price.getString(2)),
                             13, false));
                     }
                 }
                 if (received) {
-                    box.addView(text("✓ Przyjęte do spiżarni — zapisano historię",
-                        13, false));
+                    try (Cursor receipt = db.getReadableDatabase().rawQuery(
+                            "SELECT place_name_snapshot FROM shopping_receipts "
+                            + "WHERE shopping_id=?",
+                            new String[]{Long.toString(shoppingId)})) {
+                        String place = receipt.moveToFirst()
+                            ? receipt.getString(0) : "";
+                        box.addView(text("✓ Przyjęte do spiżarni"
+                            + (place.isEmpty() ? " • bez miejsca"
+                                : " • " + place), 13, false));
+                    }
                 } else if (done) {
                     smallButton(box, "Przyjmij do spiżarni", () ->
                         chooseShoppingReceipt(shoppingId, name));
@@ -3633,15 +3666,46 @@ public final class MainActivity extends Activity {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        final Long boughtQuantity;
+        try (Cursor previous = db.getReadableDatabase().rawQuery(
+                "SELECT qty_milli FROM shopping_items WHERE id=?",
+                new String[]{Long.toString(shoppingId)})) {
+            boughtQuantity = previous.moveToFirst() && !previous.isNull(0)
+                ? previous.getLong(0) : null;
+        }
         form.addView(text("Oznaczasz „Kupione”: " + productName
-            + ". Cena jest DOBROWOLNA. Nie dodajemy tu zapasu ani wydatku PayCheck.",
-            14, false));
+            + ". Cena jest za 1 " + purchaseUnit + ", a ilość to "
+            + (boughtQuantity == null ? "nieokreślona"
+                : ShoppingRules.formatQuantity(boughtQuantity))
+            + " " + purchaseUnit + ". Cena jest DOBROWOLNA. "
+            + "Nie dodajemy tu zapasu ani wydatku PayCheck.", 14, false));
         EditText price = new EditText(this);
         price.setSingleLine(true);
         price.setHint("Cena za 1 " + purchaseUnit + ", np. 6,49");
         price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(price);
+        TextView costPreview = text("Łącznie: podaj cenę, aby obliczyć.",
+            14, false);
+        form.addView(costPreview);
+        price.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st,
+                    int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int st,
+                    int before, int count) {
+                try {
+                    long unitPrice = MoneyRules.parse(s.toString());
+                    Long total = ShoppingCostRules.totalGrosz(
+                        boughtQuantity, unitPrice);
+                    costPreview.setText("Łącznie: " + (total == null
+                        ? "nieznane — uzupełnij ilość na liście"
+                        : MoneyRules.format(total)));
+                } catch (IllegalArgumentException problem) {
+                    costPreview.setText("Łącznie: podaj prawidłową cenę.");
+                }
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        });
         EditText shop = new EditText(this);
         shop.setSingleLine(true);
         shop.setHint("Sklep (opcjonalnie)");
@@ -3738,6 +3802,30 @@ public final class MainActivity extends Activity {
             + "\nSamo „kupione” nie dodaje zapasu. Potwierdź liczbę "
             + "pełnych opakowań.", 15, false));
         form.addView(count);
+        java.util.List<Long> placeIds = new java.util.ArrayList<>();
+        java.util.List<String> placeNames = new java.util.ArrayList<>();
+        placeIds.add(null);
+        placeNames.add("Bez miejsca / wybiorę później");
+        for (PlaceEntry place : readPlaces()) {
+            placeIds.add(place.id);
+            placeNames.add(db.placePath(place.id));
+        }
+        Long preselectedPlace = null;
+        try (Cursor row = db.getReadableDatabase().rawQuery(
+                "SELECT place_id FROM shopping_items WHERE id=?",
+                new String[]{Long.toString(shoppingId)})) {
+            if (row.moveToFirst() && !row.isNull(0))
+                preselectedPlace = row.getLong(0);
+        }
+        form.addView(text("Miejsce docelowe tej pozycji — potwierdź lub zmień",
+            14, false));
+        Spinner placeChoice = new Spinner(this);
+        placeChoice.setAdapter(themeSpinnerAdapter(placeNames));
+        if (preselectedPlace != null) {
+            int placeIndex = placeIds.indexOf(preselectedPlace);
+            if (placeIndex > 0) placeChoice.setSelection(placeIndex);
+        }
+        form.addView(placeChoice);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Potwierdź przyjęcie")
             .setView(form)
@@ -3748,7 +3836,8 @@ public final class MainActivity extends Activity {
                 try {
                     int packages = Integer.parseInt(count.getText().toString().trim());
                     String outcome = ShoppingReceiptStore.accept(
-                        db.getWritableDatabase(), shoppingId, pantryId, packages);
+                        db.getWritableDatabase(), shoppingId, pantryId, packages,
+                        placeIds.get(placeChoice.getSelectedItemPosition()));
                     if ("COMMITTED".equals(outcome)) {
                         DiagnosticLog.event("SHOPPING_RECEIPT_COMMITTED");
                         dialog.dismiss();
@@ -3760,7 +3849,10 @@ public final class MainActivity extends Activity {
                     } else alert("Nie przyjęto: "
                         + ("NOT_PURCHASED".equals(outcome) ? "pozycja nie jest kupiona."
                         : "MISSING_PRODUCT".equals(outcome)
-                            ? "produkt już nie istnieje." : "przekroczony limit."));
+                            ? "produkt już nie istnieje."
+                        : "MISSING_PLACE".equals(outcome)
+                            ? "miejsce już nie istnieje."
+                            : "przekroczony limit."));
                 } catch (NumberFormatException invalid) {
                     count.setError("Podaj całkowitą liczbę opakowań.");
                 } catch (IllegalArgumentException invalid) {
@@ -5628,7 +5720,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 22);
+            super(context, "edhome-beta-preview.db", null, 23);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -5665,7 +5757,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 22) {
+            if (oldVersion < 1 || newVersion > 23) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -5778,6 +5870,13 @@ public final class MainActivity extends Activity {
                 PantryPriceHistoryStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_21_TO_22_PANTRY_PRICES");
             }
+            if (oldVersion < 23) {
+                database.execSQL("ALTER TABLE shopping_items ADD COLUMN place_id INTEGER");
+                database.execSQL("ALTER TABLE shopping_receipts ADD COLUMN place_id INTEGER");
+                database.execSQL("ALTER TABLE shopping_receipts "
+                    + "ADD COLUMN place_name_snapshot TEXT NOT NULL DEFAULT ''");
+                DiagnosticLog.event("DATABASE_MIGRATED_22_TO_23_SHOPPING_PLACES");
+            }
         }
 
         private static void addPlaceSiblingIndex(SQLiteDatabase database) {
@@ -5817,7 +5916,7 @@ public final class MainActivity extends Activity {
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL COLLATE NOCASE UNIQUE, "
                 + "qty_milli INTEGER, unit TEXT NOT NULL DEFAULT 'szt.', "
-                + "checked INTEGER NOT NULL DEFAULT 0)");
+                + "checked INTEGER NOT NULL DEFAULT 0, place_id INTEGER)");
         }
 
         private static void addMemberSchedules(SQLiteDatabase database) {
@@ -6529,6 +6628,10 @@ public final class MainActivity extends Activity {
                 }
                 database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});
+                database.execSQL("UPDATE shopping_items SET place_id=NULL WHERE place_id=?",
+                    new Object[]{id});
+                database.execSQL("UPDATE shopping_receipts SET place_id=NULL WHERE place_id=?",
+                    new Object[]{id});
                 database.delete("places", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
                 return true;
@@ -6582,16 +6685,27 @@ public final class MainActivity extends Activity {
                     : new String[]{Long.toString(id)}) == 1;
         }
 
-        boolean addShoppingItem(String name, Long amount, String unit) {
+        boolean addShoppingItem(String name, Long amount, String unit,
+                Long placeId) {
             String clean = ShoppingRules.validatedName(name);
             if (!ShoppingRules.knownUnit(unit)
                     || amount != null && (amount < 1 || amount > ShoppingRules.MAX_MILLI))
                 throw new IllegalArgumentException("Nieprawidłowa ilość lub jednostka.");
+            if (placeId != null) {
+                try (Cursor place = getReadableDatabase().rawQuery(
+                        "SELECT id FROM places WHERE id=?",
+                        new String[]{Long.toString(placeId)})) {
+                    if (!place.moveToFirst())
+                        throw new IllegalArgumentException("Miejsce już nie istnieje.");
+                }
+            }
             ContentValues values = new ContentValues();
             values.put("name", clean);
             if (amount == null) values.putNull("qty_milli");
             else values.put("qty_milli", amount);
             values.put("unit", unit);
+            if (placeId == null) values.putNull("place_id");
+            else values.put("place_id", placeId);
             return getWritableDatabase().insertWithOnConflict(
                 "shopping_items", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
         }
