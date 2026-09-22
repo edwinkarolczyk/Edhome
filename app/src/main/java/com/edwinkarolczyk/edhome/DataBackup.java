@@ -415,6 +415,8 @@ final class DataBackup {
                             || "remind_time".equals(key)
                              || "assignee_name_snapshot".equals(key)
                              || "acknowledged_at".equals(key)
+                            || ("storage_items".equals(definition[0])
+                                && "lent_to".equals(key))
                             || ("pantry_purchase_prices".equals(definition[0])
                                 && ("shopping_id".equals(key)
                                     || "pantry_id".equals(key)
