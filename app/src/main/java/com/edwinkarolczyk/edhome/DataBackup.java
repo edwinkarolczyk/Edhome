@@ -120,6 +120,10 @@ final class DataBackup {
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
+        settings.put("homeTileShortHoldMs", prefs.getInt(
+            HomeTileLayout.SHORT_KEY, HomeTileLayout.DEFAULT_SHORT_MS));
+        settings.put("homeTileDragHoldMs", prefs.getInt(
+            HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -206,6 +210,20 @@ final class DataBackup {
                     "Nieprawidłowa lista ukrytych kafelków.");
             hiddenIds.add(id);
         }
+        int shortHoldMs = settings.optInt("homeTileShortHoldMs",
+            HomeTileLayout.DEFAULT_SHORT_MS);
+        int dragHoldMs = settings.optInt("homeTileDragHoldMs",
+            HomeTileLayout.DEFAULT_DRAG_MS);
+        if ((settings.has("homeTileShortHoldMs")
+                && (!(settings.get("homeTileShortHoldMs") instanceof Number)
+                    || ((Number) settings.get("homeTileShortHoldMs"))
+                        .doubleValue() != shortHoldMs))
+                || (settings.has("homeTileDragHoldMs")
+                    && (!(settings.get("homeTileDragHoldMs") instanceof Number)
+                        || ((Number) settings.get("homeTileDragHoldMs"))
+                            .doubleValue() != dragHoldMs))
+                || !HomeTileLayout.validPair(shortHoldMs, dragHoldMs))
+            throw new IllegalArgumentException("Nieprawidłowe czasy przytrzymania.");
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -909,6 +927,8 @@ final class DataBackup {
             .putString("household", household)
             .putString("theme", theme)
             .putString("home_tile_order", tileOrder)
+            .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
+            .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
             .putBoolean("timer_notifications_enabled", timerNotifications)
             .putString("quiet_hours_start", quietStart)
             .putString("quiet_hours_end", quietEnd);

@@ -63,3 +63,10 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - **Żaden zakup, skan, przyjęcie, wyjęcie ani remanent nie księguje sam pieniędzy w PayCheck.** Powiązanie paragonu z jedną rzeczywistą transakcją, wielkości paczek, korekty błędnych cen i późniejsza szacunkowa wartość całego zapasu należą do kolejnych inkrementów 0.5.x.
 
 **Odbiór ręczny:** zrób kopię przed aktualizacją; utwórz testową pozycję Ryż z jednostką „szt.”, zaznacz Kupione z ceną 6,49 zł i sklepem; sprawdź, że PayCheck i stan spiżarni nie zmieniły się. Przyjmij ją do konkretnej karty ryżu, sprawdź cenę na karcie i historię; kup drugi raz przez nowy wpis z inną ceną, sprawdź, że obie ceny pozostają. Powtórz scenariusz „Kupione bez ceny”, eksport/import JSON v22 oraz przywrócenie kopii v21. Test wykonuj na danych próbnych.
+
+## 0.5.0-beta.6 — adaptacyjny panel i dwustopniowy gest (po udanym wydaniu)
+
+- Kolumny wyliczane z dostępnej szerokości: na wąskim telefonie mniej, na typowym ok. trzy, na szerokim tablecie maksymalnie sześć czytelnych kolumn. Bez limitu liczby kafelków; strona przewijana w pionie. Podwójny kafelek zajmuje maksymalnie dwa pola i nie wystaje poza rząd.
+- Dotknięcie otwiera funkcję. Krótsze przytrzymanie **po puszczeniu** otwiera menu, a dłuższe (w trakcie trzymania) rozpoczyna przeciąganie całego kafelka; menu nie przesłania dłuższego gestu. Uchwyt ⋮⋮ pozostaje alternatywą.
+- Ustawienia → Kafelki • czas przytrzymania: krótki 300/450/600/800 ms (domyślnie 450), długi 900/1100/1400/1800 ms (domyślnie 1100), długi co najmniej 200 ms po krótkim. Oba ustawienia są w kopii JSON EDHOME i wracają po imporcie; starsze kopie dostają domyślne wartości.
+- SQLite pozostaje v22, schemat transakcji i prywatny sejf niezmienione. Testy: szerokości 320/393/600/800 dp, gesty i backup. Odbiór palcem na Huawei i tablecie jest osobnym testem użytkownika — zielone CI go nie zastępuje.

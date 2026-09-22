@@ -1,6 +1,6 @@
 > **Druga tura odpowiedzi Edwina, 22.09.2026:** [obowiązujący audyt 20 pytań](DECYZJE_2026-09-22_FORMULARZ_20.md) zawiera zatwierdzone decyzje 4/5/12/13/14/15/17/20. **Tylko 6/8/16 wciąż pozostają otwarte** w tym formularzu. Tablet jest przypisany na stałe do domownika „Wspólny” (prywatny profil na telefonie), widoczność czynności z nadrzędnego miejsca ustawiana **per czynność**, wiele otwartych opakowań/partii z datami ważności; miejsce zakupów opcjonalne do przyjęcia; cena to **za jedną sztukę/opakowanie**; konflikt remanentu blokuje **wszystkie korekty**; wkłady do wspólnego PayCheck ręczne i jawne per osoba, bez prywatnych ksiąg; PV dynamiczne z ręcznym nadpisaniem, fizyczne sterowanie dopiero po audycie. To decyzje projektowe, nie funkcje wdrożone w APK.
 
-> **Najnowsze potwierdzone wydanie Beta (22.09.2026): `0.5.0-beta.5` / versionCode 48 / SQLite v22.** Wydania `.4` i `.5` oraz CI są potwierdzone; pozostałe wiersze planu poniżej to propozycje, nie funkcje już w APK. Zobacz [odbiór serii 0.5.0](BETA_0_5_0.md).
+> **Ostatnia potwierdzona publikacja przed pracami nad adaptacją panelu: `0.5.0-beta.5` / versionCode 48 / SQLite v22.** Wydania `.4` i `.5` oraz CI są potwierdzone; pozostałe wiersze planu poniżej to propozycje, nie funkcje już w APK. Zobacz [odbiór serii 0.5.0](BETA_0_5_0.md).
 
 > **Stan nowszy od historycznego nagłówka niżej:** wydania 0.4.0-beta.11/12/13 obejmują przyjęcia zakupów, pudełka, QR i ochronę miejsc. Pierwszy PayCheck tylko dla wspólnego budżetu zaczyna się w 0.5.0-beta.1 (SQLite v20); prywatne dane nie są dostępne w Becie bez ochrony. Datowane fragmenty niżej są historią planu, nie bieżącą wersją APK.
 
@@ -242,6 +242,8 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 | [`0.5.0-beta.5`](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.5) | **Opublikowane, CI zakończone sukcesem** | Cena opcjonalna przy „Kupione”, sklep, historia rzeczywistych cen dopięta do spiżarni po przyjęciu; bez księgowania PayCheck. SQLite v21→v22 i JSON ze zwalidowaną tabelą historii cen. Manifest poprawiony o rzeczywisty changelog beta.5. |
 
 **Ważne: seria 0.5 NIE jest jeszcze zakończona funkcjonalnie**, mimo że kolejne APK mają numer 0.5.0. Dalsze podwersje trzeba nadać dopiero przed konkretnym wdrożeniem; nie nazywać automatycznie „beta.6 = backup”, bo backup zaszyfrowany był już w beta.4. Odbiór na fizycznym telefonie nie jest zastąpiony przez test CI.
+
+**W realizacji na beta: adaptacyjne kolumny i regulowany dwustopniowy gest; brak zmian main bez każdorazowej zgody.**
 
 **Do zamknięcia 0.5.x (kolejne wersje, zakres i numeracja do potwierdzenia po testach):** (1) rzeczywiste testy telefonu: 15+ kafelków, przeciąganie, backup i import, starsza kopia v21→v22, szyfrowany sejf z testowym eksportem/importem bez utraty danych; (2) pełne role i profile oddzielające prywatne dane na współdzielonym tablecie; (3) jeden paragon z pozycjami ↔ jedna potwierdzona płatność PayCheck, bez dublowania skanu/przyjęcia; (4) korekty historii cen, jednostki i rozmiary opakowań; (5) cele i raty osobiste/wspólne oraz wyciągi i propozycje bankowych transakcji po audycie prywatności i danych; (6) regresja CI i poprawny changelog każdego następnego wydania. Dopiero po odbiorze uznać serię 0.5 za domkniętą, bez wymuszania przejścia do 0.6.
 

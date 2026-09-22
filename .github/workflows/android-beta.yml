@@ -138,6 +138,15 @@ jobs:
             tests/task_rules/HomeTileCatalogSmoke.java
           java -cp "$RUNNER_TEMP/home-tiles-v2" \
             com.edwinkarolczyk.edhome.HomeTileCatalogSmoke
+      - name: Adaptive tile width and hold thresholds
+        run: |
+          mkdir -p "$RUNNER_TEMP/home-layout"
+          javac -d "$RUNNER_TEMP/home-layout" \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileLayout.java \
+            tests/task_rules/HomeTileLayoutSmoke.java
+          java -cp "$RUNNER_TEMP/home-layout" \
+            com.edwinkarolczyk.edhome.HomeTileLayoutSmoke
+          python3 tests/check_home_adaptive_contract.py
       - name: Four-theme UI-only and drag-edit contract
         run: python3 tests/check_ui_refresh_contract.py
       - name: Pantry barcode check digits
@@ -283,14 +292,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.5.0-beta.4-signed-apk
+          name: EDHOME-0.5.0-beta.6-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.4 — panel: dowolna liczba kafelków, wybór celu, nazwy, ikony, koloru, rozmiaru, położenia, ukrywanie i kopia układu. PayCheck i dane SQLite v21 zachowane."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.6 — adaptacyjne kolumny kafelków i konfigurowalne czasy menu/przeciągania; układ i gesty w backupie. SQLite v22 bez migracji."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

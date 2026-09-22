@@ -18,6 +18,8 @@ assert "newVersion > 22" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
+assert "tile.setOnTouchListener(new View.OnTouchListener()" in main
+assert "HomeTileLayout.openMenuOnRelease(" in main
 assert 'text("✎  Edytuj kafelek"' in main
 assert 'text("✥  Przesuń kafelek"' in main
 assert "beginHomeDrag(tile, (String) tileTag)" in main
@@ -62,6 +64,6 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 48" in gradle
+assert "versionCode 49" in gradle
 assert "versionName '0.5.0'" in gradle
 print("6 themes, unlimited configurable tiles, drag, backup and SQLite v22: PASS")

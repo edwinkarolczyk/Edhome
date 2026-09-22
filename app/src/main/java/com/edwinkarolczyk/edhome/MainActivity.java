@@ -499,8 +499,8 @@ public final class MainActivity extends Activity {
             + ". Dotknij, aby przejść do czynności.");
 
         TextView editHint = text(homeEditMode
-            ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
-            : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać", 13, false);
+            ? "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮"
+            : "✥  Krócej: menu • dłużej: przeciągnij • dotknij: układaj", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
         editHint.setMinHeight(dp(48));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
@@ -556,12 +556,69 @@ public final class MainActivity extends Activity {
             TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
             caption.setText(homeTileLabel(tileId));
             tile.setContentDescription(homeTileLabel(tileId)
-                + ". Dotknij, aby otworzyć. Przytrzymaj, aby edytować "
-                + "lub przesuń za uchwyt.");
+                + ". Dotknij, aby otworzyć. Krócej przytrzymaj dla menu; "
+                + "dłużej dla przeciągania. Czasy: Ustawienia.");
+            // Accessibility long-click still opens the actions menu.
             tile.setOnLongClickListener(v -> {
-                if (homeEditMode) return beginHomeDrag(tile, tileId);
                 showTileActions(tile, tileId);
                 return true;
+            });
+            // Open the short-hold menu on RELEASE, so it cannot intercept
+            // the same finger before the longer drag threshold has elapsed.
+            tile.setOnTouchListener(new View.OnTouchListener() {
+                private float startX, startY;
+                private long downAt;
+                private boolean moved, dragging;
+                private final Runnable startDrag = () -> {
+                    if (!moved && !dragging && "home".equals(screen))
+                        dragging = beginHomeDrag(tile, tileId);
+                };
+
+                @Override public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            startX = event.getRawX();
+                            startY = event.getRawY();
+                            downAt = event.getEventTime();
+                            moved = false;
+                            dragging = false;
+                            tile.postDelayed(startDrag, prefs.getInt(
+                                HomeTileLayout.DRAG_KEY,
+                                HomeTileLayout.DEFAULT_DRAG_MS));
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            if (Math.abs(event.getRawX() - startX)
+                                    > ViewConfiguration.get(MainActivity.this)
+                                        .getScaledTouchSlop()
+                                    || Math.abs(event.getRawY() - startY)
+                                    > ViewConfiguration.get(MainActivity.this)
+                                        .getScaledTouchSlop()) {
+                                moved = true;
+                                tile.removeCallbacks(startDrag);
+                            }
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                            tile.removeCallbacks(startDrag);
+                            if (!moved && !dragging) {
+                                int shortMs = prefs.getInt(HomeTileLayout.SHORT_KEY,
+                                    HomeTileLayout.DEFAULT_SHORT_MS);
+                                int dragMs = prefs.getInt(HomeTileLayout.DRAG_KEY,
+                                    HomeTileLayout.DEFAULT_DRAG_MS);
+                                long heldMs = event.getEventTime() - downAt;
+                                if (HomeTileLayout.openMenuOnRelease(
+                                        heldMs, shortMs, dragMs)
+                                        || heldMs >= dragMs)
+                                    showTileActions(tile, tileId);
+                                else tile.performClick();
+                            }
+                            return true;
+                        case MotionEvent.ACTION_CANCEL:
+                            tile.removeCallbacks(startDrag);
+                            return true;
+                        default:
+                            return false;
+                    }
+                }
             });
             tile.setOnDragListener((v, event) -> {
                 if (event.getAction() == DragEvent.ACTION_DRAG_STARTED)
@@ -873,8 +930,8 @@ public final class MainActivity extends Activity {
         homeTileSlots.clear();
         if (homeDragHint != null) {
             homeDragHint.setText(homeEditMode
-                ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
-                : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać");
+                ? "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮"
+                : "✥  Krócej: menu • dłużej: przeciągnij • dotknij: układaj");
             homeDragHint.setTextColor(subdued);
         }
     }
@@ -4752,6 +4809,52 @@ public final class MainActivity extends Activity {
             + " • sześć wariantów tej samej aplikacji bez zmiany danych.");
         note("Wybierz styl i sprawdź go od razu. Zmiana działa dla "
             + "całej aplikacji i pozostaje po ponownym uruchomieniu.");
+        LinearLayout gestures = card();
+        gestures.addView(text("Kafelki • czas przytrzymania", 19, true));
+        gestures.addView(text("Puść po krótszym przytrzymaniu dla menu. "
+            + "Trzymaj dłużej, by przeciągnąć. Uchwyt ⋮⋮ działa bez czekania.",
+            14, false));
+        Spinner shortHold = new Spinner(this);
+        shortHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "0,30 s", "0,45 s", "0,60 s", "0,80 s")));
+        int shortChoice = prefs.getInt(HomeTileLayout.SHORT_KEY,
+            HomeTileLayout.DEFAULT_SHORT_MS);
+        for (int i = 0; i < HomeTileLayout.SHORT_OPTIONS.length; i++)
+            if (HomeTileLayout.SHORT_OPTIONS[i] == shortChoice)
+                shortHold.setSelection(i);
+        gestures.addView(text("Krótsze przytrzymanie → menu po puszczeniu",
+            14, false));
+        gestures.addView(shortHold);
+        Spinner dragHold = new Spinner(this);
+        dragHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "0,90 s", "1,10 s", "1,40 s", "1,80 s")));
+        int dragChoice = prefs.getInt(HomeTileLayout.DRAG_KEY,
+            HomeTileLayout.DEFAULT_DRAG_MS);
+        for (int i = 0; i < HomeTileLayout.DRAG_OPTIONS.length; i++)
+            if (HomeTileLayout.DRAG_OPTIONS[i] == dragChoice)
+                dragHold.setSelection(i);
+        gestures.addView(text("Dłuższe przytrzymanie → przeciąganie",
+            14, false));
+        gestures.addView(dragHold);
+        smallButton(gestures, "Zapisz czasy gestów", () -> {
+            int menuMs = HomeTileLayout.SHORT_OPTIONS[
+                shortHold.getSelectedItemPosition()];
+            int moveMs = HomeTileLayout.DRAG_OPTIONS[
+                dragHold.getSelectedItemPosition()];
+            if (!HomeTileLayout.validPair(menuMs, moveMs)) {
+                alert("Przeciąganie musi zaczynać się co najmniej "
+                    + "0,20 s po progu menu.");
+                return;
+            }
+            if (!prefs.edit().putInt(HomeTileLayout.SHORT_KEY, menuMs)
+                    .putInt(HomeTileLayout.DRAG_KEY, moveMs).commit()) {
+                alert("Nie udało się zapisać czasów gestów.");
+                return;
+            }
+            DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
+            render();
+        });
+        body.addView(gestures);
         String[] descriptions = {
             "Ciemny granat • mięta • wyraźne kafle",
             "Leśna zieleń • ciepłe, naturalne akcenty",
@@ -4963,13 +5066,17 @@ public final class MainActivity extends Activity {
     private LinearLayout updateTile(LinearLayout grid, String id, String symbol,
             String caption, boolean primary, Runnable callback) {
         boolean isHome = "home".equals(screen);
+        int viewport = getResources().getDisplayMetrics().widthPixels;
+        float density = getResources().getDisplayMetrics().density;
+        int columns = HomeTileLayout.columns(Math.round(viewport / density));
         int span = isHome && "double".equals(
-            prefs.getString("tile_width_" + id, "small")) ? 2 : 1;
+            prefs.getString("tile_width_" + id, "small"))
+            ? Math.min(2, columns) : 1;
         LinearLayout row = grid.getChildCount() == 0
             ? null : (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
         int used = row == null || !(row.getTag() instanceof Integer)
             ? 0 : (Integer) row.getTag();
-        if (row == null || used + span > 3) {
+        if (row == null || used + span > columns) {
             row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setTag(0);
@@ -4980,12 +5087,10 @@ public final class MainActivity extends Activity {
         }
         row.setTag(used + span);
 
-        int width = getResources().getDisplayMetrics().widthPixels;
-        int height = getResources().getDisplayMetrics().heightPixels;
-        // Page margin 16dp each; two gaps 9dp. Keep three visible columns.
-        int widthSide = (width - dp(50)) / 3;
-        int heightSide = (height - dp(340)) / 3;
-        int side = Math.max(dp(78), Math.min(widthSide, heightSide));
+        // Page has 16dp on each side; width determines columns, not height.
+        int contentWidth = Math.max(dp(1), viewport - dp(32));
+        int side = Math.max(dp(1),
+            (contentWidth - dp(9) * (columns - 1)) / columns);
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
