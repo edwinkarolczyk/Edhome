@@ -1,5 +1,6 @@
-> **Najnowszy zweryfikowany manifest beta (22.09.2026): 0.5.0-beta.3 / versionCode 46.** Poniższa nowa sekcja „Plan prowadzący…” oddziela przyszłe propozycje od faktycznie opublikowanych wydań.
-\n> **Stan nowszy od historycznego nagłówka niżej:** wydania 0.4.0-beta.11/12/13 obejmują przyjęcia zakupów, pudełka, QR i ochronę miejsc. Pierwszy PayCheck tylko dla wspólnego budżetu zaczyna się w 0.5.0-beta.1 (SQLite v20); prywatne dane nie są dostępne w Becie bez ochrony. Datowane fragmenty niżej są historią planu, nie bieżącą wersją APK.
+> **Najnowsze potwierdzone wydanie Beta (22.09.2026): `0.5.0-beta.5` / versionCode 48 / SQLite v22.** Wydania `.4` i `.5` oraz CI są potwierdzone; pozostałe wiersze planu poniżej to propozycje, nie funkcje już w APK. Zobacz [odbiór serii 0.5.0](BETA_0_5_0.md).
+
+> **Stan nowszy od historycznego nagłówka niżej:** wydania 0.4.0-beta.11/12/13 obejmują przyjęcia zakupów, pudełka, QR i ochronę miejsc. Pierwszy PayCheck tylko dla wspólnego budżetu zaczyna się w 0.5.0-beta.1 (SQLite v20); prywatne dane nie są dostępne w Becie bez ochrony. Datowane fragmenty niżej są historią planu, nie bieżącą wersją APK.
 
 # EDHOME — roadmapa (propozycja)
 
@@ -185,9 +186,9 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 **3×3 to przykład widocznego fragmentu siatki na telefonie, nie ograniczenie danych ani stała lista systemowych modułów.** Szczegóły: [specyfikacja §26](SPECYFIKACJA_CALOSC.md#26-panel-główny--w-pełni-edytowalne-kafelki-bez-limitu-dziewięciu-doprecyzowanie-edwina-22092026). W tym czacie **tylko dokumentacja na `beta`**, bez zmian kodu, APK i `main`.
 
 
-## Plan prowadzący od 0.5.0-beta.3 do 1.0.0 — wersja po wersji (22.09.2026)
+## Historyczna propozycja od 0.5.0-beta.3 do 1.0.0 — datowany plan przed wydaniem .4 i .5
 
-**Punkt odniesienia zweryfikowany w manifeście `beta`: 0.5.0-beta.3 / versionCode 46.** Wydanie .3 dodaje osobny szyfrowany prywatny sejf PayCheck; `README` i historyczne nagłówki mogą opisywać starsze bety. Lista poniżej to **proponowane kolejne inkrementy i kryteria odbioru, NIE wydane APK, nie harmonogram dat**. Kolejne numery można skorygować po teście i zmianie rozmiaru pracy. Żaden numer nie oznacza automatycznej promocji na `main`. W tym czacie zmieniana jest wyłącznie dokumentacja `beta`.
+**UWAGA: tabela powstała przy `.3`.** Wydania `.4` (pełny panel kafelków i szyfrowana kopia PayCheck) oraz `.5` (historia cen) są już opublikowane, **nie zgadzają się z pierwotną kolejnością numerów tej tabeli**. Za obecny punkt odniesienia przyjmij sekcję „Stan wykonania serii 0.5” poniżej. Pozostałe numery to pomysły na inkrementy, a nie daty ani potwierdzone wydania. Kolejne numery można skorygować po teście i zmianie rozmiaru pracy. Żaden numer nie oznacza automatycznej promocji na `main`. W tym czacie zmieniana jest wyłącznie dokumentacja `beta`.
 
 ### Najbliższa seria 0.5.0 — równoległe domknięcie panelu i bezpiecznego PayCheck
 
@@ -228,3 +229,18 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 | **1.0.0 Stable** | Oficjalne EDHOME bez „prototyp”; zatwierdzony zakres, opis zmian przed aktualizacją, stabilny kanał i migracja danych. | **Osobna wyraźna zgoda Edwina na każdą zmianę/merge do chronionego `main`**; brak automatycznego scalenia z `beta`. |
 
 **Zakres 1.0 należy formalnie zamknąć przed RC.** Numer 1.0 nie oznacza, że wszystkie opcjonalne integracje/sterowanie są obowiązkowo gotowe; niesprawdzone funkcje oznaczyć jako przyszłe 1.x, nie obiecywać ich. Dodatki i poprawki po wydaniu używają kolejnych wersji, a nie zmieniają historii wydania 1.0.0. Nie przypisywać sztywnych dat ani pozorowanego procentu zaawansowania.
+
+
+## Stan wykonania serii 0.5 — aktualizacja po wydaniu beta.5 (22.09.2026)
+
+| Wydanie | Status potwierdzony | Zakres |
+|---|---|---|
+| `0.5.0-beta.1`–`.3` | Opublikowane wcześniej | Wspólny PayCheck, wspólne cele finansowe; prywatny sejf z oddzielnym hasłem i szyfrowanymi lokalnymi wpisami. |
+| [`0.5.0-beta.4`](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.4) | **Opublikowane, CI zakończone sukcesem** | Kafelki bez limitu 9: dodawanie, cele, nazwa, ikona, kolor, mały/podwójny rozmiar, przeciąganie, ukryj/przywróć, backup układu; osobna zaszyfrowana kopia prywatnego PayCheck i import bez dublowania UUID. |
+| [`0.5.0-beta.5`](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.5) | **Opublikowane, CI zakończone sukcesem** | Cena opcjonalna przy „Kupione”, sklep, historia rzeczywistych cen dopięta do spiżarni po przyjęciu; bez księgowania PayCheck. SQLite v21→v22 i JSON ze zwalidowaną tabelą historii cen. Manifest poprawiony o rzeczywisty changelog beta.5. |
+
+**Ważne: seria 0.5 NIE jest jeszcze zakończona funkcjonalnie**, mimo że kolejne APK mają numer 0.5.0. Dalsze podwersje trzeba nadać dopiero przed konkretnym wdrożeniem; nie nazywać automatycznie „beta.6 = backup”, bo backup zaszyfrowany był już w beta.4. Odbiór na fizycznym telefonie nie jest zastąpiony przez test CI.
+
+**Do zamknięcia 0.5.x (kolejne wersje, zakres i numeracja do potwierdzenia po testach):** (1) rzeczywiste testy telefonu: 15+ kafelków, przeciąganie, backup i import, starsza kopia v21→v22, szyfrowany sejf z testowym eksportem/importem bez utraty danych; (2) pełne role i profile oddzielające prywatne dane na współdzielonym tablecie; (3) jeden paragon z pozycjami ↔ jedna potwierdzona płatność PayCheck, bez dublowania skanu/przyjęcia; (4) korekty historii cen, jednostki i rozmiary opakowań; (5) cele i raty osobiste/wspólne oraz wyciągi i propozycje bankowych transakcji po audycie prywatności i danych; (6) regresja CI i poprawny changelog każdego następnego wydania. Dopiero po odbiorze uznać serię 0.5 za domkniętą, bez wymuszania przejścia do 0.6.
+
+**Ochrona Stable:** praca i dokumentacja na `beta`; każda zmiana lub merge do `main` wymaga osobnej wyraźnej akceptacji Edwina.
