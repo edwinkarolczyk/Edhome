@@ -585,6 +585,8 @@ public final class MainActivity extends Activity {
             });
         }
 
+        button("＋ Dodaj kafelek", this::showAddTileDialog);
+
         LinearLayout today = card();
         today.addView(text("Najbliższe czynności", 19, true));
         int displayed = 0;
@@ -598,32 +600,83 @@ public final class MainActivity extends Activity {
         }
         if (displayed == 0)
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
-        smallButton(today, "Minutniki urządzeń →", () -> go("timers"));
-        smallButton(today, "Lista zakupów →", () -> go("shopping"));
-        smallButton(today, "PayCheck • wspólny budżet →", () -> go("paycheck"));
-        smallButton(today, "Odpady i terminy wystawienia →", () -> go("waste"));
-        smallButton(today, "Zobacz wszystkie czynności →", () -> {
-            tasksFilter = "all";
-            go("tasks");
-        });
-        if (DiagnosticLog.enabled())
-            button("Diagnostyka BETA", () -> go("diagnostics"));
+        // All module navigation belongs in user-configurable tiles above.
+        // Keep this card informative; no second fixed menu below the tile grid.
         note("Działa offline. Przypomnienia włączysz w Ustawieniach; skaner "
             + "i synchronizacja są w kolejnych etapach.");
     }
 
+    private String homeTileTarget(String id) {
+        String target = prefs.getString("tile_target_" + id,
+            HomeTileCatalog.defaultTarget(id));
+        return HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+            ? target : "tasks";
+    }
+
     private String defaultHomeTileLabel(String id) {
-        int index = java.util.Arrays.asList(HOME_TILE_IDS).indexOf(id);
-        String[] labels = {"Czynności", "Kalendarz", "Miejsca",
-            "Spiżarnia", "Remanent", "Aktualizacje",
-            "Kopia danych", "Ustawienia", "Na dziś"};
-        if (index < 0) throw new IllegalArgumentException("Unknown tile ID");
-        return labels[index];
+        return HomeTileCatalog.label(homeTileTarget(id));
     }
 
     private String homeTileLabel(String id) {
         String label = prefs.getString("tile_label_" + id, defaultHomeTileLabel(id));
         return label.trim().isEmpty() ? defaultHomeTileLabel(id) : label;
+    }
+
+    private void openHomeTile(String id) {
+        String target = homeTileTarget(id);
+        if ("diagnostics".equals(target) && !DiagnosticLog.enabled()) {
+            alert("Diagnostyka jest dostępna wyłącznie w Beta.");
+            return;
+        }
+        if ("paycheck_private".equals(target)) {
+            openPrivatePaycheck();
+            return;
+        }
+        if ("tasks".equals(target) || "today".equals(target)) {
+            tasksFilter = "today".equals(target) ? "today" : "all";
+            go("tasks");
+            return;
+        }
+        go(target);
+    }
+
+    private void showAddTileDialog() {
+        java.util.List<String> targets = new java.util.ArrayList<>();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (String target : HomeTileCatalog.TARGETS) {
+            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta()))
+                continue;
+            targets.add(target);
+            names.add(HomeTileCatalog.label(target));
+        }
+        new AlertDialog.Builder(this).setTitle("Dodaj kafelek — wybierz cel")
+            .setItems(names.toArray(new String[0]), (dialog, which) -> {
+                String id = "tile_" + java.util.UUID.randomUUID().toString()
+                    .replace("-", "");
+                java.util.List<String> order = homeTileOrder();
+                order.add(id);
+                boolean ok = prefs.edit()
+                    .putString("tile_target_" + id, targets.get(which))
+                    .putString(HomeTileCatalog.ORDER_KEY,
+                        HomeTileCatalog.encode(order)).commit();
+                if (!ok) { alert("Nie można zapisać kafelka."); return; }
+                DiagnosticLog.event("HOME_TILE_ADDED");
+                render();
+                editHomeTile(id);
+            }).setNegativeButton("Anuluj", null).show();
+    }
+
+    private void removeHomeTile(String id) {
+        java.util.List<String> order = homeTileOrder();
+        if (!order.remove(id)) return;
+        boolean saved = prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .remove("tile_target_" + id).remove("tile_label_" + id)
+            .remove("tile_tint_" + id).remove("tile_icon_" + id)
+            .remove("tile_width_" + id).commit();
+        if (!saved) { alert("Nie można usunąć skrótu."); return; }
+        DiagnosticLog.event("HOME_TILE_REMOVED");
+        render();
     }
 
     private boolean isHomeTileDrag(DragEvent event) {
@@ -634,7 +687,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean beginHomeDrag(View tile, String id) {
-        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)
+        if (!homeTileOrder().contains(id)
                 || homeTileGrid == null || homeDragSource != null) return false;
         homeDragOrder = homeTileOrder();
         homeTileSlots.clear();
@@ -677,7 +730,7 @@ public final class MainActivity extends Activity {
 
     private void previewHomeDragAt(LinearLayout grid, float x, float y) {
         if (homeDragSource == null || homeDragOrder == null
-                || homeTileSlots.size() != HOME_TILE_IDS.length) return;
+                || homeTileSlots.size() != homeDragOrder.size()) return;
         int nearest = -1;
         double best = Double.MAX_VALUE;
         for (int i = 0; i < homeDragOrder.size(); i++) {
@@ -698,7 +751,7 @@ public final class MainActivity extends Activity {
     /** Preview and final save use the exact same insertion index. */
     private void previewHomeTilePlacement(int slot) {
         if (homeDragSource == null || homeDragOrder == null
-                || slot < 0 || slot >= HOME_TILE_IDS.length
+                || slot < 0 || slot >= homeDragOrder.size()
                 || slot == homeDragTargetIndex && homeDragDropped) return;
         if (slot == homeDragTargetIndex
                 && homeTileViews.get(homeDragSource).getAlpha() < 1f) return;
@@ -729,7 +782,8 @@ public final class MainActivity extends Activity {
         homeDragTargetIndex = slot;
         if (homeDragHint != null) {
             homeDragHint.setText("✥  Upuść tutaj: pozycja "
-                + (slot + 1) + " z 9 • " + homeTileLabel(homeDragSource));
+                + (slot + 1) + " z " + homeDragOrder.size()
+                + " • " + homeTileLabel(homeDragSource));
             homeDragHint.setTextColor(accent);
         }
     }
@@ -831,18 +885,41 @@ public final class MainActivity extends Activity {
                 "Przeciągnij kafelek za uchwyt ⋮⋮ lub przytrzymaj kafelek.",
                 android.widget.Toast.LENGTH_LONG).show();
         });
+        TextView remove = text("−  Usuń skrót z panelu", 16, true);
+        remove.setPadding(dp(14), dp(13), dp(14), dp(13));
+        remove.setBackground(skin.panel(this, skin.tileTop, 18));
+        menu.addView(remove);
+        remove.setOnClickListener(v -> {
+            popup.dismiss();
+            new AlertDialog.Builder(this).setTitle("Usunąć kafelek?")
+                .setMessage("Usuniemy tylko skrót, a nie dane ani moduł.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton("Usuń skrót", (d, which) ->
+                    removeHomeTile(id)).show();
+        });
         popup.showAsDropDown(anchor, 0, -dp(14));
         DiagnosticLog.event("HOME_TILE_ACTIONS_OPENED");
     }
 
     private void editHomeTile(String id) {
-        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)) return;
+        if (!homeTileOrder().contains(id)) return;
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20), dp(16), dp(20), dp(8));
         form.addView(text("Edytuj kafelek", 21, true));
-        form.addView(text("Zmieniasz wyłącznie wygląd. Moduł, dane "
-            + "i działanie pozostają bez zmian.", 13, false));
+        form.addView(text("Możesz zmienić cel tego skrótu bez zmiany danych modułu.", 13, false));
+        form.addView(text("Co otwiera kafelek", 15, true));
+        java.util.List<String> targets = new java.util.ArrayList<>();
+        java.util.List<String> targetLabels = new java.util.ArrayList<>();
+        for (String target : HomeTileCatalog.TARGETS) {
+            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())) continue;
+            targets.add(target);
+            targetLabels.add(HomeTileCatalog.label(target));
+        }
+        Spinner destination = new Spinner(this);
+        destination.setAdapter(themeSpinnerAdapter(targetLabels));
+        destination.setSelection(Math.max(0, targets.indexOf(homeTileTarget(id))));
+        form.addView(destination);
         form.addView(text("Podpis (maks. 24 znaki)", 15, true));
         EditText label = new EditText(this);
         label.setSingleLine(true);
@@ -864,7 +941,8 @@ public final class MainActivity extends Activity {
         Spinner icon = new Spinner(this);
         icon.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList(TileIcon.ICON_NAMES)));
-        String previousIcon = prefs.getString("tile_icon_" + id, id);
+        String previousIcon = prefs.getString("tile_icon_" + id,
+            HomeTileCatalog.icon(homeTileTarget(id)));
         icon.setSelection(Math.max(0,
             java.util.Arrays.asList(TileIcon.ICON_IDS).indexOf(previousIcon)));
         form.addView(icon);
@@ -902,8 +980,10 @@ public final class MainActivity extends Activity {
                         label.setError("Wpisz od 1 do 24 znaków.");
                         return;
                     }
-                    SharedPreferences.Editor change = prefs.edit();
-                    if (newLabel.equals(defaultHomeTileLabel(id)))
+                    String target = targets.get(destination.getSelectedItemPosition());
+                    SharedPreferences.Editor change = prefs.edit()
+                        .putString("tile_target_" + id, target);
+                    if (newLabel.equals(HomeTileCatalog.label(target)))
                         change.remove("tile_label_" + id);
                     else change.putString("tile_label_" + id, newLabel);
                     String code = codes[color.getSelectedItemPosition()];
@@ -911,7 +991,8 @@ public final class MainActivity extends Activity {
                     else change.putString("tile_tint_" + id, code);
                     String iconId = TileIcon.ICON_IDS[
                         icon.getSelectedItemPosition()];
-                    if (id.equals(iconId)) change.remove("tile_icon_" + id);
+                    if (HomeTileCatalog.icon(target).equals(iconId))
+                        change.remove("tile_icon_" + id);
                     else change.putString("tile_icon_" + id, iconId);
                     change.apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_SAVED");
@@ -931,17 +1012,19 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
-    /** A validated, persisted nine-tile order; duplicates/unknown IDs are repaired. */
+    /** Preserve legacy nine-tile appearance/order; v2 is user-owned and has no fixed limit. */
     private java.util.List<String> homeTileOrder() {
-        return HomeTileOrder.canonical(
-            prefs.getString("home_tile_order", ""));
+        return HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
     }
 
     private boolean moveHomeTileAtIndex(String source, int slot) {
         java.util.List<String> before = homeTileOrder();
         final java.util.List<String> next;
         try {
-            next = HomeTileOrder.moved(before, source, slot);
+            next = HomeTileCatalog.moved(before, source, slot);
         } catch (IllegalArgumentException problem) {
             DiagnosticLog.event("HOME_TILE_DRAG_INVALID");
             render();
@@ -951,8 +1034,8 @@ public final class MainActivity extends Activity {
             render(); // Also clears all preview transformations.
             return true;
         }
-        boolean saved = prefs.edit().putString("home_tile_order",
-            android.text.TextUtils.join(",", next)).commit();
+        boolean saved = prefs.edit().putString(HomeTileCatalog.ORDER_KEY,
+            HomeTileCatalog.encode(next)).commit();
         if (!saved) {
             DiagnosticLog.event("HOME_TILE_DRAG_SAVE_FAILED");
             render();
@@ -961,35 +1044,16 @@ public final class MainActivity extends Activity {
         }
         DiagnosticLog.event("HOME_TILES_REORDERED");
         render();
-        android.widget.Toast.makeText(this, "Zapisano układ 9 kafelków",
+        android.widget.Toast.makeText(this, "Zapisano układ kafelków",
             android.widget.Toast.LENGTH_SHORT).show();
         return true;
     }
 
     private LinearLayout homeTile(LinearLayout grid, String id) {
-        switch (id) {
-            case "tasks": return updateTile(grid, "✓", "Czynności", true, () -> {
-                tasksFilter = "all"; go("tasks");
-            });
-            case "calendar": return updateTile(grid, "▦", "Kalendarz", false,
-                () -> go("calendar"));
-            case "places": return updateTile(grid, "⌂", "Miejsca", false,
-                () -> go("places"));
-            case "pantry": return updateTile(grid, "▣", "Spiżarnia", false,
-                () -> go("pantry"));
-            case "audit": return updateTile(grid, "◫", "Remanent", false,
-                () -> go("audit"));
-            case "updates": return updateTile(grid, "↻", "Aktualizacje", false,
-                () -> go("updates"));
-            case "backup": return updateTile(grid, "▤", "Kopia danych", false,
-                () -> go("backup"));
-            case "settings": return updateTile(grid, "⚙", "Ustawienia", false,
-                () -> go("settings"));
-            case "today": return updateTile(grid, "◷", "Na dziś", false, () -> {
-                tasksFilter = "today"; go("tasks");
-            });
-            default: throw new IllegalArgumentException("Unknown home tile");
-        }
+        String target = homeTileTarget(id);
+        return updateTile(grid, id, "•",
+            HomeTileCatalog.label(target), "tasks".equals(target),
+            () -> openHomeTile(id));
     }
 
     private void members() {
@@ -4516,8 +4580,8 @@ public final class MainActivity extends Activity {
         return grid;
     }
 
-    private LinearLayout updateTile(LinearLayout grid, String symbol, String caption,
-            boolean primary, Runnable callback) {
+    private LinearLayout updateTile(LinearLayout grid, String id, String symbol,
+            String caption, boolean primary, Runnable callback) {
         LinearLayout row;
         if (grid.getChildCount() == 0
                 || ((LinearLayout) grid.getChildAt(grid.getChildCount() - 1))
@@ -4546,7 +4610,6 @@ public final class MainActivity extends Activity {
         boolean customTint = false;
         int tileTint = accent;
         if (isHome) {
-            String id = captionToHomeTileId(caption);
             String selected = prefs.getString("tile_tint_" + id, "default");
             customTint = !"default".equals(selected);
             if (customTint) tileTint = skin.tileTint(selected);
@@ -4611,9 +4674,11 @@ public final class MainActivity extends Activity {
             new LinearLayout.LayoutParams(dp(46), dp(46));
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
-            String moduleId = captionToHomeTileId(caption);
-            String iconId = prefs.getString("tile_icon_" + moduleId, moduleId);
-            if (!TileIcon.known(iconId)) iconId = moduleId;
+            String target = homeTileTarget(id);
+            String iconId = prefs.getString("tile_icon_" + id,
+                HomeTileCatalog.icon(target));
+            if (!TileIcon.known(iconId))
+                iconId = HomeTileCatalog.icon(target);
             TileIcon pictogram = new TileIcon(this, iconId,
                 highlighted && skin.light ? skin.accentInk : accent);
             pictogram.setPadding(dp(5), dp(5), dp(5), dp(5));
@@ -4638,20 +4703,6 @@ public final class MainActivity extends Activity {
         return tile;
     }
 
-    private String captionToHomeTileId(String caption) {
-        switch (caption) {
-            case "Czynności": return "tasks";
-            case "Kalendarz": return "calendar";
-            case "Miejsca": return "places";
-            case "Spiżarnia": return "pantry";
-            case "Remanent": return "audit";
-            case "Aktualizacje": return "updates";
-            case "Kopia danych": return "backup";
-            case "Ustawienia": return "settings";
-            case "Na dziś": return "today";
-            default: return "";
-        }
-    }
 
     private void updatesAdvanced() {
         title("Aktualizacje • opcje zaawansowane");
