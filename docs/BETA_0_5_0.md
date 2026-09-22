@@ -143,3 +143,12 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Pierwszeństwo ma dokładnie zapisany kod. Przy sprzecznych powiązaniach wariantów z różnymi produktami odjęcie jest blokowane. Zmienia się wyłącznie sposób szukania istniejącego lokalnego powiązania: żaden nieznany kod nie zakłada automatycznie nowej kartoteki.
 - Ponowny kod fizycznie tego samego produktu wymaga zatwierdzenia na podstawie ID produktu, nawet jeśli aparat zmieni zapis UPC na EAN. Do trwałego ruchu magazynowego przekazywany jest znaleziony lokalny kod, a identyfikator ostatniego produktu aktualizuje się dopiero po potwierdzonym `COMMITTED`.
 - Testy kontraktu oraz istniejące testy kandydatów UPC/EAN i odliczania; kompilacja nie zastępuje odbioru na telefonie. Nie ma nowych modułów ani migracji SQLite v22. Stable `main` nietknięty.
+
+
+## 0.5.0-beta.12 — zakupy, przyjęcie i miejsce docelowe
+
+- Miejsce jest wybierane **opcjonalnie przy dodaniu konkretnej pozycji** zakupów i ponownie wybierane albo potwierdzane przy `Przyjmij do spiżarni`. Przyjęcie zapisuje `place_id` oraz nazwę miejsca w **historii tego przyjęcia**; miejsce nie jest sztywną cechą produktu. Można przyjąć także `Bez miejsca`.
+- Usunięcie miejsca zeruje powiązanie z oczekującymi zakupami i historycznymi przyjęciami, ale zachowuje historyczną nazwę w przyjęciu. „Kupione” nie dodaje stanu; potwierdzenie przyjęcia wciąż jest jedną transakcją SQL i jednej pozycji nie da się przyjąć drugi raz.
+- Cena jest ceną **za 1 szt./kg/l** wg jednostki pozycji. Podgląd liczy łączną wartość jako cena × ilość (grosze, BigDecimal, zaokrąglenie na sumie); przy nieznanej ilości suma pozostaje nieznana, a nie 0 zł. W historii cen widoczne są zapisane ilości i łączne koszty. Bez automatycznego wydatku PayCheck.
+- SQLite **22 → 23** dodaje opcjonalne pole `shopping_items.place_id` i `shopping_receipts.place_id/place_name_snapshot`. Kopie v22 nadal są importowane, uzupełniając nowe pola bez miejsca; pełna kopia v23 zapisuje nowe powiązania. Wydanie wymaga testu instalacji/aktualizacji na telefonie, poza testami CI.
+- Stable `main` pozostaje nietknięty.
