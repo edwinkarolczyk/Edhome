@@ -1,0 +1,65 @@
+package com.edwinkarolczyk.edhome;
+
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+
+/**
+ * PayCheck first increment: SHARED ledger ONLY.
+ * Personal accounts/entries must never be shown in this unauthenticated Beta.
+ */
+final class PaycheckStore {
+    private PaycheckStore() { }
+
+    static void create(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE paycheck_transactions ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + "operation_id TEXT NOT NULL UNIQUE, "
+            + "scope TEXT NOT NULL CHECK(scope='shared'), "
+            + "kind TEXT NOT NULL CHECK(kind IN ('income','expense')), "
+            + "category TEXT NOT NULL, amount_grosz INTEGER NOT NULL "
+            + "CHECK(amount_grosz BETWEEN 1 AND 99999999999), "
+            + "note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)");
+    }
+
+    static String add(SQLiteDatabase db,String operationId,String kind,
+            String category,long grosz,String note) {
+        if(operationId==null || !operationId.matches("[0-9a-fA-F-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowa operacja.");
+        if(!"income".equals(kind) && !"expense".equals(kind))
+            throw new IllegalArgumentException("Nieznany rodzaj operacji.");
+        if(!MoneyRules.category(category) || grosz<1
+                || grosz>MoneyRules.MAX_GROSZ)
+            throw new IllegalArgumentException("Nieprawidłowa kwota lub kategoria.");
+        if(note==null || note.length()>160)
+            throw new IllegalArgumentException("Opis może mieć maks. 160 znaków.");
+        db.beginTransaction();
+        try {
+            try(Cursor previous=db.rawQuery(
+                    "SELECT 1 FROM paycheck_transactions WHERE operation_id=?",
+                    new String[]{operationId})) {
+                if(previous.moveToFirst())return "DUPLICATE";
+            }
+            ContentValues values=new ContentValues();
+            values.put("operation_id",operationId);
+            values.put("scope","shared");
+            values.put("kind",kind);
+            values.put("category",category);
+            values.put("amount_grosz",grosz);
+            values.put("note",note.trim());
+            values.put("created_at",System.currentTimeMillis());
+            db.insertOrThrow("paycheck_transactions",null,values);
+            db.setTransactionSuccessful();
+            return "COMMITTED";
+        }finally{db.endTransaction();}
+    }
+
+    static long sharedBalance(SQLiteDatabase db) {
+        try(Cursor c=db.rawQuery(
+                "SELECT COALESCE(SUM(CASE WHEN kind='income' "
+                + "THEN amount_grosz ELSE -amount_grosz END),0) "
+                + "FROM paycheck_transactions WHERE scope='shared'",null)) {
+            return c.moveToFirst()?c.getLong(0):0L;
+        }
+    }
+}

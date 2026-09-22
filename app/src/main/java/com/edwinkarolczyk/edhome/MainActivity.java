@@ -1,6 +1,8 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Activity;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.ClipData;
@@ -14,6 +16,8 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -78,6 +82,11 @@ public final class MainActivity extends Activity {
     private String tasksFilter = "all";
     private long selectedMemberId;
     private String pantrySearch = "";
+    private String pantryCategoryFilter = "";
+    private static final String SCAN_MODE_PREF = "pantry_scan_mode";
+    private final PantryBatchSession pantryBatch = new PantryBatchSession();
+    private boolean pantrySingleCameraPending;
+    private boolean storageQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -162,6 +171,7 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
+        else if (unlocked && "storage".equals(screen)) go("places");
         else if (unlocked && "shopping".equals(screen)) go("pantry");
         else if (unlocked && "waste".equals(screen)) go("tasks");
         else if (unlocked && "member_schedule".equals(screen)) go("members");
@@ -320,6 +330,8 @@ public final class MainActivity extends Activity {
                 case "pantry": pantry(); break;
                 case "shopping": shopping(); break;
                 case "places": places(); break;
+                case "storage": storage(); break;
+                case "paycheck": paycheck(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
@@ -440,8 +452,23 @@ public final class MainActivity extends Activity {
 
         TextView editHint = text(homeEditMode
             ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
-            : "✥  Dotknij, aby otworzyć • przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij", 13, false);
-        editHint.setTextColor(homeEditMode ? accent : subdued);
+            : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać", 13, false);
+        editHint.setTextColor(homeEditMode ? accent : ink);
+        editHint.setMinHeight(dp(48));
+        editHint.setGravity(Gravity.CENTER_VERTICAL);
+        editHint.setPadding(dp(12), dp(8), dp(12), dp(8));
+        editHint.setBackground(skin.panel(this, skin.tileTop, 22));
+        editHint.setClickable(true);
+        editHint.setFocusable(true);
+        editHint.setContentDescription(homeEditMode
+            ? "Zakończ układanie kafelków"
+            : "Uruchom układanie kafelków. Przytrzymaj kafelek, aby edytować.");
+        editHint.setOnClickListener(v -> {
+            if (homeDragSource != null) return;
+            homeEditMode = !homeEditMode;
+            render();
+        });
+        touchFeedback(editHint);
         body.addView(editHint);
         homeDragHint = editHint;
         homeTileViews.clear();
@@ -528,6 +555,7 @@ public final class MainActivity extends Activity {
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
         smallButton(today, "Minutniki urządzeń →", () -> go("timers"));
         smallButton(today, "Lista zakupów →", () -> go("shopping"));
+        smallButton(today, "PayCheck • wspólny budżet →", () -> go("paycheck"));
         smallButton(today, "Odpady i terminy wystawienia →", () -> go("waste"));
         smallButton(today, "Zobacz wszystkie czynności →", () -> {
             tasksFilter = "all";
@@ -704,8 +732,9 @@ public final class MainActivity extends Activity {
         homeDragFinishQueued = false;
         homeTileSlots.clear();
         if (homeDragHint != null) {
-            homeDragHint.setText("✥  Dotknij, aby otworzyć • "
-                + "przytrzymaj: Edytuj / Przesuń • uchwyt ⋮⋮: przeciągnij");
+            homeDragHint.setText(homeEditMode
+                ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
+                : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać");
             homeDragHint.setTextColor(subdued);
         }
     }
@@ -1165,8 +1194,8 @@ public final class MainActivity extends Activity {
             render();
         });
         note("Powiadomienia są opcjonalne i niezależne od przypomnień czynności. "
-            + "Obowiązuje cisza 22:00–07:00. Minutnik działa i kończy się "
-            + "również bez zgody na powiadomienia.");
+            + "Cisza: " + quietHoursStart() + "–" + quietHoursEnd()
+            + ". Minutnik działa i kończy się również bez zgody na powiadomienia.");
         LinearLayout editor = card();
         editor.addView(text("Uruchom minutnik", 20, true));
         editor.addView(text("Urządzenie", 15, true));
@@ -1419,10 +1448,13 @@ public final class MainActivity extends Activity {
         if (!place.isEmpty()) description += " • " + place;
         String assignee = db.assigneeLabel(id);
         if (!assignee.isEmpty()) description += " • Wykonawca: " + assignee;
+        String rotation = db.rotationLabel(id);
+        if (!rotation.isEmpty()) description += " • Rotacja: " + rotation;
         String[] alertTime = db.taskReminder(id);
         if (!alertTime[0].isEmpty()) {
             java.time.LocalDateTime when = ReminderRules.target(
-                due, alertTime[0], Integer.parseInt(alertTime[1]));
+                due, alertTime[0], Integer.parseInt(alertTime[1]),
+                quietHoursStart(), quietHoursEnd());
             description += " • Przypomnienie: " + when.toLocalDate()
                 + " " + when.toLocalTime() + " (orientacyjnie)";
         }
@@ -1465,6 +1497,119 @@ public final class MainActivity extends Activity {
         lp.setMargins(dp(2), dp(5), dp(2), 0);
         row.addView(action, lp);
         action.setOnClickListener(v -> run.run());
+    }
+
+    private String memberNameFromLists(Long id,
+            java.util.ArrayList<Long> memberIds,
+            java.util.ArrayList<String> memberNames) {
+        int index = memberIds.indexOf(id);
+        return index >= 0 && index < memberNames.size()
+            ? memberNames.get(index) : "Nieznana osoba";
+    }
+
+    private void renderRotationEditor(LinearLayout container,
+            java.util.ArrayList<Long> rotationIds,
+            java.util.ArrayList<Long> memberIds,
+            java.util.ArrayList<String> memberNames,
+            Spinner chosenMember) {
+        container.removeAllViews();
+        if (rotationIds.isEmpty()) {
+            TextView off = text("Rotacja wyłączona. Wykonawca pozostaje stały.", 13, false);
+            off.setTextColor(subdued);
+            container.addView(off);
+        } else {
+            TextView on = text("Kolejność rotacji • następna osoba po wykonaniu:", 13, true);
+            on.setTextColor(accent);
+            container.addView(on);
+            for (int i = 0; i < rotationIds.size(); i++) {
+                final int index = i;
+                Long memberId = rotationIds.get(i);
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView name = text((i + 1) + ". "
+                    + memberNameFromLists(memberId, memberIds, memberNames), 14, true);
+                row.addView(name, new LinearLayout.LayoutParams(0, dp(44), 1f));
+                if (i > 0) {
+                    TextView up = text("↑", 18, true);
+                    up.setGravity(Gravity.CENTER);
+                    row.addView(up, new LinearLayout.LayoutParams(dp(44), dp(44)));
+                    up.setOnClickListener(v -> {
+                        java.util.List<Long> moved = RotationRules.moved(
+                            rotationIds, index, index - 1);
+                        rotationIds.clear();
+                        rotationIds.addAll(moved);
+                        renderRotationEditor(container, rotationIds,
+                            memberIds, memberNames, chosenMember);
+                    });
+                }
+                if (i < rotationIds.size() - 1) {
+                    TextView down = text("↓", 18, true);
+                    down.setGravity(Gravity.CENTER);
+                    row.addView(down, new LinearLayout.LayoutParams(dp(44), dp(44)));
+                    down.setOnClickListener(v -> {
+                        java.util.List<Long> moved = RotationRules.moved(
+                            rotationIds, index, index + 1);
+                        rotationIds.clear();
+                        rotationIds.addAll(moved);
+                        renderRotationEditor(container, rotationIds,
+                            memberIds, memberNames, chosenMember);
+                    });
+                }
+                TextView remove = text("Usuń", 12, true);
+                remove.setGravity(Gravity.CENTER);
+                row.addView(remove, new LinearLayout.LayoutParams(dp(62), dp(44)));
+                remove.setOnClickListener(v -> {
+                    rotationIds.remove(index);
+                    if (!rotationIds.isEmpty()) {
+                        Long current = memberIds.get(chosenMember.getSelectedItemPosition());
+                        if (current == null || !rotationIds.contains(current)) {
+                            int selected = memberIds.indexOf(rotationIds.get(0));
+                            if (selected >= 0) chosenMember.setSelection(selected);
+                        }
+                    }
+                    renderRotationEditor(container, rotationIds,
+                        memberIds, memberNames, chosenMember);
+                });
+                container.addView(row);
+            }
+        }
+
+        smallButton(container, "+ Dodaj osobę do rotacji", () -> {
+            java.util.ArrayList<Long> availableIds = new java.util.ArrayList<>();
+            java.util.ArrayList<String> availableNames = new java.util.ArrayList<>();
+            for (int i = 1; i < memberIds.size(); i++) {
+                if (!rotationIds.contains(memberIds.get(i))) {
+                    availableIds.add(memberIds.get(i));
+                    availableNames.add(memberNames.get(i));
+                }
+            }
+            if (availableIds.isEmpty()) {
+                alert(memberIds.size() <= 1
+                    ? "Najpierw dodaj domowników w Czynności → Domownicy."
+                    : "Wszyscy domownicy są już w rotacji.");
+                return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("Dodaj do rotacji")
+                .setItems(availableNames.toArray(new String[0]), (dialog, which) -> {
+                    Long added = availableIds.get(which);
+                    rotationIds.add(added);
+                    if (rotationIds.size() == 1) {
+                        int selected = memberIds.indexOf(added);
+                        if (selected >= 0) chosenMember.setSelection(selected);
+                    }
+                    renderRotationEditor(container, rotationIds,
+                        memberIds, memberNames, chosenMember);
+                }).show();
+        });
+        if (!rotationIds.isEmpty()) {
+            smallButton(container, "Wyłącz rotację", () -> {
+                rotationIds.clear();
+                renderRotationEditor(container, rotationIds,
+                    memberIds, memberNames, chosenMember);
+            });
+        }
     }
 
     private ArrayAdapter<String> themeSpinnerAdapter(java.util.List<String> items) {
@@ -1634,13 +1779,25 @@ public final class MainActivity extends Activity {
         form.addView(text("Osoby dodasz w Czynności → Domownicy. "
             + "Bez wykonawcy czynność nadal działa.", 12, false));
 
+        form.addView(text("Rotacja wykonawców (opcjonalnie)", 16, true));
+        form.addView(text("Działa tylko dla czynności powtarzalnych. "
+            + "Po wykonaniu kolejny termin automatycznie dostaje następną "
+            + "osobę z ustawionej kolejki.", 12, false));
+        java.util.ArrayList<Long> rotationIds = id == null
+            ? new java.util.ArrayList<>() : db.taskRotation(id);
+        LinearLayout rotationEditor = new LinearLayout(this);
+        rotationEditor.setOrientation(LinearLayout.VERTICAL);
+        form.addView(rotationEditor);
+        renderRotationEditor(rotationEditor, rotationIds,
+            memberIds, memberNames, chosenMember);
+
         form.addView(text("Przypomnienie dla tej czynności", 16, true));
         form.addView(text("Standardowe: około 09:00 w dniu terminu lub dla "
             + "zaległych. Własne: wybrana godzina i wyprzedzenie. "
-            + "Nie wysyłamy alertów w ciszy 22:00–07:00: "
-            + "godziny 22:00–23:59 przesuwamy na 21:00 tego dnia, "
-            + "00:00–06:59 na 07:00. Android może opóźnić alarm.",
-            12, false));
+            + "Aktualna cisza: " + quietHoursStart() + "–" + quietHoursEnd()
+            + ". Alert ustawiony po początku ciszy przesuwamy godzinę przed "
+            + "jej początkiem; po północy — na koniec ciszy. "
+            + "Android może opóźnić alarm.", 12, false));
         String[] savedReminder = id == null
             ? new String[]{"", "0"} : db.taskReminder(id);
         Spinner reminderMode = new Spinner(this);
@@ -1782,11 +1939,25 @@ public final class MainActivity extends Activity {
                     return;
                 }
                 if (id != null) ReminderReceiver.cancelTask(this, id);
+                Long selectedAssignee =
+                    memberIds.get(chosenMember.getSelectedItemPosition());
+                String rotationError = RotationRules.validate(rotationIds,
+                    TaskRules.recurring(rule));
+                if (rotationError != null) {
+                    alert(rotationError);
+                    return;
+                }
+                if (!rotationIds.isEmpty()
+                        && (selectedAssignee == null
+                            || !rotationIds.contains(selectedAssignee))) {
+                    alert("Aktualny wykonawca musi należeć do rotacji.");
+                    return;
+                }
                 db.saveTask(id, title, due, rule, every,
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
                     selectedPriority, estimatedMinutes,
-                    memberIds.get(chosenMember.getSelectedItemPosition()),
-                    customTime, leadDays);
+                    selectedAssignee, customTime, leadDays,
+                    new java.util.ArrayList<>(rotationIds));
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
@@ -1808,8 +1979,8 @@ public final class MainActivity extends Activity {
         StringBuilder history = new StringBuilder();
         int found = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT completed_at,due_date,next_due_date FROM task_history "
-                + "WHERE task_id=? ORDER BY id DESC LIMIT 100",
+                "SELECT completed_at,due_date,next_due_date,assignee_name_snapshot "
+                + "FROM task_history WHERE task_id=? ORDER BY id DESC LIMIT 100",
                 new String[]{Long.toString(id)})) {
             while (cursor.moveToNext()) {
                 found++;
@@ -1819,6 +1990,8 @@ public final class MainActivity extends Activity {
                 history.append(time);
                 if (!cursor.isNull(1)) history.append(" • termin ").append(cursor.getString(1));
                 if (!cursor.isNull(2)) history.append(" → ").append(cursor.getString(2));
+                if (!cursor.isNull(3))
+                    history.append(" • wykonał/a: ").append(cursor.getString(3));
                 history.append("\n");
             }
         }
@@ -1833,8 +2006,9 @@ public final class MainActivity extends Activity {
         note("Ostatnie 100 wykonań. Historia zostaje również po usunięciu czynności z listy.");
         int count = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
-                "SELECT title_snapshot,completed_at,due_date,next_due_date "
-                + "FROM task_history ORDER BY id DESC LIMIT 100", null)) {
+                "SELECT title_snapshot,completed_at,due_date,next_due_date,"
+                + "assignee_name_snapshot FROM task_history "
+                + "ORDER BY id DESC LIMIT 100", null)) {
             while (c.moveToNext()) {
                 count++;
                 LinearLayout entry = card();
@@ -1845,6 +2019,8 @@ public final class MainActivity extends Activity {
                 entry.addView(text("Wykonano: " + finished, 14, false));
                 if (!c.isNull(2)) entry.addView(text("Termin: " + c.getString(2), 13, false));
                 if (!c.isNull(3)) entry.addView(text("Następnie: " + c.getString(3), 13, false));
+                if (!c.isNull(4)) entry.addView(text("Wykonał/a: "
+                    + c.getString(4), 13, false));
             }
         }
         if (count == 0) note("Brak zapisanych wykonań.");
@@ -2060,6 +2236,7 @@ public final class MainActivity extends Activity {
 
     private void places() {
         header("Miejsca • moje gospodarstwo");
+        button("▣ Rzeczy i pudełka / QR", () -> go("storage"));
         note("Ty nazywasz lokalizacje. Dom → Kuchnia → Szafka → "
             + "Półka to przykładowa ścieżka, nie narzucona lista. "
             + "Rodzaj jest opcjonalny; miejsce może mieć dowolną liczbę podmiejsc.");
@@ -2168,7 +2345,7 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
-                    alert("Miejsce ma podmiejsca. Przenieś je najpierw.");
+                    alert("Miejsce ma podmiejsca lub rzeczy/pudełka. Przenieś je najpierw.");
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
@@ -2318,11 +2495,392 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+
+    private void storage() {
+        header("Rzeczy • pudełka • QR");
+        note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
+            + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
+        button("+ Dodaj rzecz", () -> storageEditor("thing", null));
+        button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        button("▣ Skanuj QR rzeczy lub pudełka", () -> {
+            if (storageQrCameraPending || pantrySingleCameraPending
+                    || pantryBatch.active()) return;
+            storageQrCameraPending = true;
+            IntentIntegrator qr = new IntentIntegrator(this);
+            qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            qr.setPrompt("EDHOME: QR rzeczy lub pudełka");
+            qr.setBeepEnabled(false);
+            qr.setOrientationLocked(false);
+            qr.initiateScan();
+        });
+        button("← Miejsca", () -> go("places"));
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),
+                    c.getLong(0));
+                if(item==null)continue;
+                count++;
+                LinearLayout box=card();
+                box.addView(text(("box".equals(item.kind)?"▣ Pudełko: ":"◉ Rzecz: ")
+                    +item.name,18,true));
+                box.addView(text(StorageStore.location(db.getReadableDatabase(),item),
+                    13,false));
+                if(item.lentTo!=null)
+                    box.addView(text("Wypożyczono: "+item.lentTo,13,false));
+                smallButton(box,"Pokaż QR",()->showStorageQr(item));
+                if(item.lentTo==null)
+                    smallButton(box,"Przenieś",()->storageEditor(item.kind,item.id));
+                if("thing".equals(item.kind)){
+                    if(item.lentTo==null)
+                        smallButton(box,"Wypożycz",()->askStorageLend(item));
+                    else smallButton(box,"Zwrot",()->{
+                        try{
+                            StorageStore.returned(db.getWritableDatabase(),item.id);
+                            DiagnosticLog.event("STORAGE_RETURNED");render();
+                        }catch(Exception e){alert(e.getMessage());}
+                    });
+                }
+                smallButton(box,"Usuń",()->new AlertDialog.Builder(this)
+                    .setTitle("Usunąć rzecz z magazynu?")
+                    .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń",(d,w)->{
+                        try {
+                            StorageStore.remove(db.getWritableDatabase(),item.id);
+                            DiagnosticLog.event("STORAGE_REMOVED");render();
+                        }catch(Exception e){alert(e.getMessage());}
+                    }).show());
+            }
+        }
+        if(count==0)note("Dodaj pierwszą rzecz albo pudełko; nazwy i miejsca wybierasz sam.");
+        title("Ostatnie ruchy magazynu");
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT name_snapshot,action,details FROM storage_events "
+                +"ORDER BY id DESC LIMIT 12",null)){
+            while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
+                +" • "+c.getString(2));
+        }
+    }
+
+    private void storageEditor(String kind, Long itemId) {
+        StorageStore.Item existing=itemId==null?null:
+            StorageStore.find(db.getReadableDatabase(),itemId);
+        if(itemId!=null && existing==null){
+            alert("Rzecz już nie istnieje.");return;
+        }
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa rzeczy albo pudełka");
+        name.setText(existing==null?"":existing.name);
+        if(existing==null)layout.addView(name);
+        else layout.addView(text("Przenieś: "+existing.name,18,true));
+        java.util.List<Long> boxIds=new java.util.ArrayList<>();
+        java.util.List<Long> placeIds=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        boxIds.add(null);placeIds.add(null);labels.add("Bez lokalizacji");
+        for(PlaceEntry place:readPlaces()){
+            boxIds.add(null);placeIds.add(place.id);
+            labels.add("Miejsce: "+db.placePath(place.id));
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM storage_items WHERE kind='box' ORDER BY name",
+                null)) {
+            while(c.moveToNext()){
+                if(itemId!=null && c.getLong(0)==itemId)continue;
+                boxIds.add(c.getLong(0));placeIds.add(null);
+                labels.add("W pudełku: "+c.getString(1));
+            }
+        }
+        Spinner destination=new Spinner(this);
+        destination.setAdapter(themeSpinnerAdapter(labels));
+        if(existing!=null)for(int i=0;i<labels.size();i++){
+            if(java.util.Objects.equals(boxIds.get(i),existing.boxId)
+                    &&java.util.Objects.equals(placeIds.get(i),existing.placeId)){
+                destination.setSelection(i);break;
+            }
+        }
+        layout.addView(text("Położenie (rzeczy w pudełku dziedziczą jego miejsce)",
+            14,false));
+        layout.addView(destination);
+        new AlertDialog.Builder(this)
+            .setTitle(existing==null?"Dodaj do magazynu":"Przenieś")
+            .setView(layout).setNegativeButton("Anuluj",null)
+            .setPositiveButton(existing==null?"Dodaj":"Przenieś",(d,w)->{
+                try{
+                    int i=destination.getSelectedItemPosition();
+                    if(existing==null)StorageStore.create(db.getWritableDatabase(),
+                        name.getText().toString(),kind,boxIds.get(i),placeIds.get(i));
+                    else StorageStore.move(db.getWritableDatabase(),existing.id,
+                        boxIds.get(i),placeIds.get(i));
+                    DiagnosticLog.event(existing==null?
+                        "STORAGE_CREATED":"STORAGE_MOVED");
+                    render();
+                }catch(Exception problem){alert(problem.getMessage());}
+            }).show();
+    }
+
+    private void askStorageLend(StorageStore.Item item){
+        EditText recipient=new EditText(this);
+        recipient.setSingleLine(true);recipient.setHint("Komu wypożyczono?");
+        new AlertDialog.Builder(this).setTitle("Wypożycz: "+item.name)
+            .setView(recipient).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Wypożycz",(d,w)->{
+                try{
+                    StorageStore.lend(db.getWritableDatabase(),item.id,
+                        recipient.getText().toString());
+                    DiagnosticLog.event("STORAGE_LENT");render();
+                }catch(Exception problem){alert(problem.getMessage());}
+            }).show();
+    }
+
+    private void showStorageQr(StorageStore.Item item) {
+        String payload=StorageQr.encode(item.kind,item.id);
+        try{
+            com.google.zxing.common.BitMatrix bits =
+                new com.google.zxing.MultiFormatWriter().encode(payload,
+                    com.google.zxing.BarcodeFormat.QR_CODE,384,384);
+            Bitmap bmp=Bitmap.createBitmap(bits.getWidth(),bits.getHeight(),
+                Bitmap.Config.ARGB_8888);
+            for(int y=0;y<bits.getHeight();y++)
+                for(int x=0;x<bits.getWidth();x++)
+                    bmp.setPixel(x,y,bits.get(x,y)?Color.BLACK:Color.WHITE);
+            ImageView picture=new ImageView(this);
+            picture.setImageBitmap(bmp);
+            picture.setAdjustViewBounds(true);
+            new AlertDialog.Builder(this).setTitle("QR • "+item.name)
+                .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
+                    +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
+                .setView(picture).setNegativeButton("Zamknij",null)
+                .setPositiveButton("Kopiuj kod",(d,w)->{
+                    ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
+                        .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
+                }).show();
+        }catch(Exception error){
+            DiagnosticLog.error("STORAGE_QR_DRAW",error);
+            alert("Nie udało się wyświetlić QR.");
+        }
+    }
+
+    private void openStorageQr(String value) {
+        StorageQr.Target target=StorageQr.decode(value);
+        if(target==null){alert("To nie jest QR rzeczy/pudełka EDHOME.");return;}
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),target.id);
+        if(item==null||!item.kind.equals(target.kind)){
+            alert("Nie znaleziono obiektu o tym QR w lokalnym magazynie.");
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle(item.name)
+            .setMessage(("box".equals(item.kind)?"Pudełko":"Rzecz")
+                +"\n"+StorageStore.location(db.getReadableDatabase(),item)
+                +(item.lentTo==null?"":"\nWypożyczono: "+item.lentTo))
+            .setNegativeButton("Zamknij",null)
+            .setPositiveButton("Magazyn",(d,w)->go("storage")).show();
+    }
+
+    private void paycheck() {
+        header("PayCheck • wspólny budżet");
+        note("Pierwszy etap: tylko wspólne, ręcznie zatwierdzane transakcje. "
+            + "Prywatne profile pozostają niedostępne, dopóki nie mają "
+            + "własnej ochrony przed dostępem ze wspólnego tabletu.");
+        note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
+            + "Podaj rzeczywistą kwotę dopiero po dokonanej płatności.");
+        title("Saldo wspólne: " + MoneyRules.format(
+            PaycheckStore.sharedBalance(db.getReadableDatabase())));
+        Spinner kind=new Spinner(this);
+        kind.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList("Wydatek −","Przychód +")));
+        body.addView(kind);
+        Spinner category=new Spinner(this);
+        category.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        body.addView(category);
+        EditText amount=field("Kwota w PLN, np. 12,50",false);
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText noteField=field("Opis (opcjonalnie, maks. 160 znaków)",false);
+        button("Dodaj transakcję do wspólnego budżetu",()->{
+            long grosz;
+            try{grosz=MoneyRules.parse(amount.getText().toString());}
+            catch(IllegalArgumentException error){amount.setError(error.getMessage());return;}
+            String description=noteField.getText().toString().trim();
+            if(description.length()>160){
+                noteField.setError("Opis ma maksymalnie 160 znaków.");return;
+            }
+            String type=kind.getSelectedItemPosition()==1?"income":"expense";
+            String group=MoneyRules.CATEGORIES[category.getSelectedItemPosition()];
+            String operationId=java.util.UUID.randomUUID().toString();
+            new AlertDialog.Builder(this)
+                .setTitle("Potwierdź transakcję wspólną")
+                .setMessage(("income".equals(type)?"Przychód: ":"Wydatek: ")
+                    +MoneyRules.format(grosz)+"\n"
+                    +MoneyRules.categoryLabel(group)
+                    +(description.isEmpty()?"":"\n"+description)
+                    +"\n\nBez automatycznego powiązania z zakupami.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Zapisz",(d,w)->{
+                    try{
+                        String outcome=PaycheckStore.add(
+                            db.getWritableDatabase(),operationId,
+                            type,group,grosz,description);
+                        if("COMMITTED".equals(outcome)){
+                            DiagnosticLog.event("PAYCHECK_SHARED_COMMITTED");
+                            render();
+                        }else alert("Ta operacja była już zapisana.");
+                    }catch(Exception problem){
+                        DiagnosticLog.error("PAYCHECK_SHARED",problem);
+                        alert("Nie zapisano transakcji.");
+                    }
+                }).show();
+        });
+        title("Historia wspólna");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT kind,category,amount_grosz,note,created_at "
+                +"FROM paycheck_transactions WHERE scope='shared' "
+                +"ORDER BY id DESC LIMIT 40",null)){
+            while(c.moveToNext()){
+                count++;
+                LinearLayout entry=card();
+                boolean income="income".equals(c.getString(0));
+                entry.addView(text((income?"+ ":"− ")
+                    +MoneyRules.format(c.getLong(2)),18,true));
+                entry.addView(text(MoneyRules.categoryLabel(c.getString(1))
+                    +(c.getString(3).isEmpty()?"":" • "+c.getString(3)),14,false));
+                entry.addView(text(Instant.ofEpochMilli(c.getLong(4))
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
+                    12,false));
+            }
+        }
+        if(count==0)note("Brak transakcji wspólnych. Niczego nie księgujemy automatycznie.");
+        sharedPaycheckGoals();
+    }
+
+    private void sharedPaycheckGoals() {
+        title("Wspólne cele finansowe");
+        note("Odkładanie na cel to plan oszczędzania, a nie nowy wydatek "
+            + "ani rzeczywisty przelew. Nie zmienia salda wspólnego PayCheck.");
+        button("+ Nowy cel wspólny", this::createSharedPaycheckGoal);
+        int goals = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,target_grosz FROM paycheck_goals "
+                + "WHERE scope='shared' ORDER BY id DESC", null)) {
+            while (c.moveToNext()) {
+                goals++;
+                long id = c.getLong(0);
+                String name = c.getString(1);
+                long target = c.getLong(2);
+                long saved = PaycheckGoalsStore.allocated(
+                    db.getReadableDatabase(), id);
+                LinearLayout entry = card();
+                entry.addView(text(name, 19, true));
+                entry.addView(text("Odłożone: " + MoneyRules.format(saved)
+                    + " / " + MoneyRules.format(target), 16, false));
+                entry.addView(text("Do celu: "
+                    + MoneyRules.format(Math.max(0, target - saved)), 14, false));
+                if (saved < target) {
+                    smallButton(entry, "+ Odłóż na cel", () ->
+                        allocateSharedPaycheckGoal(id, name, target, saved));
+                } else entry.addView(text("✓ Cel osiągnięty", 14, true));
+            }
+        }
+        if (goals == 0) note("Nie masz jeszcze wspólnych celów finansowych.");
+    }
+
+    private void createSharedPaycheckGoal() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Cel, np. OC samochodu");
+        form.addView(name);
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota celu w PLN, np. 700,00");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(amount);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Nowy wspólny cel")
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Utwórz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    long target = MoneyRules.parse(amount.getText().toString());
+                    PaycheckGoalsStore.addGoal(db.getWritableDatabase(),
+                        name.getText().toString(), target);
+                    DiagnosticLog.event("PAYCHECK_SHARED_GOAL_CREATED");
+                    dialog.dismiss();
+                    render();
+                } catch (IllegalArgumentException error) {
+                    amount.setError(error.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("PAYCHECK_GOAL_CREATE", error);
+                    alert("Nie udało się utworzyć celu.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void allocateSharedPaycheckGoal(long id, String name,
+            long target, long previous) {
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota w PLN");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text(name + "\nPozostało: "
+            + MoneyRules.format(target - previous)
+            + "\nOdkładanie nie księguje wydatku i nie zmienia salda.",
+            15, false));
+        form.addView(amount);
+        String operationId = java.util.UUID.randomUUID().toString();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Potwierdź odłożenie na cel")
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Odłóż", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    long grosz = MoneyRules.parse(amount.getText().toString());
+                    String outcome = PaycheckGoalsStore.allocate(
+                        db.getWritableDatabase(), id, operationId, grosz);
+                    if ("COMMITTED".equals(outcome)) {
+                        DiagnosticLog.event("PAYCHECK_SHARED_GOAL_ALLOCATED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("DUPLICATE".equals(outcome)) {
+                        dialog.dismiss();
+                        alert("Ta wpłata została już zapisana.");
+                        render();
+                    } else amount.setError("OVER_TARGET".equals(outcome)
+                        ? "Kwota przekracza kwotę pozostałą do celu."
+                        : "Ten cel już nie istnieje.");
+                } catch (IllegalArgumentException error) {
+                    amount.setError(error.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("PAYCHECK_GOAL_ALLOCATE", error);
+                    alert("Nie udało się odłożyć kwoty.");
+                }
+            }));
+        dialog.show();
+    }
+
     private void shopping() {
         header("Lista zakupów • offline");
-        note("W tej wersji lista jest lokalna na tym urządzeniu. "
-            + "Zaznaczenie zakupu nie zmienia automatycznie stanu spiżarni. "
-            + "Ilość możesz zostawić pustą, co nie oznacza zera.");
+        note("Kupione ≠ przyjęte. Samo zaznaczenie nie zmienia stanu; "
+            + "dopiero osobny przycisk Przyjmij dopisuje wybrane opakowania "
+            + "do wskazanego produktu w spiżarni. Bez automatycznej ceny.");
         button("← Spiżarnia", () -> go("pantry"));
         EditText item = field("Co kupić?", false);
         EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
@@ -2361,6 +2919,8 @@ public final class MainActivity extends Activity {
                 final Long amount = cursor.isNull(2)
                     ? null : cursor.getLong(2);
                 final boolean done = cursor.getInt(4) == 1;
+                final boolean received = ShoppingReceiptStore.received(
+                    db.getReadableDatabase(), shoppingId);
                 LinearLayout box = card();
                 CheckBox check = new CheckBox(this);
                 check.setText(name + " • " + ShoppingRules.formatQuantity(amount)
@@ -2370,6 +2930,13 @@ public final class MainActivity extends Activity {
                 check.setButtonTintList(ColorStateList.valueOf(accent));
                 check.setChecked(done);
                 box.addView(check);
+                if (received) {
+                    box.addView(text("✓ Przyjęte do spiżarni — zapisano historię",
+                        13, false));
+                } else if (done) {
+                    smallButton(box, "Przyjmij do spiżarni", () ->
+                        chooseShoppingReceipt(shoppingId, name));
+                }
                 check.setOnCheckedChangeListener((view, isChecked) -> {
                     db.setShoppingChecked(shoppingId, isChecked);
                     DiagnosticLog.event("SHOPPING_ITEM_CHECKED");
@@ -2390,10 +2957,114 @@ public final class MainActivity extends Activity {
         if (count == 0) note("Lista jest pusta. Dodaj pierwszy produkt.");
     }
 
+    private void chooseShoppingReceipt(long shoppingId, String shoppingName) {
+        java.util.List<Long> productIds = new java.util.ArrayList<>();
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        try (Cursor items = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE", null)) {
+            while (items.moveToNext()) {
+                long id = items.getLong(0);
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+                productIds.add(id);
+                labels.add(items.getString(1) + " • "
+                    + PantryPackageRules.summary(items.getInt(2),
+                        pack.unit, pack.sizeMilli));
+            }
+        }
+        if (productIds.isEmpty()) {
+            alert("Najpierw utwórz produkt w Spiżarni; niczego nie przyjęto.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Do którego produktu przyjąć: " + shoppingName + "?")
+            .setItems(labels.toArray(new String[0]), (dialog, which) ->
+                confirmShoppingReceipt(shoppingId, shoppingName,
+                    productIds.get(which), labels.get(which)))
+            .setNegativeButton("Anuluj", null).show();
+    }
+
+    private void confirmShoppingReceipt(long shoppingId, String shoppingName,
+            long pantryId, String productLabel) {
+        EditText count = new EditText(this);
+        count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        count.setText("1");
+        count.setSelectAllOnFocus(true);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(14), dp(18), dp(14));
+        form.addView(text(shoppingName + "\n→ " + productLabel
+            + "\nSamo „kupione” nie dodaje zapasu. Potwierdź liczbę "
+            + "pełnych opakowań.", 15, false));
+        form.addView(count);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Potwierdź przyjęcie")
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Przyjmij", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    int packages = Integer.parseInt(count.getText().toString().trim());
+                    String outcome = ShoppingReceiptStore.accept(
+                        db.getWritableDatabase(), shoppingId, pantryId, packages);
+                    if ("COMMITTED".equals(outcome)) {
+                        DiagnosticLog.event("SHOPPING_RECEIPT_COMMITTED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("ALREADY_RECEIVED".equals(outcome)) {
+                        dialog.dismiss();
+                        alert("Ta pozycja była już przyjęta — nie dodano jej ponownie.");
+                        render();
+                    } else alert("Nie przyjęto: "
+                        + ("NOT_PURCHASED".equals(outcome) ? "pozycja nie jest kupiona."
+                        : "MISSING_PRODUCT".equals(outcome)
+                            ? "produkt już nie istnieje." : "przekroczony limit."));
+                } catch (NumberFormatException invalid) {
+                    count.setError("Podaj całkowitą liczbę opakowań.");
+                } catch (IllegalArgumentException invalid) {
+                    count.setError(invalid.getMessage());
+                } catch (Exception problem) {
+                    DiagnosticLog.error("SHOPPING_RECEIPT", problem);
+                    alert("Nie udało się przyjąć produktu. Stan nie został zmieniony.");
+                }
+            }));
+        dialog.show();
+    }
+
     private void pantry() {
         header("Spiżarnia • lokalne zapasy");
         button("☷ Lista zakupów", () -> go("shopping"));
         button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
+        button("☷ Kategoria: " + (pantryCategoryFilter.isEmpty()
+                ? "Wszystkie" : PantryCategories.label(pantryCategoryFilter)), () -> {
+            int chosen = java.util.Arrays.asList(PantryCategories.FILTER_IDS)
+                .indexOf(pantryCategoryFilter);
+            new AlertDialog.Builder(this).setTitle("Filtr kategorii")
+                .setSingleChoiceItems(PantryCategories.FILTER_LABELS,
+                    Math.max(0, chosen), (dialog, index) -> {
+                        pantryCategoryFilter = PantryCategories.FILTER_IDS[index];
+                        dialog.dismiss();
+                        render();
+                    }).setNegativeButton("Anuluj", null).show();
+        });
+        button("📷 Skanuj i dodaj +1", () -> {
+            finishPantryBatch();
+            openPantryCamera(false);
+        });
+        button("📷 Skanuj i wyciągnij −1", () -> {
+            finishPantryBatch();
+            openPantryCamera(true);
+        });
+        if (!pantryBatch.active()) {
+            button("📷 Skanuj serię — dodawaj +1", () -> startPantryBatch("ADD"));
+            button("📷 Skanuj serię — wyciągaj −1", () -> startPantryBatch("TAKE"));
+        } else {
+            button("⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
+                this::finishPantryBatch);
+        }
+        button("⌨ Wpisz kod ręcznie", this::manualPantryBarcode);
+        button("Historia skanów", this::showPantryScanHistory);
         button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
         button(pantrySearch.isEmpty() ? "⌕ Szukaj produktu" :
             "⌕ Szukaj: " + pantrySearch, () -> {
@@ -2414,16 +3085,42 @@ public final class MainActivity extends Activity {
         });
         int matched = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE", null)) {
+                "SELECT id,name,qty,category FROM pantry ORDER BY name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
                 long id = cursor.getLong(0);
                 String name = cursor.getString(1);
+                String category = cursor.getString(3);
+                if (!pantryCategoryFilter.isEmpty()
+                        && !pantryCategoryFilter.equals(category)) continue;
                 if (!pantrySearch.isEmpty() && !name.toLowerCase(Locale.ROOT)
                     .contains(pantrySearch.toLowerCase(Locale.ROOT))) continue;
                 matched++;
                 int qty = cursor.getInt(2);
                 LinearLayout box = card();
-                box.addView(text(name + "  •  " + qty + " szt.", 18, true));
+                PantryBarcodeStore.Details details = PantryBarcodeStore.details(
+                    db.getReadableDatabase(), id);
+                if (details != null && !details.imageUrl.isEmpty()) {
+                    Bitmap thumbnail = PantryProductLookup.cached(this, details.imageUrl);
+                    if (thumbnail != null) {
+                        ImageView photo = new ImageView(this);
+                        int px = (int) (getResources().getDisplayMetrics().density * 88);
+                        photo.setLayoutParams(new LinearLayout.LayoutParams(px, px));
+                        photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                        photo.setImageBitmap(thumbnail);
+                        box.addView(photo);
+                    } else {
+                        taskAction(box, "⬇ Pobierz zdjęcie produktu",
+                            () -> refreshPantryPhoto(details.imageUrl));
+                    }
+                }
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+                box.addView(text(name + " • " + qty + " opak.", 18, true));
+                box.addView(text(PantryPackageRules.summary(
+                    qty, pack.unit, pack.sizeMilli), 14, false));
+                box.addView(text(PantryCategories.label(category), 13, false));
+                if (details != null && !details.brand.isEmpty())
+                    box.addView(text("Marka: " + details.brand, 13, false));
                 LinearLayout quick = new LinearLayout(this);
                 quick.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(quick);
@@ -2442,7 +3139,7 @@ public final class MainActivity extends Activity {
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
-                    new AlertDialog.Builder(this).setTitle(name + " • ilość")
+                    new AlertDialog.Builder(this).setTitle(name + " • liczba opakowań")
                         .setView(count).setNegativeButton("Anuluj", null)
                         .setPositiveButton("Zapisz", (d, w) -> {
                             try {
@@ -2462,7 +3159,7 @@ public final class MainActivity extends Activity {
                 LinearLayout management = new LinearLayout(this);
                 management.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(management);
-                taskAction(management, "Zmień nazwę", () -> pantryProductDialog(id, name));
+                taskAction(management, "Edytuj", () -> pantryProductDialog(id, name));
                 taskAction(management, "Usuń", () -> {
                     if (db.openAuditId() != 0) {
                         alert("Najpierw zakończ lub anuluj remanent. "
@@ -2470,7 +3167,7 @@ public final class MainActivity extends Activity {
                         return;
                     }
                     new AlertDialog.Builder(this).setTitle("Usunąć produkt?")
-                        .setMessage(name + " • " + qty + " szt.")
+                        .setMessage(name + " • " + qty + " opak.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Usuń", (d, w) -> {
                             db.deleteStock(id);
@@ -2480,43 +3177,677 @@ public final class MainActivity extends Activity {
                 });
             }
         }
-        if (matched == 0) note(pantrySearch.isEmpty()
+        if (matched == 0) note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
             ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
-            : "Nie znaleziono produktów. Wyczyść wyszukiwanie.");
-        note("Ta wersja zapisuje ilości w sztukach. Jednostki kg/l i skaner będą kolejnym etapem.");
+            : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
+        note("Stan zapisujemy w pełnych opakowaniach; np. 3 × 0,5 l = 1,5 l. "
+            + "W serii aparat wraca po każdym zatwierdzonym skanie; "
+            + "ten sam kod wymaga dodatkowego potwierdzenia.");
+    }
+
+
+    private void startPantryBatch(String mode) {
+        if (pantryBatch.active()) return;
+        pantryBatch.start(mode);
+        DiagnosticLog.event("PANTRY_BATCH_STARTED");
+        render();
+        root.post(() -> {
+            if (pantryBatch.active() && !isFinishing() && !isDestroyed())
+                openPantryCamera("TAKE".equals(pantryBatch.mode()));
+        });
+    }
+
+    private void finishPantryBatch() {
+        if (!pantryBatch.active()) return;
+        int saved = pantryBatch.stop();
+        DiagnosticLog.event("PANTRY_BATCH_FINISHED");
+        if ("pantry".equals(screen)) render();
+        alert("Seria zakończona. Zapisane operacje: " + saved + ".");
+    }
+
+    private void continuePantryBatch() {
+        if (!pantryBatch.active()) return;
+        root.post(() -> {
+            if (!pantryBatch.active() || isFinishing() || isDestroyed()) return;
+            if (!"pantry".equals(screen)) {
+                finishPantryBatch();
+                return;
+            }
+            openPantryCamera("TAKE".equals(pantryBatch.mode()));
+        });
+    }
+
+    /** Start an offline barcode scan; never mutate stock in the camera callback. */
+    private void openPantryCamera(boolean take) {
+        if (pantryBatch.active()) {
+            if (!pantryBatch.launchCamera()) return;
+        } else {
+            if (pantrySingleCameraPending) return;
+            pantrySingleCameraPending = true;
+        }
+        prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
+        IntentIntegrator scanner = new IntentIntegrator(this);
+        scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
+        scanner.setPrompt(take ? "EDHOME: wyciągnij ze spiżarni" : "EDHOME: dodaj do spiżarni");
+        scanner.setBeepEnabled(false);
+        scanner.setOrientationLocked(false);
+        scanner.initiateScan();
+    }
+
+    private void manualPantryBarcode() {
+        finishPantryBatch();
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
+        new AlertDialog.Builder(this).setTitle("Wpisz kod kreskowy")
+            .setView(input).setNegativeButton("Anuluj", null)
+            .setNeutralButton("Wyciągnij −1", (d, w) -> onPantryBarcode(
+                input.getText().toString().trim(), "TAKE"))
+            .setPositiveButton("Dodaj +1", (d, w) -> onPantryBarcode(
+                input.getText().toString().trim(), "ADD")).show();
+    }
+
+    private void onPantryBarcode(String barcode, String mode) {
+        onPantryBarcode(barcode, mode, false);
+    }
+
+    private void onPantryBarcode(String barcode, String mode, boolean repeatedApproved) {
+        if (!PantryScanRules.validBarcode(barcode)) {
+            alert("Niepoprawny kod EAN/UPC/GTIN — sprawdź cyfrę kontrolną.");
+            DiagnosticLog.event("PANTRY_BARCODE_INVALID");
+            finishPantryBatch();
+            return;
+        }
+        if (!repeatedApproved && pantryBatch.repeated(barcode)) {
+            new AlertDialog.Builder(this).setTitle("Ten sam kod co poprzednio")
+                .setMessage("Czy to kolejne opakowanie tego samego produktu? "
+                    + "Nie naliczam go ponownie bez Twojego potwierdzenia.")
+                .setNegativeButton("Zakończ serię", (d,w) -> finishPantryBatch())
+                .setNeutralButton("Skanuj inny", (d,w) -> {
+                    if (pantryBatch.skip()) continuePantryBatch();
+                })
+                .setPositiveButton("Tak, kolejne opakowanie", (d,w) ->
+                    onPantryBarcode(barcode, mode, true))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
+            return;
+        }
+        PantryBarcodeStore.Item item = PantryBarcodeStore.find(
+            db.getReadableDatabase(), barcode);
+        String operationId = java.util.UUID.randomUUID().toString();
+        if (item == null && "TAKE".equals(mode)) {
+            finishPantryBatch();
+            alert("Nieznany kod. Najpierw dodaj produkt do spiżarni.");
+            return;
+        }
+        if (item == null) {
+            new AlertDialog.Builder(this).setTitle("Nieznany kod: " + barcode)
+                .setMessage("Przeszukać bazy Open Facts? Mogą zawierać żywność, "
+                    + "proszki do prania, kosmetyki i karmę. Do baz zostanie "
+                    + "wysłany tylko kod kreskowy. Jeśli nazwy nie będzie, "
+                    + "aplikacja zaproponuje ręczny wpis.")
+                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                .setNeutralButton("Moje produkty", (d,w) ->
+                    choosePantryProductForCode(barcode, operationId))
+                .setPositiveButton("Szukaj produktu", (d,w) ->
+                    lookupPantryProduct(barcode, operationId))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
+            return;
+        }
+        PantryPackageStore.Pack pack = PantryPackageStore.find(
+            db.getReadableDatabase(), item.id);
+        String question = "TAKE".equals(mode) ? "Wyciągnąć 1 opak.?" : "Dodać 1 opak.?";
+        new AlertDialog.Builder(this).setTitle(item.name)
+            .setMessage("Kod: " + barcode + "\nObecny stan: "
+                + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli)
+                + "\n" + question)
+            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+            .setPositiveButton("TAKE".equals(mode) ? "Wyciągnij −1" : "Dodaj +1",
+                (d,w) -> commitPantryBarcode(barcode, null, mode, operationId))
+            .setOnCancelListener(d -> finishPantryBatch()).show();
+    }
+
+
+    /** A second barcode can refer to an item already stored offline. */
+    private void choosePantryProductForCode(String barcode, String operationId) {
+        java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+        java.util.ArrayList<String> captions = new java.util.ArrayList<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE LIMIT 250",
+                null)) {
+            while (c.moveToNext()) {
+                long id = c.getLong(0);
+                String name = c.getString(1);
+                int quantity = c.getInt(2);
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+                ids.add(id);
+                captions.add(name + "\n" + PantryPackageRules.summary(quantity,
+                    pack.unit, pack.sizeMilli));
+            }
+        }
+        if (ids.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Nie masz jeszcze produktów")
+                .setMessage("Wyszukaj kod w katalogach albo dodaj produkt ręcznie.")
+                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                .setPositiveButton("Szukaj w bazach", (d,w) ->
+                    lookupPantryProduct(barcode, operationId))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz swój produkt")
+            .setMessage("Powiąż zeskanowany kod z produktem, który masz już w spiżarni. "
+                + "Nazwa i ilość zostaną zachowane; po zatwierdzeniu dodam 1 opakowanie.")
+            .setItems(captions.toArray(new String[0]), (d,which) ->
+                confirmExistingPantryCode(barcode, operationId, ids.get(which)))
+            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+            .setOnCancelListener(d -> finishPantryBatch()).show();
+    }
+
+    private void confirmExistingPantryCode(String barcode,
+            String operationId, long pantryId) {
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT name,qty FROM pantry WHERE id=?",
+                new String[]{Long.toString(pantryId)})) {
+            if (!c.moveToFirst()) {
+                finishPantryBatch();
+                alert("Wybrany produkt już nie istnieje.");
+                return;
+            }
+            String name = c.getString(0);
+            int qty = c.getInt(1);
+            PantryPackageStore.Pack pack = PantryPackageStore.find(
+                db.getReadableDatabase(), pantryId);
+            new AlertDialog.Builder(this).setTitle("Przypisz kod i dodaj +1")
+                .setMessage(name + "\n" + PantryPackageRules.summary(
+                    qty, pack.unit, pack.sizeMilli) + "\nNowy kod: " + barcode
+                    + "\n\nPotwierdź, że to dokładnie ten sam produkt i opakowanie.")
+                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                .setPositiveButton("Powiąż i dodaj +1", (d,w) ->
+                    commitPantryBarcode(barcode, null, "ADD", operationId, null,
+                        null, pack.unit, pack.sizeMilli, pantryId))
+                .setOnCancelListener(d -> finishPantryBatch()).show();
+        }
+    }
+
+    private void lookupPantryProduct(String barcode, String operationId) {
+        java.util.concurrent.atomic.AtomicBoolean cancelled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        AlertDialog loading = new AlertDialog.Builder(this)
+            .setTitle("Bazy Open Facts")
+            .setMessage("Szukam nazwy i zdjęcia dla kodu " + barcode + "…")
+            .setNegativeButton("Anuluj", (d,w) -> {
+                cancelled.set(true);
+                finishPantryBatch();
+            })
+            .create();
+        loading.setOnCancelListener(d -> {
+            cancelled.set(true);
+            finishPantryBatch();
+        });
+        loading.show();
+        new Thread(() -> {
+            PantryProductLookup.Report report = null;
+            Exception failure = null;
+            try {
+                report = PantryProductLookup.lookupDetailed(barcode,
+                    (catalogue, status) -> runOnUiThread(() -> {
+                        if (!cancelled.get() && loading.isShowing())
+                            loading.setMessage("Przeszukuję katalogi Open Facts…\n"
+                                + catalogue + ": " + status);
+                    }));
+                PantryProductLookup.Product product = report.product;
+                if (product != null && product.image != null
+                        && !product.imageUrl.isEmpty()) {
+                    try {
+                        PantryProductLookup.cache(this, product.imageUrl, product.image);
+                    } catch (Exception photoError) {
+                        DiagnosticLog.error("PANTRY_OFF_PHOTO_CACHE", photoError);
+                    }
+                }
+            } catch (Exception error) {
+                failure = error;
+            }
+            final PantryProductLookup.Report checked = report;
+            final Exception problem = failure;
+            runOnUiThread(() -> {
+                loading.dismiss();
+                if (cancelled.get() || isFinishing() || isDestroyed()) return;
+                if (problem != null || checked == null
+                        || checked.partialFailure && checked.product == null) {
+                    if (problem != null)
+                        DiagnosticLog.error("PANTRY_OFF_LOOKUP", problem);
+                    String details = checked == null ? "Nie udało się rozpocząć wyszukiwania."
+                        : checked.details;
+                    new AlertDialog.Builder(this).setTitle("Nie wszystkie bazy odpowiedziały")
+                        .setMessage("Nie mogę potwierdzić, że kodu nie ma w bazach. "
+                            + "Stan spiżarni nie został zmieniony.\n\n"
+                            + details + "\n\nMożesz spróbować później albo wpisać nazwę ręcznie.")
+                        .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                        .setNeutralButton("Szukaj po nazwie", (d,w) ->
+                            promptPantryNameSearch(barcode, operationId))
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(barcode, operationId, null))
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
+                } else if (checked.product == null) {
+                    new AlertDialog.Builder(this).setTitle("Brak nazwy w sprawdzonych katalogach")
+                        .setMessage("Sprawdzono także inne zapisy UPC/EAN tego kodu.\n\n"
+                            + checked.details + "\n\nStan nie został zmieniony. "
+                            + "Możesz wpisać nazwę ręcznie.")
+                        .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+                        .setNeutralButton("Szukaj po nazwie", (d,w) ->
+                            promptPantryNameSearch(barcode, operationId))
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(barcode, operationId, null))
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
+                } else {
+                    DiagnosticLog.event("PANTRY_OPEN_FACTS_FOUND");
+                    showNewPantryProductDialog(barcode, operationId,
+                        checked.product, checked.details);
+                }
+            });
+        }, "edhome-off-lookup").start();
+    }
+
+
+    /** Search after GTIN lookup fails. Query is never treated as a confirmed name. */
+    private void promptPantryNameSearch(String scannedBarcode, String operationId) {
+        EditText query = new EditText(this);
+        query.setSingleLine(true);
+        query.setHint("np. proszek do prania, marka");
+        new AlertDialog.Builder(this).setTitle("Szukaj produktu po nazwie")
+            .setMessage("Wyślij wpisaną frazę do katalogów Open Facts. "
+                + "Wybór podobnego produktu nie potwierdza jego zgodności z kodem — "
+                + "sprawdź nazwę na opakowaniu.")
+            .setView(query)
+            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+            .setNeutralButton("Wpisz ręcznie", (d,w) ->
+                showNewPantryProductDialog(scannedBarcode, operationId, null))
+            .setPositiveButton("Szukaj", (d,w) ->
+                searchPantryName(scannedBarcode, operationId,
+                    query.getText().toString()))
+            .setOnCancelListener(d -> finishPantryBatch()).show();
+    }
+
+    private void searchPantryName(String scannedBarcode, String operationId,
+            String rawQuery) {
+        String query = rawQuery.trim();
+        if (query.length() < 3 || query.length() > 80) {
+            alert("Wpisz od 3 do 80 znaków nazwy produktu.");
+            promptPantryNameSearch(scannedBarcode, operationId);
+            return;
+        }
+        java.util.concurrent.atomic.AtomicBoolean cancelled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        AlertDialog loading = new AlertDialog.Builder(this)
+            .setTitle("Szukam po nazwie")
+            .setMessage("Sprawdzam katalogi produktów…")
+            .setNegativeButton("Anuluj", (d,w) -> {
+                cancelled.set(true);
+                finishPantryBatch();
+            }).create();
+        loading.setOnCancelListener(d -> {
+            cancelled.set(true);
+            finishPantryBatch();
+        });
+        loading.show();
+        new Thread(() -> {
+            PantryProductLookup.NameSearchReport report = null;
+            Exception failure = null;
+            try {
+                report = PantryProductLookup.searchByName(query,
+                    (catalogue, status) -> runOnUiThread(() -> {
+                        if (!cancelled.get() && loading.isShowing())
+                            loading.setMessage(catalogue + ": " + status);
+                    }));
+            } catch (Exception problem) {
+                failure = problem;
+            }
+            final PantryProductLookup.NameSearchReport checked = report;
+            final Exception problem = failure;
+            runOnUiThread(() -> {
+                loading.dismiss();
+                if (cancelled.get() || isFinishing() || isDestroyed()) return;
+                if (problem != null || checked == null) {
+                    DiagnosticLog.error("PANTRY_NAME_SEARCH", problem == null
+                        ? new IllegalStateException("Empty search report") : problem);
+                    new AlertDialog.Builder(this).setTitle("Nie udało się wyszukać")
+                        .setMessage("Możesz wpisać produkt ręcznie. Stan jest bez zmian.")
+                        .setNegativeButton("Zakończ", (d,w) -> finishPantryBatch())
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(scannedBarcode, operationId, null))
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
+                    return;
+                }
+                if (checked.products.isEmpty()) {
+                    new AlertDialog.Builder(this).setTitle("Brak wyników po nazwie")
+                        .setMessage(checked.details + "\n\nNie znaleziono propozycji. "
+                            + "Możesz spróbować innej frazy lub wpisać nazwę ręcznie.")
+                        .setNegativeButton("Zakończ", (d,w) -> finishPantryBatch())
+                        .setNeutralButton("Szukaj ponownie", (d,w) ->
+                            promptPantryNameSearch(scannedBarcode, operationId))
+                        .setPositiveButton("Wpisz ręcznie", (d,w) ->
+                            showNewPantryProductDialog(scannedBarcode, operationId, null))
+                        .setOnCancelListener(d -> finishPantryBatch()).show();
+                    return;
+                }
+                String[] options = new String[checked.products.size()];
+                for (int i = 0; i < options.length; i++) {
+                    PantryProductLookup.Product candidate = checked.products.get(i);
+                    options[i] = candidate.name + (candidate.brand.isEmpty()
+                        ? "" : " • " + candidate.brand) + "\n" + candidate.source;
+                }
+                new AlertDialog.Builder(this).setTitle("Wybierz zgodny produkt")
+                    .setMessage("Wyniki są propozycjami po nazwie. "
+                        + "Sprawdź markę i wariant z opakowaniem.")
+                    .setItems(options, (d, which) ->
+                        previewNameSearchProduct(scannedBarcode, operationId,
+                            checked.products.get(which), checked.details))
+                    .setNegativeButton("Zakończ", (d,w) -> finishPantryBatch())
+                    .setNeutralButton("Szukaj ponownie", (d,w) ->
+                        promptPantryNameSearch(scannedBarcode, operationId))
+                    .setOnCancelListener(d -> finishPantryBatch()).show();
+            });
+        }, "edhome-name-search").start();
+    }
+
+    private void previewNameSearchProduct(String scannedBarcode,
+            String operationId, PantryProductLookup.Product candidate,
+            String sourceDetails) {
+        // Fetching a photo is optional; it must not prevent selecting a named product.
+        new Thread(() -> {
+            byte[] image = null;
+            if (!candidate.imageUrl.isEmpty()) {
+                try {
+                    image = PantryProductLookup.fetchImage(candidate.imageUrl);
+                    PantryProductLookup.cache(this, candidate.imageUrl, image);
+                } catch (Exception ignored) {
+                    DiagnosticLog.event("PANTRY_NAME_SEARCH_PHOTO_UNAVAILABLE");
+                }
+            }
+            final PantryProductLookup.Product selected =
+                new PantryProductLookup.Product(candidate.name, candidate.source,
+                    candidate.brand, candidate.imageUrl, image);
+            runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed())
+                    showNewPantryProductDialog(scannedBarcode, operationId,
+                        selected, sourceDetails + "\nDopasowano po nazwie; "
+                            + "sprawdź zgodność z kodem na opakowaniu.");
+            });
+        }, "edhome-name-search-photo").start();
+    }
+
+    /** No stock change until this confirmation, even if Open Food Facts responded. */
+    private void showNewPantryProductDialog(String barcode, String operationId,
+            PantryProductLookup.Product found) {
+        showNewPantryProductDialog(barcode, operationId, found, "");
+    }
+
+    private void showNewPantryProductDialog(String barcode, String operationId,
+            PantryProductLookup.Product found, String sourceDetails) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(padding, padding, padding, padding);
+        if (found != null && found.image != null) {
+            Bitmap thumbnail = PantryProductLookup.thumbnail(found.image);
+            if (thumbnail != null) {
+                ImageView picture = new ImageView(this);
+                int px = (int) (120 * getResources().getDisplayMetrics().density);
+                picture.setLayoutParams(new LinearLayout.LayoutParams(px, px));
+                picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                picture.setImageBitmap(thumbnail);
+                form.addView(picture);
+            }
+        }
+        EditText name = null;
+        if (found == null) {
+            name = new EditText(this);
+            name.setSingleLine(true);
+            name.setHint("Nazwa produktu / opakowania");
+            form.addView(name);
+        } else {
+            form.addView(text(found.name, 18, true));
+            if (!found.brand.isEmpty())
+                form.addView(text("Marka: " + found.brand, 14, false));
+        }
+        form.addView(text(found == null
+            ? "Kod: " + barcode + " • nazwa ręczna, offline"
+            : "Źródło: " + found.source + " • " + barcode
+                + " • sprawdź zgodność z opakowaniem.", 13, false));
+        if (!sourceDetails.isEmpty())
+            form.addView(text("Sprawdzone katalogi:\n" + sourceDetails, 12, false));
+        final EditText manualName = name;
+        final Spinner categorySpinner = pantryCategorySpinner(
+            found == null ? "other" : PantryCategories.fromSource(found.source));
+        form.addView(text("Kategoria produktu", 14, false));
+        form.addView(categorySpinner);
+        form.addView(text("Zawartość jednego opakowania", 14, false));
+        final Spinner packUnit = pantryPackageUnitSpinner("szt.");
+        final EditText packSize = new EditText(this);
+        packSize.setSingleLine(true);
+        packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        packSize.setText("1");
+        packSize.setHint("np. 0,5");
+        form.addView(packUnit);
+        form.addView(packSize);
+        new AlertDialog.Builder(this)
+            .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
+            .setView(form).setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
+            .setPositiveButton("Dodaj +1", (d,w) -> {
+                String entered = found != null ? found.name
+                    : manualName.getText().toString().trim();
+                if (entered.isEmpty() || entered.length() > 160) {
+                    alert("Nazwa produktu musi mieć 1–160 znaków.");
+                    return;
+                }
+                String unit = PantryPackageRules.UNITS[
+                    packUnit.getSelectedItemPosition()];
+                long sizeMilli;
+                try {
+                    sizeMilli = PantryPackageRules.parse(
+                        packSize.getText().toString(), unit);
+                } catch (IllegalArgumentException wrong) {
+                    alert(wrong.getMessage());
+                    return;
+                }
+                commitPantryBarcode(barcode, entered, "ADD", operationId,
+                    found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()],
+                    unit, sizeMilli);
+            }).setOnCancelListener(d -> finishPantryBatch()).show();
+    }
+
+    private void refreshPantryPhoto(String imageUrl) {
+        if (!PantryProductLookup.safeImageUrl(imageUrl)) return;
+        new Thread(() -> {
+            try {
+                byte[] data = PantryProductLookup.fetchImage(imageUrl);
+                PantryProductLookup.cache(this, imageUrl, data);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        DiagnosticLog.event("PANTRY_OFF_PHOTO_CACHED");
+                        if ("pantry".equals(screen)) render();
+                    }
+                });
+            } catch (Exception problem) {
+                DiagnosticLog.error("PANTRY_OFF_PHOTO", problem);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                        alert("Nie udało się pobrać zdjęcia. Produkt nadal działa offline.");
+                });
+            }
+        }, "edhome-off-photo").start();
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId) {
+        commitPantryBarcode(barcode, name, mode, operationId, null);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found) {
+        commitPantryBarcode(barcode, name, mode, operationId, found, null);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory) {
+        commitPantryBarcode(barcode, name, mode, operationId, found, newCategory,
+            "szt.", 1000);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory, String unit, long sizeMilli) {
+        commitPantryBarcode(barcode, name, mode, operationId, found, newCategory,
+            unit, sizeMilli, 0L);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory, String unit, long sizeMilli, long selectedPantryId) {
+        try {
+            String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
+                barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId);
+            DiagnosticLog.event("COMMITTED".equals(result) ?
+                "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
+            if (newCategory != null && "COMMITTED".equals(result)) {
+                try {
+                    PantryBarcodeStore.Item product = PantryBarcodeStore.find(
+                        db.getReadableDatabase(), barcode);
+                    if (product != null) {
+                        PantryCategoriesStore.setIfOther(db.getWritableDatabase(),
+                            product.id, newCategory);
+                        if (found != null) PantryBarcodeStore.saveDetails(
+                            db.getWritableDatabase(), product.id,
+                            found.brand, found.imageUrl);
+                    }
+                } catch (Exception detailsError) {
+                    DiagnosticLog.error("PANTRY_CATEGORY_DETAILS", detailsError);
+                }
+            }
+            if (pantryBatch.active()) {
+                if ("COMMITTED".equals(result) && pantryBatch.commit(barcode)) {
+                    DiagnosticLog.event("PANTRY_BATCH_ITEM_COMMITTED");
+                    render();
+                    continuePantryBatch();
+                } else finishPantryBatch();
+            } else render();
+        } catch (Exception problem) {
+            finishPantryBatch();
+            DiagnosticLog.error("PANTRY_SCAN_COMMIT", problem);
+            alert(problem.getMessage() == null ? "Nie udało się zapisać skanu."
+                : problem.getMessage());
+        }
+    }
+
+    private void showPantryScanHistory() {
+        StringBuilder history = new StringBuilder();
+        try (Cursor cursor = db.getReadableDatabase().rawQuery(
+                "SELECT name_snapshot,kind,before_qty,after_qty "
+                + "FROM pantry_movements ORDER BY id DESC LIMIT 30", null)) {
+            while (cursor.moveToNext()) {
+                history.append("TAKE".equals(cursor.getString(1)) ? "−1 opak. " : "+1 opak. ")
+                    .append(cursor.getString(0)).append(" • ")
+                    .append(cursor.getInt(2)).append(" → ").append(cursor.getInt(3))
+                    .append(" opak.\n");
+            }
+        }
+        new AlertDialog.Builder(this).setTitle("Ostatnie skany")
+            .setMessage(history.length() == 0 ? "Brak skanów." : history.toString())
+            .setPositiveButton("Zamknij", null).show();
+    }
+
+    private Spinner pantryCategorySpinner(String category) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_item, PantryCategories.LABELS);
+        adapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        int initial = java.util.Arrays.asList(PantryCategories.IDS)
+            .indexOf(category);
+        spinner.setSelection(Math.max(0, initial));
+        return spinner;
+    }
+
+    private Spinner pantryPackageUnitSpinner(String initialUnit) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_item, PantryPackageRules.UNITS);
+        adapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        int chosen = java.util.Arrays.asList(PantryPackageRules.UNITS)
+            .indexOf(initialUnit);
+        spinner.setSelection(Math.max(0, chosen));
+        return spinner;
     }
 
     private void pantryProductDialog(Long id, String existingName) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int)(16 * getResources().getDisplayMetrics().density);
+        form.setPadding(padding, padding, padding, padding);
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setText(existingName);
         input.setHint("Nazwa produktu");
+        form.addView(input);
+        String oldCategory = id == null ? "other"
+            : PantryCategoriesStore.find(db.getReadableDatabase(), id);
+        form.addView(text("Kategoria", 14, false));
+        Spinner category = pantryCategorySpinner(oldCategory);
+        form.addView(category);
+        PantryPackageStore.Pack current = id == null
+            ? new PantryPackageStore.Pack("szt.", 1000)
+            : PantryPackageStore.find(db.getReadableDatabase(), id);
+        form.addView(text("Zawartość jednego opakowania", 14, false));
+        Spinner packUnit = pantryPackageUnitSpinner(current.unit);
+        EditText packSize = new EditText(this);
+        packSize.setSingleLine(true);
+        packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        packSize.setText(PantryPackageRules.format(current.sizeMilli));
+        packSize.setHint("np. 0,5");
+        form.addView(packUnit);
+        form.addView(packSize);
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(id == null ? "Dodaj do spiżarni" : "Zmień nazwę produktu")
-            .setView(input).setNegativeButton("Anuluj", null)
+            .setTitle(id == null ? "Dodaj do spiżarni" : "Edytuj produkt")
+            .setView(form).setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz", null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             .setOnClickListener(v -> {
                 String name = input.getText().toString().trim();
+                String categoryId = PantryCategories.IDS[category.getSelectedItemPosition()];
                 if (name.isEmpty() || name.length() > 160) {
                     input.setError("Podaj nazwę (maks. 160 znaków).");
                     return;
                 }
-                if (id == null) {
-                    db.addStock(name);
-                    DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
-                } else if (!db.renameStock(id, name)) {
-                    input.setError("Produkt o tej nazwie już istnieje.");
+                String unit = PantryPackageRules.UNITS[
+                    packUnit.getSelectedItemPosition()];
+                long milli;
+                try {
+                    milli = PantryPackageRules.parse(packSize.getText().toString(), unit);
+                    if (id == null) {
+                        db.addStock(name, categoryId, unit, milli);
+                        DiagnosticLog.event("PANTRY_PRODUCT_ADDED");
+                    } else if (!db.editStock(id, name, categoryId, unit, milli)) {
+                        input.setError("Produkt o tej nazwie już istnieje.");
+                        return;
+                    } else DiagnosticLog.event("PANTRY_PRODUCT_EDITED");
+                } catch (IllegalArgumentException problem) {
+                    packSize.setError(problem.getMessage());
                     return;
-                } else DiagnosticLog.event("PANTRY_PRODUCT_RENAMED");
+                }
                 dialog.dismiss();
                 render();
             }));
         dialog.show();
     }
 
-
-    /** Minimalny remanent wersji 0.1.1: stały snapshot, zapis postępu, korekta dopiero na końcu. */
     private void audit() {
         header("Spiżarnia / Remanent • BETA");
         long session = db.openAuditId();
@@ -2644,6 +3975,86 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("PLACEHOLDER_VIEW");
     }
 
+    private String quietHoursStart() {
+        String value = prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String end = prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        return QuietHoursRules.validWindow(value, end)
+            ? value : QuietHoursRules.DEFAULT_START;
+    }
+
+    private String quietHoursEnd() {
+        String start = prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String value = prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        return QuietHoursRules.validWindow(start, value)
+            ? value : QuietHoursRules.DEFAULT_END;
+    }
+
+    private void editQuietHours() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(16), dp(20), dp(10));
+        form.addView(text("Cisza powiadomień", 21, true));
+        form.addView(text("W tym czasie EDHOME nie pokazuje nowych "
+            + "powiadomień czynności ani minutników. Minutniki i terminy "
+            + "nadal biegną normalnie.", 13, false));
+        final String[] start = {quietHoursStart()};
+        final String[] end = {quietHoursEnd()};
+        Button startButton = new Button(this);
+        startButton.setAllCaps(false);
+        startButton.setText("Początek: " + start[0]);
+        startButton.setOnClickListener(v -> {
+            java.time.LocalTime time = java.time.LocalTime.parse(start[0]);
+            new android.app.TimePickerDialog(this, (picker, hour, minute) -> {
+                start[0] = String.format(java.util.Locale.ROOT,
+                    "%02d:%02d", hour, minute);
+                startButton.setText("Początek: " + start[0]);
+            }, time.getHour(), time.getMinute(), true).show();
+        });
+        form.addView(startButton);
+        Button endButton = new Button(this);
+        endButton.setAllCaps(false);
+        endButton.setText("Koniec: " + end[0]);
+        endButton.setOnClickListener(v -> {
+            java.time.LocalTime time = java.time.LocalTime.parse(end[0]);
+            new android.app.TimePickerDialog(this, (picker, hour, minute) -> {
+                end[0] = String.format(java.util.Locale.ROOT,
+                    "%02d:%02d", hour, minute);
+                endButton.setText("Koniec: " + end[0]);
+            }, time.getHour(), time.getMinute(), true).show();
+        });
+        form.addView(endButton);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null)
+            .create();
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null)
+                dialog.getWindow().setBackgroundDrawable(rounded(surface));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    if (!QuietHoursRules.validWindow(start[0], end[0])) {
+                        alert("Godziny ciszy muszą tworzyć okno przez północ, "
+                            + "np. 22:00–07:00.");
+                        return;
+                    }
+                    prefs.edit()
+                        .putString("quiet_hours_start", start[0])
+                        .putString("quiet_hours_end", end[0]).apply();
+                    ReminderReceiver.schedule(this);
+                    DeviceTimerReceiver.scheduleAll(this);
+                    DiagnosticLog.event("QUIET_HOURS_CHANGED");
+                    dialog.dismiss();
+                    render();
+                });
+        });
+        dialog.show();
+    }
+
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name
@@ -2693,11 +4104,30 @@ public final class MainActivity extends Activity {
             ReminderReceiver.schedule(this);
             render();
         });
+        LinearLayout quiet = card();
+        quiet.addView(text("Cisza powiadomień", 19, true));
+        quiet.addView(text("Aktualnie: " + quietHoursStart() + "–"
+            + quietHoursEnd(), 15, true));
+        quiet.addView(text("Dotyczy przypomnień czynności i minutników. "
+            + "Okno musi przechodzić przez północ, np. 22:00–07:00.",
+            13, false));
+        smallButton(quiet, "Zmień godziny ciszy", this::editQuietHours);
+        smallButton(quiet, "Przywróć 22:00–07:00", () -> {
+            prefs.edit()
+                .putString("quiet_hours_start", QuietHoursRules.DEFAULT_START)
+                .putString("quiet_hours_end", QuietHoursRules.DEFAULT_END)
+                .apply();
+            ReminderReceiver.schedule(this);
+            DeviceTimerReceiver.scheduleAll(this);
+            DiagnosticLog.event("QUIET_HOURS_RESET");
+            render();
+        });
         note("Standardowo przypomnienia przychodzą około 09:00. "
             + "Dla poszczególnych czynności ustawisz godzinę i wyprzedzenie "
-            + "w ich edycji. Cisza 22:00–07:00. "
-            + "Android może opóźnić alarm przez oszczędzanie baterii. "
-            + "Tytuły czynności nie pojawiają się na ekranie blokady.");
+            + "w ich edycji. Aktualna cisza: " + quietHoursStart() + "–"
+            + quietHoursEnd() + ". Android może opóźnić alarm przez "
+            + "oszczędzanie baterii. Tytuły czynności nie pojawiają się "
+            + "na ekranie blokady.");
         if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
         button("Kopia danych / przenoszenie", () -> go("backup"));
         note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
@@ -3054,6 +4484,27 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
+        if (scan != null) {
+            if (storageQrCameraPending) {
+                storageQrCameraPending = false;
+                if (scan.getContents() != null) openStorageQr(scan.getContents());
+                return;
+            }
+            if (pantryBatch.active()) {
+                if (!pantryBatch.receiveScan(scan.getContents())) {
+                    if (scan.getContents() == null) finishPantryBatch();
+                    else DiagnosticLog.event("PANTRY_BATCH_DUPLICATE_RESULT_IGNORED");
+                    return;
+                }
+                onPantryBarcode(scan.getContents(), pantryBatch.mode());
+            } else if (pantrySingleCameraPending) {
+                pantrySingleCameraPending = false;
+                if (scan.getContents() != null) onPantryBarcode(scan.getContents(),
+                    prefs.getString(SCAN_MODE_PREF, "ADD"));
+            } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
+            return;
+        }
         if (request == IMPORT_BETA_APK) {
             if (result == RESULT_OK && data != null && data.getData() != null)
                 updater.importSelected(data.getData());
@@ -3150,7 +4601,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 12);
+            super(context, "edhome-beta-preview.db", null, 21);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -3163,19 +4614,30 @@ public final class MainActivity extends Activity {
                 + "assignee_id INTEGER, "
                 + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
                 + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0)");
-            database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0)");
+            database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0, "
+                + "category TEXT NOT NULL DEFAULT 'other' CHECK(category IN "
+                + "('other','food','household','beauty','pet')))");
             addAuditTables(database);
             addTaskHistory(database);
             addPlaces(database);
             addMembers(database);
             addMemberSchedules(database);
             addShopping(database);
+            ShoppingReceiptStore.create(database);
+            StorageStore.createTables(database);
+            PaycheckStore.create(database);
+            PaycheckGoalsStore.create(database);
             addDeviceTimers(database);
+            addTaskRotations(database);
+            PantryBarcodeStore.createTables(database);
+            PantryBarcodeStore.createDetails(database);
+            PantryPackageStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 12) {
+            if (oldVersion < 1 || newVersion > 21) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -3242,6 +4704,48 @@ public final class MainActivity extends Activity {
                 addDeviceTimers(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_11_TO_12_DEVICE_TIMERS");
             }
+            if (oldVersion < 13) {
+                addTaskRotations(database);
+                database.execSQL("ALTER TABLE task_history ADD COLUMN assignee_id INTEGER");
+                database.execSQL("ALTER TABLE task_history ADD COLUMN "
+                    + "assignee_name_snapshot TEXT");
+                DiagnosticLog.event("DATABASE_MIGRATED_12_TO_13_TASK_ROTATION");
+            }
+            if (oldVersion < 14) {
+                PantryBarcodeStore.createTables(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_13_TO_14_PANTRY_BARCODES");
+            }
+            if (oldVersion < 15) {
+                PantryBarcodeStore.createDetails(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS");
+            }
+            if (oldVersion < 16) {
+                database.execSQL("ALTER TABLE pantry ADD COLUMN category TEXT "
+                    + "NOT NULL DEFAULT 'other' CHECK(category IN "
+                    + "('other','food','household','beauty','pet'))");
+                DiagnosticLog.event("DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES");
+            }
+            if (oldVersion < 17) {
+                PantryPackageStore.create(database);
+                PantryPackageStore.fillLegacy(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_16_TO_17_PANTRY_PACKAGES");
+            }
+            if (oldVersion < 18) {
+                ShoppingReceiptStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS");
+            }
+            if (oldVersion < 19) {
+                StorageStore.createTables(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_18_TO_19_STORAGE_QR");
+            }
+            if (oldVersion < 20) {
+                PaycheckStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED");
+            }
+            if (oldVersion < 21) {
+                PaycheckGoalsStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS");
+            }
         }
 
         private static void addPlaceSiblingIndex(SQLiteDatabase database) {
@@ -3261,10 +4765,20 @@ public final class MainActivity extends Activity {
             database.execSQL("CREATE TABLE task_history ("
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, "
                 + "title_snapshot TEXT NOT NULL, completed_at INTEGER NOT NULL, "
-                + "due_date TEXT, next_due_date TEXT)");
+                + "due_date TEXT, next_due_date TEXT, "
+                + "assignee_id INTEGER, assignee_name_snapshot TEXT)");
             database.execSQL("CREATE INDEX task_history_task_idx ON task_history(task_id,id)");
         }
 
+
+        private static void addTaskRotations(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE task_rotation_members ("
+                + "task_id INTEGER NOT NULL, member_id INTEGER NOT NULL, "
+                + "position INTEGER NOT NULL CHECK(position>=0), "
+                + "PRIMARY KEY(task_id,member_id), UNIQUE(task_id,position))");
+            database.execSQL("CREATE INDEX task_rotation_task_idx "
+                + "ON task_rotation_members(task_id,position)");
+        }
 
         private static void addShopping(SQLiteDatabase database) {
             database.execSQL("CREATE TABLE shopping_items ("
@@ -3453,7 +4967,8 @@ public final class MainActivity extends Activity {
 
         void saveTask(Long id, String title, String dueDate, String rule, int every,
                 Long placeId, String priority, int durationMinutes,
-                Long assigneeId, String customTime, int reminderLeadDays) {
+                Long assigneeId, String customTime, int reminderLeadDays,
+                java.util.List<Long> rotationMembers) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (id != null && isWasteTask(id) && dueDate.isEmpty())
@@ -3462,6 +4977,13 @@ public final class MainActivity extends Activity {
                     || dueDate.isEmpty()
                     || !ReminderRules.allowedLead(reminderLeadDays)))
                 throw new IllegalArgumentException("Nieprawidłowe przypomnienie.");
+            String rotationError = RotationRules.validate(rotationMembers,
+                TaskRules.recurring(rule));
+            if (rotationError != null) throw new IllegalArgumentException(rotationError);
+            if (rotationMembers != null && !rotationMembers.isEmpty()
+                    && (assigneeId == null || !rotationMembers.contains(assigneeId)))
+                throw new IllegalArgumentException(
+                    "Aktualny wykonawca musi należeć do rotacji.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
             if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
@@ -3497,13 +5019,68 @@ public final class MainActivity extends Activity {
                 }
                 values.put("place_id", placeId);
             }
-            if (id == null) getWritableDatabase().insertOrThrow("tasks", null, values);
-            else {
-                // Editing a completed one-off into a recurring task reopens it.
-                if (TaskRules.recurring(rule)) values.put("done", 0);
-                getWritableDatabase().update("tasks", values, "id=?",
-                    new String[]{Long.toString(id)});
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                long taskId;
+                if (id == null) {
+                    taskId = database.insertOrThrow("tasks", null, values);
+                } else {
+                    taskId = id;
+                    // Editing a completed one-off into a recurring task reopens it.
+                    if (TaskRules.recurring(rule)) values.put("done", 0);
+                    database.update("tasks", values, "id=?",
+                        new String[]{Long.toString(id)});
+                }
+                database.delete("task_rotation_members", "task_id=?",
+                    new String[]{Long.toString(taskId)});
+                if (rotationMembers != null) {
+                    for (int position = 0; position < rotationMembers.size(); position++) {
+                        Long memberId = rotationMembers.get(position);
+                        try (Cursor person = database.rawQuery(
+                                "SELECT id FROM household_members WHERE id=?",
+                                new String[]{Long.toString(memberId)})) {
+                            if (!person.moveToFirst())
+                                throw new IllegalArgumentException(
+                                    "Osoba w rotacji już nie istnieje.");
+                        }
+                        ContentValues rotation = new ContentValues();
+                        rotation.put("task_id", taskId);
+                        rotation.put("member_id", memberId);
+                        rotation.put("position", position);
+                        database.insertOrThrow("task_rotation_members", null, rotation);
+                    }
+                }
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
             }
+        }
+
+        java.util.ArrayList<Long> taskRotation(long taskId) {
+            java.util.ArrayList<Long> result = new java.util.ArrayList<>();
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT member_id FROM task_rotation_members WHERE task_id=? "
+                    + "ORDER BY position ASC",
+                    new String[]{Long.toString(taskId)})) {
+                while (cursor.moveToNext()) result.add(cursor.getLong(0));
+            }
+            return result;
+        }
+
+        String rotationLabel(long taskId) {
+            StringBuilder result = new StringBuilder();
+            try (Cursor cursor = getReadableDatabase().rawQuery(
+                    "SELECT m.name FROM task_rotation_members r "
+                    + "JOIN household_members m ON m.id=r.member_id "
+                    + "WHERE r.task_id=? ORDER BY r.position ASC",
+                    new String[]{Long.toString(taskId)})) {
+                while (cursor.moveToNext()) {
+                    if (result.length() > 0) result.append(" → ");
+                    result.append(cursor.getString(0));
+                }
+            }
+            return result.toString();
         }
 
         boolean isWasteTask(long id) {
@@ -3546,18 +5123,36 @@ public final class MainActivity extends Activity {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try (Cursor cursor = database.rawQuery(
-                    "SELECT title,done,due_date,repeat_rule,repeat_every FROM tasks WHERE id=?",
+                    "SELECT title,done,due_date,repeat_rule,repeat_every,assignee_id "
+                    + "FROM tasks WHERE id=?",
                     new String[]{Long.toString(id)})) {
                 if (!cursor.moveToFirst() || cursor.getInt(1) != 0) return;
                 String title = cursor.getString(0);
                 String due = cursor.isNull(2) ? null : cursor.getString(2);
                 String rule = cursor.getString(3);
                 int every = cursor.getInt(4);
+                Long completedBy = cursor.isNull(5) ? null : cursor.getLong(5);
+                String completedByName = null;
+                if (completedBy != null) {
+                    try (Cursor person = database.rawQuery(
+                            "SELECT name FROM household_members WHERE id=?",
+                            new String[]{Long.toString(completedBy)})) {
+                        if (person.moveToFirst()) completedByName = person.getString(0);
+                    }
+                }
                 String next = TaskRules.recurring(rule)
                     ? TaskRules.nextDue(due, rule, every, LocalDate.now()) : null;
                 ContentValues changed = new ContentValues();
                 changed.put("done", next == null ? 1 : 0);
-                if (next != null) changed.put("due_date", next);
+                if (next != null) {
+                    changed.put("due_date", next);
+                    java.util.ArrayList<Long> rotation = taskRotation(id);
+                    if (rotation.size() >= 2) {
+                        Long nextAssignee = RotationRules.next(rotation, completedBy);
+                        if (nextAssignee == null) changed.putNull("assignee_id");
+                        else changed.put("assignee_id", nextAssignee);
+                    }
+                }
                 int affected = database.update("tasks", changed, "id=? AND done=0",
                     new String[]{Long.toString(id)});
                 if (affected != 1) return;
@@ -3569,6 +5164,10 @@ public final class MainActivity extends Activity {
                 else history.put("due_date", due);
                 if (next == null) history.putNull("next_due_date");
                 else history.put("next_due_date", next);
+                if (completedBy == null) history.putNull("assignee_id");
+                else history.put("assignee_id", completedBy);
+                if (completedByName == null) history.putNull("assignee_name_snapshot");
+                else history.put("assignee_name_snapshot", completedByName);
                 database.insertOrThrow("task_history", null, history);
                 database.setTransactionSuccessful();
             } finally {
@@ -3584,7 +5183,16 @@ public final class MainActivity extends Activity {
         }
 
         void deleteTask(long id) {
-            getWritableDatabase().delete("tasks", "id=?", new String[]{Long.toString(id)});
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                database.delete("task_rotation_members", "task_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("tasks", "id=?", new String[]{Long.toString(id)});
+                database.setTransactionSuccessful();
+            } finally {
+                database.endTransaction();
+            }
         }
 
         String[] taskReminder(long taskId) {
@@ -3653,10 +5261,60 @@ public final class MainActivity extends Activity {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try {
+                java.util.ArrayList<Long> affectedRotations = new java.util.ArrayList<>();
+                try (Cursor affected = database.rawQuery(
+                        "SELECT DISTINCT task_id FROM task_rotation_members "
+                        + "WHERE member_id=?", new String[]{Long.toString(memberId)})) {
+                    while (affected.moveToNext())
+                        affectedRotations.add(affected.getLong(0));
+                }
+                database.delete("task_rotation_members", "member_id=?",
+                    new String[]{Long.toString(memberId)});
                 ContentValues clear = new ContentValues();
                 clear.putNull("assignee_id");
                 database.update("tasks", clear, "assignee_id=?",
                     new String[]{Long.toString(memberId)});
+                for (Long taskId : affectedRotations) {
+                    java.util.ArrayList<Long> remaining = new java.util.ArrayList<>();
+                    try (Cursor rows = database.rawQuery(
+                            "SELECT member_id FROM task_rotation_members "
+                            + "WHERE task_id=? ORDER BY position",
+                            new String[]{Long.toString(taskId)})) {
+                        while (rows.moveToNext()) remaining.add(rows.getLong(0));
+                    }
+                    if (remaining.size() < 2) {
+                        database.delete("task_rotation_members", "task_id=?",
+                            new String[]{Long.toString(taskId)});
+                        if (remaining.size() == 1) {
+                            ContentValues fixed = new ContentValues();
+                            fixed.put("assignee_id", remaining.get(0));
+                            database.update("tasks", fixed,
+                                "id=? AND assignee_id IS NULL",
+                                new String[]{Long.toString(taskId)});
+                        }
+                    } else {
+                        try (Cursor current = database.rawQuery(
+                                "SELECT assignee_id FROM tasks WHERE id=?",
+                                new String[]{Long.toString(taskId)})) {
+                            if (current.moveToFirst() && current.isNull(0)) {
+                                ContentValues next = new ContentValues();
+                                next.put("assignee_id", remaining.get(0));
+                                database.update("tasks", next, "id=?",
+                                    new String[]{Long.toString(taskId)});
+                            }
+                        }
+                        // Re-number positions after removing a person.
+                        database.delete("task_rotation_members", "task_id=?",
+                            new String[]{Long.toString(taskId)});
+                        for (int i = 0; i < remaining.size(); i++) {
+                            ContentValues row = new ContentValues();
+                            row.put("task_id", taskId);
+                            row.put("member_id", remaining.get(i));
+                            row.put("position", i);
+                            database.insertOrThrow("task_rotation_members", null, row);
+                        }
+                    }
+                }
                 database.delete("member_weekly_shifts", "member_id=?",
                     new String[]{Long.toString(memberId)});
                 database.delete("member_shift_exceptions", "member_id=?",
@@ -3832,6 +5490,11 @@ public final class MainActivity extends Activity {
                     if (children.moveToFirst() && children.getInt(0) != 0)
                         return false;
                 }
+                try (Cursor occupied = database.rawQuery(
+                        "SELECT 1 FROM storage_items WHERE place_id=? LIMIT 1",
+                        new String[]{Long.toString(id)})) {
+                    if (occupied.moveToFirst()) return false;
+                }
                 database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});
                 database.delete("places", "id=?", new String[]{Long.toString(id)});
@@ -3913,7 +5576,11 @@ public final class MainActivity extends Activity {
                 new String[]{Long.toString(id)});
         }
 
-        void addStock(String name) {
+        void addStock(String name, String category, String unit, long milli) {
+            if (!PantryPackageRules.valid(unit, milli))
+                throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
+            if (!PantryCategories.known(category))
+                throw new IllegalArgumentException("Nieznana kategoria.");
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try {
@@ -3924,6 +5591,7 @@ public final class MainActivity extends Activity {
                     if (c.moveToFirst()) existing = c.getLong(0);
                 }
                 if (existing > 0) {
+                    PantryPackageStore.requireSame(database, existing, unit, milli);
                     database.execSQL(
                         "UPDATE pantry SET qty=qty+1 WHERE id=? AND qty<100000000",
                         new Object[]{existing});
@@ -3931,7 +5599,9 @@ public final class MainActivity extends Activity {
                     ContentValues values = new ContentValues();
                     values.put("name", name);
                     values.put("qty", 1);
-                    database.insertOrThrow("pantry", null, values);
+                    values.put("category", category);
+                    long newId = database.insertOrThrow("pantry", null, values);
+                    PantryPackageStore.set(database, newId, unit, milli);
                 }
                 database.setTransactionSuccessful();
             } finally {
@@ -3956,6 +5626,31 @@ public final class MainActivity extends Activity {
                 new String[]{Long.toString(id)});
         }
 
+        boolean editStock(long id, String name, String category, String unit,
+                          long milli) {
+            if (!PantryCategories.known(category)
+                    || !PantryPackageRules.valid(unit, milli))
+                throw new IllegalArgumentException("Nieprawidłowe dane opakowania.");
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                try (Cursor c = database.rawQuery(
+                        "SELECT id FROM pantry WHERE name=? COLLATE NOCASE AND id!=? LIMIT 1",
+                        new String[]{name, Long.toString(id)})) {
+                    if (c.moveToFirst()) return false;
+                }
+                ContentValues values = new ContentValues();
+                values.put("name", name);
+                values.put("category", category);
+                if (database.update("pantry", values, "id=?",
+                        new String[]{Long.toString(id)}) != 1)
+                    throw new IllegalArgumentException("Nie znaleziono produktu.");
+                PantryPackageStore.set(database, id, unit, milli);
+                database.setTransactionSuccessful();
+                return true;
+            } finally { database.endTransaction(); }
+        }
+
         boolean renameStock(long id, String name) {
             SQLiteDatabase database = getWritableDatabase();
             try (Cursor c = database.rawQuery(
@@ -3972,8 +5667,19 @@ public final class MainActivity extends Activity {
         void deleteStock(long id) {
             if (openAuditId() != 0)
                 throw new IllegalStateException("An audit is open");
-            getWritableDatabase().delete("pantry", "id=?",
-                new String[]{Long.toString(id)});
+            SQLiteDatabase database = getWritableDatabase();
+            database.beginTransaction();
+            try {
+                database.delete("pantry_barcodes", "pantry_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("pantry_product_details", "pantry_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("pantry_packages", "pantry_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("pantry", "id=?",
+                    new String[]{Long.toString(id)});
+                database.setTransactionSuccessful();
+            } finally { database.endTransaction(); }
         }
 
     }

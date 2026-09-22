@@ -1,10 +1,12 @@
-name: EDHOME Stable 0.3.4 APK
+name: EDHOME Stable APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/edhome-stable-0.5.0-20260922]
     paths:
-      - "app/build.gradle"
+      - "app/**"
+      - "tests/**"
+      - "docs/STABLE_0_5_0.md"
       - ".github/workflows/android-stable.yml"
   workflow_dispatch:
 
@@ -12,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: edhome-stable-0-3-4
+  group: edhome-stable-release
   cancel-in-progress: false
 
 jobs:
@@ -40,13 +42,18 @@ jobs:
         run: |
           python3 tests/check_db_contract.py
           python3 tests/check_place_contract.py
-          # This Stable is 0.3.4; the shared Beta-only UI guard requires 0.3.5.
-          grep -Fq "versionCode 27" app/build.gradle
-          grep -Fq "versionName '0.3.4'" app/build.gradle
+          python3 tests/check_paycheck_contract.py
+          python3 tests/check_paycheck_goals_contract.py
+          python3 tests/check_pantry_packages_contract.py
+          python3 tests/check_storage_integrity_contract.py
+          python3 tests/check_storage_qr_contract.py
+          # Stable-specific contracts for this approved release.
+          grep -Fq "versionCode 45" app/build.gradle
+          grep -Fq "versionName '0.5.0'" app/build.gradle
           grep -Fq "manifestPlaceholders = [appLabel: 'EDHOME']" app/build.gradle
           test "$(grep -Fc 'title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");' app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java)" -eq 4
-          grep -Fq "super(context, \"edhome-beta-preview.db\", null, 12)" app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java
-          grep -Fq "private static final int DB_VERSION = 12;" app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java
+          grep -Fq "super(context, \"edhome-beta-preview.db\", null, 21)" app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java
+          grep -Fq "private static final int DB_VERSION = 21;" app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java
           mkdir -p "$RUNNER_TEMP/home-tile-order"
           javac -d "$RUNNER_TEMP/home-tile-order" \
             app/src/main/java/com/edwinkarolczyk/edhome/HomeTileOrder.java \
@@ -73,7 +80,7 @@ jobs:
             exit 1
           fi
           echo "EDHOME_BETA_KEYSTORE_FILE=$RUNNER_TEMP/edhome-stable.p12" >> "$GITHUB_ENV"
-      - name: Build signed Stable 0.3.4
+      - name: Build signed Stable 0.5.0
         env:
           EDHOME_BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
           EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
@@ -83,7 +90,7 @@ jobs:
         run: |
           APK="app/build/outputs/apk/stable/release/app-stable-release.apk"
           test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "^package: name='com.edwinkarolczyk.edhome' versionCode='27' versionName='0.3.4'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "^package: name='com.edwinkarolczyk.edhome' versionCode='45' versionName='0.5.0'"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -Fq "application-label:'EDHOME'"
           EXPECTED="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
           ACTUAL=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print toupper($2); exit}' | sed 's/../&:/g;s/:$//')
@@ -94,7 +101,7 @@ jobs:
       - name: Upload Stable APK privately as Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.3.4-Stable-signed-APK
+          name: EDHOME-0.5.0-Stable-signed-APK
           path: app/build/outputs/apk/stable/release/app-stable-release.apk
           if-no-files-found: error
           retention-days: 14

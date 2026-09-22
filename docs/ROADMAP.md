@@ -1,6 +1,8 @@
+> **Stan nowszy od historycznego nagłówka niżej:** wydania 0.4.0-beta.11/12/13 obejmują przyjęcia zakupów, pudełka, QR i ochronę miejsc. Pierwszy PayCheck tylko dla wspólnego budżetu zaczyna się w 0.5.0-beta.1 (SQLite v20); prywatne dane nie są dostępne w Becie bez ochrony. Datowane fragmenty niżej są historią planu, nie bieżącą wersją APK.
+
 # EDHOME — roadmapa (propozycja)
 
-> **Stan 0.3.4-beta.2 (`beta`):** hierarchia Miejsc z własnymi nazwami, opcjonalnymi rodzajami i ikonami; ścieżki Dom → Kuchnia → Półka; SQLite v11 z zachowaniem istniejących ID i czynności, kopie JSON v2–v11. Beta bez PIN-u, Stable z PIN-em. [Odbiór Miejsc](BETA_0_3_4.md).
+> **Stan 0.3.7-beta.1 (`beta`):** rotacyjne obowiązki, konfigurowalne godziny ciszy dla czynności i minutników oraz bardziej widoczny tryb układania kafelków. SQLite v13, kopie v2–v13. Beta bez PIN-u, Stable z PIN-em. [Odbiór 0.3.7](BETA_0_3_7.md).
 
 Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i testy, a dopiero potem może trafić do `main`.
 
@@ -80,10 +82,10 @@ Wersje są **planem**, nie wydaniami. Każdy etap przechodzi przez `beta` i test
 [Zakres i scenariusze odbioru](BETA_0_1_5.md).
 
 
-## Następny inkrement — 0.3.5-beta.1
+## Zrealizowany inkrement — 0.3.7-beta.1
 
-- Lokalne minutniki sprzętów (pralka, suszarka, zmywarka) z zakończeniem i prostym potwierdzeniem, oddzielone od niepewnych dokładnych powiadomień Androida.
-- Rotacyjne obowiązki i dalsze ustawienia przypomnień w następnych małych wersjach; godziny ciszy 22:00–07:00 w 0.3.2 są stałe, jeszcze nie konfigurowalne.
+- Konfigurowalne godziny ciszy dla czynności i minutników, eksport/import JSON.
+- Wyraźne wejście w tryb układania; przytrzymanie w zwykłym trybie pozostaje menu Edytuj / Przesuń. Odbiór gestów na telefonie pozostaje do wykonania.
 - Nie włączać synchronizacji kilku urządzeń przed etapem 0.8. Weryfikować CI, podpis, manifest i zachowanie na fizycznym Androidzie.
 
 
@@ -115,7 +117,7 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 | Kolejność | Obszar / rezultat | Kryterium odbioru |
 |---|---|---|
 | 1 | Domknąć bieżącą betę 0.3.4 (SQLite v11, aktualizacje i testy użytkowe) | CI zielone; migracje danych i test telefonu/tabletu; odróżnić wydaną wersję od nieopublikowanego kodu. |
-| 2 | UI, panel i Miejsca | Sześć motywów; dowolne/dodawane/ukrywane kafelki, rozmiary, przeciąganie całego kafelka; tryb tabletu w **tym samym APK** z realnym ograniczeniem uprawnień; nazwy i rodzaje miejsc tworzone przez użytkownika; pudełko w pudełku bez cykli. |
+| 2 | UI, panel i Miejsca | Sześć motywów; **wszystkie wejścia w katalogu kafelków, bez limitu 9**; dodawanie/ukrywanie/usuwanie samych skrótów, pełna edycja każdego (cel, nazwa, ikona, kolor, rozmiar, pozycja), przeciąganie całego kafelka; także Minutniki, Zakupy, PayCheck, Odpady i wszystkie Czynności. Tryb tabletu w **tym samym APK** z kontrolą uprawnień; własne Miejsca i pudełka bez cykli. |
 | 3 | Czynności ↔ Kalendarz ↔ Miejsca | Dwa formularze czynności, trzy rodzaje daty sezonowej, reguła terminu per czynność, wspólne ID i jeden stan widoczny w wielu ekranach; planer łączy grafik, dostępność, czas i obciążenie. |
 | 4 | Spiżarnia ↔ Zakupy ↔ Skaner | Dwa tryby skanowania. Dodawanie seryjne + zgodna licencyjnie baza produktów; wyciąganie domyślnie -1 po ustawianym odliczaniu, powtórny odczyt ignorowany, zmiana liczby restartuje czas; „Do dodania do [miejsce]” z lokalizacją per pozycja zakupów; historia i testy podwójnego skanu. |
 | 5 | Remanent i zabezpieczenie danych | Konflikt ponownej weryfikacji zmienionych pozycji bez utraty reszty; kopie JSON, lokalne i NAS; testy migracji i odtwarzania. |
@@ -127,3 +129,56 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 **Prace przekrojowe przy KAŻDYM etapie:** wspólne ID i relacje, jeden właściciel danych, migracja/backup, prywatność, log Beta, CI i regresja. Bez zamrażania rozwoju na samą architekturę.
 
 **Nierozstrzygnięte:** pyt. 13 (dziedziczenie czynności miejsca), 28 (model PV); szczegóły trybu tabletu, czas domyślny odliczania, zachowanie innego kodu w trakcie licznika i semantyka wymaganych połączeń. Nie wybierać ich za użytkownika.
+
+
+## Spiżarnia — historia kosztów zakupów i cen (koncepcja, 21.09.2026)
+
+**Status:** trzy decyzje Edwina zatwierdzone 21.09.2026; koncepcja niezaimplementowana. Szczegółowy model i pytania: [specyfikacja §24](SPECYFIKACJA_CALOSC.md#24-spiżarnia--koszt-produktu-i-historia-cen-propozycja-koncepcyjna-21092026). Zachować priorytet **PayCheck jako pierwszy duży nowy moduł** z decyzji 30 odpowiedzi; kosztów spiżarni nie robić drugą, konkurencyjną księgowością.
+
+| Kolejność względem obecnego 0.3.6 | Zakres koncepcyjny | Kryterium |
+|---|---|---|
+| Fundament kartoteki / Miejsca / zakupy / skaner (obecne etapy 0.3→0.4) | Przygotować ID produktu i wariantu opakowania, jednostki oraz rozdzielenie zakupu, przyjęcia i ruchu magazynowego; nie wymuszać ceny przy skanie. | „Kupione” nie dodaje zapasu, „Wyciągnij” nie tworzy wydatku, brak ceny != 0 zł; historia nie ginie przy zmianie nazwy produktu/miejsca. |
+| Pierwszy inkrement cen przy spiżarni (po stabilizacji podstawowych operacji) | **Opcjonalna cena przy oznaczaniu pozycji jako „kupione”**, ilość, data i sklep; historia cen i ostatnia cena na karcie; link do listy zakupów; **wszystkie ceny produktów widoczne na wspólnym tablecie bez danych kont**. | Ten sam produkt w kilku zakupach ma pełną historię; szybki skaner działa bez formularza ceny; dane PayCheck i metody płatności nie trafiają do wspólnego cache. |
+| **PayCheck — nadal pierwszy duży kolejny moduł**, zgodnie z ustaleniami | Jeden paragon → wiele pozycji, jedna powiązana transakcja finansowa; uzgodnienie danych ręcznych, powiadomienia i wyciągu; osobiste i wspólne uprawnienia. | Brak drugiego zaksięgowania zakupów lub wyjęcia; na tablecie nie ma prywatnych danych finansowych. |
+| Rozszerzenie raportów spiżarni (**późniejszy etap — zatwierdzone**) | Ceny za kg/l, rabaty, porównania w czasie, zwroty, częściowe opakowania, **dopiero tu oznaczona jako szacunkowa wartość całego zapasu**, na podstawie jawnej metody i jakości danych. | Partie bez ceny i nieporównywalne jednostki nie stają się pozorną precyzyjną kwotą; raport nie jest saldem PayCheck. |
+| Etap Wi-Fi / 0.8 | Przesyłanie zakupów i ruchów po uprawnieniach, idempotencja przyjęć, spójne korekty ceny i remanentu. | Bez dubli i nadpisania historii po pracy offline na kilku urządzeniach. |
+
+**Decyzje Edwina 21.09.2026:** cena opcjonalna podczas oznaczania „kupione”; wszystkie ceny produktów widoczne na wspólnym tablecie bez danych kont/księgowości prywatnej; wartość całego zapasu dopiero w późniejszym etapie. **Otwarte:** szczegółowa metoda późniejszej wyceny stanu i zachowanie przy niepełnych danych. Nie zmieniać kodu, APK ani `main` w tym wątku bez wyraźnego osobnego polecenia.
+
+
+## EDHOME na komputerze — plan architektury (bez deklaracji działającej wersji PC)
+
+- **Interfejs:** responsywny panel webowy otwierany w przeglądarce Windows / Linux / macOS; docelowo opcjonalny instalator Windows/EXE jako opakowanie panelu. Na dużym ekranie: lewy panel modułów, centrum z kalendarzem i listami, prawa karta szczegółów, przeciąganie myszą/touch.
+- **Wspólna semantyka:** te same trwałe ID gospodarstwa, osoby, miejsca i czynności, wspólne zasady historii, terminów i uprawnień. Android pozostaje natywną aplikacją offline; nie przenosić 1:1 widoku 3×3 na monitor.
+- **Etap przed synchronizacją:** można prototypować panel PC na testowych danych albo imporcie osobnej kopii JSON. Nie prezentować tego jako danych na żywo z telefonu.
+- **Etap 0.8:** lokalny EDHOME Hub na zaufanym komputerze/NAS jako punkt wymiany po domowym Wi-Fi; Android zachowuje SQLite offline, PC używa API Huba. Identyfikatory zmian, wersje schematu, deduplikacja i rozwiązywanie konfliktów, a nie wspólny plik SQLite otwarty przez kilka urządzeń.
+- **Prywatność:** logowanie/sesja i role domowników, finansów prywatnych nie udostępniać z automatu na wspólnym PC/tablecie. Domyślnie bez publicznego wystawiania Huba do internetu.
+
+Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `main`.
+
+
+## Domowy dysk / NAS — EDHOME Hub i API (warunkowy kierunek)
+
+**Nie jest to działająca integracja. Edwin potwierdził model D-Link DNS-320L; zalecany wariant B — NAS na kopie, EDHOME Hub na osobnym hoście. Nie zweryfikowano firmware, stanu dysków ani bezpiecznych protokołów.** [Specyfikacja §25](SPECYFIKACJA_CALOSC.md#25-własny-dysk-sieciowy--nas-jako-edhome-hub-i-lokalne-api--analiza-warunkowa-21092026).
+
+| Kiedy | Rezultat | Warunek odbioru |
+|---|---|---|
+| Teraz — projekt / bez zmian kodu | **Model: D-Link DNS-320L.** Zweryfikować firmware, stan dysków, protokoły SMB i aktualne możliwości urządzenia; nie zakładać Dockera ani nowoczesnych pakietów API. | Potwierdzenie z panelu/testu sieci; żadnych haseł, adresów i numerów seryjnych w publicznym repo. |
+| Fundament danych równolegle z modułami | Wspólne ID, wersje, kolejka zdarzeń, uprawnienia i eksport; API może działać na NAS **albo** na oddzielnym mini-PC, z NAS jako magazynem backupów. | Offline działa bez Huba, brak współdzielonego pliku SQLite po SMB, brak prywatnego PayCheck w cache tabletu. |
+| Etap 0.8 — synchronizacja LAN / Hub | Lokalny proces API, autoryzacja osób i urządzeń, przyjęcia/wyjęcia, zakupy, ceny, remanent, konflikty i idempotencja; później panel PC. | Dwa urządzenia po pracy offline nie nadpisują zmian, nie dublują kosztów i mogą wznowić synchronizację. |
+| Utwardzenie i eksploatacja | Backup wersjonowany na osobny nośnik, test przywrócenia, migracje, aktualizacja usługi, zasilanie oraz opcjonalny VPN do dostępu zdalnego. | Awaria NAS/Huba nie kasuje jedynych danych; API/SMB nie są otwarte wprost do internetu. |
+
+**Dla wskazanego D-Link DNS-320L rekomendowany wariant B:** NAS wyłącznie na backupy/eksporty/załączniki po weryfikacji bezpieczeństwa, API na mini-PC lub innym zgodnym i aktualizowanym urządzeniu. Alternatywne uruchamianie niestandardowego oprogramowania na NAS pozostaje eksperymentem, nie bazową architekturą. Nie polegać na starym SMB1 ani jednym nośniku backupu. W tym czacie jedynie teoria i dokumentacja na `beta`; nie zmieniać APK, kodu ani `main`.
+
+
+## Korekta panelu po zrzutach 0.5.0-beta.2 — **kafelki bez limitu i pełny edytor** (22.09.2026)
+
+**To zatwierdzone wymaganie, nie deklaracja wykonania.** Na pokazanym ekranie widać dziewięć głównych kafelków, natomiast Minutniki urządzeń, Lista zakupów, PayCheck — wspólny budżet, Odpady, wszystkie Czynności i Diagnostyka Beta są odrębnymi przyciskami poza siatką. **Tak ma nie pozostać.** Zmieniono nadrzędny rejestr decyzji i §26 specyfikacji; historyczny opis 0.3.3-beta.2 z zakazem zmiany celu skrótu już nie obowiązuje.
+
+| Etap prac (nie przypisywać numeru wydania bez potwierdzenia planu gałęzi kodu) | Rezultat | Test odbiorowy |
+|---|---|---|
+| **Najbliższy inkrement panelu — obok dalszego PayCheck, a nie zamiast niego** | Katalog celów wszystkich modułów oraz skrótów do podwidoków (Minutniki, Zakupy, PayCheck wspólny/osobisty po uprawnieniach, Odpady, Czynności, Na dziś, Diagnostyka Beta itd.). Usunięcie stałego dolnego menu skrótów po przeniesieniu wejść do katalogu. | Każdą z funkcji obecnie występujących pod kartą „Najbliższe czynności” można dodać jako kafelek i otworzyć z niego; brak utraty istniejących funkcji. |
+| **Pełny edytor każdego kafelka** | Konfigurowalne: cel moduł/widok/dozwolony obiekt, własna nazwa, ikona z biblioteki, kolor, rozmiar (mały/podwójny), pozycja i widoczność; kilka skrótów do tego samego celu; menu przytrzymania Edytuj / Przesuń / Ukryj/Usuń skrót, pełne przeciąganie. | 15+ kafelków w przewijanej/responsywnej siatce; zmiana celu i pozostałych pól dla **domyślnego i nowego** kafelka, swobodna kolejność; żaden skrót nie kasuje danych modułu. |
+| **Trwałość, tryby, bezpieczeństwo** | Konfiguracja w bazie i JSON, migracja bez resetu, odrębny układ telefonu i współdzielonego tabletu, ponowna kontrola uprawnień docelowego ekranu. | Restart/import zachowuje cały układ; brak możliwości otwarcia prywatnego PayCheck z tabletu przez zmianę celu; Diagnostyka tylko Beta. |
+
+**3×3 to przykład widocznego fragmentu siatki na telefonie, nie ograniczenie danych ani stała lista systemowych modułów.** Szczegóły: [specyfikacja §26](SPECYFIKACJA_CALOSC.md#26-panel-główny--w-pełni-edytowalne-kafelki-bez-limitu-dziewięciu-doprecyzowanie-edwina-22092026). W tym czacie **tylko dokumentacja na `beta`**, bez zmian kodu, APK i `main`.

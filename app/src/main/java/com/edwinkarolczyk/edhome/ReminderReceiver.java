@@ -82,7 +82,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
         LocalDateTime requested;
         try {
             dueDay = LocalDate.parse(due);
-            requested = ReminderRules.target(due, hhmm, lead);
+            requested = ReminderRules.target(due, hhmm, lead,
+                pref.getString("quiet_hours_start", QuietHoursRules.DEFAULT_START),
+                pref.getString("quiet_hours_end", QuietHoursRules.DEFAULT_END));
         } catch (Exception invalid) {
             DiagnosticLog.event("REMINDER_INVALID_TASK");
             return;
@@ -95,7 +97,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
             return;
         LocalDateTime when = requested.isAfter(now)
             ? requested : now.plusMinutes(1);
-        when = ReminderRules.nextAllowed(when);
+        when = ReminderRules.nextAllowed(when,
+            pref.getString("quiet_hours_start", QuietHoursRules.DEFAULT_START),
+            pref.getString("quiet_hours_end", QuietHoursRules.DEFAULT_END));
         PendingIntent pending = taskIntent(context, id,
             PendingIntent.FLAG_UPDATE_CURRENT, occurrence);
         // Inexact delivery: Android may delay it, e.g. Doze or battery saving.
@@ -170,7 +174,15 @@ public final class ReminderReceiver extends BroadcastReceiver {
         LocalDateTime now = LocalDateTime.now();
         LocalDate today = now.toLocalDate();
         // Never announce within quiet hours even when Android delays an alarm.
-        if (now.getHour() >= 22 || now.getHour() < 7) {
+        String quietStart = pref.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String quietEnd = pref.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        if (!QuietHoursRules.validWindow(quietStart, quietEnd)) {
+            quietStart = QuietHoursRules.DEFAULT_START;
+            quietEnd = QuietHoursRules.DEFAULT_END;
+        }
+        if (QuietHoursRules.isQuiet(now, quietStart, quietEnd)) {
             schedule(context);
             return;
         }
@@ -218,7 +230,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     if (!expected.equals(actual)
                             || expected.equals(pref.getString(
                                 "reminder_fired_" + id, ""))) return;
-                    if (ReminderRules.target(taskDue, time, lead).isAfter(now)) {
+                    if (ReminderRules.target(taskDue, time, lead,
+                            quietStart, quietEnd).isAfter(now)) {
                         schedule(context);
                         return;
                     }

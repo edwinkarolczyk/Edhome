@@ -80,6 +80,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/reminders"
           javac -d "$RUNNER_TEMP/reminders" \
+            app/src/main/java/com/edwinkarolczyk/edhome/QuietHoursRules.java \
             app/src/main/java/com/edwinkarolczyk/edhome/ReminderRules.java \
             tests/task_rules/ReminderRulesSmoke.java
           java -cp "$RUNNER_TEMP/reminders" \
@@ -96,6 +97,26 @@ jobs:
             com.edwinkarolczyk.edhome.PlaceRulesSmoke
       - name: Place hierarchy / task / backup contract
         run: python3 tests/check_place_contract.py
+      - name: Appliance timer validation regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/appliance-timers"
+          javac -d "$RUNNER_TEMP/appliance-timers" \
+            app/src/main/java/com/edwinkarolczyk/edhome/DeviceTimerRules.java \
+            tests/task_rules/DeviceTimerRulesSmoke.java
+          java -cp "$RUNNER_TEMP/appliance-timers" \
+            com.edwinkarolczyk.edhome.DeviceTimerRulesSmoke
+      - name: Appliance timers / alarms / backup contract
+        run: python3 tests/check_device_timer_contract.py
+      - name: Recurring assignee rotation regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/rotation"
+          javac -d "$RUNNER_TEMP/rotation" \
+            app/src/main/java/com/edwinkarolczyk/edhome/RotationRules.java \
+            tests/task_rules/RotationRulesSmoke.java
+          java -cp "$RUNNER_TEMP/rotation" \
+            com.edwinkarolczyk.edhome.RotationRulesSmoke
+      - name: Rotation DB / history / backup contract
+        run: python3 tests/check_rotation_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Beta without PIN contract
@@ -110,6 +131,82 @@ jobs:
             com.edwinkarolczyk.edhome.HomeTileOrderSmoke
       - name: Four-theme UI-only and drag-edit contract
         run: python3 tests/check_ui_refresh_contract.py
+      - name: Pantry barcode check digits
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-scan"
+          javac -d "$RUNNER_TEMP/pantry-scan" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryScanRules.java \
+            tests/task_rules/PantryScanRulesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-scan" \
+            com.edwinkarolczyk.edhome.PantryScanRulesSmoke
+      - name: Pantry Open Food Facts integration contract
+        run: python3 tests/check_pantry_off_contract.py
+      - name: Pantry category regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-categories"
+          javac -d "$RUNNER_TEMP/pantry-categories" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryCategories.java \
+            tests/task_rules/PantryCategoriesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-categories" \
+            com.edwinkarolczyk.edhome.PantryCategoriesSmoke
+      - name: Pantry category and backup contract
+        run: python3 tests/check_pantry_categories_contract.py
+      - name: Pantry package rules and backup contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-packages"
+          javac -d "$RUNNER_TEMP/pantry-packages" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryPackageRules.java \
+            tests/task_rules/PantryPackageRulesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-packages" \
+            com.edwinkarolczyk.edhome.PantryPackageRulesSmoke
+          python3 tests/check_pantry_packages_contract.py
+      - name: Batch barcode scan state and integration contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-batch"
+          javac -d "$RUNNER_TEMP/pantry-batch" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryBatchSession.java \
+            tests/task_rules/PantryBatchSessionSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-batch" \
+            com.edwinkarolczyk.edhome.PantryBatchSessionSmoke
+          python3 tests/check_pantry_batch_contract.py
+      - name: Alternate UPC EAN GTIN lookup regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-lookup-codes"
+          javac -d "$RUNNER_TEMP/pantry-lookup-codes" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryScanRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryLookupCodes.java \
+            tests/task_rules/PantryLookupCodesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-lookup-codes" \
+            com.edwinkarolczyk.edhome.PantryLookupCodesSmoke
+          python3 tests/check_pantry_sources_contract.py
+      - name: Pantry name search confirmation contract
+        run: python3 tests/check_pantry_name_search_contract.py
+      - name: Existing pantry product barcode contract
+        run: python3 tests/check_pantry_existing_code_contract.py
+      - name: Shopping receipt inventory and backup contract
+        run: python3 tests/check_shopping_receipt_contract.py
+      - name: Storage object box QR and backup contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/edhome-storage-qr"
+          javac -d "$RUNNER_TEMP/edhome-storage-qr" \
+            app/src/main/java/com/edwinkarolczyk/edhome/StorageQr.java \
+            tests/task_rules/StorageQrSmoke.java
+          java -cp "$RUNNER_TEMP/edhome-storage-qr" \
+            com.edwinkarolczyk.edhome.StorageQrSmoke
+          python3 tests/check_storage_qr_contract.py
+      - name: Storage location and place deletion regression
+        run: python3 tests/check_storage_integrity_contract.py
+      - name: PayCheck grosze and shared-only ledger contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/edhome-paycheck"
+          javac -d "$RUNNER_TEMP/edhome-paycheck" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            tests/task_rules/MoneyRulesSmoke.java
+          java -cp "$RUNNER_TEMP/edhome-paycheck" \
+            com.edwinkarolczyk.edhome.MoneyRulesSmoke
+          python3 tests/check_paycheck_contract.py
+      - name: PayCheck goals and backup contract
+        run: python3 tests/check_paycheck_goals_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -147,17 +244,35 @@ jobs:
             echo "::error::Signed APK has an unexpected certificate."
             exit 1
           fi
+      - name: Require AndroidX ContextCompat in signed Beta APK
+        run: |
+          APK="app/build/outputs/apk/beta/release/app-beta-release.apk"
+          mkdir -p "$RUNNER_TEMP/edhome-dex"
+          FOUND=0
+          for DEX in $(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?[.]dex$'); do
+            unzip -p "$APK" "$DEX" > "$RUNNER_TEMP/edhome-dex/$DEX"
+            "$ANDROID_HOME/build-tools/35.0.0/dexdump" -f "$RUNNER_TEMP/edhome-dex/$DEX" > "$RUNNER_TEMP/edhome-dex/$DEX.txt"
+            if grep -Fq "Landroidx/core/content/ContextCompat;" "$RUNNER_TEMP/edhome-dex/$DEX.txt"; then
+              FOUND=1
+              break
+            fi
+          done
+          if [[ "$FOUND" -ne 1 ]]; then
+            echo "::error::ContextCompat is absent from the Beta APK; camera will crash on Android."
+            exit 1
+          fi
+          echo "AndroidX ContextCompat present in Beta APK"
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.3.4-beta.2-signed-apk
+          name: EDHOME-0.5.0-beta.2-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.3.4-beta.2 — naprawa przeciągania kafelków: podgląd = zapis, zawsze 9 widocznych kafelków, bez zmian danych."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.2 — PayCheck: wspólne cele finansowe i odkładanie bez księgowania wydatku; SQLite v21."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

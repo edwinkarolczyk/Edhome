@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 12;
+    private static final int DB_VERSION = 21;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -38,8 +38,20 @@ final class DataBackup {
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
-        {"pantry", "id", "name", "qty"},
+        {"task_rotation_members", "task_id", "member_id", "position"},
+        {"pantry", "id", "name", "qty", "category"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
+        {"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",
+            "packages", "before_qty", "after_qty", "happened_at"},
+        {"storage_items", "id", "name", "kind", "parent_box_id", "place_id",
+            "lent_to", "lent_at", "created_at"},
+        {"storage_events", "id", "item_id", "name_snapshot", "action",
+            "details", "happened_at"},
+        {"paycheck_transactions", "id", "operation_id", "scope", "kind",
+            "category", "amount_grosz", "note", "created_at"},
+        {"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"},
+        {"paycheck_goal_allocations", "id", "operation_id", "goal_id",
+            "amount_grosz", "created_at"},
         {"device_timers", "id", "device_type", "title", "start_at", "end_at",
             "status", "acknowledged_at"},
         {"audit_sessions", "id", "started_at", "completed_at", "status"},
@@ -48,7 +60,12 @@ final class DataBackup {
         {"audit_corrections", "id", "session_id", "pantry_id", "old_qty",
             "new_qty", "changed_at"},
         {"task_history", "id", "task_id", "title_snapshot", "completed_at",
-            "due_date", "next_due_date"}
+            "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"},
+        {"pantry_barcodes", "id", "pantry_id", "barcode"},
+        {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
+            "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
+        {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
+        {"pantry_packages", "pantry_id", "unit", "size_milli"}
     };
 
     private DataBackup() { }
@@ -67,6 +84,10 @@ final class DataBackup {
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
         settings.put("timerNotificationsEnabled",
             prefs.getBoolean("timer_notifications_enabled", false));
+        settings.put("quietHoursStart", prefs.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START));
+        settings.put("quietHoursEnd", prefs.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END));
         JSONObject appearance = new JSONObject();
         for (String id : HOME_TILE_IDS) {
             JSONObject tile = new JSONObject();
@@ -87,8 +108,12 @@ final class DataBackup {
             for (String[] definition : TABLES) {
                 String[] columns = columns(definition);
                 JSONArray rows = new JSONArray();
+                String orderBy = "task_rotation_members".equals(definition[0])
+                    ? "task_id ASC, position ASC"
+                    : "pantry_packages".equals(definition[0])
+                        ? "pantry_id ASC" : "id ASC";
                 try (Cursor cursor = database.query(definition[0], columns,
-                        null, null, null, null, "id ASC")) {
+                        null, null, null, null, orderBy)) {
                     while (cursor.moveToNext()) {
                         JSONObject row = new JSONObject();
                         for (int i = 0; i < columns.length; i++) {
@@ -130,7 +155,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -142,6 +167,13 @@ final class DataBackup {
         if (settings.has("timerNotificationsEnabled")
                 && !(settings.get("timerNotificationsEnabled") instanceof Boolean))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia minutników.");
+        String quietStart = settings.optString("quietHoursStart",
+            QuietHoursRules.DEFAULT_START);
+        String quietEnd = settings.optString("quietHoursEnd",
+            QuietHoursRules.DEFAULT_END);
+        if (!QuietHoursRules.validWindow(quietStart, quietEnd))
+            throw new IllegalArgumentException(
+                "Nieprawidłowe godziny ciszy w kopii.");
         if (household.trim().isEmpty() || household.length() > 200
                 || !UiSkin.accepted(theme))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia kopii.");
@@ -201,6 +233,17 @@ final class DataBackup {
                     || "member_shift_exceptions".equals(definition[0])))
                 || (inputVersion < 8 && "shopping_items".equals(definition[0]))
                 || (inputVersion < 12 && "device_timers".equals(definition[0]))
+                || (inputVersion < 13 && "task_rotation_members".equals(definition[0]))
+                || (inputVersion < 14 && ("pantry_barcodes".equals(definition[0])
+                    || "pantry_movements".equals(definition[0])))
+                || (inputVersion < 15 && "pantry_product_details".equals(definition[0]))
+                || (inputVersion < 17 && "pantry_packages".equals(definition[0]))
+                || (inputVersion < 18 && "shopping_receipts".equals(definition[0]))
+                || (inputVersion < 19 && ("storage_items".equals(definition[0])
+                    || "storage_events".equals(definition[0])))
+                || (inputVersion < 20 && "paycheck_transactions".equals(definition[0]))
+                || (inputVersion < 21 && ("paycheck_goals".equals(definition[0])
+                    || "paycheck_goal_allocations".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -255,6 +298,13 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 13 && "task_history".equals(definition[0])) {
+                            if ("assignee_id".equals(key)
+                                    || "assignee_name_snapshot".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                        }
                         if (inputVersion < 10 && "tasks".equals(definition[0])) {
                             if ("remind_time".equals(key)) {
                                 values.putNull(key);
@@ -265,6 +315,11 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 16 && "pantry".equals(definition[0])
+                                && "category".equals(key)) {
+                            values.put(key, "other");
+                            continue;
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
@@ -274,6 +329,7 @@ final class DataBackup {
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)
+                             || "assignee_name_snapshot".equals(key)
                              || "acknowledged_at".equals(key)))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
@@ -290,9 +346,13 @@ final class DataBackup {
                         throw new IllegalArgumentException("Nieprawidłowy typ pola: " + key);
                     }
                 }
-                Long id = values.getAsLong("id");
-                if (id == null || id <= 0 || !ids.add(id))
-                    throw new IllegalArgumentException("Nieprawidłowe lub powielone ID.");
+                if (!"task_rotation_members".equals(definition[0])
+                        && !"pantry_packages".equals(definition[0])) {
+                    Long id = values.getAsLong("id");
+                    if (id == null || id <= 0 || !ids.add(id))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowe lub powielone ID.");
+                }
                 if ("places".equals(definition[0])) {
                     String name = values.getAsString("name");
                     String kind = values.getAsString("kind");
@@ -353,13 +413,137 @@ final class DataBackup {
                         throw new IllegalArgumentException(
                             "Nieprawidłowa pozycja listy zakupów.");
                 }
+                if ("paycheck_goals".equals(definition[0])) {
+                    String scope = values.getAsString("scope");
+                    String name = values.getAsString("name");
+                    Long target = values.getAsLong("target_grosz");
+                    Long date = values.getAsLong("created_at");
+                    if (!"shared".equals(scope) || name == null
+                            || name.trim().isEmpty() || name.length() > 80
+                            || target == null || target < 1
+                            || target > MoneyRules.MAX_GROSZ
+                            || date == null || date <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowy wspólny cel.");
+                }
+                if ("paycheck_goal_allocations".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    Long goal = values.getAsLong("goal_id");
+                    Long amount = values.getAsLong("amount_grosz");
+                    Long date = values.getAsLong("created_at");
+                    if (operation == null || !operation.matches("[0-9a-fA-F-]{36}")
+                            || goal == null || goal <= 0
+                            || amount == null || amount < 1
+                            || amount > MoneyRules.MAX_GROSZ
+                            || date == null || date <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowe odłożenie na cel.");
+                }
+                if ("paycheck_transactions".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    String scope = values.getAsString("scope");
+                    String kind = values.getAsString("kind");
+                    String category = values.getAsString("category");
+                    String note = values.getAsString("note");
+                    Long amount = values.getAsLong("amount_grosz");
+                    Long date = values.getAsLong("created_at");
+                    if (operation == null || !operation.matches("[0-9a-fA-F-]{36}")
+                            || !"shared".equals(scope)
+                            || !("income".equals(kind) || "expense".equals(kind))
+                            || !MoneyRules.category(category)
+                            || note == null || note.length() > 160
+                            || amount == null || amount < 1
+                            || amount > MoneyRules.MAX_GROSZ
+                            || date == null || date <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa transakcja wspólna.");
+                }
+                if ("storage_items".equals(definition[0])) {
+                    String name = values.getAsString("name");
+                    String kind = values.getAsString("kind");
+                    String person = values.getAsString("lent_to");
+                    Long lentAt = values.getAsLong("lent_at");
+                    Long created = values.getAsLong("created_at");
+                    Long box = values.getAsLong("parent_box_id");
+                    Long place = values.getAsLong("place_id");
+                    if (name == null || name.trim().isEmpty() || name.length() > 160
+                            || !("box".equals(kind) || "thing".equals(kind))
+                            || box != null && place != null
+                            || person != null && (person.trim().isEmpty()
+                                || person.length() > 80 || !"thing".equals(kind))
+                            || (person == null) != (lentAt == null)
+                            || lentAt != null && lentAt <= 0
+                            || created == null || created <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa rzecz lub pudełko.");
+                }
+                if ("storage_events".equals(definition[0])) {
+                    String action = values.getAsString("action");
+                    String name = values.getAsString("name_snapshot");
+                    String details = values.getAsString("details");
+                    Long itemId = values.getAsLong("item_id");
+                    Long stamp = values.getAsLong("happened_at");
+                    if (itemId == null || itemId < 1 || name == null
+                            || name.trim().isEmpty() || name.length() > 160
+                            || details == null || details.length() > 300
+                            || !("created".equals(action) || "moved".equals(action)
+                                || "lent".equals(action) || "returned".equals(action)
+                                || "removed".equals(action))
+                            || stamp == null || stamp <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa historia rzeczy.");
+                }
+                if ("shopping_receipts".equals(definition[0])) {
+                    Long shopping = values.getAsLong("shopping_id");
+                    Long pantry = values.getAsLong("pantry_id");
+                    Long packages = values.getAsLong("packages");
+                    Long before = values.getAsLong("before_qty");
+                    Long after = values.getAsLong("after_qty");
+                    Long stamp = values.getAsLong("happened_at");
+                    String name = values.getAsString("name_snapshot");
+                    if (shopping == null || shopping < 1 || pantry == null || pantry < 1
+                            || packages == null || packages < 1 || packages > 100000000
+                            || before == null || before < 0 || before > 100000000
+                            || after == null || after != before + packages
+                            || after > 100000000 || stamp == null || stamp <= 0
+                            || name == null || name.trim().isEmpty() || name.length() > 160)
+                        throw new IllegalArgumentException("Nieprawidłowe przyjęcie zakupów.");
+                }
                 if ("pantry".equals(definition[0])) {
                     Long qty = values.getAsLong("qty");
                     if (qty == null || qty > 100000000L ||
                         values.getAsString("name") == null
                         || values.getAsString("name").trim().isEmpty()
-                        || values.getAsString("name").length() > 160)
+                        || values.getAsString("name").length() > 160
+                        || !PantryCategories.known(values.getAsString("category")))
                         throw new IllegalArgumentException("Nieprawidłowy produkt w kopii.");
+                }
+                if ("pantry_packages".equals(definition[0])) {
+                    Long amount = values.getAsLong("size_milli");
+                    if (amount == null || !PantryPackageRules.valid(
+                            values.getAsString("unit"), amount))
+                        throw new IllegalArgumentException("Nieprawidłowe opakowanie w kopii.");
+                }
+                if ("pantry_barcodes".equals(definition[0])
+                        && !PantryScanRules.validBarcode(values.getAsString("barcode")))
+                    throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                if ("pantry_product_details".equals(definition[0])) {
+                    String brand = values.getAsString("brand");
+                    String imageUrl = values.getAsString("image_url");
+                    if (brand == null || brand.length() > 100 || imageUrl == null
+                            || !imageUrl.isEmpty()
+                                && !PantryProductLookup.safeImageUrl(imageUrl))
+                        throw new IllegalArgumentException("Nieprawidłowe dane zdjęcia w kopii.");
+                }
+                if ("pantry_movements".equals(definition[0])) {
+                    Long before = values.getAsLong("before_qty");
+                    Long after = values.getAsLong("after_qty");
+                    Long amount = values.getAsLong("qty");
+                    String kind = values.getAsString("kind");
+                    String operation = values.getAsString("operation_id");
+                    if (!PantryScanRules.validBarcode(values.getAsString("barcode"))
+                            || operation == null || operation.isEmpty()
+                            || amount == null || amount != 1 || before == null
+                            || after == null || before > 100000000L
+                            || after > 100000000L
+                            || !("ADD".equals(kind) ? after == before + 1
+                                : "TAKE".equals(kind) && after + 1 == before))
+                        throw new IllegalArgumentException("Nieprawidłowy ruch w kopii.");
                 }
                 if ("audit_sessions".equals(definition[0])) {
                     String status = values.getAsString("status");
@@ -425,6 +609,83 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Map<Long, ContentValues> objects = new HashMap<>();
+        Set<Long> validPlaces = new HashSet<>();
+        for (ContentValues place : parsed.get("places"))
+            validPlaces.add(place.getAsLong("id"));
+        for (ContentValues object : parsed.get("storage_items"))
+            objects.put(object.getAsLong("id"), object);
+        for (ContentValues object : parsed.get("storage_items")) {
+            Long box = object.getAsLong("parent_box_id");
+            Long place = object.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Rzecz ma nieistniejące miejsce.");
+            Set<Long> seen = new HashSet<>();
+            while (box != null) {
+                ContentValues parent = objects.get(box);
+                if (!seen.add(box) || parent == null
+                        || !"box".equals(parent.getAsString("kind")))
+                    throw new IllegalArgumentException("Błąd powiązania pudełek.");
+                box = parent.getAsLong("parent_box_id");
+            }
+        }
+        Map<Long, Long> goalLimits = new HashMap<>();
+        for (ContentValues goal : parsed.get("paycheck_goals"))
+            goalLimits.put(goal.getAsLong("id"),
+                goal.getAsLong("target_grosz"));
+        Map<Long, Long> goalTotals = new HashMap<>();
+        Set<String> goalOperations = new HashSet<>();
+        for (ContentValues row : parsed.get("paycheck_goal_allocations")) {
+            Long goalId = row.getAsLong("goal_id");
+            Long maximum = goalLimits.get(goalId);
+            long amount = row.getAsLong("amount_grosz");
+            long previous = goalTotals.containsKey(goalId)
+                ? goalTotals.get(goalId) : 0;
+            if (maximum == null || !goalOperations.add(
+                    row.getAsString("operation_id"))
+                    || previous > maximum || amount > maximum - previous)
+                throw new IllegalArgumentException(
+                    "Powielona wpłata albo przekroczony lub nieistniejący cel.");
+            goalTotals.put(goalId, previous + amount);
+        }
+        Set<String> sharedFinanceOperations = new HashSet<>();
+        for (ContentValues entry : parsed.get("paycheck_transactions")) {
+            if (!sharedFinanceOperations.add(entry.getAsString("operation_id")))
+                throw new IllegalArgumentException("Zduplikowana transakcja PayCheck.");
+        }
+        Set<Long> pantryIds = new HashSet<>();
+        for (ContentValues p : parsed.get("pantry"))
+            pantryIds.add(p.getAsLong("id"));
+        Set<Long> packagedProducts = new HashSet<>();
+        for (ContentValues packageRow : parsed.get("pantry_packages")) {
+            Long pid = packageRow.getAsLong("pantry_id");
+            if (!pantryIds.contains(pid) || !packagedProducts.add(pid))
+                throw new IllegalArgumentException("Nieprawidłowe przypisanie opakowania.");
+        }
+        if (inputVersion >= 17 && packagedProducts.size() != pantryIds.size())
+            throw new IllegalArgumentException("Brakuje wielkości opakowania w kopii.");
+        Set<String> codes = new HashSet<>();
+        for (ContentValues b : parsed.get("pantry_barcodes")) {
+            if (!pantryIds.contains(b.getAsLong("pantry_id"))
+                    || !codes.add(b.getAsString("barcode")))
+                throw new IllegalArgumentException("Nieprawidłowe powiązanie kodu.");
+        }
+        Set<Long> detailedProducts = new HashSet<>();
+        for (ContentValues detail : parsed.get("pantry_product_details")) {
+            Long pid = detail.getAsLong("pantry_id");
+            if (!pantryIds.contains(pid) || !detailedProducts.add(pid))
+                throw new IllegalArgumentException("Nieprawidłowe powiązanie zdjęcia.");
+        }
+        Set<String> movements = new HashSet<>();
+        for (ContentValues m : parsed.get("pantry_movements"))
+            if (!movements.add(m.getAsString("operation_id")))
+                throw new IllegalArgumentException("Powielona operacja skanu.");
+        Set<Long> receivedShoppingIds = new HashSet<>();
+        for (ContentValues receipt : parsed.get("shopping_receipts")) {
+            Long shopping = receipt.getAsLong("shopping_id");
+            if (!receivedShoppingIds.add(shopping))
+                throw new IllegalArgumentException("Podwójne przyjęcie zakupów w kopii.");
+        }
         Set<String> shoppingNames = new HashSet<>();
         for (ContentValues item : parsed.get("shopping_items")) {
             if (!shoppingNames.add(item.getAsString("name").toLowerCase(
@@ -476,7 +737,14 @@ final class DataBackup {
         if (!PlaceRules.validForest(hierarchy))
             throw new IllegalArgumentException(
                 "Kopia zawiera nieistniejące miejsce nadrzędne lub zapętlenie.");
+        Set<Long> tasks = new HashSet<>();
+        Map<Long, String> taskRules = new HashMap<>();
+        Map<Long, Long> taskAssignees = new HashMap<>();
         for (ContentValues task : parsed.get("tasks")) {
+            Long taskId = task.getAsLong("id");
+            tasks.add(taskId);
+            taskRules.put(taskId, task.getAsString("repeat_rule"));
+            taskAssignees.put(taskId, task.getAsLong("assignee_id"));
             Long placeId = task.getAsLong("place_id");
             if (placeId != null && !places.contains(placeId))
                 throw new IllegalArgumentException("Czynność wskazuje nieistniejące miejsce.");
@@ -485,6 +753,39 @@ final class DataBackup {
                 throw new IllegalArgumentException(
                     "Czynność wskazuje nieistniejącego domownika.");
         }
+        Map<Long, Set<Long>> rotationMembers = new HashMap<>();
+        Map<Long, Set<Long>> rotationPositions = new HashMap<>();
+        for (ContentValues row : parsed.get("task_rotation_members")) {
+            Long taskId = row.getAsLong("task_id");
+            Long memberId = row.getAsLong("member_id");
+            Long position = row.getAsLong("position");
+            if (!tasks.contains(taskId) || !members.contains(memberId)
+                    || position == null || position < 0
+                    || !TaskRules.recurring(taskRules.get(taskId)))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa rotacja wykonawców w kopii.");
+            if (!rotationMembers.computeIfAbsent(taskId,
+                    ignored -> new HashSet<>()).add(memberId)
+                    || !rotationPositions.computeIfAbsent(taskId,
+                    ignored -> new HashSet<>()).add(position))
+                throw new IllegalArgumentException(
+                    "Powielona osoba lub pozycja w rotacji.");
+        }
+        for (Map.Entry<Long, Set<Long>> entry : rotationMembers.entrySet()) {
+            if (entry.getValue().size() < 2)
+                throw new IllegalArgumentException(
+                    "Rotacja musi zawierać co najmniej dwie osoby.");
+            Long assigned = taskAssignees.get(entry.getKey());
+            if (assigned == null || !entry.getValue().contains(assigned))
+                throw new IllegalArgumentException(
+                    "Aktualny wykonawca nie należy do rotacji.");
+            Set<Long> positions = rotationPositions.get(entry.getKey());
+            for (long i = 0; i < positions.size(); i++)
+                if (!positions.contains(i))
+                    throw new IllegalArgumentException(
+                        "Rotacja ma nieciągłą kolejność.");
+        }
+
         Set<Long> sessions = new HashSet<>();
         for (ContentValues session : parsed.get("audit_sessions"))
             sessions.add(session.getAsLong("id"));
@@ -503,6 +804,7 @@ final class DataBackup {
                 for (ContentValues values : parsed.get(definition[0]))
                     database.insertOrThrow(definition[0], null, values);
             }
+            if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
@@ -512,7 +814,9 @@ final class DataBackup {
             .putString("household", household)
             .putString("theme", theme)
             .putString("home_tile_order", tileOrder)
-            .putBoolean("timer_notifications_enabled", timerNotifications);
+            .putBoolean("timer_notifications_enabled", timerNotifications)
+            .putString("quiet_hours_start", quietStart)
+            .putString("quiet_hours_end", quietEnd);
         for (String id : HOME_TILE_IDS) {
             restored.remove("tile_label_" + id)
                 .remove("tile_tint_" + id).remove("tile_icon_" + id);
@@ -543,11 +847,18 @@ final class DataBackup {
             || "acknowledged_at".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
-            || "member_id".equals(column) || "weekday".equals(column)
+            || "member_id".equals(column) || "position".equals(column) || "weekday".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
-            || "changed_at".equals(column);
+            || "changed_at".equals(column) || "size_milli".equals(column)
+            || "shopping_id".equals(column) || "packages".equals(column)
+            || "amount_grosz".equals(column)
+            || "target_grosz".equals(column) || "goal_id".equals(column)
+            || "parent_box_id".equals(column) || "lent_at".equals(column)
+            || "created_at".equals(column) || "item_id".equals(column)
+            || "before_qty".equals(column)
+            || "after_qty".equals(column) || "happened_at".equals(column);
     }
 }

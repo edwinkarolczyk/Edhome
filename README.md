@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status gałęzi `beta`:** EDHOME **0.3.4-beta.2** (`versionCode 27`, SQLite 11). Aktualizacje Beta korzystają z podpisanych GitHub Releases w publicznym repozytorium `Edhome`, a manifest trafia wyłącznie na gałąź `beta`. `main` pozostaje bez zmian. Nie jest wymagane osobne `EDHOME-Updates`, token PAT ani ręczny adres HTTPS w aplikacji. Beta działa bez PIN-u; czynności mają opcjonalnego wykonawcę i grafik z wyjątkami oraz do trzech proponowanych dat do ręcznego zatwierdzenia. W etapie 0.3 działa lista zakupów, odpady jako Czynności i własna godzina/wyprzedzenie przypomnienia dla pojedynczego zadania, z ciszą 22:00–07:00 i zgodą Androida. Nowość 0.3.3: sześć motywów (w tym WMM i Trener 2), zaokrąglone kafelki, podgląd miejsca upuszczenia i wybór ikony z katalogu, bez zmiany danych. Nowość 0.3.4: własne Miejsca, zagnieżdżanie i pełne ścieżki; w beta.2 poprawiono przeciąganie kafelków i zawsze przywracane jest 9 widocznych kafelków. Stable pozostaje z PIN-em. Repozytorium i kod są obecnie publiczne; prywatne pozostają klucze podpisu, sekrety Actions i dane użytkownika.
+> **Status rozwoju na `beta`:** 0.5.0-beta.1 (`versionCode 44`, SQLite v20) — pierwszy ekran PayCheck wyłącznie dla wspólnego budżetu. Rzeczy, pudełka, lokalne QR i wypożyczenia są w 0.4.0-beta.12/13; `main` pozostaje bez zmian. Beta bez PIN-u nie przechowuje w tym etapie prywatnych kont ani transakcji. Podpisane APK i manifest aktualizacji pozostają w GitHub Releases / gałęzi `beta`.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
@@ -44,6 +44,9 @@
 
 ## Pierwsza beta i pliki do zaglądania
 
+- [Wersja 0.3.7 — godziny ciszy i układanie kafelków](docs/BETA_0_3_7.md)
+- [Wersja 0.3.6 — rotacyjne obowiązki i SQLite v13](docs/BETA_0_3_6.md)
+- [Wersja 0.3.5 — minutniki urządzeń i SQLite v12](docs/BETA_0_3_5.md)
 - [Wersja 0.3.4 — hierarchia własnych Miejsc i SQLite v11](docs/BETA_0_3_4.md)
 - [Wersja 0.3.3 — cztery style i edycja/przeciąganie kafelków](docs/BETA_0_3_3.md)
 - [Wersja 0.3.2 — indywidualna godzina i wyprzedzenie przypomnień](docs/BETA_0_3_2.md)
@@ -74,6 +77,6 @@
 
 ## Następne kroki
 
-Na `beta`: zweryfikować aktualizację 0.3.2 → 0.3.3, wszystkie cztery style i przeciąganie/edycję kafelków na telefonie z zachowaniem danych. Wydanie 0.3.3 jest wyłącznie graficzne (SQLite v10). Dalej 0.3.4: lokalne minutniki urządzeń, potem rotacyjne obowiązki. Synchronizacja kilku urządzeń dopiero w 0.8; `main` pozostaje bez zmian.
+Na `beta`: odebrać 0.4.0-beta.13 na fizycznym telefonie (QR pudełek, pożyczki, przyjęcia zakupów), następnie 0.5.0-beta.1 (wspólny PayCheck). Prywatne profile dopiero po odrębnej autoryzacji, a automatyka bankowa po testach importu i deduplikacji. `main` pozostaje bez zmian.
 
 **Repozytorium:** `edwinkarolczyk/Edhome`; nazwa aplikacji **EDHOME — Idea by Edwin**.

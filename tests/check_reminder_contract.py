@@ -10,9 +10,10 @@ for expected in (
     'ACTION_TASK', 'ACTION_REMIND',
     '"reminder_fired_" + id',
     'if (!expected.equals(actual)',
-    'ReminderRules.target(taskDue, time, lead).isAfter(now)',
+    'ReminderRules.target(taskDue, time, lead,',
+    'quietStart, quietEnd).isAfter(now)',
     'manager.setAndAllowWhileIdle(',
-    'ReminderRules.nextAllowed(when)',
+    'ReminderRules.nextAllowed(when,',
     'Intent.ACTION_BOOT_COMPLETED',
     'Intent.ACTION_MY_PACKAGE_REPLACED',
     'Intent.ACTION_TIMEZONE_CHANGED',
@@ -21,7 +22,7 @@ for expected in (
 for expected in (
     'ReminderReceiver.cancelTask(this, id);',
     'ReminderReceiver.schedule(this);',
-    'super(context, "edhome-beta-preview.db", null, 12)',
+    'super(context, "edhome-beta-preview.db", null, 21',
     'ALTER TABLE tasks ADD COLUMN remind_time TEXT',
     'ALTER TABLE tasks ADD COLUMN reminder_lead_days',
 ):
