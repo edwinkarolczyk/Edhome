@@ -41,3 +41,14 @@ Odbiór: cel OC 700 zł, odłożenie 500 zł, potem 200 zł; pozostało 0 zł, s
 - Nie zmienia się główna baza SQLite v21, nie ma migracji wspólnych danych. Lista zakupów, spiżarnia i energia nigdy same nie księgują prywatnych wpisów.
 
 Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i wydatek 12,50 zł; prywatne saldo 187,50 zł, **wspólne bez zmian**. Zablokuj sejf, spróbuj otworzyć złym hasłem; po wyjściu z aplikacji hasło wymagane ponownie. Zwykły eksport JSON nie może zawierać prywatnej kwoty ani opisu.
+
+
+## 0.5.0-beta.4 — kafelki i zaszyfrowany eksport prywatny
+
+- Oficjalnie opublikowana beta `0.5.0-beta.4` (versionCode 47), [wydanie na GitHub](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.4). Weryfikacja CI obejmuje kompilację Android Beta/Stable, podpis beta oraz kontrakty danych; **test na konkretnym telefonie jest nadal osobnym etapem**.
+- Panel ma dowolną liczbę skrótów i cele: Minutniki, Lista zakupów, PayCheck, Odpady, Czynności, itd.; można zmienić cel, podpis, ikonę, kolor, wielkość mała/podwójna, pozycję, ukryć i przywrócić, usunąć tylko skrót. Poprzednie dziewięć ma być migrowane bez straty wyglądu/kolejności; nowe skróty zawiera backup JSON. Wspólne PayCheck i prywatny sejf nie stają się tym samym danymi przez dodanie skrótu.
+- **W tym zbudowanym kodzie dodano osobną szyfrowaną kopię prywatnego PayCheck**, niezależną od zwykłego JSON EDHOME. Po odblokowaniu prywatnego sejfu można podać osobne hasło kopii (12–64 znaki) i wybrać miejsce zapisu JSON. Dane i UUID operacji są szyfrowane AES-GCM z osobnym losowym salt oraz kluczem wyprowadzonym z hasła kopii. Przy imporcie trzeba podać hasło istniejącego sejfu oraz hasło archiwum; nowe rekordy trafiają transakcyjnie, identyczne UUID są pomijane, konflikt przerywa całą operację. Prywatne kwoty/hasła nie powinny trafić do wspólnej kopii ani logów. **Nie zapisuj niezabezpieczonego JSON archiwum ani hasła w repo.**
+- To nie jest jeszcze zakończony test migracji prywatnego sejfu na inny telefon: przed odinstalowaniem starej Bety wymagane są **dwie oddzielne, sprawdzone kopie** oraz odbiór eksport/import na fizycznym urządzeniu. Samo przejście CI i wynik analizy źródła nie gwarantują odzyskania konkretnej kopii. Oryginalne hasło sejfu i osobne hasło kopii mogą być różne.
+- Poza zwykłą kopią EDHOME prywatny sejf pozostaje osobny. Nie modyfikować `main` i nie nazywać tego Stable bez akceptacji Edwina.
+
+**Test na telefonie:** (1) dodaj co najmniej 15 kafelków i zmień cel jednego pierwotnego; (2) przenieś Minutniki i PayCheck do siatki; (3) sprawdź po restarcie/eksporcie/importcie, że układ pozostał; (4) w testowym sejfie dodaj transakcję, zapisz zaszyfrowaną kopię, zaimportuj dwa razy — drugi import powinien dopisać 0; (5) błędne hasło kopii i uszkodzony plik mają odrzucić import bez zmiany salda. **Nie testować na jedynej kopii realnych danych.**
