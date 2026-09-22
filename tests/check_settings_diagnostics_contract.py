@@ -29,5 +29,5 @@ assert "Math.max(1000, Math.min(MAX_CHAT_CHARS, requestedChars))" in log
 assert "content.length() <= limit" in log and "firstNewline + 1" in log
 assert "readInto(previous, out);" in log and "readInto(current, out);" in log
 assert "new String(bytes.toByteArray(), StandardCharsets.UTF_8)" in log
-assert "versionCode 59" in gradle and "versionNameSuffix '-beta.12'" in gradle
+assert "versionCode 60" in gradle and "versionNameSuffix '-beta.12.1'" in gradle
 print("Settings single-parent view, clipboard 5k/12k/20k chars, complete .txt retention: PASS")

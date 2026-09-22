@@ -47,5 +47,5 @@ assert 'if (inputVersion < 23' in backup
 assert 'inputVersion != 22 && inputVersion != DB_VERSION' in backup
 assert 'Zakup ma nieistniejące miejsce.' in backup
 assert 'Przyjęcie ma nieistniejące miejsce.' in backup
-assert "versionCode 59" in gradle and "versionNameSuffix '-beta.12'" in gradle
+assert "versionCode 60" in gradle and "versionNameSuffix '-beta.12.1'" in gradle
 print("Per-row shopping destination, receipt-only stock, v23 backup: PASS")
