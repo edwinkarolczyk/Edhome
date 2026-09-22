@@ -22,3 +22,12 @@
 ## Po pierwszym wydaniu
 
 Priorytet: prywatne profile z izolacją i ochroną przed dostępem na wspólnym urządzeniu, cele i raty, później uzgadnianie wyciągów oraz bankowych powiadomień. Żadnego automatycznego księgowania bez zatwierdzenia.
+
+## 0.5.0-beta.2 — wspólne cele finansowe
+
+- W PayCheck można utworzyć wspólny cel (nazwa, docelowa kwota PLN), zobaczyć „odłożone / docelowe / pozostało” i ręcznie odłożyć kwotę z potwierdzeniem. Wszystkie kwoty w groszach; cel nie może zostać przekroczony, a UUID zapisu nie pozwala na podwójne naliczenie.
+- **Odkładanie jest wyłącznie planem/ewidencją**, nie wydatkiem, nie przelewem, nie zmianą salda wspólnego PayCheck. Nie zakładać, że oznacza rzeczywiste środki na rachunku; prawdziwa płatność jest oddzielną transakcją.
+- Beta bez PIN-u nie przechowuje i nie eksportuje kont prywatnych. Cele są tylko wspólne. Przed prywatnymi finansami wymagana osobna kontrola dostępu i ograniczenie widoczności na wspólnym tablecie.
+- SQLite v20→v21 dodaje `paycheck_goals` oraz `paycheck_goal_allocations`; backup zawiera obie tabele, odtwarza kopie v20 i starsze. Weryfikacja odrzuca osierocone wpłaty, duplikaty operacji i sumę ponad cel.
+
+Odbiór: cel OC 700 zł, odłożenie 500 zł, potem 200 zł; pozostało 0 zł, saldo wspólne bez zmian. Anulowanie albo ponowny zapis tego samego UUID nie zmienia odłożonej kwoty. Testy CI nie zastępują testu na Huawei.

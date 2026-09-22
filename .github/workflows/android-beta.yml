@@ -205,6 +205,8 @@ jobs:
           java -cp "$RUNNER_TEMP/edhome-paycheck" \
             com.edwinkarolczyk.edhome.MoneyRulesSmoke
           python3 tests/check_paycheck_contract.py
+      - name: PayCheck goals and backup contract
+        run: python3 tests/check_paycheck_goals_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Require persistent private signing key
@@ -263,14 +265,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.5.0-beta.1-signed-apk
+          name: EDHOME-0.5.0-beta.2-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.1 — PayCheck: wspólny budżet, potwierdzane transakcje bez prywatnych kont; SQLite v20."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.2 — PayCheck: wspólne cele finansowe i odkładanie bez księgowania wydatku; SQLite v21."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

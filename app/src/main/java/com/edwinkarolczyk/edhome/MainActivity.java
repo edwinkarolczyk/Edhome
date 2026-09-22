@@ -2758,6 +2758,122 @@ public final class MainActivity extends Activity {
             }
         }
         if(count==0)note("Brak transakcji wspólnych. Niczego nie księgujemy automatycznie.");
+        sharedPaycheckGoals();
+    }
+
+    private void sharedPaycheckGoals() {
+        title("Wspólne cele finansowe");
+        note("Odkładanie na cel to plan oszczędzania, a nie nowy wydatek "
+            + "ani rzeczywisty przelew. Nie zmienia salda wspólnego PayCheck.");
+        button("+ Nowy cel wspólny", this::createSharedPaycheckGoal);
+        int goals = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,target_grosz FROM paycheck_goals "
+                + "WHERE scope='shared' ORDER BY id DESC", null)) {
+            while (c.moveToNext()) {
+                goals++;
+                long id = c.getLong(0);
+                String name = c.getString(1);
+                long target = c.getLong(2);
+                long saved = PaycheckGoalsStore.allocated(
+                    db.getReadableDatabase(), id);
+                LinearLayout entry = card();
+                entry.addView(text(name, 19, true));
+                entry.addView(text("Odłożone: " + MoneyRules.format(saved)
+                    + " / " + MoneyRules.format(target), 16, false));
+                entry.addView(text("Do celu: "
+                    + MoneyRules.format(Math.max(0, target - saved)), 14, false));
+                if (saved < target) {
+                    smallButton(entry, "+ Odłóż na cel", () ->
+                        allocateSharedPaycheckGoal(id, name, target, saved));
+                } else entry.addView(text("✓ Cel osiągnięty", 14, true));
+            }
+        }
+        if (goals == 0) note("Nie masz jeszcze wspólnych celów finansowych.");
+    }
+
+    private void createSharedPaycheckGoal() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Cel, np. OC samochodu");
+        form.addView(name);
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota celu w PLN, np. 700,00");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(amount);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Nowy wspólny cel")
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Utwórz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    long target = MoneyRules.parse(amount.getText().toString());
+                    PaycheckGoalsStore.addGoal(db.getWritableDatabase(),
+                        name.getText().toString(), target);
+                    DiagnosticLog.event("PAYCHECK_SHARED_GOAL_CREATED");
+                    dialog.dismiss();
+                    render();
+                } catch (IllegalArgumentException error) {
+                    amount.setError(error.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("PAYCHECK_GOAL_CREATE", error);
+                    alert("Nie udało się utworzyć celu.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void allocateSharedPaycheckGoal(long id, String name,
+            long target, long previous) {
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota w PLN");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text(name + "\nPozostało: "
+            + MoneyRules.format(target - previous)
+            + "\nOdkładanie nie księguje wydatku i nie zmienia salda.",
+            15, false));
+        form.addView(amount);
+        String operationId = java.util.UUID.randomUUID().toString();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Potwierdź odłożenie na cel")
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Odłóż", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    long grosz = MoneyRules.parse(amount.getText().toString());
+                    String outcome = PaycheckGoalsStore.allocate(
+                        db.getWritableDatabase(), id, operationId, grosz);
+                    if ("COMMITTED".equals(outcome)) {
+                        DiagnosticLog.event("PAYCHECK_SHARED_GOAL_ALLOCATED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("DUPLICATE".equals(outcome)) {
+                        dialog.dismiss();
+                        alert("Ta wpłata została już zapisana.");
+                        render();
+                    } else amount.setError("OVER_TARGET".equals(outcome)
+                        ? "Kwota przekracza kwotę pozostałą do celu."
+                        : "Ten cel już nie istnieje.");
+                } catch (IllegalArgumentException error) {
+                    amount.setError(error.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("PAYCHECK_GOAL_ALLOCATE", error);
+                    alert("Nie udało się odłożyć kwoty.");
+                }
+            }));
+        dialog.show();
     }
 
     private void shopping() {
@@ -4485,7 +4601,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 20);
+            super(context, "edhome-beta-preview.db", null, 21);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -4511,6 +4627,7 @@ public final class MainActivity extends Activity {
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
             PaycheckStore.create(database);
+            PaycheckGoalsStore.create(database);
             addDeviceTimers(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
@@ -4520,7 +4637,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 20) {
+            if (oldVersion < 1 || newVersion > 21) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -4624,6 +4741,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 20) {
                 PaycheckStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED");
+            }
+            if (oldVersion < 21) {
+                PaycheckGoalsStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS");
             }
         }
 
