@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 45,
-  "versionName": "0.5.0-beta.2",
-  "changelog": "EDHOME Beta 0.5.0-beta.2 — PayCheck: wspólne cele finansowe i odkładanie bez księgowania wydatku; SQLite v21.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.2/edhome-beta.apk",
-  "sha256": "e9ca9e62f20b6b315baf3e33cc673d90d7f414f201f043c1b6f50c09f3d07ef1"
+  "versionCode": 46,
+  "versionName": "0.5.0-beta.3",
+  "changelog": "EDHOME Beta 0.5.0-beta.3 — PayCheck: osobny szyfrowany sejf prywatnych transakcji z hasłem i blokadą po wyjściu; SQLite v21.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.3/edhome-beta.apk",
+  "sha256": "e60d3849612154fe0d990e9e24ee4036b4922fb9f198717701adc351c8f5f9e5"
 }
