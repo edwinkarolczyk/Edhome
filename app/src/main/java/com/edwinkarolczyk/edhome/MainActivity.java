@@ -68,10 +68,13 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_BETA_APK = 1211;
     private static final int EXPORT_DATA_BACKUP = 1212;
     private static final int IMPORT_DATA_BACKUP = 1213;
+    private static final int EXPORT_PRIVATE_BACKUP = 1214;
+    private static final int IMPORT_PRIVATE_BACKUP = 1215;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
     private PrivatePaycheckVault.Session privatePaycheckSession;
+    private String privateBackupForSave;
     private AlertDialog privateAuthDialog;
     private AlertDialog privateEntryDialog;
     private boolean privateNeedsRender;
@@ -3056,8 +3059,13 @@ public final class MainActivity extends Activity {
         note("Tylko ten telefon, osobne hasło i zaszyfrowane wpisy. "
             + "Sejf zamyka się po opuszczeniu aplikacji. Prywatne dane nie "
             + "trafiają do wspólnej historii, diagnostyki ani kopii JSON.");
-        note("UWAGA: nie odinstalowuj aplikacji. "
-            + "Utrata hasła lub telefonu oznacza utratę tych prywatnych danych.");
+        note("Prywatny sejf nie wchodzi do zwykłej kopii JSON EDHOME. "
+            + "Osobna zaszyfrowana kopia wymaga hasła kopii (12–64 znaki). "
+            + "Bez hasła kopii nie odzyskasz jej zawartości.");
+        button("🔐 Eksportuj zaszyfrowaną kopię prywatną",
+            this::exportPrivatePaycheckDialog);
+        button("↥ Importuj zaszyfrowaną kopię prywatną",
+            this::selectPrivatePaycheckBackup);
         button("🔒 Zablokuj i wróć do wspólnego", () -> go("paycheck"));
         final java.util.List<PrivatePaycheckVault.Entry> entries;
         try {
@@ -3158,6 +3166,157 @@ public final class MainActivity extends Activity {
         }
         if (entries.isEmpty())
             note("Brak prywatnych wpisów. Wspólny budżet pozostaje osobny.");
+    }
+
+
+    private EditText securePrivatePassword(String hint) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        return input;
+    }
+
+    private void exportPrivatePaycheckDialog() {
+        if (privatePaycheckSession == null || !privatePaycheckSession.active()) {
+            alert("Odblokuj najpierw prywatny sejf."); return;
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text("Utwórz OSOBNE hasło kopii 12–64 znaki. "
+            + "Nie jest to PIN ani hasło do sejfu. Zachowaj je — bez niego nie odtworzysz pliku.",
+            14, false));
+        EditText pass = securePrivatePassword("Hasło kopii");
+        EditText again = securePrivatePassword("Powtórz hasło kopii");
+        form.addView(pass);
+        form.addView(again);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Szyfrowana kopia PayCheck").setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zaszyfruj i zapisz", null).create();
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null)
+                dialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                char[] password = pass.getText().toString().toCharArray();
+                char[] repeat = again.getText().toString().toCharArray();
+                try {
+                    if (!PrivatePaycheckCrypto.validPassword(password)
+                            || !java.util.Arrays.equals(password, repeat)) {
+                        pass.setError("Hasło kopii musi mieć 12–64 znaki i zgadzać się z powtórzeniem.");
+                        return;
+                    }
+                    if (privatePaycheckSession == null
+                            || !privatePaycheckSession.active()) {
+                        alert("Sejf zablokowany — otwórz go ponownie."); return;
+                    }
+                    privateBackupForSave = PrivatePaycheckPortable.exportEncrypted(
+                        this, privatePaycheckSession, password);
+                    pass.getText().clear();
+                    again.getText().clear();
+                    dialog.dismiss();
+                    Intent picker = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    picker.addCategory(Intent.CATEGORY_OPENABLE);
+                    picker.setType("application/json");
+                    picker.putExtra(Intent.EXTRA_TITLE,
+                        "edhome-paycheck-prywatny-zaszyfrowany.json");
+                    startActivityForResult(picker, EXPORT_PRIVATE_BACKUP);
+                } catch (Exception error) {
+                    privateBackupForSave = null;
+                    DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORT_FAILED");
+                    alert("Nie udało się przygotować zaszyfrowanej kopii. Dane sejfu pozostają bez zmian.");
+                } finally {
+                    java.util.Arrays.fill(password, '\\0');
+                    java.util.Arrays.fill(repeat, '\\0');
+                }
+            });
+        });
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show();
+    }
+
+    private void selectPrivatePaycheckBackup() {
+        if (!PrivatePaycheckVault.configured(this)) {
+            alert("Najpierw utwórz prywatny sejf i hasło. "
+                + "Potem zaimportujesz do niego zaszyfrowaną kopię.");
+            return;
+        }
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("application/json");
+        startActivityForResult(picker, IMPORT_PRIVATE_BACKUP);
+    }
+
+    private void privateBackupImportDialog(final String archive) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text("Import nie zastępuje istniejących transakcji. "
+            + "Identyczne operacje zostaną pominięte, konflikt przerwie CAŁY import.",
+            14, false));
+        EditText vaultPassword = securePrivatePassword("Hasło obecnego sejfu");
+        EditText archivePassword = securePrivatePassword("Hasło kopii");
+        form.addView(vaultPassword);
+        form.addView(archivePassword);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Przywróć prywatny PayCheck").setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Sprawdź i importuj", null).create();
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null)
+                dialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                char[] vaultPass = vaultPassword.getText().toString().toCharArray();
+                char[] backupPass = archivePassword.getText().toString().toCharArray();
+                PrivatePaycheckVault.Session session = null;
+                try {
+                    if (PrivatePaycheckVault.cooldownMillis(this) > 0) {
+                        alert("Sejf czasowo zablokowany. Spróbuj później."); return;
+                    }
+                    try {
+                        session = PrivatePaycheckVault.unlock(this, vaultPass);
+                        PrivatePaycheckVault.clearFailures(this);
+                    } catch (Exception wrongPassword) {
+                        PrivatePaycheckVault.recordFailure(this);
+                        vaultPassword.setError("Nieprawidłowe hasło sejfu.");
+                        return;
+                    }
+                    if (!PrivatePaycheckCrypto.validPassword(backupPass)) {
+                        archivePassword.setError("Podaj hasło kopii (12–64 znaki).");
+                        return;
+                    }
+                    int imported = PrivatePaycheckPortable.importEncrypted(
+                        this, session, archive, backupPass);
+                    vaultPassword.getText().clear();
+                    archivePassword.getText().clear();
+                    dialog.dismiss();
+                    DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORTED");
+                    alert("Import zakończony. Nowe prywatne transakcje: " + imported
+                        + ". Pozostałe operacje nie zostały nadpisane.");
+                } catch (Exception error) {
+                    DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORT_REJECTED");
+                    archivePassword.setError("Nieprawidłowe hasło kopii, uszkodzony plik "
+                        + "lub konflikt transakcji. Niczego nie nadpisano.");
+                } finally {
+                    if (session != null) session.lock();
+                    java.util.Arrays.fill(vaultPass, '\\0');
+                    java.util.Arrays.fill(backupPass, '\\0');
+                }
+            });
+        });
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.setOnDismissListener(d -> {
+            if (!"paycheck_private".equals(screen))
+                getWindow().clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        });
+        dialog.show();
     }
 
     private void sharedPaycheckGoals() {
@@ -4905,6 +5064,44 @@ public final class MainActivity extends Activity {
         if (request == IMPORT_BETA_APK) {
             if (result == RESULT_OK && data != null && data.getData() != null)
                 updater.importSelected(data.getData());
+            return;
+        }
+        if (request == EXPORT_PRIVATE_BACKUP) {
+            String encrypted = privateBackupForSave;
+            privateBackupForSave = null;
+            if (result != RESULT_OK || data == null || data.getData() == null
+                    || encrypted == null) return;
+            try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                if (out == null) throw new IllegalStateException("Brak dostępu do pliku.");
+                out.write(encrypted.getBytes(StandardCharsets.UTF_8));
+                out.flush();
+                DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORTED");
+                alert("Zapisano ZASZYFROWANĄ kopię prywatną. "
+                    + "Zachowaj hasło kopii i sprawdź, czy plik istnieje.");
+            } catch (Exception error) {
+                DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORT_FAILED");
+                alert("Nie zapisano kopii prywatnej. Nie odinstalowuj aplikacji.");
+            }
+            return;
+        }
+        if (request == IMPORT_PRIVATE_BACKUP) {
+            if (result != RESULT_OK || data == null || data.getData() == null) return;
+            try (InputStream in = getContentResolver().openInputStream(data.getData());
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                if (in == null) throw new IllegalStateException("Brak dostępu do pliku.");
+                byte[] block = new byte[8192];
+                int n;
+                while ((n = in.read(block)) != -1) {
+                    if (out.size() + n > PrivatePaycheckPortable.MAX_BYTES)
+                        throw new IllegalArgumentException("Plik zbyt duży.");
+                    out.write(block, 0, n);
+                }
+                privateBackupImportDialog(new String(
+                    out.toByteArray(), StandardCharsets.UTF_8));
+            } catch (Exception error) {
+                DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_READ_FAILED");
+                alert("Nie można odczytać zaszyfrowanej kopii prywatnej.");
+            }
             return;
         }
         if (request == EXPORT_DATA_BACKUP) {
