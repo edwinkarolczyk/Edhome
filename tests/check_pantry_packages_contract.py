@@ -47,5 +47,5 @@ for value in (
     'packagedProducts.size() != pantryIds.size()',
 ):
     assert value in backup, "Missing backup contract: " + value
-assert 'versionCode 56' in gradle and "versionNameSuffix '-beta.11'" in gradle
+assert 'versionCode 57' in gradle and "versionNameSuffix '-beta.11.1'" in gradle
 print("Pantry packages UI, stock isolation, backup v17 and scanner: PASS")
