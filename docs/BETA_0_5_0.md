@@ -78,3 +78,10 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Brak widoku kafelka, niekompletny zestaw pozycji lub nieaktualny stan przeciągania powoduje bezpieczne przerwanie gestu i zachowanie zapisanej kolejności.
 - Nowe regresje statyczne i Java obejmują >9 kafelków, skróty niestandardowe, ukrywanie, sloty i zgodność podglądu z zapisem. SQLite v22 pozostaje bez migracji.
 - Odbiór na telefonie jest osobny: aktualizacja bez odinstalowania, kilkanaście kafelków, długa/krótka interakcja, ukrywanie, edycja i restart aplikacji. Stable main bez zmian.
+
+
+## 0.5.0-beta.8 — aktualizator bez zapętlonego instalatora
+
+- Automatyczne sprawdzanie manifestu co najwyżej raz na 15 minut w aktywnej sesji; pobieranie nadal sprawdzane co 30 sekund. Ręczne sprawdzenie niezależne.
+- Po przekazaniu zweryfikowanego APK Androidowi instalator nie otwiera się sam ponownie dla tego samego pliku. Po anulowaniu instalacji można jawnie ponowić z ekranu Aktualizacje. Brak zgody na instalowanie nie blokuje późniejszej próby.
+- Zachowana weryfikacja podpisu i SHA-256, Beta bez PIN-u i SQLite v22 bez migracji. Stable `main` bez zmian.

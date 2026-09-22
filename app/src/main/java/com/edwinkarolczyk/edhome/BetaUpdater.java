@@ -41,6 +41,7 @@ import java.util.concurrent.Executors;
  */
 public final class BetaUpdater {
     private static final long POLL_MS = 30000L;
+    private static final long AUTO_CHECK_MS = 15L * 60L * 1000L;
     private static final int MAX_MANIFEST = 16384;
     private final Activity activity;
     private final SharedPreferences prefs;
@@ -51,7 +52,12 @@ public final class BetaUpdater {
             if (!running) return;
             if (BuildConfig.DIAGNOSTICS_ENABLED) {
                 if (activeDownload >= 0) inspectDownload(false);
-                check(false);
+                long now = android.os.SystemClock.elapsedRealtime();
+                if (lastAutomaticCheckMs < 0
+                        || now - lastAutomaticCheckMs >= AUTO_CHECK_MS) {
+                    lastAutomaticCheckMs = now;
+                    check(false);
+                }
             }
             handler.postDelayed(this, POLL_MS);
         }
@@ -60,6 +66,9 @@ public final class BetaUpdater {
     private boolean checking;
     private boolean notifying;
     private boolean verifying;
+    private long lastAutomaticCheckMs = -1;
+    // Single-flight installer: only an explicit user retry may reopen same APK.
+    private File installerStartedFor;
     private long activeDownload = -1;
     private int targetCode;
     private String expectedHash = "";
@@ -318,7 +327,8 @@ public final class BetaUpdater {
     }
 
     private void inspectFile() {
-        if (targetFile == null || !targetFile.exists() || verifying) return;
+        if (targetFile == null || !targetFile.exists() || verifying
+                || targetFile.equals(installerStartedFor)) return;
         verifying = true;
         File candidate = targetFile;
         String expected = expectedHash;
@@ -328,6 +338,7 @@ public final class BetaUpdater {
             handler.post(() -> {
                 verifying = false;
                 if (correct) {
+                    if (candidate.equals(installerStartedFor)) return;
                     DiagnosticLog.event("UPDATE_APK_VERIFIED");
                     if (!notifying) {
                         notifying = true;
@@ -428,6 +439,11 @@ public final class BetaUpdater {
     }
 
     private void install(File apk) {
+        if (apk == null || !apk.exists()) return;
+        if (apk.equals(installerStartedFor)) {
+            DiagnosticLog.event("UPDATE_INSTALL_ALREADY_OPEN");
+            return;
+        }
         try {
             if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
                 DiagnosticLog.event("UPDATE_INSTALL_PERMISSION_NEEDED");
@@ -443,6 +459,7 @@ public final class BetaUpdater {
             action.setDataAndType(uri, "application/vnd.android.package-archive");
             action.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(action);
+            installerStartedFor = apk;
             DiagnosticLog.event("UPDATE_INSTALLER_OPENED");
         } catch (Exception failure) {
             DiagnosticLog.error("UPDATE_INSTALLER", failure);
@@ -462,6 +479,7 @@ public final class BetaUpdater {
         expectedHash = "";
         releaseNotes = "Aktualizacja wybrana z plików urządzenia. Zawsze sprawdzamy identyfikator i podpis.";
         targetFile = candidate;
+        installerStartedFor = null;
         notifying = false;
         background.execute(() -> {
             boolean copied = false;
@@ -497,6 +515,8 @@ public final class BetaUpdater {
             inform("Brak zweryfikowanego APK w tej sesji. Sprawdź aktualizacje.");
             return;
         }
+        // An explicit retry after Android's installer was cancelled.
+        installerStartedFor = null;
         inspectFile();
     }
 
