@@ -102,3 +102,10 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Kopia do czatu ma konfigurowalny limit **5 000 / 12 000 (domyślnie) / 20 000 znaków**, pobiera najnowsze kompletne linie i opisuje pominięcie starszych wpisów. Nie zmienia limitu przechowywania diagnostyki: bieżący i poprzedni plik po 1 MB.
 - Eksport `.txt` zawiera całą zachowaną historię z obu segmentów (poprzednio używał podglądu obciętego do 160 tys. znaków); nie usuwa logów i nie zapisuje prywatnych danych w diagnostyce. Odczyt UTF-8 dekoduje cały segment, bez dzielenia polskich znaków między bloki.
 - Bez migracji SQLite v22; Stable `main` bez zmian. Testu Android UI na fizycznym telefonie CI nie zastępuje.
+
+
+## 0.5.0-beta.9.2 — kompaktowy wybór stylu
+
+- Ustawienia: sześć wysokich kart motywów zastąpiono pojedynczą kartą z rozwijaną listą, krótkim opisem wskazanego motywu i przyciskiem „Zastosuj styl”.
+- Początkowo zaznaczony jest aktualny motyw, zmiana wyboru w menu sama nie zapisuje ustawień; po zatwierdzeniu zostają te same nazwy w preferencjach i kopii JSON. Zmiana nie wymaga migracji SQLite v22.
+- Zachowano poprawkę zapobiegającą ponownemu dodaniu karty do widoku, limit kopiowania logów i pełny eksport .txt. Stable `main` bez zmian; test interakcji na urządzeniu pozostaje osobny.

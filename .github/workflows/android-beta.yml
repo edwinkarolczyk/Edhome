@@ -298,14 +298,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.5.0-beta.9.1-signed-apk
+          name: EDHOME-0.5.0-beta.9.2-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.9.1 — naprawiono awarię Ustawień, kopiowanie logów do czatu z limitem 5/12/20 tys. znaków i pełny eksport .txt. SQLite v22 bez migracji."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.5.0-beta.9.2 — motywy w Ustawieniach zebrane w jedno rozwijane menu zamiast sześciu dużych kart; opis wybranego stylu i przycisk Zastosuj. SQLite v22 bez migracji."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

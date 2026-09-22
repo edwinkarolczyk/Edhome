@@ -38,6 +38,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.Spinner;
 import android.widget.ScrollView;
 import android.widget.HorizontalScrollView;
@@ -4835,10 +4836,7 @@ public final class MainActivity extends Activity {
 
     private void settings() {
         header("Ustawienia");
-        note("Aktywny styl: " + skin.name
-            + " • sześć wariantów tej samej aplikacji bez zmiany danych.");
-        note("Wybierz styl i sprawdź go od razu. Zmiana działa dla "
-            + "całej aplikacji i pozostaje po ponownym uruchomieniu.");
+        note("Aktywny styl: " + skin.name + " • zmiana wyglądu nie zmienia danych.");
         LinearLayout gestures = card();
         gestures.addView(text("Kafelki • czas przytrzymania", 19, true));
         gestures.addView(text("Puść po krótszym przytrzymaniu dla menu. "
@@ -4884,7 +4882,16 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
             render();
         });
-        // card() already attaches gestures to body. Adding it twice crashes Android.
+        // One compact selector; card() attaches itself to body exactly once.
+        LinearLayout appearance = card();
+        appearance.addView(text("Wygląd • motyw aplikacji", 19, true));
+        Spinner themeChoice = new Spinner(this);
+        themeChoice.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(UiSkin.THEMES)));
+        int currentTheme = java.util.Arrays.asList(UiSkin.THEMES)
+            .indexOf(skin.name);
+        themeChoice.setSelection(Math.max(0, currentTheme));
+        appearance.addView(themeChoice);
         String[] descriptions = {
             "Ciemny granat • mięta • wyraźne kafle",
             "Leśna zieleń • ciepłe, naturalne akcenty",
@@ -4893,19 +4900,28 @@ public final class MainActivity extends Activity {
             "WMM • warsztatowy grafit • turkusowe akcenty",
             "Trener 2 • głęboka czerń • czerwone akcenty"
         };
-        for (int i = 0; i < UiSkin.THEMES.length; i++) {
-            String theme = UiSkin.THEMES[i];
-            String description = descriptions[i];
-            LinearLayout example = card();
-            example.addView(text((skin.name.equals(theme) ? "✓  " : "")
-                + theme, 18, true));
-            example.addView(text(description, 13, false));
-            smallButton(example, "Wybierz motyw " + theme, () -> {
-                prefs.edit().putString("theme", theme).apply();
-                DiagnosticLog.event("THEME_CHANGED");
-                render();
-            });
-        }
+        TextView themeDescription = text(
+            descriptions[Math.max(0, currentTheme)], 13, false);
+        appearance.addView(themeDescription);
+        themeChoice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view,
+                    int position, long id) {
+                themeDescription.setText(descriptions[position]);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        smallButton(appearance, "Zastosuj styl", () -> {
+            int choice = themeChoice.getSelectedItemPosition();
+            if (choice < 0 || choice >= UiSkin.THEMES.length) return;
+            String selectedTheme = UiSkin.THEMES[choice];
+            if (skin.name.equals(selectedTheme)) return;
+            if (!prefs.edit().putString("theme", selectedTheme).commit()) {
+                alert("Nie udało się zapisać motywu.");
+                return;
+            }
+            DiagnosticLog.event("THEME_CHANGED");
+            render();
+        });
         note("Nazwa gospodarstwa");
         EditText name = field("Nazwa gospodarstwa", false);
         name.setText(prefs.getString("household", "Moje gospodarstwo"));

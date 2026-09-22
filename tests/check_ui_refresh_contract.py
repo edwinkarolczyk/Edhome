@@ -64,6 +64,12 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 53" in gradle
+assert "versionCode 54" in gradle
 assert "versionName '0.5.0'" in gradle
-print("6 themes, unlimited configurable tiles, drag, backup and SQLite v22: PASS")
+settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
+assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
+assert 'themeChoice.setSelection(Math.max(0, currentTheme));' in settings
+assert 'smallButton(appearance, "Zastosuj styl"' in settings
+assert 'themeDescription.setText(descriptions[position]);' in settings
+assert 'for (int i = 0; i < UiSkin.THEMES.length; i++)' not in settings
+print("6 themes via compact dropdown, unlimited configurable tiles, drag, backup and SQLite v22: PASS")

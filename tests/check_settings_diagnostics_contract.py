@@ -15,6 +15,10 @@ assert "body.addView(gestures);" not in settings, "Settings attaches same card t
 assert "gestures.addView(shortHold);" in settings
 assert "gestures.addView(dragHold);" in settings
 assert "smallButton(gestures" in settings
+assert "LinearLayout appearance = card();" in settings
+assert "body.addView(appearance);" not in settings
+assert 'themeChoice.setSelection(Math.max(0, currentTheme));' in settings
+assert 'prefs.edit().putString("theme", selectedTheme).commit()' in settings
 assert "int[] chatLimits = {5000, 12000, 20000};" in main
 assert "chatSize.setSelection(1);" in main
 assert "DiagnosticLog.readForChat(limit)" in main
@@ -25,5 +29,5 @@ assert "Math.max(1000, Math.min(MAX_CHAT_CHARS, requestedChars))" in log
 assert "content.length() <= limit" in log and "firstNewline + 1" in log
 assert "readInto(previous, out);" in log and "readInto(current, out);" in log
 assert "new String(bytes.toByteArray(), StandardCharsets.UTF_8)" in log
-assert "versionCode 53" in gradle and "versionNameSuffix '-beta.9.1'" in gradle
+assert "versionCode 54" in gradle and "versionNameSuffix '-beta.9.2'" in gradle
 print("Settings single-parent view, clipboard 5k/12k/20k chars, complete .txt retention: PASS")
