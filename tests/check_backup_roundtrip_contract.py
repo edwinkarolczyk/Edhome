@@ -18,7 +18,7 @@ numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
 global_null=set(re.findall(r'"([^"]+)"\.equals\(key\)',
     nulls.split('|| ("storage_items".equals(definition[0])',1)[0]))
-scoped={"storage_items":{"lent_to"},
+scoped={"storage_items":{"lent_to","parent_box_id"},
         "pantry_purchase_prices":{"shopping_id","pantry_id","quantity_milli"}}
 for table,columns in manifest.items():
     info=db.execute('PRAGMA table_info("'+table+'")').fetchall()
