@@ -117,7 +117,7 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 | Kolejność | Obszar / rezultat | Kryterium odbioru |
 |---|---|---|
 | 1 | Domknąć bieżącą betę 0.3.4 (SQLite v11, aktualizacje i testy użytkowe) | CI zielone; migracje danych i test telefonu/tabletu; odróżnić wydaną wersję od nieopublikowanego kodu. |
-| 2 | UI, panel i Miejsca | Sześć motywów; dowolne/dodawane/ukrywane kafelki, rozmiary, przeciąganie całego kafelka; tryb tabletu w **tym samym APK** z realnym ograniczeniem uprawnień; nazwy i rodzaje miejsc tworzone przez użytkownika; pudełko w pudełku bez cykli. |
+| 2 | UI, panel i Miejsca | Sześć motywów; **wszystkie wejścia w katalogu kafelków, bez limitu 9**; dodawanie/ukrywanie/usuwanie samych skrótów, pełna edycja każdego (cel, nazwa, ikona, kolor, rozmiar, pozycja), przeciąganie całego kafelka; także Minutniki, Zakupy, PayCheck, Odpady i wszystkie Czynności. Tryb tabletu w **tym samym APK** z kontrolą uprawnień; własne Miejsca i pudełka bez cykli. |
 | 3 | Czynności ↔ Kalendarz ↔ Miejsca | Dwa formularze czynności, trzy rodzaje daty sezonowej, reguła terminu per czynność, wspólne ID i jeden stan widoczny w wielu ekranach; planer łączy grafik, dostępność, czas i obciążenie. |
 | 4 | Spiżarnia ↔ Zakupy ↔ Skaner | Dwa tryby skanowania. Dodawanie seryjne + zgodna licencyjnie baza produktów; wyciąganie domyślnie -1 po ustawianym odliczaniu, powtórny odczyt ignorowany, zmiana liczby restartuje czas; „Do dodania do [miejsce]” z lokalizacją per pozycja zakupów; historia i testy podwójnego skanu. |
 | 5 | Remanent i zabezpieczenie danych | Konflikt ponownej weryfikacji zmienionych pozycji bez utraty reszty; kopie JSON, lokalne i NAS; testy migracji i odtwarzania. |
@@ -169,3 +169,16 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 | Utwardzenie i eksploatacja | Backup wersjonowany na osobny nośnik, test przywrócenia, migracje, aktualizacja usługi, zasilanie oraz opcjonalny VPN do dostępu zdalnego. | Awaria NAS/Huba nie kasuje jedynych danych; API/SMB nie są otwarte wprost do internetu. |
 
 **Dla wskazanego D-Link DNS-320L rekomendowany wariant B:** NAS wyłącznie na backupy/eksporty/załączniki po weryfikacji bezpieczeństwa, API na mini-PC lub innym zgodnym i aktualizowanym urządzeniu. Alternatywne uruchamianie niestandardowego oprogramowania na NAS pozostaje eksperymentem, nie bazową architekturą. Nie polegać na starym SMB1 ani jednym nośniku backupu. W tym czacie jedynie teoria i dokumentacja na `beta`; nie zmieniać APK, kodu ani `main`.
+
+
+## Korekta panelu po zrzutach 0.5.0-beta.2 — **kafelki bez limitu i pełny edytor** (22.09.2026)
+
+**To zatwierdzone wymaganie, nie deklaracja wykonania.** Na pokazanym ekranie widać dziewięć głównych kafelków, natomiast Minutniki urządzeń, Lista zakupów, PayCheck — wspólny budżet, Odpady, wszystkie Czynności i Diagnostyka Beta są odrębnymi przyciskami poza siatką. **Tak ma nie pozostać.** Zmieniono nadrzędny rejestr decyzji i §26 specyfikacji; historyczny opis 0.3.3-beta.2 z zakazem zmiany celu skrótu już nie obowiązuje.
+
+| Etap prac (nie przypisywać numeru wydania bez potwierdzenia planu gałęzi kodu) | Rezultat | Test odbiorowy |
+|---|---|---|
+| **Najbliższy inkrement panelu — obok dalszego PayCheck, a nie zamiast niego** | Katalog celów wszystkich modułów oraz skrótów do podwidoków (Minutniki, Zakupy, PayCheck wspólny/osobisty po uprawnieniach, Odpady, Czynności, Na dziś, Diagnostyka Beta itd.). Usunięcie stałego dolnego menu skrótów po przeniesieniu wejść do katalogu. | Każdą z funkcji obecnie występujących pod kartą „Najbliższe czynności” można dodać jako kafelek i otworzyć z niego; brak utraty istniejących funkcji. |
+| **Pełny edytor każdego kafelka** | Konfigurowalne: cel moduł/widok/dozwolony obiekt, własna nazwa, ikona z biblioteki, kolor, rozmiar (mały/podwójny), pozycja i widoczność; kilka skrótów do tego samego celu; menu przytrzymania Edytuj / Przesuń / Ukryj/Usuń skrót, pełne przeciąganie. | 15+ kafelków w przewijanej/responsywnej siatce; zmiana celu i pozostałych pól dla **domyślnego i nowego** kafelka, swobodna kolejność; żaden skrót nie kasuje danych modułu. |
+| **Trwałość, tryby, bezpieczeństwo** | Konfiguracja w bazie i JSON, migracja bez resetu, odrębny układ telefonu i współdzielonego tabletu, ponowna kontrola uprawnień docelowego ekranu. | Restart/import zachowuje cały układ; brak możliwości otwarcia prywatnego PayCheck z tabletu przez zmianę celu; Diagnostyka tylko Beta. |
+
+**3×3 to przykład widocznego fragmentu siatki na telefonie, nie ograniczenie danych ani stała lista systemowych modułów.** Szczegóły: [specyfikacja §26](SPECYFIKACJA_CALOSC.md#26-panel-główny--w-pełni-edytowalne-kafelki-bez-limitu-dziewięciu-doprecyzowanie-edwina-22092026). W tym czacie **tylko dokumentacja na `beta`**, bez zmian kodu, APK i `main`.
