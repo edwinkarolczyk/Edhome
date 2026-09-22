@@ -52,3 +52,14 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Poza zwykłą kopią EDHOME prywatny sejf pozostaje osobny. Nie modyfikować `main` i nie nazywać tego Stable bez akceptacji Edwina.
 
 **Test na telefonie:** (1) dodaj co najmniej 15 kafelków i zmień cel jednego pierwotnego; (2) przenieś Minutniki i PayCheck do siatki; (3) sprawdź po restarcie/eksporcie/importcie, że układ pozostał; (4) w testowym sejfie dodaj transakcję, zapisz zaszyfrowaną kopię, zaimportuj dwa razy — drugi import powinien dopisać 0; (5) błędne hasło kopii i uszkodzony plik mają odrzucić import bez zmiany salda. **Nie testować na jedynej kopii realnych danych.**
+
+
+## 0.5.0-beta.5 — ceny zakupów w spiżarni
+
+- Wydanie [0.5.0-beta.5](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.5), `versionCode=48`, SQLite `v22`. CI potwierdziło kompilację Beta/Stable, migracje i kontrakty cen; odbiór interfejsu i aktualizacji na telefonie nadal wymaga testu.
+- Lista zakupów: przy oznaczaniu „Kupione” pojawia się dobrowolna cena **za jedną wskazaną jednostkę pozycji** (np. 1 szt./kg/l), opcjonalny sklep lub przycisk „Kupione bez ceny”. Nie podano ceny = **nieznana**, nigdy 0 zł. „Anuluj” nie zmienia stanu.
+- Zakup i przyjęcie do magazynu to **odrębne fakty**: dopiero potwierdzone przyjęcie wiąże zapis ceny z konkretnym produktem i zmienia liczbę opakowań. Karta produktu pokazuje ostatnią powiązaną cenę oraz historię dat i sklepów; nie porównuje automatycznie różnych jednostek/opakowań.
+- Stawki są przechowywane w pełnych groszach, zdarzenia mają identyfikator operacji. Dodatkowa tabela `pantry_purchase_prices` migruje bez kasowania historycznych produktów i transakcji; zwykły JSON EDHOME zawiera jej zwalidowane rekordy, starsze kopie nadal akceptowane. Ceny produktów mogą być udostępniane w przyszłym trybie tabletu **bez dostępu do prywatnych kont PayCheck**.
+- **Żaden zakup, skan, przyjęcie, wyjęcie ani remanent nie księguje sam pieniędzy w PayCheck.** Powiązanie paragonu z jedną rzeczywistą transakcją, wielkości paczek, korekty błędnych cen i późniejsza szacunkowa wartość całego zapasu należą do kolejnych inkrementów 0.5.x.
+
+**Odbiór ręczny:** zrób kopię przed aktualizacją; utwórz testową pozycję Ryż z jednostką „szt.”, zaznacz Kupione z ceną 6,49 zł i sklepem; sprawdź, że PayCheck i stan spiżarni nie zmieniły się. Przyjmij ją do konkretnej karty ryżu, sprawdź cenę na karcie i historię; kup drugi raz przez nowy wpis z inną ceną, sprawdź, że obie ceny pozostają. Powtórz scenariusz „Kupione bez ceny”, eksport/import JSON v22 oraz przywrócenie kopii v21. Test wykonuj na danych próbnych.
