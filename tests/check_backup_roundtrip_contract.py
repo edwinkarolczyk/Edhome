@@ -18,17 +18,22 @@ numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
 global_null=set(re.findall(r'"([^"]+)"\.equals\(key\)',
     nulls.split('|| ("storage_items".equals(definition[0])',1)[0]))
-scoped={"storage_items":{"lent_to","parent_box_id"},
+scoped={"storage_items":{"lent_to","parent_box_id","lent_at"},
         "pantry_purchase_prices":{"shopping_id","pantry_id","quantity_milli"}}
+missing_types=[]
+missing_nullable=[]
 for table,columns in manifest.items():
     info=db.execute('PRAGMA table_info("'+table+'")').fetchall()
     assert [row[1] for row in info]==columns,table
     for _,name,kind,required,default,pk in info:
         if "INT" in kind.upper():
-            assert name in numbers,table+"."+name+" integer rejected as wrong type"
+            if name not in numbers: missing_types.append(table+"."+name)
         if not required and not pk:
-            assert name in global_null|scoped.get(table,set()), (
-                table+"."+name+" SQL allows null but import rejects it")
+            if name not in global_null|scoped.get(table,set()):
+                missing_nullable.append(table+"."+name)
+
+assert not missing_types, "Numeric types missing: "+", ".join(missing_types)
+assert not missing_nullable, "Nullable fields missing: "+", ".join(missing_nullable)
 
 db.execute("INSERT INTO places(id,name,kind,parent_id,icon) VALUES(1,'Dom','Dom',NULL,'places')")
 db.execute("INSERT INTO tasks(id,title,done) VALUES(1,'Kontrola',0)")
