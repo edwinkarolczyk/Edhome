@@ -31,3 +31,13 @@ Priorytet: prywatne profile z izolacją i ochroną przed dostępem na wspólnym 
 - SQLite v20→v21 dodaje `paycheck_goals` oraz `paycheck_goal_allocations`; backup zawiera obie tabele, odtwarza kopie v20 i starsze. Weryfikacja odrzuca osierocone wpłaty, duplikaty operacji i sumę ponad cel.
 
 Odbiór: cel OC 700 zł, odłożenie 500 zł, potem 200 zł; pozostało 0 zł, saldo wspólne bez zmian. Anulowanie albo ponowny zapis tego samego UUID nie zmienia odłożonej kwoty. Testy CI nie zastępują testu na Huawei.
+
+## 0.5.0-beta.3 — szyfrowany prywatny sejf PayCheck
+
+- Beta nadal uruchamia się bez PIN-u. W PayCheck osobny przycisk „Prywatny sejf PayCheck”; przy pierwszym wejściu użytkownik tworzy **oddzielne hasło 12–64 znaków** i potwierdza je. Prywatny ekran i formularz hasła mają FLAG_SECURE, aby nie trafiać na zrzuty ekranu i podgląd ostatnich aplikacji.
+- Dane jednej lokalnej osoby (prywatny przychód, wydatek, kategoria, kwota, opis i data) są szyfrowane AES-256-GCM z losowym IV dla każdego wpisu. Klucz jest wyprowadzony z hasła i losowej soli PBKDF2-HMAC-SHA256 (310 000 iteracji). Hasło i klucz **nie są zapisywane**. W lokalnej oddzielnej bazie SQLite pozostają tylko UUID operacji i ciphertext; powtórna operacja nie nalicza drugi raz.
+- Po opuszczeniu aplikacji lub prywatnego ekranu sejf jest blokowany, bufor klucza zerowany, a ekran prywatny usuwany przed zdjęciem FLAG_SECURE. Po pięciu błędnych hasłach blokada na pięć minut. Wspólny budżet pozostaje dostępny bez hasła i nie widzi prywatnych kwot.
+- **WAŻNE: prywatne wpisy nie wchodzą do zwykłej kopii EDHOME JSON i nie są przenoszone między telefonami**; Android Auto Backup pozostaje wyłączony. Nie odinstalowywać aplikacji. Utrata hasła lub telefonu = brak możliwości odzyskania prywatnych danych. Bezpieczny eksport i wiele oddzielnych profili pozostają odrębnym etapem; nie podawać fikcyjnych zapewnień o odzyskiwaniu.
+- Nie zmienia się główna baza SQLite v21, nie ma migracji wspólnych danych. Lista zakupów, spiżarnia i energia nigdy same nie księgują prywatnych wpisów.
+
+Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i wydatek 12,50 zł; prywatne saldo 187,50 zł, **wspólne bez zmian**. Zablokuj sejf, spróbuj otworzyć złym hasłem; po wyjściu z aplikacji hasło wymagane ponownie. Zwykły eksport JSON nie może zawierać prywatnej kwoty ani opisu.

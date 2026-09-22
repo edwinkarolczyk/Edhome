@@ -71,6 +71,10 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
+    private PrivatePaycheckVault.Session privatePaycheckSession;
+    private AlertDialog privateAuthDialog;
+    private AlertDialog privateEntryDialog;
+    private boolean privateNeedsRender;
     private LinearLayout root;
     private LinearLayout body;
     private boolean unlocked;
@@ -145,6 +149,31 @@ public final class MainActivity extends Activity {
         render();
     }
 
+    @Override public void onPause() {
+        // Hide every private view BEFORE dropping FLAG_SECURE or taking a Recents snapshot.
+        if (privateAuthDialog != null) {
+            AlertDialog dialog = privateAuthDialog;
+            privateAuthDialog = null;
+            dialog.dismiss();
+        }
+        if (privateEntryDialog != null) {
+            AlertDialog dialog = privateEntryDialog;
+            privateEntryDialog = null;
+            dialog.dismiss();
+        }
+        if (privatePaycheckSession != null) {
+            privatePaycheckSession.lock();
+            privatePaycheckSession = null;
+        }
+        if ("paycheck_private".equals(screen)) {
+            if (root != null) root.removeAllViews();
+            screen = "paycheck";
+            privateNeedsRender = true;
+        }
+        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        super.onPause();
+    }
+
     @Override public void onStop() {
         super.onStop();
         if (!BetaUpdater.isBeta()) unlocked = false;
@@ -157,6 +186,10 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
         if (root != null && !unlocked) render();
+        if (privateNeedsRender && root != null) {
+            privateNeedsRender = false;
+            render();
+        }
         if (unlocked && updater != null) updater.start();
         if (unlocked && root != null && "timers".equals(screen)) render();
     }
@@ -169,7 +202,8 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (unlocked && "updates_advanced".equals(screen)) go("updates");
+        if (unlocked && "paycheck_private".equals(screen)) go("paycheck");
+        else if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
         else if (unlocked && "storage".equals(screen)) go("places");
         else if (unlocked && "shopping".equals(screen)) go("pantry");
@@ -284,6 +318,11 @@ public final class MainActivity extends Activity {
     }
 
     private void go(String destination) {
+        if (!"paycheck_private".equals(destination)
+                && privatePaycheckSession != null) {
+            privatePaycheckSession.lock();
+            privatePaycheckSession = null;
+        }
         screen = destination;
         if (!"home".equals(destination)) homeEditMode = false;
         if (unlocked && updater != null) updater.start();
@@ -298,6 +337,11 @@ public final class MainActivity extends Activity {
     private void render() {
         if (root == null || prefs == null) return;
         palette();
+        if ("paycheck_private".equals(screen) && privatePaycheckSession != null
+                && privatePaycheckSession.active())
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        else if (privateAuthDialog == null)
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         root.removeAllViews();
         root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
@@ -332,6 +376,7 @@ public final class MainActivity extends Activity {
                 case "places": places(); break;
                 case "storage": storage(); break;
                 case "paycheck": paycheck(); break;
+                case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
                 case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
                 case "audit": audit(); break;
@@ -2685,9 +2730,9 @@ public final class MainActivity extends Activity {
 
     private void paycheck() {
         header("PayCheck • wspólny budżet");
-        note("Pierwszy etap: tylko wspólne, ręcznie zatwierdzane transakcje. "
-            + "Prywatne profile pozostają niedostępne, dopóki nie mają "
-            + "własnej ochrony przed dostępem ze wspólnego tabletu.");
+        note("Wspólne finanse pozostają dostępne bez PIN-u Bety. "
+            + "Prywatne finanse mają osobny sejf z hasłem i szyfrowaniem.");
+        button("🔒 Prywatny sejf PayCheck", this::openPrivatePaycheck);
         note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
             + "Podaj rzeczywistą kwotę dopiero po dokonanej płatności.");
         title("Saldo wspólne: " + MoneyRules.format(
@@ -2759,6 +2804,214 @@ public final class MainActivity extends Activity {
         }
         if(count==0)note("Brak transakcji wspólnych. Niczego nie księgujemy automatycznie.");
         sharedPaycheckGoals();
+    }
+
+    private void openPrivatePaycheck() {
+        if (privatePaycheckSession != null && privatePaycheckSession.active()) {
+            go("paycheck_private");
+            return;
+        }
+        final boolean first = !PrivatePaycheckVault.configured(this);
+        if (!first && PrivatePaycheckVault.cooldownMillis(this) > 0) {
+            alert("Sejf czasowo zablokowany po błędnych hasłach. "
+                + "Spróbuj za kilka minut.");
+            return;
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(14), dp(18), dp(14));
+        form.addView(text(first
+            ? "Utwórz osobne hasło sejfu: 12–64 znaki. "
+                + "Nie jest to PIN aplikacji. Bez hasła nie odzyskasz danych. "
+                + "Sejf nie wchodzi do zwykłej kopii JSON."
+            : "Wpisz hasło prywatnego sejfu. "
+                + "Wspólny PayCheck pozostaje bez zmian.", 14, false));
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setHint("Hasło prywatnego sejfu");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        form.addView(password);
+        EditText confirmation = null;
+        if (first) {
+            confirmation = new EditText(this);
+            confirmation.setSingleLine(true);
+            confirmation.setHint("Powtórz hasło");
+            confirmation.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            confirmation.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+            confirmation.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+            form.addView(confirmation);
+        }
+        final EditText again = confirmation;
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(first ? "Utwórz prywatny sejf" : "Otwórz prywatny sejf")
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton(first ? "Utwórz" : "Otwórz", null)
+            .create();
+        privateAuthDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (privateAuthDialog == dialog) privateAuthDialog = null;
+            if (!"paycheck_private".equals(screen))
+                getWindow().clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        });
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                char[] secret = password.getText().toString().toCharArray();
+                char[] confirm = again == null ? null
+                    : again.getText().toString().toCharArray();
+                try {
+                    if (first && (!PrivatePaycheckCrypto.validPassword(secret)
+                            || !java.util.Arrays.equals(secret, confirm))) {
+                        password.setError("Hasła muszą być identyczne "
+                            + "i mieć 12–64 znaki.");
+                        return;
+                    }
+                    if (!first && PrivatePaycheckVault.cooldownMillis(this) > 0) {
+                        password.setError("Poczekaj kilka minut.");
+                        return;
+                    }
+                    PrivatePaycheckVault.Session session = first
+                        ? PrivatePaycheckVault.configure(this, secret)
+                        : PrivatePaycheckVault.unlock(this, secret);
+                    PrivatePaycheckVault.clearFailures(this);
+                    privatePaycheckSession = session;
+                    password.getText().clear();
+                    if (again != null) again.getText().clear();
+                    dialog.dismiss();
+                    go("paycheck_private");
+                } catch (Exception denied) {
+                    if (!first) PrivatePaycheckVault.recordFailure(this);
+                    password.setError(first
+                        ? "Nie utworzono sejfu. Spróbuj ponownie."
+                        : "Nieprawidłowe hasło lub uszkodzony sejf.");
+                } finally {
+                    java.util.Arrays.fill(secret, '\0');
+                    if (confirm != null) java.util.Arrays.fill(confirm, '\0');
+                }
+            }));
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show();
+        if (dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    private void privatePaycheck() {
+        if (privatePaycheckSession == null || !privatePaycheckSession.active()) {
+            go("paycheck");
+            return;
+        }
+        header("🔒 PayCheck • prywatny sejf");
+        note("Tylko ten telefon, osobne hasło i zaszyfrowane wpisy. "
+            + "Sejf zamyka się po opuszczeniu aplikacji. Prywatne dane nie "
+            + "trafiają do wspólnej historii, diagnostyki ani kopii JSON.");
+        note("UWAGA: nie odinstalowuj aplikacji. "
+            + "Utrata hasła lub telefonu oznacza utratę tych prywatnych danych.");
+        button("🔒 Zablokuj i wróć do wspólnego", () -> go("paycheck"));
+        final java.util.List<PrivatePaycheckVault.Entry> entries;
+        try {
+            entries = PrivatePaycheckVault.entries(this, privatePaycheckSession);
+        } catch (Exception damaged) {
+            go("paycheck");
+            alert("Nie można otworzyć prywatnych danych. "
+                + "Sprawdź hasło lub integralność sejfu.");
+            return;
+        }
+        long balance = 0;
+        try {
+            for (PrivatePaycheckVault.Entry entry : entries)
+                balance = Math.addExact(balance,
+                    "income".equals(entry.kind)
+                        ? entry.amountGrosz : -entry.amountGrosz);
+        } catch (ArithmeticException overflow) {
+            go("paycheck");
+            alert("Saldo sejfu przekracza dopuszczalny zakres.");
+            return;
+        }
+        title("Saldo prywatne: " + MoneyRules.format(balance));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList("Wydatek −", "Przychód +")));
+        body.addView(kind);
+        Spinner category = new Spinner(this);
+        category.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        body.addView(category);
+        EditText amount = field("Kwota prywatna w PLN, np. 12,50", false);
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText noteField = field("Opis prywatny (opcjonalnie)", false);
+        button("Dodaj prywatną transakcję", () -> {
+            if (privatePaycheckSession == null
+                    || !privatePaycheckSession.active()) return;
+            final long grosz;
+            try {
+                grosz = MoneyRules.parse(amount.getText().toString());
+            } catch (IllegalArgumentException error) {
+                amount.setError(error.getMessage());
+                return;
+            }
+            String description = noteField.getText().toString().trim();
+            if (description.length() > 160) {
+                noteField.setError("Opis ma maks. 160 znaków.");
+                return;
+            }
+            String type = kind.getSelectedItemPosition() == 1
+                ? "income" : "expense";
+            String group = MoneyRules.CATEGORIES[
+                category.getSelectedItemPosition()];
+            String operationId = java.util.UUID.randomUUID().toString();
+            AlertDialog confirmationDialog = new AlertDialog.Builder(this)
+                .setTitle("Potwierdź prywatną transakcję")
+                .setMessage(("income".equals(type) ? "Przychód: " : "Wydatek: ")
+                    + MoneyRules.format(grosz) + "\n"
+                    + MoneyRules.categoryLabel(group)
+                    + "\\nBez wpisu do wspólnego PayCheck.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton("Zapisz w sejfie", (d,w) -> {
+                    if (privatePaycheckSession == null
+                            || !privatePaycheckSession.active()) return;
+                    try {
+                        String status = PrivatePaycheckVault.add(
+                            this, privatePaycheckSession, operationId,
+                            type, group, grosz, description);
+                        if ("COMMITTED".equals(status)) render();
+                        else alert("Ta prywatna operacja była już zapisana.");
+                    } catch (Exception error) {
+                        alert("Nie zapisano prywatnej transakcji.");
+                    }
+                }).create();
+            privateEntryDialog = confirmationDialog;
+            confirmationDialog.setOnDismissListener(d -> {
+                if (privateEntryDialog == confirmationDialog)
+                    privateEntryDialog = null;
+            });
+            confirmationDialog.show();
+            if (confirmationDialog.getWindow() != null)
+                confirmationDialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        });
+        title("Historia prywatna • " + entries.size());
+        int shown = 0;
+        for (PrivatePaycheckVault.Entry entry : entries) {
+            if (shown++ >= 40) break;
+            LinearLayout row = card();
+            boolean income = "income".equals(entry.kind);
+            row.addView(text((income ? "+ " : "− ")
+                + MoneyRules.format(entry.amountGrosz), 18, true));
+            row.addView(text(MoneyRules.categoryLabel(entry.category)
+                + (entry.note.isEmpty() ? "" : " • " + entry.note), 14, false));
+            row.addView(text(Instant.ofEpochMilli(entry.createdAt)
+                .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
+                12, false));
+        }
+        if (entries.isEmpty())
+            note("Brak prywatnych wpisów. Wspólny budżet pozostaje osobny.");
     }
 
     private void sharedPaycheckGoals() {
