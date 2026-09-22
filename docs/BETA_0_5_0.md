@@ -70,3 +70,11 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Dotknięcie otwiera funkcję. Krótsze przytrzymanie **po puszczeniu** otwiera menu, a dłuższe (w trakcie trzymania) rozpoczyna przeciąganie całego kafelka; menu nie przesłania dłuższego gestu. Uchwyt ⋮⋮ pozostaje alternatywą.
 - Ustawienia → Kafelki • czas przytrzymania: krótki 300/450/600/800 ms (domyślnie 450), długi 900/1100/1400/1800 ms (domyślnie 1100), długi co najmniej 200 ms po krótkim. Oba ustawienia są w kopii JSON EDHOME i wracają po imporcie; starsze kopie dostają domyślne wartości.
 - SQLite pozostaje v22, schemat transakcji i prywatny sejf niezmienione. Testy: szerokości 320/393/600/800 dp, gesty i backup. Odbiór palcem na Huawei i tablecie jest osobnym testem użytkownika — zielone CI go nie zastępuje.
+
+
+## 0.5.0-beta.7 — diagnostyka przeciągania wielu kafelków
+
+- Usunięto przyczynę crasha `HomeTileOrder.moved:34`: podgląd używa teraz tego samego dynamicznego `HomeTileCatalog.moved` co zapis kolejności, zamiast starszego limitu dziewięciu kafelków.
+- Brak widoku kafelka, niekompletny zestaw pozycji lub nieaktualny stan przeciągania powoduje bezpieczne przerwanie gestu i zachowanie zapisanej kolejności.
+- Nowe regresje statyczne i Java obejmują >9 kafelków, skróty niestandardowe, ukrywanie, sloty i zgodność podglądu z zapisem. SQLite v22 pozostaje bez migracji.
+- Odbiór na telefonie jest osobny: aktualizacja bez odinstalowania, kilkanaście kafelków, długa/krótka interakcja, ukrywanie, edycja i restart aplikacji. Stable main bez zmian.

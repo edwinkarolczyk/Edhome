@@ -28,6 +28,10 @@ for token in (
 ):
     assert token in main, token
 
+assert 'HomeTileCatalog.moved(homeDragOrder, homeDragSource, slot)' in main
+assert 'HomeTileOrder.moved(' not in main
+assert 'HOME_TILE_DRAG_STALE' in main
+assert 'HOME_TILE_DRAG_INVALID' in main
 assert 'used + span > 3' not in main
 assert 'Math.min(widthSide, heightSide)' not in main
 for token in (
@@ -40,7 +44,7 @@ for token in (
     assert token in backup, token
 assert 'DEFAULT_SHORT_MS = 450' in layout
 assert 'DEFAULT_DRAG_MS = 1100' in layout
-assert 'versionCode 49' in gradle
-assert "versionNameSuffix '-beta.6'" in gradle
+assert 'versionCode 50' in gradle
+assert "versionNameSuffix '-beta.7'" in gradle
 assert 'DB_VERSION = 22;' in backup
 print("Adaptive home tiles, configurable drag/menu and backup settings: PASS")
