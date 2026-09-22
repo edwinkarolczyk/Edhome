@@ -124,6 +124,8 @@ final class DataBackup {
             HomeTileLayout.SHORT_KEY, HomeTileLayout.DEFAULT_SHORT_MS));
         settings.put("homeTileDragHoldMs", prefs.getInt(
             HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
+        settings.put("pantryTakeDelaySeconds", prefs.getInt(
+            PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -224,6 +226,14 @@ final class DataBackup {
                             .doubleValue() != dragHoldMs))
                 || !HomeTileLayout.validPair(shortHoldMs, dragHoldMs))
             throw new IllegalArgumentException("Nieprawidłowe czasy przytrzymania.");
+        int takeDelaySeconds = settings.optInt("pantryTakeDelaySeconds",
+            PantryTakeCountdown.DEFAULT_SECONDS);
+        if (!PantryTakeCountdown.validSeconds(takeDelaySeconds)
+                || (settings.has("pantryTakeDelaySeconds")
+                    && (!(settings.get("pantryTakeDelaySeconds") instanceof Number)
+                        || ((Number) settings.get("pantryTakeDelaySeconds"))
+                            .doubleValue() != takeDelaySeconds)))
+            throw new IllegalArgumentException("Nieprawidłowy czas wyjmowania.");
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -936,6 +946,7 @@ final class DataBackup {
                 .putString("home_tile_order", tileOrder)
                 .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
                 .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
+                .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
                 .putString("quiet_hours_end", quietEnd);
