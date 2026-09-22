@@ -22,8 +22,8 @@ for token in (
 for token in (
     '"edhome_private_paycheck"',
     '"edhome-paycheck-private.db"',
-    '"sealed TEXT NOT NULL"',
-    '"operation_id TEXT NOT NULL UNIQUE"',
+    'sealed TEXT NOT NULL',
+    'operation_id TEXT NOT NULL UNIQUE',
     'session.secret()',
     "Arrays.fill(key, (byte) 0)",
     'static long cooldownMillis(Context context)',
