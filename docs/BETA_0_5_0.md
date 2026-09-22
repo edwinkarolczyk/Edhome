@@ -118,3 +118,12 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Powtórzony identyfikator operacji daje jawny komunikat „nie zmieniono ponownie stanu”. Błąd zapisu nie powoduje automatycznego wznowienia aparatu ani podwójnego komunikatu „seria zakończona”; surowe komunikaty wyjątków SQLite nie trafiają do okna aplikacji.
 - Test kontraktu sprawdza ścieżki resetu, brak automatycznego ponowienia, atomową operację SQL oraz brak zmian SQLite v22. Odbiór aparatu i odmowy uprawnienia na prawdziwym Androidzie pozostaje osobno.
 - **Nie wprowadzono jeszcze odliczania 5 s** ani zmiany działania przy innym kodzie; to następny zatwierdzony etap. Stable `main` pozostaje bez zmian.
+
+
+## 0.5.0-beta.11 — ciągłe wyjmowanie z odliczaniem
+
+- Nowy aparat `PantryTakeCaptureActivity` tylko do wyjmowania; dodawanie +1 zachowuje dotychczasowy przepływ. Skan znanego produktu z dodatnim zapasem uruchamia automatyczne −1 po 5 s; ustawienia pozwalają zmienić czas na 3/5/8/10 s.
+- Kamera pozostaje otwarta: inny kod zastępuje oczekujące wyjęcie, resetuje licznik i **nie** odejmuje pierwszego produktu. Błędny/nieznany kod i brak zapasu nie powodują korekty. Licznik anulowany na tle, wyjściu i anulowaniu nigdy nie zapisuje zaległej operacji.
+- Ten sam kod z kolejnych klatek nie powoduje ponownych wyjęć: drugie opakowanie wymaga jawnego przycisku albo zeskanowania innego kodu. Opcja „Wyjmij teraz” omija tylko oczekiwanie, nigdy walidację i zapis transakcyjny. W trybie pojedynczym po jednym wyjęciu aparat się zamyka; w serii pozostaje do zakończenia.
+- Preferowany czas jest objęty zwykłą kopią JSON i walidacją importu; bez migracji SQLite v22. Czysty test Java sprawdza zastępowanie kodu, brak podwójnego skanu i anulowanie po tle; kompilacja Androida sprawdza dostępność klas skanera. Odbiór ciągłego skanowania na fizycznym telefonie pozostaje osobnym testem.
+- Stable `main` bez zmian.
