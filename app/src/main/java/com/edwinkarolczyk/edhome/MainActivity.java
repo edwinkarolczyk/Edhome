@@ -3231,8 +3231,8 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORT_FAILED");
                     alert("Nie udało się przygotować zaszyfrowanej kopii. Dane sejfu pozostają bez zmian.");
                 } finally {
-                    java.util.Arrays.fill(password, '\\0');
-                    java.util.Arrays.fill(repeat, '\\0');
+                    java.util.Arrays.fill(password, (char) 0);
+                    java.util.Arrays.fill(repeat, (char) 0);
                 }
             });
         });
@@ -3305,8 +3305,8 @@ public final class MainActivity extends Activity {
                         + "lub konflikt transakcji. Niczego nie nadpisano.");
                 } finally {
                     if (session != null) session.lock();
-                    java.util.Arrays.fill(vaultPass, '\\0');
-                    java.util.Arrays.fill(backupPass, '\\0');
+                    java.util.Arrays.fill(vaultPass, (char) 0);
+                    java.util.Arrays.fill(backupPass, (char) 0);
                 }
             });
         });
