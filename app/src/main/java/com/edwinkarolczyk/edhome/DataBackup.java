@@ -82,6 +82,11 @@ final class DataBackup {
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
+        settings.put("homeTileOrderV2", HomeTileCatalog.encode(
+            HomeTileCatalog.canonical(
+                prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+                prefs.getString("home_tile_order", ""),
+                BuildConfig.DIAGNOSTICS_ENABLED)));
         settings.put("timerNotificationsEnabled",
             prefs.getBoolean("timer_notifications_enabled", false));
         settings.put("quietHoursStart", prefs.getString("quiet_hours_start",
@@ -89,7 +94,13 @@ final class DataBackup {
         settings.put("quietHoursEnd", prefs.getString("quiet_hours_end",
             QuietHoursRules.DEFAULT_END));
         JSONObject appearance = new JSONObject();
-        for (String id : HOME_TILE_IDS) {
+        java.util.Set<String> tileIds = new java.util.LinkedHashSet<>(
+            java.util.Arrays.asList(HOME_TILE_IDS));
+        tileIds.addAll(HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BuildConfig.DIAGNOSTICS_ENABLED));
+        for (String id : tileIds) {
             JSONObject tile = new JSONObject();
             if (prefs.contains("tile_label_" + id))
                 tile.put("label", prefs.getString("tile_label_" + id, ""));
@@ -97,6 +108,8 @@ final class DataBackup {
                 tile.put("tint", prefs.getString("tile_tint_" + id, "default"));
             if (prefs.contains("tile_icon_" + id))
                 tile.put("icon", prefs.getString("tile_icon_" + id, id));
+            if (prefs.contains("tile_target_" + id))
+                tile.put("target", prefs.getString("tile_target_" + id, ""));
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
@@ -162,6 +175,20 @@ final class DataBackup {
         String household = settings.getString("household");
         String theme = settings.getString("theme");
         String tileOrder = settings.optString("homeTileOrder", "");
+        String tileOrderV2 = settings.has("homeTileOrderV2")
+            ? settings.getString("homeTileOrderV2") : null;
+        java.util.List<String> restoredTiles = null;
+        if (tileOrderV2 != null) {
+            restoredTiles = new java.util.ArrayList<>();
+            for (String tileId : tileOrderV2.split(",", -1)) {
+                if (tileId.isEmpty() && tileOrderV2.isEmpty()) continue;
+                if (!HomeTileCatalog.validTileId(tileId)
+                        || restoredTiles.contains(tileId))
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowy skrót lub duplikat w kopii.");
+                restoredTiles.add(tileId);
+            }
+        }
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -193,11 +220,14 @@ final class DataBackup {
         Map<String, String> labels = new HashMap<>();
         Map<String, String> tints = new HashMap<>();
         Map<String, String> icons = new HashMap<>();
+        Map<String, String> targets = new HashMap<>();
         if (appearance != null) {
             java.util.Iterator<String> keys = appearance.keys();
             while (keys.hasNext()) {
                 String id = keys.next();
-                if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id))
+                if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)
+                        && (restoredTiles == null
+                            || !restoredTiles.contains(id)))
                     throw new IllegalArgumentException("Nieznany kafelek w kopii.");
                 JSONObject tile = appearance.getJSONObject(id);
                 if (tile.has("label")) {
@@ -220,7 +250,18 @@ final class DataBackup {
                         throw new IllegalArgumentException("Nieznana ikona kafelka.");
                     icons.put(id, iconId);
                 }
+                if (tile.has("target")) {
+                    String destination = tile.getString("target");
+                    if (!HomeTileCatalog.validTarget(destination, true))
+                        throw new IllegalArgumentException("Nieznany cel kafelka.");
+                    targets.put(id, destination);
+                }
             }
+        }
+        if (restoredTiles != null) for (String id : restoredTiles) {
+            if (id.startsWith("tile_") && !targets.containsKey(id))
+                throw new IllegalArgumentException(
+                    "Własny kafelek nie ma celu w kopii.");
         }
 
         JSONObject tables = root.getJSONObject("tables");
@@ -817,16 +858,21 @@ final class DataBackup {
             .putBoolean("timer_notifications_enabled", timerNotifications)
             .putString("quiet_hours_start", quietStart)
             .putString("quiet_hours_end", quietEnd);
-        for (String id : HOME_TILE_IDS) {
-            restored.remove("tile_label_" + id)
-                .remove("tile_tint_" + id).remove("tile_icon_" + id);
-            if (labels.containsKey(id))
-                restored.putString("tile_label_" + id, labels.get(id));
-            if (tints.containsKey(id))
-                restored.putString("tile_tint_" + id, tints.get(id));
-            if (icons.containsKey(id))
-                restored.putString("tile_icon_" + id, icons.get(id));
+        for (String key : prefs.getAll().keySet()) {
+            if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
+                    || key.startsWith("tile_icon_") || key.startsWith("tile_target_"))
+                restored.remove(key);
         }
+        if (tileOrderV2 == null) restored.remove(HomeTileCatalog.ORDER_KEY);
+        else restored.putString(HomeTileCatalog.ORDER_KEY, tileOrderV2);
+        for (String id : labels.keySet())
+            restored.putString("tile_label_" + id, labels.get(id));
+        for (String id : tints.keySet())
+            restored.putString("tile_tint_" + id, tints.get(id));
+        for (String id : icons.keySet())
+            restored.putString("tile_icon_" + id, icons.get(id));
+        for (String id : targets.keySet())
+            restored.putString("tile_target_" + id, targets.get(id));
         if (!restored.commit())
             throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
     }
