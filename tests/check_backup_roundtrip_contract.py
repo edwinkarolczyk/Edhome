@@ -19,7 +19,8 @@ nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull
 global_null=set(re.findall(r'"([^"]+)"\.equals\(key\)',
     nulls.split('|| ("storage_items".equals(definition[0])',1)[0]))
 scoped={"storage_items":{"lent_to","parent_box_id","lent_at"},
-        "pantry_purchase_prices":{"shopping_id","pantry_id","quantity_milli"}}
+        "pantry_purchase_prices":{"shopping_id","pantry_id","quantity_milli"},
+        "vehicle_events":{"mileage"}}
 missing_types=[]
 missing_nullable=[]
 for table,columns in manifest.items():
