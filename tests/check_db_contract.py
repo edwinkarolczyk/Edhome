@@ -73,6 +73,12 @@ storage19 = statements(section(storage_store, "static void createTables(SQLiteDa
 paycheck20 = statements(section(paycheck_store, "static void create(SQLiteDatabase db)", "static String add(").replace("db.execSQL(", "database.execSQL("))
 goals21 = statements(section(goals_store, "static void create(SQLiteDatabase db)", "static long addGoal(").replace("db.execSQL(", "database.execSQL("))
 prices22 = statements(section(price_store, "static void create(SQLiteDatabase db)", "static String markBought(").replace("db.execSQL(", "database.execSQL("))
+# Historic installs: columns arrive only with the v23 migration.
+shopping22 = [sql.replace(", place_id INTEGER)", ")") for sql in shopping]
+receipts22 = [sql.replace(", place_id INTEGER, place_name_snapshot TEXT NOT NULL DEFAULT '')", ")")
+              for sql in receipts18]
+step23 = statements(section(upgrade, "if (oldVersion < 23)",
+                            'DiagnosticLog.event("DATABASE_MIGRATED_22_TO_23_SHOPPING_PLACES")'))
 legacy17 = statements(section(package_store, "static void fillLegacy(SQLiteDatabase db)", "static final class Pack").replace("db.execSQL(", "database.execSQL("))
 step16 = statements(section(upgrade, "if (oldVersion < 16)", 'DiagnosticLog.event("DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES")'))
 legacy_create = [sql.split(", category TEXT NOT NULL DEFAULT")[0] + ")"
@@ -92,12 +98,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 22, "Database version and backup format differ"
+assert version == backup_version == 23, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck20 + goals21 + prices22)
 expected = schema(fresh)
-assert len(expected) == 24 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 24 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -119,7 +125,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     if old >= 7:
         execute(db, step7 + shifts)
     if old >= 8:
-        execute(db, step8 + shopping)
+        execute(db, step8 + shopping22)
     if old >= 9:
         execute(db, step9)
     if old >= 10:
@@ -137,7 +143,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     if old < 7:
         execute(db, step7 + shifts)
     if old < 8:
-        execute(db, step8 + shopping)
+        execute(db, step8 + shopping22)
     if old < 9:
         execute(db, step9)
     if old < 10:
@@ -157,11 +163,12 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, pantry15)  # v14 to v15, preserves existing pantry rows
     execute(db, step16)  # v15 to v16, default unknown products to other
     execute(db, pantry17 + legacy17)  # v16 to v17, one szt. per legacy pack
-    execute(db, receipts18)  # v17 to v18, receipt ledger without changing stock
+    execute(db, receipts22)  # v17 to v18, receipt ledger without changing stock
     execute(db, storage19)  # v18 to v19, object and box QR, history
     execute(db, paycheck20)  # v19 to v20, shared-only money ledger
     execute(db, goals21)  # v20 to v21, shared goals and allocations
     execute(db, prices22)  # v21 to v22, optional purchase price history
+    execute(db, step23)  # v22 to v23, per-shopping destination
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -245,7 +252,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 16 && "pantry".equals(definition[0])' in backup
 assert 'PantryCategories.known(values.getAsString("category"))' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
@@ -274,21 +281,22 @@ assert 'task_id ASC, position ASC' in backup
 # An already-upgraded v14 installation must preserve barcode links and inventory.
 existing14 = sqlite3.connect(":memory:")
 execute(existing14, legacy_create + audit + history + rotations + places + sibling_index
-        + members + shifts + shopping + timers + pantry14)
+        + members + shifts + shopping22 + timers + pantry14)
 existing14.execute("INSERT INTO pantry(id,name,qty) VALUES (2,'Mleko',7)")
 existing14.execute("INSERT INTO pantry_barcodes(pantry_id,barcode) "
                    "VALUES(2,'5901234123457')")
 execute(existing14, pantry15)
 execute(existing14, step16)
 execute(existing14, pantry17 + legacy17)
-execute(existing14, receipts18)
+execute(existing14, receipts22)
 execute(existing14, storage19)
 execute(existing14, paycheck20)
 execute(existing14, goals21)
 execute(existing14, prices22)
+execute(existing14, step23)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
 assert existing14.execute("SELECT pantry_id,unit,size_milli FROM pantry_packages").fetchone() == (2,"szt.",1000)
 existing14.close()
-print("SQLite migrations v1–v21→v22: PASS; prices, goals, money, QR, backup: PASS")
+print("SQLite migrations v1–v22→v23: PASS; shopping places, prices, goals, QR, backup: PASS")
