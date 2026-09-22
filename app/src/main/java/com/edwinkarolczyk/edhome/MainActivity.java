@@ -4580,6 +4580,12 @@ public final class MainActivity extends Activity {
         return grid;
     }
 
+    /** Non-home action tiles keep the legacy five-argument signature. */
+    private LinearLayout updateTile(LinearLayout grid, String symbol,
+            String caption, boolean primary, Runnable callback) {
+        return updateTile(grid, "", symbol, caption, primary, callback);
+    }
+
     private LinearLayout updateTile(LinearLayout grid, String id, String symbol,
             String caption, boolean primary, Runnable callback) {
         LinearLayout row;
