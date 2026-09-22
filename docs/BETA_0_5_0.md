@@ -152,3 +152,10 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Cena jest ceną **za 1 szt./kg/l** wg jednostki pozycji. Podgląd liczy łączną wartość jako cena × ilość (grosze, BigDecimal, zaokrąglenie na sumie); przy nieznanej ilości suma pozostaje nieznana, a nie 0 zł. W historii cen widoczne są zapisane ilości i łączne koszty. Bez automatycznego wydatku PayCheck.
 - SQLite **22 → 23** dodaje opcjonalne pole `shopping_items.place_id` i `shopping_receipts.place_id/place_name_snapshot`. Kopie v22 nadal są importowane, uzupełniając nowe pola bez miejsca; pełna kopia v23 zapisuje nowe powiązania. Wydanie wymaga testu instalacji/aktualizacji na telefonie, poza testami CI.
 - Stable `main` pozostaje nietknięty.
+
+
+## 0.5.0-beta.12.1 — stabilizacja przywracania kopii
+
+- Usunięty zakup nie usuwa historycznego przyjęcia ani ceny. Po odtworzeniu kopii bez odpowiedniego zabezpieczenia nowy zakup mógł dostać dawny `shopping_id` i wyglądać na już przyjęty.
+- Import kopii podnosi licznik identyfikatorów zakupów co najmniej do maksimum zachowanego w przyjęciach i historii cen. Działa również na pustej liście zakupów; zapis jest częścią transakcji przywracania.
+- Test regresji odtwarza przykłady pustej i niepustej listy przy zachowanej historii. SQLite 23 bez migracji, bez nowych funkcji, Stable `main` bez zmian.
