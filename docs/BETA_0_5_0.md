@@ -85,3 +85,12 @@ Odbiór: utwórz sejf z hasłem 12+ znaków; zapisz prywatny przychód 200 zł i
 - Automatyczne sprawdzanie manifestu co najwyżej raz na 15 minut w aktywnej sesji; pobieranie nadal sprawdzane co 30 sekund. Ręczne sprawdzenie niezależne.
 - Po przekazaniu zweryfikowanego APK Androidowi instalator nie otwiera się sam ponownie dla tego samego pliku. Po anulowaniu instalacji można jawnie ponowić z ekranu Aktualizacje. Brak zgody na instalowanie nie blokuje późniejszej próby.
 - Zachowana weryfikacja podpisu i SHA-256, Beta bez PIN-u i SQLite v22 bez migracji. Stable `main` bez zmian.
+
+
+## 0.5.0-beta.9 — weryfikowane kopie EDHOME
+
+- Poprawione typy danych w imporcie historii cen: `unit_price_grosz` i `quantity_milli` są liczbami; cena bez przyjęcia do produktu ma puste `pantry_id`, a nieznana ilość jest pusta, nie zero. Puste `lent_to` niezapożyczonych rzeczy jest prawidłowe.
+- Zapis JSON do wybranego dokumentu jest następnie odczytywany i porównywany bajt po bajcie przez długość i SHA-256. Sukces jest zgłaszany dopiero po weryfikacji. Niekompletny plik nie jest automatycznie usuwany ani uznawany za kopię.
+- Jeżeli zapis ustawień przy odtwarzaniu się nie uda, transakcja SQLite cofa dane. SQLite i SharedPreferences nie mają wspólnej gwarancji atomowości na wypadek nagłego wyłączenia urządzenia.
+- Nowy test zgodności typów/pustych kolumn i symulowany round-trip SQLite→JSON→SQLite. Odbiór na prawdziwym telefonie nadal osobno. Zwykły JSON nie zawiera prywatnego sejfu PayCheck, który ma własny szyfrowany eksport.
+- Bez migracji SQLite v22, Beta bez PIN, Stable `main` bez zmian.

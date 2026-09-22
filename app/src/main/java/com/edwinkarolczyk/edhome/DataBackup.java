@@ -928,36 +928,36 @@ final class DataBackup {
             // committing SQL, so a failed preference write rolls SQL back.
             // Never clear the installed PIN, private vault or update channel.
             // Keep the new installation's PIN and update-source configuration untouched.
-        SharedPreferences.Editor restored = prefs.edit()
-            .putString("household", household)
-            .putString("theme", theme)
-            .putString("home_tile_order", tileOrder)
-            .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
-            .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
-            .putBoolean("timer_notifications_enabled", timerNotifications)
-            .putString("quiet_hours_start", quietStart)
-            .putString("quiet_hours_end", quietEnd);
-        for (String key : prefs.getAll().keySet()) {
-            if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
-                    || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
-                    || key.startsWith("tile_width_"))
-                restored.remove(key);
-        }
-        if (tileOrderV2 == null) restored.remove(HomeTileCatalog.ORDER_KEY);
-        else restored.putString(HomeTileCatalog.ORDER_KEY, tileOrderV2);
-        restored.putString("home_tiles_v2_hidden", hiddenTilesV2);
-        for (String id : labels.keySet())
-            restored.putString("tile_label_" + id, labels.get(id));
-        for (String id : tints.keySet())
-            restored.putString("tile_tint_" + id, tints.get(id));
-        for (String id : icons.keySet())
-            restored.putString("tile_icon_" + id, icons.get(id));
-        for (String id : targets.keySet())
-            restored.putString("tile_target_" + id, targets.get(id));
-        for (String id : widths.keySet())
-            restored.putString("tile_width_" + id, widths.get(id));
-        if (!restored.commit())
-            throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
+            SharedPreferences.Editor restored = prefs.edit()
+                .putString("household", household)
+                .putString("theme", theme)
+                .putString("home_tile_order", tileOrder)
+                .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
+                .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
+                .putBoolean("timer_notifications_enabled", timerNotifications)
+                .putString("quiet_hours_start", quietStart)
+                .putString("quiet_hours_end", quietEnd);
+            for (String key : prefs.getAll().keySet()) {
+                if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
+                        || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
+                        || key.startsWith("tile_width_"))
+                    restored.remove(key);
+            }
+            if (tileOrderV2 == null) restored.remove(HomeTileCatalog.ORDER_KEY);
+            else restored.putString(HomeTileCatalog.ORDER_KEY, tileOrderV2);
+            restored.putString("home_tiles_v2_hidden", hiddenTilesV2);
+            for (String id : labels.keySet())
+                restored.putString("tile_label_" + id, labels.get(id));
+            for (String id : tints.keySet())
+                restored.putString("tile_tint_" + id, tints.get(id));
+            for (String id : icons.keySet())
+                restored.putString("tile_icon_" + id, icons.get(id));
+            for (String id : targets.keySet())
+                restored.putString("tile_target_" + id, targets.get(id));
+            for (String id : widths.keySet())
+                restored.putString("tile_width_" + id, widths.get(id));
+            if (!restored.commit())
+                throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();

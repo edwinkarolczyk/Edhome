@@ -4963,6 +4963,7 @@ public final class MainActivity extends Activity {
         note("Eksport zawiera czynności, miejsca i ich przypisania, spiżarnię, historię, bieżący remanent oraz ustawienia gospodarstwa.");
         note("Nie zawiera PIN-u, dziennika diagnostycznego ani adresu aktualizacji. Plik JSON nie jest szyfrowany: przechowuj go prywatnie.");
         note("Kopia umożliwia przeniesienie danych do nowej instalacji, ale nie omija wymogu tego samego podpisu APK przy zwykłej aktualizacji Androida.");
+        note("Prywatny sejf PayCheck nie jest częścią tej kopii. Wykonaj osobny, zaszyfrowany eksport po odblokowaniu sejfu.");
         button("Eksportuj kopię danych (.json)", () -> {
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
