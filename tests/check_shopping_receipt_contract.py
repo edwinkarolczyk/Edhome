@@ -11,7 +11,7 @@ gradle = Path("app/build.gradle").read_text()
 for token in (
     'ShoppingReceiptStore.create(database);',
     'DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS',
-    'super(context, "edhome-beta-preview.db", null, 23)',
+    'super(context, "edhome-beta-preview.db", null, 24)',
     'oldVersion < 1 || newVersion > 24',
     'ShoppingReceiptStore.received(',
     'smallButton(box, "Przyjmij do spiżarni"',

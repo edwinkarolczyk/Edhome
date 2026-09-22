@@ -12,7 +12,7 @@ assert all('"' + name + '"' in skin for name in
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
-assert 'super(context, "edhome-beta-preview.db", null, 23' in main
+assert 'super(context, "edhome-beta-preview.db", null, 24' in main
 assert 'private static final int DB_VERSION = 24;' in backup
 assert "newVersion > 24" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
