@@ -28,27 +28,40 @@ assert "previewHomeTilePlacement(nearest)" in main
 assert "translationX(target[0] - old[0])" in main
 assert "translationY(target[1] - old[1])" in main
 assert "homeDragHint.setText(" in main
-assert "HomeTileOrder.moved(" in main and "homeDragOrder, homeDragSource, slot" in main
-assert "HomeTileOrder.moved(before, source, slot)" in main
+assert "HomeTileCatalog.moved(" in main
+assert "homeDragOrder, homeDragSource, slot" in main
+assert "HomeTileCatalog.moved(before, source, slot)" in main
 assert "scheduleHomeDragFinish()" in main
 assert "tile.setAlpha(1f)" in main
 assert "tile.setVisibility(View.VISIBLE)" in main
 assert "homeDragDropped = homeDragTargetIndex >= 0;" in main
 assert "moveHomeTile(sourceId, tileId)" not in main
-assert 'putString("home_tile_order"' in main
+assert "HomeTileCatalog.ORDER_KEY" in main
 assert 'prefs.getString("tile_label_" + id' in main
 assert 'prefs.getString("tile_tint_" + id' in main
+assert 'prefs.getString("tile_target_" + id' in main
+assert 'prefs.getString("tile_width_" + id' in main
+assert 'home_tiles_v2_hidden' in main
+assert 'showAddTileDialog' in main and 'restoreHiddenHomeTile' in main
+assert 'homeTileTarget(id)' in main and 'openHomeTile(id)' in main
+assert 'updateTile(grid, id, "•"' in main
 assert '"homeTileAppearance"' in backup
-assert 'restored.remove("tile_label_" + id)' in backup
-assert '.remove("tile_tint_" + id).remove("tile_icon_" + id)' in backup
-assert 'prefs.getString("tile_icon_" + moduleId, moduleId)' in main
+assert '"homeTileOrderV2"' in backup and '"homeTileHiddenV2"' in backup
+assert 'restored.remove(key)' in backup
+assert 'prefs.getString("tile_icon_" + id,' in main
 assert 'settings.put("homeTileAppearance", appearance)' in backup
 assert 'tile.put("icon", prefs.getString("tile_icon_" + id, id))' in backup
+catalog = Path("app/src/main/java/com/edwinkarolczyk/edhome/HomeTileCatalog.java").read_text(encoding="utf-8")
+for destination in ("timers", "shopping", "paycheck", "paycheck_private",
+                    "waste", "storage", "diagnostics"):
+    assert f'"{destination}"' in catalog
+assert "List<String> STARTER_IDS" in catalog
+assert 'setPositiveButton("Usuń skrót"' in main
 icons = Path("app/src/main/java/com/edwinkarolczyk/edhome/TileIcon.java").read_text(encoding="utf-8")
 assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher"))
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 46" in gradle
+assert "versionCode 47" in gradle
 assert "versionName '0.5.0'" in gradle
-print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v20: PASS")
+print("6 themes, unlimited configurable tiles, drag, backup and SQLite v21: PASS")
