@@ -197,7 +197,7 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 
 - Lokalna lista zakupów jest niezależna od stanów spiżarni; oznaczenie zakupione nie zwiększa automatycznie zapasu. Nie należy deklarować wspólnej synchronizowanej listy przed etapem Wi-Fi.
 - Ilość opcjonalna: `NULL` jest nieokreśloną ilością, nie zerem; `0` i ujemne ilości są odrzucane. Jednostki na start: szt., kg, l; precyzja maks. trzy miejsca po przecinku w przeliczeniu na całkowite tysięczne.
-- Pozycje można oznaczać i usuwać; nowe zakupy bez zmiany stałego układu dziewięciu kafelków. Etap 0.3 obejmuje także śmieci, obowiązki, minutniki i przypomnienia — te funkcje nie są automatycznie ukończone przez samą listę.
+- Pozycje można oznaczać i usuwać; lista zakupów jest także dostępnym celem kafelka. Historyczny układ dziewięciu kafelków nie stanowi limitu ani stałego zestawu na panelu. Etap 0.3 obejmuje także śmieci, obowiązki, minutniki i przypomnienia — te funkcje nie są automatycznie ukończone przez samą listę.
 
 
 ## 19. Inkrement 0.3.1 — odpady w jednym rejestrze Czynności
@@ -245,11 +245,11 @@ Wszystkie trzy używają **tej samej kartoteki produktu, jednostek, miejsc, upra
 **Status:** ustalenie koncepcyjne. Panel, priorytety i sterowanie nie są automatycznie wdrożone przez dodanie tego opisu; kolejność poniżej w roadmapie.
 
 
-## EDHOME UI Refresh 0.3.3-beta.2 — zatwierdzone przez Edwina
+## EDHOME UI Refresh 0.3.3-beta.2 — HISTORYCZNY etap (późniejsze ustalenia §23 i §26 mają pierwszeństwo)
 
-- Jedno gospodarstwo, te same 9 kafelków, zawartość i logika; cztery wizualne motywy: Neonowy, Naturalny, Pastelowy i Szklany (rozmiar i proporcje zrzutów jako punkt odniesienia, bez obietnicy dosłownej identyczności każdego piksela na wszystkich Androidach).
-- Karty i kafelki z dużym zaokrągleniem, palety i kontrast dostosowane do motywu, graficzne ikony i czytelne dotykowe przyciski. Układ 3×3 przewijany pionowo.
-- Kliknięcie otwiera moduł; **przytrzymanie wyświetla Edytuj / Przesuń**; przeciąganie za uchwyt zmienia kolejność. Edycja prezentacji pozwala zmienić podpis i kolor kafelka, ale **nigdy powiązanie ID/modułu ani dane**. Nie usuwamy systemowych 9 kafelków.
+- Historycznie etap 0.3.3-beta.2 zachowywał istniejące dziewięć kafelków i cztery motywy wizualne: Neonowy, Naturalny, Pastelowy i Szklany. Nie jest to aktualny limit panelu ani wyłączny zestaw motywów; patrz późniejsze decyzje §23 i §26.
+- Karty i kafelki z dużym zaokrągleniem, palety i kontrast dostosowane do motywu, graficzne ikony i czytelne dotykowe przyciski. Układ 3×3 to historyczny wygląd jednego ekranu, nie ograniczenie liczby kafelków; pełną siatkę definiuje §26.
+- Historyczny zakres edycji obejmował podpis/kolor, przytrzymanie Edytuj / Przesuń i przeciąganie uchwytem. **Zakaz zmiany celu oraz nakaz zachowania dziewięciu systemowych kafelków tracą moc na rzecz §26**. Niezmienne pozostają ID rzeczywistych danych/modułów oraz uprawnienia, nie konfiguracja skrótu na panelu.
 - Po ponownym uruchomieniu zachowuje się kolejność, motyw i wygląd. Kopia JSON uwzględnia edycje wizualne. Wersja bazy SQLite pozostaje v10; Beta bez PIN-u, Stable z PIN-em, repo i kanał aktualizacji bez zmian.
 - Obrazy koncepcyjne są inspiracją, nie zrzutem z uruchomionego Androida; wykonanie UI w aplikacji wymaga kompilacji i osobnego testu na telefonie. Dalsze 0.3.4: minutniki urządzeń.
 
@@ -300,7 +300,7 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 
 **[Pełny rejestr 30 decyzji i nierozstrzygniętych pytań](DECYZJE_2026-09-21_FORMULARZ_30.md) ma pierwszeństwo przed wcześniejszymi, sprzecznymi wariantami koncepcyjnymi w tym pliku.** Zapis decyzji oznacza zakres do wdrożenia, nie potwierdzenie ukończenia w aplikacji.
 
-- Wszystkie sześć motywów. Dowolna liczba kafelków (dodawanie/ukrywanie), małe i podwójne kafelki, przeciąganie całego kafelka po przytrzymaniu.
+- Wszystkie sześć motywów. Dowolna liczba kafelków (dodawanie/ukrywanie/usuwanie z panelu), małe i podwójne kafelki, przeciąganie całego kafelka po przytrzymaniu. **Każdy kafelek ma edytowalne: cel, nazwę, ikonę, kolor, rozmiar, widoczność i pozycję; szczegóły §26.**
 - **Tablet = przełączany tryb tej samej aplikacji EDHOME**, z uproszczonym/współdzielonym zestawem funkcji i prawidłowymi uprawnieniami; nie oddzielny program lub APK. Użytkownik wybiera tryb/układ.
 - Czynności: szybkie/zaawansowane dodawanie, data/przedział/sezon, liczenie terminu od planu lub wykonania per czynność. Kalendarz najpierw łączyć z innymi modułami.
 - Nazwa **i rodzaj** miejsca definiowane przez użytkownika. Pudełka mogą być w innych pudełkach, z niezmiennym ID/QR i bez cykli hierarchii.
@@ -389,3 +389,26 @@ SUPLA Apps/katalog integracji jest wykazem rozwiązań, **nie** dodatkowym mecha
 - Nie blokować EDHOME na możliwościach tego NAS: architektura Huba i API jest niezależna od sprzętu; **wariant B jest rozwiązaniem referencyjnym**, nie deklaracją zakupu mini-PC ani uruchomionej usługi.
 - DNS-320L może być używany w LAN do kopii JSON, mediów i załączników **po przetestowaniu firmware, dysków i protokołu**; nie przypisywać mu Docker/aktualnych pakietów bez potwierdzenia. Niewspierane lub stare protokoły SMB (np. wymuszające SMB1) traktować jako przeszkodę bezpieczeństwa — nie obniżać zabezpieczeń całej sieci dla wygody integracji.
 - API pracuje na osobnym hoście i samodzielnie przechowuje aktualny stan; zapisy na NAS są **backupem**, nie współdzieloną aktywną bazą SQLite. Przećwiczyć odtworzenie i wykonać kopię dodatkowo poza NAS.
+
+
+## 26. Panel główny — w pełni edytowalne kafelki bez limitu dziewięciu (doprecyzowanie Edwina 22.09.2026)
+
+**Decyzja obowiązująca, nadrzędna wobec historycznej siatki 3×3 i zakazu zmiany celu z 0.3.3-beta.2. Status: wymaganie do wdrożenia, nie potwierdzenie obecności w APK.** Na zrzutach 0.5.0-beta.2 jest siatka dziewięciu skrótów, a „Minutniki urządzeń”, „Lista zakupów”, „PayCheck · wspólny budżet”, „Odpady i terminy wystawienia”, „Zobacz wszystkie czynności” oraz „Diagnostyka BETA” występują poza siatką. To tymczasowy stan UI, **nie projekt docelowy**.
+
+### Jeden system kafelków — wszystkie wejścia
+
+- Panel jest **listą/siatką skrótów konfigurowanych przez użytkownika**, a nie sztywnym menu dziewięciu modułów. Można dodać dowolną liczbę, usuwać skróty z panelu bez usuwania modułów/danych, ukrywać i przywracać z katalogu. Jedna funkcja może mieć więcej niż jeden kafelek, każdy z innym podpisem/ikoną/kolorem; nie tworzy to duplikatów danych.
+- **Każda docelowa funkcja udostępnia kafelek**: Minutniki urządzeń, Lista zakupów, PayCheck (np. osobne cele: wspólny budżet i uprawnione finanse osobiste), Odpady, Czynności, Kalendarz, Na dziś, Spiżarnia, Miejsca, Remanent, Aktualizacje, Kopia danych, Ustawienia, Diagnostyka Beta, przyszły Skaner, SUPLA i kolejne moduły. Skróty obecnie pod kartą „Najbliższe czynności” należy przenieść do katalogu kafelków; sama karta może pozostać informacją/widżetem, ale nie jest zastępczym menu modułów. Diagnostykę udostępniać wyłącznie w Beta.
+- **Każdy kafelek ma komplet ustawień:** (1) cel otwarcia — moduł, konkretny widok lub kontekst, a tam, gdzie wspierane, konkretna czynność/obiekt; (2) własna nazwa/podpis; (3) ikona wybrana z dostępnej biblioteki; (4) kolor lub styl kafelka zgodny z motywem i czytelnością; (5) rozmiar, m.in. mały i podwójny; (6) pozycja/kolejność przez przytrzymanie i przeciąganie całej powierzchni lub alternatywnie dostępny uchwyt; (7) widoczność w danym układzie/profilu. Kafelki z domyślnego zestawu podlegają tym samym regułom — brak dziewięciu nieusuwalnych pozycji.
+- **Przytrzymaj → Edytuj / Przesuń / Ukryj lub Usuń skrót**; zwykłe dotknięcie otwiera ustawiony cel. W edytorze podgląd wyniku i wybór celu z listy dozwolonych funkcji, nie ręczne wpisywanie technicznych ID. Gesty nie mogą przypadkowo uruchamiać modułu, niszczyć danych ani blokować przewijania na telefonie. Dla dostępności zapewnić również sterowanie kolejnością bez przeciągania.
+- Siatka **może początkowo wyglądać jak 3 kolumny × 3 wiersze na widocznym obszarze telefonu**, lecz poniżej biegnie dalej z przewijaniem; liczba kolumn może dostosować się do ekranu, orientacji i rozmiaru kafelków. Nie kończyć panelu na dziewiątym skrócie, nie zastępować dalszych pozycji przypadkowymi przyciskami poza siatką.
+- Po zmianie celu kafelek otwiera nowy cel, ale **nie modyfikuje ID ani danych oryginalnego modułu**. Powiązania skrót → cel są oddzielną konfiguracją (trwałe ID skrótu, typ celu, ID obiektu opcjonalnie); usunięcie lub ukrycie skrótu nie usuwa obiektu. Jeśli cel nie istnieje lub jest niedostępny, pokazać stan „niedostępny” i umożliwić ponowny wybór.
+- Kafelki na ekranie wspólnym tabletu i na prywatnym telefonie mają osobne układy; lista dozwolonych **celów** jest filtrowana po uprawnieniach. Zmiana nazwy/ikony czy ukrycie ekranu nie nadaje dostępu do prywatnego PayCheck; przy przejściu do modułu i odczycie danych ponownie sprawdzić uprawnienia.
+- Układ, cel, nazwa, ikona, kolor, rozmiar, widoczność i kolejność mają przetrwać restart, eksport/import, migracje i przyszłą synchronizację zgodnie z polityką profilu/urządzenia. Aktualizacja modułów nie może resetować panelu ani zamieniać istniejących kafelków na nowe bez decyzji użytkownika.
+
+### Podział na etapy i test odbiorowy
+
+1. **Rdzeń:** katalog celów, edytor wszystkich pól, dowolna liczba kafelków, kilka rozmiarów, przewijanie, pełne przeciąganie, zachowanie układu w lokalnej bazie i backupie.
+2. **Domknięcie obecnego panelu:** dodać cele Minutniki, Zakupy, PayCheck, Odpady, pełne Czynności i Diagnostyka Beta do katalogu, umożliwić przeniesienie dolnych przycisków do kafelków; nie usunąć funkcji ani ich historii.
+3. **Profile:** oddzielny tablet/telefon, filtrowanie uprawnionych celów, przywrócenie ukrytych skrótów, dostępne alternatywy gestów oraz test na rzeczywistym małym ekranie i przy otwartej klawiaturze.
+4. **Test:** użytkownik może dodać co najmniej 15 kafelków, przenieść „Minutniki” i „PayCheck” do siatki, nadać dowolnemu kafelkowi nowy cel/podpis/ikonę/kolor/pozycję, duplikować skrót do tego samego celu, ukryć i przywrócić, zamknąć/włączyć aplikację i odzyskać identyczny układ — **bez ruszania danych lub obchodzenia uprawnień**.
