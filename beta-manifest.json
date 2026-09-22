@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 48,
-  "versionName": "0.5.0-beta.5",
-  "changelog": "EDHOME 0.5.0-beta.5: opcjonalna cena przy oznaczaniu „Kupione”, sklep i historia cen w spiżarni po przyjęciu produktu. Migracja SQLite v21→v22 i kopia cen w JSON; bez automatycznego księgowania w PayCheck. Zachowane edytowalne kafelki i osobny szyfrowany eksport prywatnego sejfu.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.5/edhome-beta.apk",
-  "sha256": "ee96739c9a6aec85fc4d9ef9474a7d4435e1c630261b03b848412c3aa56f59bf"
+  "versionCode": 49,
+  "versionName": "0.5.0-beta.6",
+  "changelog": "EDHOME Beta 0.5.0-beta.6 — adaptacyjne kolumny kafelków i konfigurowalne czasy menu/przeciągania; układ i gesty w backupie. SQLite v22 bez migracji.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.6/edhome-beta.apk",
+  "sha256": "18c831cf81447421a39c61109d48081c2f1a4d7bcf7b92391c41847b98f31db2"
 }
