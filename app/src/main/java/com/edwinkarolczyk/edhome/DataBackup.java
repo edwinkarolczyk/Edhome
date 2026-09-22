@@ -87,6 +87,8 @@ final class DataBackup {
                 prefs.getString(HomeTileCatalog.ORDER_KEY, null),
                 prefs.getString("home_tile_order", ""),
                 BuildConfig.DIAGNOSTICS_ENABLED)));
+        settings.put("homeTileHiddenV2",
+            prefs.getString("home_tiles_v2_hidden", ""));
         settings.put("timerNotificationsEnabled",
             prefs.getBoolean("timer_notifications_enabled", false));
         settings.put("quietHoursStart", prefs.getString("quiet_hours_start",
@@ -110,6 +112,8 @@ final class DataBackup {
                 tile.put("icon", prefs.getString("tile_icon_" + id, id));
             if (prefs.contains("tile_target_" + id))
                 tile.put("target", prefs.getString("tile_target_" + id, ""));
+            if (prefs.contains("tile_width_" + id))
+                tile.put("width", prefs.getString("tile_width_" + id, "small"));
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
@@ -177,6 +181,8 @@ final class DataBackup {
         String tileOrder = settings.optString("homeTileOrder", "");
         String tileOrderV2 = settings.has("homeTileOrderV2")
             ? settings.getString("homeTileOrderV2") : null;
+        String hiddenTilesV2 = settings.optString("homeTileHiddenV2", "");
+        java.util.List<String> hiddenIds = new java.util.ArrayList<>();
         java.util.List<String> restoredTiles = null;
         if (tileOrderV2 != null) {
             restoredTiles = new java.util.ArrayList<>();
@@ -188,6 +194,14 @@ final class DataBackup {
                         "Nieprawidłowy skrót lub duplikat w kopii.");
                 restoredTiles.add(tileId);
             }
+        }
+        for (String id : hiddenTilesV2.split(",", -1)) {
+            if (id.isEmpty() && hiddenTilesV2.isEmpty()) continue;
+            if (restoredTiles == null || !restoredTiles.contains(id)
+                    || hiddenIds.contains(id))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa lista ukrytych kafelków.");
+            hiddenIds.add(id);
         }
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
@@ -221,6 +235,7 @@ final class DataBackup {
         Map<String, String> tints = new HashMap<>();
         Map<String, String> icons = new HashMap<>();
         Map<String, String> targets = new HashMap<>();
+        Map<String, String> widths = new HashMap<>();
         if (appearance != null) {
             java.util.Iterator<String> keys = appearance.keys();
             while (keys.hasNext()) {
@@ -255,6 +270,12 @@ final class DataBackup {
                     if (!HomeTileCatalog.validTarget(destination, true))
                         throw new IllegalArgumentException("Nieznany cel kafelka.");
                     targets.put(id, destination);
+                }
+                if (tile.has("width")) {
+                    String width = tile.getString("width");
+                    if (!"small".equals(width) && !"double".equals(width))
+                        throw new IllegalArgumentException("Nieznany rozmiar kafelka.");
+                    widths.put(id, width);
                 }
             }
         }
@@ -860,11 +881,13 @@ final class DataBackup {
             .putString("quiet_hours_end", quietEnd);
         for (String key : prefs.getAll().keySet()) {
             if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
-                    || key.startsWith("tile_icon_") || key.startsWith("tile_target_"))
+                    || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
+                    || key.startsWith("tile_width_"))
                 restored.remove(key);
         }
         if (tileOrderV2 == null) restored.remove(HomeTileCatalog.ORDER_KEY);
         else restored.putString(HomeTileCatalog.ORDER_KEY, tileOrderV2);
+        restored.putString("home_tiles_v2_hidden", hiddenTilesV2);
         for (String id : labels.keySet())
             restored.putString("tile_label_" + id, labels.get(id));
         for (String id : tints.keySet())
@@ -873,6 +896,8 @@ final class DataBackup {
             restored.putString("tile_icon_" + id, icons.get(id));
         for (String id : targets.keySet())
             restored.putString("tile_target_" + id, targets.get(id));
+        for (String id : widths.keySet())
+            restored.putString("tile_width_" + id, widths.get(id));
         if (!restored.commit())
             throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
     }
