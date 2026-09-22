@@ -40,7 +40,7 @@ for token in (
     '"target_grosz".equals(column) || "goal_id".equals(column)',
 ):
     assert token in backup, "Backup protection absent: "+token
-assert "versionCode 52" in gradle and "versionNameSuffix '-beta.9'" in gradle
+assert "versionCode 53" in gradle and "versionNameSuffix '-beta.9.1'" in gradle
 assert "PaycheckGoalsStore" not in (root/"ShoppingReceiptStore.java").read_text()
 assert "PaycheckGoalsStore" not in (root/"PantryBarcodeStore.java").read_text()
 body=source.split("static void create(SQLiteDatabase db)",1)[1].split("static long addGoal(",1)[0]
