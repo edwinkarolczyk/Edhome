@@ -88,6 +88,36 @@ final class PantryBarcodeStore {
         }
     }
 
+    /** Resolves only existing local links; never creates a pantry product or barcode. */
+    static final class TakeCode {
+        final String linkedBarcode;
+        final Item item;
+        TakeCode(String linkedBarcode, Item item) {
+            this.linkedBarcode = linkedBarcode;
+            this.item = item;
+        }
+    }
+
+    /**
+     * ZXing may deliver UPC-A as 12 digits or EAN-13 with a leading zero.
+     * Prefer the exact link; aliases are accepted only if all links refer
+     * to one pantry item, rather than silently subtracting another product.
+     */
+    static TakeCode findTakeCode(SQLiteDatabase db, String scanned) {
+        Item exact = find(db, scanned);
+        if (exact != null) return new TakeCode(scanned, exact);
+        TakeCode resolved = null;
+        for (String alias : PantryLookupCodes.candidates(scanned)) {
+            if (alias.equals(scanned)) continue;
+            Item linked = find(db, alias);
+            if (linked == null) continue;
+            if (resolved != null && resolved.item.id != linked.id)
+                throw new IllegalStateException("Sprzeczne powiązania kodów UPC/EAN.");
+            if (resolved == null) resolved = new TakeCode(alias, linked);
+        }
+        return resolved;
+    }
+
     private static boolean operationExists(SQLiteDatabase db, String id) {
         try (Cursor cursor = db.rawQuery(
                 "SELECT 1 FROM pantry_movements WHERE operation_id=? LIMIT 1",
