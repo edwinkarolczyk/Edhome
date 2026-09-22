@@ -35,7 +35,7 @@ for token in (
 ):
     assert token in store, token
 for token in (
-    'DB_VERSION = 22;',
+    'DB_VERSION = 23;',
     '{"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",',
     'inputVersion < 18 && "shopping_receipts".equals(definition[0])',
     'Podwójne przyjęcie zakupów w kopii.',
