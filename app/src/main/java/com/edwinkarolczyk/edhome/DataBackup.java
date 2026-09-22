@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 21;
+    private static final int DB_VERSION = 22;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -43,6 +43,9 @@ final class DataBackup {
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
         {"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",
             "packages", "before_qty", "after_qty", "happened_at"},
+        {"pantry_purchase_prices", "id", "operation_id", "shopping_id", "pantry_id",
+            "name_snapshot", "unit", "quantity_milli", "unit_price_grosz",
+            "shop", "happened_at"},
         {"storage_items", "id", "name", "kind", "parent_box_id", "place_id",
             "lent_to", "lent_at", "created_at"},
         {"storage_events", "id", "item_id", "name_snapshot", "action",
@@ -172,7 +175,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -306,6 +309,7 @@ final class DataBackup {
                 || (inputVersion < 20 && "paycheck_transactions".equals(definition[0]))
                 || (inputVersion < 21 && ("paycheck_goals".equals(definition[0])
                     || "paycheck_goal_allocations".equals(definition[0])))
+                || (inputVersion < 22 && "pantry_purchase_prices".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -474,6 +478,30 @@ final class DataBackup {
                             || checked == null || checked > 1)
                         throw new IllegalArgumentException(
                             "Nieprawidłowa pozycja listy zakupów.");
+                }
+                if ("pantry_purchase_prices".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    String name = values.getAsString("name_snapshot");
+                    String unit = values.getAsString("unit");
+                    Long amount = values.getAsLong("unit_price_grosz");
+                    Long qty = values.getAsLong("quantity_milli");
+                    Long shopping = values.getAsLong("shopping_id");
+                    Long product = values.getAsLong("pantry_id");
+                    String shop = values.getAsString("shop");
+                    Long date = values.getAsLong("happened_at");
+                    if (operation == null
+                            || !operation.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || name == null || name.trim().isEmpty()
+                            || name.length() > 160 || !ShoppingRules.knownUnit(unit)
+                            || amount == null || amount < 1
+                            || amount > MoneyRules.MAX_GROSZ
+                            || qty != null && (qty < 1 || qty > ShoppingRules.MAX_MILLI)
+                            || shopping != null && shopping < 1
+                            || product != null && product < 1
+                            || shop == null || shop.length() > 80
+                            || date == null || date <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa historia ceny.");
                 }
                 if ("paycheck_goals".equals(definition[0])) {
                     String scope = values.getAsString("scope");
@@ -742,6 +770,11 @@ final class DataBackup {
         for (ContentValues m : parsed.get("pantry_movements"))
             if (!movements.add(m.getAsString("operation_id")))
                 throw new IllegalArgumentException("Powielona operacja skanu.");
+        Set<String> priceOperationIds = new HashSet<>();
+        for (ContentValues price : parsed.get("pantry_purchase_prices")) {
+            if (!priceOperationIds.add(price.getAsString("operation_id")))
+                throw new IllegalArgumentException("Powielony zapis ceny w kopii.");
+        }
         Set<Long> receivedShoppingIds = new HashSet<>();
         for (ContentValues receipt : parsed.get("shopping_receipts")) {
             Long shopping = receipt.getAsLong("shopping_id");
