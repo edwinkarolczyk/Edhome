@@ -3977,13 +3977,32 @@ public final class MainActivity extends Activity {
             if (pantrySingleCameraPending) return;
             pantrySingleCameraPending = true;
         }
-        prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
-        IntentIntegrator scanner = new IntentIntegrator(this);
-        scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
-        scanner.setPrompt(take ? "EDHOME: wyciągnij ze spiżarni" : "EDHOME: dodaj do spiżarni");
-        scanner.setBeepEnabled(false);
-        scanner.setOrientationLocked(false);
-        scanner.initiateScan();
+        try {
+            prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
+            IntentIntegrator scanner = new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
+            scanner.setPrompt(take ? "EDHOME: wyciągnij ze spiżarni"
+                : "EDHOME: dodaj do spiżarni");
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+        } catch (Exception problem) {
+            // launchCamera() has already claimed the pending result. Release it
+            // if Android cannot start CaptureActivity; do not retry invisibly.
+            abortPantryScan("PANTRY_CAMERA_LAUNCH", problem,
+                "Nie można uruchomić aparatu. Sprawdź uprawnienie kamery "
+                + "albo wpisz kod ręcznie. Stan spiżarni nie został zmieniony.");
+        }
+    }
+
+    /** Abort a failed scanner path without claiming an inventory operation. */
+    private void abortPantryScan(String event, Exception problem, String message) {
+        pantrySingleCameraPending = false;
+        if (pantryBatch.active()) pantryBatch.stop();
+        if (problem == null) DiagnosticLog.event(event);
+        else DiagnosticLog.error(event, problem);
+        if ("pantry".equals(screen)) render();
+        alert(message);
     }
 
     private void manualPantryBarcode() {
@@ -4024,8 +4043,15 @@ public final class MainActivity extends Activity {
                 .setOnCancelListener(d -> finishPantryBatch()).show();
             return;
         }
-        PantryBarcodeStore.Item item = PantryBarcodeStore.find(
-            db.getReadableDatabase(), barcode);
+        final PantryBarcodeStore.Item item;
+        try {
+            item = PantryBarcodeStore.find(db.getReadableDatabase(), barcode);
+        } catch (Exception problem) {
+            abortPantryScan("PANTRY_SCAN_READ", problem,
+                "Nie udało się odczytać produktu. Niczego nie dodano ani "
+                    + "nie wyjęto. Spróbuj ponownie albo wyeksportuj diagnostykę.");
+            return;
+        }
         String operationId = java.util.UUID.randomUUID().toString();
         if (item == null && "TAKE".equals(mode)) {
             finishPantryBatch();
@@ -4046,8 +4072,15 @@ public final class MainActivity extends Activity {
                 .setOnCancelListener(d -> finishPantryBatch()).show();
             return;
         }
-        PantryPackageStore.Pack pack = PantryPackageStore.find(
-            db.getReadableDatabase(), item.id);
+        final PantryPackageStore.Pack pack;
+        try {
+            pack = PantryPackageStore.find(db.getReadableDatabase(), item.id);
+        } catch (Exception problem) {
+            abortPantryScan("PANTRY_PACKAGE_READ", problem,
+                "Nie udało się odczytać opakowania. Stan spiżarni nie został "
+                    + "zmieniony. Spróbuj ponownie albo wyeksportuj diagnostykę.");
+            return;
+        }
         String question = "TAKE".equals(mode) ? "Wyciągnąć 1 opak.?" : "Dodać 1 opak.?";
         new AlertDialog.Builder(this).setTitle(item.name)
             .setMessage("Kod: " + barcode + "\nObecny stan: "
@@ -4463,8 +4496,19 @@ public final class MainActivity extends Activity {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
                 barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId);
-            DiagnosticLog.event("COMMITTED".equals(result) ?
-                "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
+            if ("DUPLICATE_IGNORED".equals(result)) {
+                abortPantryScan("PANTRY_SCAN_DUPLICATE_IGNORED", null,
+                    "Ta operacja skanowania była już zapisana. Nie zmieniono "
+                        + "stanu ponownie.");
+                return;
+            }
+            if (!"COMMITTED".equals(result)) {
+                abortPantryScan("PANTRY_SCAN_UNEXPECTED_RESULT", null,
+                    "Nie potwierdzono zapisu skanu. Sprawdź stan i historię "
+                        + "przed kolejną próbą.");
+                return;
+            }
+            DiagnosticLog.event("PANTRY_SCAN_COMMITTED");
             if (newCategory != null && "COMMITTED".equals(result)) {
                 try {
                     PantryBarcodeStore.Item product = PantryBarcodeStore.find(
@@ -4488,10 +4532,11 @@ public final class MainActivity extends Activity {
                 } else finishPantryBatch();
             } else render();
         } catch (Exception problem) {
-            finishPantryBatch();
-            DiagnosticLog.error("PANTRY_SCAN_COMMIT", problem);
-            alert(problem.getMessage() == null ? "Nie udało się zapisać skanu."
-                : problem.getMessage());
+            String explanation = problem instanceof IllegalArgumentException
+                && problem.getMessage() != null ? problem.getMessage()
+                : "Nie udało się zapisać skanu. Sprawdź stan i historię "
+                    + "przed ponowną próbą; nie zakładamy, że operacja się udała.";
+            abortPantryScan("PANTRY_SCAN_COMMIT", problem, explanation);
         }
     }
 
