@@ -20,7 +20,7 @@ assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|sett
 assert "showTileActions(tile, tileId);" in main
 assert 'text("✎  Edytuj kafelek"' in main
 assert 'text("✥  Przesuń kafelek"' in main
-assert "beginHomeDrag(tile, (String) id)" in main
+assert "beginHomeDrag(tile, (String) tileTag)" in main
 assert "MotionEvent.ACTION_MOVE" in main
 assert "ACTION_DRAG_LOCATION" in main
 assert "scrollHomeDuringDrag(" in main
