@@ -12,7 +12,7 @@ for clause in (
     'PrivatePaycheckCrypto.key(backupPassword, salt)',
     'PrivatePaycheckCrypto.seal(key, plain.toString())',
     'PrivatePaycheckCrypto.unseal(key, archive.getString("encrypted"))',
-    'PrivatePaycheckCrypto.seal(\n                        session.secret(), entry.toString())',
+    'session.secret(), entry.toString()',
     'database.beginTransaction()',
     'database.setTransactionSuccessful()',
     'database.endTransaction()',
