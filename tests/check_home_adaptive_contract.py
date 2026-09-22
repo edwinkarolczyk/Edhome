@@ -46,5 +46,5 @@ assert 'DEFAULT_SHORT_MS = 450' in layout
 assert 'DEFAULT_DRAG_MS = 1100' in layout
 assert 'versionCode 59' in gradle
 assert "versionNameSuffix '-beta.12'" in gradle
-assert 'DB_VERSION = 22;' in backup
+assert 'DB_VERSION = 23;' in backup
 print("Adaptive home tiles, configurable drag/menu and backup settings: PASS")
