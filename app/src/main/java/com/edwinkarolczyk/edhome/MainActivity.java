@@ -586,6 +586,8 @@ public final class MainActivity extends Activity {
         }
 
         button("＋ Dodaj kafelek", this::showAddTileDialog);
+        if (!hiddenHomeTiles().isEmpty())
+            button("◉ Przywróć ukryte kafelki", this::restoreHiddenHomeTile);
 
         LinearLayout today = card();
         today.addView(text("Najbliższe czynności", 19, true));
@@ -666,11 +668,47 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("Anuluj", null).show();
     }
 
-    private void removeHomeTile(String id) {
-        java.util.List<String> order = homeTileOrder();
-        if (!order.remove(id)) return;
+    private void restoreHiddenHomeTile() {
+        java.util.List<String> hidden = hiddenHomeTiles();
+        String[] names = new String[hidden.size()];
+        for (int i = 0; i < hidden.size(); i++)
+            names[i] = homeTileLabel(hidden.get(i));
+        new AlertDialog.Builder(this).setTitle("Przywróć kafelek")
+            .setItems(names, (dialog, which) -> {
+                hidden.remove(which);
+                if (!prefs.edit().putString("home_tiles_v2_hidden",
+                        HomeTileCatalog.encode(hidden)).commit()) {
+                    alert("Nie udało się przywrócić kafelka.");
+                    return;
+                }
+                DiagnosticLog.event("HOME_TILE_RESTORED");
+                render();
+            }).setNegativeButton("Anuluj", null).show();
+    }
+
+    private void hideHomeTile(String id) {
+        java.util.List<String> order = allHomeTiles();
+        if (!order.contains(id)) return;
+        java.util.List<String> hidden = hiddenHomeTiles();
+        if (!hidden.contains(id)) hidden.add(id);
         boolean saved = prefs.edit()
             .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .putString("home_tiles_v2_hidden",
+                HomeTileCatalog.encode(hidden)).commit();
+        if (!saved) { alert("Nie można ukryć kafelka."); return; }
+        DiagnosticLog.event("HOME_TILE_HIDDEN");
+        render();
+    }
+
+    private void removeHomeTile(String id) {
+        java.util.List<String> order = allHomeTiles();
+        if (!order.remove(id)) return;
+        java.util.List<String> hidden = hiddenHomeTiles();
+        hidden.remove(id);
+        boolean saved = prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .putString("home_tiles_v2_hidden",
+                HomeTileCatalog.encode(hidden))
             .remove("tile_target_" + id).remove("tile_label_" + id)
             .remove("tile_tint_" + id).remove("tile_icon_" + id)
             .remove("tile_width_" + id).commit();
@@ -885,6 +923,14 @@ public final class MainActivity extends Activity {
                 "Przeciągnij kafelek za uchwyt ⋮⋮ lub przytrzymaj kafelek.",
                 android.widget.Toast.LENGTH_LONG).show();
         });
+        TextView hide = text("◉  Ukryj kafelek", 16, true);
+        hide.setPadding(dp(14), dp(13), dp(14), dp(13));
+        hide.setBackground(skin.panel(this, skin.tileTop, 18));
+        menu.addView(hide);
+        hide.setOnClickListener(v -> {
+            popup.dismiss();
+            hideHomeTile(id);
+        });
         TextView remove = text("−  Usuń skrót z panelu", 16, true);
         remove.setPadding(dp(14), dp(13), dp(14), dp(13));
         remove.setBackground(skin.panel(this, skin.tileTop, 18));
@@ -1028,12 +1074,27 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
-    /** Preserve legacy nine-tile appearance/order; v2 is user-owned and has no fixed limit. */
-    private java.util.List<String> homeTileOrder() {
+    /** Keep hidden tile identity and appearance; only visible IDs participate in drag. */
+    private java.util.List<String> allHomeTiles() {
         return HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
             BetaUpdater.isBeta());
+    }
+
+    private java.util.List<String> hiddenHomeTiles() {
+        java.util.List<String> hidden = new java.util.ArrayList<>();
+        String saved = prefs.getString("home_tiles_v2_hidden", "");
+        java.util.List<String> known = allHomeTiles();
+        for (String id : saved.split(",", -1))
+            if (known.contains(id) && !hidden.contains(id)) hidden.add(id);
+        return hidden;
+    }
+
+    private java.util.List<String> homeTileOrder() {
+        java.util.List<String> visible = allHomeTiles();
+        visible.removeAll(hiddenHomeTiles());
+        return visible;
     }
 
     private boolean moveHomeTileAtIndex(String source, int slot) {
@@ -1050,8 +1111,13 @@ public final class MainActivity extends Activity {
             render(); // Also clears all preview transformations.
             return true;
         }
+        // Retain hidden shortcuts while persisting the visible order.
+        java.util.List<String> full = allHomeTiles();
+        full.removeAll(next);
+        java.util.List<String> nextFull = new java.util.ArrayList<>(next);
+        nextFull.addAll(full);
         boolean saved = prefs.edit().putString(HomeTileCatalog.ORDER_KEY,
-            HomeTileCatalog.encode(next)).commit();
+            HomeTileCatalog.encode(nextFull)).commit();
         if (!saved) {
             DiagnosticLog.event("HOME_TILE_DRAG_SAVE_FAILED");
             render();
