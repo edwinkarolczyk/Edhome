@@ -60,6 +60,8 @@ final class ShoppingReceiptStore {
             record.put("after_qty", before + packages);
             record.put("happened_at", System.currentTimeMillis());
             db.insertOrThrow("shopping_receipts", null, record);
+            // Price history follows the real product only on confirmed receipt.
+            PantryPriceHistoryStore.linkReceived(db, shoppingId, pantryId);
             ContentValues updated = new ContentValues();
             updated.put("qty", before + packages);
             if (db.update("pantry", updated, "id=? AND qty=?",
