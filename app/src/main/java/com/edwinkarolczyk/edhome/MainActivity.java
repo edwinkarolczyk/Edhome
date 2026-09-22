@@ -5196,7 +5196,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 21);
+            super(context, "edhome-beta-preview.db", null, 22);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -5223,6 +5223,7 @@ public final class MainActivity extends Activity {
             StorageStore.createTables(database);
             PaycheckStore.create(database);
             PaycheckGoalsStore.create(database);
+            PantryPriceHistoryStore.create(database);
             addDeviceTimers(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
@@ -5232,7 +5233,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 21) {
+            if (oldVersion < 1 || newVersion > 22) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -5340,6 +5341,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 21) {
                 PaycheckGoalsStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS");
+            }
+            if (oldVersion < 22) {
+                PantryPriceHistoryStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_21_TO_22_PANTRY_PRICES");
             }
         }
 
