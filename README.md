@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Status rozwoju na `beta`:** 0.5.0-beta.1 (`versionCode 44`, SQLite v20) — pierwszy ekran PayCheck wyłącznie dla wspólnego budżetu. Rzeczy, pudełka, lokalne QR i wypożyczenia są w 0.4.0-beta.12/13; `main` pozostaje bez zmian. Beta bez PIN-u nie przechowuje w tym etapie prywatnych kont ani transakcji. Podpisane APK i manifest aktualizacji pozostają w GitHub Releases / gałęzi `beta`.
+> **Aktualna wydana Beta: `0.5.0-beta.5` (versionCode 48, SQLite v22).** Wydania `.4` i `.5` obejmują kafelki bez limitu z edycją celu/nazwy/ikony/koloru/rozmiaru/pozycji, szyfrowany prywatny sejf i osobną zaszyfrowaną kopię PayCheck oraz opcjonalne ceny i historię zakupów w spiżarni. Prywatne finanse nie trafiają do zwykłego JSON; test kopii prywatnej i migracji na telefonie nadal wymagany. `main` bez zmian. Automatyczne podpisane APK i manifest: GitHub Releases / gałąź `beta`.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 
