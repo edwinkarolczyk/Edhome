@@ -91,6 +91,14 @@
 - SQLite v27→v28: dwa opcjonalne pola przypomnień w tabeli pojazdów. Starsze rekordy mają przypomnienia domyślnie wyłączone; eksport/import obejmuje ustawienia, waliduje wartości i nie usuwa danych. Stable `main` bez zmian.
 - Test na telefonie: ustaw termin niedługo przed datą testu, włącz OC, sprawdź prośbę o zgodę systemową, godziny ciszy, brak duplikatu, aktualizację starego OC i niezależny przegląd. Fizyczny odbiór osobno.
 
+## 0.6.0.6 — koszty pojazdu i opcjonalna płatność we wspólnym PayCheck
+
+- Na karcie pojazdu „Zapisz koszt pojazdu”: data, OC/przegląd/serwis/opony/inne, kwota PLN, notatka i domyślnie **wyłączona** opcja „Zapisz również jako WYDATEK we wspólnym PayCheck”.
+- Bez zaznaczenia powstaje tylko wpis historii kosztów. Z zaznaczeniem wpis pojazdu i **jedna** transakcja wspólna PayCheck zapisują się atomowo na tym samym `operation_id`, bez księgowania kolejnej wpłaty lub przekazu do celu oszczędnościowego. Sumy kosztów widoczne na karcie pojazdu.
+- Powtórzenie operacji nie tworzy duplikatu; błąd części transakcji cofa cały zapis. Nie dotykamy prywatnego sejfu.
+- SQLite v28→v29, eksport/import v29 zachowuje nowe koszty i link oraz sprawdza zgodność kwot, kategorii i referencji. Import v26–v28 zachowuje dane i dodaje pustą historię kosztów.
+- To nadal inkrement do odbioru fizycznego; brak załączników dokumentów i zakończenia całej 0.6.0. Stable `main` bez zmian.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

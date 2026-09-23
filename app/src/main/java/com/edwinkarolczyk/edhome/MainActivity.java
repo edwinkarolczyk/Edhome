@@ -2681,6 +2681,27 @@ public final class MainActivity extends Activity {
                             13, false));
                     }
                 }
+                smallButton(box, "+ Zapisz koszt pojazdu", () -> editVehicleCost(item));
+                try (Cursor total = db.getReadableDatabase().rawQuery(
+                        "SELECT COALESCE(SUM(amount_grosz),0) FROM vehicle_costs WHERE vehicle_id=?",
+                        new String[]{Long.toString(id)})) {
+                    if (total.moveToFirst() && total.getLong(0)>0)
+                        box.addView(text("Zapisane koszty: "
+                            + MoneyRules.format(total.getLong(0)), 15, true));
+                }
+                try (Cursor costs = db.getReadableDatabase().rawQuery(
+                        "SELECT kind,paid_on,amount_grosz,note,paycheck_operation_id "
+                        + "FROM vehicle_costs WHERE vehicle_id=? "
+                        + "ORDER BY paid_on DESC,id DESC LIMIT 30",
+                        new String[]{Long.toString(id)})) {
+                    while (costs.moveToNext())
+                        box.addView(text(costs.getString(1) + " • "
+                            + VehicleCostStore.label(costs.getString(0)) + " • "
+                            + MoneyRules.format(costs.getLong(2))
+                            + (costs.isNull(4) ? " • poza PayCheck" : " • wspólny PayCheck")
+                            + (costs.getString(3).isEmpty() ? ""
+                                : "\n" + costs.getString(3)), 13, false));
+                }
                 smallButton(box, "+ Zapisz serwis / opony / inne", () -> editVehicleEvent(item));
                 smallButton(box, "+ Dodaj komplet opon", () -> editVehicleTyres(item, null));
                 int tyreCount = 0;
@@ -2728,6 +2749,67 @@ public final class MainActivity extends Activity {
         }
         if (shown == 0)
             note("Brak pojazdów. Dodaj pierwszy samochód lub inny pojazd.");
+    }
+
+    /** An explicit tap is required before creating a shared PayCheck expense. */
+    private void editVehicleCost(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        form.addView(text("Koszt • " + vehicle.name, 15, true));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleCostStore.LABELS)));
+        form.addView(kind);
+        EditText date = vehicleCalendarDate(form, "Data zapłaty • kalendarz",
+            LocalDate.now().toString(), false);
+        EditText amount = vehicleInput(form, "Kwota PLN, np. 650,00", "");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText note = vehicleInput(form, "Opis kosztu (opcjonalnie)", "");
+        CheckBox paycheck = new CheckBox(this);
+        paycheck.setText("Zapisz również jako WYDATEK we wspólnym PayCheck");
+        paycheck.setChecked(false);
+        form.addView(paycheck);
+        form.addView(text("Bez zaznaczenia koszt jest wyłącznie w historii pojazdu. "
+            + "Z zaznaczeniem jedna płatność zostaje zapisana tylko raz, "
+            + "bez automatycznych wpłat na cel.", 13, false));
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Zapisz koszt • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String result = VehicleCostStore.record(db.getWritableDatabase(),
+                        vehicle.id, operationId,
+                        VehicleCostStore.KINDS[kind.getSelectedItemPosition()],
+                        date.getText().toString(),
+                        MoneyRules.parse(amount.getText().toString()),
+                        note.getText().toString(), paycheck.isChecked());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_COST_COMMITTED");
+                        dialog.dismiss();render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();alert("Koszt już zapisano. Nie powtórzono płatności.");
+                        render();
+                    } else alert("Pojazd już nie istnieje. Kosztu nie zapisano.");
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_COST", error);
+                    alert("Nie potwierdzono zapisu. Sprawdź historię i PayCheck przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
     }
 
     private String tyrePlaceName(long id) {
@@ -6477,6 +6559,7 @@ public final class MainActivity extends Activity {
             VehicleStore.create(database);
             VehicleTyreStore.create(database);
             VehiclePolicyStore.create(database);
+            VehicleCostStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
@@ -6485,7 +6568,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 28) {
+            if (oldVersion < 1 || newVersion > 29) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6627,6 +6710,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE vehicles ADD COLUMN inspection_reminder_lead "
                     + "INTEGER CHECK(inspection_reminder_lead IN (0,1,7,14,30))");
                 DiagnosticLog.event("DATABASE_MIGRATED_27_TO_28_VEHICLE_REMINDERS");
+            }
+            if (oldVersion < 29) {
+                VehicleCostStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_28_TO_29_VEHICLE_COSTS");
             }
         }
 

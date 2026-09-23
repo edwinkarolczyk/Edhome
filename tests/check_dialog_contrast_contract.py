@@ -68,7 +68,7 @@ assert "lightDialogForm(form);" in area(
     "private void showNewPantryProductDialog(String barcode, String operationId,\n"
     "            PantryProductLookup.Product found, String sourceDetails) {",
     "private void showPantryPriceHistory(")
-assert "versionCode 70" in gradle
+assert "versionCode 71" in gradle
 assert "versionNameSuffix ''" in gradle
 assert "tests/check_dialog_contrast_contract.py" in workflow
 print("Light dialog text/hint, spinner selection/dropdown and six-skin isolation: PASS")
