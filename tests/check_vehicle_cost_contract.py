@@ -31,6 +31,7 @@ for token in ('"vehicle_costs", "id", "operation_id", "vehicle_id"',
 db=runpy.run_path("tests/check_db_contract.py")["fresh"]
 db.execute("INSERT INTO vehicles(id,name) VALUES(9,'Audi')")
 op="11111111-1111-4111-8111-111111111111"
+db.commit()
 db.execute("BEGIN")
 db.execute("INSERT INTO paycheck_transactions(operation_id,scope,kind,category,"
            "amount_grosz,note,created_at) VALUES(?,'shared','expense','vehicle',"
