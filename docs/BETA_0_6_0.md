@@ -74,6 +74,15 @@
 - Terminy nadal są czytane bezpośrednio z tabeli pojazdów — żadnych drugich zadań, nowych transakcji ani zmian w bazie SQLite v26.
 - Odbiór: przy dzisiejszym miesiącu powinny być widoczne terminy 2027 na liście; przejście do nich ma pokazać wydarzenie w wybranym dniu. Sprawdzić też zwykłe czynności i agendę 30-dniową. Stable `main` bez zmian.
 
+## 0.6.0.4 — polisa OC ↔ istniejący wspólny cel PayCheck
+
+- Podczas dodawania polisy OC można wybrać opcjonalny **istniejący wspólny cel PayCheck**. Brak wyboru nie tworzy nowego celu; polityka prywatnych finansów w Becie bez PIN-u pozostaje bez zmian.
+- Karta pojazdu pokazuje powiązany cel i jego aktualny postęp (odłożone/kwota docelowa), a widok wspólnych celów pokazuje pojazdy i termin OC powiązanych **bieżących** polis, bez duplikatów zdarzeń kalendarzowych.
+- Link i nowa polisa zapisywane są atomowo; sprawdzamy istnienie celu przed zapisem. Ponowienie tego samego operation_id nie dodaje polisy, celu ani wpłaty. Historia polis i jej poprzednie powiązania nie są nadpisywane.
+- SQLite v26→v27 dodaje opcjonalny `goal_id` do polisy; stare polisy zachowują dane i mają pusty link. Kopia v27 przechowuje link i odrzuca referencje do nieistniejących celów; import kopii v26 ustawia brak linku.
+- Link jest wyłącznie informacyjny: nie tworzy wpłat, wydatków, nowych sald ani prywatnych danych; Stable `main` bez zmian.
+- Odbiór: utworzyć w PayCheck wspólny cel „OC”; dodać bieżącą polisę z linkiem; sprawdzić kartę pojazdu, cel i termin kalendarza; dodać polisę bez linku; zrestartować i sprawdzić dane i kopię.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

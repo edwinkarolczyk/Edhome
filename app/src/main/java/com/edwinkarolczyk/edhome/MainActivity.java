@@ -2651,7 +2651,7 @@ public final class MainActivity extends Activity {
                 int policyCount = 0;
                 try (Cursor policies = db.getReadableDatabase().rawQuery(
                         "SELECT provider,policy_number,valid_from,valid_until,"
-                        + "current,notes FROM vehicle_policies WHERE vehicle_id=? "
+                        + "current,notes,goal_id FROM vehicle_policies WHERE vehicle_id=? "
                         + "ORDER BY current DESC,valid_until DESC,id DESC LIMIT 30",
                         new String[]{Long.toString(id)})) {
                     while (policies.moveToNext()) {
@@ -2663,7 +2663,11 @@ public final class MainActivity extends Activity {
                             + "\n" + policies.getString(2) + " → "
                             + policies.getString(3)
                             + (policies.getString(5).isEmpty() ? ""
-                                : "\n" + policies.getString(5)), 13, false));
+                                : "\n" + policies.getString(5))
+                            + (policies.isNull(6) ? ""
+                                : "\nCel wspólny PayCheck: "
+                                    + vehiclePolicyGoalLabel(policies.getLong(6))),
+                            13, false));
                     }
                 }
                 smallButton(box, "+ Zapisz serwis / opony / inne", () -> editVehicleEvent(item));
@@ -2864,6 +2868,21 @@ public final class MainActivity extends Activity {
             selected.getDayOfMonth()).show();
     }
 
+    /** Read-only goal summary; never posts an allocation or a transaction. */
+    private String vehiclePolicyGoalLabel(long id) {
+        try (Cursor goal = db.getReadableDatabase().rawQuery(
+                "SELECT name,target_grosz FROM paycheck_goals "
+                + "WHERE id=? AND scope='shared'",
+                new String[]{Long.toString(id)})) {
+            if (!goal.moveToFirst()) return "brak celu (sprawdź kopię danych)";
+            long saved = PaycheckGoalsStore.allocated(
+                db.getReadableDatabase(), id);
+            return goal.getString(0) + " • "
+                + MoneyRules.format(saved) + " / "
+                + MoneyRules.format(goal.getLong(1));
+        }
+    }
+
     /** Policy history never overwrites earlier records and never posts a PayCheck cost. */
     private void editVehiclePolicy(VehicleStore.Vehicle vehicle) {
         LinearLayout form = new LinearLayout(this);
@@ -2900,6 +2919,26 @@ public final class MainActivity extends Activity {
                 until.setText(VehiclePolicyDates.yearMinusDay(
                     from.getText().toString()));
         });
+        form.addView(text("Powiąż opcjonalnie ze wspólnym celem PayCheck",
+            14, false));
+        java.util.List<Long> goalIds = new java.util.ArrayList<>();
+        java.util.List<String> goalNames = new java.util.ArrayList<>();
+        goalIds.add(null);
+        goalNames.add("Bez powiązania z celem");
+        try (Cursor goals = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,target_grosz FROM paycheck_goals "
+                + "WHERE scope='shared' ORDER BY name COLLATE NOCASE,id", null)) {
+            while (goals.moveToNext()) {
+                goalIds.add(goals.getLong(0));
+                goalNames.add(goals.getString(1) + " • "
+                    + MoneyRules.format(goals.getLong(2)));
+            }
+        }
+        Spinner goal = new Spinner(this);
+        goal.setAdapter(lightDialogSpinnerAdapter(goalNames));
+        form.addView(goal);
+        form.addView(text("To wyłącznie powiązanie: bez automatycznej wpłaty, "
+            + "wydatku i zmian salda. Nowy cel dodasz w PayCheck.", 13, false));
         CheckBox active = new CheckBox(this);
         active.setText("Ustaw jako bieżącą polisę i termin OC w kalendarzu");
         active.setChecked(true);
@@ -2924,7 +2963,8 @@ public final class MainActivity extends Activity {
                         vehicle.id,operationId,provider.getText().toString(),
                         number.getText().toString(),from.getText().toString(),
                         until.getText().toString(),active.isChecked(),
-                        notes.getText().toString());
+                        notes.getText().toString(),
+                        goalIds.get(goal.getSelectedItemPosition()));
                     if ("COMMITTED".equals(result)) {
                         DiagnosticLog.event("VEHICLE_POLICY_COMMITTED");
                         dialog.dismiss();render();
@@ -4025,6 +4065,17 @@ public final class MainActivity extends Activity {
                     + " / " + MoneyRules.format(target), 16, false));
                 entry.addView(text("Do celu: "
                     + MoneyRules.format(Math.max(0, target - saved)), 14, false));
+                try (Cursor policies = db.getReadableDatabase().rawQuery(
+                        "SELECT v.name,p.valid_until FROM vehicle_policies p "
+                        + "JOIN vehicles v ON v.id=p.vehicle_id "
+                        + "WHERE p.goal_id=? AND p.current=1 "
+                        + "ORDER BY p.valid_until,p.id",
+                        new String[]{Long.toString(id)})) {
+                    while (policies.moveToNext()) {
+                        entry.addView(text("OC • " + policies.getString(0)
+                            + " • termin " + policies.getString(1), 14, false));
+                    }
+                }
                 if (saved < target) {
                     smallButton(entry, "+ Odłóż na cel", () ->
                         allocateSharedPaycheckGoal(id, name, target, saved));
@@ -6320,7 +6371,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 26);
+            super(context, "edhome-beta-preview.db", null, 27);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6360,7 +6411,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 26) {
+            if (oldVersion < 1 || newVersion > 27) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6491,6 +6542,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 26) {
                 VehiclePolicyStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_25_TO_26_VEHICLE_POLICIES");
+            }
+            if (oldVersion >= 26 && oldVersion < 27) {
+                database.execSQL("ALTER TABLE vehicle_policies ADD COLUMN goal_id INTEGER");
+                DiagnosticLog.event("DATABASE_MIGRATED_26_TO_27_POLICY_GOAL_LINK");
             }
         }
 

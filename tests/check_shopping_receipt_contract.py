@@ -35,14 +35,14 @@ for token in (
 ):
     assert token in store, token
 for token in (
-    'DB_VERSION = 26;',
+    'DB_VERSION = 27;',
     '{"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",',
     'inputVersion < 18 && "shopping_receipts".equals(definition[0])',
     'Podwójne przyjęcie zakupów w kopii.',
     '"shopping_id".equals(column) || "packages".equals(column)',
 ):
     assert token in backup, token
-assert "versionCode 68" in gradle and "versionNameSuffix ''" in gradle
+assert "versionCode 69" in gradle and "versionNameSuffix ''" in gradle
 
 db = sqlite3.connect(":memory:")
 db.executescript("""

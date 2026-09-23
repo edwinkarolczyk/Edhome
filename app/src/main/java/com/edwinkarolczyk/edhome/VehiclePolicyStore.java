@@ -18,7 +18,7 @@ final class VehiclePolicyStore {
             + "provider TEXT NOT NULL, policy_number TEXT NOT NULL, "
             + "valid_from TEXT NOT NULL, valid_until TEXT NOT NULL, "
             + "current INTEGER NOT NULL DEFAULT 0 CHECK(current IN (0,1)), "
-            + "notes TEXT NOT NULL DEFAULT '')");
+            + "notes TEXT NOT NULL DEFAULT '', goal_id INTEGER)");
         db.execSQL("CREATE UNIQUE INDEX vehicle_policies_one_current "
             + "ON vehicle_policies(vehicle_id) WHERE current=1");
         db.execSQL("CREATE INDEX vehicle_policies_vehicle_idx "
@@ -61,7 +61,7 @@ final class VehiclePolicyStore {
      */
     static String add(SQLiteDatabase db, long vehicleId, String operationId,
             String company, String policyNumber, String from, String until,
-            boolean makeCurrent, String description) {
+            boolean makeCurrent, String description, Long goalId) {
         company=provider(company);
         policyNumber=number(policyNumber);
         until=dates(from,until);
@@ -81,6 +81,15 @@ final class VehiclePolicyStore {
                 }
             }
             if(VehicleStore.find(db,vehicleId)==null)return "MISSING_VEHICLE";
+            if(goalId!=null){
+                if(goalId<1)throw new IllegalArgumentException("Nieprawidłowy cel OC.");
+                try(Cursor goal=db.rawQuery(
+                        "SELECT 1 FROM paycheck_goals WHERE id=? AND scope='shared'",
+                        new String[]{Long.toString(goalId)})){
+                    if(!goal.moveToFirst())
+                        throw new IllegalArgumentException("Wspólny cel PayCheck nie istnieje.");
+                }
+            }
             if(makeCurrent) {
                 ContentValues previous=new ContentValues();
                 previous.put("current",0);
@@ -96,6 +105,8 @@ final class VehiclePolicyStore {
             policy.put("valid_until",until);
             policy.put("current",makeCurrent?1:0);
             policy.put("notes",description);
+            if(goalId==null)policy.putNull("goal_id");
+            else policy.put("goal_id",goalId);
             db.insertOrThrow("vehicle_policies",null,policy);
             if(makeCurrent){
                 ContentValues vehicle=new ContentValues();

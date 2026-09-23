@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 26;
+    private static final int DB_VERSION = 27;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -78,7 +78,8 @@ final class DataBackup {
         {"vehicle_tyre_sets", "id", "vehicle_id", "label", "season",
             "dot", "tread_tenths", "mounted", "place_id"},
         {"vehicle_policies", "id", "operation_id", "vehicle_id", "provider",
-            "policy_number", "valid_from", "valid_until", "current", "notes"}
+            "policy_number", "valid_from", "valid_until", "current", "notes",
+            "goal_id"}
     };
 
     private DataBackup() { }
@@ -428,6 +429,12 @@ final class DataBackup {
                             values.put(key, "other");
                             continue;
                         }
+                        if (inputVersion < 27
+                                && "vehicle_policies".equals(definition[0])
+                                && "goal_id".equals(key)) {
+                            values.putNull(key);
+                            continue;
+                        }
                         if (inputVersion < 23
                                 && ("shopping_items".equals(definition[0])
                                     || "shopping_receipts".equals(definition[0]))) {
@@ -460,7 +467,9 @@ final class DataBackup {
                             || ("vehicle_events".equals(definition[0])
                                 && "mileage".equals(key))
                             || ("vehicle_tyre_sets".equals(definition[0])
-                                && "tread_tenths".equals(key))))
+                                && "tread_tenths".equals(key))
+                            || ("vehicle_policies".equals(definition[0])
+                                && "goal_id".equals(key))))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -585,12 +594,14 @@ final class DataBackup {
                     String from = values.getAsString("valid_from");
                     String until = values.getAsString("valid_until");
                     Long current = values.getAsLong("current");
+                    Long goalId = values.getAsLong("goal_id");
                     String description = values.getAsString("notes");
                     if (operation == null || !operation.matches(
                                 "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
                                 + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
                             || vehicle == null || vehicle < 1
                             || current == null || current < 0 || current > 1
+                            || goalId != null && goalId < 1
                             || !VehiclePolicyStore.provider(company).equals(company)
                             || !VehiclePolicyStore.number(number).equals(number)
                             || !VehiclePolicyStore.dates(from,until).equals(until)
@@ -910,6 +921,12 @@ final class DataBackup {
         for (ContentValues goal : parsed.get("paycheck_goals"))
             goalLimits.put(goal.getAsLong("id"),
                 goal.getAsLong("target_grosz"));
+        for (ContentValues policy : parsed.get("vehicle_policies")) {
+            Long goalId = policy.getAsLong("goal_id");
+            if (goalId != null && !goalLimits.containsKey(goalId))
+                throw new IllegalArgumentException(
+                    "Polisa OC wskazuje nieistniejący wspólny cel PayCheck.");
+        }
         Map<Long, Long> goalTotals = new HashMap<>();
         Set<String> goalOperations = new HashSet<>();
         for (ContentValues row : parsed.get("paycheck_goal_allocations")) {
