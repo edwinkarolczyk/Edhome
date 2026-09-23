@@ -2741,8 +2741,9 @@ public final class MainActivity extends Activity {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(10), dp(18), dp(10));
-        EditText date = vehicleInput(form, "Data RRRR-MM-DD",
-            LocalDate.now().toString());
+        EditText date = vehicleCalendarDate(form,
+            "Data zmiany kół • wybierz w kalendarzu",
+            LocalDate.now().toString(), false);
         EditText mileage = vehicleInput(form, "Przebieg [km] (opcjonalnie)", "");
         mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(text("Gdzie odłożyć zdjęty komplet?", 13, false));
@@ -2901,6 +2902,22 @@ public final class MainActivity extends Activity {
         return input;
     }
 
+    /** Calendar-backed dates are read-only to avoid malformed ISO strings and keyboard overlap. */
+    private EditText vehicleCalendarDate(LinearLayout form, String hint,
+            String value, boolean optional) {
+        EditText input = vehicleInput(form, hint, value);
+        input.setFocusable(false);
+        input.setClickable(true);
+        input.setOnClickListener(v -> pickVehiclePolicyDate(input, null));
+        if (optional) {
+            TextView clear = text("Wyczyść: " + hint, 13, false);
+            clear.setTextColor(0xFF08796E);
+            clear.setOnClickListener(v -> input.setText(""));
+            form.addView(clear);
+        }
+        return input;
+    }
+
     private void editVehicle(VehicleStore.Vehicle vehicle) {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -2912,10 +2929,11 @@ public final class MainActivity extends Activity {
         EditText mileage = vehicleInput(form, "Aktualny przebieg [km]",
             vehicle == null ? "0" : Long.toString(vehicle.mileage));
         mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        EditText oc = vehicleInput(form, "OC do: RRRR-MM-DD (opcjonalnie)",
-            vehicle == null ? "" : vehicle.ocUntil);
-        EditText inspection = vehicleInput(form, "Przegląd do: RRRR-MM-DD (opcjonalnie)",
-            vehicle == null ? "" : vehicle.inspectionUntil);
+        EditText oc = vehicleCalendarDate(form, "OC do (opcjonalnie) • wybierz datę",
+            vehicle == null ? "" : vehicle.ocUntil, true);
+        EditText inspection = vehicleCalendarDate(form,
+            "Przegląd do (opcjonalnie) • wybierz datę",
+            vehicle == null ? "" : vehicle.inspectionUntil, true);
         EditText notes = vehicleInput(form, "Notatka (opcjonalnie)",
             vehicle == null ? "" : vehicle.notes);
         lightDialogForm(form);
@@ -2955,8 +2973,9 @@ public final class MainActivity extends Activity {
         kind.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Serwis / olej / filtry", "Opony", "Inne")));
         form.addView(kind);
-        EditText date = vehicleInput(form, "Data RRRR-MM-DD",
-            LocalDate.now().toString());
+        EditText date = vehicleCalendarDate(form,
+            "Data serwisu • wybierz w kalendarzu",
+            LocalDate.now().toString(), false);
         EditText mileage = vehicleInput(form, "Przebieg [km] (opcjonalnie)", "");
         mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         EditText description = vehicleInput(form, "Co wykonano? (maks. 500 znaków)", "");

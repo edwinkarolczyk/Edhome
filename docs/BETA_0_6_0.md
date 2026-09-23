@@ -51,6 +51,13 @@
 - Walidacja dat i historii polis pozostaje po stronie zapisującej; ta zmiana nie księguje nic do PayCheck i nie modyfikuje schematu SQLite v26 ani kopii danych.
 - Test odbioru: zaznacz datę początku; sprawdź proponowany koniec; wskaż inny koniec; zmień początek i sprawdź, czy indywidualny koniec pozostał; przywróć automat. `main` bez zmian.
 
+## 0.6.0.1 — daty pojazdów z kalendarza (odbiór na telefonie wymagany)
+
+- W edycji pojazdu OC i przegląd, a w historii serwisu i wymianie kół daty wybiera się z kalendarza Androida. Nie trzeba ręcznie wpisywać RRRR-MM-DD.
+- Opcjonalne terminy OC i przeglądu można jawnie wyczyścić. Edytując istniejący termin, kalendarz otwiera zapisaną datę. Serwis i wymiana kół domyślnie podpowiadają bieżącą datę.
+- Wersjonowanie testowego kanału zmienione na `0.6.0.1`, `0.6.0.2` itd., bez sufiksu `-beta.N` w numerze aplikacji. Kanał instalacyjny Beta, pakiet i podpis pozostają bez zmian.
+- Brak zmian schematu SQLite v26, kopii i księgowania PayCheck. Stable `main` bez zmian.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

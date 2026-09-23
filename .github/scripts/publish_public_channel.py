@@ -32,7 +32,8 @@ gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 if not apk.is_file() or apk.stat().st_size < 1000:
     raise SystemExit("Signed APK is missing or too small.")
 name = re.search(r"\bversionName\s+'([^']+)'", gradle).group(1)
-suffix = re.search(r"beta\s*\{[\s\S]*?versionNameSuffix\s+'([^']+)'", gradle).group(1)
+suffix_match = re.search(r"beta\s*\{[\s\S]*?versionNameSuffix\s+'([^']*)'", gradle)
+suffix = suffix_match.group(1) if suffix_match else ""
 code = int(re.search(r"\bversionCode\s+(\d+)", gradle).group(1))
 version = name + suffix
 tag = "beta-v" + version
