@@ -43,6 +43,14 @@
 - **Nie ma jeszcze** plikowych załączników ani integracji z celami PayCheck. Nie księgować automatycznie wydatków; `main` nietknięta.
 - Odbiór: dodać polisę bieżącą i archiwalną; sprawdzić kalendarz, historię oraz zachowanie danych po aktualizacji.
 
+## 0.6.0-beta.5 — wybór dat OC z kalendarza i opcjonalny koniec polisy
+
+- Początek i koniec polisy OC wybiera się z natywnego kalendarza Androida, bez ręcznego wpisywania RRRR-MM-DD.
+- Domyślnie wyliczany koniec to początek + jeden rok kalendarzowy − jeden dzień (np. 2026-09-09 → 2027-09-08), z obsługą lat przestępnych.
+- Podpowiedź jest opcjonalna: odznaczenie automatycznego końca albo wybranie daty końca w kalendarzu pozwala na indywidualny okres. Ponowny wybór automatu wylicza koniec na nowo. Zmiana początku po ręcznym nadpisaniu nie kasuje indywidualnego końca.
+- Walidacja dat i historii polis pozostaje po stronie zapisującej; ta zmiana nie księguje nic do PayCheck i nie modyfikuje schematu SQLite v26 ani kopii danych.
+- Test odbioru: zaznacz datę początku; sprawdź proponowany koniec; wskaż inny koniec; zmień początek i sprawdź, czy indywidualny koniec pozostał; przywróć automat. `main` bez zmian.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

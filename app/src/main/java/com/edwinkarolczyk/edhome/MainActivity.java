@@ -2787,6 +2787,21 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    /** Read-only date field: tapping it opens the native Android date picker. */
+    private void pickVehiclePolicyDate(EditText input, Runnable afterPick) {
+        LocalDate selected;
+        try {
+            selected = LocalDate.parse(input.getText().toString());
+        } catch (Exception ignored) {
+            selected = LocalDate.now();
+        }
+        new DatePickerDialog(this, (picker, year, month, day) -> {
+            input.setText(LocalDate.of(year, month + 1, day).toString());
+            if (afterPick != null) afterPick.run();
+        }, selected.getYear(), selected.getMonthValue() - 1,
+            selected.getDayOfMonth()).show();
+    }
+
     /** Policy history never overwrites earlier records and never posts a PayCheck cost. */
     private void editVehiclePolicy(VehicleStore.Vehicle vehicle) {
         LinearLayout form = new LinearLayout(this);
@@ -2794,9 +2809,35 @@ public final class MainActivity extends Activity {
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
         EditText provider = vehicleInput(form,"Ubezpieczyciel, np. PZU","");
         EditText number = vehicleInput(form,"Numer polisy","");
-        EditText from = vehicleInput(form,"OC od: RRRR-MM-DD",
+        // Both dates use Android's calendar instead of requiring ISO typing.
+        form.addView(text("Początek ochrony OC • dotknij daty",14,false));
+        EditText from = vehicleInput(form,"OC od • wybierz w kalendarzu",
             LocalDate.now().toString());
-        EditText until = vehicleInput(form,"OC do: RRRR-MM-DD","");
+        from.setFocusable(false);
+        from.setClickable(true);
+        form.addView(text("Koniec ochrony OC • dotknij daty, aby zmienić",14,false));
+        EditText until = vehicleInput(form,"OC do • wybierz w kalendarzu",
+            VehiclePolicyDates.yearMinusDay(from.getText().toString()));
+        until.setFocusable(false);
+        until.setClickable(true);
+        CheckBox automaticEnd = new CheckBox(this);
+        automaticEnd.setText("Automatycznie: rok od początku minus 1 dzień");
+        automaticEnd.setChecked(true);
+        form.addView(automaticEnd);
+        from.setOnClickListener(v -> pickVehiclePolicyDate(from, () -> {
+            if (automaticEnd.isChecked())
+                until.setText(VehiclePolicyDates.yearMinusDay(
+                    from.getText().toString()));
+        }));
+        until.setOnClickListener(v -> {
+            automaticEnd.setChecked(false);
+            pickVehiclePolicyDate(until, null);
+        });
+        automaticEnd.setOnCheckedChangeListener((button, checked) -> {
+            if (checked)
+                until.setText(VehiclePolicyDates.yearMinusDay(
+                    from.getText().toString()));
+        });
         CheckBox active = new CheckBox(this);
         active.setText("Ustaw jako bieżącą polisę i termin OC w kalendarzu");
         active.setChecked(true);
