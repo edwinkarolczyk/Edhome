@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 69,
-  "versionName": "0.6.0.4",
-  "changelog": "EDHOME 0.6.0.4 — opcjonalne powiązanie polisy OC ze wspólnym celem PayCheck i widok postępu celu oraz terminu z obu modułów. Bez automatycznych wpłat i wydatków. SQLite v27 i import starszych kopii; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.4/edhome-beta.apk",
-  "sha256": "ebd882fee8d626cd8edd7203cc2dad33834db32eaaa91450c512652c65e7a20b"
+  "versionCode": 70,
+  "versionName": "0.6.0.5",
+  "changelog": "EDHOME 0.6.0.5 — dobrowolne przypomnienia o OC i przeglądzie per pojazd: 30/14/7/1 dni wcześniej albo w dniu terminu; powiadomienie otwiera Pojazdy, bez drugich czynności i księgowań. SQLite v28 i kopie starszych danych; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.5/edhome-beta.apk",
+  "sha256": "0394b118c8f414267814051d68764b1082579e4c62841e7531a62fb9fa4c6293"
 }
