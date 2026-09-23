@@ -23,7 +23,8 @@ scoped={"vehicles":{"oc_reminder_lead","inspection_reminder_lead"},
         "pantry_purchase_prices":{"shopping_id","pantry_id","quantity_milli"},
         "vehicle_events":{"mileage"},
         "vehicle_tyre_sets":{"tread_tenths"},
-        "vehicle_policies":{"goal_id"}}
+        "vehicle_policies":{"goal_id"},
+        "vehicle_costs":{"paycheck_operation_id"}}
 missing_types=[]
 missing_nullable=[]
 for table,columns in manifest.items():
