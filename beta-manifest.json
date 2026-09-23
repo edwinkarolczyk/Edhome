@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 67,
-  "versionName": "0.6.0.2",
-  "changelog": "EDHOME 0.6.0.2 — stabilizacja: nie można usunąć Miejsca przypisanego do kompletu opon; blokada nie zmienia czynności ani zakupów. Przenieś komplet przed usunięciem Miejsca. SQLite v26 i dane bez zmian; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.2/edhome-beta.apk",
-  "sha256": "9740ce3e9ae193fdf5992dd61a8d046b5d7bd20919fbd3071cdb04fec7899b09"
+  "versionCode": 68,
+  "versionName": "0.6.0.3",
+  "changelog": "EDHOME 0.6.0.3 — kalendarz pokazuje najbliższe terminy OC i przeglądów także poza bieżącym miesiącem; przejście do daty z listy lub karty pojazdu. SQLite v26 i dane bez zmian; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.3/edhome-beta.apk",
+  "sha256": "b1578668dd132b5f6b6c677c8d043a0f414b2e2206a968608eeebf285f555dac"
 }
