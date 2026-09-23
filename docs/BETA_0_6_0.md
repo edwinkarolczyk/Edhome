@@ -58,6 +58,14 @@
 - Wersjonowanie testowego kanału zmienione na `0.6.0.1`, `0.6.0.2` itd., bez sufiksu `-beta.N` w numerze aplikacji. Kanał instalacyjny Beta, pakiet i podpis pozostają bez zmian.
 - Brak zmian schematu SQLite v26, kopii i księgowania PayCheck. Stable `main` bez zmian.
 
+## 0.6.0.2 — stabilizacja referencji miejsca dla opon
+
+- Usunięcie Miejsca jest zablokowane, gdy jest przypisane choćby do jednego kompletu opon pojazdu; dotychczasowy warunek sprawdzał tylko podmiejsca oraz rzeczy/pudełka magazynu.
+- Warunek jest sprawdzany **przed** odpięciem czynności i zakupów, więc odrzucona próba nie zmienia niczego w pozostałych modułach. Komplet, jego nazwa, DOT, bieżnik, lokalizacja i historia nie są usuwane ani przenoszone.
+- Po ręcznym przeniesieniu kompletu do innego Miejsca (lub usunięciu przypisania) można usunąć poprzednie Miejsce na dotychczasowych zasadach.
+- Regresja SQLite + kontrakt UI obejmują zajęte miejsce, zachowanie czynności i możliwość usunięcia dopiero po zwolnieniu opon. Schemat SQLite v26 i kopia danych bez zmian.
+- To inkrement stabilizacyjny; nie oznacza zakończenia całego 0.6.0 ani zgody na `main`.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

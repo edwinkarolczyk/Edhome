@@ -3159,7 +3159,8 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
-                    alert("Miejsce ma podmiejsca lub rzeczy/pudełka. Przenieś je najpierw.");
+                    alert("Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon. "
+                        + "Przenieś je najpierw.");
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
@@ -7178,6 +7179,13 @@ public final class MainActivity extends Activity {
                         "SELECT 1 FROM storage_items WHERE place_id=? LIMIT 1",
                         new String[]{Long.toString(id)})) {
                     if (occupied.moveToFirst()) return false;
+                }
+                // Vehicle tyres use the same Places, but are not storage_items.
+                // Reject deletion before clearing any other relations or history.
+                try (Cursor tyres = database.rawQuery(
+                        "SELECT 1 FROM vehicle_tyre_sets WHERE place_id=? LIMIT 1",
+                        new String[]{Long.toString(id)})) {
+                    if (tyres.moveToFirst()) return false;
                 }
                 database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});

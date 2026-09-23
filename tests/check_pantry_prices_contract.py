@@ -50,6 +50,6 @@ assert 'DATABASE_MIGRATED_21_TO_22_PANTRY_PRICES' in main
 assert '"pantry_purchase_prices", "id", "operation_id", "shopping_id", "pantry_id"' in backup
 assert 'inputVersion < 22 && "pantry_purchase_prices".equals(definition[0])' in backup
 assert 'private static final int DB_VERSION = 26;' in backup
-assert 'versionCode 66' in gradle and "versionNameSuffix ''" in gradle
+assert 'versionCode 67' in gradle and "versionNameSuffix ''" in gradle
 assert '"pantry_purchase_prices"' not in (base / "PaycheckStore.java").read_text(encoding="utf-8")
 print("Optional historical prices, v22 migration, backup, no automatic PayCheck: PASS")

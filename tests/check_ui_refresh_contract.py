@@ -64,8 +64,8 @@ assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 66" in gradle
-assert "versionName '0.6.0.1'" in gradle
+assert "versionCode 67" in gradle
+assert "versionName '0.6.0.2'" in gradle
 settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
 assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
 assert 'themeChoice.setSelection(Math.max(0, currentTheme));' in settings
