@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 68,
-  "versionName": "0.6.0.3",
-  "changelog": "EDHOME 0.6.0.3 — kalendarz pokazuje najbliższe terminy OC i przeglądów także poza bieżącym miesiącem; przejście do daty z listy lub karty pojazdu. SQLite v26 i dane bez zmian; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.3/edhome-beta.apk",
-  "sha256": "b1578668dd132b5f6b6c677c8d043a0f414b2e2206a968608eeebf285f555dac"
+  "versionCode": 69,
+  "versionName": "0.6.0.4",
+  "changelog": "EDHOME 0.6.0.4 — opcjonalne powiązanie polisy OC ze wspólnym celem PayCheck i widok postępu celu oraz terminu z obu modułów. Bez automatycznych wpłat i wydatków. SQLite v27 i import starszych kopii; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.4/edhome-beta.apk",
+  "sha256": "ebd882fee8d626cd8edd7203cc2dad33834db32eaaa91450c512652c65e7a20b"
 }
