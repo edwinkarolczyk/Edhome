@@ -45,7 +45,7 @@ for token in (
 ):
     assert token in backup,token
 assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
-assert "versionCode 62" in gradle and "versionNameSuffix '-beta.2'" in gradle
+assert "versionCode 63" in gradle and "versionNameSuffix '-beta.3'" in gradle
 assert "versionName '0.6.0'" in gradle
 # Receipt and barcode commit must never automatically post to PayCheck.
 receipt=Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text()

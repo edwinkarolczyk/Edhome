@@ -1896,6 +1896,24 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Contrasting colors for white native dialogs, independent of the six screen themes. */
+    private int lightDialogAccent() {
+        if (UiSkin.TRAINER.equals(skin.name)) return 0xFFC62828;
+        if (UiSkin.NATURE.equals(skin.name) || UiSkin.PASTEL.equals(skin.name))
+            return 0xFF246B45;
+        if (UiSkin.GLASS.equals(skin.name)) return 0xFF176B83;
+        return 0xFF08796E;
+    }
+
+    private void lightDialogForm(View form) {
+        DialogContrast.apply(form, lightDialogAccent());
+    }
+
+    private ArrayAdapter<String> lightDialogSpinnerAdapter(
+            java.util.List<String> labels) {
+        return DialogContrast.spinnerAdapter(this, labels);
+    }
+
     private ArrayAdapter<String> themeSpinnerAdapter(java.util.List<String> items) {
         return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
             @Override public View getView(int position, View convertView,
@@ -2638,7 +2656,7 @@ public final class MainActivity extends Activity {
                 current = ids.size() - 1;
         }
         Spinner spinner = new Spinner(this);
-        spinner.setAdapter(themeSpinnerAdapter(names));
+        spinner.setAdapter(lightDialogSpinnerAdapter(names));
         spinner.setSelection(current);
         form.addView(spinner);
         return spinner;
@@ -2652,7 +2670,7 @@ public final class MainActivity extends Activity {
         EditText label = vehicleInput(form, "Komplet, np. zimowe na felgach",
             set == null ? "" : set.label);
         Spinner season = new Spinner(this);
-        season.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+        season.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Letnie", "Zimowe", "Całoroczne")));
         season.setSelection(set == null ? 0 :
             "winter".equals(set.season) ? 1 : "allseason".equals(set.season) ? 2 : 0);
@@ -2668,6 +2686,7 @@ public final class MainActivity extends Activity {
         form.addView(text("Miejsce przechowywania (dla zamontowanych: brak)", 13, false));
         java.util.List<Long> places = new java.util.ArrayList<>();
         Spinner storage = tyrePlaceSpinner(form, set == null ? null : set.placeId, places);
+        lightDialogForm(form);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -2711,6 +2730,7 @@ public final class MainActivity extends Activity {
         java.util.List<Long> places = new java.util.ArrayList<>();
         Spinner storage = tyrePlaceSpinner(form, null, places);
         String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -2784,6 +2804,7 @@ public final class MainActivity extends Activity {
             vehicle == null ? "" : vehicle.inspectionUntil);
         EditText notes = vehicleInput(form, "Notatka (opcjonalnie)",
             vehicle == null ? "" : vehicle.notes);
+        lightDialogForm(form);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -2817,7 +2838,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(10), dp(18), dp(10));
         Spinner kind = new Spinner(this);
-        kind.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+        kind.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Serwis / olej / filtry", "Opony", "Inne")));
         form.addView(kind);
         EditText date = vehicleInput(form, "Data RRRR-MM-DD",
@@ -2826,6 +2847,7 @@ public final class MainActivity extends Activity {
         mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         EditText description = vehicleInput(form, "Co wykonano? (maks. 500 znaków)", "");
         String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -3257,7 +3279,7 @@ public final class MainActivity extends Activity {
             }
         }
         Spinner destination=new Spinner(this);
-        destination.setAdapter(themeSpinnerAdapter(labels));
+        destination.setAdapter(lightDialogSpinnerAdapter(labels));
         if(existing!=null)for(int i=0;i<labels.size();i++){
             if(java.util.Objects.equals(boxIds.get(i),existing.boxId)
                     &&java.util.Objects.equals(placeIds.get(i),existing.placeId)){
@@ -3267,6 +3289,7 @@ public final class MainActivity extends Activity {
         layout.addView(text("Położenie (rzeczy w pudełku dziedziczą jego miejsce)",
             14,false));
         layout.addView(destination);
+        lightDialogForm(layout);
         new AlertDialog.Builder(this)
             .setTitle(existing==null?"Dodaj do magazynu":"Przenieś")
             .setView(layout).setNegativeButton("Anuluj",null)
@@ -3287,6 +3310,7 @@ public final class MainActivity extends Activity {
     private void askStorageLend(StorageStore.Item item){
         EditText recipient=new EditText(this);
         recipient.setSingleLine(true);recipient.setHint("Komu wypożyczono?");
+        lightDialogForm(recipient);
         new AlertDialog.Builder(this).setTitle("Wypożycz: "+item.name)
             .setView(recipient).setNegativeButton("Anuluj",null)
             .setPositiveButton("Wypożycz",(d,w)->{
@@ -4086,6 +4110,7 @@ public final class MainActivity extends Activity {
         shop.setSingleLine(true);
         shop.setHint("Sklep (opcjonalnie)");
         form.addView(shop);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Zakup • cena opcjonalna").setView(form)
             .setNegativeButton("Anuluj", (d,w) -> render())
@@ -4910,6 +4935,7 @@ public final class MainActivity extends Activity {
         packSize.setHint("np. 0,5");
         form.addView(packUnit);
         form.addView(packSize);
+        lightDialogForm(form);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
@@ -5051,10 +5077,8 @@ public final class MainActivity extends Activity {
 
     private Spinner pantryCategorySpinner(String category) {
         Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_item, PantryCategories.LABELS);
-        adapter.setDropDownViewResource(
-            android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> adapter = lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(PantryCategories.LABELS));
         spinner.setAdapter(adapter);
         int initial = java.util.Arrays.asList(PantryCategories.IDS)
             .indexOf(category);
@@ -5064,10 +5088,8 @@ public final class MainActivity extends Activity {
 
     private Spinner pantryPackageUnitSpinner(String initialUnit) {
         Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_item, PantryPackageRules.UNITS);
-        adapter.setDropDownViewResource(
-            android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> adapter = lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(PantryPackageRules.UNITS));
         spinner.setAdapter(adapter);
         int chosen = java.util.Arrays.asList(PantryPackageRules.UNITS)
             .indexOf(initialUnit);
@@ -5136,6 +5158,7 @@ public final class MainActivity extends Activity {
         packSize.setHint("np. 0,5");
         form.addView(packUnit);
         form.addView(packSize);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(id == null ? "Dodaj do spiżarni" : "Edytuj produkt")
             .setView(form).setNegativeButton("Anuluj", null)

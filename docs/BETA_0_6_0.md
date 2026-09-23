@@ -27,6 +27,13 @@
 - To nadal **seria 0.6.0**. Nie przechodzić do 0.6.1 przed ukończeniem
   i odbiorem całej 0.6.0; `main` bez zmian.
 
+## 0.6.0-beta.3 — czytelność formularzy (odbiór telefonu nadal osobno)
+
+- Jasne natywne dialogi korzystają z oddzielnej palety o wysokim kontraście; ciemny ekran EDHOME nie narzuca na nie jasnej czcionki ani bladego hinta.
+- Jedna wspólna metoda styluje pola, opisy i podkreślenia, a oddzielny adapter styluje zarówno wybraną wartość Spinnera, jak i listę rozwijaną.
+- Objęte testowanymi widokami: edycja pojazdu, historia serwisu, komplety i wymiana opon, tworzenie/przenoszenie rzeczy, edycja produktów i potwierdzenie produktu ze skanu; także formularz ceny zakupu.
+- Odbiór: otworzyć w każdym motywie i przy wysuniętej klawiaturze; sprawdzić puste i wypełnione pola oraz listę rozwijaną. Tylko UI: wersja danych i zasady księgowania bez zmian; nie wprowadzać zmian na `main`.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.
