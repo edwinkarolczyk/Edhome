@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 63,
   "versionName": "0.6.0-beta.3",
-  "changelog": "EDHOME 0.6.0-beta.2 — komplety opon, DOT, bieżnik, miejsce przechowywania i atomowa zmiana kół z historią; SQLite v25, import starszych kopii. Prace nad 0.6.0 trwają; Stable bez zmian.",
+  "changelog": "EDHOME 0.6.0-beta.3 — poprawiony kontrast jasnych formularzy: czytelny tekst, podpowiedzi i wybrane wartości list w Pojazdach, Magazynie i Spiżarni; bez zmian danych i SQLite v25. Stable bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.3/edhome-beta.apk",
   "sha256": "565bf48c07875fd02aec17bb5eefaf1f9782334ddf7ac5c12503615fa911ec03"
 }
