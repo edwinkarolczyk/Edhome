@@ -46,7 +46,7 @@ assert 'versionCode 71' in gradle and "versionName '0.6.0.6'" in gradle
 assert "versionNameSuffix ''" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
-assert len(context["schema"](db))==28
+assert len(context["schema"](db))==29
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes) "
            "VALUES(1,'Audi A4','WD 123',150000,'2027-09-01','2027-08-05','')")
 db.execute("INSERT INTO vehicle_events(operation_id,vehicle_id,kind,event_date,mileage,note) "

@@ -12,7 +12,7 @@ for token in (
     'ShoppingReceiptStore.create(database);',
     'DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS',
     'super(context, "edhome-beta-preview.db", null, 29)',
-    'oldVersion < 1 || newVersion > 28',
+    'oldVersion < 1 || newVersion > 29',
     'ShoppingReceiptStore.received(',
     'smallButton(box, "Przyjmij do spiżarni"',
     'chooseShoppingReceipt(shoppingId, name)',

@@ -42,5 +42,5 @@ for token in (
 assert 'if (!"task_rotation_members".equals(definition[0])' in backup
 assert '&& !"pantry_packages".equals(definition[0]))' in backup
 assert 'private static final int DB_VERSION = 29;' in backup
-assert 'super(context, "edhome-beta-preview.db", null, 28' in main
+assert 'super(context, "edhome-beta-preview.db", null, 29' in main
 print("Rotation DB v20, next-assignee history, deletion and backup contract: PASS")
