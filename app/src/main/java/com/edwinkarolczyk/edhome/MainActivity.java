@@ -6527,7 +6527,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 28);
+            super(context, "edhome-beta-preview.db", null, 29);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
