@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 70,
-  "versionName": "0.6.0.5",
-  "changelog": "EDHOME 0.6.0.5 — dobrowolne przypomnienia o OC i przeglądzie per pojazd: 30/14/7/1 dni wcześniej albo w dniu terminu; powiadomienie otwiera Pojazdy, bez drugich czynności i księgowań. SQLite v28 i kopie starszych danych; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.5/edhome-beta.apk",
-  "sha256": "0394b118c8f414267814051d68764b1082579e4c62841e7531a62fb9fa4c6293"
+  "versionCode": 71,
+  "versionName": "0.6.0.6",
+  "changelog": "EDHOME 0.6.0.6 — koszty OC, przeglądu, serwisu i opon z opcjonalnym jednorazowym wydatkiem we wspólnym PayCheck. Brak automatycznych księgowań; historia i kopie SQLite v29. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.6/edhome-beta.apk",
+  "sha256": "f88035d1528d9252d409087e606dd3f62ce3d585fdf271673734b1cbf3325455"
 }
