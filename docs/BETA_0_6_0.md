@@ -27,12 +27,21 @@
 - To nadal **seria 0.6.0**. Nie przechodzić do 0.6.1 przed ukończeniem
   i odbiorem całej 0.6.0; `main` bez zmian.
 
-## 0.6.0-beta.3 — czytelność formularzy (odbiór telefonu nadal osobno)
+## 0.6.0-beta.3 — czytelność formularzy (odbiór Edwina: TAK)
 
 - Jasne natywne dialogi korzystają z oddzielnej palety o wysokim kontraście; ciemny ekran EDHOME nie narzuca na nie jasnej czcionki ani bladego hinta.
 - Jedna wspólna metoda styluje pola, opisy i podkreślenia, a oddzielny adapter styluje zarówno wybraną wartość Spinnera, jak i listę rozwijaną.
 - Objęte testowanymi widokami: edycja pojazdu, historia serwisu, komplety i wymiana opon, tworzenie/przenoszenie rzeczy, edycja produktów i potwierdzenie produktu ze skanu; także formularz ceny zakupu.
 - Odbiór: otworzyć w każdym motywie i przy wysuniętej klawiaturze; sprawdzić puste i wypełnione pola oraz listę rozwijaną. Tylko UI: wersja danych i zasady księgowania bez zmian; nie wprowadzać zmian na `main`.
+
+## 0.6.0-beta.4 — polisy OC i historia odnowień
+
+- Na karcie pojazdu można zapisać polisę OC: ubezpieczyciel, numer, daty ważności i opcjonalna notatka.
+- Nowy rekord zachowuje poprzednią polisę w historii. Opcja „bieżąca” aktualizuje istniejący termin OC pojazdu, więc ten sam termin widać w kalendarzu bez drugiej czynności. Archiwalny zapis nie zmienia terminu.
+- Jedna polisa bieżąca na pojazd; zapis i aktualizacja terminu są jedną transakcją. Ponowienie operacji nie tworzy drugiego rekordu ani nie przywraca starszej polisy.
+- SQLite v25→v26 i backup v26 obejmują historię polis. Przy imporcie starszej kopii historia polis pozostaje pusta — bez dopisywania fikcyjnych dokumentów.
+- **Nie ma jeszcze** plikowych załączników ani integracji z celami PayCheck. Nie księgować automatycznie wydatków; `main` nietknięta.
+- Odbiór: dodać polisę bieżącą i archiwalną; sprawdzić kalendarz, historię oraz zachowanie danych po aktualizacji.
 
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 

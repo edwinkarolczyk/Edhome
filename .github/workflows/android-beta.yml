@@ -127,6 +127,8 @@ jobs:
             com.edwinkarolczyk.edhome.VehicleRulesSmoke
           python3 tests/check_vehicle_contract.py
           python3 tests/check_vehicle_tyre_contract.py
+      - name: Vehicle OC policy history and renewal integrity
+        run: python3 tests/check_vehicle_policy_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
@@ -338,14 +340,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0-beta.3-signed-apk
+          name: EDHOME-0.6.0-beta.4-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0-beta.2 — komplety opon, DOT, bieżnik, miejsce przechowywania i atomowa zmiana kół z historią; SQLite v25, import starszych kopii. Prace nad 0.6.0 trwają; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0-beta.4 — polisy OC: ubezpieczyciel, numer, daty i historia odnowień; jedna bieżąca polisa aktualizuje termin OC w kalendarzu, bez automatycznego księgowania PayCheck. SQLite v26, kopie starszych danych. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

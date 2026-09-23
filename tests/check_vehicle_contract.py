@@ -12,7 +12,7 @@ for token in (
     "VehicleStore.create(database);", "VehicleTyreStore.create(database);",
     "DATABASE_MIGRATED_24_TO_25_TYRE_SETS",
     "DATABASE_MIGRATED_23_TO_24_VEHICLES",
-    'super(context, "edhome-beta-preview.db", null, 25)',
+    'super(context, "edhome-beta-preview.db", null, 26)',
     'case "vehicles": vehicles(); break;',
     'header("Kalendarz • czynności i pojazdy")',
     "oc_until AS deadline", "inspection_until",
@@ -34,7 +34,7 @@ for token in (
 assert "PaycheckStore" not in store and "PantryBarcodeStore" not in store
 assert "VehicleRules.optionalDate" in store
 assert '"vehicles"' in catalog and 'case "vehicles": return "Pojazdy";' in catalog
-assert 'private static final int DB_VERSION = 25;' in backup
+assert 'private static final int DB_VERSION = 26;' in backup
 assert '{"vehicles", "id", "name", "registration", "mileage",' in backup
 assert '{"vehicle_events", "id", "operation_id", "vehicle_id",' in backup
 assert 'inputVersion < 24 && ("vehicles".equals(definition[0])' in backup
@@ -42,11 +42,11 @@ assert 'vehicleIds.contains(event.getAsLong("vehicle_id"))' in backup
 assert 'vehicleOperations.add(event.getAsString("operation_id"))' in backup
 assert '"mileage".equals(column) || "vehicle_id".equals(column)' in backup
 assert '"tread_tenths".equals(column) || "mounted".equals(column)' in backup
-assert 'versionCode 63' in gradle and "versionName '0.6.0'" in gradle
-assert "versionNameSuffix '-beta.3'" in gradle
+assert 'versionCode 64' in gradle and "versionName '0.6.0'" in gradle
+assert "versionNameSuffix '-beta.4'" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
-assert len(context["schema"](db))==27
+assert len(context["schema"](db))==28
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes) "
            "VALUES(1,'Audi A4','WD 123',150000,'2027-09-01','2027-08-05','')")
 db.execute("INSERT INTO vehicle_events(operation_id,vehicle_id,kind,event_date,mileage,note) "

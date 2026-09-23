@@ -70,6 +70,14 @@ final class VehicleStore {
                 Vehicle previous = find(db, id);
                 if (previous == null)
                     throw new IllegalArgumentException("Pojazd już nie istnieje.");
+                try (Cursor policy = db.rawQuery(
+                        "SELECT valid_until FROM vehicle_policies "
+                        + "WHERE vehicle_id=? AND current=1",
+                        new String[]{Long.toString(id)})) {
+                    if (policy.moveToFirst() && !ocUntil.equals(policy.getString(0)))
+                        throw new IllegalArgumentException(
+                            "Termin bieżącej polisy OC zmieniaj przez zapis nowej polisy.");
+                }
                 if (mileage < previous.mileage)
                     throw new IllegalArgumentException("Przebieg nie może się zmniejszyć.");
                 if (db.update("vehicles", values, "id=? AND mileage=?",

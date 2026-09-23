@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 25;
+    private static final int DB_VERSION = 26;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -76,7 +76,9 @@ final class DataBackup {
         {"vehicle_events", "id", "operation_id", "vehicle_id",
             "kind", "event_date", "mileage", "note"},
         {"vehicle_tyre_sets", "id", "vehicle_id", "label", "season",
-            "dot", "tread_tenths", "mounted", "place_id"}
+            "dot", "tread_tenths", "mounted", "place_id"},
+        {"vehicle_policies", "id", "operation_id", "vehicle_id", "provider",
+            "policy_number", "valid_from", "valid_until", "current", "notes"}
     };
 
     private DataBackup() { }
@@ -189,7 +191,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -349,6 +351,7 @@ final class DataBackup {
                 || (inputVersion < 24 && ("vehicles".equals(definition[0])
                     || "vehicle_events".equals(definition[0])))
                 || (inputVersion < 25 && "vehicle_tyre_sets".equals(definition[0]))
+                || (inputVersion < 26 && "vehicle_policies".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -573,6 +576,27 @@ final class DataBackup {
                             || !VehicleTyreStore.dot(dot).equals(dot))
                         throw new IllegalArgumentException(
                             "Nieprawidłowy komplet opon w kopii.");
+                }
+                if ("vehicle_policies".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    String company = values.getAsString("provider");
+                    String number = values.getAsString("policy_number");
+                    String from = values.getAsString("valid_from");
+                    String until = values.getAsString("valid_until");
+                    Long current = values.getAsLong("current");
+                    String description = values.getAsString("notes");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || current == null || current < 0 || current > 1
+                            || !VehiclePolicyStore.provider(company).equals(company)
+                            || !VehiclePolicyStore.number(number).equals(number)
+                            || !VehiclePolicyStore.dates(from,until).equals(until)
+                            || !VehiclePolicyStore.notes(description).equals(description))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowa polisa OC w kopii.");
                 }
                 if ("vehicle_events".equals(definition[0])) {
                     String operation = values.getAsString("operation_id");
@@ -832,6 +856,18 @@ final class DataBackup {
                     || mounted == 1 && !mountedVehicles.add(vehicle))
                 throw new IllegalArgumentException(
                     "Komplet opon bez pojazdu lub dwa zamontowane komplety.");
+        }
+        Set<Long> policyCurrentVehicles = new HashSet<>();
+        Set<String> policyOperations = new HashSet<>();
+        for (ContentValues policy : parsed.get("vehicle_policies")) {
+            Long vehicle = policy.getAsLong("vehicle_id");
+            Long current = policy.getAsLong("current");
+            String operation = policy.getAsString("operation_id");
+            if (!vehicleIds.contains(vehicle)
+                    || !policyOperations.add(operation)
+                    || current == 1 && !policyCurrentVehicles.add(vehicle))
+                throw new IllegalArgumentException(
+                    "Polisa OC bez pojazdu, duplikat lub dwie bieżące polisy.");
         }
         Map<Long, ContentValues> objects = new HashMap<>();
         Set<Long> validPlaces = new HashSet<>();
@@ -1136,6 +1172,7 @@ final class DataBackup {
             || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column)
             || "mileage".equals(column) || "vehicle_id".equals(column)
-            || "tread_tenths".equals(column) || "mounted".equals(column);
+            || "tread_tenths".equals(column) || "mounted".equals(column)
+            || "current".equals(column);
     }
 }

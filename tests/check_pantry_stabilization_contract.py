@@ -15,6 +15,6 @@ assert 'countdown.markCommitted(scannedBarcode);' in camera
 assert camera.index('PantryBarcodeStore.commit(db, barcode, null, "TAKE",') < camera.index(
     'countdown.markCommitted(scannedBarcode);')
 assert 'if (another != null) another.setEnabled(false);' in camera
-assert "versionCode 63" in gradle
-assert "versionNameSuffix '-beta.3'" in gradle
+assert "versionCode 64" in gradle
+assert "versionNameSuffix '-beta.4'" in gradle
 print("A-B-A consent and cancellation after unsuccessful scan: PASS")

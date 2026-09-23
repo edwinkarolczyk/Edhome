@@ -2586,6 +2586,25 @@ public final class MainActivity extends Activity {
                         + vehicleDeadline(item.inspectionUntil), 15, false));
                 if (!item.notes.isEmpty()) box.addView(text(item.notes, 13, false));
                 smallButton(box, "Edytuj pojazd", () -> editVehicle(item));
+                smallButton(box, "+ Zapisz polisę OC", () -> editVehiclePolicy(item));
+                int policyCount = 0;
+                try (Cursor policies = db.getReadableDatabase().rawQuery(
+                        "SELECT provider,policy_number,valid_from,valid_until,"
+                        + "current,notes FROM vehicle_policies WHERE vehicle_id=? "
+                        + "ORDER BY current DESC,valid_until DESC,id DESC LIMIT 30",
+                        new String[]{Long.toString(id)})) {
+                    while (policies.moveToNext()) {
+                        if (policyCount++ == 0)
+                            box.addView(text("Polisy OC — bieżąca i historia", 15, true));
+                        box.addView(text((policies.getInt(4) == 1
+                                ? "BIEŻĄCA • " : "Archiwalna • ")
+                            + policies.getString(0) + " • nr " + policies.getString(1)
+                            + "\n" + policies.getString(2) + " → "
+                            + policies.getString(3)
+                            + (policies.getString(5).isEmpty() ? ""
+                                : "\n" + policies.getString(5)), 13, false));
+                    }
+                }
                 smallButton(box, "+ Zapisz serwis / opony / inne", () -> editVehicleEvent(item));
                 smallButton(box, "+ Dodaj komplet opon", () -> editVehicleTyres(item, null));
                 int tyreCount = 0;
@@ -2763,6 +2782,60 @@ public final class MainActivity extends Activity {
                     alert("Nie potwierdzono zmiany. Sprawdź historię przed ponowieniem.");
                 } finally {
                     if (dialog.isShowing())save.setEnabled(true);
+                }
+            }));
+        dialog.show();
+    }
+
+    /** Policy history never overwrites earlier records and never posts a PayCheck cost. */
+    private void editVehiclePolicy(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText provider = vehicleInput(form,"Ubezpieczyciel, np. PZU","");
+        EditText number = vehicleInput(form,"Numer polisy","");
+        EditText from = vehicleInput(form,"OC od: RRRR-MM-DD",
+            LocalDate.now().toString());
+        EditText until = vehicleInput(form,"OC do: RRRR-MM-DD","");
+        CheckBox active = new CheckBox(this);
+        active.setText("Ustaw jako bieżącą polisę i termin OC w kalendarzu");
+        active.setChecked(true);
+        form.addView(active);
+        EditText notes = vehicleInput(form,"Notatka (opcjonalnie)","");
+        form.addView(text("Archiwalną polisę możesz dodać bez zmiany aktualnego "
+            + "terminu OC. Zapis nie dodaje wydatku do PayCheck.",13,false));
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Polisa OC • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz polisę",null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String result = VehiclePolicyStore.add(db.getWritableDatabase(),
+                        vehicle.id,operationId,provider.getText().toString(),
+                        number.getText().toString(),from.getText().toString(),
+                        until.getText().toString(),active.isChecked(),
+                        notes.getText().toString());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_POLICY_COMMITTED");
+                        dialog.dismiss();render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();alert("Polisa została już zapisana.");
+                        render();
+                    } else alert("Nie odnaleziono pojazdu. Polisy nie zapisano.");
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_POLICY",error);
+                    alert("Nie potwierdzono zapisu. Sprawdź listę polis przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
                 }
             }));
         dialog.show();
@@ -6125,7 +6198,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 25);
+            super(context, "edhome-beta-preview.db", null, 26);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6156,6 +6229,7 @@ public final class MainActivity extends Activity {
             addDeviceTimers(database);
             VehicleStore.create(database);
             VehicleTyreStore.create(database);
+            VehiclePolicyStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
@@ -6164,7 +6238,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 25) {
+            if (oldVersion < 1 || newVersion > 26) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6291,6 +6365,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 25) {
                 VehicleTyreStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_24_TO_25_TYRE_SETS");
+            }
+            if (oldVersion < 26) {
+                VehiclePolicyStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_25_TO_26_VEHICLE_POLICIES");
             }
         }
 

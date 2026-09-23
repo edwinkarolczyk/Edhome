@@ -27,11 +27,11 @@ for token in (
     'PAYCHECK_SHARED_GOAL_ALLOCATED',
     'Nie zmienia salda wspólnego PayCheck.',
     'DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS',
-    'super(context, "edhome-beta-preview.db", null, 25)',
+    'super(context, "edhome-beta-preview.db", null, 26)',
 ):
     assert token in main, "Goal UI/schema missing: "+token
 for token in (
-    'DB_VERSION = 25;',
+    'DB_VERSION = 26;',
     '"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"',
     '"paycheck_goal_allocations", "id", "operation_id", "goal_id"',
     'inputVersion < 21 && ("paycheck_goals".equals(definition[0])',
@@ -40,7 +40,7 @@ for token in (
     '"target_grosz".equals(column) || "goal_id".equals(column)',
 ):
     assert token in backup, "Backup protection absent: "+token
-assert "versionCode 63" in gradle and "versionNameSuffix '-beta.3'" in gradle
+assert "versionCode 64" in gradle and "versionNameSuffix '-beta.4'" in gradle
 assert "PaycheckGoalsStore" not in (root/"ShoppingReceiptStore.java").read_text()
 assert "PaycheckGoalsStore" not in (root/"PantryBarcodeStore.java").read_text()
 body=source.split("static void create(SQLiteDatabase db)",1)[1].split("static long addGoal(",1)[0]
