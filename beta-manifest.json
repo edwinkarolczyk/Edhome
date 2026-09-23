@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 61,
-  "versionName": "0.6.0-beta.1",
-  "changelog": "EDHOME 0.6.0-beta.1 — poczatek Pojazdow: karty, przebieg, OC i przeglad w kalendarzu, historia serwisu z ochrona przed duplikatami; SQLite v24, import starszych kopii. Opony w kolejnym etapie; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.1/edhome-beta.apk",
-  "sha256": "15ace1e9f79ee77aff8909e217991830d1d24fbc769c9dbb5701afcace4fa6d6"
+  "versionCode": 62,
+  "versionName": "0.6.0-beta.2",
+  "changelog": "EDHOME 0.6.0-beta.2 — komplety opon, DOT, bieżnik, miejsce przechowywania i atomowa zmiana kół z historią; SQLite v25, import starszych kopii. Prace nad 0.6.0 trwają; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.2/edhome-beta.apk",
+  "sha256": "fd75e4907b6f645bd4e39b91f4595829d978d61ef55f7401b209dd2d2a18bcbb"
 }
