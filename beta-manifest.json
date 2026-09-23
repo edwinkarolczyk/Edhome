@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 64,
-  "versionName": "0.6.0-beta.4",
-  "changelog": "EDHOME 0.6.0-beta.4 — polisy OC: ubezpieczyciel, numer, daty i historia odnowień; jedna bieżąca polisa aktualizuje termin OC w kalendarzu, bez automatycznego księgowania PayCheck. SQLite v26, kopie starszych danych. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.4/edhome-beta.apk",
-  "sha256": "c9093e6689f2135dbd2a1733687b9ffe5e7750a53146ff224f817f55bc4e8cd5"
+  "versionCode": 65,
+  "versionName": "0.6.0-beta.5",
+  "changelog": "EDHOME 0.6.0-beta.5 — polisa OC: daty wybierane z kalendarza, opcjonalny koniec po roku minus jeden dzień, ręczny termin nie jest nadpisywany. SQLite v26 i dane bez zmian; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.5/edhome-beta.apk",
+  "sha256": "40acb078cd7ca05384ee7a89d5664b0a0dea28a520d063d59905bf193eab2f0a"
 }
