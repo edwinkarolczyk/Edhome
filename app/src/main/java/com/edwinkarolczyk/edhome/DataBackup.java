@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 24;
+    private static final int DB_VERSION = 25;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -74,7 +74,9 @@ final class DataBackup {
         {"vehicles", "id", "name", "registration", "mileage",
             "oc_until", "inspection_until", "notes"},
         {"vehicle_events", "id", "operation_id", "vehicle_id",
-            "kind", "event_date", "mileage", "note"}
+            "kind", "event_date", "mileage", "note"},
+        {"vehicle_tyre_sets", "id", "vehicle_id", "label", "season",
+            "dot", "tread_tenths", "mounted", "place_id"}
     };
 
     private DataBackup() { }
@@ -187,7 +189,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -346,6 +348,7 @@ final class DataBackup {
                 || (inputVersion < 22 && "pantry_purchase_prices".equals(definition[0]))
                 || (inputVersion < 24 && ("vehicles".equals(definition[0])
                     || "vehicle_events".equals(definition[0])))
+                || (inputVersion < 25 && "vehicle_tyre_sets".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -452,7 +455,9 @@ final class DataBackup {
                                     || "pantry_id".equals(key)
                                     || "quantity_milli".equals(key)))
                             || ("vehicle_events".equals(definition[0])
-                                && "mileage".equals(key))))
+                                && "mileage".equals(key))
+                            || ("vehicle_tyre_sets".equals(definition[0])
+                                && "tread_tenths".equals(key))))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -549,6 +554,25 @@ final class DataBackup {
                             || !VehicleRules.optionalDate(oc).equals(oc)
                             || !VehicleRules.optionalDate(inspection).equals(inspection))
                         throw new IllegalArgumentException("Nieprawidłowy pojazd w kopii.");
+                }
+                if ("vehicle_tyre_sets".equals(definition[0])) {
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    String name = values.getAsString("label");
+                    String season = values.getAsString("season");
+                    String dot = values.getAsString("dot");
+                    Long tread = values.getAsLong("tread_tenths");
+                    Long mounted = values.getAsLong("mounted");
+                    Long place = values.getAsLong("place_id");
+                    if (vehicle == null || vehicle < 1
+                            || tread != null && (tread < 0 || tread > 200)
+                            || mounted == null || mounted < 0 || mounted > 1
+                            || mounted == 1 && place != null
+                            || place != null && place < 1
+                            || !VehicleTyreStore.label(name).equals(name)
+                            || !VehicleTyreStore.season(season).equals(season)
+                            || !VehicleTyreStore.dot(dot).equals(dot))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy komplet opon w kopii.");
                 }
                 if ("vehicle_events".equals(definition[0])) {
                     String operation = values.getAsString("operation_id");
@@ -800,10 +824,24 @@ final class DataBackup {
                 throw new IllegalArgumentException(
                     "Historia pojazdu bez pojazdu lub zduplikowany wpis.");
         }
+        Set<Long> mountedVehicles = new HashSet<>();
+        for (ContentValues tyres : parsed.get("vehicle_tyre_sets")) {
+            Long vehicle = tyres.getAsLong("vehicle_id");
+            Long mounted = tyres.getAsLong("mounted");
+            if (!vehicleIds.contains(vehicle)
+                    || mounted == 1 && !mountedVehicles.add(vehicle))
+                throw new IllegalArgumentException(
+                    "Komplet opon bez pojazdu lub dwa zamontowane komplety.");
+        }
         Map<Long, ContentValues> objects = new HashMap<>();
         Set<Long> validPlaces = new HashSet<>();
         for (ContentValues place : parsed.get("places"))
             validPlaces.add(place.getAsLong("id"));
+        for (ContentValues tyres : parsed.get("vehicle_tyre_sets")) {
+            Long place = tyres.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Komplet opon ma nieistniejące miejsce.");
+        }
         for (ContentValues item : parsed.get("shopping_items")) {
             Long place = item.getAsLong("place_id");
             if (place != null && !validPlaces.contains(place))
@@ -1097,6 +1135,7 @@ final class DataBackup {
             || "created_at".equals(column) || "item_id".equals(column)
             || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column)
-            || "mileage".equals(column) || "vehicle_id".equals(column);
+            || "mileage".equals(column) || "vehicle_id".equals(column)
+            || "tread_tenths".equals(column) || "mounted".equals(column);
     }
 }

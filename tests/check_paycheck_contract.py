@@ -20,7 +20,7 @@ for token in (
     'PAYCHECK_SHARED_COMMITTED',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
-    'super(context, "edhome-beta-preview.db", null, 24)',
+    'super(context, "edhome-beta-preview.db", null, 25)',
 ):
     assert token in main, token
 for token in (
@@ -35,7 +35,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 24;',
+    'DB_VERSION = 25;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
@@ -45,7 +45,7 @@ for token in (
 ):
     assert token in backup,token
 assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
-assert "versionCode 61" in gradle and "versionNameSuffix '-beta.1'" in gradle
+assert "versionCode 62" in gradle and "versionNameSuffix '-beta.2'" in gradle
 assert "versionName '0.6.0'" in gradle
 # Receipt and barcode commit must never automatically post to PayCheck.
 receipt=Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text()

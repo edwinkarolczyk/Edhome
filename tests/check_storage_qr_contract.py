@@ -14,7 +14,7 @@ gradle=Path("app/build.gradle").read_text()
 for token in (
     'StorageStore.createTables(database);',
     'DATABASE_MIGRATED_18_TO_19_STORAGE_QR',
-    'super(context, "edhome-beta-preview.db", null, 24)',
+    'super(context, "edhome-beta-preview.db", null, 25)',
     'case "storage": storage(); break;',
     'private boolean storageQrCameraPending;',
     'if (storageQrCameraPending) {',
@@ -44,7 +44,7 @@ for token in (
     assert token in store, "Missing storage safety: "+token
 
 for token in (
-    'DB_VERSION = 24;',
+    'DB_VERSION = 25;',
     '{"storage_items", "id", "name", "kind", "parent_box_id", "place_id",',
     '{"storage_events", "id", "item_id", "name_snapshot", "action",',
     'inputVersion < 19 && ("storage_items".equals(definition[0])',
@@ -55,7 +55,7 @@ for token in (
 ):
     assert token in backup, "Missing storage backup: "+token
 assert 'EDHOME:STORAGE:1:' in qr
-assert "versionCode 61" in gradle and "versionNameSuffix '-beta.1'" in gradle
+assert "versionCode 62" in gradle and "versionNameSuffix '-beta.2'" in gradle
 
 expression=store.split('static void createTables(SQLiteDatabase db)',1)[1].split('static final class Item',1)[0]
 statements=[]

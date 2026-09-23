@@ -2569,6 +2569,34 @@ public final class MainActivity extends Activity {
                 if (!item.notes.isEmpty()) box.addView(text(item.notes, 13, false));
                 smallButton(box, "Edytuj pojazd", () -> editVehicle(item));
                 smallButton(box, "+ Zapisz serwis / opony / inne", () -> editVehicleEvent(item));
+                smallButton(box, "+ Dodaj komplet opon", () -> editVehicleTyres(item, null));
+                int tyreCount = 0;
+                try (Cursor tyres = db.getReadableDatabase().rawQuery(
+                        "SELECT id FROM vehicle_tyre_sets WHERE vehicle_id=? "
+                        + "ORDER BY mounted DESC,id", new String[]{Long.toString(id)})) {
+                    while (tyres.moveToNext()) {
+                        VehicleTyreStore.SetInfo set = VehicleTyreStore.find(
+                            db.getReadableDatabase(), tyres.getLong(0));
+                        if (set == null) continue;
+                        if (tyreCount++ == 0)
+                            box.addView(text("Komplety opon", 15, true));
+                        String where = set.mounted ? "NA POJEŹDZIE" :
+                            (set.placeId == null ? "Bez miejsca" :
+                            tyrePlaceName(set.placeId));
+                        box.addView(text(set.label + " • "
+                            + VehicleTyreStore.seasonLabel(set.season)
+                            + " • " + where
+                            + (set.dot.isEmpty() ? "" : " • DOT " + set.dot)
+                            + (set.tread == null ? "" : " • bieżnik "
+                                + (set.tread / 10) + "," + (set.tread % 10) + " mm"),
+                            13, false));
+                        smallButton(box, "Edytuj komplet: " + set.label,
+                            () -> editVehicleTyres(item, set));
+                        smallButton(box, set.mounted ? "Zdejmij: " + set.label
+                                : "Zamontuj: " + set.label,
+                            () -> changeVehicleTyres(item, set.mounted ? 0 : set.id));
+                    }
+                }
                 int events = 0;
                 try (Cursor history = db.getReadableDatabase().rawQuery(
                         "SELECT kind,event_date,mileage,note FROM vehicle_events "
@@ -2587,6 +2615,137 @@ public final class MainActivity extends Activity {
         }
         if (shown == 0)
             note("Brak pojazdów. Dodaj pierwszy samochód lub inny pojazd.");
+    }
+
+    private String tyrePlaceName(long id) {
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT name FROM places WHERE id=?",
+                new String[]{Long.toString(id)})) {
+            return c.moveToFirst() ? c.getString(0) : "Miejsce usunięte";
+        }
+    }
+
+    private Spinner tyrePlaceSpinner(LinearLayout form, Long selected,
+            java.util.List<Long> ids) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        names.add("Bez przypisanego miejsca");
+        ids.add(null);
+        int current = 0;
+        for (PlaceEntry place : readPlaces()) {
+            ids.add(place.id);
+            names.add(place.name + " [#" + place.id + "]");
+            if (selected != null && place.id == selected.longValue())
+                current = ids.size() - 1;
+        }
+        Spinner spinner = new Spinner(this);
+        spinner.setAdapter(themeSpinnerAdapter(names));
+        spinner.setSelection(current);
+        form.addView(spinner);
+        return spinner;
+    }
+
+    private void editVehicleTyres(VehicleStore.Vehicle vehicle,
+            VehicleTyreStore.SetInfo set) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        EditText label = vehicleInput(form, "Komplet, np. zimowe na felgach",
+            set == null ? "" : set.label);
+        Spinner season = new Spinner(this);
+        season.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "Letnie", "Zimowe", "Całoroczne")));
+        season.setSelection(set == null ? 0 :
+            "winter".equals(set.season) ? 1 : "allseason".equals(set.season) ? 2 : 0);
+        form.addView(season);
+        EditText dot = vehicleInput(form, "DOT (np. 3424, opcjonalnie)",
+            set == null ? "" : set.dot);
+        dot.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText tread = vehicleInput(form, "Bieżnik [mm], np. 6,5 (opcjonalnie)",
+            set == null || set.tread == null ? "" :
+                (set.tread / 10) + "," + (set.tread % 10));
+        tread.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(text("Miejsce przechowywania (dla zamontowanych: brak)", 13, false));
+        java.util.List<Long> places = new java.util.ArrayList<>();
+        Spinner storage = tyrePlaceSpinner(form, set == null ? null : set.placeId, places);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(set == null ? "Dodaj komplet • " + vehicle.name :
+                "Edytuj komplet • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    String[] seasons = {"summer", "winter", "allseason"};
+                    VehicleTyreStore.save(db.getWritableDatabase(),
+                        set == null ? 0 : set.id, vehicle.id,
+                        label.getText().toString(),
+                        seasons[season.getSelectedItemPosition()],
+                        dot.getText().toString(),
+                        VehicleTyreStore.tread(tread.getText().toString()),
+                        places.get(storage.getSelectedItemPosition()));
+                    DiagnosticLog.event("VEHICLE_TYRE_SET_SAVED");
+                    dialog.dismiss();
+                    render();
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_TYRE_SET", error);
+                    alert("Nie udało się zapisać kompletu.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void changeVehicleTyres(VehicleStore.Vehicle vehicle, long targetId) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        EditText date = vehicleInput(form, "Data RRRR-MM-DD",
+            LocalDate.now().toString());
+        EditText mileage = vehicleInput(form, "Przebieg [km] (opcjonalnie)", "");
+        mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(text("Gdzie odłożyć zdjęty komplet?", 13, false));
+        java.util.List<Long> places = new java.util.ArrayList<>();
+        Spinner storage = tyrePlaceSpinner(form, null, places);
+        String operationId = java.util.UUID.randomUUID().toString();
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(targetId == 0 ? "Zdejmij komplet • " + vehicle.name :
+                "Zmień koła • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Potwierdź zmianę", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String raw = mileage.getText().toString().trim();
+                    Long distance = raw.isEmpty() ? null : VehicleRules.mileage(raw);
+                    String result = VehicleTyreStore.change(db.getWritableDatabase(),
+                        vehicle.id, targetId,
+                        places.get(storage.getSelectedItemPosition()),
+                        operationId, date.getText().toString(), distance);
+                    dialog.dismiss();
+                    if ("COMMITTED".equals(result))
+                        DiagnosticLog.event("VEHICLE_TYRE_CHANGE_COMMITTED");
+                    else if ("DUPLICATE_IGNORED".equals(result))
+                        alert("Zmiana była już zapisana. Nie powtórzono operacji.");
+                    else alert("Pojazd nie istnieje. Nie wykonano zmiany.");
+                    render();
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_TYRE_CHANGE", error);
+                    alert("Nie potwierdzono zmiany. Sprawdź historię przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing())save.setEnabled(true);
+                }
+            }));
+        dialog.show();
     }
 
     private String vehicleDeadline(String iso) {
@@ -5943,7 +6102,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 24);
+            super(context, "edhome-beta-preview.db", null, 25);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -5973,6 +6132,7 @@ public final class MainActivity extends Activity {
             PantryPriceHistoryStore.create(database);
             addDeviceTimers(database);
             VehicleStore.create(database);
+            VehicleTyreStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
@@ -5981,7 +6141,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 24) {
+            if (oldVersion < 1 || newVersion > 25) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6104,6 +6264,10 @@ public final class MainActivity extends Activity {
             if (oldVersion < 24) {
                 VehicleStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_23_TO_24_VEHICLES");
+            }
+            if (oldVersion < 25) {
+                VehicleTyreStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_24_TO_25_TYRE_SETS");
             }
         }
 

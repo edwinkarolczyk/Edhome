@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==26
+assert len(manifest)==27
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -20,7 +20,8 @@ global_null=set(re.findall(r'"([^"]+)"\.equals\(key\)',
     nulls.split('|| ("storage_items".equals(definition[0])',1)[0]))
 scoped={"storage_items":{"lent_to","parent_box_id","lent_at"},
         "pantry_purchase_prices":{"shopping_id","pantry_id","quantity_milli"},
-        "vehicle_events":{"mileage"}}
+        "vehicle_events":{"mileage"},
+        "vehicle_tyre_sets":{"tread_tenths"}}
 missing_types=[]
 missing_nullable=[]
 for table,columns in manifest.items():
@@ -82,4 +83,4 @@ assert restore.index("if (!restored.commit())")<restore.index(
 assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
 assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
 assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 24 tables and all numeric/nullable fields, sample JSON roundtrip, readback and rollback contract PASS")
+print("Backup: 27 tables and all numeric/nullable fields, sample JSON roundtrip, readback and rollback contract PASS")
