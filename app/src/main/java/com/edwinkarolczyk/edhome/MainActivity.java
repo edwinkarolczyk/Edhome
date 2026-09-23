@@ -2329,6 +2329,51 @@ public final class MainActivity extends Activity {
         button("Wróć do czynności", () -> go("tasks"));
     }
 
+    /** Open the actual calendar day, even if the OC/inspection is next year. */
+    private void showVehicleDateInCalendar(String date) {
+        LocalDate day = LocalDate.parse(date);
+        calendarDay = day.toString();
+        calendarMonth = YearMonth.from(day).toString();
+        calendarView = "day";
+        go("calendar");
+    }
+
+    /** Separate from the 30-day agenda: the next OC and inspection dates must
+     * remain discoverable when a policy is valid for another calendar year.
+     */
+    private void upcomingVehicleDeadlines() {
+        LinearLayout deadlines = card();
+        deadlines.addView(text("Terminy pojazdów — także poza bieżącym miesiącem",
+            17, true));
+        String sql = "SELECT deadline,kind,name FROM ("
+            + "SELECT oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+            + "WHERE oc_until!='' UNION ALL "
+            + "SELECT inspection_until,'Przegląd',name FROM vehicles "
+            + "WHERE inspection_until!='') WHERE deadline>=? "
+            + "ORDER BY deadline,name,kind LIMIT 20";
+        int shown = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(sql,
+                new String[]{LocalDate.now().toString()})) {
+            while (c.moveToNext()) {
+                shown++;
+                String date = c.getString(0);
+                String kind = c.getString(1);
+                String name = c.getString(2);
+                smallButton(deadlines, date + " • " + kind + " • " + name
+                    + "  →", () -> showVehicleDateInCalendar(date));
+            }
+        }
+        if (shown == 0) {
+            deadlines.addView(text(
+                "Brak przyszłych terminów OC i przeglądów. "
+                + "Sprawdź daty na kartach pojazdów lub przejdź do wybranego dnia.",
+                14, false));
+        } else {
+            deadlines.addView(text("Dotknij terminu, aby otworzyć jego dzień "
+                + "w kalendarzu. Agenda nadal pokazuje tylko 30 dni.", 13, false));
+        }
+    }
+
     private void calendar() {
         header("Kalendarz • czynności i pojazdy");
         YearMonth month = YearMonth.parse(calendarMonth);
@@ -2397,6 +2442,14 @@ public final class MainActivity extends Activity {
             calendarMonth = YearMonth.from(LocalDate.now()).toString();
             render();
         });
+        button("Przejdź do daty", () -> {
+            LocalDate initial = LocalDate.parse(calendarDay);
+            new DatePickerDialog(this, (picker, year, monthIndex, dayOfMonth) ->
+                showVehicleDateInCalendar(LocalDate.of(
+                    year, monthIndex + 1, dayOfMonth).toString()),
+                initial.getYear(), initial.getMonthValue() - 1,
+                initial.getDayOfMonth()).show();
+        });
         LinearLayout summary = card();
         summary.addView(text("Wybrano: " + selected.format(
             DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy", new Locale("pl", "PL"))),
@@ -2410,6 +2463,8 @@ public final class MainActivity extends Activity {
             tasksFilter = "overdue";
             go("tasks");
         });
+
+        upcomingVehicleDeadlines();
 
         Map<String, Integer> counts = new HashMap<>();
         LocalDate countStart = "week".equals(calendarView)
@@ -2585,6 +2640,12 @@ public final class MainActivity extends Activity {
                     box.addView(text("Przegląd: " + item.inspectionUntil + " • "
                         + vehicleDeadline(item.inspectionUntil), 15, false));
                 if (!item.notes.isEmpty()) box.addView(text(item.notes, 13, false));
+                if (!item.ocUntil.isEmpty())
+                    smallButton(box, "Pokaż OC w kalendarzu", () ->
+                        showVehicleDateInCalendar(item.ocUntil));
+                if (!item.inspectionUntil.isEmpty())
+                    smallButton(box, "Pokaż przegląd w kalendarzu", () ->
+                        showVehicleDateInCalendar(item.inspectionUntil));
                 smallButton(box, "Edytuj pojazd", () -> editVehicle(item));
                 smallButton(box, "+ Zapisz polisę OC", () -> editVehiclePolicy(item));
                 int policyCount = 0;

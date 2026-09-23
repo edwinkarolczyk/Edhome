@@ -66,6 +66,14 @@
 - Regresja SQLite + kontrakt UI obejmują zajęte miejsce, zachowanie czynności i możliwość usunięcia dopiero po zwolnieniu opon. Schemat SQLite v26 i kopia danych bez zmian.
 - To inkrement stabilizacyjny; nie oznacza zakończenia całego 0.6.0 ani zgody na `main`.
 
+## 0.6.0.3 — odkrywalność terminów pojazdów w kalendarzu
+
+- Odbiór Edwina dla 0.6.0.2 jest częściowy: dane Audi, OC, przeglądu i opon są zachowane, ale w bieżącym widoku kalendarza brakowało widocznych terminów.
+- Kalendarz dotąd pokazywał terminy OC/przeglądu w wybranym miesiącu/dniu, a Agenda obejmowała tylko 30 dni — termin w 2027 roku nie był widoczny przy otwarciu kalendarza we wrześniu 2026.
+- Nowa lista przyszłych OC i przeglądów jest widoczna niezależnie od aktualnego miesiąca; dotknięcie terminu otwiera właściwy dzień i miesiąc. Na karcie pojazdu dodane są przejścia „Pokaż OC w kalendarzu” i „Pokaż przegląd w kalendarzu”. Dodano wybór dowolnej daty.
+- Terminy nadal są czytane bezpośrednio z tabeli pojazdów — żadnych drugich zadań, nowych transakcji ani zmian w bazie SQLite v26.
+- Odbiór: przy dzisiejszym miesiącu powinny być widoczne terminy 2027 na liście; przejście do nich ma pokazać wydarzenie w wybranym dniu. Sprawdzić też zwykłe czynności i agendę 30-dniową. Stable `main` bez zmian.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

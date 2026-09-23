@@ -140,6 +140,8 @@ jobs:
           python3 tests/check_vehicle_policy_dates_contract.py
       - name: Vehicle date picker and optional deadline clearing regression
         run: python3 tests/check_vehicle_date_picker_contract.py
+      - name: Vehicle calendar future-deadline discovery regression
+        run: python3 tests/check_vehicle_calendar_visibility_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
@@ -351,14 +353,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.2-signed-apk
+          name: EDHOME-0.6.0.3-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.2 — stabilizacja: nie można usunąć Miejsca przypisanego do kompletu opon; blokada nie zmienia czynności ani zakupów. Przenieś komplet przed usunięciem Miejsca. SQLite v26 i dane bez zmian; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.3 — kalendarz pokazuje najbliższe terminy OC i przeglądów także poza bieżącym miesiącem; przejście do daty z listy lub karty pojazdu. SQLite v26 i dane bez zmian; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

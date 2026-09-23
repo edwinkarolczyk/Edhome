@@ -22,8 +22,8 @@ for start,stop,labels in (
     chunk=main.split(start,1)[1].split(stop,1)[0]
     assert "vehicleCalendarDate(form" in chunk,start
     for label in labels: assert label in chunk,label
-assert "versionCode 67" in gradle
-assert "versionName '0.6.0.2'" in gradle
+assert "versionCode 68" in gradle
+assert "versionName '0.6.0.3'" in gradle
 assert "versionNameSuffix ''" in gradle
 assert 'suffix_match = re.search(' in script
 print("Vehicle OC, inspection, service and tyre dates use calendar; optional clear: PASS")
