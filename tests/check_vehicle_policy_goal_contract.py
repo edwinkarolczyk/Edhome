@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""0.6.0.4: optional OC-to-shared-goal link, v27 migrations, backup and ledger isolation."""
+"""0.6.0.5: optional OC-to-shared-goal link, v27 migrations, backup and ledger isolation."""
 from pathlib import Path
 import sqlite3
 import runpy
@@ -36,7 +36,7 @@ for token in (
 ):
     assert token in main,token
 for token in (
-    "private static final int DB_VERSION = 27;",
+    "private static final int DB_VERSION = 28;",
     '"notes",\n            "goal_id"',
     'inputVersion < 27',
     '"vehicle_policies".equals(definition[0])',
@@ -50,7 +50,7 @@ form=main.split("private void editVehiclePolicy(",1)[1].split(
     "private String vehicleDeadline(",1)[0]
 assert "PaycheckStore.add(" not in form
 assert "PaycheckGoalsStore.allocate(" not in form
-assert "versionCode 69" in gradle and "versionName '0.6.0.4'" in gradle
+assert "versionCode 70" in gradle and "versionName '0.6.0.5'" in gradle
 
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes)"
            " VALUES(77,'Audi A4','',0,'','','')")

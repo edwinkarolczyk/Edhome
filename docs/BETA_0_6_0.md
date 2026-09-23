@@ -83,6 +83,14 @@
 - Link jest wyłącznie informacyjny: nie tworzy wpłat, wydatków, nowych sald ani prywatnych danych; Stable `main` bez zmian.
 - Odbiór: utworzyć w PayCheck wspólny cel „OC”; dodać bieżącą polisę z linkiem; sprawdzić kartę pojazdu, cel i termin kalendarza; dodać polisę bez linku; zrestartować i sprawdzić dane i kopię.
 
+## 0.6.0.5 — niezależne przypomnienia OC/przeglądu
+
+- Na karcie pojazdu nowy formularz „Przypomnienia OC / przeglądu”. Osobno dla każdego terminu ustawiasz: wyłączone (domyślnie), 30, 14, 7, 1 dzień wcześniej albo w dniu terminu; powiadomienie około 09:00 z uwzględnieniem godzin ciszy.
+- Powiadomienia prowadzą do modułu Pojazdy, nie tworzą czynności, wpłat ani wydatków PayCheck. Powiadomienia systemowe na Androidzie 13+ wymagają zgody. Android może opóźnić dostarczenie alarmu.
+- Po zmianie daty, odnowieniu OC, restarcie telefonu lub aktualizacji APK następuje ponowne planowanie. Alarm sprawdza aktualny termin i ustawienie, żeby nie wysłać powiadomienia o starej polisie. Potwierdzenie wysłania zapobiega duplikatom po wznowieniu/restartach.
+- SQLite v27→v28: dwa opcjonalne pola przypomnień w tabeli pojazdów. Starsze rekordy mają przypomnienia domyślnie wyłączone; eksport/import obejmuje ustawienia, waliduje wartości i nie usuwa danych. Stable `main` bez zmian.
+- Test na telefonie: ustaw termin niedługo przed datą testu, włącz OC, sprawdź prośbę o zgodę systemową, godziny ciszy, brak duplikatu, aktualizację starego OC i niezależny przegląd. Fizyczny odbiór osobno.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

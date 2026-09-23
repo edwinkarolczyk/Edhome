@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 27;
+    private static final int DB_VERSION = 28;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -72,7 +72,8 @@ final class DataBackup {
         {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
         {"pantry_packages", "pantry_id", "unit", "size_milli"},
         {"vehicles", "id", "name", "registration", "mileage",
-            "oc_until", "inspection_until", "notes"},
+            "oc_until", "inspection_until", "notes",
+            "oc_reminder_lead", "inspection_reminder_lead"},
         {"vehicle_events", "id", "operation_id", "vehicle_id",
             "kind", "event_date", "mileage", "note"},
         {"vehicle_tyre_sets", "id", "vehicle_id", "label", "season",
@@ -435,6 +436,13 @@ final class DataBackup {
                             values.putNull(key);
                             continue;
                         }
+                        if (inputVersion < 28
+                                && "vehicles".equals(definition[0])
+                                && ("oc_reminder_lead".equals(key)
+                                    || "inspection_reminder_lead".equals(key))) {
+                            values.putNull(key);
+                            continue;
+                        }
                         if (inputVersion < 23
                                 && ("shopping_items".equals(definition[0])
                                     || "shopping_receipts".equals(definition[0]))) {
@@ -464,6 +472,9 @@ final class DataBackup {
                                 && ("shopping_id".equals(key)
                                     || "pantry_id".equals(key)
                                     || "quantity_milli".equals(key)))
+                            || ("vehicles".equals(definition[0])
+                                && ("oc_reminder_lead".equals(key)
+                                    || "inspection_reminder_lead".equals(key)))
                             || ("vehicle_events".equals(definition[0])
                                 && "mileage".equals(key))
                             || ("vehicle_tyre_sets".equals(definition[0])
@@ -553,6 +564,14 @@ final class DataBackup {
                             "Nieprawidłowa pozycja listy zakupów.");
                 }
                 if ("vehicles".equals(definition[0])) {
+                    Integer ocLead = values.getAsInteger("oc_reminder_lead");
+                    Integer inspectionLead = values.getAsInteger(
+                        "inspection_reminder_lead");
+                    if (ocLead != null && !VehicleReminderRules.allowed(ocLead)
+                            || inspectionLead != null
+                                && !VehicleReminderRules.allowed(inspectionLead))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowe przypomnienie pojazdu w kopii.");
                     String title = values.getAsString("name");
                     String plate = values.getAsString("registration");
                     String oc = values.getAsString("oc_until");
@@ -1170,6 +1189,8 @@ final class DataBackup {
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "reminder_lead_days".equals(column)
+            || "oc_reminder_lead".equals(column)
+            || "inspection_reminder_lead".equals(column)
             || "start_at".equals(column) || "end_at".equals(column)
             || "acknowledged_at".equals(column)
             || "task_id".equals(column)

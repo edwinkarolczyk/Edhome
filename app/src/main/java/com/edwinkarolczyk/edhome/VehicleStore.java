@@ -14,7 +14,10 @@ final class VehicleStore {
             + "name TEXT NOT NULL, registration TEXT NOT NULL DEFAULT '', "
             + "mileage INTEGER NOT NULL DEFAULT 0 CHECK(mileage BETWEEN 0 AND 999999999), "
             + "oc_until TEXT NOT NULL DEFAULT '', "
-            + "inspection_until TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '')");
+            + "inspection_until TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', "
+            + "oc_reminder_lead INTEGER CHECK(oc_reminder_lead IN (0,1,7,14,30)), "
+            + "inspection_reminder_lead INTEGER "
+            + "CHECK(inspection_reminder_lead IN (0,1,7,14,30)))");
         db.execSQL("CREATE TABLE vehicle_events ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
             + "operation_id TEXT NOT NULL UNIQUE, vehicle_id INTEGER NOT NULL, "
@@ -29,6 +32,7 @@ final class VehicleStore {
     static final class Vehicle {
         final long id, mileage;
         final String name, registration, ocUntil, inspectionUntil, notes;
+        final Integer ocReminderLead, inspectionReminderLead;
         Vehicle(Cursor c) {
             id = c.getLong(0);
             name = c.getString(1);
@@ -37,15 +41,38 @@ final class VehicleStore {
             ocUntil = c.getString(4);
             inspectionUntil = c.getString(5);
             notes = c.getString(6);
+            ocReminderLead = c.isNull(7) ? null : c.getInt(7);
+            inspectionReminderLead = c.isNull(8) ? null : c.getInt(8);
         }
     }
 
     static Vehicle find(SQLiteDatabase db, long id) {
         try (Cursor c = db.rawQuery(
-                "SELECT id,name,registration,mileage,oc_until,inspection_until,notes "
-                + "FROM vehicles WHERE id=?", new String[]{Long.toString(id)})) {
+                "SELECT id,name,registration,mileage,oc_until,inspection_until,notes,"
+                + "oc_reminder_lead,inspection_reminder_lead FROM vehicles WHERE id=?", new String[]{Long.toString(id)})) {
             return c.moveToFirst() ? new Vehicle(c) : null;
         }
+    }
+
+    /** Reminder settings only: never edits OC dates, history, or PayCheck. */
+    static void saveReminderLeads(SQLiteDatabase db, long id,
+            Integer ocLead, Integer inspectionLead) {
+        if (id < 1 || ocLead != null && !VehicleReminderRules.allowed(ocLead)
+                || inspectionLead != null
+                    && !VehicleReminderRules.allowed(inspectionLead))
+            throw new IllegalArgumentException("Nieprawidłowe przypomnienie.");
+        ContentValues values = new ContentValues();
+        if (ocLead == null) values.putNull("oc_reminder_lead");
+        else values.put("oc_reminder_lead", ocLead);
+        if (inspectionLead == null) values.putNull("inspection_reminder_lead");
+        else values.put("inspection_reminder_lead", inspectionLead);
+        db.beginTransaction();
+        try {
+            if (db.update("vehicles", values, "id=?",
+                    new String[]{Long.toString(id)}) != 1)
+                throw new IllegalArgumentException("Pojazd nie istnieje.");
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
     }
 
     static long save(SQLiteDatabase db, long id, String name, String registration,

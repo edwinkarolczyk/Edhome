@@ -144,6 +144,15 @@ jobs:
         run: python3 tests/check_vehicle_calendar_visibility_contract.py
       - name: Vehicle OC goal linking, v27 backup and ledger isolation
         run: python3 tests/check_vehicle_policy_goal_contract.py
+      - name: Vehicle opt-in OC/inspection notification regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/vehicle-reminder-rules"
+          javac -d "$RUNNER_TEMP/vehicle-reminder-rules" \
+            app/src/main/java/com/edwinkarolczyk/edhome/VehicleReminderRules.java \
+            tests/task_rules/VehicleReminderRulesSmoke.java
+          java -cp "$RUNNER_TEMP/vehicle-reminder-rules" \
+            com.edwinkarolczyk.edhome.VehicleReminderRulesSmoke
+          python3 tests/check_vehicle_reminder_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
@@ -355,14 +364,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.4-signed-apk
+          name: EDHOME-0.6.0.5-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.4 — opcjonalne powiązanie polisy OC ze wspólnym celem PayCheck i widok postępu celu oraz terminu z obu modułów. Bez automatycznych wpłat i wydatków. SQLite v27 i import starszych kopii; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.5 — dobrowolne przypomnienia o OC i przeglądzie per pojazd: 30/14/7/1 dni wcześniej albo w dniu terminu; powiadomienie otwiera Pojazdy, bez drugich czynności i księgowań. SQLite v28 i kopie starszych danych; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

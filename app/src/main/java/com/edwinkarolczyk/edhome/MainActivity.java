@@ -146,6 +146,8 @@ public final class MainActivity extends Activity {
         DeviceTimerReceiver.scheduleAll(this);
         if (getIntent() != null && getIntent().getBooleanExtra("open_timers", false))
             screen = "timers";
+        if (getIntent() != null && getIntent().getBooleanExtra("open_vehicles", false))
+            screen = "vehicles";
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -204,6 +206,8 @@ public final class MainActivity extends Activity {
         setIntent(intent);
         if (intent != null && intent.getBooleanExtra("open_timers", false))
             go("timers");
+        if (intent != null && intent.getBooleanExtra("open_vehicles", false))
+            go("vehicles");
     }
 
     @Override public void onBackPressed() {
@@ -2640,6 +2644,13 @@ public final class MainActivity extends Activity {
                     box.addView(text("Przegląd: " + item.inspectionUntil + " • "
                         + vehicleDeadline(item.inspectionUntil), 15, false));
                 if (!item.notes.isEmpty()) box.addView(text(item.notes, 13, false));
+                smallButton(box, "Przypomnienia OC / przeglądu", () ->
+                    editVehicleReminders(item));
+                box.addView(text("Powiadomienie OC: "
+                    + vehicleReminderLabel(item.ocReminderLead)
+                    + " • przegląd: "
+                    + vehicleReminderLabel(item.inspectionReminderLead),
+                    13, false));
                 if (!item.ocUntil.isEmpty())
                     smallButton(box, "Pokaż OC w kalendarzu", () ->
                         showVehicleDateInCalendar(item.ocUntil));
@@ -2967,6 +2978,7 @@ public final class MainActivity extends Activity {
                         goalIds.get(goal.getSelectedItemPosition()));
                     if ("COMMITTED".equals(result)) {
                         DiagnosticLog.event("VEHICLE_POLICY_COMMITTED");
+                        VehicleReminderReceiver.schedule(this);
                         dialog.dismiss();render();
                     } else if ("DUPLICATE_IGNORED".equals(result)) {
                         dialog.dismiss();alert("Polisa została już zapisana.");
@@ -2979,6 +2991,66 @@ public final class MainActivity extends Activity {
                     alert("Nie potwierdzono zapisu. Sprawdź listę polis przed ponowieniem.");
                 } finally {
                     if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
+    }
+
+    private String vehicleReminderLabel(Integer lead) {
+        return VehicleReminderRules.LABELS[VehicleReminderRules.index(lead)];
+    }
+
+    /** Per-vehicle opt-in; alarm delivery is inexact and respects quiet hours. */
+    private void editVehicleReminders(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        form.addView(text("OC • " + (vehicle.ocUntil.isEmpty()
+            ? "brak daty" : vehicle.ocUntil), 15, true));
+        Spinner oc = new Spinner(this);
+        oc.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleReminderRules.LABELS)));
+        oc.setSelection(VehicleReminderRules.index(vehicle.ocReminderLead));
+        form.addView(oc);
+        form.addView(text("Przegląd • " + (vehicle.inspectionUntil.isEmpty()
+            ? "brak daty" : vehicle.inspectionUntil), 15, true));
+        Spinner inspection = new Spinner(this);
+        inspection.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleReminderRules.LABELS)));
+        inspection.setSelection(VehicleReminderRules.index(
+            vehicle.inspectionReminderLead));
+        form.addView(inspection);
+        form.addView(text("Powiadomienie przychodzi około 09:00 w wybranym dniu. "
+            + "Android może je opóźnić; godziny ciszy ustawisz w Ustawieniach. "
+            + "Nie powstaje druga czynność ani wydatek PayCheck.", 13, false));
+        lightDialogForm(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Powiadomienia • " + vehicle.name)
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    Integer ocLead = VehicleReminderRules.LEADS[
+                        oc.getSelectedItemPosition()];
+                    Integer inspectionLead = VehicleReminderRules.LEADS[
+                        inspection.getSelectedItemPosition()];
+                    VehicleStore.saveReminderLeads(db.getWritableDatabase(),
+                        vehicle.id, ocLead, inspectionLead);
+                    VehicleReminderReceiver.schedule(this);
+                    dialog.dismiss();
+                    if ((ocLead != null || inspectionLead != null)
+                            && Build.VERSION.SDK_INT >= 33
+                            && checkSelfPermission(
+                                android.Manifest.permission.POST_NOTIFICATIONS)
+                                != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS}, 7130);
+                    DiagnosticLog.event("VEHICLE_REMINDERS_SAVED");
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_REMINDERS_SAVE", error);
+                    alert("Nie zapisano ustawień przypomnień.");
                 }
             }));
         dialog.show();
@@ -3054,6 +3126,7 @@ public final class MainActivity extends Activity {
                         oc.getText().toString(), inspection.getText().toString(),
                         notes.getText().toString().trim());
                     DiagnosticLog.event("VEHICLE_SAVED", "id=" + id);
+                    VehicleReminderReceiver.schedule(this);
                     dialog.dismiss();
                     render();
                 } catch (IllegalArgumentException invalid) {
@@ -5788,7 +5861,7 @@ public final class MainActivity extends Activity {
         quiet.addView(text("Cisza powiadomień", 19, true));
         quiet.addView(text("Aktualnie: " + quietHoursStart() + "–"
             + quietHoursEnd(), 15, true));
-        quiet.addView(text("Dotyczy przypomnień czynności i minutników. "
+        quiet.addView(text("Dotyczy przypomnień czynności, pojazdów i minutników. "
             + "Okno musi przechodzić przez północ, np. 22:00–07:00.",
             13, false));
         smallButton(quiet, "Zmień godziny ciszy", this::editQuietHours);
@@ -6328,6 +6401,7 @@ public final class MainActivity extends Activity {
                                 if (key.startsWith("reminder_fired_")
                                         || key.startsWith("reminder_custom_day_")
                                         || "reminder_legacy_day".equals(key)
+                                        || key.startsWith("vehicle_reminder_fired_")
                                         || key.startsWith("timer_notified_"))
                                     reminderReset.remove(key);
                             }
@@ -6371,7 +6445,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 27);
+            super(context, "edhome-beta-preview.db", null, 28);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6411,7 +6485,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 27) {
+            if (oldVersion < 1 || newVersion > 28) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6546,6 +6620,13 @@ public final class MainActivity extends Activity {
             if (oldVersion >= 26 && oldVersion < 27) {
                 database.execSQL("ALTER TABLE vehicle_policies ADD COLUMN goal_id INTEGER");
                 DiagnosticLog.event("DATABASE_MIGRATED_26_TO_27_POLICY_GOAL_LINK");
+            }
+            if (oldVersion < 28) {
+                database.execSQL("ALTER TABLE vehicles ADD COLUMN oc_reminder_lead INTEGER "
+                    + "CHECK(oc_reminder_lead IN (0,1,7,14,30))");
+                database.execSQL("ALTER TABLE vehicles ADD COLUMN inspection_reminder_lead "
+                    + "INTEGER CHECK(inspection_reminder_lead IN (0,1,7,14,30))");
+                DiagnosticLog.event("DATABASE_MIGRATED_27_TO_28_VEHICLE_REMINDERS");
             }
         }
 
