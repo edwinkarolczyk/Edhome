@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 63,
-  "versionName": "0.6.0-beta.3",
-  "changelog": "EDHOME 0.6.0-beta.3 — poprawiony kontrast jasnych formularzy: czytelny tekst, podpowiedzi i wybrane wartości list w Pojazdach, Magazynie i Spiżarni; bez zmian danych i SQLite v25. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.3/edhome-beta.apk",
-  "sha256": "565bf48c07875fd02aec17bb5eefaf1f9782334ddf7ac5c12503615fa911ec03"
+  "versionCode": 64,
+  "versionName": "0.6.0-beta.4",
+  "changelog": "EDHOME 0.6.0-beta.4 — polisy OC: ubezpieczyciel, numer, daty i historia odnowień; jedna bieżąca polisa aktualizuje termin OC w kalendarzu, bez automatycznego księgowania PayCheck. SQLite v26, kopie starszych danych. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0-beta.4/edhome-beta.apk",
+  "sha256": "c9093e6689f2135dbd2a1733687b9ffe5e7750a53146ff224f817f55bc4e8cd5"
 }
