@@ -20,7 +20,7 @@ for token in (
     'PAYCHECK_SHARED_COMMITTED',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
-    'super(context, "edhome-beta-preview.db", null, 26)',
+    'super(context, "edhome-beta-preview.db", null, 27)',
 ):
     assert token in main, token
 for token in (

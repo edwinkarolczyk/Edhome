@@ -8,7 +8,7 @@ scan = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java
 gradle = Path("app/build.gradle").read_text()
 for value in (
     '"DATABASE_MIGRATED_16_TO_17_PANTRY_PACKAGES"',
-    'super(context, "edhome-beta-preview.db", null, 26)',
+    'super(context, "edhome-beta-preview.db", null, 27)',
     'PantryPackageStore.fillLegacy(database)',
     'PantryPackageStore.create(database)',
     'PantryPackageRules.summary(',
