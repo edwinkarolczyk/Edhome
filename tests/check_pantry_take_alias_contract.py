@@ -42,5 +42,5 @@ assert camera.index("countdown.markCommitted(scannedBarcode);") < camera.index(
     "lastCommittedPantryId = pantryId;")
 assert 'if (resolved != null && resolved.item.id != linked.id)' in method
 assert "PantryScanRules.validBarcode(code)" in lookup
-assert "versionCode 80" in gradle and "versionNameSuffix ''" in gradle
+assert "versionCode 81" in gradle and "versionNameSuffix ''" in gradle
 print("TAKE local UPC/EAN aliases, conflict rejection, repeat consent by product: PASS")
