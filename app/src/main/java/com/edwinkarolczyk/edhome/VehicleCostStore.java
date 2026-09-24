@@ -80,6 +80,7 @@ final class VehicleCostStore {
                     ?summary.substring(0,160):summary);
                 transaction.put("created_at",System.currentTimeMillis());
                 transaction.put("status","pending");
+                transaction.put("confirmation_source","none");
                 db.insertOrThrow("paycheck_transactions",null,transaction);
             }
             ContentValues cost=new ContentValues();
