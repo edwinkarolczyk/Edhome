@@ -15,6 +15,14 @@ for phrase in ('selected_banking_packages','bank_notification_opt_in',
     assert phrase in store, phrase
 assert 'PaycheckStore' not in store
 assert 'PaycheckStore' not in listener
+# The listener must remain independent of a foreground activity and recover
+# only still-visible notifications on Android service reconnection / opt-in.
+for phrase in ('onListenerConnected()', 'getActiveNotifications()',
+               'recheckActiveNotifications()', 'onNotificationPosted(sbn)'):
+    assert phrase in listener, phrase
+assert 'BankNotificationListener.recheckActiveNotifications()' in ui
+assert 'transakcj[aeęąi]*\\\\s+kart' in rules
+
 assert 'getString("text"' not in store
 for phrase in ('!BankNotificationHints.enabled(this)',
                'BankNotificationHints.selected(this)',
