@@ -169,6 +169,25 @@ public final class MainActivity extends Activity {
         setContentView(root);
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
+        // The icon pack is part of the signed APK. Unpack in the background
+        // without resetting the home screen, asking for ZIP or changing data.
+        new Thread(() -> {
+            try {
+                boolean newlyInstalled = IconPack3D.installBundled(this);
+                if (newlyInstalled) {
+                    if (!prefs.getBoolean("icon_style_explicit", false))
+                        prefs.edit().putString("icon_style", "ai3d").commit();
+                    DiagnosticLog.event("AI3D_BUNDLED_INSTALLED",
+                        "count=100");
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && ("home".equals(screen)
+                                || "settings".equals(screen))) render();
+                    });
+                }
+            } catch (Exception missingAssets) {
+                DiagnosticLog.event("AI3D_BUNDLED_MISSING");
+            }
+        }, "edhome-bundled-3d-icons").start();
     }
 
     @Override public void onPause() {
@@ -6850,10 +6869,8 @@ public final class MainActivity extends Activity {
         icons3d.addView(text(IconPack3D.installed(this)
             ? "Paczka 100 ikon 3D jest dostępna na urządzeniu. "
                 + "Indywidualne ikony zmienisz przez przytrzymanie kafelka."
-            : "Zaimportuj paczkę EDHOME_AI_3D_100.zip (100 ikon). "
-                + "Dotychczasowe ikony zostają bez zmian.", 14, false));
-        smallButton(icons3d, "Importuj 100 ikon AI 3D • ZIP",
-            this::importAi3dIconPack);
+            : "Ikony AI 3D trafiają do aplikacji razem z aktualizacją APK. "
+                + "Nie trzeba niczego importować.", 14, false));
         if (IconPack3D.installed(this)) {
             boolean active3d = "ai3d".equals(
                 prefs.getString("icon_style", "standard"));
@@ -6861,7 +6878,8 @@ public final class MainActivity extends Activity {
                 ? "Przełącz wszystkie domyślne na standardowe"
                 : "Przełącz wszystkie domyślne na AI 3D", () -> {
                 String next = active3d ? "standard" : "ai3d";
-                if (prefs.edit().putString("icon_style", next).commit())
+                if (prefs.edit().putString("icon_style", next)
+                        .putBoolean("icon_style_explicit", true).commit())
                     render();
                 else alert("Nie zapisano stylu ikon.");
             });
