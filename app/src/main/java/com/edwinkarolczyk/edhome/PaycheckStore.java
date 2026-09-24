@@ -21,7 +21,10 @@ final class PaycheckStore {
             + "CHECK(amount_grosz BETWEEN 1 AND 99999999999), "
             + "note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, "
             + "status TEXT NOT NULL DEFAULT 'confirmed' "
-            + "CHECK(status IN ('pending','confirmed')))");
+            + "CHECK(status IN ('pending','confirmed')), "
+            + "confirmation_source TEXT NOT NULL DEFAULT 'legacy' "
+            + "CHECK(confirmation_source IN ('none','legacy','manual')), "
+            + "confirmed_at INTEGER)");
     }
 
     static String add(SQLiteDatabase db,String operationId,String kind,
@@ -51,6 +54,7 @@ final class PaycheckStore {
             values.put("note",note.trim());
             values.put("created_at",System.currentTimeMillis());
             values.put("status","pending");
+            values.put("confirmation_source","none");
             db.insertOrThrow("paycheck_transactions",null,values);
             db.setTransactionSuccessful();
             return "COMMITTED";
@@ -67,6 +71,8 @@ final class PaycheckStore {
         try {
             ContentValues state = new ContentValues();
             state.put("status", "confirmed");
+            state.put("confirmation_source", "manual");
+            state.put("confirmed_at", System.currentTimeMillis());
             int changed = db.update("paycheck_transactions", state,
                 "operation_id=? AND scope='shared' AND status='pending'",
                 new String[]{operationId});
