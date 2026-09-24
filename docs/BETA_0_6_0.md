@@ -171,3 +171,11 @@
 - W mBankowym formacie bez stabilnego identyfikatora transakcji odróżnienie operacji opiera się na odcisku rachunku z nagłówka (jeśli istnieje), dacie księgowania i operacji, znaku i kwocie, saldzie po operacji, opisie i tytule. Dwie płatności na tę samą kwotę z **różnym saldem końcowym** pozostają różnymi wpisami. Brak salda po operacji lub nierozróżnialne rekordy skutkują bezpiecznym odrzuceniem importu, a nie domniemaniem unikalnego ID banku.
 - Wszystkie dopasowania są jedynie propozycjami; saldo wspólne zmienia się **wyłącznie po zatwierdzeniu użytkownika**. Nie ma dostępu do prawdziwego banku, odczytu PDF VeloBanku, OCR ani odczytu powiadomień systemowych. Wspólny i prywatny PayCheck pozostają rozdzielone. SQLite v33, bez zmiany schematu.
 - **Odbiór fizyczny:** Edwin wybiera swój oryginalny plik mBanku na telefonie (bez przesyłania go do repo), oznacza partię jako mBank i sprawdza listę, rozpoznanie kwot/dat, brak duplikatów i zachowanie starego salda po samym imporcie. Jeśli pierwotny plik jest binarnym XLS, należy to odnotować jako niezrealizowany wariant, nie sugerować, że działa. Nie nazywać adaptera gotowym przed zielonym CI i testem urządzenia; `main` nietknięta.
+
+## Status odbioru importu bankowego — 24.09.2026
+
+- Test telefonu: **NIEZALICZONY**. Edwin potwierdził, że import bankowy w bieżącej Becie nie działa poprawnie / nie wczytuje pliku w użyteczny sposób.
+- Decyzja: **odłożyć import bankowy na końcową stabilizację 0.6.0**. Nie blokować dalszych prac nad pozostałym zakresem 0.6.0, ale nie oznaczać importu jako gotowego ani odebranego.
+- Dotychczasowe testy telefonu pozostają ważne: kopia i aktualizacja, stare saldo, ręczne potwierdzanie PayCheck, koszt pojazdu→PayCheck, dokumenty pojazdu oraz zachowanie danych/stabilność — OK.
+- Do ponownego testu na końcu: mBank/CSV/XLSX, VeloBank PDF, wielobankowa kolejka, deduplikacja i brak podwójnego księgowania.
+- `main` bez zmian; nie zamykać całej 0.6.0 przed ponownym testem importu.
