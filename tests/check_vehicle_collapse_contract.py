@@ -7,11 +7,14 @@ assert needle in main
 assert 'final boolean collapsed = prefs.getBoolean(collapseKey, false);' in main
 assert 'prefs.edit().putBoolean(collapseKey, !collapsed).apply();' in main
 assert 'if (collapsed) continue;' in main
-assert 'collapsed ? "▸ Rozwiń pojazd" : "▾ Zwiń pojazd"' in main
+assert 'TextView chevron = text(collapsed ? "▸" : "▾", 24, true);' in main
+assert 'vehicleHeading.setOnClickListener(v -> {' in main
+assert 'box.addView(vehicleHeading);' in main
+assert 'smallButton(box, collapsed ?' not in main
 vehicle=main.index('private void vehicles()')
 heading=main.index(needle,vehicle)
 skip=main.index('if (collapsed) continue;',heading)
 details=main.index('box.addView(text("Przebieg: "',skip)
 assert vehicle<heading<skip<details
-assert 'prefs.edit().putBoolean(collapseKey, !collapsed).apply();\n                        render();' in main
+assert 'prefs.edit().putBoolean(collapseKey, !collapsed).apply();\n                    render();' in main
 print("Vehicle collapse: independent ID keys, persisted on restart, no data writes PASS")
