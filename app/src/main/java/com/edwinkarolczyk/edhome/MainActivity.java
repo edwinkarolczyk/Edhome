@@ -4986,8 +4986,12 @@ public final class MainActivity extends Activity {
      * Stable operation ID guarantees retry cannot create the same draft twice.
      */
     private void assignBankHintToShared(BankNotificationHints.Entry signal) {
-        if(!BetaUpdater.isBeta()||BankNotificationHints.alreadyHandled(
-                this,signal.key)) {render();return;}
+        if(!BetaUpdater.isBeta())return;
+        if(BankNotificationHints.alreadyHandled(this,signal.key)) {
+            BankNotificationHints.remove(this,signal.key);
+            render();
+            return;
+        }
         String operationId=java.util.UUID.nameUUIDFromBytes(
             ("edhome-bank-hint:"+signal.key).getBytes(StandardCharsets.UTF_8))
             .toString();
@@ -5008,9 +5012,14 @@ public final class MainActivity extends Activity {
     }
 
     private void assignBankHintToPrivate(BankNotificationHints.Entry signal) {
-        if(privatePaycheckSession==null||!privatePaycheckSession.active()
-                ||BankNotificationHints.alreadyHandled(this,signal.key))
+        if(privatePaycheckSession==null||!privatePaycheckSession.active())
             return;
+        if(BankNotificationHints.alreadyHandled(this,signal.key)) {
+            if(BankNotificationHints.remove(this,signal.key))
+                pendingPrivateBankHintKey=null;
+            render();
+            return;
+        }
         String operationId=java.util.UUID.nameUUIDFromBytes(
             ("edhome-bank-hint:"+signal.key).getBytes(StandardCharsets.UTF_8))
             .toString();
