@@ -2683,6 +2683,30 @@ public final class MainActivity extends Activity {
                             13, false));
                     }
                 }
+                smallButton(box, "+ Dodaj dokument", () -> editVehicleDocument(item));
+                int documentCount = 0;
+                try (Cursor documents = db.getReadableDatabase().rawQuery(
+                        "SELECT kind,title,document_number,issued_on,valid_until,note "
+                        + "FROM vehicle_documents WHERE vehicle_id=? "
+                        + "ORDER BY valid_until DESC,issued_on DESC,id DESC LIMIT 30",
+                        new String[]{Long.toString(id)})) {
+                    while (documents.moveToNext()) {
+                        if (documentCount++ == 0)
+                            box.addView(text("Dokumenty pojazdu", 15, true));
+                        String dates = "";
+                        if (!documents.getString(3).isEmpty())
+                            dates += "\nData: " + documents.getString(3);
+                        if (!documents.getString(4).isEmpty())
+                            dates += "\nWażny do: " + documents.getString(4);
+                        box.addView(text(VehicleDocumentStore.label(documents.getString(0))
+                            + " • " + documents.getString(1)
+                            + (documents.getString(2).isEmpty() ? ""
+                                : " • nr " + documents.getString(2))
+                            + dates
+                            + (documents.getString(5).isEmpty() ? ""
+                                : "\n" + documents.getString(5)), 13, false));
+                    }
+                }
                 smallButton(box, "+ Zapisz koszt pojazdu", () -> editVehicleCost(item));
                 try (Cursor total = db.getReadableDatabase().rawQuery(
                         "SELECT COALESCE(SUM(amount_grosz),0) FROM vehicle_costs WHERE vehicle_id=?",
@@ -2751,6 +2775,64 @@ public final class MainActivity extends Activity {
         }
         if (shown == 0)
             note("Brak pojazdów. Dodaj pierwszy samochód lub inny pojazd.");
+    }
+
+    private void editVehicleDocument(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        form.addView(text("Dokument • " + vehicle.name, 15, true));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleDocumentStore.LABELS)));
+        form.addView(kind);
+        EditText title = vehicleInput(form, "Nazwa dokumentu", "");
+        EditText number = vehicleInput(form, "Numer dokumentu (opcjonalnie)", "");
+        EditText issued = vehicleCalendarDate(form,
+            "Data dokumentu (opcjonalnie) • kalendarz", "", true);
+        EditText valid = vehicleCalendarDate(form,
+            "Ważny do (opcjonalnie) • kalendarz", "", true);
+        EditText noteField = vehicleInput(form, "Notatka (opcjonalnie)", "");
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Nowy dokument • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz dokument", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String result = VehicleDocumentStore.add(db.getWritableDatabase(),
+                        vehicle.id, operationId,
+                        VehicleDocumentStore.KINDS[kind.getSelectedItemPosition()],
+                        title.getText().toString(), number.getText().toString(),
+                        issued.getText().toString(), valid.getText().toString(),
+                        noteField.getText().toString());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_DOCUMENT_COMMITTED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();
+                        alert("Ten dokument został już zapisany.");
+                        render();
+                    } else {
+                        alert("Pojazd nie istnieje. Dokumentu nie zapisano.");
+                    }
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_DOCUMENT", error);
+                    alert("Nie udało się zapisać dokumentu.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
     }
 
     /** An explicit tap is required before creating a shared PayCheck expense. */
@@ -6731,7 +6813,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 32);
+            super(context, "edhome-beta-preview.db", null, 33);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6764,6 +6846,7 @@ public final class MainActivity extends Activity {
             VehicleTyreStore.create(database);
             VehiclePolicyStore.create(database);
             VehicleCostStore.create(database);
+            VehicleDocumentStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
@@ -6772,7 +6855,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 32) {
+            if (oldVersion < 1 || newVersion > 33) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6940,6 +7023,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("CREATE UNIQUE INDEX paycheck_statement_key_unique "
                     + "ON paycheck_transactions(statement_key)");
                 DiagnosticLog.event("DATABASE_MIGRATED_31_TO_32_STATEMENT_MATCH");
+            }
+            if(oldVersion < 33) {
+                VehicleDocumentStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_32_TO_33_VEHICLE_DOCUMENTS");
             }
         }
 
