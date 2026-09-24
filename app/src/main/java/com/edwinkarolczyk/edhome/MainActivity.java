@@ -4319,7 +4319,7 @@ public final class MainActivity extends Activity {
                 if(choice==0) {
                     try {
                         StorageQrLabels.print(this,pdf,
-                            StorageQrLabels.pages(count,format),
+                            StorageQrLabels.pages(count,format),format,
                             "EDHOME — etykiety QR");
                         StorageQrLabels.log(this,"Drukowanie",count);
                     } catch(Exception error) {
