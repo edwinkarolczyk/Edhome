@@ -8,6 +8,12 @@ final class BankNotificationRulesSmoke {
             BankNotificationRules.parse("Zapłacono 12,50 PLN w sklepie");
         check(expense!=null && expense.kind.equals("expense")
             && expense.amountGrosz==1250,"exact expense");
+        BankNotificationRules.Hint velo=
+            BankNotificationRules.parse("Transakcja kartą\\nNowa transakcja kartą 5375 **** **** 2166 w wysokości 60.10 PLN w STACJA PALIW AELIN");
+        check(velo!=null && velo.kind.equals("expense")
+            && velo.amountGrosz==6010,"VeloBank card notification while app closed");
+        check(BankNotificationRules.parse("Transakcja na rachunku 60,10 PLN")==null,
+            "generic transaction is not necessarily card expense");
         BankNotificationRules.Hint income=
             BankNotificationRules.parse("Otrzymano przelew 1 200,00 zł");
         check(income!=null && income.kind.equals("income")
