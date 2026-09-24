@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 79,
-  "versionName": "0.6.0.14",
-  "changelog": "EDHOME 0.6.0.14 — Pojazdy: każdą kartę można zwinąć i rozwinąć niezależnie; stan zapamiętany po ponownym uruchomieniu. Dane i SQLite v33 bez zmian. Import bankowy zgłoszony jako niesprawny na telefonie, odłożony do końcowej stabilizacji 0.6. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.14/edhome-beta.apk",
-  "sha256": "b8c577011c25ad106f6c715e9b2899829cc78cebf8b007a1151b478eb54a5de4"
+  "versionCode": 80,
+  "versionName": "0.6.0.15",
+  "changelog": "EDHOME 0.6.0.15 — Pojazdy: tapnięcie nazwy i strzałki zwija lub rozwija kartę; stan zapamiętany. PayCheck Beta: za zgodą Androida i po wyborze aplikacji bankowych lokalne sygnały o kwocie z powiadomień oraz propozycje oczekujących płatności, potwierdzane wyłącznie ręcznie. Import bankowy odłożony, bez załączników. SQLite v33, Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.15/edhome-beta.apk",
+  "sha256": "f357464876d200676ca7c29ef2c53b8857903800d98865ad89315d46bfe0c2da"
 }
