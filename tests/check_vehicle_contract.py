@@ -42,7 +42,7 @@ assert 'vehicleIds.contains(event.getAsLong("vehicle_id"))' in backup
 assert 'vehicleOperations.add(event.getAsString("operation_id"))' in backup
 assert '"mileage".equals(column) || "vehicle_id".equals(column)' in backup
 assert '"tread_tenths".equals(column) || "mounted".equals(column)' in backup
-assert 'versionCode 79' in gradle and "versionName '0.6.0.14'" in gradle
+assert 'versionCode 80' in gradle and "versionName '0.6.0.15'" in gradle
 assert "versionNameSuffix ''" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
