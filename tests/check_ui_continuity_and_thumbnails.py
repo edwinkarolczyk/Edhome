@@ -18,7 +18,10 @@ assert 'Intent.ACTION_PICK_ACTIVITY' in main
 assert 'PICK_BANK_APP_SYSTEM' in main
 assert 'getPackageManager().queryIntentActivities(launcher,0)' in main.replace('\n                .queryIntentActivities','\ngetPackageManager().queryIntentActivities') or 'queryIntentActivities(launcher,0)' in main
 assert 'setView(form)' in main
-assert 'setMultiChoiceItems(names,selected' not in main
+# The bank picker must not revert to a 234-row native multi-choice list.
+# Magazyn QR batch printing intentionally uses native multi-selection.
+bank=main.split('private void configureBankNotifications()',1)[1].split('private void showBankNotificationHints()',1)[0]
+assert 'setMultiChoiceItems(names,selected' not in bank
 assert 'IMPORT_STORAGE_THUMBNAIL' in main
 assert 'StorageThumbs.compress(getContentResolver(),' in main
 assert 'StorageThumbs.read(prefs,item.id)' in main
