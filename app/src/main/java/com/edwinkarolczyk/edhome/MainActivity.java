@@ -4129,32 +4129,66 @@ public final class MainActivity extends Activity {
         java.util.Map<String,String> available=new java.util.TreeMap<>();
         for(ResolveInfo resolved:getPackageManager()
                 .queryIntentActivities(launcher,0)) {
-            if(resolved.activityInfo==null
-                    ||resolved.activityInfo.applicationInfo==null)continue;
+            if(resolved.activityInfo==null)continue;
             String pkg=resolved.activityInfo.packageName;
             if(pkg.equals(getPackageName()))continue;
             String label=resolved.loadLabel(getPackageManager()).toString();
             available.put(pkg,label+" • "+pkg);
         }
-        if(available.isEmpty()){
-            alert("Android nie udostępnia listy aplikacji do wyboru. "
-                +"Nie włączono odczytu powiadomień.");return;
+        // Some Android launchers/skins return no visible activities via the
+        // intent query. Include user-installed applications too.
+        for(android.content.pm.ApplicationInfo app:
+                getPackageManager().getInstalledApplications(0)) {
+            if(app.packageName.equals(getPackageName())
+                    ||(app.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM)!=0)
+                continue;
+            String label=getPackageManager()
+                .getApplicationLabel(app).toString();
+            available.putIfAbsent(app.packageName,
+                label+" • "+app.packageName);
         }
         java.util.List<String> packages=new java.util.ArrayList<>(
             available.keySet());
-        String[] names=new String[packages.size()];
-        boolean[] selected=new boolean[packages.size()];
         java.util.Set<String> previously=BankNotificationHints.selected(this);
-        for(int i=0;i<packages.size();i++){
-            names[i]=available.get(packages.get(i));
-            selected[i]=previously.contains(packages.get(i));
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(10),dp(16),dp(10));
+        form.addView(text("Widocznych aplikacji: "+packages.size()
+            +". Zaznacz WYŁĄCZNIE swoje banki. Uprawnienie Androida "
+            +"przyznaje dostęp do wszystkich powiadomień, lecz EDHOME "
+            +"analizuje tylko wskazane pakiety.",14,false));
+        ScrollView listScroll=new ScrollView(this);
+        LinearLayout choices=new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        java.util.Set<String> wanted=new java.util.HashSet<>(previously);
+        for(String pkg:packages) {
+            CheckBox choice=new CheckBox(this);
+            choice.setText(available.get(pkg));
+            choice.setTextColor(ink);
+            choice.setChecked(wanted.contains(pkg));
+            choice.setMinHeight(dp(48));
+            choice.setOnCheckedChangeListener((button,checked)->{
+                if(checked)wanted.add(pkg);
+                else wanted.remove(pkg);
+            });
+            choices.addView(choice);
         }
-        // AlertDialog displays either its message OR its list on many Android
-        // variants. Never combine setMessage with setMultiChoiceItems here.
+        if(packages.isEmpty())
+            choices.addView(text("Android nie udostępnił listy aplikacji. "
+                +"Możesz wkleić identyfikator pakietu banku poniżej; "
+                +"nie wpisuj loginu ani numeru rachunku.",14,false));
+        listScroll.addView(choices);
+        form.addView(listScroll,new LinearLayout.LayoutParams(
+            -1,dp(260)));
+        EditText manual=new EditText(this);
+        manual.setSingleLine(true);
+        manual.setTextColor(ink);
+        manual.setHintTextColor(subdued);
+        manual.setHint("Pakiet banku, jeśli nie ma go na liście (opcjonalnie)");
+        form.addView(manual);
         new AlertDialog.Builder(this)
-            .setTitle("Zaznacz aplikacje bankowe")
-            .setMultiChoiceItems(names,selected,
-                (dialog,which,isChecked)->selected[which]=isChecked)
+            .setTitle("Wybierz aplikacje bankowe")
+            .setView(form)
             .setNegativeButton("Anuluj",null)
             .setNeutralButton("Wyłącz i wyczyść",(dialog,which)->{
                 BankNotificationHints.configure(this,
@@ -4162,9 +4196,16 @@ public final class MainActivity extends Activity {
                 render();
             })
             .setPositiveButton("Zapisz wybór",(dialog,which)->{
-                java.util.Set<String> wanted=new java.util.HashSet<>();
-                for(int i=0;i<packages.size();i++)
-                    if(selected[i])wanted.add(packages.get(i));
+                String packageName=manual.getText().toString().trim();
+                if(!packageName.isEmpty()) {
+                    if(!packageName.matches("[A-Za-z_][A-Za-z_0-9]*"
+                            +"(\\.[A-Za-z_][A-Za-z_0-9]*)+")
+                            ||packageName.length()>255) {
+                        alert("Nieprawidłowy identyfikator pakietu Androida. "
+                            +"Nie zapisano tego wpisu.");return;
+                    }
+                    wanted.add(packageName);
+                }
                 BankNotificationHints.configure(this,wanted,
                     !wanted.isEmpty());
                 render();
@@ -4173,11 +4214,10 @@ public final class MainActivity extends Activity {
                     new AlertDialog.Builder(this)
                         .setTitle("Dostęp do powiadomień Androida")
                         .setMessage("W ustawieniach włącz dostęp dla "
-                            +"EDHOME — wybrane banki. Android może pokazać "
-                            +"ostrzeżenie, że taka usługa ma dostęp do "
-                            +"wszystkich powiadomień. EDHOME przetwarza "
-                            +"wyłącznie wskazane aplikacje bankowe. "
-                            +"Możesz później cofnąć tę zgodę.")
+                            +"EDHOME — wybrane banki. Android pokaże "
+                            +"ostrzeżenie: uprawnienie daje dostęp do "
+                            +"wszystkich powiadomień; EDHOME przetwarza "
+                            +"tylko wskazane pakiety. Dostęp można cofnąć.")
                         .setNegativeButton("Później",null)
                         .setPositiveButton("Otwórz ustawienia",(d,w)->{
                             try {
