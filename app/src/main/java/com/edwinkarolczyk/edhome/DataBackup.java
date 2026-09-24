@@ -168,6 +168,9 @@ final class DataBackup {
             storageThumbs.put(thumb);
         }
         settings.put("storageThumbnails",storageThumbs);
+        // Only non-sensitive QR activity metadata; no QR payload or private data.
+        settings.put("storageQrHistory",
+            prefs.getString(StorageQrLabels.HISTORY,""));
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -233,6 +236,9 @@ final class DataBackup {
         String tileOrderV2 = settings.has("homeTileOrderV2")
             ? settings.getString("homeTileOrderV2") : null;
         String hiddenTilesV2 = settings.optString("homeTileHiddenV2", "");
+        String qrHistory = settings.optString("storageQrHistory","");
+        if (qrHistory.length()>12000 || qrHistory.indexOf('\0')>=0)
+            throw new IllegalArgumentException("Nieprawidłowa historia QR.");
         java.util.List<String> hiddenIds = new java.util.ArrayList<>();
         java.util.List<String> restoredTiles = null;
         if (tileOrderV2 != null) {
@@ -1346,6 +1352,7 @@ final class DataBackup {
                 .putString("household", household)
                 .putString("theme", theme)
                 .putString("home_tile_order", tileOrder)
+                .putString(StorageQrLabels.HISTORY, qrHistory)
                 .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
                 .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
