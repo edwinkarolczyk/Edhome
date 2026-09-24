@@ -4814,6 +4814,10 @@ public final class MainActivity extends Activity {
                 }
                 BankNotificationHints.configure(this,wanted,
                     !wanted.isEmpty());
+                // Bank selection may happen after Android connected the listener.
+                // Recheck only notifications still active; dedup prevents repeats.
+                if(!wanted.isEmpty()&&bankNotificationPermissionGranted())
+                    BankNotificationListener.recheckActiveNotifications();
                 render();
                 if(wanted.isEmpty())return;
                 if(!bankNotificationPermissionGranted()) {
