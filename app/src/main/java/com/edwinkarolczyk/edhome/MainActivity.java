@@ -4413,18 +4413,105 @@ public final class MainActivity extends Activity {
 
     private void openStorageQr(String value) {
         StorageQr.Target target=StorageQr.decode(value);
-        if(target==null){alert("To nie jest QR rzeczy/pudełka EDHOME.");return;}
-        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),target.id);
+        if(target==null){alert("To nie jest QR EDHOME.");return;}
+        if ("place".equals(target.kind)) {
+            PlaceEntry found=null;
+            for(PlaceEntry place:readPlaces())
+                if(place.id==target.id) { found=place;break; }
+            if(found==null) {
+                alert("Nie znaleziono tego miejsca w lokalnym EDHOME.");return;
+            }
+            final PlaceEntry place=found;
+            StorageQrLabels.log(this,"Skan miejsca",1);
+            LinearLayout card=new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(16),dp(12),dp(16),dp(10));
+            card.addView(text(db.placePath(place.id),15,false));
+            AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Miejsce • "+place.name).setView(card)
+                .setNegativeButton("Zamknij",null).create();
+            smallButton(card,"Pokaż QR / etykieta",()->{
+                dialog.dismiss();showPlaceQr(place);
+            });
+            smallButton(card,"Edytuj / przenieś miejsce",()->{
+                dialog.dismiss();placeEditor(place.id,place.name,place.kind,
+                    place.parent,place.icon);
+            });
+            smallButton(card,"Otwórz Miejsca",()->{
+                dialog.dismiss();go("places");
+            });
+            smallButton(card,"Historia QR",()->{
+                dialog.dismiss();showQrHistory();
+            });
+            dialog.show();
+            return;
+        }
+        StorageStore.Item item=StorageStore.find(
+            db.getReadableDatabase(),target.id);
         if(item==null||!item.kind.equals(target.kind)){
             alert("Nie znaleziono obiektu o tym QR w lokalnym magazynie.");
             return;
         }
-        new AlertDialog.Builder(this).setTitle(item.name)
-            .setMessage(("box".equals(item.kind)?"Pudełko":"Rzecz")
-                +"\n"+StorageStore.location(db.getReadableDatabase(),item)
-                +(item.lentTo==null?"":"\nWypożyczono: "+item.lentTo))
-            .setNegativeButton("Zamknij",null)
-            .setPositiveButton("Magazyn",(d,w)->go("storage")).show();
+        StorageQrLabels.log(this,"Skan "+("box".equals(item.kind)
+            ?"pudełka":"rzeczy"),1);
+        LinearLayout controls=new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        controls.setPadding(dp(16),dp(12),dp(16),dp(10));
+        controls.addView(text(StorageStore.location(
+            db.getReadableDatabase(),item),14,false));
+        if(item.lentTo!=null)
+            controls.addView(text("Wypożyczono: "+item.lentTo,14,false));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(item.name).setView(controls)
+            .setNegativeButton("Zamknij",null).create();
+        smallButton(controls,"Pokaż QR / etykieta",()->{
+            dialog.dismiss();showStorageQr(item);
+        });
+        if(item.lentTo==null) {
+            smallButton(controls,"Przenieś",()->{
+                dialog.dismiss();storageEditor(item.kind,item.id);
+            });
+            if("thing".equals(item.kind))
+                smallButton(controls,"Wypożycz",()->{
+                    dialog.dismiss();askStorageLend(item);
+                });
+        } else {
+            smallButton(controls,"Potwierdź zwrot",()->{
+                dialog.dismiss();
+                new AlertDialog.Builder(this).setTitle("Potwierdzić zwrot?")
+                    .setMessage(item.name)
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Zwróć",(d,w)->{
+                        try {
+                            StorageStore.returned(
+                                db.getWritableDatabase(),item.id);
+                            render();
+                        }catch(Exception issue){alert(issue.getMessage());}
+                    }).show();
+            });
+        }
+        smallButton(controls,"Historia obiektu",()->{
+            dialog.dismiss();
+            StringBuilder history=new StringBuilder();
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT action,details,happened_at FROM storage_events "
+                    +"WHERE item_id=? ORDER BY id DESC LIMIT 30",
+                    new String[]{Long.toString(item.id)})) {
+                while(c.moveToNext()) {
+                    if(history.length()>0)history.append("\n");
+                    history.append(c.getString(0)).append(" • ")
+                        .append(c.getString(1));
+                }
+            }
+            new AlertDialog.Builder(this).setTitle("Historia • "+item.name)
+                .setMessage(history.length()==0?"Brak operacji":
+                    history.toString())
+                .setPositiveButton("Zamknij",null).show();
+        });
+        smallButton(controls,"Otwórz Magazyn",()->{
+            dialog.dismiss();go("storage");
+        });
+        dialog.show();
     }
 
     private void paycheck() {
