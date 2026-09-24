@@ -8,6 +8,8 @@ store=(s/"BankNotificationHints.java").read_text(encoding="utf-8")
 rules=(s/"BankNotificationRules.java").read_text(encoding="utf-8")
 beta=Path("app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
 stable=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+receipt=(s/"BankReceiptNotifier.java").read_text(encoding="utf-8")
+
 for phrase in ('selected_banking_packages','bank_notification_opt_in',
                'static void collect(', 'MAX=40', 'TTL=14L',
                'putString(ROWS,result.toString())',
@@ -15,6 +17,25 @@ for phrase in ('selected_banking_packages','bank_notification_opt_in',
     assert phrase in store, phrase
 assert 'PaycheckStore' not in store
 assert 'PaycheckStore' not in listener
+assert 'PaycheckStore' not in receipt
+for phrase in ('bank_receipt_notifications_enabled', 'receiptEnabled(',
+               'setReceiptEnabled(', 'if(persist(context,entries))',
+               'BankReceiptNotifier.show(context,saved)',
+               '.putString(ROWS,result.toString()).commit()'):
+    assert phrase in store, phrase
+for phrase in ('android.Manifest.permission.POST_NOTIFICATIONS',
+               'NotificationChannel', 'Notification.VISIBILITY_PRIVATE',
+               'setPublicVersion(publicView)', 'manager.notify(',
+               'BankNotificationHints.receiptEnabled(context)',
+               'NotificationManager.IMPORTANCE_DEFAULT',
+               'manager.areNotificationsEnabled()'):
+    assert phrase in receipt, phrase
+for secret in ('notificationText', 'EXTRA_TEXT', 'EXTRA_BIG_TEXT',
+               'PaycheckStore.confirm('):
+    assert secret not in receipt, secret
+assert 'Powiadomienie EDHOME po odebraniu:' in ui
+assert 'requestBankReceiptNotificationPermission()' in ui
+
 # The listener must remain independent of a foreground activity and recover
 # only still-visible notifications on Android service reconnection / opt-in.
 for phrase in ('onListenerConnected()', 'getActiveNotifications()',
