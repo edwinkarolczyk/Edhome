@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 91,
-  "versionName": "0.6.0.26",
-  "changelog": "EDHOME 0.6.0.26 — PayCheck: po zapisaniu nowego powiadomienia z wybranego banku EDHOME pokazuje własne potwierdzenie z kwotą i źródłem. Powiadomienie można wyłączyć osobno; Android 13+ wymaga zgody na wysyłanie powiadomień. Blokada duplikatów, prywatny ekran blokady, bez zmiany salda i bez kasowania danych. Beta tylko; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.26/edhome-beta.apk",
-  "sha256": "07bc1dec594d994a7868edc0980d75cd7e1ed4bf3bf49d5e1aed584fccef0160"
+  "versionCode": 92,
+  "versionName": "0.6.0.27",
+  "changelog": "EDHOME 0.6.0.27 — PayCheck: nowe sygnały bankowe automatycznie trafiają do kolejki oczekujących na wybór wspólny/prywatny. Wspólny wpis powstaje jako pending, prywatny dopiero w odblokowanym zaszyfrowanym sejfie, także jako pending. Salda nie zmieniają się do potwierdzenia; identyfikatory chronią przed ponownym utworzeniem z tego samego powiadomienia. Bez migracji i bez kasowania danych; Beta tylko, Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.27/edhome-beta.apk",
+  "sha256": "a255d46dbc0bf7f9151ed931b27cbe32ca659c97083a88f9e56f2ef4daf67314"
 }
