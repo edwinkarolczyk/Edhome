@@ -11,7 +11,7 @@ stable=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 receipt=(s/"BankReceiptNotifier.java").read_text(encoding="utf-8")
 
 for phrase in ('selected_banking_packages','bank_notification_opt_in',
-               'static void collect(', 'MAX=40', 'TTL=14L',
+               'static void collect(', 'Never truncate' ,
                'putString(ROWS,result.toString())',
                'getStringSet(PACKAGES', 'selected(context).contains(source)'):
     assert phrase in store, phrase
