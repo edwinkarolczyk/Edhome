@@ -3977,6 +3977,18 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    private String decodeBankStatementText(byte[] bytes) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        }catch(java.nio.charset.CharacterCodingException legacy) {
+            return java.nio.charset.Charset.forName("windows-1250")
+                .decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        }
+    }
+
     private void importStatementCsv(java.util.List<Uri> files, String bank) {
         if(files==null||bank==null||files.isEmpty())return;
         if(files.size()>10){alert("Wybierz maksymalnie 10 plików na raz.");return;}
@@ -4001,7 +4013,7 @@ public final class MainActivity extends Activity {
                     throw new IllegalArgumentException(
                         "Eksport tekstowy: maksymalnie 256 KB na plik.");
                 String text=xlsx?BankStatementWorkbook.textRows(bytes)
-                    :new String(bytes,StandardCharsets.UTF_8);
+                    :decodeBankStatementText(bytes);
                 java.util.List<BankStatementCsv.Entry> parsed=
                     BankStatementMbank.recognizes(text)
                         ?BankStatementMbank.parse(text)
