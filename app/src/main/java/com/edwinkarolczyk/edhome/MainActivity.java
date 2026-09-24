@@ -7635,6 +7635,26 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == EXPORT_QR_LABELS_PDF) {
+            byte[] pdf=pendingQrLabelsPdf;
+            pendingQrLabelsPdf=null;
+            if (result==RESULT_OK && pdf!=null
+                    && data!=null && data.getData()!=null) {
+                try (OutputStream output=getContentResolver().openOutputStream(
+                        data.getData(),"w")) {
+                    if(output==null)throw new java.io.IOException(
+                        "Nie można otworzyć dokumentu.");
+                    output.write(pdf);
+                    output.flush();
+                    StorageQrLabels.log(this,"Zapis PDF",1);
+                    alert("Zapisano etykiety QR do PDF.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("QR_PDF_EXPORT",error);
+                    alert("Nie zapisano PDF.");
+                }
+            }
+            return;
+        }
         if (request == IMPORT_CUSTOM_TILE_ICON) {
             final String tileId = pendingCustomTileId;
             pendingCustomTileId = null;
