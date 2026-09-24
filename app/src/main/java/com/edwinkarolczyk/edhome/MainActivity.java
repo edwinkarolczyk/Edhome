@@ -2639,14 +2639,28 @@ public final class MainActivity extends Activity {
                 // It persists through navigation, process restarts and application updates.
                 final String collapseKey = "vehicle_collapsed_" + id;
                 final boolean collapsed = prefs.getBoolean(collapseKey, false);
-                box.addView(text(item.name, 20, true));
+                LinearLayout vehicleHeading = new LinearLayout(this);
+                vehicleHeading.setOrientation(LinearLayout.HORIZONTAL);
+                vehicleHeading.setGravity(Gravity.CENTER_VERTICAL);
+                vehicleHeading.setMinimumHeight(dp(48));
+                TextView vehicleTitle = text(item.name, 20, true);
+                vehicleHeading.addView(vehicleTitle,
+                    new LinearLayout.LayoutParams(0, -2, 1f));
+                TextView chevron = text(collapsed ? "▸" : "▾", 24, true);
+                chevron.setContentDescription(collapsed ? "Rozwiń pojazd" : "Zwiń pojazd");
+                vehicleHeading.addView(chevron);
+                vehicleHeading.setContentDescription(item.name + " • "
+                    + (collapsed ? "Rozwiń" : "Zwiń"));
+                vehicleHeading.setClickable(true);
+                vehicleHeading.setFocusable(true);
+                touchFeedback(vehicleHeading);
+                vehicleHeading.setOnClickListener(v -> {
+                    prefs.edit().putBoolean(collapseKey, !collapsed).apply();
+                    render();
+                });
+                box.addView(vehicleHeading);
                 if (!item.registration.isEmpty())
                     box.addView(text("Rejestracja: " + item.registration, 14, false));
-                smallButton(box, collapsed ? "▸ Rozwiń pojazd" : "▾ Zwiń pojazd",
-                    () -> {
-                        prefs.edit().putBoolean(collapseKey, !collapsed).apply();
-                        render();
-                    });
                 if (collapsed) continue;
                 box.addView(text("Przebieg: " + item.mileage + " km", 14, false));
                 if (!item.ocUntil.isEmpty())
