@@ -7,7 +7,7 @@ end=s.index("    private void storageEditor(",start)
 ui=s[start:end]
 assert 'title("Podgląd magazynu")' in ui
 assert 'storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body)' in ui
-assert 'storageTreeItem(item,items,drawnItems,depth+1,inner)' in ui
+assert 'storageTreeItem(child,items,drawnItems,depth+1,inner)' in ui
 assert 'String key="storage_tree_place_"+place.id;' in ui
 assert 'String key="storage_tree_box_"+item.id;' in ui
 assert 'prefs.getBoolean(key,false)' in ui
