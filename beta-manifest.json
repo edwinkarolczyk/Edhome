@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 92,
-  "versionName": "0.6.0.27",
-  "changelog": "EDHOME 0.6.0.27 — PayCheck: nowe sygnały bankowe automatycznie trafiają do kolejki oczekujących na wybór wspólny/prywatny. Wspólny wpis powstaje jako pending, prywatny dopiero w odblokowanym zaszyfrowanym sejfie, także jako pending. Salda nie zmieniają się do potwierdzenia; identyfikatory chronią przed ponownym utworzeniem z tego samego powiadomienia. Bez migracji i bez kasowania danych; Beta tylko, Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.27/edhome-beta.apk",
-  "sha256": "a255d46dbc0bf7f9151ed931b27cbe32ca659c97083a88f9e56f2ef4daf67314"
+  "versionCode": 93,
+  "versionName": "0.6.0.28",
+  "changelog": "EDHOME 0.6.0.28 — PayCheck: sygnał bankowy automatycznie trafia do kolejki oczekujących na wybór wspólny/prywatny, bez zmiany salda. Dotknięcie potwierdzenia EDHOME otwiera PayCheck. Po wyborze wspólny powstaje pending; prywatny powstaje jako pending dopiero po odblokowaniu sejfu. Kolejka nie usuwa już starszych nieprzypisanych sygnałów po 14 dniach ani po 40 wpisach. Ochrona przed ponownym zapisaniem tego samego powiadomienia. Zachowane dane, Beta tylko, main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.28/edhome-beta.apk",
+  "sha256": "51e7e056fa8e9d636b436b5e754f632353cc7acde3a6dd1ed5b860f71a739801"
 }
