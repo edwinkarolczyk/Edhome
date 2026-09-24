@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 31;
+    private static final int DB_VERSION = 32;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -54,7 +54,7 @@ final class DataBackup {
             "details", "happened_at"},
         {"paycheck_transactions", "id", "operation_id", "scope", "kind",
             "category", "amount_grosz", "note", "created_at", "status",
-            "confirmation_source", "confirmed_at"},
+            "confirmation_source", "confirmed_at", "statement_key", "statement_date"},
         {"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"},
         {"paycheck_goal_allocations", "id", "operation_id", "goal_id",
             "amount_grosz", "created_at"},
@@ -196,7 +196,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -452,6 +452,12 @@ final class DataBackup {
                                 continue;
                             }
                         }
+                        if (inputVersion < 32
+                                && "paycheck_transactions".equals(definition[0])
+                                && ("statement_key".equals(key) || "statement_date".equals(key))) {
+                            values.putNull(key);
+                            continue;
+                        }
                         if (inputVersion < 27
                                 && "vehicle_policies".equals(definition[0])
                                 && "goal_id".equals(key)) {
@@ -487,6 +493,9 @@ final class DataBackup {
                              || "assignee_name_snapshot".equals(key)
                              || "acknowledged_at".equals(key)
                             || "confirmed_at".equals(key)
+                            || ("paycheck_transactions".equals(definition[0])
+                                && ("statement_key".equals(key)
+                                    || "statement_date".equals(key)))
                             || ("storage_items".equals(definition[0])
                                 && ("lent_to".equals(key)
                                     || "parent_box_id".equals(key)
@@ -758,6 +767,18 @@ final class DataBackup {
                                     || "manual".equals(source)
                                         && confirmedAt != null && confirmedAt > 0)))
                         throw new IllegalArgumentException("Nieprawidłowe źródło potwierdzenia.");
+                    String statementKey = values.getAsString("statement_key");
+                    String statementDate = values.getAsString("statement_date");
+                    if ((statementKey == null) != (statementDate == null)
+                            || statementKey != null && (!statementKey.matches("[0-9a-f]{64}")
+                                || !"confirmed".equals(status)
+                                || !"manual".equals(source)))
+                        throw new IllegalArgumentException("Niespójne uzgodnienie bankowe.");
+                    if (statementDate != null) try {
+                        java.time.LocalDate.parse(statementDate);
+                    } catch (java.time.format.DateTimeParseException error) {
+                        throw new IllegalArgumentException("Nieprawidłowa data wyciągu.");
+                    }
                     if (operation == null || !operation.matches("[0-9a-fA-F-]{36}")
                             || !("pending".equals(status) || "confirmed".equals(status))
                             || !"shared".equals(scope)
@@ -1018,8 +1039,12 @@ final class DataBackup {
                     "Powielona wpłata albo przekroczony lub nieistniejący cel.");
             goalTotals.put(goalId, previous + amount);
         }
+        Set<String> bankStatementOperations = new HashSet<>();
         Set<String> sharedFinanceOperations = new HashSet<>();
         for (ContentValues entry : parsed.get("paycheck_transactions")) {
+            String bankKey=entry.getAsString("statement_key");
+            if (bankKey != null && !bankStatementOperations.add(bankKey))
+                throw new IllegalArgumentException("Powielony identyfikator z wyciągu.");
             if (!sharedFinanceOperations.add(entry.getAsString("operation_id")))
                 throw new IllegalArgumentException("Zduplikowana transakcja PayCheck.");
         }
