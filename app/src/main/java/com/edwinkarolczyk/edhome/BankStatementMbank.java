@@ -82,6 +82,8 @@ final class BankStatementMbank {
             if(rawAmount.startsWith("-")||rawAmount.startsWith("+"))
                 rawAmount=rawAmount.substring(1);
             long grosz=money(rawAmount,i+1);
+            if(grosz==0)throw new IllegalArgumentException(
+                "mBank: zerowa kwota w wierszu "+(i+1));
             String rawBalance=cells.get(balance).trim().replace(" ","")
                 .replace("\u00a0","");
             if(rawBalance.isEmpty())
@@ -152,6 +154,8 @@ final class BankStatementMbank {
         if(quoted)throw new IllegalArgumentException(
             "mBank: niezamknięty cudzysłów.");
         parts.add(part.toString());
+        while(parts.size()>1&&parts.get(parts.size()-1).trim().isEmpty())
+            parts.remove(parts.size()-1);
         return parts;
     }
 
