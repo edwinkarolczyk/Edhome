@@ -130,3 +130,13 @@
 - Wspólne saldo zmienia się jednorazowo dopiero przy zatwierdzeniu skojarzenia. Zachowujemy skrót identyfikatora i datę w celu deduplikacji; surowe wiersze CSV nie są utrwalane. Na ekranie źródło oznaczone „Uzgodnione z importowanym CSV” — to nie jest gwarancja autentyczności banku.
 - SQLite v31→v32; backup v32 przechowuje referencję/dzień i waliduje ich spójność. Starsze kopie do v31 zachowują operacje bez dorabiania fikcyjnych dopasowań.
 - **Nie jest to jeszcze obsługa powiadomień Androida, import dowolnego formatu dowolnego banku ani automatyczne rozpoznawanie przelewów własnych.** Pozostaje zakres kolejnych inkrementów 0.6 oraz dokumenty pojazdów i pełna stabilizacja; `main` nietknięta.
+
+
+## 0.6.0.10 — dokumenty pojazdu
+
+- Karta każdego pojazdu otrzymuje lokalny rejestr dokumentów. Typy: dowód rejestracyjny, polisa/ubezpieczenie, przegląd, faktura/rachunek, dokument serwisowy i inne.
+- Dokument przechowuje nazwę, opcjonalny numer, datę dokumentu, opcjonalny termin ważności oraz notatkę. Wpis jest przypisany do jednego istniejącego pojazdu i ma własny identyfikator operacji, więc ponowienie zapisu nie tworzy duplikatu.
+- Rejestr dokumentów **nie tworzy wydatku PayCheck, celu ani czynności**. Koszt dokumentu lub polisy trafia do finansów tylko przez istniejący jawny mechanizm kosztu pojazdu.
+- SQLite v32→v33 dodaje tabelę `vehicle_documents`; backup v33 zachowuje dokumenty, a starsze kopie importują pusty rejestr bez utraty wcześniejszych danych.
+- Ten inkrement przechowuje ewidencję dokumentu, nie binarny skan/PDF. Załączniki plikowe wymagają osobnego modelu kopii danych, aby aktualizacja lub odtworzenie nie zgubiły pliku.
+- Stable `main` pozostaje bez zmian.
