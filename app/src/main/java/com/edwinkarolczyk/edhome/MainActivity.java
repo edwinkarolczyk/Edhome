@@ -3952,12 +3952,12 @@ public final class MainActivity extends Activity {
         bank.setSingleLine(true);
         bank.setHint("Nazwa banku, np. mój bank");
         bank.setText(prefs.getString("paycheck_csv_bank_name",""));
-        new AlertDialog.Builder(this).setTitle("Import CSV • tylko wspólny PayCheck")
-            .setMessage("Wpisz bank, z którego pochodzi plik. Użyj tej samej "
+        new AlertDialog.Builder(this).setTitle("Wczytaj potwierdzenia CSV • PayCheck")
+            .setMessage("Wpisz bank dla wybranej partii (do 10 plików). Użyj tej samej "
                 + "nazwy przy kolejnym imporcie. EDHOME nie łączy się z bankiem "
                 + "i nie sprawdza autentyczności wskazanego pliku.")
             .setView(bank).setNegativeButton("Anuluj",null)
-            .setPositiveButton("Wybierz CSV",(d,w)->{
+            .setPositiveButton("Wybierz pliki",(d,w)->{
                 String label=bank.getText().toString().trim();
                 if(label.isEmpty()||label.length()>80){
                     alert("Nazwa banku musi mieć od 1 do 80 znaków.");return;
@@ -3967,6 +3967,7 @@ public final class MainActivity extends Activity {
                 Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 picker.addCategory(Intent.CATEGORY_OPENABLE);
                 picker.setType("*/*");
+                picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
                 try{startActivityForResult(picker,IMPORT_STATEMENT_CSV);}
                 catch(Exception error){
                     pendingStatementBank=null;
@@ -3976,27 +3977,43 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
-    private void importStatementCsv(Uri uri, String bank) {
-        if(uri==null||bank==null)return;
+    private void importStatementCsv(java.util.List<Uri> files, String bank) {
+        if(files==null||bank==null||files.isEmpty())return;
+        if(files.size()>10){alert("Wybierz maksymalnie 10 CSV na raz.");return;}
         try {
-            ByteArrayOutputStream output=new ByteArrayOutputStream();
-            try(InputStream stream=getContentResolver().openInputStream(uri)){
-                if(stream==null)throw new IllegalArgumentException("Nie można odczytać CSV.");
-                byte[] buffer=new byte[4096];int n;
-                while((n=stream.read(buffer))!=-1) {
-                    if(output.size()+n>BankStatementCsv.MAX_BYTES)
-                        throw new IllegalArgumentException("CSV: maksymalnie 256 KB.");
-                    output.write(buffer,0,n);
+            java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
+            java.util.Set<String> seen=new java.util.HashSet<>();
+            int duplicateRows=0;
+            for(Uri uri:files) {
+                ByteArrayOutputStream output=new ByteArrayOutputStream();
+                try(InputStream stream=getContentResolver().openInputStream(uri)){
+                    if(stream==null)throw new IllegalArgumentException("Nie można odczytać CSV.");
+                    byte[] buffer=new byte[4096];int n;
+                    while((n=stream.read(buffer))!=-1) {
+                        if(output.size()+n>BankStatementCsv.MAX_BYTES)
+                            throw new IllegalArgumentException("CSV: maksymalnie 256 KB na plik.");
+                        output.write(buffer,0,n);
+                    }
+                }
+                java.util.List<BankStatementCsv.Entry> parsed=
+                    BankStatementCsv.parse(new String(output.toByteArray(),
+                        StandardCharsets.UTF_8),bank);
+                for(BankStatementCsv.Entry entry:parsed) {
+                    if(!seen.add(entry.evidenceKey)){duplicateRows++;continue;}
+                    if(entries.size()>=BankStatementCsv.MAX_ROWS)
+                        throw new IllegalArgumentException(
+                            "Maksymalnie 250 różnych transakcji w partii.");
+                    entries.add(entry);
                 }
             }
-            java.util.List<BankStatementCsv.Entry> entries=
-                BankStatementCsv.parse(new String(output.toByteArray(),
-                    StandardCharsets.UTF_8),bank);
             DiagnosticLog.event("PAYCHECK_CSV_PREVIEW");
+            if(duplicateRows>0)
+                alert("Pominięto "+duplicateRows+" powtórzonych pozycji między plikami. "
+                    +"Żaden duplikat nie zmieni salda.");
             showStatementEntries(entries,bank);
         }catch(Exception error){
             DiagnosticLog.event("PAYCHECK_CSV_IMPORT_REJECTED");
-            alert("Nie wczytano CSV: "+(error instanceof IllegalArgumentException
+            alert("Nie wczytano partii CSV: "+(error instanceof IllegalArgumentException
                 ?error.getMessage():"błąd odczytu pliku."));
         }
     }
@@ -6665,8 +6682,14 @@ public final class MainActivity extends Activity {
         if (request == IMPORT_STATEMENT_CSV) {
             String bank=pendingStatementBank;
             pendingStatementBank=null;
-            if(result==RESULT_OK&&data!=null&&data.getData()!=null)
-                importStatementCsv(data.getData(),bank);
+            if(result==RESULT_OK&&data!=null&&bank!=null) {
+                java.util.List<Uri> files=new java.util.ArrayList<>();
+                if(data.getClipData()!=null) {
+                    for(int i=0;i<data.getClipData().getItemCount();i++)
+                        files.add(data.getClipData().getItemAt(i).getUri());
+                } else if(data.getData()!=null) files.add(data.getData());
+                if(!files.isEmpty()) importStatementCsv(files,bank);
+            }
             return;
         }
         if (request == IMPORT_BETA_APK) {
