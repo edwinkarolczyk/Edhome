@@ -4016,7 +4016,12 @@ public final class MainActivity extends Activity {
                 if(BankStatementWorkbook.isXlsx(bytes)) {
                     text=BankStatementWorkbook.textRows(bytes);
                 } else {
-                    text=new String(bytes,StandardCharsets.UTF_8);
+                    String utf8=new String(bytes,StandardCharsets.UTF_8);
+                    String cp1250=new String(bytes,
+                        java.nio.charset.Charset.forName("windows-1250"));
+                    if(BankStatementMbank.recognizes(utf8)) text=utf8;
+                    else if(BankStatementMbank.recognizes(cp1250)) text=cp1250;
+                    else text=utf8.indexOf('\uFFFD')>=0?cp1250:utf8;
                 }
                 java.util.List<BankStatementCsv.Entry> parsed;
                 if(BankStatementMbank.recognizes(text)) {
