@@ -140,3 +140,17 @@
 - SQLite v32→v33 dodaje tabelę `vehicle_documents`; backup v33 zachowuje dokumenty, a starsze kopie importują pusty rejestr bez utraty wcześniejszych danych.
 - Ten inkrement przechowuje ewidencję dokumentu, nie binarny skan/PDF. Załączniki plikowe wymagają osobnego modelu kopii danych, aby aktualizacja lub odtworzenie nie zgubiły pliku.
 - Stable `main` pozostaje bez zmian.
+
+## Odbiór telefonu 0.6.0.10 — zgłoszenie Edwina 24.09.2026
+
+**6 z 7 scenariuszy zaliczonych na fizycznym urządzeniu:** aktualizacja i kopia danych; zachowanie starego salda; nowy wspólny wydatek oczekujący i ręczne potwierdzenie; koszt pojazdu → wspólny PayCheck; rejestr dokumentu pojazdu po restarcie; zachowanie danych i podstawowa stabilność. **Nieprzetestowane:** import CSV, więc cała 0.6.0 pozostaje otwarta. Te wyniki są deklaracją odbioru użytkownika; nie oznaczają wykonania testu plikowych załączników ani automatycznego potwierdzania bankiem.
+
+### Test 4 — import CSV bez prawdziwych danych bankowych
+
+1. Wyeksportuj kopię. Zanotuj potwierdzone saldo w PayCheck. Utwórz **nowy** wspólny wydatek 12,50 zł, pozostaw „Do potwierdzenia”. Nie używaj wpisu potwierdzonego w teście 3.
+2. Skopiuj [syntetyczny CSV](../tests/fixtures/paycheck_statement_acceptance.csv) jako lokalny plik UTF-8 `edhome-test.csv`, separator średnikowy. Kolumny: `Data;Kwota;Id transakcji;Opis`; testowy wiersz `2026-09-24;-12,50;EDHOME-TEST-CSV-1250-001;Test uzgodnienia PayCheck`.
+3. Otwórz PayCheck → „Uzgodnij z wyciągiem CSV”; wybierz lokalny plik i wpisz **fikcyjną nazwę banku „EDHOME TEST”**. Wskaż właściwy wpis oczekujący na 12,50 zł i jawnie potwierdź skojarzenie. Saldo ma zmienić się **dokładnie raz** o −12,50 zł; wpis staje się potwierdzony i ma źródło „Uzgodnione z importowanym CSV”. Sam podgląd/import bez zatwierdzenia nie może zmienić salda.
+4. Zaimportuj **ten sam CSV z tą samą fikcyjną nazwą banku** ponownie. Identyfikator `EDHOME-TEST-CSV-1250-001` musi zostać odrzucony jako już użyty, bez kolejnej zmiany salda, nawet po restarcie aplikacji.
+5. Sprawdź brak wpływu na prywatny sejf, inne wydatki i dokumenty pojazdu. Jeśli test nie przejdzie, zachowaj plik testowy, eksport logów i zanotuj saldo przed/po.
+
+**Uwaga:** „EDHOME TEST” to wyłącznie etykieta w pliku testowym, nie prawdziwy bank; CSV sam w sobie nie dowodzi autentyczności operacji. Dopóki użytkownik nie potwierdzi testu 4, nie oznaczać importu jako odebranego. Stable `main` bez zmian; 1.0.0 dopiero po testach całego wydania i wyraźnym odbiorze.
