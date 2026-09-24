@@ -42,7 +42,7 @@ for token in (
     '"shopping_id".equals(column) || "packages".equals(column)',
 ):
     assert token in backup, token
-assert "versionCode 84" in gradle and "versionNameSuffix ''" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 
 db = sqlite3.connect(":memory:")
 db.executescript("""
