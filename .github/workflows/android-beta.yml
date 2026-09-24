@@ -387,14 +387,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.12-signed-apk
+          name: EDHOME-0.6.0.13-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.12 — PayCheck: rozpoznawanie eksportu mBanku z nagłówkami i stopką oraz różnych operacji bez ID przez daty, kwotę i saldo po operacji; import tekstowego CSV i arkusza XLSX z wierszami mBanku. Dopasowania nadal zatwierdza użytkownik; PDF VeloBanku jeszcze nieobsługiwany. SQLite v33 i dane zachowane, Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.13 — PayCheck mBank: odczyt pliku CSV w UTF-8 i Windows-1250 oraz eksportu XLSX z tekstem operacji w arkuszu; jednoznaczne propozycje bez automatycznego księgowania. Saldo i dane zachowane, SQLite v33; PDF VeloBanku jeszcze nieobsługiwany; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
