@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 86,
-  "versionName": "0.6.0.21",
-  "changelog": "EDHOME 0.6.0.20 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: obsługa importu paczki 100 ikon AI 3D ZIP, przełączanie standard/3D i wybór ikony kafelka. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.21/edhome-beta.apk",
-  "sha256": "eca9cbf28996e11936c39ca966d4cb9cb2f14bb1e6985c386685ca73f9b9801d"
+  "versionCode": 87,
+  "versionName": "0.6.0.22",
+  "changelog": "EDHOME 0.6.0.22 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: import 100 ikon AI 3D ZIP, przełączanie standard/3D, wybór ikony i własny PNG/WebP na kafelku. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.22/edhome-beta.apk",
+  "sha256": "ac3c14e9e8a53f387c078ec9dcfabc53fb70eaa2294dc484d38047d94b72e05a"
 }
