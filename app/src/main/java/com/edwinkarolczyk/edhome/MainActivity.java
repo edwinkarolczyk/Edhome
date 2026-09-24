@@ -4791,9 +4791,11 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(14), dp(18), dp(14));
         form.addView(text(first
-            ? "Utwórz osobne hasło sejfu: 12–64 znaki. "
+            ? "Utwórz osobne hasło sejfu: 5–64 znaki. "
                 + "Nie jest to PIN aplikacji. Bez hasła nie odzyskasz danych. "
-                + "Sejf nie wchodzi do zwykłej kopii JSON."
+                + "Sejf nie wchodzi do zwykłej kopii JSON. "
+                + "Krótkie hasło (5 znaków) słabiej chroni dane; "
+                + "zalecane jest dłuższe hasło."
             : "Wpisz hasło prywatnego sejfu. "
                 + "Wspólny PayCheck pozostaje bez zmian.", 14, false));
         EditText password = new EditText(this);
@@ -4838,7 +4840,7 @@ public final class MainActivity extends Activity {
                     if (first && (!PrivatePaycheckCrypto.validPassword(secret)
                             || !java.util.Arrays.equals(secret, confirm))) {
                         password.setError("Hasła muszą być identyczne "
-                            + "i mieć 12–64 znaki.");
+                            + "i mieć 5–64 znaki.");
                         return;
                     }
                     if (!first && PrivatePaycheckVault.cooldownMillis(this) > 0) {
@@ -5027,7 +5029,7 @@ public final class MainActivity extends Activity {
                 char[] password = pass.getText().toString().toCharArray();
                 char[] repeat = again.getText().toString().toCharArray();
                 try {
-                    if (!PrivatePaycheckCrypto.validPassword(password)
+                    if (!PrivatePaycheckCrypto.validBackupPassword(password)
                             || !java.util.Arrays.equals(password, repeat)) {
                         pass.setError("Hasło kopii musi mieć 12–64 znaki i zgadzać się z powtórzeniem.");
                         return;
@@ -5108,7 +5110,7 @@ public final class MainActivity extends Activity {
                         vaultPassword.setError("Nieprawidłowe hasło sejfu.");
                         return;
                     }
-                    if (!PrivatePaycheckCrypto.validPassword(backupPass)) {
+                    if (!PrivatePaycheckCrypto.validBackupPassword(backupPass)) {
                         archivePassword.setError("Podaj hasło kopii (12–64 znaki).");
                         return;
                     }
