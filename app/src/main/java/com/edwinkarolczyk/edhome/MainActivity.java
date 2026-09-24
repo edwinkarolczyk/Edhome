@@ -3907,13 +3907,13 @@ public final class MainActivity extends Activity {
             button("◷ Historia skanowania i drukowania QR",
                 this::showQrHistory);
         }
-        button("▣ Skanuj QR rzeczy lub pudełka", () -> {
+        button("▣ Skanuj QR rzeczy, pudełka lub miejsca", () -> {
             if (storageQrCameraPending || pantrySingleCameraPending
                     || pantryBatch.active()) return;
             storageQrCameraPending = true;
             IntentIntegrator qr = new IntentIntegrator(this);
             qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-            qr.setPrompt("EDHOME: QR rzeczy lub pudełka");
+            qr.setPrompt("EDHOME: QR rzeczy, pudełka lub miejsca");
             qr.setBeepEnabled(false);
             qr.setOrientationLocked(false);
             qr.initiateScan();
@@ -4321,7 +4321,7 @@ public final class MainActivity extends Activity {
                         StorageQrLabels.print(this,pdf,
                             StorageQrLabels.pages(count,format),format,
                             "EDHOME — etykiety QR");
-                        StorageQrLabels.log(this,"Drukowanie",count);
+                        StorageQrLabels.log(this,"Otworzono drukowanie",count);
                     } catch(Exception error) {
                         alert("Nie można otworzyć drukowania: "
                             +error.getMessage());
@@ -4366,7 +4366,7 @@ public final class MainActivity extends Activity {
                 "Etykiety EDHOME",uri));
             startActivity(Intent.createChooser(share,
                 "Udostępnij etykiety QR"));
-            StorageQrLabels.log(this,"Udostępnienie PDF",count);
+            StorageQrLabels.log(this,"Otworzono udostępnianie PDF",count);
         } catch(Exception failure) {
             DiagnosticLog.error("QR_SHARE",failure);
             alert("Nie można udostępnić PDF.");
