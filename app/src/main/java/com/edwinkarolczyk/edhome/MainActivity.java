@@ -3826,7 +3826,7 @@ public final class MainActivity extends Activity {
         title("Historia wspólna");
         int count=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT operation_id,kind,category,amount_grosz,note,created_at,status "
+                "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source "
                 +"FROM paycheck_transactions WHERE scope='shared' "
                 +"ORDER BY id DESC LIMIT 40",null)){
             while(c.moveToNext()){
@@ -3834,13 +3834,17 @@ public final class MainActivity extends Activity {
                 String operationId=c.getString(0);
                 boolean income="income".equals(c.getString(1));
                 String status=c.getString(6);
+                String evidence=c.getString(7);
                 LinearLayout entry=card();
                 entry.addView(text((income?"+ ":"− ")
                     +MoneyRules.format(c.getLong(3))
                     +("pending".equals(status)?" • DO POTWIERDZENIA"
-                        :" • POTWIERDZONE"),18,true));
+                        :"manual".equals(evidence)?" • POTWIERDZONE RĘCZNIE"
+                        :" • WPIS HISTORYCZNY"),18,true));
                 entry.addView(text(MoneyRules.categoryLabel(c.getString(2))
                     +(c.getString(4).isEmpty()?"":" • "+c.getString(4)),14,false));
+                if ("legacy".equals(evidence))
+                    entry.addView(text("Brak informacji o źródle potwierdzenia bankowego.",12,false));
                 entry.addView(text(Instant.ofEpochMilli(c.getLong(5))
                     .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
                     12,false));
@@ -6569,7 +6573,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 30);
+            super(context, "edhome-beta-preview.db", null, 31);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6610,7 +6614,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 30) {
+            if (oldVersion < 1 || newVersion > 31) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6762,6 +6766,15 @@ public final class MainActivity extends Activity {
                     + "TEXT NOT NULL DEFAULT 'confirmed' "
                     + "CHECK(status IN ('pending','confirmed'))");
                 DiagnosticLog.event("DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING");
+            }
+            if (oldVersion < 31) {
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN "
+                    + "confirmation_source TEXT NOT NULL DEFAULT 'legacy' "
+                    + "CHECK(confirmation_source IN ('none','legacy','manual'))");
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN confirmed_at INTEGER");
+                database.execSQL("UPDATE paycheck_transactions SET confirmation_source='none' "
+                    + "WHERE status='pending'");
+                DiagnosticLog.event("DATABASE_MIGRATED_30_TO_31_CONFIRMATION_PROVENANCE");
             }
         }
 
