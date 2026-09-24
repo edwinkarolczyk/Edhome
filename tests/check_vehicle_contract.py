@@ -42,7 +42,13 @@ assert 'vehicleIds.contains(event.getAsLong("vehicle_id"))' in backup
 assert 'vehicleOperations.add(event.getAsString("operation_id"))' in backup
 assert '"mileage".equals(column) || "vehicle_id".equals(column)' in backup
 assert '"tread_tenths".equals(column) || "mounted".equals(column)' in backup
-assert 'versionCode 84' in gradle and "versionName '0.6.0.19'" in gradle
+# Release numbers advance independently of the vehicle schema; avoid pinning CI
+# to an already published APK when only the build number changes.
+import re
+version_code = re.search(r"\\bversionCode\\s+(\\d+)", gradle)
+version_name = re.search(r"\\bversionName\\s+'([^']+)'", gradle)
+assert version_code and int(version_code.group(1)) >= 84
+assert version_name and re.fullmatch(r"0\\.6\\.0\\.\\d+", version_name.group(1))
 assert "versionNameSuffix ''" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
