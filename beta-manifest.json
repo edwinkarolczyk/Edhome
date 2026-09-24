@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 87,
-  "versionName": "0.6.0.22",
-  "changelog": "EDHOME 0.6.0.22 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: import 100 ikon AI 3D ZIP, przełączanie standard/3D, wybór ikony i własny PNG/WebP na kafelku. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.22/edhome-beta.apk",
-  "sha256": "ac3c14e9e8a53f387c078ec9dcfabc53fb70eaa2294dc484d38047d94b72e05a"
+  "versionCode": 89,
+  "versionName": "0.6.0.24",
+  "changelog": "EDHOME 0.6.0.24 — Magazyn: QR miejsc, rzeczy i pudełek; etykiety 40×30, 50×30, 70×50 mm i A4 zbiorczo, druk Android, PDF i udostępnianie. Skan otwiera kartę działań i historię. Większe ikony AI 3D dopasowane do kafelka pojedynczego/podwójnego, bez pustych marginesów; import ZIP opcjonalny. Bez migracji SQLite i bez kasowania danych; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.24/edhome-beta.apk",
+  "sha256": "d2e65fca44e9ca17ffa33a9064a46e01be5e9a39bfab1db95d0b6ad9dc24498d"
 }
