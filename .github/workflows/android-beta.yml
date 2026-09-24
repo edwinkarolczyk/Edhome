@@ -155,6 +155,8 @@ jobs:
           python3 tests/check_vehicle_reminder_contract.py
       - name: Vehicle cost and one shared PayCheck expense regression
         run: python3 tests/check_vehicle_cost_contract.py
+      - name: Vehicle document register regression
+        run: python3 tests/check_vehicle_document_contract.py
       - name: Pending shared PayCheck and one-time confirmation regression
         run: python3 tests/check_paycheck_pending_contract.py
       - name: Bank CSV parsing regression
@@ -380,14 +382,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.9-signed-apk
+          name: EDHOME-0.6.0.10-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.9 — wspólny PayCheck: ręczny import wyciągu CSV z Data;Kwota;Id transakcji;Opis i świadome dopasowanie do oczekującego wpisu po zgodności znaku i kwoty; jeden identyfikator bankowy nie może potwierdzić dwóch wydatków. Plik wskazuje użytkownik, aplikacja nie uwierzytelnia banku. SQLite v32 i kopie zgodne wstecz. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.10 — Pojazdy: lokalny rejestr dokumentów z typem, numerem, datą, terminem ważności i notatką; dokumenty są przypisane do pojazdu, nie tworzą kosztów PayCheck. SQLite v33 i kopie zgodne wstecz. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
