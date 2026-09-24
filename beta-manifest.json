@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 85,
-  "versionName": "0.6.0.20",
-  "changelog": "EDHOME 0.6.0.20 — poprawka odrzucania starych APK po aktualizacji; sprawdzanie SHA-256, pakietu, wersji i podpisu bez osłabienia zabezpieczeń. PayCheck: czytelny wybór banków z wyszukiwarką oraz instrukcja uprawnień powiadomień Androida. Dane zachowane, Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.20/edhome-beta.apk",
-  "sha256": "fd6f0e6471f0b2581abfe8ce62963cb344a0803161c43d5d3343bf04159c9714"
+  "versionCode": 86,
+  "versionName": "0.6.0.21",
+  "changelog": "EDHOME 0.6.0.20 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: obsługa importu paczki 100 ikon AI 3D ZIP, przełączanie standard/3D i wybór ikony kafelka. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.21/edhome-beta.apk",
+  "sha256": "eca9cbf28996e11936c39ca966d4cb9cb2f14bb1e6985c386685ca73f9b9801d"
 }
