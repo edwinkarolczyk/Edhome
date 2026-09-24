@@ -73,6 +73,13 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_PRIVATE_BACKUP = 1215;
     private static final int TAKE_SCANNER_RESULT = 1216;
     private static final int IMPORT_STATEMENT_CSV = 1217;
+    private static final int IMPORT_VEHICLE_DOCUMENT = 1218;
+    private static final int EXPORT_VEHICLE_DOCUMENT = 1219;
+    private long pendingDocumentVehicleId;
+    private Long pendingDocumentPolicyId;
+    private String pendingDocumentKind;
+    private String pendingDocumentOperationId;
+    private long pendingDocumentExportId;
     private String pendingStatementBank;
     private SharedPreferences prefs;
     private LocalDb db;
@@ -2683,6 +2690,26 @@ public final class MainActivity extends Activity {
                             13, false));
                     }
                 }
+                smallButton(box, "+ Dołącz dokument pojazdu", () ->
+                    selectVehicleDocument(item));
+                try(Cursor documents=db.getReadableDatabase().rawQuery(
+                        "SELECT id,kind,file_name,created_at,policy_id "
+                        + "FROM vehicle_documents WHERE vehicle_id=? ORDER BY id DESC",
+                        new String[]{Long.toString(id)})){
+                    int documentsShown=0;
+                    while(documents.moveToNext()){
+                        if(documentsShown++==0)
+                            box.addView(text("Dokumenty pojazdu • w kopii gospodarstwa",15,true));
+                        final long documentId=documents.getLong(0);
+                        String docName=documents.getString(2);
+                        box.addView(text(VehicleDocumentStore.label(documents.getString(1))
+                            + " • " + docName + (documents.isNull(4)
+                                ? "" : " • polisa #"+documents.getLong(4)),
+                            13,false));
+                        smallButton(box,"Zapisz kopię pliku: "+docName,
+                            ()->exportVehicleDocument(documentId));
+                    }
+                }
                 smallButton(box, "+ Zapisz koszt pojazdu", () -> editVehicleCost(item));
                 try (Cursor total = db.getReadableDatabase().rawQuery(
                         "SELECT COALESCE(SUM(amount_grosz),0) FROM vehicle_costs WHERE vehicle_id=?",
@@ -2976,6 +3003,165 @@ public final class MainActivity extends Activity {
             return goal.getString(0) + " • "
                 + MoneyRules.format(saved) + " / "
                 + MoneyRules.format(goal.getLong(1));
+        }
+    }
+
+    /** Real bytes are copied into SQLite; picker URI is never stored. */
+    private void selectVehicleDocument(VehicleStore.Vehicle vehicle){
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(12),dp(18),dp(12));
+        form.addView(text("Plik PDF/JPG/PNG do 2 MB. Zwykła kopia JSON "
+            + "gospodarstwa zawiera te dokumenty bez szyfrowania. "
+            + "Nie dodawaj tu prywatnych dokumentów PayCheck.",14,false));
+        Spinner kind=new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleDocumentStore.LABELS)));
+        form.addView(kind);
+        java.util.List<Long> policyIds=new java.util.ArrayList<>();
+        java.util.List<String> policyNames=new java.util.ArrayList<>();
+        policyIds.add(null);policyNames.add("Bez powiązania z konkretną polisą");
+        try(Cursor policies=db.getReadableDatabase().rawQuery(
+                "SELECT id,provider,policy_number FROM vehicle_policies "
+                +"WHERE vehicle_id=? ORDER BY current DESC,id DESC",
+                new String[]{Long.toString(vehicle.id)})){
+            while(policies.moveToNext()){
+                policyIds.add(policies.getLong(0));
+                policyNames.add(policies.getString(1)+" • "+policies.getString(2));
+            }
+        }
+        form.addView(text("Polisa OC • opcjonalnie",13,false));
+        Spinner policy=new Spinner(this);
+        policy.setAdapter(lightDialogSpinnerAdapter(policyNames));
+        form.addView(policy);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Dołącz dokument • "+vehicle.name).setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Wybierz plik",(d,w)->{
+                int index=kind.getSelectedItemPosition();
+                Long policyId=policyIds.get(policy.getSelectedItemPosition());
+                if(index!=0&&policyId!=null){
+                    alert("Powiązanie z polisą dotyczy wyłącznie dokumentu OC.");return;
+                }
+                pendingDocumentVehicleId=vehicle.id;
+                pendingDocumentPolicyId=policyId;
+                pendingDocumentKind=VehicleDocumentStore.KINDS[index];
+                pendingDocumentOperationId=java.util.UUID.randomUUID().toString();
+                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("*/*");
+                try{startActivityForResult(picker,IMPORT_VEHICLE_DOCUMENT);}
+                catch(Exception error){
+                    pendingDocumentOperationId=null;
+                    DiagnosticLog.event("VEHICLE_DOCUMENT_PICKER_FAILED");
+                    alert("Nie można wybrać dokumentu.");
+                }
+            }).show();
+    }
+
+    private void importVehicleDocument(Uri uri) {
+        long vehicleId=pendingDocumentVehicleId;
+        Long policyId=pendingDocumentPolicyId;
+        String kind=pendingDocumentKind;
+        String operationId=pendingDocumentOperationId;
+        pendingDocumentOperationId=null;
+        pendingDocumentPolicyId=null;
+        pendingDocumentKind=null;
+        if(uri==null||operationId==null||kind==null)return;
+        try{
+            String fileName="dokument";
+            try(Cursor meta=getContentResolver().query(uri,
+                    new String[]{android.provider.OpenableColumns.DISPLAY_NAME},
+                    null,null,null)){
+                if(meta!=null&&meta.moveToFirst()&&!meta.isNull(0))
+                    fileName=meta.getString(0);
+            }
+            if(!VehicleDocumentStore.validName(fileName))
+                throw new IllegalArgumentException("Nieprawidłowa nazwa pliku.");
+            ByteArrayOutputStream output=new ByteArrayOutputStream();
+            try(InputStream stream=getContentResolver().openInputStream(uri)){
+                if(stream==null)
+                    throw new IllegalArgumentException("Nie można odczytać dokumentu.");
+                byte[] buffer=new byte[8192];
+                int count;
+                while((count=stream.read(buffer))!=-1){
+                    if(output.size()+count>VehicleDocumentStore.MAX_FILE_BYTES)
+                        throw new IllegalArgumentException(
+                            "Załącznik jest za duży: maksymalnie 2 MB.");
+                    output.write(buffer,0,count);
+                }
+            }
+            byte[] bytes=output.toByteArray();
+            String mime=null;
+            for(String format:new String[]{
+                    "application/pdf","image/jpeg","image/png"}){
+                if(VehicleDocumentStore.validMime(format,bytes)){
+                    mime=format;break;
+                }
+            }
+            if(mime==null)throw new IllegalArgumentException(
+                "Obsługiwane są tylko poprawne pliki PDF, JPG i PNG do 2 MB.");
+            String result=VehicleDocumentStore.add(db.getWritableDatabase(),
+                vehicleId,policyId,operationId,kind,fileName,mime,bytes);
+            if("COMMITTED".equals(result)){
+                DiagnosticLog.event("VEHICLE_DOCUMENT_STORED");
+                alert("Dokument dodany i objęty kopią gospodarstwa. "
+                    + "Przed eksportem pamiętaj: zwykły JSON nie jest szyfrowany.");
+                render();
+            }else if("DOCUMENT_LIMIT".equals(result))
+                alert("Limit załączników: łącznie maksymalnie 8 MB "
+                    + "zakodowanych plików w tej wersji.");
+            else if("ALREADY_ATTACHED".equals(result)||"DUPLICATE".equals(result))
+                alert("Ten dokument jest już dodany do pojazdu.");
+            else alert("Nie odnaleziono pojazdu lub wskazanej polisy.");
+        }catch(IllegalArgumentException invalid){
+            alert(invalid.getMessage());
+        }catch(Exception error){
+            DiagnosticLog.event("VEHICLE_DOCUMENT_IMPORT_FAILED");
+            alert("Nie dodano dokumentu. Dane pojazdu pozostały bez zmian.");
+        }
+    }
+
+    private void exportVehicleDocument(long documentId){
+        try(Cursor doc=db.getReadableDatabase().rawQuery(
+                "SELECT file_name,mime FROM vehicle_documents WHERE id=?",
+                new String[]{Long.toString(documentId)})){
+            if(!doc.moveToFirst()){
+                alert("Nie znaleziono dokumentu.");return;
+            }
+            Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            save.addCategory(Intent.CATEGORY_OPENABLE);
+            save.setType(doc.getString(1));
+            save.putExtra(Intent.EXTRA_TITLE,doc.getString(0));
+            pendingDocumentExportId=documentId;
+            try{startActivityForResult(save,EXPORT_VEHICLE_DOCUMENT);}
+            catch(Exception error){
+                pendingDocumentExportId=0;
+                alert("Nie można wybrać miejsca zapisu dokumentu.");
+            }
+        }
+    }
+
+    private void saveVehicleDocument(Uri target,long documentId){
+        if(target==null||documentId<1)return;
+        try(Cursor doc=db.getReadableDatabase().rawQuery(
+                "SELECT mime,base64_data,sha256 FROM vehicle_documents WHERE id=?",
+                new String[]{Long.toString(documentId)})){
+            if(!doc.moveToFirst()){
+                alert("Dokument już nie istnieje.");return;
+            }
+            byte[] bytes=VehicleDocumentStore.decodeAndVerify(
+                doc.getString(0),doc.getString(1),doc.getString(2));
+            try(OutputStream output=getContentResolver().openOutputStream(target)){
+                if(output==null)throw new IllegalStateException("No document output");
+                output.write(bytes);
+            }
+            DiagnosticLog.event("VEHICLE_DOCUMENT_EXPORTED");
+            alert("Zapisano kopię dokumentu w wybranym miejscu.");
+        }catch(Exception error){
+            DiagnosticLog.event("VEHICLE_DOCUMENT_EXPORT_FAILED");
+            alert("Nie udało się zapisać pliku; sprawdź miejsce zapisu.");
         }
     }
 
@@ -6172,6 +6358,7 @@ public final class MainActivity extends Activity {
         note("Nie zawiera PIN-u, dziennika diagnostycznego ani adresu aktualizacji. Plik JSON nie jest szyfrowany: przechowuj go prywatnie.");
         note("Kopia umożliwia przeniesienie danych do nowej instalacji, ale nie omija wymogu tego samego podpisu APK przy zwykłej aktualizacji Androida.");
         note("Prywatny sejf PayCheck nie jest częścią tej kopii. Wykonaj osobny, zaszyfrowany eksport po odblokowaniu sejfu.");
+        note("UWAGA: Załączniki dokumentów pojazdu są zapisane w zwykłej kopii JSON BEZ SZYFROWANIA. Nie udostępniaj jej osobom nieuprawnionym.");
         button("Eksportuj kopię danych (.json)", () -> {
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
@@ -6580,6 +6767,23 @@ public final class MainActivity extends Activity {
             } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
             return;
         }
+        if (request == IMPORT_VEHICLE_DOCUMENT) {
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null)
+                importVehicleDocument(data.getData());
+            else{
+                pendingDocumentOperationId=null;
+                pendingDocumentPolicyId=null;
+                pendingDocumentKind=null;
+            }
+            return;
+        }
+        if (request == EXPORT_VEHICLE_DOCUMENT) {
+            long documentId=pendingDocumentExportId;
+            pendingDocumentExportId=0;
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null)
+                saveVehicleDocument(data.getData(),documentId);
+            return;
+        }
         if (request == IMPORT_STATEMENT_CSV) {
             String bank=pendingStatementBank;
             pendingStatementBank=null;
@@ -6731,7 +6935,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 32);
+            super(context, "edhome-beta-preview.db", null, 33);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6764,6 +6968,7 @@ public final class MainActivity extends Activity {
             VehicleTyreStore.create(database);
             VehiclePolicyStore.create(database);
             VehicleCostStore.create(database);
+            VehicleDocumentStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
@@ -6772,7 +6977,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 32) {
+            if (oldVersion < 1 || newVersion > 33) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6940,6 +7145,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("CREATE UNIQUE INDEX paycheck_statement_key_unique "
                     + "ON paycheck_transactions(statement_key)");
                 DiagnosticLog.event("DATABASE_MIGRATED_31_TO_32_STATEMENT_MATCH");
+            }
+            if(oldVersion < 33) {
+                VehicleDocumentStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_32_TO_33_VEHICLE_DOCUMENTS");
             }
         }
 
