@@ -14,6 +14,12 @@ public final class BankNotificationListener extends NotificationListenerService 
     // when the user selects a bank after granting notification access.
     private static volatile WeakReference<BankNotificationListener> connected;
 
+    /** Connection to Android is not the same as just having permission. */
+    static boolean isConnected() {
+        WeakReference<BankNotificationListener> ref=connected;
+        return ref!=null && ref.get()!=null;
+    }
+
     @Override public void onListenerConnected() {
         super.onListenerConnected();
         connected=new WeakReference<>(this);
@@ -63,6 +69,8 @@ public final class BankNotificationListener extends NotificationListenerService 
                 ||!BankNotificationHints.enabled(this)
                 ||!BankNotificationHints.selected(this)
                     .contains(sbn.getPackageName()))return;
+        // Diagnostic metadata for selected banks only: no content or card data.
+        BankNotificationHints.recordSeen(this,sbn.getPackageName());
         Notification notification=sbn.getNotification();
         if(notification==null||notification.extras==null)return;
         CharSequence title=notification.extras.getCharSequence(
