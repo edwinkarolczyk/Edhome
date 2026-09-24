@@ -409,14 +409,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.24-signed-apk
+          name: EDHOME-0.6.0.26-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.24 — Magazyn: QR miejsc, rzeczy i pudełek; etykiety 40×30, 50×30, 70×50 mm i A4 zbiorczo, druk Android, PDF i udostępnianie. Skan otwiera kartę działań i historię. Większe ikony AI 3D dopasowane do kafelka pojedynczego/podwójnego, bez pustych marginesów; import ZIP opcjonalny. Bez migracji SQLite i bez kasowania danych; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.26 — PayCheck: po zapisaniu nowego powiadomienia z wybranego banku EDHOME pokazuje własne potwierdzenie z kwotą i źródłem. Powiadomienie można wyłączyć osobno; Android 13+ wymaga zgody na wysyłanie powiadomień. Blokada duplikatów, prywatny ekran blokady, bez zmiany salda i bez kasowania danych. Beta tylko; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
