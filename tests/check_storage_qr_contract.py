@@ -90,9 +90,12 @@ for token in (
     assert token in (qr+"\n"+main), "Missing QR integration: "+token
 for token in ('"40 × 30 mm"', '"50 × 30 mm"', '"70 × 50 mm"',
     '"A4 — zbiorczo"', 'new PdfDocument()', 'BarcodeFormat.QR_CODE',
-    'PrintDocumentAdapter', 'PrintManager', 'MAX_ENTRY' if False else 'HISTORY_LIMIT',
+    'PrintDocumentAdapter', 'PrintManager', 'HISTORY_LIMIT',
     'int perPage = rows * columns;', 'StorageQr.encode(kind,id)'):
     assert token in labels, "Missing PDF/print: "+token
+assert 'settings.put("storageQrHistory"' in backup
+assert 'String qrHistory = settings.optString("storageQrHistory","")' in backup
+assert '.putString(StorageQrLabels.HISTORY, qrHistory)' in backup
 assert 'android:authorities="${applicationId}.qrpdf"' in beta
 assert 'android:exported="false"' in beta
 assert '"r".equals(mode)' in provider
