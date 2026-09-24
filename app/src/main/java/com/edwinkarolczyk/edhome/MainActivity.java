@@ -4892,6 +4892,12 @@ public final class MainActivity extends Activity {
                 android.Manifest.permission.POST_NOTIFICATIONS},7133);
     }
 
+    private String bankSignalTime(long millis) {
+        if(millis<=0)return "brak";
+        return new java.text.SimpleDateFormat("dd.MM HH:mm:ss",
+            java.util.Locale.getDefault()).format(new java.util.Date(millis));
+    }
+
     private void showBankNotificationHints() {
         boolean optIn=BankNotificationHints.enabled(this);
         boolean androidEnabled=bankNotificationPermissionGranted();
@@ -4900,6 +4906,37 @@ public final class MainActivity extends Activity {
             :!androidEnabled?"Wybór zapisany • nadaj zgodę w ustawieniach Androida."
             :"Włączone • "+BankNotificationHints.selected(this).size()
                 +" wybranych aplikacji. Otwórz PayCheck ponownie po powiadomieniu.");
+        // Distinguish granted access, an actually bound listener, a bank event,
+        // a rejected format and a saved entry. Never show raw bank contents.
+        note("Nasłuch Androida: "+(BankNotificationListener.isConnected()
+            ?"POŁĄCZONY":"NIEPOŁĄCZONY")
+            +" • dostęp: "+(androidEnabled?"TAK":"NIE"));
+        if(optIn) {
+            long seen=BankNotificationHints.lastSeen(this);
+            long saved=BankNotificationHints.lastSaved(this);
+            long rejected=BankNotificationHints.lastUnrecognized(this);
+            note("Ostatnie powiadomienie wybranego banku: "
+                +bankSignalTime(seen));
+            String seenPackage=BankNotificationHints.lastSeenPackage(this);
+            if(!seenPackage.isEmpty()
+                    &&BankNotificationHints.selected(this).contains(seenPackage))
+                note("Źródło odebranego powiadomienia: "+seenPackage);
+            note("Ostatnio zapisany sygnał: "+bankSignalTime(saved));
+            note("Ostatni nierozpoznany komunikat bankowy: "
+                +bankSignalTime(rejected));
+            note("Własne powiadomienie EDHOME: "
+                +(BankReceiptNotifier.allowed(this)?"DOZWOLONE":
+                    "BRAK ZGODY LUB WYŁĄCZONE"));
+            button("Sprawdź teraz aktywne powiadomienia banków",()->{
+                if(android.os.Build.VERSION.SDK_INT>=24
+                        &&bankNotificationPermissionGranted())
+                    android.service.notification.NotificationListenerService
+                        .requestRebind(new ComponentName(this,
+                            BankNotificationListener.class));
+                BankNotificationListener.recheckActiveNotifications();
+                render();
+            });
+        }
         if(optIn&&!androidEnabled)
             button("Jak odblokować dostęp do powiadomień",
                 this::showBankNotificationPermissionGuide);
