@@ -29,4 +29,7 @@ assert 'static String addPending(' in private
 assert 'static boolean confirmPending(' in private
 assert '!"pending".equals(entry.status)' in ui
 assert 'privatePaycheckSession.active()' in ui
+assert 'getBooleanExtra("open_paycheck",false)' in ui
+assert '.putExtra("open_paycheck",true)' in (
+    root/"BankReceiptNotifier.java").read_text(encoding="utf-8")
 print("Bank auto-pending: unassigned drafts, explicit scope, replay guard, private encryption, balances PASS")
