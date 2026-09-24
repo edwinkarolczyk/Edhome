@@ -161,6 +161,16 @@ jobs:
         run: python3 tests/check_vehicle_collapse_contract.py
       - name: Pending shared PayCheck and one-time confirmation regression
         run: python3 tests/check_paycheck_pending_contract.py
+      - name: Opt-in bank notification parsing and privacy regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/bank-notifications"
+          javac -d "$RUNNER_TEMP/bank-notifications" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankNotificationRules.java \
+            tests/task_rules/BankNotificationRulesSmoke.java
+          java -cp "$RUNNER_TEMP/bank-notifications" \
+            com.edwinkarolczyk.edhome.BankNotificationRulesSmoke
+          python3 tests/check_bank_notification_contract.py
       - name: Bank CSV parsing regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-csv"
