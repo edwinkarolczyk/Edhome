@@ -4203,6 +4203,183 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    private StorageQrLabels.Label qrLabel(StorageStore.Item item) {
+        return new StorageQrLabels.Label(item.kind,item.id,item.name,
+            StorageStore.location(db.getReadableDatabase(),item));
+    }
+
+    private StorageQrLabels.Label qrLabel(PlaceEntry place) {
+        return new StorageQrLabels.Label("place",place.id,place.name,
+            db.placePath(place.id));
+    }
+
+    private void showPlaceQr(PlaceEntry place) {
+        String payload=StorageQr.encode("place",place.id);
+        try {
+            com.google.zxing.common.BitMatrix bits =
+                new com.google.zxing.MultiFormatWriter().encode(payload,
+                    com.google.zxing.BarcodeFormat.QR_CODE,384,384);
+            Bitmap bmp=Bitmap.createBitmap(bits.getWidth(),bits.getHeight(),
+                Bitmap.Config.ARGB_8888);
+            for(int y=0;y<bits.getHeight();y++)
+                for(int x=0;x<bits.getWidth();x++)
+                    bmp.setPixel(x,y,bits.get(x,y)?Color.BLACK:Color.WHITE);
+            ImageView preview=new ImageView(this);
+            preview.setImageBitmap(bmp);
+            preview.setAdjustViewBounds(true);
+            new AlertDialog.Builder(this).setTitle("QR miejsca • "+place.name)
+                .setMessage(db.placePath(place.id)
+                    +"\nKod działa offline na tym urządzeniu; lokalizacja "
+                    +"nie zmienia identyfikatora QR.")
+                .setView(preview).setNegativeButton("Zamknij",null)
+                .setPositiveButton("Etykieta / PDF",(d,w)->
+                    selectQrLabelFormat(java.util.Collections.singletonList(
+                        qrLabel(place)))).show();
+        } catch(Exception problem) {
+            DiagnosticLog.error("PLACE_QR_DRAW",problem);
+            alert("Nie można utworzyć kodu QR miejsca.");
+        }
+    }
+
+    private void selectBulkQrLabels() {
+        java.util.List<StorageQrLabels.Label> all=new java.util.ArrayList<>();
+        for(PlaceEntry place:readPlaces())all.add(qrLabel(place));
+        try(Cursor cursor=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
+                null)) {
+            while(cursor.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),cursor.getLong(0));
+                if(item!=null)all.add(qrLabel(item));
+            }
+        }
+        if(all.isEmpty()) { alert("Dodaj najpierw rzeczy, pudełka lub miejsca.");return; }
+        if(all.size()>250) {
+            alert("Druk zbiorczy obsługuje do 250 etykiet na raz. "
+                +"Wybierz mniejszą grupę.");return;
+        }
+        String[] names=new String[all.size()];
+        boolean[] selected=new boolean[all.size()];
+        for(int i=0;i<all.size();i++) {
+            StorageQrLabels.Label label=all.get(i);
+            names[i]=("place".equals(label.kind)?"⌂ Miejsce: "
+                :"box".equals(label.kind)?"▣ Pudełko: ":"◉ Rzecz: ")
+                +label.name+" • "+label.location;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Zaznacz etykiety QR")
+            .setMultiChoiceItems(names,selected,(d,i,checked)->
+                selected[i]=checked)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dalej",(d,w)->{
+                java.util.List<StorageQrLabels.Label> chosen=
+                    new java.util.ArrayList<>();
+                for(int i=0;i<all.size();i++)
+                    if(selected[i])chosen.add(all.get(i));
+                if(chosen.isEmpty()) {
+                    alert("Zaznacz przynajmniej jedną etykietę.");return;
+                }
+                selectQrLabelFormat(chosen);
+            }).show();
+    }
+
+    private void selectQrLabelFormat(
+            java.util.List<StorageQrLabels.Label> selected) {
+        if(!BetaUpdater.isBeta())return;
+        String[] formats=StorageQrLabels.FORMATS;
+        new AlertDialog.Builder(this).setTitle(
+                "Format etykiet • "+selected.size()+" szt.")
+            .setItems(formats,(dialog,format)->{
+                // PDF rendering can be expensive for a large A4 batch.
+                new Thread(()->{
+                    byte[] output=null;
+                    String failure=null;
+                    try { output=StorageQrLabels.pdf(selected,format); }
+                    catch(Exception error) { failure=error.getMessage(); }
+                    byte[] pdf=output;
+                    String problem=failure;
+                    runOnUiThread(()->{
+                        if(pdf==null) {
+                            alert("Nie wygenerowano PDF: "+problem);return;
+                        }
+                        chooseQrOutput(pdf,selected.size(),format);
+                    });
+                },"edhome-qr-pdf").start();
+            }).show();
+    }
+
+    private void chooseQrOutput(byte[] pdf,int count,int format) {
+        new AlertDialog.Builder(this)
+            .setTitle("Gotowe etykiety QR • "+count)
+            .setMessage(StorageQrLabels.FORMATS[format]
+                +"\nWydrukuj, zapisz PDF lub udostępnij bez zmiany danych.")
+            .setItems(new String[]{"Drukuj przez Androida","Zapisz jako PDF",
+                "Udostępnij PDF"},(dialog,choice)->{
+                if(choice==0) {
+                    try {
+                        StorageQrLabels.print(this,pdf,
+                            StorageQrLabels.pages(count,format),
+                            "EDHOME — etykiety QR");
+                        StorageQrLabels.log(this,"Drukowanie",count);
+                    } catch(Exception error) {
+                        alert("Nie można otworzyć drukowania: "
+                            +error.getMessage());
+                    }
+                } else if(choice==1) {
+                    pendingQrLabelsPdf=pdf;
+                    Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    save.addCategory(Intent.CATEGORY_OPENABLE);
+                    save.setType("application/pdf");
+                    save.putExtra(Intent.EXTRA_TITLE,
+                        "EDHOME-etykiety-QR.pdf");
+                    try { startActivityForResult(save,EXPORT_QR_LABELS_PDF); }
+                    catch(Exception error) {
+                        pendingQrLabelsPdf=null;
+                        alert("Nie można otworzyć zapisu PDF.");
+                    }
+                } else shareQrPdf(pdf,count);
+            }).show();
+    }
+
+    private void shareQrPdf(byte[] pdf,int count) {
+        try {
+            java.io.File folder=new java.io.File(
+                getCacheDir(),"qr-labels");
+            if(!folder.isDirectory()&&!folder.mkdirs())
+                throw new java.io.IOException("Brak katalogu PDF.");
+            String file="edhome-qr-"+java.util.UUID.randomUUID().toString()
+                .replace("-","")+".pdf";
+            java.io.File out=new java.io.File(folder,file);
+            try(java.io.FileOutputStream stream=
+                    new java.io.FileOutputStream(out)) {
+                stream.write(pdf);
+            }
+            Uri uri=Uri.parse("content://"+getPackageName()
+                +".qrpdf/labels/"+file);
+            Intent share=new Intent(Intent.ACTION_SEND);
+            share.setType("application/pdf");
+            share.putExtra(Intent.EXTRA_STREAM,uri);
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            share.setClipData(ClipData.newUri(getContentResolver(),
+                "Etykiety EDHOME",uri));
+            startActivity(Intent.createChooser(share,
+                "Udostępnij etykiety QR"));
+            StorageQrLabels.log(this,"Udostępnienie PDF",count);
+        } catch(Exception failure) {
+            DiagnosticLog.error("QR_SHARE",failure);
+            alert("Nie można udostępnić PDF.");
+        }
+    }
+
+    private void showQrHistory() {
+        String history=prefs.getString(StorageQrLabels.HISTORY,"");
+        new AlertDialog.Builder(this).setTitle("Historia QR")
+            .setMessage(history.isEmpty()
+                ?"Brak zeskanowanych, drukowanych lub zapisanych etykiet."
+                :history.replace("\n\n","\n"))
+            .setPositiveButton("Zamknij",null).show();
+    }
+
     private void showStorageQr(StorageStore.Item item) {
         String payload=StorageQr.encode(item.kind,item.id);
         try{
