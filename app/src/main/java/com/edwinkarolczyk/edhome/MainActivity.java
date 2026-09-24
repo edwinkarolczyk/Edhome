@@ -2635,9 +2635,19 @@ public final class MainActivity extends Activity {
                 VehicleStore.Vehicle item = VehicleStore.find(db.getReadableDatabase(), id);
                 if (item == null) continue;
                 LinearLayout box = card();
+                // View state is per stable vehicle ID, never per list position or name.
+                // It persists through navigation, process restarts and application updates.
+                final String collapseKey = "vehicle_collapsed_" + id;
+                final boolean collapsed = prefs.getBoolean(collapseKey, false);
                 box.addView(text(item.name, 20, true));
                 if (!item.registration.isEmpty())
                     box.addView(text("Rejestracja: " + item.registration, 14, false));
+                smallButton(box, collapsed ? "▸ Rozwiń pojazd" : "▾ Zwiń pojazd",
+                    () -> {
+                        prefs.edit().putBoolean(collapseKey, !collapsed).apply();
+                        render();
+                    });
+                if (collapsed) continue;
                 box.addView(text("Przebieg: " + item.mileage + " km", 14, false));
                 if (!item.ocUntil.isEmpty())
                     box.addView(text("OC: " + item.ocUntil + " • "
