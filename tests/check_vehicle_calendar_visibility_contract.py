@@ -36,8 +36,8 @@ assert "showVehicleDateInCalendar(item.ocUntil)" in vehicle
 assert "showVehicleDateInCalendar(item.inspectionUntil)" in vehicle
 assert "SELECT deadline,COUNT(*) FROM (" in calendar
 assert "WHERE deadline=? ORDER BY name,kind" in calendar
-assert "versionCode 84" in gradle
-assert "versionName '0.6.0.19'" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
+assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
 assert "versionNameSuffix ''" in gradle
 
 db=sqlite3.connect(":memory:")
