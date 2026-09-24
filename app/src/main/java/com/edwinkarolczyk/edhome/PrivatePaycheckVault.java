@@ -41,11 +41,14 @@ final class PrivatePaycheckVault {
     static final class Entry {
         final String kind;
         final String category;
+        final String operationId, status;
         final long amountGrosz;
         final String note;
         final long createdAt;
         Entry(String kind, String category, long amountGrosz, String note,
-                long createdAt) {
+                long createdAt, String operationId, String status) {
+            this.operationId=operationId;
+            this.status=status;
             this.kind = kind;
             this.category = category;
             this.amountGrosz = amountGrosz;
@@ -154,6 +157,21 @@ final class PrivatePaycheckVault {
     static String add(Context context, Session session, String operationId,
             String kind, String category, long grosz, String note)
             throws Exception {
+        return addWithStatus(context,session,operationId,kind,category,
+            grosz,note,"confirmed");
+    }
+
+    /** A bank notification is not settlement: encrypted pending entry only. */
+    static String addPending(Context context,Session session,String operationId,
+            String kind,String category,long grosz,String note)
+            throws Exception {
+        return addWithStatus(context,session,operationId,kind,category,
+            grosz,note,"pending");
+    }
+
+    private static String addWithStatus(Context context,Session session,
+            String operationId,String kind,String category,long grosz,String note,
+            String status) throws Exception {
         if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}")
                 || !("income".equals(kind) || "expense".equals(kind))
                 || !MoneyRules.category(category) || grosz < 1
@@ -166,6 +184,7 @@ final class PrivatePaycheckVault {
         payload.put("grosz", grosz);
         payload.put("note", note.trim());
         payload.put("date", System.currentTimeMillis());
+        payload.put("status",status);
         String sealed = PrivatePaycheckCrypto.seal(
             session.secret(), payload.toString());
         try (SQLiteDatabase db = openDatabase(context, session)) {
@@ -188,26 +207,53 @@ final class PrivatePaycheckVault {
         }
     }
 
+    static boolean confirmPending(Context context,Session session,
+            String operationId) throws Exception {
+        try(SQLiteDatabase db=openDatabase(context,session)) {
+            db.beginTransaction();
+            try(Cursor c=db.rawQuery(
+                    "SELECT sealed FROM private_paycheck_entries WHERE operation_id=?",
+                    new String[]{operationId})) {
+                if(!c.moveToFirst())return false;
+                JSONObject payload=new JSONObject(PrivatePaycheckCrypto.unseal(
+                    session.secret(),c.getString(0)));
+                if(!"pending".equals(payload.optString("status","confirmed")))
+                    return false;
+                payload.put("status","confirmed");
+                ContentValues values=new ContentValues();
+                values.put("sealed",PrivatePaycheckCrypto.seal(
+                    session.secret(),payload.toString()));
+                boolean changed=db.update("private_paycheck_entries",values,
+                    "operation_id=?",new String[]{operationId})==1;
+                if(changed)db.setTransactionSuccessful();
+                return changed;
+            }finally{db.endTransaction();}
+        }
+    }
+
     static List<Entry> entries(Context context, Session session)
             throws Exception {
         List<Entry> rows = new ArrayList<>();
         try (SQLiteDatabase db = openDatabase(context, session);
-             Cursor c = db.rawQuery("SELECT sealed FROM private_paycheck_entries "
+             Cursor c = db.rawQuery("SELECT operation_id,sealed FROM private_paycheck_entries "
                  + "ORDER BY id DESC", null)) {
             while (c.moveToNext()) {
                 JSONObject json = new JSONObject(PrivatePaycheckCrypto.unseal(
-                    session.secret(), c.getString(0)));
+                    session.secret(), c.getString(1)));
                 String kind = json.getString("kind");
                 String category = json.getString("category");
                 long amount = json.getLong("grosz");
                 String note = json.getString("note");
                 long date = json.getLong("date");
-                if (!("income".equals(kind) || "expense".equals(kind))
+                String status=json.optString("status","confirmed");
+                if (!("pending".equals(status)||"confirmed".equals(status))
+                        || !("income".equals(kind) || "expense".equals(kind))
                         || !MoneyRules.category(category) || amount < 1
                         || amount > MoneyRules.MAX_GROSZ || note.length() > 160
                         || date <= 0)
                     throw new GeneralSecurityException("Nieprawidłowe dane sejfu.");
-                rows.add(new Entry(kind, category, amount, note, date));
+                rows.add(new Entry(kind, category, amount, note, date,
+                    c.getString(0),status));
             }
         }
         return rows;
