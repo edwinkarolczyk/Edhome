@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 71,
-  "versionName": "0.6.0.6",
-  "changelog": "EDHOME 0.6.0.6 — koszty OC, przeglądu, serwisu i opon z opcjonalnym jednorazowym wydatkiem we wspólnym PayCheck. Brak automatycznych księgowań; historia i kopie SQLite v29. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.6/edhome-beta.apk",
-  "sha256": "f88035d1528d9252d409087e606dd3f62ce3d585fdf271673734b1cbf3325455"
+  "versionCode": 72,
+  "versionName": "0.6.0.7",
+  "changelog": "EDHOME 0.6.0.7 — wspólny PayCheck: nowe wpisy i koszty pojazdu trafiają do kolejki Do potwierdzenia bez zmiany salda; ręczne potwierdzenie po sprawdzeniu banku lub wyciągu księguje tylko raz. Starsze wpisy zachowują saldo. SQLite v30; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.7/edhome-beta.apk",
+  "sha256": "836d44355e9c88ec2d4e0c4f0382e8cc4fd5888edb68bc2c1a8d7f6530ffacab"
 }
