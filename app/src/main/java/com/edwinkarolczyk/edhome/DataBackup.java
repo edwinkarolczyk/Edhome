@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 30;
+    private static final int DB_VERSION = 31;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -53,7 +53,8 @@ final class DataBackup {
         {"storage_events", "id", "item_id", "name_snapshot", "action",
             "details", "happened_at"},
         {"paycheck_transactions", "id", "operation_id", "scope", "kind",
-            "category", "amount_grosz", "note", "created_at", "status"},
+            "category", "amount_grosz", "note", "created_at", "status",
+            "confirmation_source", "confirmed_at"},
         {"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"},
         {"paycheck_goal_allocations", "id", "operation_id", "goal_id",
             "amount_grosz", "created_at"},
@@ -195,7 +196,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -439,6 +440,18 @@ final class DataBackup {
                             values.put(key, "confirmed");
                             continue;
                         }
+                        if (inputVersion < 31
+                                && "paycheck_transactions".equals(definition[0])) {
+                            if ("confirmation_source".equals(key)) {
+                                values.put(key, "pending".equals(values.getAsString("status"))
+                                    ? "none" : "legacy");
+                                continue;
+                            }
+                            if ("confirmed_at".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                        }
                         if (inputVersion < 27
                                 && "vehicle_policies".equals(definition[0])
                                 && "goal_id".equals(key)) {
@@ -473,6 +486,7 @@ final class DataBackup {
                             || "remind_time".equals(key)
                              || "assignee_name_snapshot".equals(key)
                              || "acknowledged_at".equals(key)
+                            || "confirmed_at".equals(key)
                             || ("storage_items".equals(definition[0])
                                 && ("lent_to".equals(key)
                                     || "parent_box_id".equals(key)
@@ -735,6 +749,15 @@ final class DataBackup {
                     Long amount = values.getAsLong("amount_grosz");
                     Long date = values.getAsLong("created_at");
                     String status = values.getAsString("status");
+                    String source = values.getAsString("confirmation_source");
+                    Long confirmedAt = values.getAsLong("confirmed_at");
+                    if (!("pending".equals(status) && "none".equals(source)
+                            && confirmedAt == null
+                            || "confirmed".equals(status)
+                                && ("legacy".equals(source) && confirmedAt == null
+                                    || "manual".equals(source)
+                                        && confirmedAt != null && confirmedAt > 0)))
+                        throw new IllegalArgumentException("Nieprawidłowe źródło potwierdzenia.");
                     if (operation == null || !operation.matches("[0-9a-fA-F-]{36}")
                             || !("pending".equals(status) || "confirmed".equals(status))
                             || !"shared".equals(scope)
@@ -1264,7 +1287,8 @@ final class DataBackup {
             || "quantity_milli".equals(column) || "unit_price_grosz".equals(column)
             || "target_grosz".equals(column) || "goal_id".equals(column)
             || "parent_box_id".equals(column) || "lent_at".equals(column)
-            || "created_at".equals(column) || "item_id".equals(column)
+            || "created_at".equals(column) || "confirmed_at".equals(column)
+            || "item_id".equals(column)
             || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column)
             || "mileage".equals(column) || "vehicle_id".equals(column)
