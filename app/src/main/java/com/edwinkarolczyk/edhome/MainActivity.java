@@ -77,6 +77,7 @@ public final class MainActivity extends Activity {
     private static final int TAKE_SCANNER_RESULT = 1216;
     private static final int IMPORT_STATEMENT_CSV = 1217;
     private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
+    private static final int PICK_BANK_APP_SYSTEM = 1219;
     private long pendingStorageThumbnailId;
     private String pendingStatementBank;
     private SharedPreferences prefs;
@@ -4253,6 +4254,23 @@ public final class MainActivity extends Activity {
             });
             choices.addView(choice);
         }
+        Button androidPicker=new Button(this);
+        androidPicker.setAllCaps(false);
+        androidPicker.setText("Wybierz bank z systemowej listy aplikacji");
+        androidPicker.setOnClickListener(v->{
+            try {
+                Intent target=new Intent(Intent.ACTION_MAIN);
+                target.addCategory(Intent.CATEGORY_LAUNCHER);
+                Intent pick=new Intent(Intent.ACTION_PICK_ACTIVITY);
+                pick.putExtra(Intent.EXTRA_INTENT,target);
+                pick.putExtra(Intent.EXTRA_TITLE,"Wybierz aplikację bankową");
+                startActivityForResult(pick,PICK_BANK_APP_SYSTEM);
+            }catch(Exception error){
+                alert("Android nie obsługuje systemowej listy aplikacji. "
+                    +"Możesz użyć identyfikatora pakietu poniżej.");
+            }
+        });
+        form.addView(androidPicker);
         if(packages.isEmpty())
             choices.addView(text("Android nie udostępnił listy aplikacji. "
                 +"Możesz wkleić identyfikator pakietu banku poniżej; "
@@ -7204,6 +7222,20 @@ public final class MainActivity extends Activity {
                 if (scan.getContents() != null) onPantryBarcode(scan.getContents(),
                     prefs.getString(SCAN_MODE_PREF, "ADD"));
             } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
+            return;
+        }
+        if (request == PICK_BANK_APP_SYSTEM) {
+            if(result==RESULT_OK&&data!=null&&data.getComponent()!=null) {
+                String pkg=data.getComponent().getPackageName();
+                java.util.Set<String> chosen=BankNotificationHints.selected(this);
+                chosen.add(pkg);
+                BankNotificationHints.configure(this,chosen,true);
+                render();
+                alert("Wybrano aplikację: "+pkg+". "
+                    +"Jeżeli nie masz jeszcze zgody Androida, wróć do "
+                    +"PayCheck i otwórz ustawienia dostępu do powiadomień.");
+            }else if(result==RESULT_OK)
+                alert("Android nie podał pakietu wybranej aplikacji.");
             return;
         }
         if (request == IMPORT_STORAGE_THUMBNAIL) {
