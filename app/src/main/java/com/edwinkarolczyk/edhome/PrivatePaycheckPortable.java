@@ -59,7 +59,7 @@ final class PrivatePaycheckPortable {
 
     static String exportEncrypted(Context context, PrivatePaycheckVault.Session session,
             char[] backupPassword) throws Exception {
-        if (!PrivatePaycheckCrypto.validPassword(backupPassword))
+        if (!PrivatePaycheckCrypto.validBackupPassword(backupPassword))
             throw new GeneralSecurityException("Backup password must be 12–64 characters.");
         JSONArray rows = new JSONArray();
         try (SQLiteDatabase database = open(context, session);
@@ -105,7 +105,7 @@ final class PrivatePaycheckPortable {
             String json, char[] backupPassword) throws Exception {
         session.secret();
         if (json == null || json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES
-                || !PrivatePaycheckCrypto.validPassword(backupPassword))
+                || !PrivatePaycheckCrypto.validBackupPassword(backupPassword))
             throw new GeneralSecurityException("Invalid private backup.");
         JSONObject archive = new JSONObject(json);
         if (!FORMAT.equals(archive.getString("format")))
