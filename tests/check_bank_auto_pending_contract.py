@@ -18,6 +18,9 @@ for token in ('WSPÓLNY • dodaj do oczekujących','PRYWATNY • otwórz sejf',
               'BankNotificationHints.remove(this,signal.key)',
               'java.util.UUID.nameUUIDFromBytes('):
     assert token in ui,token
+assert 'entries.subList(0,MAX)' not in hints
+assert 'received>now-TTL' not in hints
+assert 'visibleBankDrafts++>=40' in ui
 assert 'BankNotificationHints.collect(' in listener
 assert 'PaycheckStore.add(' not in listener
 assert 'PrivatePaycheckVault.addPending(' not in listener
