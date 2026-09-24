@@ -21,6 +21,13 @@ assert 'inputVersion != 31 && inputVersion != DB_VERSION' in backup
 assert '"statement_key", "statement_date"' in backup
 assert 'bankStatementOperations.add(bankKey)' in backup
 assert 'MAX_ROWS = 250' in parser and 'MAX_BYTES = 256 * 1024' in parser
+fixture=Path("tests/fixtures/paycheck_statement_acceptance.csv").read_text(encoding="utf-8").splitlines()
+assert fixture[0]=="Data;Kwota;Id transakcji;Opis"
+assert len(fixture)==2
+date,amount,reference,description=fixture[1].split(";")
+assert date=="2026-09-24" and amount=="-12,50"
+assert reference=="EDHOME-TEST-CSV-1250-001"
+assert description=="Test uzgodnienia PayCheck"
 db=runpy.run_path("tests/check_db_contract.py")["fresh"]
 for op,amount in [('11111111-1111-4111-8111-111111111111',65000),
                   ('22222222-2222-4222-8222-222222222222',65000)]:
