@@ -4020,33 +4020,69 @@ public final class MainActivity extends Activity {
 
     private void showStatementEntries(
             java.util.List<BankStatementCsv.Entry> rows, String bank) {
-        java.util.List<BankStatementCsv.Entry> unmatched=new java.util.ArrayList<>();
+        showFilteredStatementEntries(rows,bank,0);
+    }
+
+    private void showStatementFilters(
+            java.util.List<BankStatementCsv.Entry> rows,String bank) {
+        final String[] filters={"Wszystkie","1 propozycja","Kilka propozycji",
+            "Bez pasującego wpisu","Wydatki −","Wpływy +"};
+        new AlertDialog.Builder(this).setTitle("Filtruj potwierdzenia")
+            .setItems(filters,(d,filter)->
+                showFilteredStatementEntries(rows,bank,filter))
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showFilteredStatementEntries(
+            java.util.List<BankStatementCsv.Entry> rows,String bank,int filter) {
+        java.util.List<BankStatementCsv.Entry> visible=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        int duplicates=0;
         SQLiteDatabase read=db.getReadableDatabase();
-        for(BankStatementCsv.Entry entry:rows){
+        for(BankStatementCsv.Entry entry:rows) {
+            boolean used;
             try(Cursor c=read.rawQuery(
                     "SELECT 1 FROM paycheck_transactions WHERE statement_key=?",
-                    new String[]{entry.evidenceKey})){
-                if(!c.moveToFirst())unmatched.add(entry);
+                    new String[]{entry.evidenceKey})) {
+                used=c.moveToFirst();
             }
+            if(used){duplicates++;continue;}
+            int pending=0;
+            try(Cursor c=read.rawQuery(
+                    "SELECT COUNT(*) FROM paycheck_transactions "
+                    +"WHERE scope='shared' AND status='pending' "
+                    +"AND kind=? AND amount_grosz=?",
+                    new String[]{entry.kind,Long.toString(entry.amountGrosz)})) {
+                if(c.moveToFirst())pending=c.getInt(0);
+            }
+            if(filter==1&&pending!=1 || filter==2&&pending<2
+                    || filter==3&&pending!=0
+                    || filter==4&&!"expense".equals(entry.kind)
+                    || filter==5&&!"income".equals(entry.kind))
+                continue;
+            visible.add(entry);
+            String description=entry.description.length()>55
+                ?entry.description.substring(0,55)+"…" : entry.description;
+            labels.add(entry.date+" • "
+                +("income".equals(entry.kind)?"+ ":"− ")
+                +MoneyRules.format(entry.amountGrosz)+"\n"
+                +description+"\n"
+                +(pending==1?"✓ 1 propozycja • sprawdź i zatwierdź"
+                    :pending>1?"? "+pending+" możliwych wpisów • wybierz"
+                    :"— Brak oczekującego wpisu"));
         }
-        if(unmatched.isEmpty()){
-            alert("Wszystkie wskazane pozycje CSV są już uzgodnione. "
-                + "Nie dodano drugiego wydatku.");render();return;
-        }
-        String[] labels=new String[unmatched.size()];
-        for(int i=0;i<unmatched.size();i++){
-            BankStatementCsv.Entry x=unmatched.get(i);
-            String description=x.description.length()>55
-                ?x.description.substring(0,55)+"…" : x.description;
-            labels[i]=x.date+" • "+("income".equals(x.kind)?"+ ":"− ")
-                +MoneyRules.format(x.amountGrosz)+" • "+description;
+        if(visible.isEmpty()&&filter==0&&duplicates==rows.size()){
+            alert("Wszystkie pozycje już uzgodnione. "
+                +"Nie odjęto ponownie pieniędzy.");render();return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("Wyciąg CSV • "+unmatched.size()+" do uzgodnienia")
-            .setMessage("Wskaż pozycję, następnie odpowiedni OCZEKUJĄCY wpis "
-                + "PayCheck. Nie ma dopasowania automatycznego.")
-            .setItems(labels,(d,index)->
-                matchStatementEntry(unmatched.get(index),rows,bank))
+            .setTitle("Potwierdzenia • "+bank+" • "+visible.size())
+            .setMessage("Zduplikowane: "+duplicates+". "
+                +"Dopasowania to propozycje, nie automatyczne księgowanie. "
+                +"Saldo zmienia się wyłącznie po Twoim zatwierdzeniu.")
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                matchStatementEntry(visible.get(index),rows,bank))
+            .setNeutralButton("Filtry",(d,w)->showStatementFilters(rows,bank))
             .setNegativeButton("Zamknij",null).show();
     }
 
