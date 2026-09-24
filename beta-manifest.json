@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 93,
-  "versionName": "0.6.0.28",
-  "changelog": "EDHOME 0.6.0.28 — PayCheck: sygnał bankowy automatycznie trafia do kolejki oczekujących na wybór wspólny/prywatny, bez zmiany salda. Dotknięcie potwierdzenia EDHOME otwiera PayCheck. Po wyborze wspólny powstaje pending; prywatny powstaje jako pending dopiero po odblokowaniu sejfu. Kolejka nie usuwa już starszych nieprzypisanych sygnałów po 14 dniach ani po 40 wpisach. Ochrona przed ponownym zapisaniem tego samego powiadomienia. Zachowane dane, Beta tylko, main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.28/edhome-beta.apk",
-  "sha256": "51e7e056fa8e9d636b436b5e754f632353cc7acde3a6dd1ed5b860f71a739801"
+  "versionCode": 94,
+  "versionName": "0.6.0.29",
+  "changelog": "EDHOME 0.6.0.29 — Magazyn: naprawiony wybór Drukuj / Zapisz PDF / Udostępnij w oknie etykiet QR. PayCheck: diagnostyka nasłuchu banków pokazuje faktyczne połączenie usługi Androida, ostatnie odebrane, nierozpoznane i zapisane zdarzenie oraz zgodę na powiadomienia EDHOME. Przywracanie połączenia i sprawdzanie aktywnych powiadomień na żądanie. Bez treści bankowych w diagnostyce, bez migracji lub kasowania danych; Beta tylko, main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.29/edhome-beta.apk",
+  "sha256": "508760fc939779a329cdbeda690a9f4916f3cc86c936ebfd15d7bdb5f47de8e8"
 }
