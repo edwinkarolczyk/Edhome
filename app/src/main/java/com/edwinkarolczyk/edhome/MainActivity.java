@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_STATEMENT_CSV = 1217;
     private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
     private static final int PICK_BANK_APP_SYSTEM = 1219;
+    private static final int IMPORT_AI_3D_PACK = 1220;
     private long pendingStorageThumbnailId;
     private String pendingStatementBank;
     private SharedPreferences prefs;
@@ -1096,6 +1097,42 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("HOME_TILE_ACTIONS_OPENED");
     }
 
+    private String defaultTileIcon(String target) {
+        return "ai3d".equals(prefs.getString("icon_style", "standard"))
+            && IconPack3D.installed(this) ? IconPack3D.defaultFor(target)
+            : HomeTileCatalog.icon(target);
+    }
+
+    private View tileIconImage(String iconId, int size, boolean highlighted) {
+        if (IconPack3D.known(this, iconId)) {
+            android.graphics.Bitmap image = IconPack3D.bitmap(this, iconId);
+            if (image != null) {
+                ImageView graphic = new ImageView(this);
+                graphic.setImageBitmap(image);
+                graphic.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                graphic.setContentDescription("Ikona 3D");
+                return graphic;
+            }
+        }
+        TileIcon graphic = new TileIcon(this, iconId,
+            highlighted && skin.light ? skin.accentInk : accent);
+        graphic.setPadding(dp(size / 9), dp(size / 9),
+            dp(size / 9), dp(size / 9));
+        graphic.setBackground(skin.panel(this, skin.iconBacking, 24));
+        return graphic;
+    }
+
+    private void importAi3dIconPack() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("application/zip");
+        picker.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+            "application/zip", "application/x-zip-compressed",
+            "application/octet-stream"});
+        try { startActivityForResult(picker, IMPORT_AI_3D_PACK); }
+        catch (Exception failed) { alert("Nie można otworzyć wyboru paczki ZIP."); }
+    }
+
     private void editHomeTile(String id) {
         if (!homeTileOrder().contains(id)) return;
         LinearLayout form = new LinearLayout(this);
@@ -1135,13 +1172,21 @@ public final class MainActivity extends Activity {
             java.util.Arrays.asList(codes).indexOf(selected)));
         form.addView(color);
         form.addView(text("Ikona — wybierz z lokalnej biblioteki", 15, true));
+        java.util.List<String> iconIds = new java.util.ArrayList<>();
+        java.util.List<String> iconNames = new java.util.ArrayList<>();
+        for (int i = 0; i < TileIcon.ICON_IDS.length; i++) {
+            iconIds.add(TileIcon.ICON_IDS[i]);
+            iconNames.add("Standard • " + TileIcon.ICON_NAMES[i]);
+        }
+        for (IconPack3D.Option available : IconPack3D.options(this)) {
+            iconIds.add(available.id);
+            iconNames.add(available.title);
+        }
         Spinner icon = new Spinner(this);
-        icon.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList(TileIcon.ICON_NAMES)));
+        icon.setAdapter(themeSpinnerAdapter(iconNames));
         String previousIcon = prefs.getString("tile_icon_" + id,
-            HomeTileCatalog.icon(homeTileTarget(id)));
-        icon.setSelection(Math.max(0,
-            java.util.Arrays.asList(TileIcon.ICON_IDS).indexOf(previousIcon)));
+            defaultTileIcon(homeTileTarget(id)));
+        icon.setSelection(Math.max(0, iconIds.indexOf(previousIcon)));
         form.addView(icon);
         form.addView(text("Rozmiar kafelka", 15, true));
         String[] sizeLabels = {"Mały (1 pole)", "Podwójny (2 pola)"};
@@ -1161,11 +1206,7 @@ public final class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> p,
                     View view, int position, long rowId) {
                 previewFrame.removeAllViews();
-                TileIcon pictogram = new TileIcon(MainActivity.this,
-                    TileIcon.ICON_IDS[position], accent);
-                pictogram.setPadding(dp(8), dp(8), dp(8), dp(8));
-                pictogram.setBackground(skin.panel(MainActivity.this,
-                    skin.iconBacking, 24));
+                View pictogram = tileIconImage(iconIds.get(position), 64, false);
                 previewFrame.addView(pictogram,
                     new LinearLayout.LayoutParams(dp(64), dp(64)));
             }
@@ -1200,9 +1241,8 @@ public final class MainActivity extends Activity {
                     String code = codes[color.getSelectedItemPosition()];
                     if ("default".equals(code)) change.remove("tile_tint_" + id);
                     else change.putString("tile_tint_" + id, code);
-                    String iconId = TileIcon.ICON_IDS[
-                        icon.getSelectedItemPosition()];
-                    if (HomeTileCatalog.icon(target).equals(iconId))
+                    String iconId = iconIds.get(icon.getSelectedItemPosition());
+                    if (defaultTileIcon(target).equals(iconId))
                         change.remove("tile_icon_" + id);
                     else change.putString("tile_icon_" + id, iconId);
                     String tileSize = sizeValues[size.getSelectedItemPosition()];
@@ -6706,6 +6746,27 @@ public final class MainActivity extends Activity {
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name + " • zmiana wyglądu nie zmienia danych.");
+        LinearLayout icons3d = card();
+        icons3d.addView(text("Ikony kafelków • EDHOME AI 3D", 19, true));
+        icons3d.addView(text(IconPack3D.installed(this)
+            ? "Paczka 100 ikon 3D jest dostępna na urządzeniu. "
+                + "Indywidualne ikony zmienisz przez przytrzymanie kafelka."
+            : "Zaimportuj paczkę EDHOME_AI_3D_100.zip (100 ikon). "
+                + "Dotychczasowe ikony zostają bez zmian.", 14, false));
+        smallButton(icons3d, "Importuj 100 ikon AI 3D • ZIP",
+            this::importAi3dIconPack);
+        if (IconPack3D.installed(this)) {
+            boolean active3d = "ai3d".equals(
+                prefs.getString("icon_style", "standard"));
+            smallButton(icons3d, active3d
+                ? "Przełącz wszystkie domyślne na standardowe"
+                : "Przełącz wszystkie domyślne na AI 3D", () -> {
+                String next = active3d ? "standard" : "ai3d";
+                if (prefs.edit().putString("icon_style", next).commit())
+                    render();
+                else alert("Nie zapisano stylu ikon.");
+            });
+        }
         LinearLayout gestures = card();
         gestures.addView(text("Kafelki • czas przytrzymania", 19, true));
         gestures.addView(text("Puść po krótszym przytrzymaniu dla menu. "
@@ -7111,14 +7172,10 @@ public final class MainActivity extends Activity {
         if (isHome) {
             String target = homeTileTarget(id);
             String iconId = prefs.getString("tile_icon_" + id,
-                HomeTileCatalog.icon(target));
-            if (!TileIcon.known(iconId))
-                iconId = HomeTileCatalog.icon(target);
-            TileIcon pictogram = new TileIcon(this, iconId,
-                highlighted && skin.light ? skin.accentInk : accent);
-            pictogram.setPadding(dp(5), dp(5), dp(5), dp(5));
-            pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
-            tile.addView(pictogram, iconParams);
+                defaultTileIcon(target));
+            if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId))
+                iconId = defaultTileIcon(target);
+            tile.addView(tileIconImage(iconId, 46, highlighted), iconParams);
         } else {
             TextView pictogram = text(symbol, 29, true);
             pictogram.setTextColor(highlighted && skin.light
@@ -7256,6 +7313,31 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == IMPORT_AI_3D_PACK) {
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                final Uri chosen = data.getData();
+                new Thread(() -> {
+                    int count = 0;
+                    String error = null;
+                    try { count = IconPack3D.importArchive(this, chosen); }
+                    catch (Exception invalid) { error = invalid.getMessage(); }
+                    final int imported = count;
+                    final String problem = error;
+                    runOnUiThread(() -> {
+                        if (imported == 100) {
+                            prefs.edit().putString("icon_style", "ai3d").commit();
+                            DiagnosticLog.event("AI3D_ICON_PACK_IMPORTED",
+                                "count=" + imported);
+                            render();
+                            alert("Zaimportowano 100 ikon AI 3D. "
+                                + "Dotychczasowe ustawienia kafelków zostały zachowane.");
+                        } else alert("Nie udało się zaimportować ikon: "
+                            + (problem == null ? "Nieprawidłowy ZIP." : problem));
+                    });
+                }, "edhome-ai3d-import").start();
+            }
+            return;
+        }
         if (request == TAKE_SCANNER_RESULT) {
             if ("pantry".equals(screen)) render();
             if (result == RESULT_OK && data != null)
