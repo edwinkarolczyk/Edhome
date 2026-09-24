@@ -21,6 +21,9 @@ final class BankNotificationHints {
     private static final String PACKAGES="selected_banking_packages";
     private static final String RECEIPT="bank_receipt_notifications_enabled";
     private static final String ROWS="bank_notification_hints_v1";
+    // Processed IDs survive dismissals / Android reconnects; no bank text stored.
+    private static final String HANDLED="bank_notification_handled_v1";
+    private static final int MAX_HANDLED=512;
     private static final int MAX=40;
     private static final long TTL=14L*24*60*60*1000;
 
@@ -77,10 +80,31 @@ final class BankNotificationHints {
         }catch(Exception invalid){ /* discard damaged local hint cache */ }
         return result;
     }
-    static void remove(Context context,String key) {
+    /** Close a draft without forgetting its ID: a replay must not recreate it. */
+    static boolean remove(Context context,String key) {
         List<Entry> entries=list(context);
-        entries.removeIf(e->e.key.equals(key));
-        persist(context,entries);
+        boolean found=entries.removeIf(e->e.key.equals(key));
+        if(!found)return alreadyHandled(context,key);
+        // Save the tombstone first. If the subsequent queue write fails, a
+        // stale card may remain, but it cannot generate a second ledger entry.
+        if(!rememberHandled(context,key))return false;
+        return persist(context,entries);
+    }
+
+    static boolean alreadyHandled(Context context,String key) {
+        return pref(context).getString(HANDLED,"").contains("|"+key+"|");
+    }
+
+    private static boolean rememberHandled(Context context,String key) {
+        if(key==null||!key.matches("[0-9a-f]{64}"))return false;
+        String old=pref(context).getString(HANDLED,"");
+        if(old.contains("|"+key+"|"))return true;
+        String[] ids=(old+"|"+key+"|").split("\\|");
+        StringBuilder bounded=new StringBuilder();
+        for(int i=Math.max(0,ids.length-MAX_HANDLED);i<ids.length;i++)
+            if(ids[i].matches("[0-9a-f]{64}"))
+                bounded.append('|').append(ids[i]).append('|');
+        return pref(context).edit().putString(HANDLED,bounded.toString()).commit();
     }
     static void collect(Context context,StatusBarNotification sbn,
             String notificationText) {
@@ -92,6 +116,7 @@ final class BankNotificationHints {
         // Never hash or log/store unredacted notification title/text.
         String unique=digest(sbn.getPackageName()+"\n"+sbn.getKey()
             +"\n"+sbn.getPostTime());
+        if(alreadyHandled(context,unique))return;
         List<Entry> entries=list(context);
         for(Entry existing:entries)if(existing.key.equals(unique))return;
         Entry saved=new Entry(unique,sbn.getPackageName(),hint.kind,
