@@ -3730,10 +3730,10 @@ public final class MainActivity extends Activity {
                 if(item!=null)items.add(item);
             }
         }
-        title("Drzewko magazynu");
-        note("Tapnij miejsce lub pudełko, aby zwinąć i rozwinąć. "
-            +"Każda gałąź zapamiętuje swój stan po zamknięciu aplikacji. "
-            +"Przytrzymaj rzecz, aby zobaczyć szczegóły.");
+        title("Podgląd magazynu");
+        note("Miejsca, pudełka i rzeczy widzisz razem. Tapnij nagłówek "
+            +"tylko wtedy, gdy chcesz ukryć lub pokazać zawartość. "
+            +"Bez przeładowania ekranu i bez utraty przewinięcia.");
         java.util.Set<Long> drawnPlaces=new java.util.HashSet<>();
         java.util.Set<Long> drawnItems=new java.util.HashSet<>();
         java.util.Set<Long> knownPlaces=new java.util.HashSet<>();
@@ -3743,13 +3743,13 @@ public final class MainActivity extends Activity {
             if("box".equals(item.kind))knownBoxes.add(item.id);
         for(PlaceEntry place:places)
             if(place.parent==null || !knownPlaces.contains(place.parent))
-                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0);
+                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body);
         // Guard old damaged/cyclic data, without exposing collapsed descendants.
         for(PlaceEntry place:places)
             if(!drawnPlaces.contains(place.id)
                     &&place.parent!=null
                     &&!knownPlaces.contains(place.parent))
-                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0);
+                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body);
         boolean unassigned=false;
         for(StorageStore.Item item:items)
             if(item.boxId==null && (item.placeId==null
@@ -3757,19 +3757,19 @@ public final class MainActivity extends Activity {
                 unassigned=true;break;
             }
         if(unassigned) {
-            storageTreeHeading("Bez przypisanego miejsca",0,
-                "storage_tree_unassigned",false);
-            if(!prefs.getBoolean("storage_tree_unassigned",false))
-                for(StorageStore.Item item:items)
-                    if(item.boxId==null && (item.placeId==null
-                            ||!knownPlaces.contains(item.placeId)))
-                        storageTreeItem(item,items,drawnItems,1);
+            LinearLayout unassignedChildren=storageTreeHeading(
+                "Bez przypisanego miejsca",0,"storage_tree_unassigned",
+                prefs.getBoolean("storage_tree_unassigned",false),body);
+            for(StorageStore.Item item:items)
+                if(item.boxId==null && (item.placeId==null
+                        ||!knownPlaces.contains(item.placeId)))
+                    storageTreeItem(item,items,drawnItems,1,unassignedChildren);
         }
         // Orphaned item children are not silently dropped after an old restore.
         for(StorageStore.Item item:items)
             if(item.boxId!=null&&!knownBoxes.contains(item.boxId)
                     &&!drawnItems.contains(item.id))
-                storageTreeItem(item,items,drawnItems,0);
+                storageTreeItem(item,items,drawnItems,0,body);
         if(places.isEmpty()&&items.isEmpty())
             note("Magazyn jest pusty. Dodaj miejsce, rzecz albo pudełko.");
         title("Ostatnie ruchy magazynu");
@@ -3781,80 +3781,98 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void storageTreeHeading(String label,int depth,
-            String prefKey,boolean collapsed) {
+    /** Reparent a newly built card into its branch while retaining card style. */
+    private void storageTreeAttach(LinearLayout row,LinearLayout target) {
+        if(target==body)return;
+        body.removeView(row);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
+        params.setMargins(0,dp(3),0,dp(3));
+        target.addView(row,params);
+    }
+
+    /** The header and children remain the SAME Android views when toggled.
+     * No render(), scroll reset, focus reset or database write.
+     */
+    private LinearLayout storageTreeHeading(String label,int depth,
+            String prefKey,boolean collapsed,LinearLayout target) {
         LinearLayout row=card();
         row.setPadding(dp(12+Math.min(depth,8)*13),dp(4),dp(12),dp(4));
         TextView heading=text((collapsed?"▸ ":"▾ ")+label,17,true);
         heading.setMinHeight(dp(44));
         heading.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(heading);
+        storageTreeAttach(row,target);
+        LinearLayout children=new LinearLayout(this);
+        children.setOrientation(LinearLayout.VERTICAL);
+        children.setVisibility(collapsed?View.GONE:View.VISIBLE);
+        target.addView(children,new LinearLayout.LayoutParams(-1,-2));
         row.setClickable(true);
         row.setFocusable(true);
         touchFeedback(row);
         row.setContentDescription(label+(collapsed?" • Rozwiń":" • Zwiń"));
         row.setOnClickListener(v->{
-            prefs.edit().putBoolean(prefKey,!collapsed).apply();
-            render();
+            boolean nowCollapsed=children.getVisibility()==View.VISIBLE;
+            children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);
+            heading.setText((nowCollapsed?"▸ ":"▾ ")+label);
+            row.setContentDescription(label+(nowCollapsed
+                ?" • Rozwiń":" • Zwiń"));
+            prefs.edit().putBoolean(prefKey,nowCollapsed).apply();
         });
+        return children;
     }
 
     private void storageTreePlace(PlaceEntry place,
             java.util.List<PlaceEntry> places,
             java.util.List<StorageStore.Item> items,
             java.util.Set<Long> drawnPlaces,
-            java.util.Set<Long> drawnItems,int depth) {
+            java.util.Set<Long> drawnItems,int depth,LinearLayout target) {
         if(depth>64||!drawnPlaces.add(place.id))return;
         String key="storage_tree_place_"+place.id;
         boolean collapsed=prefs.getBoolean(key,false);
-        storageTreeHeading("⌂ "+place.name,depth,key,collapsed);
-        if(collapsed)return;
+        LinearLayout children=storageTreeHeading("⌂ "+place.name,
+            depth,key,collapsed,target);
         for(PlaceEntry child:places)
             if(child.parent!=null&&child.parent==place.id)
                 storageTreePlace(child,places,items,drawnPlaces,
-                    drawnItems,depth+1);
+                    drawnItems,depth+1,children);
         for(StorageStore.Item item:items)
             if(item.boxId==null && item.placeId!=null
                     &&item.placeId==place.id)
-                storageTreeItem(item,items,drawnItems,depth+1);
+                storageTreeItem(item,items,drawnItems,depth+1,children);
     }
 
     private void storageTreeItem(StorageStore.Item item,
             java.util.List<StorageStore.Item> items,
-            java.util.Set<Long> drawnItems,int depth) {
+            java.util.Set<Long> drawnItems,int depth,LinearLayout target) {
         if(depth>64||!drawnItems.add(item.id))return;
         boolean isBox="box".equals(item.kind);
         String key="storage_tree_box_"+item.id;
-        boolean collapsed=prefs.getBoolean(key,false);
-        if(isBox) {
-            storageTreeHeading("▣ Pudełko #"+item.id+" • "+item.name,
-                depth,key,collapsed);
-            if(collapsed)return;
-        }
-        LinearLayout card=card();
-        card.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
-        if(!isBox) {
-            TextView name=text("◉ "+item.name,16,true);
-            card.addView(name);
-        }
-        card.addView(text(StorageStore.location(db.getReadableDatabase(),item),
+        LinearLayout inner=target;
+        if(isBox)
+            inner=storageTreeHeading("▣ Pudełko #"+item.id+" • "+item.name,
+                depth,key,prefs.getBoolean(key,false),target);
+        LinearLayout details=card();
+        details.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
+        storageTreeAttach(details,inner);
+        if(!isBox)details.addView(text("◉ "+item.name,16,true));
+        details.addView(text(StorageStore.location(db.getReadableDatabase(),item),
             12,false));
         if(item.lentTo!=null)
-            card.addView(text("Wypożyczono: "+item.lentTo,13,false));
-        smallButton(card,"Pokaż QR",()->showStorageQr(item));
+            details.addView(text("Wypożyczono: "+item.lentTo,13,false));
+        smallButton(details,"Pokaż QR",()->showStorageQr(item));
         if(item.lentTo==null)
-            smallButton(card,"Przenieś",()->storageEditor(item.kind,item.id));
+            smallButton(details,"Przenieś",()->storageEditor(item.kind,item.id));
         if(!isBox) {
             if(item.lentTo==null)
-                smallButton(card,"Wypożycz",()->askStorageLend(item));
-            else smallButton(card,"Zwrot",()->{
+                smallButton(details,"Wypożycz",()->askStorageLend(item));
+            else smallButton(details,"Zwrot",()->{
                 try{
                     StorageStore.returned(db.getWritableDatabase(),item.id);
                     DiagnosticLog.event("STORAGE_RETURNED");render();
                 }catch(Exception error){alert(error.getMessage());}
             });
         }
-        smallButton(card,"Usuń",()->new AlertDialog.Builder(this)
+        smallButton(details,"Usuń",()->new AlertDialog.Builder(this)
             .setTitle(isBox?"Usunąć pudełko?":"Usunąć rzecz?")
             .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
             .setNegativeButton("Anuluj",null)
@@ -3867,7 +3885,7 @@ public final class MainActivity extends Activity {
         if(isBox)
             for(StorageStore.Item child:items)
                 if(child.boxId!=null && child.boxId==item.id)
-                    storageTreeItem(child,items,drawnItems,depth+1);
+                    storageTreeItem(child,items,drawnItems,depth+1,inner);
     }
 
     private void storageEditor(String kind, Long itemId) {
