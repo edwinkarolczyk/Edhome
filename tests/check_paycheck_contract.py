@@ -20,7 +20,7 @@ for token in (
     'PAYCHECK_SHARED_PENDING',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
-    'super(context, "edhome-beta-preview.db", null, 31)',
+    'super(context, "edhome-beta-preview.db", null, 32)',
 ):
     assert token in main, token
 for token in (
@@ -35,7 +35,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 31;',
+    'DB_VERSION = 32;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
@@ -45,14 +45,14 @@ for token in (
 ):
     assert token in backup,token
 assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
-assert "versionCode 73" in gradle and "versionNameSuffix ''" in gradle
-assert "versionName '0.6.0.8'" in gradle
+assert "versionCode 74" in gradle and "versionNameSuffix ''" in gradle
+assert "versionName '0.6.0.9'" in gradle
 # Receipt and barcode commit must never automatically post to PayCheck.
 receipt=Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text()
 barcode=Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text()
 assert 'PaycheckStore' not in receipt and 'PaycheckStore' not in barcode
 
-expr=store.split('static void create(SQLiteDatabase db)',1)[1].split('static String add(',1)[0]
+expr=store.split('static void create(SQLiteDatabase db)',1)[1].split('static String add(',1)[0].split('db.execSQL("CREATE UNIQUE INDEX',1)[0]
 sql=''.join(json.loads(part) for part in re.findall(r'"(?:\\.|[^"\\])*"',expr))
 db=sqlite3.connect(":memory:")
 db.execute(sql)
