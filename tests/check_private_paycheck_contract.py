@@ -15,7 +15,8 @@ for token in (
     '"AES/GCM/NoPadding"',
     'new GCMParameterSpec(128, nonce)',
     'cipher.updateAAD(AAD)',
-    "password.length >= 5",\n    "static boolean validBackupPassword(char[] password)",
+    "password.length >= 5",
+    "static boolean validBackupPassword(char[] password)",
     "newSalt()",
 ):
     assert token in crypto, "Crypto guard missing: "+token
