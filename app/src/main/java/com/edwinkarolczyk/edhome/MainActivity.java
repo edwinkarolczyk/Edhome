@@ -9,6 +9,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ComponentName;
+import android.content.pm.ResolveInfo;
+import android.provider.Settings;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -3921,6 +3924,11 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
+        if (BetaUpdater.isBeta()) {
+            button("Powiadomienia bankowe • wybierz aplikacje",
+                this::configureBankNotifications);
+            showBankNotificationHints();
+        }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
         note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
             + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
@@ -3969,6 +3977,165 @@ public final class MainActivity extends Activity {
         }
         if(count==0)note("Brak transakcji wspólnych.");
         sharedPaycheckGoals();
+    }
+
+    /** Android notification access always requires the user's system-level approval.
+     * Opt-in and exact app selection are separate; other app messages are ignored.
+     */
+    private boolean bankNotificationPermissionGranted() {
+        String value=Settings.Secure.getString(getContentResolver(),
+            "enabled_notification_listeners");
+        if(value==null)return false;
+        for(String raw:value.split(":")) {
+            ComponentName component=ComponentName.unflattenFromString(raw);
+            if(component!=null&&getPackageName().equals(component.getPackageName())
+                    &&BankNotificationListener.class.getName().equals(
+                        component.getClassName()))
+                return true;
+        }
+        return false;
+    }
+
+    private void configureBankNotifications() {
+        if(!BetaUpdater.isBeta())return;
+        Intent launcher=new Intent(Intent.ACTION_MAIN);
+        launcher.addCategory(Intent.CATEGORY_LAUNCHER);
+        java.util.Map<String,String> available=new java.util.TreeMap<>();
+        for(ResolveInfo resolved:getPackageManager()
+                .queryIntentActivities(launcher,0)) {
+            if(resolved.activityInfo==null
+                    ||resolved.activityInfo.applicationInfo==null)continue;
+            String pkg=resolved.activityInfo.packageName;
+            if(pkg.equals(getPackageName()))continue;
+            String label=resolved.loadLabel(getPackageManager()).toString();
+            available.put(pkg,label+" • "+pkg);
+        }
+        if(available.isEmpty()){
+            alert("Android nie udostępnia listy aplikacji do wyboru. "
+                +"Nie włączono odczytu powiadomień.");return;
+        }
+        java.util.List<String> packages=new java.util.ArrayList<>(
+            available.keySet());
+        String[] names=new String[packages.size()];
+        boolean[] selected=new boolean[packages.size()];
+        java.util.Set<String> previously=BankNotificationHints.selected(this);
+        for(int i=0;i<packages.size();i++){
+            names[i]=available.get(packages.get(i));
+            selected[i]=previously.contains(packages.get(i));
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz TYLKO swoje aplikacje bankowe")
+            .setMessage("Android przyznaje EDHOME dostęp do powiadomień. "
+                +"EDHOME analizuje tylko wybrane aplikacje i zapisuje lokalnie "
+                +"wyłącznie kwotę, kierunek, źródło i znacznik czasu. "
+                +"Nie zapisuje treści, numerów kont ani kodów. "
+                +"Powiadomienie jest podpowiedzią, nie potwierdzeniem bankowym.")
+            .setMultiChoiceItems(names,selected,
+                (dialog,which,isChecked)->selected[which]=isChecked)
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Wyłącz i wyczyść",(dialog,which)->{
+                BankNotificationHints.configure(this,
+                    java.util.Collections.emptySet(),false);
+                render();
+            })
+            .setPositiveButton("Zapisz wybór",(dialog,which)->{
+                java.util.Set<String> wanted=new java.util.HashSet<>();
+                for(int i=0;i<packages.size();i++)
+                    if(selected[i])wanted.add(packages.get(i));
+                BankNotificationHints.configure(this,wanted,
+                    !wanted.isEmpty());
+                render();
+                if(wanted.isEmpty())return;
+                if(!bankNotificationPermissionGranted()) {
+                    new AlertDialog.Builder(this)
+                        .setTitle("Dostęp do powiadomień Androida")
+                        .setMessage("W ustawieniach włącz dostęp dla "
+                            +"EDHOME — wybrane banki. Android może pokazać "
+                            +"ostrzeżenie, że taka usługa ma dostęp do "
+                            +"wszystkich powiadomień. EDHOME przetwarza "
+                            +"wyłącznie wskazane aplikacje bankowe. "
+                            +"Możesz później cofnąć tę zgodę.")
+                        .setNegativeButton("Później",null)
+                        .setPositiveButton("Otwórz ustawienia",(d,w)->{
+                            try {
+                                startActivity(new Intent(
+                                    Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                            } catch(Exception error) {
+                                alert("Otwórz Ustawienia Androida → "
+                                    +"Dostęp do powiadomień → EDHOME.");
+                            }
+                        }).show();
+                }
+            }).show();
+    }
+
+    private void showBankNotificationHints() {
+        boolean optIn=BankNotificationHints.enabled(this);
+        boolean androidEnabled=bankNotificationPermissionGranted();
+        title("Sygnały z aplikacji bankowych");
+        note(!optIn?"Wyłączone. Wybierz banki, aby włączyć."
+            :!androidEnabled?"Wybór zapisany • nadaj zgodę w ustawieniach Androida."
+            :"Włączone • "+BankNotificationHints.selected(this).size()
+                +" wybranych aplikacji. Otwórz PayCheck ponownie po powiadomieniu.");
+        if(!optIn||!androidEnabled)return;
+        java.util.List<BankNotificationHints.Entry> signals=
+            BankNotificationHints.list(this);
+        if(signals.isEmpty()){
+            note("Jeszcze nie rozpoznano powiadomień o płatnościach w PLN. "
+                +"Niektóre banki ukrywają kwotę w powiadomieniu.");return;
+        }
+        for(BankNotificationHints.Entry signal:signals) {
+            LinearLayout entry=card();
+            String source=signal.source;
+            try {
+                source=getPackageManager().getApplicationLabel(
+                    getPackageManager().getApplicationInfo(
+                        signal.source,0)).toString();
+            }catch(Exception unavailable){/* use package name */}
+            entry.addView(text(source+" • "
+                +("income".equals(signal.kind)?"+ ":"− ")
+                +MoneyRules.format(signal.amount),17,true));
+            entry.addView(text(Instant.ofEpochMilli(signal.received)
+                .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                +" • niezweryfikowana sugestia",13,false));
+            java.util.List<String> ids=new java.util.ArrayList<>();
+            java.util.List<String> labels=new java.util.ArrayList<>();
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT operation_id,note,created_at "
+                    +"FROM paycheck_transactions WHERE scope='shared' "
+                    +"AND status='pending' AND kind=? AND amount_grosz=? "
+                    +"ORDER BY id DESC LIMIT 40",
+                    new String[]{signal.kind,
+                        Long.toString(signal.amount)})) {
+                while(c.moveToNext()) {
+                    ids.add(c.getString(0));
+                    String note=c.getString(1);
+                    labels.add((note.isEmpty()?"Bez opisu":note)
+                        +" • "+Instant.ofEpochMilli(c.getLong(2))
+                            .atZone(ZoneId.systemDefault()).toLocalDate());
+                }
+            }
+            if(ids.isEmpty())
+                entry.addView(text("Brak oczekującego wpisu o tej kwocie. "
+                    +"Saldo bez zmian.",13,false));
+            else if(ids.size()==1)
+                smallButton(entry,"Sprawdź i potwierdź pasujący wpis",
+                    ()->confirmSharedPaycheckEntry(ids.get(0),signal.key));
+            else
+                smallButton(entry,"Wybierz spośród "+ids.size()+" wpisów",
+                    ()->new AlertDialog.Builder(this)
+                        .setTitle("Wybierz właściwy wydatek / wpływ")
+                        .setMessage("Ta sama kwota wystąpiła kilka razy. "
+                            +"Powiadomienie nie rozstrzyga, która to płatność.")
+                        .setItems(labels.toArray(new String[0]),
+                            (d,which)->confirmSharedPaycheckEntry(
+                                ids.get(which),signal.key))
+                        .setNegativeButton("Anuluj",null).show());
+            smallButton(entry,"Odrzuć sygnał",()->{
+                BankNotificationHints.remove(this,signal.key);
+                render();
+            });
+        }
     }
 
     private void selectStatementCsv() {
@@ -4220,18 +4387,24 @@ public final class MainActivity extends Activity {
 
     /** A manual attestation, NOT an automated bank statement verification. */
     private void confirmSharedPaycheckEntry(String operationId) {
+        confirmSharedPaycheckEntry(operationId,null);
+    }
+
+    private void confirmSharedPaycheckEntry(String operationId,String hintKey) {
         new AlertDialog.Builder(this)
             .setTitle("Potwierdź operację?")
             .setMessage("Potwierdź wyłącznie po sprawdzeniu faktycznej transakcji "
-                + "w banku lub na wyciągu. EDHOME jeszcze nie odczytuje banku "
-                + "automatycznie. Zatwierdzenie zmieni saldo wspólne tylko raz.")
+                + "w banku lub na wyciągu. Powiadomienie bankowe nie jest "
+                + "dowodem zaksięgowania. Zatwierdzenie zmieni saldo tylko raz.")
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Sprawdziłem — potwierdź", (d,w) -> {
                 try {
                     String result=PaycheckStore.confirm(db.getWritableDatabase(),
                         operationId);
-                    if ("CONFIRMED".equals(result))
+                    if ("CONFIRMED".equals(result)) {
+                        if(hintKey!=null)BankNotificationHints.remove(this,hintKey);
                         DiagnosticLog.event("PAYCHECK_SHARED_CONFIRMED");
+                    }
                     else alert("Operacja już potwierdzona lub nie istnieje.");
                     render();
                 } catch (Exception error) {
