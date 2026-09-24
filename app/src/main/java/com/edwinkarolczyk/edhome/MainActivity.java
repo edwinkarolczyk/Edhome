@@ -4818,6 +4818,9 @@ public final class MainActivity extends Activity {
                 // Recheck only notifications still active; dedup prevents repeats.
                 if(!wanted.isEmpty()&&bankNotificationPermissionGranted())
                     BankNotificationListener.recheckActiveNotifications();
+                if(!wanted.isEmpty()&&bankNotificationPermissionGranted()
+                        &&BankNotificationHints.receiptEnabled(this))
+                    requestBankReceiptNotificationPermission();
                 render();
                 if(wanted.isEmpty())return;
                 if(!bankNotificationPermissionGranted()) {
@@ -4870,6 +4873,16 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    /** POST_NOTIFICATIONS is separate from NotificationListener access. */
+    private void requestBankReceiptNotificationPermission() {
+        if(android.os.Build.VERSION.SDK_INT>=33
+                &&checkSelfPermission(
+                    android.Manifest.permission.POST_NOTIFICATIONS)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{
+                android.Manifest.permission.POST_NOTIFICATIONS},7133);
+    }
+
     private void showBankNotificationHints() {
         boolean optIn=BankNotificationHints.enabled(this);
         boolean androidEnabled=bankNotificationPermissionGranted();
@@ -4881,6 +4894,21 @@ public final class MainActivity extends Activity {
         if(optIn&&!androidEnabled)
             button("Jak odblokować dostęp do powiadomień",
                 this::showBankNotificationPermissionGuide);
+        if(optIn) {
+            boolean receipt=BankNotificationHints.receiptEnabled(this);
+            button("Powiadomienie EDHOME po odebraniu: "
+                +(receipt?"WŁ.":"WYŁ."),()->{
+                    BankNotificationHints.setReceiptEnabled(this,!receipt);
+                    if(!receipt)requestBankReceiptNotificationPermission();
+                    render();
+                });
+            note("Po zapisaniu sygnału EDHOME może potwierdzić odbiór "
+                +"osobnym powiadomieniem. Możesz je wyłączyć niezależnie od "
+                +"nasłuchu banków. Nie oznacza to zaksięgowania w banku.");
+            if(receipt&&!BankReceiptNotifier.allowed(this)&&androidEnabled)
+                button("Zezwól na powiadomienia EDHOME",
+                    this::requestBankReceiptNotificationPermission);
+        }
         if(!optIn||!androidEnabled)return;
         java.util.List<BankNotificationHints.Entry> signals=
             BankNotificationHints.list(this);
