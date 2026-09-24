@@ -340,6 +340,7 @@ execute(existing14, step29)  # v28 to v29, vehicle costs
 execute(existing14, step30)
 execute(existing14, step31)
 execute(existing14, step32)
+execute(existing14, step33)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -362,8 +363,9 @@ execute(existing23, step29)  # v28 to v29, vehicle costs
 execute(existing23, step30)
 execute(existing23, step31)
 execute(existing23, step32)
+execute(existing23, step33)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v31→v32: PASS; reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v32→v33: PASS; reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
