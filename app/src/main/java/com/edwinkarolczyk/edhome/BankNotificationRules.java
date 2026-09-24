@@ -31,7 +31,7 @@ final class BankNotificationRules {
             return null;
         boolean expense=t.matches("(?s).*(?:płatnoś|zapłac|zakup|"
             +"obciąż|wydatk|przelew wychodzący|przelew wysłan|"
-            +"przelew wykonany|wypłat).*");
+            +"przelew wykonany|wypłat|transakcj[aeęąi]*\\s+kart).*");
         boolean income=t.matches("(?s).*(?:wpłat|uznan|otrzyman|"
             +"przelew przychodzący|przelew otrzymany|wpływ).*");
         if(expense==income)return null;
