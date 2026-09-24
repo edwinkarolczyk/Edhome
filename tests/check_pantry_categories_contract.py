@@ -19,7 +19,7 @@ for token in (
     'db.editStock(id, name, categoryId, unit, milli)',
     '"DATABASE_MIGRATED_15_TO_16_PANTRY_CATEGORIES"',
     'ALTER TABLE pantry ADD COLUMN category TEXT',
-    'super(context, "edhome-beta-preview.db", null, 32)',
+    'super(context, "edhome-beta-preview.db", null, 33)',
 ):
     assert token in main, "Missing main contract: " + token
 for token in (
