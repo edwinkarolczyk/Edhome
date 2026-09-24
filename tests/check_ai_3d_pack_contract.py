@@ -9,13 +9,16 @@ portable = (root / "PrivatePaycheckPortable.java").read_text(encoding="utf-8")
 for token in (
     'EXPECTED = 100', 'manifest.json', 'icons/', 'sha256(icon)',
     'EXPECTED + 1', 'entrySize > MAX_ENTRY', 'total > MAX_EXTRACTED',
+    'BUNDLED_ASSET = "EDHOME_AI_3D_100.zip"', 'installBundled(Context context)',
+    'getAssets().open(BUNDLED_ASSET)',
     'options.outWidth != 192', 'stage.renameTo(active)',
     'previous.renameTo(active)', 'new File(context.getFilesDir()',
     'static String defaultFor(String target)', 'PREFIX = "ai3d_"',
 ):
     assert token in pack, token
 for token in (
-    'IMPORT_AI_3D_PACK = 1220', 'this::importAi3dIconPack',
+    'IMPORT_AI_3D_PACK = 1220', 'AI3D_BUNDLED_INSTALLED',
+    'IconPack3D.installBundled(this)',
     'IconPack3D.importArchive(this, chosen)', 'tileIconImage(',
     'icon_style', 'IconPack3D.options(this)', 'IconPack3D.known(this, iconId)',
 ):
