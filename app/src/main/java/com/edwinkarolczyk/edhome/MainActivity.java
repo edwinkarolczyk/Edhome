@@ -4247,7 +4247,7 @@ public final class MainActivity extends Activity {
         for(String pkg:packages) {
             CheckBox choice=new CheckBox(this);
             choice.setText(available.get(pkg));
-            choice.setTextColor(ink);
+            choice.setTextColor(DialogContrast.TEXT);
             choice.setChecked(wanted.contains(pkg));
             choice.setMinHeight(dp(48));
             choice.setOnCheckedChangeListener((button,checked)->{
@@ -4282,10 +4282,11 @@ public final class MainActivity extends Activity {
             -1,dp(260)));
         EditText manual=new EditText(this);
         manual.setSingleLine(true);
-        manual.setTextColor(ink);
-        manual.setHintTextColor(subdued);
+        manual.setTextColor(DialogContrast.TEXT);
+        manual.setHintTextColor(DialogContrast.HINT);
         manual.setHint("Pakiet banku, jeśli nie ma go na liście (opcjonalnie)");
         form.addView(manual);
+        lightDialogForm(form);
         new AlertDialog.Builder(this)
             .setTitle("Wybierz aplikacje bankowe")
             .setView(form)
@@ -4311,23 +4312,51 @@ public final class MainActivity extends Activity {
                 render();
                 if(wanted.isEmpty())return;
                 if(!bankNotificationPermissionGranted()) {
-                    new AlertDialog.Builder(this)
-                        .setTitle("Dostęp do powiadomień Androida")
-                        .setMessage("W ustawieniach włącz dostęp dla "
-                            +"EDHOME — wybrane banki. Android pokaże "
-                            +"ostrzeżenie: uprawnienie daje dostęp do "
-                            +"wszystkich powiadomień; EDHOME przetwarza "
-                            +"tylko wskazane pakiety. Dostęp można cofnąć.")
-                        .setNegativeButton("Później",null)
-                        .setPositiveButton("Otwórz ustawienia",(d,w)->{
-                            try {
-                                startActivity(new Intent(
-                                    Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-                            } catch(Exception error) {
-                                alert("Otwórz Ustawienia Androida → "
-                                    +"Dostęp do powiadomień → EDHOME.");
-                            }
-                        }).show();
+                    showBankNotificationPermissionGuide();
+                }
+            }).show();
+    }
+
+    /** On Android 13+ a sideloaded APK may have restricted settings.
+     * Only the user can explicitly allow them; never attempt to bypass Android.
+     */
+    private void showBankNotificationPermissionGuide() {
+        if (bankNotificationPermissionGranted()) {
+            alert("Dostęp do powiadomień jest już włączony.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Dostęp do powiadomień • EDHOME Beta")
+            .setMessage("Jeśli Android pokazuje „Aplikacja nie otrzymała dostępu” "
+                +"lub przełącznik jest wyszarzony, może blokować specjalne "
+                +"uprawnienia aplikacji zainstalowanej z pliku APK.\n\n"
+                +"1. Otwórz Ustawienia aplikacji EDHOME Beta.\n"
+                +"2. Dotknij menu ⋮ u góry i wybierz „Zezwól na ustawienia "
+                +"z ograniczonym dostępem”, jeśli Android pokazuje tę opcję.\n"
+                +"3. Wróć do EDHOME → PayCheck → Dostęp do powiadomień, "
+                +"włącz „Zezwalaj na dostęp do powiadomień” i potwierdź.\n\n"
+                +"Włączaj tę opcję tylko, jeśli ufasz źródłu APK. Android "
+                +"przyznaje uprawnienie do wszystkich powiadomień; EDHOME "
+                +"analizuje tylko wybrane banki i nie traktuje sygnału "
+                +"jako bankowego potwierdzenia transakcji.")
+            .setNegativeButton("Później", null)
+            .setNeutralButton("Dostęp do powiadomień", (dialog, which) -> {
+                try {
+                    startActivity(new Intent(
+                        Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                } catch (Exception error) {
+                    alert("Otwórz Ustawienia Androida → "
+                        +"Dostęp do powiadomień → EDHOME Beta.");
+                }
+            })
+            .setPositiveButton("Ustawienia aplikacji", (dialog, which) -> {
+                try {
+                    startActivity(new Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName())));
+                } catch (Exception error) {
+                    alert("Otwórz Ustawienia Androida → Aplikacje → "
+                        +"EDHOME Beta → menu ⋮.");
                 }
             }).show();
     }
@@ -4340,6 +4369,9 @@ public final class MainActivity extends Activity {
             :!androidEnabled?"Wybór zapisany • nadaj zgodę w ustawieniach Androida."
             :"Włączone • "+BankNotificationHints.selected(this).size()
                 +" wybranych aplikacji. Otwórz PayCheck ponownie po powiadomieniu.");
+        if(optIn&&!androidEnabled)
+            button("Jak odblokować dostęp do powiadomień",
+                this::showBankNotificationPermissionGuide);
         if(!optIn||!androidEnabled)return;
         java.util.List<BankNotificationHints.Entry> signals=
             BankNotificationHints.list(this);
@@ -7233,9 +7265,9 @@ public final class MainActivity extends Activity {
                 chosen.add(pkg);
                 BankNotificationHints.configure(this,chosen,true);
                 render();
-                alert("Wybrano aplikację: "+pkg+". "
-                    +"Jeżeli nie masz jeszcze zgody Androida, wróć do "
-                    +"PayCheck i otwórz ustawienia dostępu do powiadomień.");
+                if(!bankNotificationPermissionGranted())
+                    showBankNotificationPermissionGuide();
+                else alert("Wybrano aplikację: "+pkg+".");
             }else if(result==RESULT_OK)
                 alert("Android nie podał pakietu wybranej aplikacji.");
             return;
