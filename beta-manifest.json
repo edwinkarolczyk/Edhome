@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 76,
-  "versionName": "0.6.0.11",
-  "changelog": "EDHOME 0.6.0.11 — PayCheck CSV: do 10 plików jednego banku na partię, rozpoznawanie średnika, przecinka i tabulatora, warianty kolumn, filtr propozycji i jednoznaczne sugerowane dopasowanie z zatwierdzeniem użytkownika. Żaden import nie księguje samoczynnie. SQLite v33, dane zachowane; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.11/edhome-beta.apk",
-  "sha256": "bbab99161e54bd14db96f231991809be4d290eea9b9483e3e139c371b7b4cc54"
+  "versionCode": 77,
+  "versionName": "0.6.0.12",
+  "changelog": "EDHOME 0.6.0.12 — PayCheck: rozpoznawanie eksportu mBanku z nagłówkami i stopką oraz różnych operacji bez ID przez daty, kwotę i saldo po operacji; import tekstowego CSV i arkusza XLSX z wierszami mBanku. Dopasowania nadal zatwierdza użytkownik; PDF VeloBanku jeszcze nieobsługiwany. SQLite v33 i dane zachowane, Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.12/edhome-beta.apk",
+  "sha256": "de0a17178f1d2d81c85976ec5bc9823a9e60f38246c59ee376fa730589463b43"
 }
