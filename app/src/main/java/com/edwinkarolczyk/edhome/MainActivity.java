@@ -1198,12 +1198,27 @@ public final class MainActivity extends Activity {
             iconIds.add(TileCustomImage.key(id));
             iconNames.add("Moja ikona • PNG/WebP");
         }
+        // Search in the entire local library, keeping stable IDs on save.
+        // Filtering must never rebuild the underlying screen or reset scroll.
+        final java.util.List<String> filteredIconIds =
+            new java.util.ArrayList<>(iconIds);
+        final java.util.List<String> filteredIconNames =
+            new java.util.ArrayList<>(iconNames);
+        EditText iconSearch = new EditText(this);
+        iconSearch.setSingleLine(true);
+        iconSearch.setHint("Szukaj ikony, np. garaż, auto, pralka, finanse");
+        iconSearch.setTextColor(ink);
+        iconSearch.setHintTextColor(subdued);
+        form.addView(iconSearch);
         Spinner icon = new Spinner(this);
-        icon.setAdapter(themeSpinnerAdapter(iconNames));
+        icon.setAdapter(themeSpinnerAdapter(filteredIconNames));
         String previousIcon = prefs.getString("tile_icon_" + id,
             defaultTileIcon(homeTileTarget(id)));
-        icon.setSelection(Math.max(0, iconIds.indexOf(previousIcon)));
+        icon.setSelection(Math.max(0, filteredIconIds.indexOf(previousIcon)));
         form.addView(icon);
+        TextView iconMatches = text("Dostępne ikony: "
+            + filteredIconIds.size(), 13, false);
+        form.addView(iconMatches);
         Button ownIcon = new Button(this);
         ownIcon.setText("Dodaj własną ikonę PNG / WebP");
         ownIcon.setAllCaps(false);
@@ -1241,10 +1256,50 @@ public final class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> p,
                     View view, int position, long rowId) {
                 previewFrame.removeAllViews();
-                View pictogram = tileIconImage(iconIds.get(position), 64, false);
+                if (position < 0 || position >= filteredIconIds.size()) return;
+                View pictogram = tileIconImage(
+                    filteredIconIds.get(position), 88, false);
                 previewFrame.addView(pictogram,
-                    new LinearLayout.LayoutParams(dp(64), dp(64)));
+                    new LinearLayout.LayoutParams(dp(88), dp(88)));
             }
+        });
+        iconSearch.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text,
+                    int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence text,
+                    int start, int before, int count) {
+                String selectedId = icon.getSelectedItemPosition() >= 0
+                    && icon.getSelectedItemPosition() < filteredIconIds.size()
+                    ? filteredIconIds.get(icon.getSelectedItemPosition())
+                    : previousIcon;
+                String query = java.text.Normalizer.normalize(
+                    text.toString().trim().toLowerCase(java.util.Locale.ROOT),
+                    java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
+                filteredIconIds.clear();
+                filteredIconNames.clear();
+                for (int i = 0; i < iconIds.size(); i++) {
+                    String textName = java.text.Normalizer.normalize(
+                        (iconNames.get(i) + " " + iconIds.get(i))
+                            .toLowerCase(java.util.Locale.ROOT),
+                        java.text.Normalizer.Form.NFD)
+                        .replaceAll("\\p{M}+", "");
+                    if (textName.contains(query)) {
+                        filteredIconIds.add(iconIds.get(i));
+                        filteredIconNames.add(iconNames.get(i));
+                    }
+                }
+                icon.setAdapter(themeSpinnerAdapter(filteredIconNames));
+                int selected = filteredIconIds.indexOf(selectedId);
+                if (selected < 0) selected = filteredIconIds.indexOf(previousIcon);
+                if (selected >= 0) icon.setSelection(selected);
+                else if (!filteredIconIds.isEmpty()) icon.setSelection(0);
+                iconMatches.setText(filteredIconIds.isEmpty()
+                    ? "Brak pasujących ikon. Zmień wyszukiwanie."
+                    : "Znaleziono ikon: " + filteredIconIds.size());
+                if (filteredIconIds.isEmpty()) previewFrame.removeAllViews();
+            }
+            @Override public void afterTextChanged(
+                    android.text.Editable text) { }
         });
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setView(form)
@@ -1277,7 +1332,13 @@ public final class MainActivity extends Activity {
                     String code = codes[color.getSelectedItemPosition()];
                     if ("default".equals(code)) change.remove("tile_tint_" + id);
                     else change.putString("tile_tint_" + id, code);
-                    String iconId = iconIds.get(icon.getSelectedItemPosition());
+                    int selectedIconIndex = icon.getSelectedItemPosition();
+                    if (selectedIconIndex < 0
+                            || selectedIconIndex >= filteredIconIds.size()) {
+                        iconSearch.setError("Wyszukaj i wybierz ikonę.");
+                        return;
+                    }
+                    String iconId = filteredIconIds.get(selectedIconIndex);
                     if (defaultTileIcon(target).equals(iconId))
                         change.remove("tile_icon_" + id);
                     else change.putString("tile_icon_" + id, iconId);
@@ -7154,8 +7215,10 @@ public final class MainActivity extends Activity {
         tile.setClickable(true);
         tile.setFocusable(true);
         tile.setContentDescription(caption.replace("\n", " "));
+        int tileHeight = isHome ? side + dp(56) : side;
         LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(side * span + dp(9) * (span - 1), side);
+            new LinearLayout.LayoutParams(side * span + dp(9) * (span - 1),
+                tileHeight);
         if (row.getChildCount() > 0) params.setMargins(dp(9), 0, 0, 0);
         row.addView(tile, params);
 
@@ -7204,8 +7267,11 @@ public final class MainActivity extends Activity {
             });
         }
 
+        int homeIconSize = Math.min(span > 1 ? dp(108) : dp(85),
+            Math.max(dp(1), side - (span > 1 ? 0 : dp(16))));
+        int displayedIconSize = isHome ? homeIconSize : dp(46);
         LinearLayout.LayoutParams iconParams =
-            new LinearLayout.LayoutParams(dp(46), dp(46));
+            new LinearLayout.LayoutParams(displayedIconSize, displayedIconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
             String target = homeTileTarget(id);
@@ -7214,7 +7280,8 @@ public final class MainActivity extends Activity {
             if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId)
                     && !TileCustomImage.available(this, iconId))
                 iconId = defaultTileIcon(target);
-            tile.addView(tileIconImage(iconId, 46, highlighted), iconParams);
+            tile.addView(tileIconImage(iconId,
+                Math.round(displayedIconSize / density), highlighted), iconParams);
         } else {
             TextView pictogram = text(symbol, 29, true);
             pictogram.setTextColor(highlighted && skin.light
