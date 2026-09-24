@@ -19,7 +19,9 @@ final class PaycheckStore {
             + "kind TEXT NOT NULL CHECK(kind IN ('income','expense')), "
             + "category TEXT NOT NULL, amount_grosz INTEGER NOT NULL "
             + "CHECK(amount_grosz BETWEEN 1 AND 99999999999), "
-            + "note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)");
+            + "note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, "
+            + "status TEXT NOT NULL DEFAULT 'confirmed' "
+            + "CHECK(status IN ('pending','confirmed')))");
     }
 
     static String add(SQLiteDatabase db,String operationId,String kind,
@@ -48,17 +50,36 @@ final class PaycheckStore {
             values.put("amount_grosz",grosz);
             values.put("note",note.trim());
             values.put("created_at",System.currentTimeMillis());
+            values.put("status","pending");
             db.insertOrThrow("paycheck_transactions",null,values);
             db.setTransactionSuccessful();
             return "COMMITTED";
         }finally{db.endTransaction();}
     }
 
+    /** Manual attestation only; future bank notification/statement matching is separate.
+     * Only the first pending -> confirmed transition changes the reported balance.
+     */
+    static String confirm(SQLiteDatabase db, String operationId) {
+        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowa transakcja.");
+        db.beginTransaction();
+        try {
+            ContentValues state = new ContentValues();
+            state.put("status", "confirmed");
+            int changed = db.update("paycheck_transactions", state,
+                "operation_id=? AND scope='shared' AND status='pending'",
+                new String[]{operationId});
+            db.setTransactionSuccessful();
+            return changed == 1 ? "CONFIRMED" : "ALREADY_OR_MISSING";
+        } finally { db.endTransaction(); }
+    }
+
     static long sharedBalance(SQLiteDatabase db) {
         try(Cursor c=db.rawQuery(
                 "SELECT COALESCE(SUM(CASE WHEN kind='income' "
                 + "THEN amount_grosz ELSE -amount_grosz END),0) "
-                + "FROM paycheck_transactions WHERE scope='shared'",null)) {
+                + "FROM paycheck_transactions WHERE scope='shared' AND status='confirmed'",null)) {
             return c.moveToFirst()?c.getLong(0):0L;
         }
     }

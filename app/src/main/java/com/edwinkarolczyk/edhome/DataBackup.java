@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 29;
+    private static final int DB_VERSION = 30;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -53,7 +53,7 @@ final class DataBackup {
         {"storage_events", "id", "item_id", "name_snapshot", "action",
             "details", "happened_at"},
         {"paycheck_transactions", "id", "operation_id", "scope", "kind",
-            "category", "amount_grosz", "note", "created_at"},
+            "category", "amount_grosz", "note", "created_at", "status"},
         {"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"},
         {"paycheck_goal_allocations", "id", "operation_id", "goal_id",
             "amount_grosz", "created_at"},
@@ -433,6 +433,12 @@ final class DataBackup {
                             values.put(key, "other");
                             continue;
                         }
+                        if (inputVersion < 30
+                                && "paycheck_transactions".equals(definition[0])
+                                && "status".equals(key)) {
+                            values.put(key, "confirmed");
+                            continue;
+                        }
                         if (inputVersion < 27
                                 && "vehicle_policies".equals(definition[0])
                                 && "goal_id".equals(key)) {
@@ -728,7 +734,9 @@ final class DataBackup {
                     String note = values.getAsString("note");
                     Long amount = values.getAsLong("amount_grosz");
                     Long date = values.getAsLong("created_at");
+                    String status = values.getAsString("status");
                     if (operation == null || !operation.matches("[0-9a-fA-F-]{36}")
+                            || !("pending".equals(status) || "confirmed".equals(status))
                             || !"shared".equals(scope)
                             || !("income".equals(kind) || "expense".equals(kind))
                             || !MoneyRules.category(category)

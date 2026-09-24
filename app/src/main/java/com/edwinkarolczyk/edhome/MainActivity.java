@@ -2698,7 +2698,7 @@ public final class MainActivity extends Activity {
                         box.addView(text(costs.getString(1) + " • "
                             + VehicleCostStore.label(costs.getString(0)) + " • "
                             + MoneyRules.format(costs.getLong(2))
-                            + (costs.isNull(4) ? " • poza PayCheck" : " • wspólny PayCheck")
+                            + (costs.isNull(4) ? " • poza PayCheck" : " • sprawdź status w PayCheck")
                             + (costs.getString(3).isEmpty() ? ""
                                 : "\n" + costs.getString(3)), 13, false));
                 }
@@ -2768,11 +2768,12 @@ public final class MainActivity extends Activity {
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText note = vehicleInput(form, "Opis kosztu (opcjonalnie)", "");
         CheckBox paycheck = new CheckBox(this);
-        paycheck.setText("Zapisz również jako WYDATEK we wspólnym PayCheck");
+        paycheck.setText("Przekaż wydatek do potwierdzenia we wspólnym PayCheck");
         paycheck.setChecked(false);
         form.addView(paycheck);
         form.addView(text("Bez zaznaczenia koszt jest wyłącznie w historii pojazdu. "
-            + "Z zaznaczeniem jedna płatność zostaje zapisana tylko raz, "
+            + "Z zaznaczeniem trafia do kolejki Do potwierdzenia. "
+            + "Saldo zmieni się dopiero po ręcznym potwierdzeniu w PayCheck; "
             + "bez automatycznych wpłat na cel.", 13, false));
         String operationId = java.util.UUID.randomUUID().toString();
         lightDialogForm(form);
@@ -3762,8 +3763,9 @@ public final class MainActivity extends Activity {
             + "Prywatne finanse mają osobny sejf z hasłem i szyfrowaniem.");
         button("🔒 Prywatny sejf PayCheck", this::openPrivatePaycheck);
         note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
-            + "Podaj rzeczywistą kwotę dopiero po dokonanej płatności.");
-        title("Saldo wspólne: " + MoneyRules.format(
+            + "Nowe wpisy finansowe czekają na potwierdzenie; "
+            + "saldo liczy tylko potwierdzone operacje.");
+        title("Saldo potwierdzone wspólne: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
         Spinner kind=new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
@@ -3802,7 +3804,7 @@ public final class MainActivity extends Activity {
                             db.getWritableDatabase(),operationId,
                             type,group,grosz,description);
                         if("COMMITTED".equals(outcome)){
-                            DiagnosticLog.event("PAYCHECK_SHARED_COMMITTED");
+                            DiagnosticLog.event("PAYCHECK_SHARED_PENDING");
                             render();
                         }else alert("Ta operacja była już zapisana.");
                     }catch(Exception problem){
@@ -3811,27 +3813,67 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
+        title("Do potwierdzenia • bez wpływu na saldo");
+        try (Cursor pending = db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
+                + "FROM paycheck_transactions WHERE scope='shared' "
+                + "AND status='pending'", null)) {
+            if (pending.moveToFirst())
+                note(pending.getInt(0) + " wpisów • "
+                    + MoneyRules.format(pending.getLong(1))
+                    + " (łączna wartość, przychody i wydatki osobno w historii)");
+        }
         title("Historia wspólna");
         int count=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT kind,category,amount_grosz,note,created_at "
+                "SELECT operation_id,kind,category,amount_grosz,note,created_at,status "
                 +"FROM paycheck_transactions WHERE scope='shared' "
                 +"ORDER BY id DESC LIMIT 40",null)){
             while(c.moveToNext()){
                 count++;
+                String operationId=c.getString(0);
+                boolean income="income".equals(c.getString(1));
+                String status=c.getString(6);
                 LinearLayout entry=card();
-                boolean income="income".equals(c.getString(0));
                 entry.addView(text((income?"+ ":"− ")
-                    +MoneyRules.format(c.getLong(2)),18,true));
-                entry.addView(text(MoneyRules.categoryLabel(c.getString(1))
-                    +(c.getString(3).isEmpty()?"":" • "+c.getString(3)),14,false));
-                entry.addView(text(Instant.ofEpochMilli(c.getLong(4))
+                    +MoneyRules.format(c.getLong(3))
+                    +("pending".equals(status)?" • DO POTWIERDZENIA"
+                        :" • POTWIERDZONE"),18,true));
+                entry.addView(text(MoneyRules.categoryLabel(c.getString(2))
+                    +(c.getString(4).isEmpty()?"":" • "+c.getString(4)),14,false));
+                entry.addView(text(Instant.ofEpochMilli(c.getLong(5))
                     .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
                     12,false));
+                if ("pending".equals(status))
+                    smallButton(entry, "Potwierdź po sprawdzeniu banku / wyciągu",
+                        () -> confirmSharedPaycheckEntry(operationId));
             }
         }
-        if(count==0)note("Brak transakcji wspólnych. Niczego nie księgujemy automatycznie.");
+        if(count==0)note("Brak transakcji wspólnych.");
         sharedPaycheckGoals();
+    }
+
+    /** A manual attestation, NOT an automated bank statement verification. */
+    private void confirmSharedPaycheckEntry(String operationId) {
+        new AlertDialog.Builder(this)
+            .setTitle("Potwierdź operację?")
+            .setMessage("Potwierdź wyłącznie po sprawdzeniu faktycznej transakcji "
+                + "w banku lub na wyciągu. EDHOME jeszcze nie odczytuje banku "
+                + "automatycznie. Zatwierdzenie zmieni saldo wspólne tylko raz.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Sprawdziłem — potwierdź", (d,w) -> {
+                try {
+                    String result=PaycheckStore.confirm(db.getWritableDatabase(),
+                        operationId);
+                    if ("CONFIRMED".equals(result))
+                        DiagnosticLog.event("PAYCHECK_SHARED_CONFIRMED");
+                    else alert("Operacja już potwierdzona lub nie istnieje.");
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.error("PAYCHECK_CONFIRM", error);
+                    alert("Nie udało się potwierdzić. Saldo pozostało bez zmian.");
+                }
+            }).show();
     }
 
     private void openPrivatePaycheck() {
@@ -6527,7 +6569,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 29);
+            super(context, "edhome-beta-preview.db", null, 30);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6568,7 +6610,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 29) {
+            if (oldVersion < 1 || newVersion > 30) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6714,6 +6756,12 @@ public final class MainActivity extends Activity {
             if (oldVersion < 29) {
                 VehicleCostStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_28_TO_29_VEHICLE_COSTS");
+            }
+            if (oldVersion >= 20 && oldVersion < 30) {
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN status "
+                    + "TEXT NOT NULL DEFAULT 'confirmed' "
+                    + "CHECK(status IN ('pending','confirmed'))");
+                DiagnosticLog.event("DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING");
             }
         }
 

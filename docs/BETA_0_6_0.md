@@ -99,6 +99,14 @@
 - SQLite v28→v29, eksport/import v29 zachowuje nowe koszty i link oraz sprawdza zgodność kwot, kategorii i referencji. Import v26–v28 zachowuje dane i dodaje pustą historię kosztów.
 - To nadal inkrement do odbioru fizycznego; brak załączników dokumentów i zakończenia całej 0.6.0. Stable `main` bez zmian.
 
+## 0.6.0.7 — pierwsza korekta PayCheck: „Do potwierdzenia”
+
+- NOWE wpisy wspólne, również koszt pojazdu z zaznaczoną integracją, są zapisywane jako `pending`. Nie wpływają na saldo potwierdzone. Brak zaznaczenia integracji nadal zostawia koszt tylko przy pojeździe.
+- Ekran wspólnego PayCheck rozróżnia wpisy `Do potwierdzenia` i `Potwierdzone`. Użytkownik może RĘCZNIE potwierdzić dopiero po sprawdzeniu transakcji w banku lub na wyciągu. Potwierdzenie zmienia saldo tylko raz; nie oznacza automatycznego sprawdzenia banku.
+- Dotychczasowe wpisy pozostają potwierdzone w celu zachowania salda po aktualizacji; nie przypisujemy im fikcyjnej historii weryfikacji bankowej.
+- SQLite v29→v30: status z domyślną wartością `confirmed` dla historycznych transakcji; import kopii starszych wersji również zachowuje stare księgowania jako potwierdzone. Nowe kopie przenoszą status `pending/confirmed`.
+- Nie ma jeszcze automatycznego odczytu powiadomień bankowych, importu wyciągów, deduplikacji między źródłami ani ostatecznego odbioru 0.6.0. Stable `main` bez zmian.
+
 ## Kolejne inkrementy 0.6 — zakres, nie wdrożenie
 
 1. Doprecyzowanie ewidencji opon po testach beta.2; ocena powiązań z innymi rzeczami w magazynie bez kopiowania stanu.

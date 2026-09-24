@@ -37,7 +37,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'private static final int DB_VERSION = 29;',
+    'private static final int DB_VERSION = 30;',
     '"oc_reminder_lead", "inspection_reminder_lead"',
     'inputVersion < 28',
     'VehicleReminderRules.allowed(ocLead)',

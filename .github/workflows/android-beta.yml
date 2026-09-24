@@ -155,6 +155,8 @@ jobs:
           python3 tests/check_vehicle_reminder_contract.py
       - name: Vehicle cost and one shared PayCheck expense regression
         run: python3 tests/check_vehicle_cost_contract.py
+      - name: Pending shared PayCheck and one-time confirmation regression
+        run: python3 tests/check_paycheck_pending_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
@@ -366,14 +368,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.6-signed-apk
+          name: EDHOME-0.6.0.7-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.6 — koszty OC, przeglądu, serwisu i opon z opcjonalnym jednorazowym wydatkiem we wspólnym PayCheck. Brak automatycznych księgowań; historia i kopie SQLite v29. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.7 — wspólny PayCheck: nowe wpisy i koszty pojazdu trafiają do kolejki Do potwierdzenia bez zmiany salda; ręczne potwierdzenie po sprawdzeniu banku lub wyciągu księguje tylko raz. Starsze wpisy zachowują saldo. SQLite v30; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
