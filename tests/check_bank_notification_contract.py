@@ -45,6 +45,23 @@ for secret in ('notificationText', 'EXTRA_TEXT', 'EXTRA_BIG_TEXT',
     assert secret not in receipt, secret
 assert 'Powiadomienie EDHOME po odebraniu:' in ui
 assert 'requestBankReceiptNotificationPermission()' in ui
+for phrase in ('static boolean isConnected()', 'BankNotificationHints.recordSeen(this,',
+               'onListenerConnected()'):
+    assert phrase in listener,phrase
+for phrase in ('bank_last_seen_at', 'bank_last_saved_at',
+               'bank_last_unrecognized_at', 'lastSeenPackage(',
+               'putLong(UNRECOGNIZED,', 'putLong(SAVED,'):
+    assert phrase in store,phrase
+for phrase in ('Nasłuch Androida:', 'Ostatni nierozpoznany komunikat bankowy:',
+               'Ostatnio zapisany sygnał:', 'Własne powiadomienie EDHOME:',
+               'BankNotificationListener.isConnected()',
+               'Sprawdź teraz aktywne powiadomienia banków'):
+    assert phrase in ui,phrase
+qr=ui[ui.index('    private void chooseQrOutput('):
+      ui.index('    private void shareQrPdf(')]
+assert '.setMessage(' not in qr, "QR AlertDialog message hides list on some devices"
+assert '.setItems(new String[]{"Drukuj przez Androida","Zapisz jako PDF",' in qr
+
 
 # The listener must remain independent of a foreground activity and recover
 # only still-visible notifications on Android service reconnection / opt-in.
