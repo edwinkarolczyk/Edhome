@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 78,
-  "versionName": "0.6.0.13",
-  "changelog": "EDHOME 0.6.0.13 — PayCheck mBank: odczyt pliku CSV w UTF-8 i Windows-1250 oraz eksportu XLSX z tekstem operacji w arkuszu; jednoznaczne propozycje bez automatycznego księgowania. Saldo i dane zachowane, SQLite v33; PDF VeloBanku jeszcze nieobsługiwany; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.13/edhome-beta.apk",
-  "sha256": "5326b4200ecbcad7d07b72286d7d5c29803a5e78e97e6e8107cff3a2eaea242f"
+  "versionCode": 79,
+  "versionName": "0.6.0.14",
+  "changelog": "EDHOME 0.6.0.14 — Pojazdy: każdą kartę można zwinąć i rozwinąć niezależnie; stan zapamiętany po ponownym uruchomieniu. Dane i SQLite v33 bez zmian. Import bankowy zgłoszony jako niesprawny na telefonie, odłożony do końcowej stabilizacji 0.6. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.14/edhome-beta.apk",
+  "sha256": "b8c577011c25ad106f6c715e9b2899829cc78cebf8b007a1151b478eb54a5de4"
 }
