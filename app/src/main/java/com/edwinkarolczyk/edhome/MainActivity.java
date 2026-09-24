@@ -1108,7 +1108,8 @@ public final class MainActivity extends Activity {
         java.util.List<String> targetLabels = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
             if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
-                    || homeTargetAlreadyAdded(target,id))continue;
+                    || (!target.equals(homeTileTarget(id))
+                        && homeTargetAlreadyAdded(target,id)))continue;
             targets.add(target);
             targetLabels.add(HomeTileCatalog.label(target));
         }
@@ -1186,7 +1187,8 @@ public final class MainActivity extends Activity {
                         return;
                     }
                     String target = targets.get(destination.getSelectedItemPosition());
-                    if(homeTargetAlreadyAdded(target,id)) {
+                    if(!target.equals(homeTileTarget(id))
+                            && homeTargetAlreadyAdded(target,id)) {
                         alert("Ten moduł jest już przypisany do innego kafelka.");
                         return;
                     }
