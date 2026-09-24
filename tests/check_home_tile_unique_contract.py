@@ -17,6 +17,7 @@ assert 'Przywróć ukryte kafelki' in selection
 editor=s[s.index("private void editHomeTile(String id)"):s.index("private java.util.List<String> allHomeTiles()")]
 assert "homeTargetAlreadyAdded(target,id)" in editor
 assert "String target = targets.get(destination.getSelectedItemPosition());" in editor
-assert "if(homeTargetAlreadyAdded(target,id))" in editor
+assert "&& homeTargetAlreadyAdded(target,id))" in editor
+assert "target.equals(homeTileTarget(id))" in editor
 assert "Ten moduł jest już przypisany" in editor
 print("Home tiles: add/edit rejects duplicate targets including hidden, existing tiles retained PASS")
