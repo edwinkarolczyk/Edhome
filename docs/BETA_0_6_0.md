@@ -121,3 +121,12 @@
 - Wspólne koszty pojazdu zaczynają jako `pending/none`; nie zmieniają salda przed potwierdzeniem. Ponowienie potwierdzenia nie zmienia źródła ani czasu.
 - Kopia v31 obejmuje źródło i czas potwierdzenia; import v29 i v30 działa również po aktualizacji. Kopie prywatnego sejfu nadal pozostają oddzielne.
 - W kolejnych inkrementach 0.6: prawdziwa integracja wyciągów i powiadomień bankowych z identyfikacją źródła, dokumenty pojazdów, testy i odbiór. Nie przenosić na `main` bez zatwierdzenia.
+
+## 0.6.0.9 — ręczne uzgadnianie importowanego wyciągu CSV
+
+- W PayCheck przycisk „Uzgodnij z wyciągiem CSV”. Plik wybierany jest przez systemowy picker Androida; aplikacja nie loguje się do banku i **nie uwierzytelnia pochodzenia pliku**.
+- Wspierany na tym etapie jest CSV UTF-8 z separatorem średnikowym i kolumnami `Data;Kwota;Id transakcji;Opis`; data `RRRR-MM-DD` lub `DD.MM.RRRR`, kwota ujemna jako wydatek, dodatnia jako wpływ. Do 256 KB i 250 transakcji. Konieczny stabilny identyfikator transakcji z banku; pliki bez identyfikatora są odrzucane, zamiast zgadywania duplikatów.
+- Użytkownik wskazuje bank i **ręcznie wybiera powiązanie** wiersza CSV z istniejącą transakcją `pending` o takim samym znaku i kwocie; import nie tworzy nowych wydatków, nie rusza sejfu prywatnego, niczego nie potwierdza bez wyboru. Ten sam `bank+identyfikator` nie może potwierdzić dwóch wpisów nawet po ponownym imporcie.
+- Wspólne saldo zmienia się jednorazowo dopiero przy zatwierdzeniu skojarzenia. Zachowujemy skrót identyfikatora i datę w celu deduplikacji; surowe wiersze CSV nie są utrwalane. Na ekranie źródło oznaczone „Uzgodnione z importowanym CSV” — to nie jest gwarancja autentyczności banku.
+- SQLite v31→v32; backup v32 przechowuje referencję/dzień i waliduje ich spójność. Starsze kopie do v31 zachowują operacje bez dorabiania fikcyjnych dopasowań.
+- **Nie jest to jeszcze obsługa powiadomień Androida, import dowolnego formatu dowolnego banku ani automatyczne rozpoznawanie przelewów własnych.** Pozostaje zakres kolejnych inkrementów 0.6 oraz dokumenty pojazdów i pełna stabilizacja; `main` nietknięta.
