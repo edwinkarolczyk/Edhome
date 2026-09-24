@@ -16,6 +16,7 @@ goals_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PaycheckGoalsSto
 price_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryPriceHistoryStore.java").read_text(encoding="utf-8")
 policy_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehiclePolicyStore.java").read_text(encoding="utf-8")
 cost_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleCostStore.java").read_text(encoding="utf-8")
+document_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleDocumentStore.java").read_text(encoding="utf-8")
 tyre_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleTyreStore.java").read_text(encoding="utf-8")
 vehicle_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleStore.java").read_text(encoding="utf-8")
 
@@ -78,7 +79,9 @@ paycheck32 = statements(section(paycheck_store, "static void create(SQLiteDataba
 paycheck20 = [sql.replace(", status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed'))", "").replace(", confirmation_source TEXT NOT NULL DEFAULT 'legacy' CHECK(confirmation_source IN ('none','legacy','manual'))", "").replace(", confirmed_at INTEGER", "").replace(", statement_key TEXT, statement_date TEXT", "") for sql in paycheck32 if sql.startswith("CREATE TABLE")]
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
-step32 = statements(section(upgrade, "if(oldVersion < 32)", "private static void addPlaceSiblingIndex"))
+step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
+documents33 = statements(section(document_store, "static void create(SQLiteDatabase db)", "static String label(").replace("db.execSQL(", "database.execSQL("))
+step33 = documents33.copy()
 goals21 = statements(section(goals_store, "static void create(SQLiteDatabase db)", "static long addGoal(").replace("db.execSQL(", "database.execSQL("))
 prices22 = statements(section(price_store, "static void create(SQLiteDatabase db)", "static String markBought(").replace("db.execSQL(", "database.execSQL("))
 vehicles28 = statements(section(vehicle_store, "static void create(SQLiteDatabase db)", "static final class Vehicle").replace("db.execSQL(", "database.execSQL("))
@@ -122,12 +125,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 32, "Database version and backup format differ"
+assert version == backup_version == 33, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
 expected = schema(fresh)
-assert len(expected) == 29 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 30 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -202,6 +205,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step30)  # historical PayCheck entries become confirmed
     execute(db, step31)  # pending stays pending; legacy source remains unknown
     execute(db, step32)  # bank CSV evidence reference and unique index
+    execute(db, step33)  # vehicle document register
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
