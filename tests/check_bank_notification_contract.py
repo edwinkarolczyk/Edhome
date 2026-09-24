@@ -17,13 +17,23 @@ for phrase in ('selected_banking_packages','bank_notification_opt_in',
     assert phrase in store, phrase
 assert 'PaycheckStore' not in store
 assert 'PaycheckStore' not in listener
+assert 'BankNotificationHints.alreadyHandled(context,unique)' not in listener
+assert 'static boolean alreadyHandled(' in store
+assert 'private static boolean rememberHandled(' in store
+assert 'if(alreadyHandled(context,unique))return;' in store
+assert 'PaycheckStore.add(db.getWritableDatabase(),' in ui
+assert 'PrivatePaycheckVault.addPending(this,' in ui
+assert 'pendingPrivateBankHintKey' in ui
+assert 'private static String addWithStatus(' in Path(
+    "app/src/main/java/com/edwinkarolczyk/edhome/PrivatePaycheckVault.java"
+).read_text(encoding="utf-8")
 assert 'PaycheckStore' not in receipt
 for phrase in ('bank_receipt_notifications_enabled', 'receiptEnabled(',
                'setReceiptEnabled(', 'if(persist(context,entries))',
                'BankReceiptNotifier.show(context,saved)',
                '.putString(ROWS,result.toString()).commit()'):
     assert phrase in store, phrase
-for phrase in ('android.Manifest.permission.POST_NOTIFICATIONS',
+for phrase in ('Manifest.permission.POST_NOTIFICATIONS',
                'NotificationChannel', 'Notification.VISIBILITY_PRIVATE',
                'setPublicVersion(publicView)', 'manager.notify(',
                'BankNotificationHints.receiptEnabled(context)',
