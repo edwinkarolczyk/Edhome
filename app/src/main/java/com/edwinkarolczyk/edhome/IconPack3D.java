@@ -20,10 +20,11 @@ import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/** Optional, user-imported EDHOME AI 3D asset pack. Nothing touches the ledger or vault. */
+/** Bundled EDHOME AI 3D pack, delivered by an ordinary signed APK update. */
 final class IconPack3D {
     static final String PREFIX = "ai3d_";
     private static final String PACK = "EDHOME AI 3D";
+    static final String BUNDLED_ASSET = "EDHOME_AI_3D_100.zip";
     private static final int EXPECTED = 100;
     private static final long MAX_ARCHIVE = 12L * 1024 * 1024;
     private static final long MAX_ENTRY = 512L * 1024;
@@ -96,8 +97,24 @@ final class IconPack3D {
         return id != null && id.matches("[a-z][a-z0-9_]{0,39}");
     }
 
-    /** Bounded ZIP extraction, filename and digest validation, atomic pack replacement. */
+    /** User files are optional; the standard flow always installs from the signed APK. */
     static int importArchive(Context context, Uri source) throws Exception {
+        try (InputStream raw = context.getContentResolver().openInputStream(source)) {
+            if (raw == null) throw new IllegalArgumentException("Nie można otworzyć ZIP.");
+            return unpack(context, raw);
+        }
+    }
+
+    /** Called off the UI thread after an in-place update; never asks the user to import. */
+    static boolean installBundled(Context context) throws Exception {
+        if (installed(context)) return false;
+        try (InputStream raw = context.getAssets().open(BUNDLED_ASSET)) {
+            return unpack(context, raw) == EXPECTED;
+        }
+    }
+
+    /** Bounded ZIP extraction, SHA-256 validation, and atomic pack replacement. */
+    private static int unpack(Context context, InputStream raw) throws Exception {
         File parent = context.getFilesDir();
         File stage = new File(parent, "edhome-ai-3d-stage");
         File active = folder(context);
@@ -107,9 +124,7 @@ final class IconPack3D {
         Set<String> files = new HashSet<>();
         long total = 0;
         try {
-            try (InputStream raw = context.getContentResolver().openInputStream(source)) {
-                if (raw == null) throw new IllegalArgumentException("Nie można otworzyć ZIP.");
-                try (ZipInputStream zip = new ZipInputStream(raw)) {
+            try (ZipInputStream zip = new ZipInputStream(raw)) {
                     ZipEntry entry;
                     while ((entry = zip.getNextEntry()) != null) {
                         if (entry.isDirectory()) throw new IllegalArgumentException("Nieprawidłowy ZIP.");
@@ -136,7 +151,6 @@ final class IconPack3D {
                         }
                         zip.closeEntry();
                     }
-                }
             }
             if (files.size() != EXPECTED + 1)
                 throw new IllegalArgumentException("Paczka musi zawierać dokładnie 100 ikon.");
