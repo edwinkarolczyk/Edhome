@@ -167,6 +167,9 @@ public final class MainActivity extends Activity {
             screen = "timers";
         if (getIntent() != null && getIntent().getBooleanExtra("open_vehicles", false))
             screen = "vehicles";
+        if (BetaUpdater.isBeta() && getIntent() != null
+                && getIntent().getBooleanExtra("open_paycheck",false))
+            screen="paycheck";
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -247,6 +250,9 @@ public final class MainActivity extends Activity {
             go("timers");
         if (intent != null && intent.getBooleanExtra("open_vehicles", false))
             go("vehicles");
+        if (BetaUpdater.isBeta() && intent != null
+                && intent.getBooleanExtra("open_paycheck",false))
+            go("paycheck");
     }
 
     @Override public void onBackPressed() {
