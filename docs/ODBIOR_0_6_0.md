@@ -43,3 +43,10 @@ Załączanie skanów PDF/zdjęć do dokumentów pojazdu jest odłożone. Rejestr
 - [ ] Sprawdź przypadek bez miejsca oraz dane starego magazynu po aktualizacji, bez resetu i bez ingerencji w saldo PayCheck.
 
 **Status tego punktu:** wdrożenie w kodzie `beta` nie jest jeszcze odbiorem na urządzeniu; warunek `0.6.0` pozostaje otwarty do testu fizycznego telefonu. Import bankowy nadal na sam koniec.
+
+## Korekta Magazynu, przewijania i banków — 24.09.2026
+
+- Edwin doprecyzował, że chodzi o **podgląd hierarchii**, nie obowiązkowy akordeon. Magazyn wyświetla miejsca → podmiejsca → pudełka → rzeczy; nagłówki gałęzi można opcjonalnie tapnąć. Zwijanie/rozwijanie zmienia tylko widoczność istniejących podwidoków **bez `render()`, bez cofania przewinięcia i bez resetowania reszty ekranu**. Stan gałęzi pamiętany per trwałe ID.
+- EDHOME przechowuje pozycję przewinięcia osobno dla ekranów i przy przebudowie tego samego widoku przywraca ją po ułożeniu elementów, zamiast przechodzić na początek. Odbiór: przewiń długą listę pojazdów, Magazynu i PayCheck, wykonaj akcję, zamknij dialog i sprawdź, że zostajesz w pobliżu ostatniego miejsca.
+- Własne zdjęcia rzeczy/pudełek: użytkownik wybiera plik lokalnie; EDHOME zapamiętuje skompresowaną miniaturę JPEG (maks. 32 KB), nie zewnętrzny URI oryginału. Można ją zmienić/usunąć. Miniaturki włączone do zwykłej kopii JSON i walidowane przed przywróceniem (przypisanie do istniejącego ID); brak wysyłania zdjęć do repo ani sieci. Odbiór fizyczny: własne zdjęcie → restart → kopia/odtworzenie → zdjęcie pozostaje.
+- Pusta lista banków jest zgłoszonym problemem telefonu. Selekcja korzysta z własnych pól zaznaczenia i przeglądu aplikacji, ma alternatywę **systemowego wyboru aplikacji Androida** oraz ręczne wpisanie identyfikatora pakietu (nie danych logowania!). Odbiór: wybrać bank z listy, wyłączyć/włączyć nasłuch, sprawdzić co najmniej jedną podpowiedź lub zgłosić brak rozpoznania. `main` bez zmian.
