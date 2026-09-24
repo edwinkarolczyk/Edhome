@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 72,
-  "versionName": "0.6.0.7",
-  "changelog": "EDHOME 0.6.0.7 — wspólny PayCheck: nowe wpisy i koszty pojazdu trafiają do kolejki Do potwierdzenia bez zmiany salda; ręczne potwierdzenie po sprawdzeniu banku lub wyciągu księguje tylko raz. Starsze wpisy zachowują saldo. SQLite v30; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.7/edhome-beta.apk",
-  "sha256": "836d44355e9c88ec2d4e0c4f0382e8cc4fd5888edb68bc2c1a8d7f6530ffacab"
+  "versionCode": 73,
+  "versionName": "0.6.0.8",
+  "changelog": "EDHOME 0.6.0.8 — wspólny PayCheck: nowe wpisy i koszty pojazdu trafiają do kolejki Do potwierdzenia bez zmiany salda; ręczne potwierdzenie po sprawdzeniu banku lub wyciągu księguje tylko raz. Starsze wpisy zachowują saldo. SQLite v31; ręczne potwierdzenia otrzymują ślad, dane historyczne nie udają weryfikacji bankowej; naprawiono przywracanie kopii v29/v30. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.8/edhome-beta.apk",
+  "sha256": "de915622d4e39fe631f0ff469a1385f19ceddc030d9057d8237dc2f9307147f0"
 }
