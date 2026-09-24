@@ -154,3 +154,12 @@
 5. Sprawdź brak wpływu na prywatny sejf, inne wydatki i dokumenty pojazdu. Jeśli test nie przejdzie, zachowaj plik testowy, eksport logów i zanotuj saldo przed/po.
 
 **Uwaga:** „EDHOME TEST” to wyłącznie etykieta w pliku testowym, nie prawdziwy bank; CSV sam w sobie nie dowodzi autentyczności operacji. Dopóki użytkownik nie potwierdzi testu 4, nie oznaczać importu jako odebranego. Stable `main` bez zmian; 1.0.0 dopiero po testach całego wydania i wyraźnym odbiorze.
+
+## 0.6.0.11 — pierwszy krok do wielobankowej skrzynki PayCheck (odbiór telefonu wymagany)
+
+- Obecny wybór CSV pozwala wskazać **do 10 plików jednego wskazanego banku** w jednej partii; ponowione identyfikatory pomiędzy tymi plikami są pomijane. Różne banki na tym etapie dodawaj oddzielnymi partiami; **nie ma jeszcze wspólnej trwałej kolejki wielu źródeł**.
+- Parser obsługuje separator średnikowy, tabulator lub przecinek z ujętą w cudzysłów kwotą dziesiętną, oraz część alternatywnych nagłówków. Wymaga stabilnego identyfikatora transakcji i kwoty ze znakiem: brak identyfikatora nie jest powodem do wymyślania nowego wpisu.
+- Po odczycie widok ma oznaczać, czy istnieje dokładnie jedna propozycja o zgodnym rodzaju i kwocie, kilka propozycji czy brak wpisu oczekującego. Filtry: wszystkie, jedna propozycja, kilka propozycji, brak pary, wydatki i wpływy. Jednoznaczną propozycję zatwierdzasz bez wybierania z kolejnej listy; żadna propozycja sama nie księguje.
+- Identyfikator i klucz bankowy nadal są deduplikowane; saldo liczy wyłącznie potwierdzone wpisy. SQLite pozostaje v33 i dotychczasowe dane są zachowane.
+- **To nie jest pełna realizacja nowego wymagania:** brak wspólnej lokalnej skrzynki z różnymi bankami, PDF/obrazów, automatycznego odczytu powiadomień i uwierzytelnionego bankowego potwierdzania. Docelowy model oraz kryteria: [PAYCHECK_MULTI_BANK_0_6_0.md](PAYCHECK_MULTI_BANK_0_6_0.md).
+- `main` bez zmian; dopiero zielone CI, podpisana publikacja i test fizycznego telefonu uprawniają do uznania tego inkrementu za wydany i odebrany.
