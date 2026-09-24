@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 82,
-  "versionName": "0.6.0.17",
-  "changelog": "EDHOME 0.6.0.17 — Magazyn: drzewko Miejsca → podmiejsca → pudełka → rzeczy; tapnięcie gałęzi zwija/rozwija, zapamiętywane osobno po restarcie. QR i działania na rzeczach zachowane. Import bankowy na koniec 0.6, bez załączników. SQLite v33, Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.17/edhome-beta.apk",
-  "sha256": "3c029b90bbf71a03600b5cabfc26fb8077a30f1a29d1706b861937cc7ea70630"
+  "versionCode": 84,
+  "versionName": "0.6.0.19",
+  "changelog": "EDHOME 0.6.0.19 — Magazyn: podgląd miejsc, pudełek i rzeczy, miejscowe zwijanie bez przeładowania, własne miniatury zdjęć objęte kopią JSON. Ekrany zachowują przewinięcie, wybór banku ma listę instalowanych aplikacji i ręczny pakiet awaryjny. Powiadomienia do ręcznej weryfikacji, import bankowy nadal odłożony. SQLite v33; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.19/edhome-beta.apk",
+  "sha256": "6a93e4145cbdf060c1443c18e391cb4954afdbbf1b81a6f8b7c3f44938ab37cd"
 }
