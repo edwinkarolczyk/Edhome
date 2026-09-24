@@ -28,7 +28,7 @@ for phrase in ('android.permission.BIND_NOTIFICATION_LISTENER_SERVICE',
 assert 'BankNotificationListener' not in stable
 for phrase in ('bankNotificationPermissionGranted()',
                'Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS',
-               'setMultiChoiceItems(names,selected',
+               'choices.addView(choice)',
                'showBankNotificationHints()',
                'confirmSharedPaycheckEntry(ids.get(0),signal.key)',
                'BankNotificationHints.remove(this,hintKey)'):
