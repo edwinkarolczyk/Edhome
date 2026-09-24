@@ -22,6 +22,11 @@
             </intent-filter>
         </service>
         <provider
+            android:name="com.edwinkarolczyk.edhome.StorageQrPdfProvider"
+            android:authorities="${applicationId}.qrpdf"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+        <provider
             android:name="com.edwinkarolczyk.edhome.UpdateApkProvider"
             android:authorities="${applicationId}.updates"
             android:exported="false"
