@@ -79,6 +79,8 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
     private static final int PICK_BANK_APP_SYSTEM = 1219;
     private static final int IMPORT_AI_3D_PACK = 1220;
+    private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
+    private String pendingCustomTileId;
     private long pendingStorageThumbnailId;
     private String pendingStatementBank;
     private SharedPreferences prefs;
@@ -1104,6 +1106,16 @@ public final class MainActivity extends Activity {
     }
 
     private View tileIconImage(String iconId, int size, boolean highlighted) {
+        if (TileCustomImage.available(this, iconId)) {
+            android.graphics.Bitmap image = TileCustomImage.bitmap(this, iconId);
+            if (image != null) {
+                ImageView graphic = new ImageView(this);
+                graphic.setImageBitmap(image);
+                graphic.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                graphic.setBackground(skin.panel(this, skin.iconBacking, 24));
+                return graphic;
+            }
+        }
         if (IconPack3D.known(this, iconId)) {
             android.graphics.Bitmap image = IconPack3D.bitmap(this, iconId);
             if (image != null) {
@@ -1182,12 +1194,35 @@ public final class MainActivity extends Activity {
             iconIds.add(available.id);
             iconNames.add(available.title);
         }
+        if (TileCustomImage.available(this, TileCustomImage.key(id))) {
+            iconIds.add(TileCustomImage.key(id));
+            iconNames.add("Moja ikona • PNG/WebP");
+        }
         Spinner icon = new Spinner(this);
         icon.setAdapter(themeSpinnerAdapter(iconNames));
         String previousIcon = prefs.getString("tile_icon_" + id,
             defaultTileIcon(homeTileTarget(id)));
         icon.setSelection(Math.max(0, iconIds.indexOf(previousIcon)));
         form.addView(icon);
+        Button ownIcon = new Button(this);
+        ownIcon.setText("Dodaj własną ikonę PNG / WebP");
+        ownIcon.setAllCaps(false);
+        form.addView(ownIcon);
+        final AlertDialog[] tileDialog = new AlertDialog[1];
+        ownIcon.setOnClickListener(v -> {
+            pendingCustomTileId = id;
+            if (tileDialog[0] != null) tileDialog[0].dismiss();
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            picker.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"image/png", "image/webp"});
+            try { startActivityForResult(picker, IMPORT_CUSTOM_TILE_ICON); }
+            catch (Exception failure) {
+                pendingCustomTileId = null;
+                alert("Nie można wybrać własnej ikony.");
+            }
+        });
         form.addView(text("Rozmiar kafelka", 15, true));
         String[] sizeLabels = {"Mały (1 pole)", "Podwójny (2 pola)"};
         String[] sizeValues = {"small", "double"};
@@ -1217,6 +1252,7 @@ public final class MainActivity extends Activity {
             .setNeutralButton("Przywróć wygląd", null)
             .setPositiveButton("Zapisz", null)
             .create();
+        tileDialog[0] = dialog;
         dialog.setOnShowListener(ignore -> {
             dialog.getWindow().setBackgroundDrawable(skin.panel(this, surface, 28));
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -7175,7 +7211,8 @@ public final class MainActivity extends Activity {
             String target = homeTileTarget(id);
             String iconId = prefs.getString("tile_icon_" + id,
                 defaultTileIcon(target));
-            if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId))
+            if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId)
+                    && !TileCustomImage.available(this, iconId))
                 iconId = defaultTileIcon(target);
             tile.addView(tileIconImage(iconId, 46, highlighted), iconParams);
         } else {
@@ -7315,6 +7352,33 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == IMPORT_CUSTOM_TILE_ICON) {
+            final String tileId = pendingCustomTileId;
+            pendingCustomTileId = null;
+            if (result == RESULT_OK && tileId != null
+                    && data != null && data.getData() != null) {
+                final Uri chosen = data.getData();
+                new Thread(() -> {
+                    String failure = null;
+                    try { TileCustomImage.importImage(this, tileId, chosen); }
+                    catch (Exception problem) { failure = problem.getMessage(); }
+                    final String error = failure;
+                    runOnUiThread(() -> {
+                        if (error != null) {
+                            alert("Nie zapisano własnej ikony: " + error);
+                            return;
+                        }
+                        if (prefs.edit().putString("tile_icon_" + tileId,
+                                TileCustomImage.key(tileId)).commit()) {
+                            DiagnosticLog.event("HOME_CUSTOM_ICON_IMPORTED");
+                            render();
+                            alert("Zapisano własną ikonę kafelka.");
+                        } else alert("Nie zapisano wyboru ikony.");
+                    });
+                }, "edhome-custom-icon-import").start();
+            }
+            return;
+        }
         if (request == IMPORT_AI_3D_PACK) {
             if (result == RESULT_OK && data != null && data.getData() != null) {
                 final Uri chosen = data.getData();
