@@ -3957,7 +3957,7 @@ public final class MainActivity extends Activity {
                 + "nazwy przy kolejnym imporcie. EDHOME nie łączy się z bankiem "
                 + "i nie sprawdza autentyczności wskazanego pliku.")
             .setView(bank).setNegativeButton("Anuluj",null)
-            .setPositiveButton("Wybierz pliki",(d,w)->{
+            .setPositiveButton("Wybierz pliki bankowe",(d,w)->{
                 String label=bank.getText().toString().trim();
                 if(label.isEmpty()||label.length()>80){
                     alert("Nazwa banku musi mieć od 1 do 80 znaków.");return;
@@ -3996,28 +3996,36 @@ public final class MainActivity extends Activity {
             java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
             java.util.Set<String> seen=new java.util.HashSet<>();
             int duplicateRows=0;
+            int mbankFiles=0;
+            int genericFiles=0;
             for(Uri uri:files) {
                 ByteArrayOutputStream output=new ByteArrayOutputStream();
                 try(InputStream stream=getContentResolver().openInputStream(uri)){
-                    if(stream==null)throw new IllegalArgumentException("Nie można odczytać pliku.");
+                    if(stream==null)throw new IllegalArgumentException(
+                        "Nie można odczytać wybranego pliku.");
                     byte[] buffer=new byte[4096];int n;
                     while((n=stream.read(buffer))!=-1) {
                         if(output.size()+n>2*1024*1024)
-                            throw new IllegalArgumentException("Maksymalnie 2 MB na plik.");
+                            throw new IllegalArgumentException(
+                                "Plik bankowy jest za duży (maks. 2 MB).");
                         output.write(buffer,0,n);
                     }
                 }
                 byte[] bytes=output.toByteArray();
-                boolean xlsx=BankStatementWorkbook.isXlsx(bytes);
-                if(!xlsx&&bytes.length>BankStatementCsv.MAX_BYTES)
-                    throw new IllegalArgumentException(
-                        "Eksport tekstowy: maksymalnie 256 KB na plik.");
-                String text=xlsx?BankStatementWorkbook.textRows(bytes)
-                    :decodeBankStatementText(bytes);
-                java.util.List<BankStatementCsv.Entry> parsed=
-                    BankStatementMbank.recognizes(text)
-                        ?BankStatementMbank.parse(text)
-                        :BankStatementCsv.parse(text,bank);
+                String text;
+                if(BankStatementWorkbook.isXlsx(bytes)) {
+                    text=BankStatementWorkbook.textRows(bytes);
+                } else {
+                    text=new String(bytes,StandardCharsets.UTF_8);
+                }
+                java.util.List<BankStatementCsv.Entry> parsed;
+                if(BankStatementMbank.recognizes(text)) {
+                    parsed=BankStatementMbank.parse(text);
+                    mbankFiles++;
+                } else {
+                    parsed=BankStatementCsv.parse(text,bank);
+                    genericFiles++;
+                }
                 for(BankStatementCsv.Entry entry:parsed) {
                     if(!seen.add(entry.evidenceKey)){duplicateRows++;continue;}
                     if(entries.size()>=BankStatementCsv.MAX_ROWS)
@@ -4026,14 +4034,16 @@ public final class MainActivity extends Activity {
                     entries.add(entry);
                 }
             }
-            DiagnosticLog.event("PAYCHECK_CSV_PREVIEW");
+            DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
+            String detected=mbankFiles>0&&genericFiles==0?"mBank"
+                :mbankFiles>0?"mBank + "+bank:bank;
             if(duplicateRows>0)
                 alert("Pominięto "+duplicateRows+" powtórzonych pozycji między plikami. "
                     +"Żaden duplikat nie zmieni salda.");
-            showStatementEntries(entries,bank);
+            showStatementEntries(entries,detected);
         }catch(Exception error){
-            DiagnosticLog.event("PAYCHECK_CSV_IMPORT_REJECTED");
-            alert("Nie wczytano potwierdzeń: "+(error instanceof IllegalArgumentException
+            DiagnosticLog.event("PAYCHECK_BANK_FILES_REJECTED");
+            alert("Nie wczytano plików: "+(error instanceof IllegalArgumentException
                 ?error.getMessage():"błąd odczytu pliku."));
         }
     }
