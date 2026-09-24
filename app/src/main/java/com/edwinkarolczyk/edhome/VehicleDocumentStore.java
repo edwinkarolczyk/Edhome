@@ -1,6 +1,7 @@
 package com.edwinkarolczyk.edhome;
 
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import java.time.LocalDate;
 
@@ -55,20 +56,33 @@ final class VehicleDocumentStore {
         if (!issuedOn.isEmpty() && !validUntil.isEmpty()
                 && LocalDate.parse(validUntil).isBefore(LocalDate.parse(issuedOn)))
             throw new IllegalArgumentException("Termin ważności nie może być przed datą dokumentu.");
-        if (VehicleStore.find(db,vehicleId)==null) return "MISSING_VEHICLE";
-        ContentValues values=new ContentValues();
-        values.put("operation_id",operationId);
-        values.put("vehicle_id",vehicleId);
-        values.put("kind",kind);
-        values.put("title",title);
-        values.put("document_number",number);
-        values.put("issued_on",issuedOn);
-        values.put("valid_until",validUntil);
-        values.put("note",note);
-        values.put("created_at",System.currentTimeMillis());
-        long row=db.insertWithOnConflict("vehicle_documents",null,values,
-            SQLiteDatabase.CONFLICT_IGNORE);
-        return row==-1 ? "DUPLICATE_IGNORED" : "COMMITTED";
+        db.beginTransaction();
+        try {
+            try (Cursor existing=db.rawQuery(
+                    "SELECT 1 FROM vehicle_documents WHERE operation_id=?",
+                    new String[]{operationId})) {
+                if (existing.moveToFirst()) {
+                    db.setTransactionSuccessful();
+                    return "DUPLICATE_IGNORED";
+                }
+            }
+            if (VehicleStore.find(db,vehicleId)==null) return "MISSING_VEHICLE";
+            ContentValues values=new ContentValues();
+            values.put("operation_id",operationId);
+            values.put("vehicle_id",vehicleId);
+            values.put("kind",kind);
+            values.put("title",title);
+            values.put("document_number",number);
+            values.put("issued_on",issuedOn);
+            values.put("valid_until",validUntil);
+            values.put("note",note);
+            values.put("created_at",System.currentTimeMillis());
+            db.insertOrThrow("vehicle_documents",null,values);
+            db.setTransactionSuccessful();
+            return "COMMITTED";
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private static String clean(String raw,int min,int max,String label) {
