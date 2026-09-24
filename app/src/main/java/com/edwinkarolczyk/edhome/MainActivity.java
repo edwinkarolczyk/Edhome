@@ -80,6 +80,8 @@ public final class MainActivity extends Activity {
     private static final int PICK_BANK_APP_SYSTEM = 1219;
     private static final int IMPORT_AI_3D_PACK = 1220;
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
+    private static final int EXPORT_QR_LABELS_PDF = 1222;
+    private byte[] pendingQrLabelsPdf;
     private String pendingCustomTileId;
     private long pendingStorageThumbnailId;
     private String pendingStatementBank;
@@ -3703,6 +3705,9 @@ public final class MainActivity extends Activity {
             placeEditor(null, "", "", entry.id, "places"));
         taskAction(actions, "Edytuj", () -> placeEditor(entry.id,
             entry.name, entry.kind, entry.parent, entry.icon));
+        if (BetaUpdater.isBeta())
+            smallButton(box,"QR i etykieta miejsca",
+                () -> showPlaceQr(entry));
         box.setOnLongClickListener(v -> {
             String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
                 "Usuń"};
@@ -3895,6 +3900,12 @@ public final class MainActivity extends Activity {
             + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
         button("+ Dodaj rzecz", () -> storageEditor("thing", null));
         button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        if (BetaUpdater.isBeta()) {
+            button("▣ Drukuj wybrane etykiety QR / PDF",
+                this::selectBulkQrLabels);
+            button("◷ Historia skanowania i drukowania QR",
+                this::showQrHistory);
+        }
         button("▣ Skanuj QR rzeczy lub pudełka", () -> {
             if (storageQrCameraPending || pantrySingleCameraPending
                     || pantryBatch.active()) return;
@@ -4021,6 +4032,9 @@ public final class MainActivity extends Activity {
         boolean collapsed=prefs.getBoolean(key,false);
         LinearLayout children=storageTreeHeading("⌂ "+place.name,
             depth,key,collapsed,target);
+        if (BetaUpdater.isBeta())
+            smallButton(children,"QR i etykieta miejsca",
+                () -> showPlaceQr(place));
         for(PlaceEntry child:places)
             if(child.parent!=null&&child.parent==place.id)
                 storageTreePlace(child,places,items,drawnPlaces,
@@ -4065,6 +4079,10 @@ public final class MainActivity extends Activity {
         if(item.lentTo!=null)
             details.addView(text("Wypożyczono: "+item.lentTo,13,false));
         smallButton(details,"Pokaż QR",()->showStorageQr(item));
+        if (BetaUpdater.isBeta())
+            smallButton(details,"Drukuj etykietę / PDF / Udostępnij",
+                () -> selectQrLabelFormat(java.util.Collections.singletonList(
+                    qrLabel(item))));
         if(item.lentTo==null)
             smallButton(details,"Przenieś",()->storageEditor(item.kind,item.id));
         if(!isBox) {
@@ -4203,10 +4221,13 @@ public final class MainActivity extends Activity {
                 .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
                     +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
                 .setView(picture).setNegativeButton("Zamknij",null)
-                .setPositiveButton("Kopiuj kod",(d,w)->{
+                .setNeutralButton("Kopiuj kod",(d,w)->{
                     ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
                         .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
-                }).show();
+                })
+                .setPositiveButton("Etykieta / PDF",(d,w)->
+                    selectQrLabelFormat(java.util.Collections.singletonList(
+                        qrLabel(item)))).show();
         }catch(Exception error){
             DiagnosticLog.error("STORAGE_QR_DRAW",error);
             alert("Nie udało się wyświetlić QR.");
