@@ -33,5 +33,5 @@ for token in (
     'db.setTransactionSuccessful();',
 ):
     assert token in store, "Missing atomic ID-based assignment: "+token
-assert 'versionCode 75' in gradle and "versionNameSuffix ''" in gradle
+assert 'versionCode 76' in gradle and "versionNameSuffix ''" in gradle
 print("Existing product barcode assignment: explicit ID, atomic +1, safe failure: PASS")
