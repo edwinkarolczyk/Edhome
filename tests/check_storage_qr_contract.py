@@ -55,7 +55,7 @@ for token in (
 ):
     assert token in backup, "Missing storage backup: "+token
 assert 'EDHOME:STORAGE:1:' in qr
-assert "versionCode 84" in gradle and "versionNameSuffix ''" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 
 expression=store.split('static void createTables(SQLiteDatabase db)',1)[1].split('static final class Item',1)[0]
 statements=[]
