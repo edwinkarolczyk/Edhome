@@ -1150,8 +1150,10 @@ public final class MainActivity extends Activity {
         }
         TileIcon graphic = new TileIcon(this, iconId,
             highlighted && skin.light ? skin.accentInk : accent);
-        graphic.setPadding(dp(size / 9), dp(size / 9),
-            dp(size / 9), dp(size / 9));
+        graphic.setPadding(dp(Math.max(2, size / 16)),
+            dp(Math.max(2, size / 16)),
+            dp(Math.max(2, size / 16)),
+            dp(Math.max(2, size / 16)));
         graphic.setBackground(skin.panel(this, skin.iconBacking, 24));
         return graphic;
     }
@@ -7164,6 +7166,8 @@ public final class MainActivity extends Activity {
                 + "Indywidualne ikony zmienisz przez przytrzymanie kafelka."
             : "Ikony AI 3D trafiają do aplikacji razem z aktualizacją APK. "
                 + "Nie trzeba niczego importować.", 14, false));
+        smallButton(icons3d, "Opcjonalnie: importuj paczkę ikon ZIP",
+            this::importAi3dIconPack);
         if (IconPack3D.installed(this)) {
             boolean active3d = "ai3d".equals(
                 prefs.getString("icon_style", "standard"));
@@ -7526,7 +7530,10 @@ public final class MainActivity extends Activity {
         tile.setClickable(true);
         tile.setFocusable(true);
         tile.setContentDescription(caption.replace("\n", " "));
-        int tileHeight = isHome ? side + dp(56) : side;
+        // Reserve space for the caption and drag handle. The icon fills the
+        // remaining square visual area; double-wide tiles get a taller icon
+        // without stretching its 3D artwork horizontally.
+        int tileHeight = isHome ? side + dp(76) : side;
         LinearLayout.LayoutParams params =
             new LinearLayout.LayoutParams(side * span + dp(9) * (span - 1),
                 tileHeight);
@@ -7578,9 +7585,11 @@ public final class MainActivity extends Activity {
             });
         }
 
-        int homeIconSize = Math.min(span > 1 ? dp(108) : dp(85),
-            Math.max(dp(1), side - (span > 1 ? 0 : dp(16))));
-        int displayedIconSize = isHome ? homeIconSize : dp(46);
+        int iconWidth = side * span + dp(9) * (span - 1) - dp(10);
+        int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
+        int displayedIconSize = isHome
+            ? Math.max(dp(24), Math.min(iconWidth, iconHeight))
+            : dp(46);
         LinearLayout.LayoutParams iconParams =
             new LinearLayout.LayoutParams(displayedIconSize, displayedIconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
@@ -7791,7 +7800,8 @@ public final class MainActivity extends Activity {
                     final String problem = error;
                     runOnUiThread(() -> {
                         if (imported == 100) {
-                            prefs.edit().putString("icon_style", "ai3d").commit();
+                            prefs.edit().putString("icon_style", "ai3d")
+                                .putBoolean("icon_style_explicit", true).commit();
                             DiagnosticLog.event("AI3D_ICON_PACK_IMPORTED",
                                 "count=" + imported);
                             render();
