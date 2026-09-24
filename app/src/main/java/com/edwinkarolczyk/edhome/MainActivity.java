@@ -4924,7 +4924,13 @@ public final class MainActivity extends Activity {
             note("Jeszcze nie rozpoznano powiadomień o płatnościach w PLN. "
                 +"Niektóre banki ukrywają kwotę w powiadomieniu.");return;
         }
+        int visibleBankDrafts=0;
         for(BankNotificationHints.Entry signal:signals) {
+            if(visibleBankDrafts++>=40) {
+                note("W kolejce pozostało jeszcze "+(signals.size()-40)
+                    +" pozycji. Przypisz widoczne, aby zobaczyć kolejne.");
+                break;
+            }
             LinearLayout entry=card();
             String source=signal.source;
             try {
