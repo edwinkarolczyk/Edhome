@@ -76,6 +76,8 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_PRIVATE_BACKUP = 1215;
     private static final int TAKE_SCANNER_RESULT = 1216;
     private static final int IMPORT_STATEMENT_CSV = 1217;
+    private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
+    private long pendingStorageThumbnailId;
     private String pendingStatementBank;
     private SharedPreferences prefs;
     private LocalDb db;
@@ -3854,7 +3856,22 @@ public final class MainActivity extends Activity {
         LinearLayout details=card();
         details.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
         storageTreeAttach(details,inner);
+        Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+        if(thumbnail!=null) {
+            ImageView preview=new ImageView(this);
+            preview.setImageBitmap(thumbnail);
+            preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            details.addView(preview,new LinearLayout.LayoutParams(
+                dp(82),dp(82)));
+        }
         if(!isBox)details.addView(text("◉ "+item.name,16,true));
+        smallButton(details,thumbnail==null?"Dodaj zdjęcie • miniatura":
+            "Zmień zdjęcie • miniatura",()->selectStorageThumbnail(item.id));
+        if(thumbnail!=null)
+            smallButton(details,"Usuń zdjęcie",()->{
+                prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                render();
+            });
         details.addView(text(StorageStore.location(db.getReadableDatabase(),item),
             12,false));
         if(item.lentTo!=null)
@@ -3879,6 +3896,7 @@ public final class MainActivity extends Activity {
             .setPositiveButton("Usuń",(dialog,which)->{
                 try{
                     StorageStore.remove(db.getWritableDatabase(),item.id);
+                    prefs.edit().remove(StorageThumbs.key(item.id)).apply();
                     DiagnosticLog.event("STORAGE_REMOVED");render();
                 }catch(Exception error){alert(error.getMessage());}
             }).show());
@@ -3886,6 +3904,21 @@ public final class MainActivity extends Activity {
             for(StorageStore.Item child:items)
                 if(child.boxId!=null && child.boxId==item.id)
                     storageTreeItem(child,items,drawnItems,depth+1,inner);
+    }
+
+    private void selectStorageThumbnail(long id) {
+        if(StorageStore.find(db.getReadableDatabase(),id)==null) {
+            alert("Rzecz już nie istnieje.");return;
+        }
+        pendingStorageThumbnailId=id;
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("image/*");
+        try {startActivityForResult(picker,IMPORT_STORAGE_THUMBNAIL);}
+        catch(Exception error){
+            pendingStorageThumbnailId=0;
+            alert("Nie można otworzyć wyboru zdjęcia.");
+        }
     }
 
     private void storageEditor(String kind, Long itemId) {
@@ -7142,6 +7175,28 @@ public final class MainActivity extends Activity {
                 if (scan.getContents() != null) onPantryBarcode(scan.getContents(),
                     prefs.getString(SCAN_MODE_PREF, "ADD"));
             } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
+            return;
+        }
+        if (request == IMPORT_STORAGE_THUMBNAIL) {
+            long id=pendingStorageThumbnailId;
+            pendingStorageThumbnailId=0;
+            if(result==RESULT_OK&&id>0&&data!=null&&data.getData()!=null) {
+                try {
+                    if(StorageStore.find(db.getReadableDatabase(),id)==null)
+                        throw new IllegalArgumentException("Rzecz już nie istnieje.");
+                    String thumbnail=StorageThumbs.compress(getContentResolver(),
+                        data.getData());
+                    if(!prefs.edit().putString(StorageThumbs.key(id),
+                            thumbnail).commit())
+                        throw new IllegalStateException("Nie zapisano miniatury.");
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
+                    render();
+                }catch(Exception error) {
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
+                    alert(error instanceof IllegalArgumentException
+                        ?error.getMessage():"Nie udało się zapisać miniatury.");
+                }
+            }
             return;
         }
         if (request == IMPORT_STATEMENT_CSV) {
