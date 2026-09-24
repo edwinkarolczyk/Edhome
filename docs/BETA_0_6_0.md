@@ -179,3 +179,10 @@
 - Dotychczasowe testy telefonu pozostają ważne: kopia i aktualizacja, stare saldo, ręczne potwierdzanie PayCheck, koszt pojazdu→PayCheck, dokumenty pojazdu oraz zachowanie danych/stabilność — OK.
 - Do ponownego testu na końcu: mBank/CSV/XLSX, VeloBank PDF, wielobankowa kolejka, deduplikacja i brak podwójnego księgowania.
 - `main` bez zmian; nie zamykać całej 0.6.0 przed ponownym testem importu.
+
+## 0.6.0.14 — indywidualne zwijanie kart pojazdów
+
+- Każdy pojazd w module Pojazdy ma własny przycisk **„Zwiń pojazd” / „Rozwiń pojazd”**. Po zwinięciu pozostają jego nazwa, rejestracja (jeżeli jest) oraz przycisk rozwijania. Sekcje OC, przeglądów, dokumentów, kosztów, historii i opon są ukryte, nie usuwane.
+- Stan jest pamiętany **osobno po stabilnym ID pojazdu** w lokalnych ustawieniach Androida; zmiana nazwy, kolejności listy, przejście na inny ekran i ponowne uruchomienie nie rozwijają go samoczynnie. Nowe pojazdy domyślnie są rozwinięte.
+- Zwijanie nie wykonuje zapisu do tabel pojazdów ani nie księguje PayCheck; SQLite pozostaje v33. Pamięć zwinięcia to lokalna preferencja interfejsu, nie zawartość eksportu JSON danych gospodarczych.
+- **Odbiór telefonu:** dodaj dwa pojazdy lub użyj istniejących; zwiń pierwszy, sprawdź, że drugi pozostał rozwinięty; uruchom aplikację ponownie i wróć do Pojazdów; rozwiń pierwszy i sprawdź wszystkie poprzednie dane. Import bankowy nadal otwarty i odłożony do końcowej stabilizacji. `main` bez zmian.
