@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 32;
+    private static final int DB_VERSION = 33;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -83,7 +83,9 @@ final class DataBackup {
             "policy_number", "valid_from", "valid_until", "current", "notes",
             "goal_id"},
         {"vehicle_costs", "id", "operation_id", "vehicle_id", "kind",
-            "paid_on", "amount_grosz", "note", "paycheck_operation_id"}
+            "paid_on", "amount_grosz", "note", "paycheck_operation_id"},
+        {"vehicle_documents", "id", "operation_id", "vehicle_id", "kind",
+            "title", "document_number", "issued_on", "valid_until", "note", "created_at"}
     };
 
     private DataBackup() { }
@@ -358,6 +360,7 @@ final class DataBackup {
                 || (inputVersion < 25 && "vehicle_tyre_sets".equals(definition[0]))
                 || (inputVersion < 26 && "vehicle_policies".equals(definition[0]))
                 || (inputVersion < 29 && "vehicle_costs".equals(definition[0]))
+                || (inputVersion < 33 && "vehicle_documents".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
