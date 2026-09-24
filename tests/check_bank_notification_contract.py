@@ -33,6 +33,9 @@ for phrase in ('bankNotificationPermissionGranted()',
                'confirmSharedPaycheckEntry(ids.get(0),signal.key)',
                'BankNotificationHints.remove(this,hintKey)'):
     assert phrase in ui, phrase
+dialog=ui[ui.index("    private void configureBankNotifications()"):ui.index("    private void showBankNotificationHints()")]
+assert '.setMultiChoiceItems(names,selected' in dialog
+assert '.setMessage(' not in dialog.split('.setMultiChoiceItems(names,selected')[0].split('new AlertDialog.Builder(this)')[-1], "A list dialog must not have a message"
 assert 'PaycheckStore.confirm(' in ui
 assert 'PaycheckStore.confirm(' not in listener
 assert 'PaycheckStore.matchStatement(' not in listener
