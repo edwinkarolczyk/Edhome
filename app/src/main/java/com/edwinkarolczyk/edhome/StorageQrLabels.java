@@ -177,13 +177,23 @@ final class StorageQrLabels {
         return format==3?(count+23)/24:count;
     }
 
+    static void log(Context context, String event, Label label) {
+        // History contains only the kind and stable numeric ID, not names,
+        // QR payload, account data or full item location.
+        writeHistory(context,event+" • "+label.kind+" #"+label.id);
+    }
+
     static void log(Context context, String event, int count) {
+        writeHistory(context,event+" • "+count+" kodów");
+    }
+
+    private static void writeHistory(Context context, String event) {
         SharedPreferences prefs=context.getSharedPreferences(
             "edhome_beta_prefs",Context.MODE_PRIVATE);
         String prior=prefs.getString(HISTORY,"");
         String line=LocalDateTime.now().format(
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-            +" • "+event+" • "+count+" kodów";
+            +" • "+event;
         String[] rows=prior.split("\n");
         StringBuilder output=new StringBuilder(line);
         for (int i=0;i<rows.length && i<HISTORY_LIMIT-1;i++)
