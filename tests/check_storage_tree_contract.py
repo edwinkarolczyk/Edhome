@@ -11,7 +11,7 @@ assert 'storageTreeItem(item,items,drawnItems,depth+1,inner)' in ui
 assert 'String key="storage_tree_place_"+place.id;' in ui
 assert 'String key="storage_tree_box_"+item.id;' in ui
 assert 'prefs.getBoolean(key,false)' in ui
-assert 'prefs.edit().putBoolean(prefKey,!collapsed).apply();' in ui
+assert 'prefs.edit().putBoolean(prefKey,nowCollapsed).apply();' in ui
 assert 'row.setOnClickListener(v->' in ui
 assert 'item.boxId==null && item.placeId!=null' in ui
 assert 'child.parent!=null&&child.parent==place.id' in ui
