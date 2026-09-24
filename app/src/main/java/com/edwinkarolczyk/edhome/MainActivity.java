@@ -3698,48 +3698,61 @@ public final class MainActivity extends Activity {
             qr.initiateScan();
         });
         button("← Miejsca", () -> go("places"));
-        int count=0;
+        // One read-only tree: Miejsce → podmiejsce → pudełko → rzecz.
+        // Collapsing hides descendants without changing database relations.
+        java.util.List<PlaceEntry> places=readPlaces();
+        java.util.List<StorageStore.Item> items=new java.util.ArrayList<>();
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
                 null)) {
-            while(c.moveToNext()) {
-                StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),
-                    c.getLong(0));
-                if(item==null)continue;
-                count++;
-                LinearLayout box=card();
-                box.addView(text(("box".equals(item.kind)?"▣ Pudełko: ":"◉ Rzecz: ")
-                    +item.name,18,true));
-                box.addView(text(StorageStore.location(db.getReadableDatabase(),item),
-                    13,false));
-                if(item.lentTo!=null)
-                    box.addView(text("Wypożyczono: "+item.lentTo,13,false));
-                smallButton(box,"Pokaż QR",()->showStorageQr(item));
-                if(item.lentTo==null)
-                    smallButton(box,"Przenieś",()->storageEditor(item.kind,item.id));
-                if("thing".equals(item.kind)){
-                    if(item.lentTo==null)
-                        smallButton(box,"Wypożycz",()->askStorageLend(item));
-                    else smallButton(box,"Zwrot",()->{
-                        try{
-                            StorageStore.returned(db.getWritableDatabase(),item.id);
-                            DiagnosticLog.event("STORAGE_RETURNED");render();
-                        }catch(Exception e){alert(e.getMessage());}
-                    });
-                }
-                smallButton(box,"Usuń",()->new AlertDialog.Builder(this)
-                    .setTitle("Usunąć rzecz z magazynu?")
-                    .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
-                    .setNegativeButton("Anuluj",null)
-                    .setPositiveButton("Usuń",(d,w)->{
-                        try {
-                            StorageStore.remove(db.getWritableDatabase(),item.id);
-                            DiagnosticLog.event("STORAGE_REMOVED");render();
-                        }catch(Exception e){alert(e.getMessage());}
-                    }).show());
+            while(c.moveToNext()){
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item!=null)items.add(item);
             }
         }
-        if(count==0)note("Dodaj pierwszą rzecz albo pudełko; nazwy i miejsca wybierasz sam.");
+        title("Drzewko magazynu");
+        note("Tapnij miejsce lub pudełko, aby zwinąć i rozwinąć. "
+            +"Każda gałąź zapamiętuje swój stan po zamknięciu aplikacji. "
+            +"Przytrzymaj rzecz, aby zobaczyć szczegóły.");
+        java.util.Set<Long> drawnPlaces=new java.util.HashSet<>();
+        java.util.Set<Long> drawnItems=new java.util.HashSet<>();
+        java.util.Set<Long> knownPlaces=new java.util.HashSet<>();
+        java.util.Set<Long> knownBoxes=new java.util.HashSet<>();
+        for(PlaceEntry place:places)knownPlaces.add(place.id);
+        for(StorageStore.Item item:items)
+            if("box".equals(item.kind))knownBoxes.add(item.id);
+        for(PlaceEntry place:places)
+            if(place.parent==null || !knownPlaces.contains(place.parent))
+                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0);
+        // Guard old damaged/cyclic data, without exposing collapsed descendants.
+        for(PlaceEntry place:places)
+            if(!drawnPlaces.contains(place.id)
+                    &&place.parent!=null
+                    &&!knownPlaces.contains(place.parent))
+                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0);
+        boolean unassigned=false;
+        for(StorageStore.Item item:items)
+            if(item.boxId==null && (item.placeId==null
+                    ||!knownPlaces.contains(item.placeId))) {
+                unassigned=true;break;
+            }
+        if(unassigned) {
+            storageTreeHeading("Bez przypisanego miejsca",0,
+                "storage_tree_unassigned",false);
+            if(!prefs.getBoolean("storage_tree_unassigned",false))
+                for(StorageStore.Item item:items)
+                    if(item.boxId==null && (item.placeId==null
+                            ||!knownPlaces.contains(item.placeId)))
+                        storageTreeItem(item,items,drawnItems,1);
+        }
+        // Orphaned item children are not silently dropped after an old restore.
+        for(StorageStore.Item item:items)
+            if(item.boxId!=null&&!knownBoxes.contains(item.boxId)
+                    &&!drawnItems.contains(item.id))
+                storageTreeItem(item,items,drawnItems,0);
+        if(places.isEmpty()&&items.isEmpty())
+            note("Magazyn jest pusty. Dodaj miejsce, rzecz albo pudełko.");
         title("Ostatnie ruchy magazynu");
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT name_snapshot,action,details FROM storage_events "
@@ -3747,6 +3760,95 @@ public final class MainActivity extends Activity {
             while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
                 +" • "+c.getString(2));
         }
+    }
+
+    private void storageTreeHeading(String label,int depth,
+            String prefKey,boolean collapsed) {
+        LinearLayout row=card();
+        row.setPadding(dp(12+Math.min(depth,8)*13),dp(4),dp(12),dp(4));
+        TextView heading=text((collapsed?"▸ ":"▾ ")+label,17,true);
+        heading.setMinHeight(dp(44));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(heading);
+        row.setClickable(true);
+        row.setFocusable(true);
+        touchFeedback(row);
+        row.setContentDescription(label+(collapsed?" • Rozwiń":" • Zwiń"));
+        row.setOnClickListener(v->{
+            prefs.edit().putBoolean(prefKey,!collapsed).apply();
+            render();
+        });
+    }
+
+    private void storageTreePlace(PlaceEntry place,
+            java.util.List<PlaceEntry> places,
+            java.util.List<StorageStore.Item> items,
+            java.util.Set<Long> drawnPlaces,
+            java.util.Set<Long> drawnItems,int depth) {
+        if(depth>64||!drawnPlaces.add(place.id))return;
+        String key="storage_tree_place_"+place.id;
+        boolean collapsed=prefs.getBoolean(key,false);
+        storageTreeHeading("⌂ "+place.name,depth,key,collapsed);
+        if(collapsed)return;
+        for(PlaceEntry child:places)
+            if(child.parent!=null&&child.parent==place.id)
+                storageTreePlace(child,places,items,drawnPlaces,
+                    drawnItems,depth+1);
+        for(StorageStore.Item item:items)
+            if(item.boxId==null && item.placeId!=null
+                    &&item.placeId==place.id)
+                storageTreeItem(item,items,drawnItems,depth+1);
+    }
+
+    private void storageTreeItem(StorageStore.Item item,
+            java.util.List<StorageStore.Item> items,
+            java.util.Set<Long> drawnItems,int depth) {
+        if(depth>64||!drawnItems.add(item.id))return;
+        boolean isBox="box".equals(item.kind);
+        String key="storage_tree_box_"+item.id;
+        boolean collapsed=prefs.getBoolean(key,false);
+        if(isBox) {
+            storageTreeHeading("▣ Pudełko #"+item.id+" • "+item.name,
+                depth,key,collapsed);
+            if(collapsed)return;
+        }
+        LinearLayout card=card();
+        card.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
+        if(!isBox) {
+            TextView name=text("◉ "+item.name,16,true);
+            card.addView(name);
+        }
+        card.addView(text(StorageStore.location(db.getReadableDatabase(),item),
+            12,false));
+        if(item.lentTo!=null)
+            card.addView(text("Wypożyczono: "+item.lentTo,13,false));
+        smallButton(card,"Pokaż QR",()->showStorageQr(item));
+        if(item.lentTo==null)
+            smallButton(card,"Przenieś",()->storageEditor(item.kind,item.id));
+        if(!isBox) {
+            if(item.lentTo==null)
+                smallButton(card,"Wypożycz",()->askStorageLend(item));
+            else smallButton(card,"Zwrot",()->{
+                try{
+                    StorageStore.returned(db.getWritableDatabase(),item.id);
+                    DiagnosticLog.event("STORAGE_RETURNED");render();
+                }catch(Exception error){alert(error.getMessage());}
+            });
+        }
+        smallButton(card,"Usuń",()->new AlertDialog.Builder(this)
+            .setTitle(isBox?"Usunąć pudełko?":"Usunąć rzecz?")
+            .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń",(dialog,which)->{
+                try{
+                    StorageStore.remove(db.getWritableDatabase(),item.id);
+                    DiagnosticLog.event("STORAGE_REMOVED");render();
+                }catch(Exception error){alert(error.getMessage());}
+            }).show());
+        if(isBox)
+            for(StorageStore.Item child:items)
+                if(child.boxId!=null && child.boxId==item.id)
+                    storageTreeItem(child,items,drawnItems,depth+1);
     }
 
     private void storageEditor(String kind, Long itemId) {
