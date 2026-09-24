@@ -34,8 +34,11 @@ for phrase in ('bankNotificationPermissionGranted()',
                'BankNotificationHints.remove(this,hintKey)'):
     assert phrase in ui, phrase
 dialog=ui[ui.index("    private void configureBankNotifications()"):ui.index("    private void showBankNotificationHints()")]
-assert '.setMultiChoiceItems(names,selected' in dialog
-assert '.setMessage(' not in dialog.split('.setMultiChoiceItems(names,selected')[0].split('new AlertDialog.Builder(this)')[-1], "A list dialog must not have a message"
+assert '.setView(form)' in dialog
+assert 'choices.addView(choice)' in dialog
+assert 'Intent.ACTION_PICK_ACTIVITY' in dialog
+assert '.setMultiChoiceItems(names,selected' not in dialog
+
 assert 'PaycheckStore.confirm(' in ui
 assert 'PaycheckStore.confirm(' not in listener
 assert 'PaycheckStore.matchStatement(' not in listener
