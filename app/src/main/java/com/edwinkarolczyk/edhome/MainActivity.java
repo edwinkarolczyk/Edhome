@@ -4346,10 +4346,11 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseQrOutput(byte[] pdf,int count,int format) {
+        // An Android AlertDialog cannot reliably show both message AND list
+        // on every device theme; use the title to preserve all three actions.
         new AlertDialog.Builder(this)
-            .setTitle("Gotowe etykiety QR • "+count)
-            .setMessage(StorageQrLabels.FORMATS[format]
-                +"\nWydrukuj, zapisz PDF lub udostępnij bez zmiany danych.")
+            .setTitle("Gotowe etykiety QR • "+count+"\n"
+                +StorageQrLabels.FORMATS[format])
             .setItems(new String[]{"Drukuj przez Androida","Zapisz jako PDF",
                 "Udostępnij PDF"},(dialog,choice)->{
                 if(choice==0) {
