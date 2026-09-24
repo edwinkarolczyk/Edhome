@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 75,
-  "versionName": "0.6.0.10",
-  "changelog": "EDHOME 0.6.0.10 — Pojazdy: lokalny rejestr dokumentów z typem, numerem, datą, terminem ważności i notatką; dokumenty są przypisane do pojazdu, nie tworzą kosztów PayCheck. SQLite v33 i kopie zgodne wstecz. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.10/edhome-beta.apk",
-  "sha256": "bd3928dbb6434538aac2a851d7c77f8b8ae7bdff92946b136365bb3f5101e38a"
+  "versionCode": 76,
+  "versionName": "0.6.0.11",
+  "changelog": "EDHOME 0.6.0.11 — PayCheck CSV: do 10 plików jednego banku na partię, rozpoznawanie średnika, przecinka i tabulatora, warianty kolumn, filtr propozycji i jednoznaczne sugerowane dopasowanie z zatwierdzeniem użytkownika. Żaden import nie księguje samoczynnie. SQLite v33, dane zachowane; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.11/edhome-beta.apk",
+  "sha256": "bbab99161e54bd14db96f231991809be4d290eea9b9483e3e139c371b7b4cc54"
 }
