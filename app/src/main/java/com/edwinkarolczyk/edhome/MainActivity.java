@@ -126,6 +126,10 @@ public final class MainActivity extends Activity {
     private UiSkin skin;
     private boolean homeEditMode;
     private ScrollView pageScroll;
+    // Screen-local scroll: same-screen rerenders never jump to the top.
+    private final java.util.Map<String,Integer> screenScrollY =
+        new java.util.HashMap<>();
+    private String renderedScreen = "";
     private final java.util.Map<String, LinearLayout> homeTileViews =
         new java.util.LinkedHashMap<>();
     private final java.util.Map<String, int[]> homeTileSlots =
@@ -338,6 +342,8 @@ public final class MainActivity extends Activity {
             privatePaycheckSession.lock();
             privatePaycheckSession = null;
         }
+        if (pageScroll != null && screen.equals(renderedScreen))
+            screenScrollY.put(screen,pageScroll.getScrollY());
         screen = destination;
         if (!"home".equals(destination)) homeEditMode = false;
         if (unlocked && updater != null) updater.start();
@@ -351,6 +357,11 @@ public final class MainActivity extends Activity {
 
     private void render() {
         if (root == null || prefs == null) return;
+        // Save the old viewport BEFORE removing its views.
+        if(pageScroll!=null && screen.equals(renderedScreen))
+            screenScrollY.put(screen,pageScroll.getScrollY());
+        final int restoreScrollY=screenScrollY.getOrDefault(screen,0);
+        final String restoreScreen=screen;
         palette();
         if ("paycheck_private".equals(screen) && privatePaycheckSession != null
                 && privatePaycheckSession.active())
@@ -404,6 +415,14 @@ public final class MainActivity extends Activity {
                 default: home();
             }
         }
+        renderedScreen=screen;
+        // post-layout restore; direct scrollTo before layout is silently lost.
+        scroll.post(()->{
+            if(pageScroll==scroll && restoreScreen.equals(screen)) {
+                int maxY=Math.max(0,body.getHeight()-scroll.getHeight());
+                scroll.scrollTo(0,Math.min(restoreScrollY,maxY));
+            }
+        });
     }
 
     private static byte[] derivedPin(String pin, String salt) throws Exception {
