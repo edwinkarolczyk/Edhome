@@ -4105,42 +4105,57 @@ public final class MainActivity extends Activity {
             }
         }
         if(ids.isEmpty()){
-            alert("Nie ma oczekującej transakcji o tym samym znaku i kwocie. "
+            alert("Brak oczekującej transakcji o tym samym znaku i kwocie. "
                 + "Import NIE tworzy nowej płatności.");return;
         }
-        new AlertDialog.Builder(this).setTitle("Dopasuj istniejącą transakcję")
+        if(ids.size()==1) {
+            confirmStatementMatch(statement,rows,bank,ids.get(0),labels.get(0));
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Wybierz właściwą transakcję")
             .setMessage(statement.date+" • "
                 +("income".equals(statement.kind)?"+ ":"− ")
                 +MoneyRules.format(statement.amountGrosz)
-                +"\n"+statement.description)
-            .setItems(labels.toArray(new String[0]),(d,index)->{
-                String operationId=ids.get(index);
-                new AlertDialog.Builder(this).setTitle("Potwierdź uzgodnienie")
-                    .setMessage("Dopasowujesz jeden wpis PayCheck do jednej "
-                        + "pozycji pliku CSV wskazanego przez Ciebie. "
-                        + "To nie jest połączenie ani uwierzytelnienie banku. "
-                        + "Saldo zmieni się tylko raz.\n\n"+labels.get(index))
-                    .setNegativeButton("Anuluj",null)
-                    .setPositiveButton("Uzgodnij",(dialog,which)->{
-                        try{
-                            String outcome=PaycheckStore.matchStatement(
-                                db.getWritableDatabase(),operationId,
-                                statement.kind,statement.amountGrosz,
-                                statement.evidenceKey,statement.date);
-                            if("MATCHED".equals(outcome)){
-                                DiagnosticLog.event("PAYCHECK_CSV_MATCHED");
-                                render();
-                                showStatementEntries(rows,bank);
-                            }else if("ALREADY_MATCHED".equals(outcome))
-                                alert("Ten wpis jest już uzgodniony.");
-                            else alert("Nie uzgodniono: ta transakcja "
-                                + "lub identyfikator CSV były już użyte.");
-                        }catch(Exception error){
-                            DiagnosticLog.event("PAYCHECK_CSV_MATCH_FAILED");
-                            alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
-                        }
-                    }).show();
-            }).setNegativeButton("Powrót",null).show();
+                +"\n"+statement.description
+                +"\nKilka identycznych kwot. Nie wybieram za Ciebie.")
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                confirmStatementMatch(statement,rows,bank,
+                    ids.get(index),labels.get(index)))
+            .setNegativeButton("Powrót",null).show();
+    }
+
+    private void confirmStatementMatch(BankStatementCsv.Entry statement,
+            java.util.List<BankStatementCsv.Entry> rows,String bank,
+            String operationId,String candidateLabel) {
+        new AlertDialog.Builder(this).setTitle("Potwierdź dopasowanie")
+            .setMessage(statement.date+" • "
+                +("income".equals(statement.kind)?"+ ":"− ")
+                +MoneyRules.format(statement.amountGrosz)
+                +"\n"+statement.description+"\n\n"
+                +"Wpis PayCheck: "+candidateLabel+"\n\n"
+                +"To propozycja z importowanego pliku, nie "
+                +"uwierzytelnione połączenie z bankiem. "
+                +"Saldo zmieni się tylko raz po zatwierdzeniu.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zatwierdź parę",(dialog,which)->{
+                try {
+                    String outcome=PaycheckStore.matchStatement(
+                        db.getWritableDatabase(),operationId,
+                        statement.kind,statement.amountGrosz,
+                        statement.evidenceKey,statement.date);
+                    if("MATCHED".equals(outcome)){
+                        DiagnosticLog.event("PAYCHECK_CSV_MATCHED");
+                        render();
+                        showStatementEntries(rows,bank);
+                    }else if("ALREADY_MATCHED".equals(outcome))
+                        alert("Ten wpis jest już uzgodniony.");
+                    else alert("Nie uzgodniono: ta transakcja "
+                        +"lub identyfikator CSV były już użyte.");
+                }catch(Exception error){
+                    DiagnosticLog.event("PAYCHECK_CSV_MATCH_FAILED");
+                    alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
+                }
+            }).show();
     }
 
     /** A manual attestation, NOT an automated bank statement verification. */
