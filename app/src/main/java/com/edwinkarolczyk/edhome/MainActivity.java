@@ -4030,6 +4030,10 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta()) {
             button("Powiadomienia bankowe • wybierz aplikacje",
                 this::configureBankNotifications);
+            note("Zaznacz wyłącznie banki, których używasz. Android poprosi osobno "
+                +"o zgodę na dostęp do powiadomień. EDHOME zachowuje lokalnie "
+                +"tylko kwotę, kierunek, źródło i czas — bez treści ani kodów. "
+                +"Powiadomienia są sugestiami, nie potwierdzeniem księgowania.");
             showBankNotificationHints();
         }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
@@ -4126,13 +4130,10 @@ public final class MainActivity extends Activity {
             names[i]=available.get(packages.get(i));
             selected[i]=previously.contains(packages.get(i));
         }
+        // AlertDialog displays either its message OR its list on many Android
+        // variants. Never combine setMessage with setMultiChoiceItems here.
         new AlertDialog.Builder(this)
-            .setTitle("Wybierz TYLKO swoje aplikacje bankowe")
-            .setMessage("Android przyznaje EDHOME dostęp do powiadomień. "
-                +"EDHOME analizuje tylko wybrane aplikacje i zapisuje lokalnie "
-                +"wyłącznie kwotę, kierunek, źródło i znacznik czasu. "
-                +"Nie zapisuje treści, numerów kont ani kodów. "
-                +"Powiadomienie jest podpowiedzią, nie potwierdzeniem bankowym.")
+            .setTitle("Zaznacz aplikacje bankowe")
             .setMultiChoiceItems(names,selected,
                 (dialog,which,isChecked)->selected[which]=isChecked)
             .setNegativeButton("Anuluj",null)
