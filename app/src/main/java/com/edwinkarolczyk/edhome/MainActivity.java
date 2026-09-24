@@ -4396,17 +4396,23 @@ public final class MainActivity extends Activity {
             ImageView picture=new ImageView(this);
             picture.setImageBitmap(bmp);
             picture.setAdjustViewBounds(true);
-            new AlertDialog.Builder(this).setTitle("QR • "+item.name)
+            AlertDialog.Builder preview=new AlertDialog.Builder(this)
+                .setTitle("QR • "+item.name)
                 .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
                     +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
-                .setView(picture).setNegativeButton("Zamknij",null)
-                .setNeutralButton("Kopiuj kod",(d,w)->{
+                .setView(picture).setNegativeButton("Zamknij",null);
+            if(BetaUpdater.isBeta())preview.setNeutralButton(
+                "Kopiuj kod",(d,w)->{
                     ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
                         .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
-                })
-                .setPositiveButton("Etykieta / PDF",(d,w)->
+                }).setPositiveButton("Etykieta / PDF",(d,w)->
                     selectQrLabelFormat(java.util.Collections.singletonList(
-                        qrLabel(item)))).show();
+                        qrLabel(item))));
+            else preview.setPositiveButton("Kopiuj kod",(d,w)->{
+                ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
+                    .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
+            });
+            preview.show();
         }catch(Exception error){
             DiagnosticLog.error("STORAGE_QR_DRAW",error);
             alert("Nie udało się wyświetlić QR.");
