@@ -45,7 +45,7 @@ final class BankStatementCsv {
         String[] lines=csv.replace("\r\n","\n").replace('\r','\n').split("\n",-1);
         if (lines.length < 2)
             throw new IllegalArgumentException("Wyciąg CSV jest pusty.");
-        String headerLine=lines[0].replace("\\uFEFF","");
+        String headerLine=lines[0].replace("\uFEFF","");
         char delimiter=detectDelimiter(headerLine);
         List<String> header=fields(headerLine,delimiter);
         int date=position(header,"data","data księgowania","data operacji",
@@ -117,7 +117,7 @@ final class BankStatementCsv {
     }
 
     private static char detectDelimiter(String header) {
-        for(char candidate : new char[]{';','\\t',','}) {
+        for(char candidate : new char[]{';','\t',','}) {
             List<String> columns=fields(header,candidate);
             if(position(columns,"data","data księgowania","data operacji",
                     "data transakcji","booking date","date")>=0
