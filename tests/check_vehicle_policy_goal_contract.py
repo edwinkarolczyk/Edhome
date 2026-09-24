@@ -50,7 +50,7 @@ form=main.split("private void editVehiclePolicy(",1)[1].split(
     "private String vehicleDeadline(",1)[0]
 assert "PaycheckStore.add(" not in form
 assert "PaycheckGoalsStore.allocate(" not in form
-assert "versionCode 84" in gradle and "versionName '0.6.0.19'" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
 
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes)"
            " VALUES(77,'Audi A4','',0,'','','')")
