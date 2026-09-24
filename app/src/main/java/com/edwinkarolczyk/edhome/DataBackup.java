@@ -143,6 +143,31 @@ final class DataBackup {
             HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
+        // Include user-selected small storage photos in the portable JSON backup.
+        // Never export the original photo or its external content URI.
+        JSONArray storageThumbs=new JSONArray();
+        Set<Long> validStorageIds=new HashSet<>();
+        try(Cursor storage=database.rawQuery(
+                "SELECT id FROM storage_items",null)) {
+            while(storage.moveToNext())validStorageIds.add(storage.getLong(0));
+        }
+        for(Map.Entry<String,?> value:prefs.getAll().entrySet()) {
+            if(!value.getKey().startsWith(StorageThumbs.PREFIX)
+                    ||!(value.getValue() instanceof String))continue;
+            String suffix=value.getKey().substring(StorageThumbs.PREFIX.length());
+            long id;
+            try{id=Long.parseLong(suffix);}
+            catch(NumberFormatException invalid){continue;}
+            if(!validStorageIds.contains(id))continue;
+            String data=(String)value.getValue();
+            if(data.length()>50000)throw new IllegalStateException(
+                "Nieprawidłowa miniatura magazynu.");
+            JSONObject thumb=new JSONObject();
+            thumb.put("itemId",id);
+            thumb.put("jpegBase64",data);
+            storageThumbs.put(thumb);
+        }
+        settings.put("storageThumbnails",storageThumbs);
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -1259,6 +1284,38 @@ final class DataBackup {
             }
         }
 
+        Map<Long,String> restoredStorageThumbs=new HashMap<>();
+        Set<Long> presentStorageIds=new HashSet<>();
+        for(ContentValues item:parsed.get("storage_items"))
+            presentStorageIds.add(item.getAsLong("id"));
+        JSONArray thumbEntries=settings.optJSONArray("storageThumbnails");
+        if(settings.has("storageThumbnails")&&thumbEntries==null)
+            throw new IllegalArgumentException("Nieprawidłowe miniatury magazynu.");
+        if(thumbEntries!=null) {
+            if(thumbEntries.length()>200)
+                throw new IllegalArgumentException("Za dużo miniaturek w kopii.");
+            for(int t=0;t<thumbEntries.length();t++){
+                JSONObject thumb=thumbEntries.getJSONObject(t);
+                long id=thumb.getLong("itemId");
+                String jpeg=thumb.getString("jpegBase64");
+                if(id<=0||!presentStorageIds.contains(id)
+                        ||restoredStorageThumbs.containsKey(id)
+                        ||jpeg.length()>50000)
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowa miniatura rzeczy w kopii.");
+                byte[] bytes;
+                try{bytes=android.util.Base64.decode(jpeg,
+                    android.util.Base64.NO_WRAP);}
+                catch(Exception invalid){throw new IllegalArgumentException(
+                    "Nieprawidłowe kodowanie miniatury.",invalid);}
+                if(bytes.length<4||bytes.length>StorageThumbs.MAX_JPEG_BYTES
+                        ||(bytes[0]&255)!=255||(bytes[1]&255)!=216)
+                    throw new IllegalArgumentException(
+                        "Niedozwolony obraz miniatury w kopii.");
+                restoredStorageThumbs.put(id,jpeg);
+            }
+        }
+
         database.beginTransaction();
         try {
             for (int i = TABLES.length - 1; i >= 0; i--)
@@ -1298,7 +1355,8 @@ final class DataBackup {
             for (String key : prefs.getAll().keySet()) {
                 if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
                         || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
-                        || key.startsWith("tile_width_"))
+                        || key.startsWith("tile_width_")
+                        || key.startsWith(StorageThumbs.PREFIX))
                     restored.remove(key);
             }
             if (tileOrderV2 == null) restored.remove(HomeTileCatalog.ORDER_KEY);
@@ -1314,6 +1372,9 @@ final class DataBackup {
                 restored.putString("tile_target_" + id, targets.get(id));
             for (String id : widths.keySet())
                 restored.putString("tile_width_" + id, widths.get(id));
+            for(Map.Entry<Long,String> thumb:restoredStorageThumbs.entrySet())
+                restored.putString(StorageThumbs.key(thumb.getKey()),
+                    thumb.getValue());
             if (!restored.commit())
                 throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
             database.setTransactionSuccessful();
