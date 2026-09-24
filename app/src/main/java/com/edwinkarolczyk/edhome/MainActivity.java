@@ -3959,11 +3959,12 @@ public final class MainActivity extends Activity {
             .setView(bank).setNegativeButton("Anuluj",null)
             .setPositiveButton("Wybierz pliki bankowe",(d,w)->{
                 String label=bank.getText().toString().trim();
-                if(label.isEmpty()||label.length()>80){
-                    alert("Nazwa banku musi mieć od 1 do 80 znaków.");return;
+                if(label.length()>80){
+                    alert("Nazwa banku może mieć maksymalnie 80 znaków.");return;
                 }
                 pendingStatementBank=label;
-                prefs.edit().putString("paycheck_csv_bank_name",label).apply();
+                if(!label.isEmpty())
+                    prefs.edit().putString("paycheck_csv_bank_name",label).apply();
                 Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 picker.addCategory(Intent.CATEGORY_OPENABLE);
                 picker.setType("*/*");
