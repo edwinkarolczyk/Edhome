@@ -13,9 +13,13 @@ public final class PrivatePaycheckCryptoSmoke {
     public static void main(String[] args) throws Exception {
         char[] password = "BardzoTrudneHaslo2026!".toCharArray();
         check(PrivatePaycheckCrypto.validPassword(password), "password length");
-        check(PrivatePaycheckCrypto.validPassword("12345".toCharArray()),\n            "five-character vault password allowed");\n        check(!PrivatePaycheckCrypto.validPassword("1234".toCharArray()),
+        check(PrivatePaycheckCrypto.validPassword("12345".toCharArray()),
+            "five-character vault password allowed");
+        check(!PrivatePaycheckCrypto.validPassword("1234".toCharArray()),
             "short password refused");
-        check(!PrivatePaycheckCrypto.validBackupPassword("12345".toCharArray()),\n            "short backup password refused");\n        byte[] salt = PrivatePaycheckCrypto.newSalt();
+        check(!PrivatePaycheckCrypto.validBackupPassword("12345".toCharArray()),
+            "short backup password refused");
+        byte[] salt = PrivatePaycheckCrypto.newSalt();
         byte[] key = PrivatePaycheckCrypto.key(password, salt);
         check(key.length == 32, "256-bit key");
         String plaintext = "{\"amount\":70000,\"note\":\"Zażółć ąę €\"}";
