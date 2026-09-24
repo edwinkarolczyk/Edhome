@@ -403,14 +403,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.18-signed-apk
+          name: EDHOME-0.6.0.19-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.18 — Naprawiono puste okno wyboru aplikacji bankowych: lista jest widoczna zamiast opisu, informację o zgodzie przeniesiono na ekran PayCheck. Drzewko Magazynu z 0.6.0.17 zachowane. Powiadomienia nadal wymagają zgody Androida i ręcznego potwierdzenia; import bankowy na koniec 0.6. SQLite v33, Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.19 — Magazyn: podgląd miejsc, pudełek i rzeczy, miejscowe zwijanie bez przeładowania, własne miniatury zdjęć objęte kopią JSON. Ekrany zachowują przewinięcie, wybór banku ma listę instalowanych aplikacji i ręczny pakiet awaryjny. Powiadomienia do ręcznej weryfikacji, import bankowy nadal odłożony. SQLite v33; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
