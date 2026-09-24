@@ -736,23 +736,47 @@ public final class MainActivity extends Activity {
         go(target);
     }
 
+    /** A target may occur at most once across visible AND hidden tiles.
+     * Existing duplicate tiles from older versions are left untouched.
+     */
+    private boolean homeTargetAlreadyAdded(String target,String excludedTileId) {
+        for(String tileId:allHomeTiles()) {
+            if(tileId.equals(excludedTileId))continue;
+            if(homeTileTarget(tileId).equals(target))return true;
+        }
+        return false;
+    }
+
     private void showAddTileDialog() {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> names = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta()))
+            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+                    || homeTargetAlreadyAdded(target,null))
                 continue;
             targets.add(target);
             names.add(HomeTileCatalog.label(target));
         }
+        if(targets.isEmpty()) {
+            alert("Wszystkie dostępne moduły mają już kafelki. "
+                + "Jeśli nie widzisz któregoś na pulpicie, użyj „Przywróć ukryte kafelki”.");
+            return;
+        }
         new AlertDialog.Builder(this).setTitle("Dodaj kafelek — wybierz cel")
             .setItems(names.toArray(new String[0]), (dialog, which) -> {
+                String target=targets.get(which);
+                // Recheck after opening the dialog; do not trust stale UI choices.
+                if(homeTargetAlreadyAdded(target,null)) {
+                    alert("Ten moduł ma już kafelek. "
+                        + "Możesz przywrócić ukryty kafelek lub edytować istniejący.");
+                    return;
+                }
                 String id = "tile_" + java.util.UUID.randomUUID().toString()
                     .replace("-", "");
-                java.util.List<String> order = homeTileOrder();
+                java.util.List<String> order = allHomeTiles();
                 order.add(id);
                 boolean ok = prefs.edit()
-                    .putString("tile_target_" + id, targets.get(which))
+                    .putString("tile_target_" + id, target)
                     .putString(HomeTileCatalog.ORDER_KEY,
                         HomeTileCatalog.encode(order)).commit();
                 if (!ok) { alert("Nie można zapisać kafelka."); return; }
@@ -1082,7 +1106,8 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> targetLabels = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())) continue;
+            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+                    || homeTargetAlreadyAdded(target,id))continue;
             targets.add(target);
             targetLabels.add(HomeTileCatalog.label(target));
         }
@@ -1160,6 +1185,10 @@ public final class MainActivity extends Activity {
                         return;
                     }
                     String target = targets.get(destination.getSelectedItemPosition());
+                    if(homeTargetAlreadyAdded(target,id)) {
+                        alert("Ten moduł jest już przypisany do innego kafelka.");
+                        return;
+                    }
                     SharedPreferences.Editor change = prefs.edit()
                         .putString("tile_target_" + id, target);
                     if (newLabel.equals(HomeTileCatalog.label(target)))
