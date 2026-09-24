@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 90,
-  "versionName": "0.6.0.25",
-  "changelog": "EDHOME 0.6.0.24 — Magazyn: QR miejsc, rzeczy i pudełek; etykiety 40×30, 50×30, 70×50 mm i A4 zbiorczo, druk Android, PDF i udostępnianie. Skan otwiera kartę działań i historię. Większe ikony AI 3D dopasowane do kafelka pojedynczego/podwójnego, bez pustych marginesów; import ZIP opcjonalny. Bez migracji SQLite i bez kasowania danych; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.25/edhome-beta.apk",
-  "sha256": "74d3a8e6de243e56f2347a8275f65f57fd414c37b6e5a0bf0297064f20815371"
+  "versionCode": 91,
+  "versionName": "0.6.0.26",
+  "changelog": "EDHOME 0.6.0.26 — PayCheck: po zapisaniu nowego powiadomienia z wybranego banku EDHOME pokazuje własne potwierdzenie z kwotą i źródłem. Powiadomienie można wyłączyć osobno; Android 13+ wymaga zgody na wysyłanie powiadomień. Blokada duplikatów, prywatny ekran blokady, bez zmiany salda i bez kasowania danych. Beta tylko; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.26/edhome-beta.apk",
+  "sha256": "07bc1dec594d994a7868edc0980d75cd7e1ed4bf3bf49d5e1aed584fccef0160"
 }
