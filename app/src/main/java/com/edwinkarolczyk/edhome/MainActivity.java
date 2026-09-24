@@ -72,6 +72,8 @@ public final class MainActivity extends Activity {
     private static final int EXPORT_PRIVATE_BACKUP = 1214;
     private static final int IMPORT_PRIVATE_BACKUP = 1215;
     private static final int TAKE_SCANNER_RESULT = 1216;
+    private static final int IMPORT_STATEMENT_CSV = 1217;
+    private String pendingStatementBank;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -3813,6 +3815,10 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
+        button("Uzgodnij z wyciągiem CSV (ręczny wybór)", this::selectStatementCsv);
+        note("CSV musi zawierać Data;Kwota;Id transakcji;Opis. "
+            + "Wybierasz pary ręcznie; samo wczytanie pliku NIE księguje transakcji "
+            + "ani nie potwierdza autentyczności wyciągu.");
         title("Do potwierdzenia • bez wpływu na saldo");
         try (Cursor pending = db.getReadableDatabase().rawQuery(
                 "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
@@ -3826,7 +3832,7 @@ public final class MainActivity extends Activity {
         title("Historia wspólna");
         int count=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source "
+                "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source,statement_key "
                 +"FROM paycheck_transactions WHERE scope='shared' "
                 +"ORDER BY id DESC LIMIT 40",null)){
             while(c.moveToNext()){
@@ -3835,10 +3841,12 @@ public final class MainActivity extends Activity {
                 boolean income="income".equals(c.getString(1));
                 String status=c.getString(6);
                 String evidence=c.getString(7);
+                boolean withStatement=!c.isNull(8);
                 LinearLayout entry=card();
                 entry.addView(text((income?"+ ":"− ")
                     +MoneyRules.format(c.getLong(3))
                     +("pending".equals(status)?" • DO POTWIERDZENIA"
+                         :withStatement?" • UZGODNIONE Z IMPORTOWANYM CSV"
                         :"manual".equals(evidence)?" • POTWIERDZONE RĘCZNIE"
                         :" • WPIS HISTORYCZNY"),18,true));
                 entry.addView(text(MoneyRules.categoryLabel(c.getString(2))
@@ -3855,6 +3863,149 @@ public final class MainActivity extends Activity {
         }
         if(count==0)note("Brak transakcji wspólnych.");
         sharedPaycheckGoals();
+    }
+
+    private void selectStatementCsv() {
+        EditText bank = new EditText(this);
+        bank.setSingleLine(true);
+        bank.setHint("Nazwa banku, np. mój bank");
+        bank.setText(prefs.getString("paycheck_csv_bank_name",""));
+        new AlertDialog.Builder(this).setTitle("Import CSV • tylko wspólny PayCheck")
+            .setMessage("Wpisz bank, z którego pochodzi plik. Użyj tej samej "
+                + "nazwy przy kolejnym imporcie. EDHOME nie łączy się z bankiem "
+                + "i nie sprawdza autentyczności wskazanego pliku.")
+            .setView(bank).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Wybierz CSV",(d,w)->{
+                String label=bank.getText().toString().trim();
+                if(label.isEmpty()||label.length()>80){
+                    alert("Nazwa banku musi mieć od 1 do 80 znaków.");return;
+                }
+                pendingStatementBank=label;
+                prefs.edit().putString("paycheck_csv_bank_name",label).apply();
+                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("*/*");
+                try{startActivityForResult(picker,IMPORT_STATEMENT_CSV);}
+                catch(Exception error){
+                    pendingStatementBank=null;
+                    DiagnosticLog.event("PAYCHECK_CSV_PICKER_FAILED");
+                    alert("Nie można wskazać pliku CSV.");
+                }
+            }).show();
+    }
+
+    private void importStatementCsv(Uri uri, String bank) {
+        if(uri==null||bank==null)return;
+        try {
+            ByteArrayOutputStream output=new ByteArrayOutputStream();
+            try(InputStream stream=getContentResolver().openInputStream(uri)){
+                if(stream==null)throw new IllegalArgumentException("Nie można odczytać CSV.");
+                byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1) {
+                    if(output.size()+n>BankStatementCsv.MAX_BYTES)
+                        throw new IllegalArgumentException("CSV: maksymalnie 256 KB.");
+                    output.write(buffer,0,n);
+                }
+            }
+            java.util.List<BankStatementCsv.Entry> entries=
+                BankStatementCsv.parse(new String(output.toByteArray(),
+                    StandardCharsets.UTF_8),bank);
+            DiagnosticLog.event("PAYCHECK_CSV_PREVIEW");
+            showStatementEntries(entries,bank);
+        }catch(Exception error){
+            DiagnosticLog.event("PAYCHECK_CSV_IMPORT_REJECTED");
+            alert("Nie wczytano CSV: "+(error instanceof IllegalArgumentException
+                ?error.getMessage():"błąd odczytu pliku."));
+        }
+    }
+
+    private void showStatementEntries(
+            java.util.List<BankStatementCsv.Entry> rows, String bank) {
+        java.util.List<BankStatementCsv.Entry> unmatched=new java.util.ArrayList<>();
+        SQLiteDatabase read=db.getReadableDatabase();
+        for(BankStatementCsv.Entry entry:rows){
+            try(Cursor c=read.rawQuery(
+                    "SELECT 1 FROM paycheck_transactions WHERE statement_key=?",
+                    new String[]{entry.evidenceKey})){
+                if(!c.moveToFirst())unmatched.add(entry);
+            }
+        }
+        if(unmatched.isEmpty()){
+            alert("Wszystkie wskazane pozycje CSV są już uzgodnione. "
+                + "Nie dodano drugiego wydatku.");render();return;
+        }
+        String[] labels=new String[unmatched.size()];
+        for(int i=0;i<unmatched.size();i++){
+            BankStatementCsv.Entry x=unmatched.get(i);
+            String description=x.description.length()>55
+                ?x.description.substring(0,55)+"…" : x.description;
+            labels[i]=x.date+" • "+("income".equals(x.kind)?"+ ":"− ")
+                +MoneyRules.format(x.amountGrosz)+" • "+description;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wyciąg CSV • "+unmatched.size()+" do uzgodnienia")
+            .setMessage("Wskaż pozycję, następnie odpowiedni OCZEKUJĄCY wpis "
+                + "PayCheck. Nie ma dopasowania automatycznego.")
+            .setItems(labels,(d,index)->
+                matchStatementEntry(unmatched.get(index),rows,bank))
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void matchStatementEntry(BankStatementCsv.Entry statement,
+            java.util.List<BankStatementCsv.Entry> rows,String bank){
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,note,created_at FROM paycheck_transactions "
+                + "WHERE scope='shared' AND status='pending' AND kind=? "
+                + "AND amount_grosz=? ORDER BY id DESC LIMIT 40",
+                new String[]{statement.kind,
+                    Long.toString(statement.amountGrosz)})){
+            while(c.moveToNext()){
+                ids.add(c.getString(0));
+                String note=c.getString(1);
+                labels.add((note.isEmpty()?"Bez opisu":note)
+                    +" • "+Instant.ofEpochMilli(c.getLong(2))
+                        .atZone(ZoneId.systemDefault()).toLocalDate());
+            }
+        }
+        if(ids.isEmpty()){
+            alert("Nie ma oczekującej transakcji o tym samym znaku i kwocie. "
+                + "Import NIE tworzy nowej płatności.");return;
+        }
+        new AlertDialog.Builder(this).setTitle("Dopasuj istniejącą transakcję")
+            .setMessage(statement.date+" • "
+                +("income".equals(statement.kind)?"+ ":"− ")
+                +MoneyRules.format(statement.amountGrosz)
+                +"\n"+statement.description)
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                String operationId=ids.get(index);
+                new AlertDialog.Builder(this).setTitle("Potwierdź uzgodnienie")
+                    .setMessage("Dopasowujesz jeden wpis PayCheck do jednej "
+                        + "pozycji pliku CSV wskazanego przez Ciebie. "
+                        + "To nie jest połączenie ani uwierzytelnienie banku. "
+                        + "Saldo zmieni się tylko raz.\n\n"+labels.get(index))
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Uzgodnij",(dialog,which)->{
+                        try{
+                            String outcome=PaycheckStore.matchStatement(
+                                db.getWritableDatabase(),operationId,
+                                statement.kind,statement.amountGrosz,
+                                statement.evidenceKey,statement.date);
+                            if("MATCHED".equals(outcome)){
+                                DiagnosticLog.event("PAYCHECK_CSV_MATCHED");
+                                render();
+                                showStatementEntries(rows,bank);
+                            }else if("ALREADY_MATCHED".equals(outcome))
+                                alert("Ten wpis jest już uzgodniony.");
+                            else alert("Nie uzgodniono: ta transakcja "
+                                + "lub identyfikator CSV były już użyte.");
+                        }catch(Exception error){
+                            DiagnosticLog.event("PAYCHECK_CSV_MATCH_FAILED");
+                            alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
+                        }
+                    }).show();
+            }).setNegativeButton("Powrót",null).show();
     }
 
     /** A manual attestation, NOT an automated bank statement verification. */
@@ -6429,6 +6580,13 @@ public final class MainActivity extends Activity {
             } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
             return;
         }
+        if (request == IMPORT_STATEMENT_CSV) {
+            String bank=pendingStatementBank;
+            pendingStatementBank=null;
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null)
+                importStatementCsv(data.getData(),bank);
+            return;
+        }
         if (request == IMPORT_BETA_APK) {
             if (result == RESULT_OK && data != null && data.getData() != null)
                 updater.importSelected(data.getData());
@@ -6573,7 +6731,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 31);
+            super(context, "edhome-beta-preview.db", null, 32);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -6614,7 +6772,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 31) {
+            if (oldVersion < 1 || newVersion > 32) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -6775,6 +6933,13 @@ public final class MainActivity extends Activity {
                 database.execSQL("UPDATE paycheck_transactions SET confirmation_source='none' "
                     + "WHERE status='pending'");
                 DiagnosticLog.event("DATABASE_MIGRATED_30_TO_31_CONFIRMATION_PROVENANCE");
+            }
+            if(oldVersion < 32) {
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN statement_key TEXT");
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN statement_date TEXT");
+                database.execSQL("CREATE UNIQUE INDEX paycheck_statement_key_unique "
+                    + "ON paycheck_transactions(statement_key)");
+                DiagnosticLog.event("DATABASE_MIGRATED_31_TO_32_STATEMENT_MATCH");
             }
         }
 
