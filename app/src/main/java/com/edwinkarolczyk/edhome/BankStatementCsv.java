@@ -45,12 +45,18 @@ final class BankStatementCsv {
         String[] lines=csv.replace("\r\n","\n").replace('\r','\n').split("\n",-1);
         if (lines.length < 2)
             throw new IllegalArgumentException("Wyciąg CSV jest pusty.");
-        List<String> header=fields(lines[0].replace("\uFEFF",""));
-        int date=position(header,"data","data księgowania","date");
-        int amount=position(header,"kwota","amount");
+        String headerLine=lines[0].replace("\\uFEFF","");
+        char delimiter=detectDelimiter(headerLine);
+        List<String> header=fields(headerLine,delimiter);
+        int date=position(header,"data","data księgowania","data operacji",
+            "data transakcji","booking date","date");
+        int amount=position(header,"kwota","kwota operacji","kwota [pln]",
+            "amount","amount (pln)");
         int ref=position(header,"id transakcji","identyfikator transakcji",
-            "identyfikator","reference","transaction id");
-        int desc=position(header,"opis","opis operacji","description","tytuł");
+            "identyfikator","identyfikator operacji","nr transakcji",
+            "numer referencyjny","reference","transaction id");
+        int desc=position(header,"opis","opis operacji","description",
+            "tytuł","tytuł operacji","szczegóły");
         if (date<0 || amount<0 || ref<0 || desc<0)
             throw new IllegalArgumentException(
                 "CSV wymaga kolumn: Data;Kwota;Id transakcji;Opis.");
@@ -60,7 +66,7 @@ final class BankStatementCsv {
             if(lines[i].trim().isEmpty())continue;
             if(entries.size()>=MAX_ROWS)
                 throw new IllegalArgumentException("Maksymalnie 250 transakcji na plik.");
-            List<String> row=fields(lines[i]);
+            List<String> row=fields(lines[i],delimiter);
             if(row.size()!=header.size())
                 throw new IllegalArgumentException("Błędna liczba kolumn CSV, wiersz "+(i+1));
             String dateValue=normalizeDate(row.get(date));
@@ -110,7 +116,20 @@ final class BankStatementCsv {
         }
     }
 
-    private static List<String> fields(String line) {
+    private static char detectDelimiter(String header) {
+        for(char candidate : new char[]{';','\\t',','}) {
+            List<String> columns=fields(header,candidate);
+            if(position(columns,"data","data księgowania","data operacji",
+                    "data transakcji","booking date","date")>=0
+                    && position(columns,"kwota","kwota operacji","kwota [pln]",
+                        "amount","amount (pln)")>=0)
+                return candidate;
+        }
+        throw new IllegalArgumentException(
+            "Nieznany układ CSV. Wymagane są kolumny daty i kwoty.");
+    }
+
+    private static List<String> fields(String line, char delimiter) {
         List<String> values=new ArrayList<>();
         StringBuilder current=new StringBuilder();
         boolean quoted=false;
@@ -120,7 +139,7 @@ final class BankStatementCsv {
                 if(quoted && i+1<line.length() && line.charAt(i+1)=='"'){
                     current.append('"');i++;
                 }else quoted=!quoted;
-            }else if(c==';' && !quoted){
+            }else if(c==delimiter && !quoted){
                 values.add(current.toString());current.setLength(0);
             }else current.append(c);
         }
