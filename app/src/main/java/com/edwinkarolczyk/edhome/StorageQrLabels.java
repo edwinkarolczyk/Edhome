@@ -138,7 +138,8 @@ final class StorageQrLabels {
         return shortened+"…";
     }
 
-    static void print(Activity activity,byte[] pdf,int pageCount,String jobName) {
+    static void print(Activity activity,byte[] pdf,int pageCount,
+            int format,String jobName) {
         PrintManager manager = (PrintManager) activity.getSystemService(
             Context.PRINT_SERVICE);
         if (manager == null) throw new IllegalStateException(
@@ -169,6 +170,11 @@ final class StorageQrLabels {
                 }
             }
         },new PrintAttributes.Builder()
+            .setMediaSize(format==3 ? PrintAttributes.MediaSize.ISO_A4
+                : new PrintAttributes.MediaSize("EDHOME_QR_"+format,
+                    FORMATS[format],
+                    format==0 ? 1575 : format==1 ? 1969 : 2756,
+                    format==2 ? 1969 : 1181))
             .setColorMode(PrintAttributes.COLOR_MODE_MONOCHROME)
             .build());
     }
