@@ -24,7 +24,9 @@ final class PaycheckStore {
             + "CHECK(status IN ('pending','confirmed')), "
             + "confirmation_source TEXT NOT NULL DEFAULT 'legacy' "
             + "CHECK(confirmation_source IN ('none','legacy','manual')), "
-            + "confirmed_at INTEGER)");
+            + "confirmed_at INTEGER, statement_key TEXT, statement_date TEXT)");
+        db.execSQL("CREATE UNIQUE INDEX paycheck_statement_key_unique "
+            + "ON paycheck_transactions(statement_key)");
     }
 
     static String add(SQLiteDatabase db,String operationId,String kind,
@@ -79,6 +81,47 @@ final class PaycheckStore {
             db.setTransactionSuccessful();
             return changed == 1 ? "CONFIRMED" : "ALREADY_OR_MISSING";
         } finally { db.endTransaction(); }
+    }
+
+    /** Reconcile ONE user-selected CSV row with ONE existing pending shared entry.
+     * No automatic bank authentication, no new posting and no duplicate evidence.
+     */
+    static String matchStatement(SQLiteDatabase db, String operationId,
+            String kind, long grosz, String evidenceKey, String bookingDate) {
+        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}")
+                || evidenceKey == null || !evidenceKey.matches("[0-9a-f]{64}")
+                || !("income".equals(kind) || "expense".equals(kind))
+                || grosz < 1 || grosz > MoneyRules.MAX_GROSZ)
+            throw new IllegalArgumentException("Nieprawidłowe uzgodnienie wyciągu.");
+        try { java.time.LocalDate.parse(bookingDate); }
+        catch (Exception invalid) {
+            throw new IllegalArgumentException("Nieprawidłowa data wyciągu.");
+        }
+        db.beginTransaction();
+        try {
+            try (Cursor prior = db.rawQuery(
+                    "SELECT operation_id FROM paycheck_transactions WHERE statement_key=?",
+                    new String[]{evidenceKey})) {
+                if (prior.moveToFirst()) {
+                    String result = operationId.equals(prior.getString(0))
+                        ? "ALREADY_MATCHED" : "EVIDENCE_USED";
+                    db.setTransactionSuccessful();
+                    return result;
+                }
+            }
+            ContentValues values = new ContentValues();
+            values.put("status", "confirmed");
+            values.put("confirmation_source", "manual");
+            values.put("confirmed_at", System.currentTimeMillis());
+            values.put("statement_key", evidenceKey);
+            values.put("statement_date", bookingDate);
+            int changed = db.update("paycheck_transactions", values,
+                "operation_id=? AND scope='shared' AND status='pending' "
+                    + "AND kind=? AND amount_grosz=? AND statement_key IS NULL",
+                new String[]{operationId,kind,Long.toString(grosz)});
+            db.setTransactionSuccessful();
+            return changed==1 ? "MATCHED" : "NOT_PENDING_OR_MISMATCH";
+        } finally {db.endTransaction();}
     }
 
     static long sharedBalance(SQLiteDatabase db) {
