@@ -75,7 +75,7 @@ pantry17 = statements(section(package_store, "static void create(SQLiteDatabase 
 receipts18 = statements(section(receipt_store, "static void create(SQLiteDatabase db)", "static boolean received(").replace("db.execSQL(", "database.execSQL("))
 storage19 = statements(section(storage_store, "static void createTables(SQLiteDatabase db)", "static final class Item").replace("db.execSQL(", "database.execSQL("))
 paycheck30 = statements(section(paycheck_store, "static void create(SQLiteDatabase db)", "static String add(").replace("db.execSQL(", "database.execSQL("))
-paycheck20 = [sql.replace(", status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed'))", ")") for sql in paycheck30]
+paycheck20 = [sql.replace(", status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed'))", "") for sql in paycheck30]
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "private static void addPlaceSiblingIndex"))
 goals21 = statements(section(goals_store, "static void create(SQLiteDatabase db)", "static long addGoal(").replace("db.execSQL(", "database.execSQL("))
 prices22 = statements(section(price_store, "static void create(SQLiteDatabase db)", "static String markBought(").replace("db.execSQL(", "database.execSQL("))
