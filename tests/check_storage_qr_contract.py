@@ -73,3 +73,28 @@ except sqlite3.IntegrityError:
     pass
 assert db.execute("SELECT count(*) FROM storage_items").fetchone()[0]==2
 print("Storage QR, place inheritance, cycle prevention, history, backup v19: PASS")
+
+# QR label printing contract: place IDs remain distinct from things/boxes.
+labels=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageQrLabels.java").read_text()
+provider=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageQrPdfProvider.java").read_text()
+beta=Path("app/src/beta/AndroidManifest.xml").read_text()
+for token in (
+    '"place".equals(kind)', 'StorageQr.encode("place",place.id)',
+    'selectBulkQrLabels()', 'selectQrLabelFormat(',
+    'StorageQrLabels.pdf(selected,format)', 'StorageQrLabels.print(this,pdf,',
+    'Intent.ACTION_CREATE_DOCUMENT', '"application/pdf"',
+    'StorageQrLabels.log(this,"Skan miejsca",qrLabel(place))',
+    'StorageQrLabels.log(this,"Skan "+',
+    'showQrHistory()', 'StorageStore.returned(',
+):
+    assert token in (qr+"\n"+main), "Missing QR integration: "+token
+for token in ('"40 × 30 mm"', '"50 × 30 mm"', '"70 × 50 mm"',
+    '"A4 — zbiorczo"', 'new PdfDocument()', 'BarcodeFormat.QR_CODE',
+    'PrintDocumentAdapter', 'PrintManager', 'MAX_ENTRY' if False else 'HISTORY_LIMIT',
+    'int perPage = rows * columns;', 'StorageQr.encode(kind,id)'):
+    assert token in labels, "Missing PDF/print: "+token
+assert 'android:authorities="${applicationId}.qrpdf"' in beta
+assert 'android:exported="false"' in beta
+assert '"r".equals(mode)' in provider
+assert 'getCacheDir()' in main and 'FLAG_GRANT_READ_URI_PERMISSION' in main
+print("QR place/thing/box, printable formats, PDF export/share and history: PASS")
