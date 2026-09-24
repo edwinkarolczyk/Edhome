@@ -4233,6 +4233,12 @@ public final class MainActivity extends Activity {
         java.util.List<String> packages=new java.util.ArrayList<>(
             available.keySet());
         java.util.Set<String> previously=BankNotificationHints.selected(this);
+        packages.sort((left,right)->{
+            boolean leftSelected=previously.contains(left);
+            boolean rightSelected=previously.contains(right);
+            if(leftSelected!=rightSelected)return leftSelected?-1:1;
+            return available.get(left).compareToIgnoreCase(available.get(right));
+        });
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(16),dp(10),dp(16),dp(10));
@@ -4256,6 +4262,27 @@ public final class MainActivity extends Activity {
             });
             choices.addView(choice);
         }
+        EditText searchBank=new EditText(this);
+        searchBank.setSingleLine(true);
+        searchBank.setHint("Szukaj banku lub aplikacji na liście");
+        searchBank.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value,
+                int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence value,
+                int start, int before, int count) {
+                String query=value.toString().trim()
+                    .toLowerCase(java.util.Locale.ROOT);
+                for(int i=0;i<packages.size();i++) {
+                    String label=available.get(packages.get(i));
+                    choices.getChildAt(i).setVisibility(
+                        label.toLowerCase(java.util.Locale.ROOT).contains(query)
+                        ?View.VISIBLE:View.GONE);
+                }
+            }
+            @Override public void afterTextChanged(
+                android.text.Editable value) { }
+        });
+        form.addView(searchBank);
         Button androidPicker=new Button(this);
         androidPicker.setAllCaps(false);
         androidPicker.setText("Wybierz bank z systemowej listy aplikacji");
