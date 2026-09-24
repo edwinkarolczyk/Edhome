@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 74,
-  "versionName": "0.6.0.9",
-  "changelog": "EDHOME 0.6.0.9 — wspólny PayCheck: ręczny import wyciągu CSV z Data;Kwota;Id transakcji;Opis i świadome dopasowanie do oczekującego wpisu po zgodności znaku i kwoty; jeden identyfikator bankowy nie może potwierdzić dwóch wydatków. Plik wskazuje użytkownik, aplikacja nie uwierzytelnia banku. SQLite v32 i kopie zgodne wstecz. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.9/edhome-beta.apk",
-  "sha256": "887ea76841274e0862f454a1c6476f6e9405ffde77d3693e51d1dab706073a3c"
+  "versionCode": 75,
+  "versionName": "0.6.0.10",
+  "changelog": "EDHOME 0.6.0.10 — Pojazdy: lokalny rejestr dokumentów z typem, numerem, datą, terminem ważności i notatką; dokumenty są przypisane do pojazdu, nie tworzą kosztów PayCheck. SQLite v33 i kopie zgodne wstecz. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.10/edhome-beta.apk",
+  "sha256": "bd3928dbb6434538aac2a851d7c77f8b8ae7bdff92946b136365bb3f5101e38a"
 }
