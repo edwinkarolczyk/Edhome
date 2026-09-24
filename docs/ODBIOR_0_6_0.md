@@ -32,3 +32,14 @@ Stan 24.09.2026. **Nie zamknięto całej 0.6.0.** To lista kryteriów, nie autom
 ### Wyłączone z bieżącego zakresu decyzją użytkownika
 
 Załączanie skanów PDF/zdjęć do dokumentów pojazdu jest odłożone. Rejestr metadanych dokumentów pozostaje w 0.6.0. Nie traktować braku funkcji załączania jako błędu tej serii, dopóki Edwin nie zmieni decyzji.
+
+## Magazyn — drzewko jako warunek odbioru 0.6.0 (zgłoszenie Edwina)
+
+- Dotychczasowy widok „Rzeczy • pudełka • QR” był **płaską listą**, mimo że model przechowywał hierarchię. To było pominięte w planie odbioru. W `0.6.0.17` zaplanowano drzewko **miejsce → podmiejsce → pudełko → rzecz**, również pudełko w pudełku; bez utraty QR, działań przenoszenia i wypożyczenia. Rzeczy i pudełka bez lokalizacji pozostają widoczne w „Bez przypisanego miejsca”.
+- [ ] Tapnij nagłówek jednego miejsca: zwija się cała jego gałąź; inne miejsca pozostają w dotychczasowym stanie.
+- [ ] Tapnij pudełko: zawartość znika i wraca po rozwinięciu; nie pojawia się drugi raz na końcu jako osobna pozycja.
+- [ ] Przejdź do innej zakładki, uruchom EDHOME ponownie; stan poszczególnych miejsc i pudełek jest pamiętany po ich **trwałym ID**, nie po nazwie i kolejności.
+- [ ] Przenieś rzecz i pudełko; sprawdź nową ścieżkę w drzewku, bez zmiany QR. Sprawdź pożyczanie/zwrot i zabezpieczenie przed usunięciem pudełka z zawartością.
+- [ ] Sprawdź przypadek bez miejsca oraz dane starego magazynu po aktualizacji, bez resetu i bez ingerencji w saldo PayCheck.
+
+**Status tego punktu:** wdrożenie w kodzie `beta` nie jest jeszcze odbiorem na urządzeniu; warunek `0.6.0` pozostaje otwarty do testu fizycznego telefonu. Import bankowy nadal na sam koniec.
