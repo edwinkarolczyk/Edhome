@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Verify actual bundled 100 AI 3D icon images
+        run: python3 tests/check_bundled_3d_assets.py
       - name: JDK 17
         uses: actions/setup-java@v4
         with:
