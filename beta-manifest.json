@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 84,
-  "versionName": "0.6.0.19",
-  "changelog": "EDHOME 0.6.0.19 — Magazyn: podgląd miejsc, pudełek i rzeczy, miejscowe zwijanie bez przeładowania, własne miniatury zdjęć objęte kopią JSON. Ekrany zachowują przewinięcie, wybór banku ma listę instalowanych aplikacji i ręczny pakiet awaryjny. Powiadomienia do ręcznej weryfikacji, import bankowy nadal odłożony. SQLite v33; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.19/edhome-beta.apk",
-  "sha256": "6a93e4145cbdf060c1443c18e391cb4954afdbbf1b81a6f8b7c3f44938ab37cd"
+  "versionCode": 85,
+  "versionName": "0.6.0.20",
+  "changelog": "EDHOME 0.6.0.20 — poprawka odrzucania starych APK po aktualizacji; sprawdzanie SHA-256, pakietu, wersji i podpisu bez osłabienia zabezpieczeń. PayCheck: czytelny wybór banków z wyszukiwarką oraz instrukcja uprawnień powiadomień Androida. Dane zachowane, Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.20/edhome-beta.apk",
+  "sha256": "fd6f0e6471f0b2581abfe8ce62963cb344a0803161c43d5d3343bf04159c9714"
 }
