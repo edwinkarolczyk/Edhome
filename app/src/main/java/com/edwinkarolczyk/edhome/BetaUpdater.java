@@ -86,6 +86,30 @@ public final class BetaUpdater {
             File folder = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
             if (folder != null) targetFile = new File(folder, "edhome-beta-" + targetCode + ".apk");
         }
+        // After an update, never reverify an old pending download against
+        // the already installed version. Preserve user data and the signing checks.
+        if (targetCode > 0 && targetCode <= BuildConfig.VERSION_CODE) {
+            if (activeDownload >= 0) {
+                try {
+                    DownloadManager manager = (DownloadManager)
+                        activity.getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (manager != null) manager.remove(activeDownload);
+                } catch (Exception failure) {
+                    DiagnosticLog.error("UPDATE_STALE_DOWNLOAD", failure);
+                }
+            }
+            if (targetFile != null && targetFile.exists()) targetFile.delete();
+            activeDownload = -1;
+            targetCode = 0;
+            expectedHash = "";
+            releaseNotes = "";
+            targetFile = null;
+            prefs.edit().remove("update_download_id")
+                .remove("update_target_code")
+                .remove("update_target_hash")
+                .remove("update_target_notes").apply();
+            DiagnosticLog.event("UPDATE_STALE_TARGET_CLEARED");
+        }
     }
 
     public static boolean isBeta() {
@@ -257,6 +281,13 @@ public final class BetaUpdater {
             return;
         }
         DiagnosticLog.event("UPDATE_AVAILABLE", "versionCode=" + code);
+        // A changed digest must not reuse an APK downloaded for an old feed.
+        if (code == targetCode && !digest.equals(expectedHash)) {
+            if (targetFile != null && targetFile.exists()) targetFile.delete();
+            activeDownload = -1;
+            targetCode = 0;
+            prefs.edit().remove("update_download_id").apply();
+        }
         if (code == targetCode && activeDownload >= 0) {
             inspectDownload(manual);
             return;
@@ -334,7 +365,8 @@ public final class BetaUpdater {
         String expected = expectedHash;
         int requestedCode = targetCode;
         background.execute(() -> {
-            boolean correct = verify(candidate, expected, requestedCode);
+            String rejection = verify(candidate, expected, requestedCode);
+            boolean correct = rejection.isEmpty();
             handler.post(() -> {
                 verifying = false;
                 if (correct) {
@@ -394,16 +426,18 @@ public final class BetaUpdater {
                             dialog.getWindow().setBackgroundDrawable(panel);
                     }
                 } else {
-                    DiagnosticLog.event("UPDATE_APK_REJECTED");
+                    DiagnosticLog.event("UPDATE_APK_REJECTED", "reason=" + rejection);
                     candidate.delete();
-                    inform("Odrzucono pobrany APK: niezgodny skrót, pakiet, wersja lub podpis. Nie instaluj go.");
+                    inform("Odrzucono pobrany APK (" + rejection
+                        + "). Nie instaluj go. Sprawdź aktualizacje ponownie "
+                        + "po opublikowaniu nowej wersji.");
                 }
             });
         });
     }
 
-    private boolean verify(File apk, String sha256, int code) {
-        if (!apk.isFile() || apk.length() == 0) return false;
+    private String verify(File apk, String sha256, int code) {
+        if (!apk.isFile() || apk.length() == 0) return "EMPTY_APK";
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] block = new byte[32768];
@@ -416,25 +450,30 @@ public final class BetaUpdater {
             for (byte b : hash) actual.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
             if (!sha256.isEmpty() && !MessageDigest.isEqual(
                   actual.toString().getBytes(StandardCharsets.US_ASCII),
-                  sha256.getBytes(StandardCharsets.US_ASCII))) return false;
+                  sha256.getBytes(StandardCharsets.US_ASCII))) return "SHA256_MISMATCH";
 
             PackageManager pm = activity.getPackageManager();
             int flags = Build.VERSION.SDK_INT >= 28
                 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
             PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), flags);
             PackageInfo installed = pm.getPackageInfo(activity.getPackageName(), flags);
-            if (archive == null || !activity.getPackageName().equals(archive.packageName)) return false;
-            long archiveCode = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
-            if ((code > 0 && archiveCode != code) || archiveCode <= BuildConfig.VERSION_CODE) return false;
+            if (archive == null) return "APK_PARSE_FAILED";
+            if (!activity.getPackageName().equals(archive.packageName))
+                return "PACKAGE_MISMATCH";
+            long archiveCode = Build.VERSION.SDK_INT >= 28
+                ? archive.getLongVersionCode() : archive.versionCode;
+            if ((code > 0 && archiveCode != code)
+                    || archiveCode <= BuildConfig.VERSION_CODE)
+                return "VERSION_NOT_NEWER";
             Signature[] from = Build.VERSION.SDK_INT >= 28
                 ? archive.signingInfo.getApkContentsSigners() : archive.signatures;
             Signature[] existing = Build.VERSION.SDK_INT >= 28
                 ? installed.signingInfo.getApkContentsSigners() : installed.signatures;
             return from != null && existing != null && from.length == existing.length
-                && Arrays.equals(from, existing);
+                && Arrays.equals(from, existing) ? "" : "SIGNER_MISMATCH";
         } catch (Exception problem) {
             DiagnosticLog.error("UPDATE_VERIFY", problem);
-            return false;
+            return "APK_VERIFICATION_ERROR";
         }
     }
 
