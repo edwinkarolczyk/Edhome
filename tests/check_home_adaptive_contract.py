@@ -42,6 +42,15 @@ for token in (
     '.putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)',
 ):
     assert token in backup, token
+# Big native/AI 3D icons are sized from actual tile geometry, not a 46dp
+# thumbnail, and the optional ZIP picker never gates ordinary APK updates.
+assert 'int tileHeight = isHome ? side + dp(76) : side;' in main
+assert 'int iconWidth = side * span + dp(9) * (span - 1) - dp(10);' in main
+assert 'int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);' in main
+assert 'Math.min(iconWidth, iconHeight)' in main
+assert 'trim3dTransparentMargins(image)' in main
+assert 'Opcjonalnie: importuj paczkę ikon ZIP' in main
+assert '.putBoolean("icon_style_explicit", true).commit()' in main
 assert 'DEFAULT_SHORT_MS = 450' in layout
 assert 'DEFAULT_DRAG_MS = 1100' in layout
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
