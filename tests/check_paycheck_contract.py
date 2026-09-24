@@ -17,7 +17,7 @@ for token in (
     'PaycheckStore.add(',
     'new AlertDialog.Builder(this)',
     'Potwierdź transakcję wspólną',
-    'PAYCHECK_SHARED_COMMITTED',
+    'PAYCHECK_SHARED_PENDING',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
     'super(context, "edhome-beta-preview.db", null, 30)',
