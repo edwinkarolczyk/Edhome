@@ -665,6 +665,35 @@ final class DataBackup {
                         throw new IllegalArgumentException(
                             "Nieprawidłowa polisa OC w kopii.");
                 }
+                if ("vehicle_documents".equals(definition[0])) {
+                    String operation=values.getAsString("operation_id");
+                    Long vehicle=values.getAsLong("vehicle_id");
+                    String kind=values.getAsString("kind");
+                    String title=values.getAsString("title");
+                    String number=values.getAsString("document_number");
+                    String issued=values.getAsString("issued_on");
+                    String until=values.getAsString("valid_until");
+                    String note=values.getAsString("note");
+                    Long created=values.getAsLong("created_at");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || !VehicleDocumentStore.validKind(kind)
+                            || title == null || title.trim().isEmpty()
+                            || title.length()>120
+                            || number == null || number.length()>120
+                            || issued == null || until == null
+                            || !VehicleRules.optionalDate(issued).equals(issued)
+                            || !VehicleRules.optionalDate(until).equals(until)
+                            || !issued.isEmpty() && !until.isEmpty()
+                                && java.time.LocalDate.parse(until).isBefore(
+                                    java.time.LocalDate.parse(issued))
+                            || note == null || note.length()>500
+                            || created == null || created < 1)
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy dokument pojazdu w kopii.");
+                }
                 if ("vehicle_costs".equals(definition[0])) {
                     String operation = values.getAsString("operation_id");
                     Long vehicle = values.getAsLong("vehicle_id");
@@ -958,6 +987,13 @@ final class DataBackup {
                     || !vehicleOperations.add(event.getAsString("operation_id")))
                 throw new IllegalArgumentException(
                     "Historia pojazdu bez pojazdu lub zduplikowany wpis.");
+        }
+        Set<String> documentOperations = new HashSet<>();
+        for (ContentValues document : parsed.get("vehicle_documents")) {
+            if (!vehicleIds.contains(document.getAsLong("vehicle_id"))
+                    || !documentOperations.add(document.getAsString("operation_id")))
+                throw new IllegalArgumentException(
+                    "Dokument bez pojazdu lub zduplikowany identyfikator dokumentu.");
         }
         Set<Long> mountedVehicles = new HashSet<>();
         for (ContentValues tyres : parsed.get("vehicle_tyre_sets")) {
