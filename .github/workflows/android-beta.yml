@@ -157,6 +157,8 @@ jobs:
         run: python3 tests/check_vehicle_cost_contract.py
       - name: Vehicle document register regression
         run: python3 tests/check_vehicle_document_contract.py
+      - name: Per-vehicle collapsed state regression
+        run: python3 tests/check_vehicle_collapse_contract.py
       - name: Pending shared PayCheck and one-time confirmation regression
         run: python3 tests/check_paycheck_pending_contract.py
       - name: Bank CSV parsing regression
