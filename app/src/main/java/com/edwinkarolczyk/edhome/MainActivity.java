@@ -1127,6 +1127,33 @@ public final class MainActivity extends Activity {
             : HomeTileCatalog.icon(target);
     }
 
+    /** AI PNG/WebP files can contain transparent gutters. Trim those gutters
+     * so FIT_CENTER scales the artwork, not the empty bitmap margins.
+     * Retain a 2-pixel safety edge to avoid clipping soft 3D shadows.
+     */
+    private Bitmap trim3dTransparentMargins(Bitmap image) {
+        if (image == null || !image.hasAlpha()) return image;
+        int width = image.getWidth(), height = image.getHeight();
+        int left = width, top = height, right = -1, bottom = -1;
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                if (Color.alpha(image.getPixel(x, y)) > 5) {
+                    left = Math.min(left, x);
+                    top = Math.min(top, y);
+                    right = Math.max(right, x);
+                    bottom = Math.max(bottom, y);
+                }
+        if (right < left || bottom < top) return image;
+        left = Math.max(0, left - 2);
+        top = Math.max(0, top - 2);
+        right = Math.min(width - 1, right + 2);
+        bottom = Math.min(height - 1, bottom + 2);
+        if (left == 0 && top == 0 && right == width - 1
+                && bottom == height - 1) return image;
+        return Bitmap.createBitmap(image, left, top,
+            right - left + 1, bottom - top + 1);
+    }
+
     private View tileIconImage(String iconId, int size, boolean highlighted) {
         if (TileCustomImage.available(this, iconId)) {
             android.graphics.Bitmap image = TileCustomImage.bitmap(this, iconId);
@@ -1142,7 +1169,7 @@ public final class MainActivity extends Activity {
             android.graphics.Bitmap image = IconPack3D.bitmap(this, iconId);
             if (image != null) {
                 ImageView graphic = new ImageView(this);
-                graphic.setImageBitmap(image);
+                graphic.setImageBitmap(trim3dTransparentMargins(image));
                 graphic.setScaleType(ImageView.ScaleType.FIT_CENTER);
                 graphic.setContentDescription("Ikona 3D");
                 return graphic;
