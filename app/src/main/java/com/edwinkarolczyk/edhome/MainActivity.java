@@ -82,6 +82,7 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
     private static final int EXPORT_QR_LABELS_PDF = 1222;
     private byte[] pendingQrLabelsPdf;
+    private int pendingQrLabelsCount;
     private String pendingCustomTileId;
     private long pendingStorageThumbnailId;
     private String pendingStatementBank;
@@ -4327,6 +4328,7 @@ public final class MainActivity extends Activity {
                     }
                 } else if(choice==1) {
                     pendingQrLabelsPdf=pdf;
+                    pendingQrLabelsCount=count;
                     Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
                     save.addCategory(Intent.CATEGORY_OPENABLE);
                     save.setType("application/pdf");
@@ -4422,7 +4424,7 @@ public final class MainActivity extends Activity {
                 alert("Nie znaleziono tego miejsca w lokalnym EDHOME.");return;
             }
             final PlaceEntry place=found;
-            StorageQrLabels.log(this,"Skan miejsca",1);
+            StorageQrLabels.log(this,"Skan miejsca",qrLabel(place));
             LinearLayout card=new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(16),dp(12),dp(16),dp(10));
@@ -4453,7 +4455,7 @@ public final class MainActivity extends Activity {
             return;
         }
         StorageQrLabels.log(this,"Skan "+("box".equals(item.kind)
-            ?"pudełka":"rzeczy"),1);
+            ?"pudełka":"rzeczy"),qrLabel(item));
         LinearLayout controls=new LinearLayout(this);
         controls.setOrientation(LinearLayout.VERTICAL);
         controls.setPadding(dp(16),dp(12),dp(16),dp(10));
@@ -7724,7 +7726,9 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request, result, data);
         if (request == EXPORT_QR_LABELS_PDF) {
             byte[] pdf=pendingQrLabelsPdf;
+            int count=pendingQrLabelsCount;
             pendingQrLabelsPdf=null;
+            pendingQrLabelsCount=0;
             if (result==RESULT_OK && pdf!=null
                     && data!=null && data.getData()!=null) {
                 try (OutputStream output=getContentResolver().openOutputStream(
@@ -7733,7 +7737,7 @@ public final class MainActivity extends Activity {
                         "Nie można otworzyć dokumentu.");
                     output.write(pdf);
                     output.flush();
-                    StorageQrLabels.log(this,"Zapis PDF",1);
+                    StorageQrLabels.log(this,"Zapis PDF",count);
                     alert("Zapisano etykiety QR do PDF.");
                 } catch(Exception error) {
                     DiagnosticLog.error("QR_PDF_EXPORT",error);
