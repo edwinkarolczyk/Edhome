@@ -410,14 +410,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.27-signed-apk
+          name: EDHOME-0.6.0.28-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.27 — PayCheck: nowe sygnały bankowe automatycznie trafiają do kolejki oczekujących na wybór wspólny/prywatny. Wspólny wpis powstaje jako pending, prywatny dopiero w odblokowanym zaszyfrowanym sejfie, także jako pending. Salda nie zmieniają się do potwierdzenia; identyfikatory chronią przed ponownym utworzeniem z tego samego powiadomienia. Bez migracji i bez kasowania danych; Beta tylko, Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.28 — PayCheck: sygnał bankowy automatycznie trafia do kolejki oczekujących na wybór wspólny/prywatny, bez zmiany salda. Dotknięcie potwierdzenia EDHOME otwiera PayCheck. Po wyborze wspólny powstaje pending; prywatny powstaje jako pending dopiero po odblokowaniu sejfu. Kolejka nie usuwa już starszych nieprzypisanych sygnałów po 14 dniach ani po 40 wpisach. Ochrona przed ponownym zapisaniem tego samego powiadomienia. Zachowane dane, Beta tylko, main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
