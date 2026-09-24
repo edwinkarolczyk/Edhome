@@ -171,6 +171,7 @@ jobs:
           java -cp "$RUNNER_TEMP/bank-notifications" \
             com.edwinkarolczyk.edhome.BankNotificationRulesSmoke
           python3 tests/check_bank_notification_contract.py
+          python3 tests/check_bank_auto_pending_contract.py
       - name: Bank CSV parsing regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-csv"
@@ -409,14 +410,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.26-signed-apk
+          name: EDHOME-0.6.0.27-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.26 — PayCheck: po zapisaniu nowego powiadomienia z wybranego banku EDHOME pokazuje własne potwierdzenie z kwotą i źródłem. Powiadomienie można wyłączyć osobno; Android 13+ wymaga zgody na wysyłanie powiadomień. Blokada duplikatów, prywatny ekran blokady, bez zmiany salda i bez kasowania danych. Beta tylko; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.27 — PayCheck: nowe sygnały bankowe automatycznie trafiają do kolejki oczekujących na wybór wspólny/prywatny. Wspólny wpis powstaje jako pending, prywatny dopiero w odblokowanym zaszyfrowanym sejfie, także jako pending. Salda nie zmieniają się do potwierdzenia; identyfikatory chronią przed ponownym utworzeniem z tego samego powiadomienia. Bez migracji i bez kasowania danych; Beta tylko, Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
