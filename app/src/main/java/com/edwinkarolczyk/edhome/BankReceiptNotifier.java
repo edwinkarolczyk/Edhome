@@ -56,6 +56,7 @@ final class BankReceiptNotifier {
             String title="EDHOME • zapisano "
                 +("income".equals(entry.kind)?"wpływ ":"wydatek ")+amount;
             Intent open=new Intent(context,MainActivity.class)
+                .putExtra("open_paycheck",true)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
                     |Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent tap=PendingIntent.getActivity(context,0,open,
