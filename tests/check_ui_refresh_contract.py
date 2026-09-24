@@ -12,9 +12,9 @@ assert all('"' + name + '"' in skin for name in
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
-assert 'super(context, "edhome-beta-preview.db", null, 29' in main
+assert 'super(context, "edhome-beta-preview.db", null, 30' in main
 assert 'private static final int DB_VERSION = 30;' in backup
-assert "newVersion > 29" in main
+assert "newVersion > 30" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
