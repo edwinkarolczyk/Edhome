@@ -203,7 +203,8 @@ public final class MainActivity extends Activity {
             render();
         }
         if (unlocked && updater != null) updater.start();
-        if (unlocked && root != null && "timers".equals(screen)) render();
+        if (unlocked && root != null && ("timers".equals(screen)
+                || "paycheck".equals(screen))) render();
     }
 
     @Override protected void onNewIntent(Intent intent) {
