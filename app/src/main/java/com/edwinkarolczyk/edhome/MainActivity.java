@@ -3897,10 +3897,10 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
-        button("Uzgodnij z wyciągiem CSV (ręczny wybór)", this::selectStatementCsv);
-        note("CSV musi zawierać Data;Kwota;Id transakcji;Opis. "
-            + "Wybierasz pary ręcznie; samo wczytanie pliku NIE księguje transakcji "
-            + "ani nie potwierdza autentyczności wyciągu.");
+        button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
+        note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
+            + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
+            + "Plik nie jest automatycznie potwierdzeniem z banku.");
         title("Do potwierdzenia • bez wpływu na saldo");
         try (Cursor pending = db.getReadableDatabase().rawQuery(
                 "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
@@ -3952,8 +3952,8 @@ public final class MainActivity extends Activity {
         bank.setSingleLine(true);
         bank.setHint("Nazwa banku, np. mój bank");
         bank.setText(prefs.getString("paycheck_csv_bank_name",""));
-        new AlertDialog.Builder(this).setTitle("Wczytaj potwierdzenia CSV • PayCheck")
-            .setMessage("Wpisz bank dla wybranej partii (do 10 plików). Użyj tej samej "
+        new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
+            .setMessage("Wpisz bank dla wybranej partii (do 10 plików CSV/XLSX). Użyj tej samej "
                 + "nazwy przy kolejnym imporcie. EDHOME nie łączy się z bankiem "
                 + "i nie sprawdza autentyczności wskazanego pliku.")
             .setView(bank).setNegativeButton("Anuluj",null)
@@ -3979,7 +3979,7 @@ public final class MainActivity extends Activity {
 
     private void importStatementCsv(java.util.List<Uri> files, String bank) {
         if(files==null||bank==null||files.isEmpty())return;
-        if(files.size()>10){alert("Wybierz maksymalnie 10 CSV na raz.");return;}
+        if(files.size()>10){alert("Wybierz maksymalnie 10 plików na raz.");return;}
         try {
             java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
             java.util.Set<String> seen=new java.util.HashSet<>();
@@ -3987,17 +3987,25 @@ public final class MainActivity extends Activity {
             for(Uri uri:files) {
                 ByteArrayOutputStream output=new ByteArrayOutputStream();
                 try(InputStream stream=getContentResolver().openInputStream(uri)){
-                    if(stream==null)throw new IllegalArgumentException("Nie można odczytać CSV.");
+                    if(stream==null)throw new IllegalArgumentException("Nie można odczytać pliku.");
                     byte[] buffer=new byte[4096];int n;
                     while((n=stream.read(buffer))!=-1) {
-                        if(output.size()+n>BankStatementCsv.MAX_BYTES)
-                            throw new IllegalArgumentException("CSV: maksymalnie 256 KB na plik.");
+                        if(output.size()+n>2*1024*1024)
+                            throw new IllegalArgumentException("Maksymalnie 2 MB na plik.");
                         output.write(buffer,0,n);
                     }
                 }
+                byte[] bytes=output.toByteArray();
+                boolean xlsx=BankStatementWorkbook.isXlsx(bytes);
+                if(!xlsx&&bytes.length>BankStatementCsv.MAX_BYTES)
+                    throw new IllegalArgumentException(
+                        "Eksport tekstowy: maksymalnie 256 KB na plik.");
+                String text=xlsx?BankStatementWorkbook.textRows(bytes)
+                    :new String(bytes,StandardCharsets.UTF_8);
                 java.util.List<BankStatementCsv.Entry> parsed=
-                    BankStatementCsv.parse(new String(output.toByteArray(),
-                        StandardCharsets.UTF_8),bank);
+                    BankStatementMbank.recognizes(text)
+                        ?BankStatementMbank.parse(text)
+                        :BankStatementCsv.parse(text,bank);
                 for(BankStatementCsv.Entry entry:parsed) {
                     if(!seen.add(entry.evidenceKey)){duplicateRows++;continue;}
                     if(entries.size()>=BankStatementCsv.MAX_ROWS)
@@ -4013,7 +4021,7 @@ public final class MainActivity extends Activity {
             showStatementEntries(entries,bank);
         }catch(Exception error){
             DiagnosticLog.event("PAYCHECK_CSV_IMPORT_REJECTED");
-            alert("Nie wczytano partii CSV: "+(error instanceof IllegalArgumentException
+            alert("Nie wczytano potwierdzeń: "+(error instanceof IllegalArgumentException
                 ?error.getMessage():"błąd odczytu pliku."));
         }
     }
