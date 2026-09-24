@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==29
+assert len(manifest)==30
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -86,4 +86,4 @@ assert restore.index("if (!restored.commit())")<restore.index(
 assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
 assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
 assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 29 tables and all numeric/nullable fields, sample JSON roundtrip, readback and rollback contract PASS")
+print("Backup: 30 tables and all numeric/nullable fields, sample JSON roundtrip, readback and rollback contract PASS")
