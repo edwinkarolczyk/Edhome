@@ -24,6 +24,19 @@ final class BankStatementCsvSmoke {
         if(rows.get(0).evidenceKey.equals(
                 BankStatementCsv.parse(csv,"Inny bank").get(0).evidenceKey))
             fail("Bank namespace collision");
+        List<BankStatementCsv.Entry> tab=BankStatementCsv.parse(
+            "Data operacji\\tKwota operacji\\tNr transakcji\\tTytuł\\n"
+            +"24.09.2026\\t-12,50\\ttab-ref-001\\tZakupy\\n","Bank A");
+        if(tab.size()!=1 || tab.get(0).amountGrosz!=1250
+                || !tab.get(0).kind.equals("expense"))
+            fail("Bank tab-delimited CSV not recognized");
+        List<BankStatementCsv.Entry> comma=BankStatementCsv.parse(
+            "Date,Amount,Transaction id,Description\\n"
+            +"2026-09-24,\\"-12,50\\",comma-ref-001,Test\\n","Bank B");
+        if(comma.size()!=1 || comma.get(0).amountGrosz!=1250)
+            fail("Bank comma-delimited CSV not recognized");
+        if(tab.get(0).evidenceKey.equals(comma.get(0).evidenceKey))
+            fail("Bank/transaction deduplication namespace failure");
         invalid("Data;Kwota;Id transakcji;Opis\n2026-09-23;-1,00;;test\n");
         invalid("Data;Kwota;Id transakcji;Opis\n2026-09-23;0;bank-001;test\n");
         invalid("Data;Kwota;Id transakcji;Opis\n2026-09-23;-1,999;bank-001;test\n");
