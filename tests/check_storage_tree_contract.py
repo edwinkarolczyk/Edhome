@@ -5,9 +5,9 @@ s=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_tex
 start=s.index("    private void storage() {")
 end=s.index("    private void storageEditor(",start)
 ui=s[start:end]
-assert 'title("Drzewko magazynu")' in ui
-assert 'storageTreePlace(place,places,items,drawnPlaces,drawnItems,0)' in ui
-assert 'storageTreeItem(item,items,drawnItems,depth+1)' in ui
+assert 'title("Podgląd magazynu")' in ui
+assert 'storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body)' in ui
+assert 'storageTreeItem(item,items,drawnItems,depth+1,inner)' in ui
 assert 'String key="storage_tree_place_"+place.id;' in ui
 assert 'String key="storage_tree_box_"+item.id;' in ui
 assert 'prefs.getBoolean(key,false)' in ui
@@ -16,7 +16,9 @@ assert 'row.setOnClickListener(v->' in ui
 assert 'item.boxId==null && item.placeId!=null' in ui
 assert 'child.parent!=null&&child.parent==place.id' in ui
 assert 'child.boxId!=null && child.boxId==item.id' in ui
-assert 'if(collapsed)return;' in ui
+assert 'children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);' in ui
+assert 'storageTreeAttach(details,inner);' in ui
+assert 'render();' not in ui[ui.index('private LinearLayout storageTreeHeading('):ui.index('private void storageTreePlace(')]
 assert 'if(depth>64||!drawnItems.add(item.id))return;' in ui
 assert 'if(depth>64||!drawnPlaces.add(place.id))return;' in ui
 assert 'StorageStore.location(db.getReadableDatabase(),item)' in ui
