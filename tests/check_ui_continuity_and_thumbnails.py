@@ -14,6 +14,8 @@ end=main.index('private void storageTreePlace(',start)
 assert 'children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);' in main[start:end]
 assert 'render();' not in main[start:end]
 assert 'getInstalledApplications(0)' in main
+assert 'Intent.ACTION_PICK_ACTIVITY' in main
+assert 'PICK_BANK_APP_SYSTEM' in main
 assert 'getPackageManager().queryIntentActivities(launcher,0)' in main.replace('\n                .queryIntentActivities','\ngetPackageManager().queryIntentActivities') or 'queryIntentActivities(launcher,0)' in main
 assert 'setView(form)' in main
 assert 'setMultiChoiceItems(names,selected' not in main
