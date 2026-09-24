@@ -25,7 +25,13 @@ final class PrivatePaycheckCrypto {
             && password.length <= 64;
     }
 
-    // A portable encrypted backup keeps a stronger, independent password.\n    static boolean validBackupPassword(char[] password) {\n        return password != null && password.length >= 12\n            && password.length <= 64;\n    }\n\n    static byte[] newSalt() {
+    // A portable encrypted backup keeps a stronger, independent password.
+    static boolean validBackupPassword(char[] password) {
+        return password != null && password.length >= 12
+            && password.length <= 64;
+    }
+
+    static byte[] newSalt() {
         byte[] salt = new byte[16];
         RANDOM.nextBytes(salt);
         return salt;
