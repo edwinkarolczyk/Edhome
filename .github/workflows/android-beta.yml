@@ -407,14 +407,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.20-signed-apk
+          name: EDHOME-0.6.0.21-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.20 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: obsługa importu paczki 100 ikon AI 3D ZIP, przełączanie standard/3D i wybór ikony kafelka. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.21 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: obsługa importu paczki 100 ikon AI 3D ZIP, przełączanie standard/3D i wybór ikony kafelka. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
