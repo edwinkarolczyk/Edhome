@@ -24,8 +24,8 @@ final class BankNotificationHints {
     // Processed IDs survive dismissals / Android reconnects; no bank text stored.
     private static final String HANDLED="bank_notification_handled_v1";
     private static final int MAX_HANDLED=512;
-    private static final int MAX=40;
-    private static final long TTL=14L*24*60*60*1000;
+    // Unassigned financial drafts must not silently disappear after 14 days
+    // or when more than 40 bank notifications arrive. User closes them.
 
     static final class Entry {
         final String key,source,kind;
@@ -73,7 +73,7 @@ final class BankNotificationHints {
                 if(key.matches("[0-9a-f]{64}")&&source.length()<=255
                         &&("income".equals(kind)||"expense".equals(kind))
                         &&amount>0&&amount<=MoneyRules.MAX_GROSZ
-                        &&received<=now+60000&&received>now-TTL
+                        &&received<=now+60000&&received>0
                         &&selected(context).contains(source))
                     result.add(new Entry(key,source,kind,amount,received));
             }
@@ -122,7 +122,7 @@ final class BankNotificationHints {
         Entry saved=new Entry(unique,sbn.getPackageName(),hint.kind,
             hint.amountGrosz,System.currentTimeMillis());
         entries.add(0,saved);
-        if(entries.size()>MAX)entries=new ArrayList<>(entries.subList(0,MAX));
+        // Never truncate older unassigned drafts to make room for a new one.
         // A receipt is allowed only after durable storage succeeds.
         if(persist(context,entries))BankReceiptNotifier.show(context,saved);
     }
