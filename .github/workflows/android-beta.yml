@@ -226,6 +226,8 @@ jobs:
         run: python3 tests/check_home_tile_unique_contract.py
       - name: Light dialog text, hints and spinner contrast regression
         run: python3 tests/check_dialog_contrast_contract.py
+      - name: AI 3D pack import and private vault password policy
+        run: python3 tests/check_ai_3d_pack_contract.py
       - name: Four-theme UI-only and drag-edit contract
         run: python3 tests/check_ui_refresh_contract.py
       - name: Pantry barcode check digits
@@ -412,7 +414,7 @@ jobs:
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.20 — poprawka odrzucania starych APK po aktualizacji; sprawdzanie SHA-256, pakietu, wersji i podpisu bez osłabienia zabezpieczeń. PayCheck: czytelny wybór banków z wyszukiwarką oraz instrukcja uprawnień powiadomień Androida. Dane zachowane, Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.20 — PayCheck: wybór banków z wyszukiwarką, kontrast i instrukcja uprawnień Androida. Prywatny sejf: hasło od 5 znaków (kopia szyfrowana nadal min. 12). Wygląd: obsługa importu paczki 100 ikon AI 3D ZIP, przełączanie standard/3D i wybór ikony kafelka. Aktualizator: czyszczenie starych APK, dokładniejsze błędy weryfikacji. Instalacja zachowuje dane; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
