@@ -19,6 +19,7 @@ final class BankNotificationHints {
     private static final String PREFS="edhome_bank_hint_prefs";
     private static final String ENABLED="bank_notification_opt_in";
     private static final String PACKAGES="selected_banking_packages";
+    private static final String RECEIPT="bank_receipt_notifications_enabled";
     private static final String ROWS="bank_notification_hints_v1";
     private static final int MAX=40;
     private static final long TTL=14L*24*60*60*1000;
@@ -37,6 +38,12 @@ final class BankNotificationHints {
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
     static boolean enabled(Context c){return pref(c).getBoolean(ENABLED,false);}
+    static boolean receiptEnabled(Context c){
+        return pref(c).getBoolean(RECEIPT,true);
+    }
+    static void setReceiptEnabled(Context c,boolean enabled){
+        pref(c).edit().putBoolean(RECEIPT,enabled).apply();
+    }
     static Set<String> selected(Context c){
         return new java.util.HashSet<>(
             pref(c).getStringSet(PACKAGES,java.util.Collections.emptySet()));
@@ -87,12 +94,14 @@ final class BankNotificationHints {
             +"\n"+sbn.getPostTime());
         List<Entry> entries=list(context);
         for(Entry existing:entries)if(existing.key.equals(unique))return;
-        entries.add(0,new Entry(unique,sbn.getPackageName(),hint.kind,
-            hint.amountGrosz,System.currentTimeMillis()));
+        Entry saved=new Entry(unique,sbn.getPackageName(),hint.kind,
+            hint.amountGrosz,System.currentTimeMillis());
+        entries.add(0,saved);
         if(entries.size()>MAX)entries=new ArrayList<>(entries.subList(0,MAX));
-        persist(context,entries);
+        // A receipt is allowed only after durable storage succeeds.
+        if(persist(context,entries))BankReceiptNotifier.show(context,saved);
     }
-    private static void persist(Context context,List<Entry> entries) {
+    private static boolean persist(Context context,List<Entry> entries) {
         JSONArray result=new JSONArray();
         for(Entry e:entries) {
             JSONObject row=new JSONObject();
@@ -105,7 +114,7 @@ final class BankNotificationHints {
                 result.put(row);
             }catch(Exception invalid){ /* impossible for primitives */ }
         }
-        pref(context).edit().putString(ROWS,result.toString()).apply();
+        return pref(context).edit().putString(ROWS,result.toString()).commit();
     }
     private static String digest(String data) {
         try {
