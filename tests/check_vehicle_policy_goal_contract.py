@@ -50,7 +50,7 @@ form=main.split("private void editVehiclePolicy(",1)[1].split(
     "private String vehicleDeadline(",1)[0]
 assert "PaycheckStore.add(" not in form
 assert "PaycheckGoalsStore.allocate(" not in form
-assert "versionCode 75" in gradle and "versionName '0.6.0.10'" in gradle
+assert "versionCode 76" in gradle and "versionName '0.6.0.11'" in gradle
 
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes)"
            " VALUES(77,'Audi A4','',0,'','','')")
