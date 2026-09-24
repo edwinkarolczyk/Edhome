@@ -18,7 +18,7 @@ for token in ('Do potwierdzenia • bez wpływu na saldo',
               'Saldo potwierdzone wspólne:',
               'DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING'):
     assert token in main,token
-for token in ('DB_VERSION = 31;','"created_at", "status"',
+for token in ('DB_VERSION = 32;','"created_at", "status"',
               'inputVersion < 30','values.put(key, "confirmed");',
               '|| !("pending".equals(status) || "confirmed".equals(status))'):
     assert token in backup,token
