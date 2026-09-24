@@ -114,3 +114,10 @@
 3. Dom, remonty i instalacje jako następne moduły wykorzystujące wspólne miejsca, czynności, kalendarz i finanse.
 
 Źródło zakresu: [ROADMAP.md](ROADMAP.md) i [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md).
+
+## 0.6.0.8 — prawdziwe pochodzenie potwierdzenia
+
+- Migracja SQLite v30→v31 zapisuje źródło: `none` (nowy wpis oczekujący), `manual` (ręczne potwierdzenie przez użytkownika), `legacy` (stary wpis — brak informacji o banku). Ręczne potwierdzenie zachowuje także czas. Nie jest to automatyczna weryfikacja bankowa.
+- Wspólne koszty pojazdu zaczynają jako `pending/none`; nie zmieniają salda przed potwierdzeniem. Ponowienie potwierdzenia nie zmienia źródła ani czasu.
+- Kopia v31 obejmuje źródło i czas potwierdzenia; import v29 i v30 działa również po aktualizacji. Kopie prywatnego sejfu nadal pozostają oddzielne.
+- W kolejnych inkrementach 0.6: prawdziwa integracja wyciągów i powiadomień bankowych z identyfikacją źródła, dokumenty pojazdów, testy i odbiór. Nie przenosić na `main` bez zatwierdzenia.
