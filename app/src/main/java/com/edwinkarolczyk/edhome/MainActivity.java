@@ -90,6 +90,7 @@ public final class MainActivity extends Activity {
     private LocalDb db;
     private BetaUpdater updater;
     private PrivatePaycheckVault.Session privatePaycheckSession;
+    private String pendingPrivateBankHintKey;
     private String privateBackupForSave;
     private AlertDialog privateAuthDialog;
     private AlertDialog privateEntryDialog;
@@ -4610,10 +4611,11 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta()) {
             button("Powiadomienia bankowe • wybierz aplikacje",
                 this::configureBankNotifications);
-            note("Zaznacz wyłącznie banki, których używasz. Android poprosi osobno "
-                +"o zgodę na dostęp do powiadomień. EDHOME zachowuje lokalnie "
-                +"tylko kwotę, kierunek, źródło i czas — bez treści ani kodów. "
-                +"Powiadomienia są sugestiami, nie potwierdzeniem księgowania.");
+            note("Nowe powiadomienia automatycznie trafiają do kolejki "
+                +"oczekujących na wybór: wspólny czy prywatny. Dopiero po "
+                +"wyborze miejsca tworzymy wpis w odpowiednim budżecie; "
+                +"saldo pozostaje bez zmian. EDHOME zapisuje tylko kwotę, "
+                +"kierunek, źródło i czas, bez treści i kodów.");
             showBankNotificationHints();
         }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
@@ -4947,9 +4949,18 @@ public final class MainActivity extends Activity {
                             .atZone(ZoneId.systemDefault()).toLocalDate());
                 }
             }
-            if(ids.isEmpty())
-                entry.addView(text("Brak oczekującego wpisu o tej kwocie. "
+            if(ids.isEmpty()) {
+                entry.addView(text("Automatycznie dodano do kolejki • "
+                    +"wybierz, czy to wydatek wspólny, czy prywatny. "
                     +"Saldo bez zmian.",13,false));
+                smallButton(entry,"WSPÓLNY • dodaj do oczekujących",
+                    ()->assignBankHintToShared(signal));
+                smallButton(entry,"PRYWATNY • otwórz sejf",
+                    ()->{
+                        pendingPrivateBankHintKey=signal.key;
+                        openPrivatePaycheck();
+                    });
+            }
             else if(ids.size()==1)
                 smallButton(entry,"Sprawdź i potwierdź pasujący wpis",
                     ()->confirmSharedPaycheckEntry(ids.get(0),signal.key));
@@ -4964,9 +4975,58 @@ public final class MainActivity extends Activity {
                                 ids.get(which),signal.key))
                         .setNegativeButton("Anuluj",null).show());
             smallButton(entry,"Odrzuć sygnał",()->{
-                BankNotificationHints.remove(this,signal.key);
+                if(!BankNotificationHints.remove(this,signal.key))
+                    alert("Nie zapisano odrzucenia. Spróbuj ponownie.");
                 render();
             });
+        }
+    }
+
+    /** Assign an auto-collected draft only after explicit shared/private choice.
+     * Stable operation ID guarantees retry cannot create the same draft twice.
+     */
+    private void assignBankHintToShared(BankNotificationHints.Entry signal) {
+        if(!BetaUpdater.isBeta()||BankNotificationHints.alreadyHandled(
+                this,signal.key)) {render();return;}
+        String operationId=java.util.UUID.nameUUIDFromBytes(
+            ("edhome-bank-hint:"+signal.key).getBytes(StandardCharsets.UTF_8))
+            .toString();
+        try {
+            String result=PaycheckStore.add(db.getWritableDatabase(),
+                operationId,signal.kind,"other",signal.amount,
+                "Powiadomienie z wybranego banku • niezweryfikowane");
+            if("COMMITTED".equals(result)||"DUPLICATE".equals(result)) {
+                if(!BankNotificationHints.remove(this,signal.key))
+                    alert("Wpis zapisany, ale nie zamknięto sygnału. "
+                        +"Ponowny wybór nie stworzy kopii.");
+                render();
+            }
+        }catch(Exception error){
+            DiagnosticLog.event("BANK_DRAFT_SHARED_FAILED");
+            alert("Nie utworzono wspólnego wpisu. Saldo bez zmian.");
+        }
+    }
+
+    private void assignBankHintToPrivate(BankNotificationHints.Entry signal) {
+        if(privatePaycheckSession==null||!privatePaycheckSession.active()
+                ||BankNotificationHints.alreadyHandled(this,signal.key))
+            return;
+        String operationId=java.util.UUID.nameUUIDFromBytes(
+            ("edhome-bank-hint:"+signal.key).getBytes(StandardCharsets.UTF_8))
+            .toString();
+        try {
+            String result=PrivatePaycheckVault.addPending(this,
+                privatePaycheckSession,operationId,signal.kind,"other",
+                signal.amount,"Powiadomienie z wybranego banku");
+            if("COMMITTED".equals(result)||"DUPLICATE".equals(result)){
+                if(BankNotificationHints.remove(this,signal.key))
+                    pendingPrivateBankHintKey=null;
+                else alert("Prywatny wpis zapisany. Nie zamknięto sygnału; "
+                    +"powtórzenie nie utworzy kopii.");
+                render();
+            }
+        }catch(Exception error){
+            alert("Nie zapisano prywatnego wpisu. Sejf i saldo bez zmian.");
         }
     }
 
@@ -5372,15 +5432,32 @@ public final class MainActivity extends Activity {
         long balance = 0;
         try {
             for (PrivatePaycheckVault.Entry entry : entries)
-                balance = Math.addExact(balance,
-                    "income".equals(entry.kind)
-                        ? entry.amountGrosz : -entry.amountGrosz);
+                if(!"pending".equals(entry.status))
+                    balance = Math.addExact(balance,
+                        "income".equals(entry.kind)
+                            ? entry.amountGrosz : -entry.amountGrosz);
         } catch (ArithmeticException overflow) {
             go("paycheck");
             alert("Saldo sejfu przekracza dopuszczalny zakres.");
             return;
         }
         title("Saldo prywatne: " + MoneyRules.format(balance));
+        if(pendingPrivateBankHintKey!=null) {
+            for(BankNotificationHints.Entry hint:BankNotificationHints.list(this))
+                if(hint.key.equals(pendingPrivateBankHintKey)) {
+                    final BankNotificationHints.Entry chosen=hint;
+                    title("Nowy sygnał • do prywatnego sejfu");
+                    note(MoneyRules.format(chosen.amount)
+                        +" • wpis oczekujący, bez wpływu na saldo");
+                    button("Zapisz jako PRYWATNY do potwierdzenia",
+                        ()->assignBankHintToPrivate(chosen));
+                    button("Wróć bez przypisania",()->{
+                        pendingPrivateBankHintKey=null;
+                        go("paycheck");
+                    });
+                    break;
+                }
+        }
         Spinner kind = new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList("Wydatek −", "Przychód +")));
@@ -5450,7 +5527,27 @@ public final class MainActivity extends Activity {
             LinearLayout row = card();
             boolean income = "income".equals(entry.kind);
             row.addView(text((income ? "+ " : "− ")
-                + MoneyRules.format(entry.amountGrosz), 18, true));
+                + MoneyRules.format(entry.amountGrosz)
+                +("pending".equals(entry.status)?" • DO POTWIERDZENIA":""),
+                18,true));
+            if("pending".equals(entry.status))
+                smallButton(row,"Sprawdziłem w banku • potwierdź",
+                    ()->new AlertDialog.Builder(this)
+                        .setTitle("Potwierdź prywatny wpis?")
+                        .setMessage("Potwierdź po sprawdzeniu operacji w banku. "
+                            +"Samo powiadomienie nie dowodzi księgowania.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Potwierdź",(d,w)->{
+                            try {
+                                if(privatePaycheckSession!=null
+                                        &&privatePaycheckSession.active()
+                                        &&PrivatePaycheckVault.confirmPending(
+                                            this,privatePaycheckSession,
+                                            entry.operationId))render();
+                            }catch(Exception error){
+                                alert("Nie potwierdzono prywatnego wpisu.");
+                            }
+                        }).show());
             row.addView(text(MoneyRules.categoryLabel(entry.category)
                 + (entry.note.isEmpty() ? "" : " • " + entry.note), 14, false));
             row.addView(text(Instant.ofEpochMilli(entry.createdAt)
