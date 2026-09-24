@@ -222,6 +222,8 @@ jobs:
           java -cp "$RUNNER_TEMP/home-layout" \
             com.edwinkarolczyk.edhome.HomeTileLayoutSmoke
           python3 tests/check_home_adaptive_contract.py
+      - name: Unique home tile targets including hidden tiles
+        run: python3 tests/check_home_tile_unique_contract.py
       - name: Light dialog text, hints and spinner contrast regression
         run: python3 tests/check_dialog_contrast_contract.py
       - name: Four-theme UI-only and drag-edit contract
