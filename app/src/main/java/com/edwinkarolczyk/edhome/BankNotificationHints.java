@@ -20,6 +20,11 @@ final class BankNotificationHints {
     private static final String ENABLED="bank_notification_opt_in";
     private static final String PACKAGES="selected_banking_packages";
     private static final String RECEIPT="bank_receipt_notifications_enabled";
+    // Diagnostics: timestamps/package of SELECTED bank only; no bank text.
+    private static final String SEEN="bank_last_seen_at";
+    private static final String SEEN_PACKAGE="bank_last_seen_package";
+    private static final String SAVED="bank_last_saved_at";
+    private static final String UNRECOGNIZED="bank_last_unrecognized_at";
     private static final String ROWS="bank_notification_hints_v1";
     // Processed IDs survive dismissals / Android reconnects; no bank text stored.
     private static final String HANDLED="bank_notification_handled_v1";
@@ -41,6 +46,19 @@ final class BankNotificationHints {
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
     static boolean enabled(Context c){return pref(c).getBoolean(ENABLED,false);}
+    static void recordSeen(Context c,String source) {
+        if(!enabled(c)||!selected(c).contains(source))return;
+        pref(c).edit().putLong(SEEN,System.currentTimeMillis())
+            .putString(SEEN_PACKAGE,source).apply();
+    }
+    static long lastSeen(Context c){return pref(c).getLong(SEEN,0);}
+    static String lastSeenPackage(Context c){
+        return pref(c).getString(SEEN_PACKAGE,"");
+    }
+    static long lastSaved(Context c){return pref(c).getLong(SAVED,0);}
+    static long lastUnrecognized(Context c){
+        return pref(c).getLong(UNRECOGNIZED,0);
+    }
     static boolean receiptEnabled(Context c){
         return pref(c).getBoolean(RECEIPT,true);
     }
@@ -111,7 +129,11 @@ final class BankNotificationHints {
         if(sbn==null||!enabled(context)
                 ||!selected(context).contains(sbn.getPackageName()))return;
         BankNotificationRules.Hint hint=BankNotificationRules.parse(notificationText);
-        if(hint==null)return;
+        if(hint==null){
+            pref(context).edit().putLong(UNRECOGNIZED,
+                System.currentTimeMillis()).apply();
+            return;
+        }
         // Same Android notification, even after service reconnect, has same key.
         // Never hash or log/store unredacted notification title/text.
         String unique=digest(sbn.getPackageName()+"\n"+sbn.getKey()
@@ -124,7 +146,10 @@ final class BankNotificationHints {
         entries.add(0,saved);
         // Never truncate older unassigned drafts to make room for a new one.
         // A receipt is allowed only after durable storage succeeds.
-        if(persist(context,entries))BankReceiptNotifier.show(context,saved);
+        if(persist(context,entries)) {
+            pref(context).edit().putLong(SAVED,System.currentTimeMillis()).apply();
+            BankReceiptNotifier.show(context,saved);
+        }
     }
     private static boolean persist(Context context,List<Entry> entries) {
         JSONArray result=new JSONArray();
