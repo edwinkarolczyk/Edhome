@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 89,
-  "versionName": "0.6.0.24",
+  "versionCode": 90,
+  "versionName": "0.6.0.25",
   "changelog": "EDHOME 0.6.0.24 — Magazyn: QR miejsc, rzeczy i pudełek; etykiety 40×30, 50×30, 70×50 mm i A4 zbiorczo, druk Android, PDF i udostępnianie. Skan otwiera kartę działań i historię. Większe ikony AI 3D dopasowane do kafelka pojedynczego/podwójnego, bez pustych marginesów; import ZIP opcjonalny. Bez migracji SQLite i bez kasowania danych; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.24/edhome-beta.apk",
-  "sha256": "d2e65fca44e9ca17ffa33a9064a46e01be5e9a39bfab1db95d0b6ad9dc24498d"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.25/edhome-beta.apk",
+  "sha256": "74d3a8e6de243e56f2347a8275f65f57fd414c37b6e5a0bf0297064f20815371"
 }
