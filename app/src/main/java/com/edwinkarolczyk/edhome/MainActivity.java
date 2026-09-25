@@ -5223,9 +5223,9 @@ public final class MainActivity extends Activity {
                         "Nie można odczytać wybranego pliku.");
                     byte[] buffer=new byte[4096];int n;
                     while((n=stream.read(buffer))!=-1) {
-                        if(output.size()+n>2*1024*1024)
+                        if(output.size()+n>8*1024*1024)
                             throw new IllegalArgumentException(
-                                "Plik bankowy jest za duży (maks. 2 MB).");
+                                "Plik bankowy jest za duży (maks. 8 MB; CSV nadal maks. 256 KB).");
                         output.write(buffer,0,n);
                     }
                 }
