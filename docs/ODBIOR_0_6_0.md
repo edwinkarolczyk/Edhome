@@ -1,6 +1,20 @@
 # EDHOME — odbiór całej serii 0.6.0 (beta)
 
-Stan 24.09.2026. **Nie zamknięto całej 0.6.0.** To lista kryteriów, nie automatyczny raport zaliczenia. Wersja referencyjna: podpisana Beta **0.6.0.16**, SQLite v33. Pierwsze Stable dopiero 1.0.0 po testach i osobnym odbiorze Edwina; `main` bez zmian.
+Stan 25.09.2026. **Nie zamknięto całej 0.6.0.** To lista kryteriów, nie automatyczny raport zaliczenia. Aktualny kandydat do końcowego odbioru: Beta **0.6.0.30**, SQLite v33. Pierwsze Stable dopiero 1.0.0 po testach i osobnym odbiorze Edwina; `main` bez zmian.
+
+## Kandydat końcowy 0.6.0.30 — 25.09.2026
+
+- [x] Kod: automatyczny rebind `NotificationListenerService` po rozłączeniu Androida oraz przy wznowieniu EDHOME, jeśli użytkownik nadal ma włączony dostęp.
+- [x] Kod: diagnostyka odróżnia zgodę Androida, realne połączenie listenera, ostatnie powiadomienie wybranego banku, nierozpoznany komunikat i zapisany sygnał — bez zapisywania surowej treści bankowej.
+- [x] Kod: powiadomienie bankowe tworzy lokalny szkic i pyta wspólny/prywatny; saldo zmienia się dopiero po późniejszym potwierdzeniu.
+- [x] Kod: zabezpieczenie przed ponownym utworzeniem z tego samego powiadomienia oraz dodatkowe ostrzeżenie, gdy podobna operacja została już uzgodniona z wyciągiem w terminie ±2 dni.
+- [x] Kod: CSV, tekstowy eksport mBanku, XLSX z tekstowymi wierszami oraz **tekstowy PDF VeloBanku** są odczytywane lokalnie; PDF skanowany jako sam obraz pozostaje świadomie odrzucony (brak OCR w 0.6).
+- [x] Kod: okno etykiet QR pokazuje trzy działania: Drukuj przez Androida / Zapisz PDF / Udostępnij PDF.
+- [ ] Telefon: PayCheck ma pokazać `Nasłuch Androida: POŁĄCZONY` i zarejestrować prawdziwe powiadomienie VeloBank/mBank.
+- [ ] Telefon: pojedyncza etykieta QR — druk/PDF, skan do właściwego obiektu i ten sam QR po przeniesieniu.
+- [ ] Telefon: import własnego mBank CSV/XLSX i tekstowego PDF VeloBanku na kopii testowej; ponowiony import bez drugiego księgowania.
+- [ ] Telefon: końcowy backup → aktualizacja → restart → restore kopii testowej oraz kontrola PayCheck/Pojazdów/Magazynu/miniatur.
+- [ ] Edwin: jawny odbiór całej 0.6.0. Dopiero po nim wolno rozpocząć 0.7.0; `main` nadal bez zmian.
 
 ## Potwierdzone dotychczas przez Edwina na telefonie
 
