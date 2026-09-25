@@ -5166,12 +5166,14 @@ public final class MainActivity extends Activity {
     private void selectStatementCsv() {
         EditText bank = new EditText(this);
         bank.setSingleLine(true);
-        bank.setHint("Nazwa banku, np. mój bank");
+        bank.setHint("Nazwa banku dla zwykłego CSV (mBank/Velo wykrywane automatycznie)");
         bank.setText(prefs.getString("paycheck_csv_bank_name",""));
         new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
-            .setMessage("Wpisz bank dla wybranej partii (do 10 plików CSV/XLSX). Użyj tej samej "
-                + "nazwy przy kolejnym imporcie. EDHOME nie łączy się z bankiem "
-                + "i nie sprawdza autentyczności wskazanego pliku.")
+            .setMessage("Do 10 plików naraz. Obsługiwane: zwykły CSV, tekstowy eksport "
+                + "mBanku, XLSX z tekstowym eksportem oraz tekstowy PDF VeloBanku. "
+                + "Nazwę banku wpisz dla zwykłego CSV; mBank i VeloBank są wykrywane "
+                + "automatycznie. PDF będący wyłącznie skanem obrazu nie jest OCR-owany. "
+                + "EDHOME niczego nie wysyła i nie sprawdza autentyczności pliku.")
             .setView(bank).setNegativeButton("Anuluj",null)
             .setPositiveButton("Wybierz pliki bankowe",(d,w)->{
                 String label=bank.getText().toString().trim();
