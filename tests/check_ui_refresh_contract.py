@@ -18,6 +18,10 @@ assert "newVersion > 34" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
+assert "android.view.ScaleGestureDetector" in main
+assert "MotionEvent.ACTION_POINTER_DOWN" in main
+assert "HOME_TILE_RESIZED" in main
+assert 'putString("tile_width_" + tileId' in main
 assert "tile.setOnTouchListener(new View.OnTouchListener()" in main
 assert "HomeTileLayout.openMenuOnRelease(" in main
 assert 'text("✎  Edytuj kafelek"' in main
