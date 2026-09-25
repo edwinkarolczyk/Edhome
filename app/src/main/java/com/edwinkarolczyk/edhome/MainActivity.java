@@ -4635,8 +4635,19 @@ public final class MainActivity extends Activity {
             showBankNotificationHints();
         }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
-        if(BetaUpdater.isBeta())
+        if(BetaUpdater.isBeta()) {
+            int bankOpen=BankEvidenceStore.list(
+                db.getReadableDatabase(),"open").size();
+            int bankMatched=BankEvidenceStore.list(
+                db.getReadableDatabase(),"matched").size();
+            int bankDismissed=BankEvidenceStore.list(
+                db.getReadableDatabase(),"dismissed").size();
+            button("Banki i potwierdzenia • kolejka ("+bankOpen+")",
+                ()->showBankEvidenceQueue(0));
+            note("Kolejka bankowa: "+bankOpen+" otwartych • "
+                +bankMatched+" uzgodnionych • "+bankDismissed+" odrzuconych.");
             note("Diagnostyka importu: "+bankImportDiagLine());
+        }
         note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
             + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
             + "Plik nie jest automatycznie potwierdzeniem z banku.");
