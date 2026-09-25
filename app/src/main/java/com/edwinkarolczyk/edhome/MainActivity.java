@@ -5149,6 +5149,7 @@ public final class MainActivity extends Activity {
             java.util.Set<String> seen=new java.util.HashSet<>();
             int duplicateRows=0;
             int mbankFiles=0;
+            int veloPdfFiles=0;
             int genericFiles=0;
             for(Uri uri:files) {
                 ByteArrayOutputStream output=new ByteArrayOutputStream();
@@ -5164,24 +5165,33 @@ public final class MainActivity extends Activity {
                     }
                 }
                 byte[] bytes=output.toByteArray();
-                String text;
-                if(BankStatementWorkbook.isXlsx(bytes)) {
-                    text=BankStatementWorkbook.textRows(bytes);
-                } else {
-                    String utf8=new String(bytes,StandardCharsets.UTF_8);
-                    String cp1250=new String(bytes,
-                        java.nio.charset.Charset.forName("windows-1250"));
-                    if(BankStatementMbank.recognizes(utf8)) text=utf8;
-                    else if(BankStatementMbank.recognizes(cp1250)) text=cp1250;
-                    else text=utf8.indexOf('\uFFFD')>=0?cp1250:utf8;
-                }
                 java.util.List<BankStatementCsv.Entry> parsed;
-                if(BankStatementMbank.recognizes(text)) {
-                    parsed=BankStatementMbank.parse(text);
-                    mbankFiles++;
+                if(BankPdfText.isPdf(bytes)) {
+                    String pdfText=BankPdfText.extract(this,bytes);
+                    if(!BankStatementVeloPdf.recognizes(pdfText))
+                        throw new IllegalArgumentException(
+                            "Tekstowy PDF jest czytelny, ale nie rozpoznano obsługiwanego formatu banku.");
+                    parsed=BankStatementVeloPdf.parse(pdfText);
+                    veloPdfFiles++;
                 } else {
-                    parsed=BankStatementCsv.parse(text,bank);
-                    genericFiles++;
+                    String text;
+                    if(BankStatementWorkbook.isXlsx(bytes)) {
+                        text=BankStatementWorkbook.textRows(bytes);
+                    } else {
+                        String utf8=new String(bytes,StandardCharsets.UTF_8);
+                        String cp1250=new String(bytes,
+                            java.nio.charset.Charset.forName("windows-1250"));
+                        if(BankStatementMbank.recognizes(utf8)) text=utf8;
+                        else if(BankStatementMbank.recognizes(cp1250)) text=cp1250;
+                        else text=utf8.indexOf('\uFFFD')>=0?cp1250:utf8;
+                    }
+                    if(BankStatementMbank.recognizes(text)) {
+                        parsed=BankStatementMbank.parse(text);
+                        mbankFiles++;
+                    } else {
+                        parsed=BankStatementCsv.parse(text,bank);
+                        genericFiles++;
+                    }
                 }
                 for(BankStatementCsv.Entry entry:parsed) {
                     if(!seen.add(entry.evidenceKey)){duplicateRows++;continue;}
@@ -5192,8 +5202,12 @@ public final class MainActivity extends Activity {
                 }
             }
             DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
-            String detected=mbankFiles>0&&genericFiles==0?"mBank"
-                :mbankFiles>0?"mBank + "+bank:bank;
+            java.util.List<String> detectedSources=new java.util.ArrayList<>();
+            if(mbankFiles>0)detectedSources.add("mBank");
+            if(veloPdfFiles>0)detectedSources.add("VeloBank PDF");
+            if(genericFiles>0)detectedSources.add(
+                bank==null||bank.trim().isEmpty()?"CSV":bank.trim());
+            String detected=android.text.TextUtils.join(" + ",detectedSources);
             if(duplicateRows>0)
                 alert("Pominięto "+duplicateRows+" powtórzonych pozycji między plikami. "
                     +"Żaden duplikat nie zmieni salda.");
