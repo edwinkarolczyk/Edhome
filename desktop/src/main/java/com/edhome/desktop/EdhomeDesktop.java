@@ -35,9 +35,9 @@ public final class EdhomeDesktop extends JFrame {
         Preferences.userRoot().node("edhome/desktop-beta");
 
     private static final String[] NAV = {
-        "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Magazyn",
-        "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy", "Odpady",
-        "Miejsca", "Ustawienia"
+        "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
+        "Magazyn", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
+        "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Ustawienia"
     };
 
     private final JPanel content = new JPanel(new BorderLayout());
@@ -113,6 +113,9 @@ public final class EdhomeDesktop extends JFrame {
         if ("Zadania".equals(name)) return tablePage("Zadania", "tasks",
             cols("Tytuł","title","Termin","due_date","Priorytet","priority",
                  "Wykonane","done","Osoba","assignee_id"));
+        if ("Czynności".equals(name)) return tablePage("Czynności", "tasks",
+            cols("Nazwa","title","Typ","task_kind","Powtarzanie","repeat_rule",
+                 "Co ile","repeat_every","Miejsce","place_id"));
         if ("Magazyn".equals(name)) return tablePage("Magazyn", "storage_items",
             cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
                  "Miejsce","place_id","Wypożyczone","lent_to"));
@@ -125,9 +128,17 @@ public final class EdhomeDesktop extends JFrame {
             cols("Typ","kind","Kategoria","category","Kwota [gr]","amount_grosz",
                  "Status","status","Źródło","confirmation_source","Data","created_at"));
         if ("Pojazdy".equals(name)) return tablePage("Pojazdy", "vehicles",
-            cols("Nazwa","name","Marka","make","Model","model","Rejestracja","registration",
-                 "Przebieg","mileage"));
+            cols("Nazwa","name","Rejestracja","registration","Przebieg","mileage",
+                 "OC do","oc_until","Przegląd do","inspection_until"));
         if ("Odpady".equals(name)) return waste();
+        if ("Timery".equals(name)) return tablePage("Timery urządzeń", "device_timers",
+            cols("Urządzenie","device_type","Nazwa","title","Start","start_at","Koniec","end_at"));
+        if ("Energia".equals(name)) return placeholderPage("Energia i ogrzewanie",
+            "Podstawowy ekran desktopowy jest gotowy. Dane PV, CWU, bufora i ogrzewania "
+            + "dołączymy do wspólnego modelu po stronie Androida, żeby PC nie tworzył osobnej bazy.");
+        if ("SUPLA".equals(name)) return placeholderPage("SUPLA",
+            "Miejsce na podgląd pralki, suszarki i automatyki domowej. "
+            + "W pierwszym desktop MVP integracja nie odpytuje jeszcze SUPLA.");
         if ("Miejsca".equals(name)) return tablePage("Miejsca", "places",
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
         return settings();
@@ -303,6 +314,17 @@ public final class EdhomeDesktop extends JFrame {
         card.add(new JLabel(title), BorderLayout.NORTH);
         card.add(number, BorderLayout.CENTER);
         return card;
+    }
+
+    private JComponent placeholderPage(String title, String description) {
+        JPanel page = page(title);
+        JTextArea note = new JTextArea(description);
+        note.setEditable(false);
+        note.setLineWrap(true);
+        note.setWrapStyleWord(true);
+        note.setBorder(new EmptyBorder(20, 4, 4, 4));
+        page.add(note, BorderLayout.CENTER);
+        return page;
     }
 
     private JComponent tablePage(String title, String table, String[][] columns) {
