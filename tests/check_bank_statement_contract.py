@@ -12,6 +12,7 @@ mbank=(src/"BankStatementMbank.java").read_text(encoding="utf-8")
 workbook=(src/"BankStatementWorkbook.java").read_text(encoding="utf-8")
 velo=(src/"BankStatementVeloPdf.java").read_text(encoding="utf-8")
 pdfbridge=(src/"BankPdfText.java").read_text(encoding="utf-8")
+queue=(src/"BankEvidenceStore.java").read_text(encoding="utf-8")
 gradle=Path("app/build.gradle").read_text(encoding="utf-8")
 
 for word in ('statement_key TEXT','CREATE UNIQUE INDEX paycheck_statement_key_unique',
@@ -32,7 +33,8 @@ for word in ('bankImportDiag(', 'bankImportDiagLine()',
              'bankImportDiag("BŁĄD • "+diagStage',
              'Diagnostyka importu:'):
     assert word in ui,word
-assert 'inputVersion != 31 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 33 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
 assert '"statement_key", "statement_date"' in backup
 assert 'bankStatementOperations.add(bankKey)' in backup
 assert 'MAX_ROWS = 250' in parser and 'MAX_BYTES = 256 * 1024' in parser
@@ -50,8 +52,24 @@ for word in ('BankStatementMbank.recognizes(text)',
              'BankPdfText.extract(this,bytes)',
              'BankStatementVeloPdf.parse(pdfText)',
              'Intent.EXTRA_ALLOW_MULTIPLE',
+             'BankEvidenceStore.ingest(',
+             'showBankEvidenceQueue(0)',
+             'BankEvidenceStore.match(',
+             'BankEvidenceStore.dismiss(',
+             'BankEvidenceStore.reopen(',
+             'Banki i potwierdzenia • kolejka',
              'Zatwierdź parę'):
     assert word in ui, word
+for word in ('CREATE TABLE bank_evidence_queue',
+             'evidence_key TEXT NOT NULL UNIQUE',
+             "CHECK(state IN ('open','matched','dismissed'))",
+             'UNION SELECT 1 FROM paycheck_transactions WHERE statement_key=?',
+             'static IngestResult ingest(',
+             'static String match(',
+             'db.beginTransaction();',
+             'matched_operation_id',
+             'matched_at'):
+    assert word in queue,word
 assert '"#Saldo końcowe"' in mbank
 assert '"#Data księgowania;"' in mbank
 assert 'balanceGrosz' in mbank and '"mbank\\n"' in mbank
@@ -87,4 +105,25 @@ assert db.execute("""UPDATE paycheck_transactions SET status='confirmed'
     WHERE operation_id=? AND status='pending' AND amount_grosz=100""",
     ('22222222-2222-4222-8222-222222222222',)).rowcount==0
 assert db.execute("SELECT count(*) FROM paycheck_transactions").fetchone()==(2,)
-print("Bank CSV reconciliation: existing-only, unique key, exact amount and once-only PASS")
+queue_key='b'*64
+db.execute("""INSERT INTO bank_evidence_queue
+(evidence_key,source_kind,source_label,kind,amount_grosz,booking_date,
+ description,imported_at,state)
+VALUES (?,'csv','EDHOME TEST','expense',1250,'2026-09-25',
+ 'Test kolejki',1,'open')""",(queue_key,))
+try:
+    db.execute("""INSERT INTO bank_evidence_queue
+    (evidence_key,source_kind,source_label,kind,amount_grosz,booking_date,
+     description,imported_at,state)
+    VALUES (?,'csv','EDHOME TEST','expense',1250,'2026-09-25','Duplikat',2,'open')""",
+    (queue_key,))
+    raise AssertionError("duplicate queue evidence accepted")
+except sqlite3.IntegrityError: pass
+try:
+    db.execute("""UPDATE bank_evidence_queue SET state='matched'
+        WHERE evidence_key=?""",(queue_key,))
+    raise AssertionError("matched queue row without operation/timestamp accepted")
+except sqlite3.IntegrityError: pass
+assert db.execute("SELECT state FROM bank_evidence_queue WHERE evidence_key=?",
+                  (queue_key,)).fetchone()==('open',)
+print("Bank reconciliation + persistent evidence queue: unique key, exact match, state constraints PASS")
