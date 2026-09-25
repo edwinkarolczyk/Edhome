@@ -12,6 +12,7 @@ package_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryPackageS
 receipt_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text(encoding="utf-8")
 storage_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageStore.java").read_text(encoding="utf-8")
 paycheck_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PaycheckStore.java").read_text(encoding="utf-8")
+bank_evidence_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/BankEvidenceStore.java").read_text(encoding="utf-8")
 goals_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PaycheckGoalsStore.java").read_text(encoding="utf-8")
 price_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryPriceHistoryStore.java").read_text(encoding="utf-8")
 policy_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehiclePolicyStore.java").read_text(encoding="utf-8")
@@ -77,6 +78,10 @@ receipts18 = statements(section(receipt_store, "static void create(SQLiteDatabas
 storage19 = statements(section(storage_store, "static void createTables(SQLiteDatabase db)", "static final class Item").replace("db.execSQL(", "database.execSQL("))
 paycheck32 = statements(section(paycheck_store, "static void create(SQLiteDatabase db)", "static String add(").replace("db.execSQL(", "database.execSQL("))
 paycheck20 = [sql.replace(", status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed'))", "").replace(", confirmation_source TEXT NOT NULL DEFAULT 'legacy' CHECK(confirmation_source IN ('none','legacy','manual'))", "").replace(", confirmed_at INTEGER", "").replace(", statement_key TEXT, statement_date TEXT", "") for sql in paycheck32 if sql.startswith("CREATE TABLE")]
+bank34 = statements(section(bank_evidence_store,
+    "static void create(SQLiteDatabase db)", "static IngestResult ingest("
+    ).replace("db.execSQL(", "database.execSQL("))
+step34 = bank34.copy()
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
 step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
@@ -125,12 +130,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 33, "Database version and backup format differ"
+assert version == backup_version == 34, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
 expected = schema(fresh)
-assert len(expected) == 30 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 31 and len(bank34) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -206,6 +211,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step31)  # pending stays pending; legacy source remains unknown
     execute(db, step32)  # bank CSV evidence reference and unique index
     execute(db, step33)  # vehicle document register
+    execute(db, step34)  # v33 to v34, persistent bank evidence queue
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -341,6 +347,7 @@ execute(existing14, step30)
 execute(existing14, step31)
 execute(existing14, step32)
 execute(existing14, step33)
+execute(existing14, step34)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -364,8 +371,9 @@ execute(existing23, step30)
 execute(existing23, step31)
 execute(existing23, step32)
 execute(existing23, step33)
+execute(existing23, step34)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v32→v33: PASS; reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v33→v34: PASS; bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
