@@ -21,7 +21,9 @@ print("desktop sync contract OK")
 assert 'PAIR_PORT = 45824' in desktop
 assert 'MultiFormatWriter' in desktop
 assert 'edhome://desktop-pair' in desktop
-assert 'X-EDHOME-NONCE' in desktop
+assert 'x-edhome-nonce' in desktop.lower()
 assert 'desktopPairQrCameraPending' in main
 assert 'Skanuj QR z ekranu PC' in main
 assert 'DESKTOP_QR_PAIRED' in main
+
+assert 'X-EDHOME-NONCE' in main
