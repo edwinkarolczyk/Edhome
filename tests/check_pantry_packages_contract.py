@@ -8,7 +8,7 @@ scan = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java
 gradle = Path("app/build.gradle").read_text()
 for value in (
     '"DATABASE_MIGRATED_16_TO_17_PANTRY_PACKAGES"',
-    'super(context, "edhome-beta-preview.db", null, 33)',
+    'super(context, "edhome-beta-preview.db", null, 34)',
     'PantryPackageStore.fillLegacy(database)',
     'PantryPackageStore.create(database)',
     'PantryPackageRules.summary(',
@@ -38,7 +38,7 @@ for value in (
 ):
     assert value in scan, "Missing atomic barcode/package contract: " + value
 for value in (
-    'DB_VERSION = 33;',
+    'DB_VERSION = 34;',
     '{"pantry_packages", "pantry_id", "unit", "size_milli"}',
     'inputVersion < 17 && "pantry_packages".equals(definition[0])',
     '"size_milli".equals(column)',
