@@ -10,6 +10,9 @@ backup=(src/"DataBackup.java").read_text(encoding="utf-8")
 parser=(src/"BankStatementCsv.java").read_text(encoding="utf-8")
 mbank=(src/"BankStatementMbank.java").read_text(encoding="utf-8")
 workbook=(src/"BankStatementWorkbook.java").read_text(encoding="utf-8")
+velo=(src/"BankStatementVeloPdf.java").read_text(encoding="utf-8")
+pdfbridge=(src/"BankPdfText.java").read_text(encoding="utf-8")
+gradle=Path("app/build.gradle").read_text(encoding="utf-8")
 
 for word in ('statement_key TEXT','CREATE UNIQUE INDEX paycheck_statement_key_unique',
              'static String matchStatement(', "AND status='pending'",
@@ -34,6 +37,9 @@ assert description=="Test uzgodnienia PayCheck"
 for word in ('BankStatementMbank.recognizes(text)',
              'BankStatementMbank.parse(text)',
              'BankStatementWorkbook.textRows(bytes)',
+             'BankPdfText.isPdf(bytes)',
+             'BankPdfText.extract(this,bytes)',
+             'BankStatementVeloPdf.parse(pdfText)',
              'Intent.EXTRA_ALLOW_MULTIPLE',
              'Zatwierdź parę'):
     assert word in ui, word
@@ -41,6 +47,12 @@ assert '"#Saldo końcowe"' in mbank
 assert '"#Data księgowania;"' in mbank
 assert 'balanceGrosz' in mbank and '"mbank\\n"' in mbank
 assert "ZipInputStream" in workbook and 'disallow-doctype-decl' in workbook
+assert 'velobank-pdf-confirmation' in velo and 'velobank-pdf-row' in velo
+assert 'PDF skanowany jako obraz' in velo
+assert 'Class.forName(' in pdfbridge and 'PDFTextStripper' in pdfbridge
+assert 'MAX_PDF_BYTES=8*1024*1024' in pdfbridge
+assert "betaImplementation 'com.tom-roush:pdfbox-android:2.0.27.0'" in gradle
+assert 'implementation \'com.tom-roush:pdfbox-android' not in gradle
 db=runpy.run_path("tests/check_db_contract.py")["fresh"]
 for op,amount in [('11111111-1111-4111-8111-111111111111',65000),
                   ('22222222-2222-4222-8222-222222222222',65000)]:
