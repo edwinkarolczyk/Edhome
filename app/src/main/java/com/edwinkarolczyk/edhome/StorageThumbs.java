@@ -49,21 +49,31 @@ final class StorageThumbs {
             original=BitmapFactory.decodeStream(in,null,sample);
         }
         if(original==null)throw new IllegalArgumentException("Nie rozpoznano zdjęcia.");
+        try { return compress(original); }
+        finally { original.recycle(); }
+    }
+
+    /** Camera preview bitmaps are already small; normalize them exactly like file imports. */
+    static String compress(Bitmap original)throws Exception {
+        if(original==null||original.getWidth()<1||original.getHeight()<1)
+            throw new IllegalArgumentException("Nie rozpoznano zdjęcia.");
         int w=original.getWidth(),h=original.getHeight();
         double scale=Math.min(1.0,192.0/Math.max(w,h));
-        Bitmap small=Bitmap.createScaledBitmap(original,
+        Bitmap small=scale<1.0?Bitmap.createScaledBitmap(original,
             Math.max(1,(int)Math.round(w*scale)),
-            Math.max(1,(int)Math.round(h*scale)),true);
-        if(small!=original)original.recycle();
-        ByteArrayOutputStream out=new ByteArrayOutputStream();
-        for(int quality:new int[]{78,65,50}) {
-            out.reset();
-            small.compress(Bitmap.CompressFormat.JPEG,quality,out);
-            if(out.size()<=MAX_JPEG_BYTES)break;
+            Math.max(1,(int)Math.round(h*scale)),true):original;
+        try {
+            ByteArrayOutputStream out=new ByteArrayOutputStream();
+            for(int quality:new int[]{78,65,50}) {
+                out.reset();
+                small.compress(Bitmap.CompressFormat.JPEG,quality,out);
+                if(out.size()<=MAX_JPEG_BYTES)break;
+            }
+            if(out.size()==0||out.size()>MAX_JPEG_BYTES)
+                throw new IllegalArgumentException("Miniatura jest za duża.");
+            return Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP);
+        } finally {
+            if(small!=original)small.recycle();
         }
-        small.recycle();
-        if(out.size()==0||out.size()>MAX_JPEG_BYTES)
-            throw new IllegalArgumentException("Miniatura jest za duża.");
-        return Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP);
     }
 }
