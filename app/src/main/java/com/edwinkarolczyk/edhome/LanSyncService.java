@@ -19,7 +19,7 @@ public final class LanSyncService extends Service {
     private static final String CHANNEL = "edhome-desktop-lan";
     private static final int NOTIFICATION_ID = 1700042;
 
-    private LocalDb db;
+    private MainActivity.LocalDb db;
     private LanSyncServer server;
     private SharedPreferences prefs;
 
@@ -37,7 +37,7 @@ public final class LanSyncService extends Service {
         super.onCreate();
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
-        db = new LocalDb(this);
+        db = new MainActivity.LocalDb(this);
         db.getWritableDatabase();
 
         NotificationManager manager = (NotificationManager)
