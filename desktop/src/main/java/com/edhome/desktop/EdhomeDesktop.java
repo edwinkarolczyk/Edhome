@@ -50,13 +50,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.prefs.Preferences;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.44";
+    private static final String DESKTOP_VERSION = "0.6.0.45";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -506,7 +511,7 @@ public final class EdhomeDesktop extends JFrame {
             "Połączenie QR jest jednorazowo potwierdzane losowym kodem i działa tylko w sieci lokalnej.\n"
           + "Po zeskanowaniu Desktop zapisuje adres telefonu oraz kod lokalnego odczytu i od razu pobiera dane.\n\n"
           + "Kolejny etap:\n"
-          + "• automatyczne wykrywanie telefonu w LAN bez otwierania QR,\n"
+          + "• automatyczne wykrywanie telefonu w LAN po zmianie adresu IP,\n"
           + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
           + "• kolejne formularze dodawania/usuwania bez technicznych pól.\n"
           + "Pulpit pokazuje teraz zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
@@ -537,7 +542,21 @@ public final class EdhomeDesktop extends JFrame {
 
         new SwingWorker<SnapshotResult,Void>() {
             @Override protected SnapshotResult doInBackground() throws Exception {
-                return new LanClient(host, PORT, secret).snapshot();
+                Exception first;
+                try {
+                    return new LanClient(host, PORT, secret).snapshot();
+                } catch (Exception error) {
+                    first = error;
+                }
+
+                SwingUtilities.invokeLater(() ->
+                    connection.setText("SZUKAM TELEFONU W SIECI LAN…"));
+                String discovered = LanClient.discover(secret, PORT);
+                if (discovered != null && !discovered.equals(host)) {
+                    PREFS.put("phoneIp", discovered);
+                    return new LanClient(discovered, PORT, secret).snapshot();
+                }
+                throw first;
             }
 
             @Override protected void done() {
@@ -2048,6 +2067,59 @@ public final class EdhomeDesktop extends JFrame {
             validate(root);
             return new SnapshotResult(root,
                 response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""));
+        }
+
+        static String discover(String token, int port) {
+            String local = QrPairingSession.localAddress();
+            if (local == null || !local.matches("[0-9]+(\\.[0-9]+){3}"))
+                return null;
+            int dot = local.lastIndexOf('.');
+            if (dot <= 0) return null;
+            String prefix = local.substring(0, dot + 1);
+
+            ExecutorService pool = Executors.newFixedThreadPool(32);
+            try {
+                java.util.List<Callable<String>> tasks = new ArrayList<>();
+                for (int i = 1; i <= 254; i++) {
+                    String candidate = prefix + i;
+                    if (candidate.equals(local)) continue;
+                    tasks.add(() -> probe(candidate, port, token) ? candidate : null);
+                }
+                java.util.List<Future<String>> futures =
+                    pool.invokeAll(tasks, 6, TimeUnit.SECONDS);
+                for (Future<String> future : futures) {
+                    if (future.isCancelled()) continue;
+                    try {
+                        String host = future.get();
+                        if (host != null) return host;
+                    } catch (Exception ignored) { }
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                pool.shutdownNow();
+            }
+            return null;
+        }
+
+        private static boolean probe(String host, int port, String token) {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 450);
+                socket.setSoTimeout(900);
+                BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
+                    socket.getOutputStream(), StandardCharsets.US_ASCII));
+                out.write("GET /status HTTP/1.1\\r\\n");
+                out.write("Host: " + host + "\\r\\n");
+                out.write("X-EDHOME-TOKEN: " + token + "\\r\\n");
+                out.write("Connection: close\\r\\n\\r\\n");
+                out.flush();
+                BufferedReader in = new BufferedReader(new InputStreamReader(
+                    socket.getInputStream(), StandardCharsets.US_ASCII));
+                String status = in.readLine();
+                return status != null && status.contains(" 200 ");
+            } catch (Exception ignored) {
+                return false;
+            }
         }
 
         private static String normalizeHost(String raw) {
