@@ -357,6 +357,8 @@ jobs:
         run: python3 tests/check_updater_contract.py
       - name: EDHOME 0.6 code-side release gate
         run: python3 tests/check_0_6_release_gate.py
+      - name: Desktop Wi-Fi read-only sync contract
+        run: python3 tests/check_desktop_sync_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Verify actual bundled 100 AI 3D icon images
@@ -417,14 +419,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.32-signed-apk
+          name: EDHOME-0.6.0.33-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.32 — kandydat końcowy serii 0.6. Dodano bramkę release 0.6 w CI, dwuminutowy test nasłuchu banku na telefonie oraz bezpieczną diagnostykę importu (etap/liczba plików/pozycji/czas, bez danych finansowych). Zachowano rebind NotificationListener, lokalny CSV/mBank XLSX/tekstowy PDF Velo, ochronę powiadomienie↔wyciąg, stabilny Magazyn/miniatury/przewijanie oraz Drukuj/PDF/Udostępnij QR. Dane zachowane; Beta tylko; main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.33 — EDHOME Desktop MVP. Dodano lokalny odczyt Android → PC po Wi‑Fi/LAN z kodem parowania, cache offline i osobny build Windows. Synchronizacja PC jest na razie tylko do odczytu, więc nie nadpisuje danych telefonu. Zachowano dane i dotychczasowe moduły; Beta tylko; main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
