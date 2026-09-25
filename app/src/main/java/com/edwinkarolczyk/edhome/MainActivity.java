@@ -5058,9 +5058,15 @@ public final class MainActivity extends Activity {
                 +" wybranych aplikacji. Otwórz PayCheck ponownie po powiadomieniu.");
         // Distinguish granted access, an actually bound listener, a bank event,
         // a rejected format and a saved entry. Never show raw bank contents.
-        note("Nasłuch Androida: "+(BankNotificationListener.isConnected()
-            ?"POŁĄCZONY":"NIEPOŁĄCZONY")
-            +" • dostęp: "+(androidEnabled?"TAK":"NIE"));
+        boolean listenerConnected=BankNotificationListener.isConnected();
+        TextView listenerStatus=text(
+            "Nasłuch Androida: "+(listenerConnected?"● POŁĄCZONY":"● NIEPOŁĄCZONY")
+                +" • dostęp: "+(androidEnabled?"TAK":"NIE"),14,true);
+        listenerStatus.setTextColor(listenerConnected
+            ?0xFF39D98A
+            :0xFFFF4D4D);
+        listenerStatus.setPadding(0,dp(5),0,dp(8));
+        body.addView(listenerStatus);
         if(optIn) {
             long seen=BankNotificationHints.lastSeen(this);
             long saved=BankNotificationHints.lastSaved(this);
