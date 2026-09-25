@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 96,
-  "versionName": "0.6.0.31",
-  "changelog": "EDHOME 0.6.0.31 — końcowa diagnostyka PayCheck: dwuminutowy test nasłuchu wybranego banku rozróżnia brak odbioru Androida od odebranego, ale nierozpoznanego komunikatu; wynik jest lokalny i bez treści bankowych. Pozostają poprawki 0.6: ponowne wiązanie NotificationListener, lokalny import tekstowych PDF VeloBanku, ochrona przed duplikatem powiadomienie↔wyciąg oraz poprawione Drukuj / PDF / Udostępnij QR. Zachowane dane, Beta tylko, main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.31/edhome-beta.apk",
-  "sha256": "2cd0ca245acae15c60c9e3d5f274c1b93f97b599f320085887fabe42acb4337a"
+  "versionCode": 102,
+  "versionName": "0.6.0.37",
+  "changelog": "EDHOME 0.6.0.34 — Magazyn: miniaturę rzeczy i pudełka można wybrać z galerii/folderu albo zrobić aparatem. Poprawiono przepływ A4: przy pojedynczej etykiecie opcja A4 prowadzi do wyboru zbiorczego zamiast sugerować druk zbiorczy 1 szt. Zachowano Desktop MVP i lokalny odczyt po Wi‑Fi/LAN. Beta tylko; main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.37/edhome-beta.apk",
+  "sha256": "e0696fdef5b84e71d2361c0a905c07444764c15358f7b7047a7a1a41b9c95167"
 }
