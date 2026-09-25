@@ -18,6 +18,10 @@ assert "newVersion > 34" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
+manifest = Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+assert "android:name=\".BankNotificationListener\"" in manifest
+assert "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" in manifest
+assert "android.service.notification.NotificationListenerService" in manifest
 assert "android.view.ScaleGestureDetector" in main
 assert "MotionEvent.ACTION_POINTER_DOWN" in main
 assert "HOME_TILE_RESIZED" in main
