@@ -40,9 +40,9 @@ for token in (
     'BankNotificationHints.selected(this)',
     'static boolean isConnected()',
     'onListenerConnected()',
-    'requestRebind()',
 ):
     assert token in listener, token
+assert 'requestRebind(new ComponentName(this,' in main
 for token in (
     'bank_listener_test_until',
     'TEST_WINDOW_MS=2L*60*1000',
