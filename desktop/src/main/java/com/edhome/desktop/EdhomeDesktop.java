@@ -298,10 +298,13 @@ public final class EdhomeDesktop extends JFrame {
             @Override protected void done() {
                 if (trigger != null) trigger.setEnabled(true);
                 try {
-                    snapshot = get();
+                    SnapshotResult result = get();
+                    snapshot = result.data;
+                    snapshotHash = result.sha256;
+                    dirty = false;
                     validate(snapshot);
                     saveCache(snapshot);
-                    connection.setText("ONLINE • Android "
+                    connection.setText("ONLINE • EDYCJA • Android "
                         + str(snapshot,"sourceVersion",""));
                     showSection(current);
                 } catch (Exception ex) {
@@ -645,14 +648,60 @@ public final class EdhomeDesktop extends JFrame {
         private final String[][] cols;
 
         JsonTableModel(JsonArray input, String[][] cols) {
-            for (JsonElement e : input) if (e.isJsonObject()) rows.add(e.getAsJsonObject());
+            for (JsonElement e : input)
+                if (e.isJsonObject()) rows.add(e.getAsJsonObject());
             this.cols = cols;
         }
+
         public int getRowCount() { return rows.size(); }
         public int getColumnCount() { return cols.length; }
         public String getColumnName(int column) { return cols[column][0]; }
+
         public Object getValueAt(int row, int column) {
             return value(rows.get(row), cols[column][1]);
+        }
+
+        @Override public boolean isCellEditable(int row, int column) {
+            return true;
+        }
+
+        @Override public void setValueAt(Object input, int row, int column) {
+            JsonObject target = rows.get(row);
+            String key = cols[column][1];
+            JsonElement currentValue = target.get(key);
+            String text = input == null ? "" : input.toString().trim();
+            try {
+                if (currentValue != null && !currentValue.isJsonNull()
+                        && currentValue.isJsonPrimitive()
+                        && currentValue.getAsJsonPrimitive().isNumber()) {
+                    if (text.isBlank()) target.add(key, com.google.gson.JsonNull.INSTANCE);
+                    else target.addProperty(key, Long.parseLong(text));
+                } else if (currentValue != null && !currentValue.isJsonNull()
+                        && currentValue.isJsonPrimitive()
+                        && currentValue.getAsJsonPrimitive().isBoolean()) {
+                    target.addProperty(key, Boolean.parseBoolean(text));
+                } else {
+                    if (text.isBlank() && (currentValue == null || currentValue.isJsonNull()))
+                        target.add(key, com.google.gson.JsonNull.INSTANCE);
+                    else target.addProperty(key, text);
+                }
+                dirty = true;
+                connection.setText("ONLINE • niezapisane zmiany z PC");
+                fireTableCellUpdated(row, column);
+            } catch (Exception invalid) {
+                JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                    "Nieprawidłowa wartość dla pola „" + cols[column][0] + "”.");
+            }
+        }
+    }
+
+    private static final class SnapshotResult {
+        final JsonObject data;
+        final String sha256;
+
+        SnapshotResult(JsonObject data, String sha256) {
+            this.data = data;
+            this.sha256 = sha256 == null ? "" : sha256;
         }
     }
 
