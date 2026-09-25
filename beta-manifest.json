@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 104,
-  "versionName": "0.6.0.39",
-  "changelog": "EDHOME 0.6.0.39 — naprawiono parowanie Desktop przez QR na Androidzie: ruch HTTP jest dopuszczony wyłącznie w wariancie Beta, a kod QR nadal akceptuje tylko prywatny adres IPv4 w lokalnej sieci. Desktop przechodzi na dwukierunkowy tryb Android ↔ PC: można edytować istniejące dane w tabelach i zapisać je z powrotem do telefonu. Zapis jest chroniony kodem parowania, ograniczeniem do LAN oraz kontrolą konfliktu SHA-256; jeśli dane na telefonie zmieniły się od ostatniego pobrania, zapis z PC zostaje odrzucony. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.39/edhome-beta.apk",
-  "sha256": "ef8728db82fb622af4a16e063fb62b6c1bdd05c6aeef4778abe8e2adc9612c91"
+  "versionCode": 106,
+  "versionName": "0.6.0.41",
+  "changelog": "EDHOME 0.6.0.41 — dodano na górze EDHOME wskaźnik połączenia z Desktopem: zielone ● ⇄ PC oznacza aktywne połączenie, szare ○ ⇄ PC oczekiwanie. Wskaźnik odświeża się bez przeładowywania ekranu i po dotknięciu otwiera ustawienia połączenia. Ustawienia pokazują także aktualny stan PC. Zachowano trwałą usługę LAN z 0.6.0.40. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.41/edhome-beta.apk",
+  "sha256": "7e6ea99d2b0c27daedc866ef7c8c5f54f17ddcf6e74ee54fa0cf8fae41be9ee2"
 }
