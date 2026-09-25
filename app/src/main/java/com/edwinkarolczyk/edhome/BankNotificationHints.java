@@ -132,6 +132,7 @@ final class BankNotificationHints {
         if(hint==null){
             pref(context).edit().putLong(UNRECOGNIZED,
                 System.currentTimeMillis()).apply();
+            DiagnosticLog.event("BANK_NOTIFICATION_UNRECOGNIZED");
             return;
         }
         // Same Android notification, even after service reconnect, has same key.
@@ -148,6 +149,7 @@ final class BankNotificationHints {
         // A receipt is allowed only after durable storage succeeds.
         if(persist(context,entries)) {
             pref(context).edit().putLong(SAVED,System.currentTimeMillis()).apply();
+            DiagnosticLog.event("BANK_NOTIFICATION_SAVED");
             BankReceiptNotifier.show(context,saved);
         }
     }
