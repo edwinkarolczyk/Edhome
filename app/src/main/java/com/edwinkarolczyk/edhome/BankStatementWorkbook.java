@@ -76,6 +76,7 @@ final class BankStatementWorkbook {
             Element row=(Element)rows.item(r);
             NodeList cells=row.getElementsByTagName("c");
             List<String> values=new ArrayList<>();
+            boolean any=false;
             for(int c=0;c<cells.getLength();c++) {
                 Element cell=(Element)cells.item(c);
                 String type=cell.getAttribute("t");
@@ -91,16 +92,23 @@ final class BankStatementWorkbook {
                             "Brak wartości tekstowej XLSX.");
                     value=strings.get(index);
                 }else if("inlineStr".equals(type))value=texts(cell,"t");
-                if(value.isEmpty())continue;
-                // Preserve rows stored as one complete semicolon string
-                // in the first column, including the mBank #header.
-                values.add(value);
+
+                // Blank cells may be omitted from the XML. Preserve their
+                // positions from the cell reference (for example G12), or a
+                // valid bank row shifts left and is parsed under wrong headers.
+                int column=columnIndex(cell.getAttribute("r"),c);
+                while(values.size()<=column)values.add("");
+                values.set(column,value);
+                if(!value.isEmpty())any=true;
             }
-            if(values.isEmpty())continue;
+            if(!any)continue;
+            // Only trailing empties are disposable. Internal blanks are data.
+            while(values.size()>1&&values.get(values.size()-1).isEmpty())
+                values.remove(values.size()-1);
             if(values.size()==1)result.append(values.get(0));
             else for(int i=0;i<values.size();i++) {
                 if(i>0)result.append(';');
-                result.append('"').append(values.get(i).replace("\"","\"\""))
+                result.append('"').append(values.get(i).replace("\"","\"""))
                     .append('"');
             }
             result.append('\n');
@@ -109,6 +117,20 @@ final class BankStatementWorkbook {
                     "Za dużo danych transakcyjnych w XLSX.");
         }
         return result.toString();
+    }
+
+    private static int columnIndex(String ref,int fallback) {
+        if(ref==null||ref.isEmpty())return fallback;
+        int value=0,letters=0;
+        for(int i=0;i<ref.length();i++) {
+            char ch=ref.charAt(i);
+            if(ch>='A'&&ch<='Z') {
+                value=value*26+(ch-'A'+1);letters++;
+            } else if(ch>='a'&&ch<='z') {
+                value=value*26+(ch-'a'+1);letters++;
+            } else break;
+        }
+        return letters==0?fallback:value-1;
     }
 
     private static Document parse(byte[] xml) {
