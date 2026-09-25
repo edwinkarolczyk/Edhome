@@ -5266,6 +5266,8 @@ public final class MainActivity extends Activity {
         bankImportDiag(diagStage,files.size(),0);
         try {
             java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
+            java.util.List<BankEvidenceStore.Incoming> incoming=
+                new java.util.ArrayList<>();
             java.util.Set<String> seen=new java.util.HashSet<>();
             int duplicateRows=0;
             int mbankFiles=0;
@@ -5287,6 +5289,8 @@ public final class MainActivity extends Activity {
                 }
                 byte[] bytes=output.toByteArray();
                 java.util.List<BankStatementCsv.Entry> parsed;
+                String sourceKind;
+                String sourceLabel;
                 if(BankPdfText.isPdf(bytes)) {
                     diagStage="PDF_TEXT";
                     String pdfText=BankPdfText.extract(this,bytes);
@@ -5294,6 +5298,8 @@ public final class MainActivity extends Activity {
                         throw new IllegalArgumentException(
                             "Tekstowy PDF jest czytelny, ale nie rozpoznano obsługiwanego formatu banku.");
                     parsed=BankStatementVeloPdf.parse(pdfText);
+                    sourceKind="velo_pdf";
+                    sourceLabel="VeloBank";
                     veloPdfFiles++;
                 } else {
                     String text;
@@ -5311,10 +5317,14 @@ public final class MainActivity extends Activity {
                     if(BankStatementMbank.recognizes(text)) {
                         diagStage="MBANK_PARSE";
                         parsed=BankStatementMbank.parse(text);
+                        sourceKind="mbank";
+                        sourceLabel="mBank";
                         mbankFiles++;
                     } else {
                         diagStage="CSV_PARSE";
                         parsed=BankStatementCsv.parse(text,bank);
+                        sourceKind="csv";
+                        sourceLabel=bank.trim();
                         genericFiles++;
                     }
                 }
@@ -5324,9 +5334,14 @@ public final class MainActivity extends Activity {
                         throw new IllegalArgumentException(
                             "Maksymalnie 250 różnych transakcji w partii.");
                     entries.add(entry);
+                    incoming.add(new BankEvidenceStore.Incoming(
+                        entry,sourceKind,sourceLabel));
                 }
             }
-            bankImportDiag("OK",files.size(),entries.size());
+            diagStage="QUEUE_SAVE";
+            BankEvidenceStore.IngestResult queue=BankEvidenceStore.ingest(
+                db.getWritableDatabase(),incoming);
+            bankImportDiag("OK",files.size(),queue.inserted);
             DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
             java.util.List<String> detectedSources=new java.util.ArrayList<>();
             if(mbankFiles>0)detectedSources.add("mBank");
@@ -5334,10 +5349,11 @@ public final class MainActivity extends Activity {
             if(genericFiles>0)detectedSources.add(
                 bank==null||bank.trim().isEmpty()?"CSV":bank.trim());
             String detected=android.text.TextUtils.join(" + ",detectedSources);
-            if(duplicateRows>0)
-                alert("Pominięto "+duplicateRows+" powtórzonych pozycji między plikami. "
-                    +"Żaden duplikat nie zmieni salda.");
-            showStatementEntries(entries,detected);
+            int duplicates=duplicateRows+queue.duplicates;
+            if(duplicates>0)
+                alert("Pominięto "+duplicates+" powtórzonych / wcześniej zapisanych "
+                    +"pozycji. Żaden duplikat nie zmieni salda.");
+            showBankEvidenceQueue(0);
         }catch(Exception error){
             bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
             DiagnosticLog.event("PAYCHECK_BANK_FILES_REJECTED");
