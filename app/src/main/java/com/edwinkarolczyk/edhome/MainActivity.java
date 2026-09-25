@@ -4347,10 +4347,15 @@ public final class MainActivity extends Activity {
     private void selectQrLabelFormat(
             java.util.List<StorageQrLabels.Label> selected) {
         if(!BetaUpdater.isBeta())return;
-        String[] formats=StorageQrLabels.FORMATS;
+        String[] formats=StorageQrLabels.FORMATS.clone();
+        if(selected.size()==1) formats[3]="A4 — wybór zbiorczy";
         new AlertDialog.Builder(this).setTitle(
                 "Format etykiet • "+selected.size()+" szt.")
             .setItems(formats,(dialog,format)->{
+                if(format==3&&selected.size()==1) {
+                    selectBulkQrLabels();
+                    return;
+                }
                 // PDF rendering can be expensive for a large A4 batch.
                 new Thread(()->{
                     byte[] output=null;
