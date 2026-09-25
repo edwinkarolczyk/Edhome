@@ -46,7 +46,8 @@ for secret in ('notificationText', 'EXTRA_TEXT', 'EXTRA_BIG_TEXT',
 assert 'Powiadomienie EDHOME po odebraniu:' in ui
 assert 'requestBankReceiptNotificationPermission()' in ui
 for phrase in ('static boolean isConnected()', 'BankNotificationHints.recordSeen(this,',
-               'onListenerConnected()'):
+               'onListenerConnected()', 'onListenerDisconnected()',
+               'requestRebind(new ComponentName(this,'):
     assert phrase in listener,phrase
 for phrase in ('bank_last_seen_at', 'bank_last_saved_at',
                'bank_last_unrecognized_at', 'lastSeenPackage(',
@@ -55,7 +56,9 @@ for phrase in ('bank_last_seen_at', 'bank_last_saved_at',
 for phrase in ('Nasłuch Androida:', 'Ostatni nierozpoznany komunikat bankowy:',
                'Ostatnio zapisany sygnał:', 'Własne powiadomienie EDHOME:',
                'BankNotificationListener.isConnected()',
-               'Sprawdź teraz aktywne powiadomienia banków'):
+               'Sprawdź teraz aktywne powiadomienia banków',
+               '!BankNotificationListener.isConnected()',
+               'requestRebind(new ComponentName(this,'):
     assert phrase in ui,phrase
 qr=ui[ui.index('    private void chooseQrOutput('):
       ui.index('    private void shareQrPdf(')]
