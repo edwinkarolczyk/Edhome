@@ -15,7 +15,7 @@ assert 'DataBackup.exportJson' in service
 assert 'PrivatePaycheck' not in server
 assert 'desktop_sync_token' in server
 assert 'isSiteLocalAddress()' in server
-assert 'odczyt i zapis' in desktop.lower()
+assert 'android ↔ pc' in desktop.lower()
 
 print("desktop sync contract OK")
 
