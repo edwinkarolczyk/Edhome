@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 103,
-  "versionName": "0.6.0.38",
-  "changelog": "EDHOME 0.6.0.38 — Desktop: dodano szybkie parowanie przez QR. Na PC wybierz Pokaż QR do połączenia, a na telefonie Ustawienia → Skanuj QR z ekranu PC. QR jest jednorazowy, wygasa po 3 minutach i działa wyłącznie w lokalnej sieci Wi‑Fi/LAN. Po skanie Desktop zapisuje dane połączenia i automatycznie pobiera snapshot. Beta tylko; main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.38/edhome-beta.apk",
-  "sha256": "9f0f42a4e8214f60822fb41f99552d6714cc959ffe339380c24b11a87dfebb1a"
+  "versionCode": 104,
+  "versionName": "0.6.0.39",
+  "changelog": "EDHOME 0.6.0.39 — naprawiono parowanie Desktop przez QR na Androidzie: ruch HTTP jest dopuszczony wyłącznie w wariancie Beta, a kod QR nadal akceptuje tylko prywatny adres IPv4 w lokalnej sieci. Desktop przechodzi na dwukierunkowy tryb Android ↔ PC: można edytować istniejące dane w tabelach i zapisać je z powrotem do telefonu. Zapis jest chroniony kodem parowania, ograniczeniem do LAN oraz kontrolą konfliktu SHA-256; jeśli dane na telefonie zmieniły się od ostatniego pobrania, zapis z PC zostaje odrzucony. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.39/edhome-beta.apk",
+  "sha256": "ef8728db82fb622af4a16e063fb62b6c1bdd05c6aeef4778abe8e2adc9612c91"
 }
