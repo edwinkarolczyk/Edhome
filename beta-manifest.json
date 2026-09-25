@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 94,
-  "versionName": "0.6.0.29",
-  "changelog": "EDHOME 0.6.0.29 — Magazyn: naprawiony wybór Drukuj / Zapisz PDF / Udostępnij w oknie etykiet QR. PayCheck: diagnostyka nasłuchu banków pokazuje faktyczne połączenie usługi Androida, ostatnie odebrane, nierozpoznane i zapisane zdarzenie oraz zgodę na powiadomienia EDHOME. Przywracanie połączenia i sprawdzanie aktywnych powiadomień na żądanie. Bez treści bankowych w diagnostyce, bez migracji lub kasowania danych; Beta tylko, main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.29/edhome-beta.apk",
-  "sha256": "508760fc939779a329cdbeda690a9f4916f3cc86c936ebfd15d7bdb5f47de8e8"
+  "versionCode": 95,
+  "versionName": "0.6.0.30",
+  "changelog": "EDHOME 0.6.0.30 — końcowa stabilizacja PayCheck 0.6: automatyczne ponowne wiązanie NotificationListener po rozłączeniu i wznowieniu aplikacji; lokalny import tekstowych PDF VeloBanku (bez OCR, bez sieci) do ręcznego uzgodnienia; ochrona przed podwójnym wpisem, gdy podobna operacja została już uzgodniona z wyciągiem; diagnostyka nasłuchu pozostaje. Magazyn: poprawione akcje Drukuj / PDF / Udostępnij QR. Zachowane dane, Beta tylko, main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.30/edhome-beta.apk",
+  "sha256": "4ffca08a3eba4e8a7a5806fb3e0a36d34e45400f3a10602a5aeb0a0f988f4007"
 }
