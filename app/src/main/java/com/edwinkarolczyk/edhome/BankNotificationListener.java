@@ -24,11 +24,13 @@ public final class BankNotificationListener extends NotificationListenerService 
     @Override public void onListenerConnected() {
         super.onListenerConnected();
         connected=new WeakReference<>(this);
+        DiagnosticLog.event("BANK_LISTENER_CONNECTED");
         collectActiveNotifications();
     }
 
     @Override public void onListenerDisconnected() {
         clearConnected();
+        DiagnosticLog.event("BANK_LISTENER_DISCONNECTED");
         super.onListenerDisconnected();
         // Android may disconnect a listener under memory pressure or after an
         // app update. Ask the framework to bind us again; no foreground
@@ -81,6 +83,7 @@ public final class BankNotificationListener extends NotificationListenerService 
                     .contains(sbn.getPackageName()))return;
         // Diagnostic metadata for selected banks only: no content or card data.
         BankNotificationHints.recordSeen(this,sbn.getPackageName());
+        DiagnosticLog.event("BANK_NOTIFICATION_SEEN");
         Notification notification=sbn.getNotification();
         if(notification==null||notification.extras==null)return;
         CharSequence title=notification.extras.getCharSequence(
