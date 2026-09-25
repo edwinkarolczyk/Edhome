@@ -6,12 +6,27 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.AbstractTableModel;
 import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,13 +36,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.prefs.Preferences;
 
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
+    private static final int PAIR_PORT = 45824;
     private static final Path CACHE = Path.of(System.getProperty("user.home"),
         ".edhome", "desktop-cache.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -44,6 +65,7 @@ public final class EdhomeDesktop extends JFrame {
     private final JLabel connection = new JLabel("OFFLINE • lokalna kopia");
     private JsonObject snapshot;
     private String current = "Pulpit";
+    private QrPairingSession qrPairingSession;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new EdhomeDesktop().setVisible(true));
@@ -216,20 +238,24 @@ public final class EdhomeDesktop extends JFrame {
 
         JTextField ip = new JTextField(PREFS.get("phoneIp", ""), 18);
         JTextField token = new JTextField(PREFS.get("token", ""), 18);
-        JButton pull = new JButton("Pobierz przez Wi‑Fi");
+        JButton qrPair = new JButton("Pokaż QR do połączenia");
+        JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
         JButton importFile = new JButton("Wczytaj backup JSON");
-        JLabel help = new JLabel("<html>Na telefonie: <b>Ustawienia → EDHOME Desktop • Wi‑Fi</b>. "
-            + "Przepisz adres i kod. Telefon oraz PC muszą być w tej samej sieci.<br>"
-            + "Dane pobierane są tylko z telefonu do PC. Prywatny PayCheck nie trafia do zwykłego backupu.</html>");
+        JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
+            + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
+            + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
+            + "Adres i kod poniżej zostają jako awaryjne połączenie ręczne.</html>");
 
         g.gridx=0; g.gridy=0; g.weightx=0; form.add(new JLabel("Adres telefonu:"),g);
         g.gridx=1; g.weightx=1; form.add(ip,g);
         g.gridx=0; g.gridy=1; g.weightx=0; form.add(new JLabel("Kod parowania:"),g);
         g.gridx=1; g.weightx=1; form.add(token,g);
         g.gridx=0; g.gridy=2; g.gridwidth=2; g.weightx=1; form.add(help,g);
-        g.gridy=3; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
+        g.gridy=3; g.gridwidth=2; form.add(qrPair,g);
+        g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
         g.gridx=1; form.add(importFile,g);
 
+        qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
             String host = ip.getText().trim();
             String secret = token.getText().trim();
@@ -237,45 +263,124 @@ public final class EdhomeDesktop extends JFrame {
                 JOptionPane.showMessageDialog(this, "Wpisz adres telefonu i kod parowania.");
                 return;
             }
-            PREFS.put("phoneIp", host);
-            PREFS.put("token", secret);
-            pull.setEnabled(false);
-            connection.setText("ŁĄCZENIE…");
-            new SwingWorker<JsonObject,Void>() {
-                @Override protected JsonObject doInBackground() throws Exception {
-                    return new LanClient(host, PORT, secret).snapshot();
-                }
-                @Override protected void done() {
-                    pull.setEnabled(true);
-                    try {
-                        snapshot = get();
-                        validate(snapshot);
-                        saveCache(snapshot);
-                        connection.setText("ONLINE • Android " + str(snapshot,"sourceVersion",""));
-                        showSection(current);
-                    } catch (Exception ex) {
-                        connection.setText("OFFLINE • błąd połączenia");
-                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
-                            "Nie pobrano danych:\n" + rootMessage(ex),
-                            "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
-                    }
-                }
-            }.execute();
+            pullFromPhone(host, secret, pull);
         });
 
         importFile.addActionListener(e -> importBackup());
 
         page.add(form, BorderLayout.NORTH);
         JTextArea notes = new JTextArea(
-            "Plan kolejnego etapu:\n"
-          + "• automatyczne wykrywanie telefonu w LAN,\n"
+            "Połączenie QR jest jednorazowo potwierdzane losowym kodem i działa tylko w sieci lokalnej.\n"
+          + "Po zeskanowaniu Desktop zapisuje adres telefonu oraz kod lokalnego odczytu i od razu pobiera dane.\n\n"
+          + "Kolejny etap:\n"
+          + "• automatyczne wykrywanie telefonu w LAN bez otwierania QR,\n"
           + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
-          + "• edycja na PC po dodaniu updatedAt/deviceId i rozwiązywania konfliktów,\n"
-          + "• później SUPLA/NAS bez wystawiania EDHOME do Internetu.");
+          + "• edycja na PC po dodaniu updatedAt/deviceId i rozwiązywania konfliktów.");
         notes.setEditable(false);
+        notes.setLineWrap(true);
+        notes.setWrapStyleWord(true);
         notes.setBorder(new EmptyBorder(20, 4, 4, 4));
         page.add(notes, BorderLayout.CENTER);
         return page;
+    }
+
+    private void pullFromPhone(String host, String secret, JButton trigger) {
+        PREFS.put("phoneIp", host);
+        PREFS.put("token", secret);
+        if (trigger != null) trigger.setEnabled(false);
+        connection.setText("ŁĄCZENIE…");
+        new SwingWorker<JsonObject,Void>() {
+            @Override protected JsonObject doInBackground() throws Exception {
+                return new LanClient(host, PORT, secret).snapshot();
+            }
+            @Override protected void done() {
+                if (trigger != null) trigger.setEnabled(true);
+                try {
+                    snapshot = get();
+                    validate(snapshot);
+                    saveCache(snapshot);
+                    connection.setText("ONLINE • Android "
+                        + str(snapshot,"sourceVersion",""));
+                    showSection(current);
+                } catch (Exception ex) {
+                    connection.setText("OFFLINE • błąd połączenia");
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie pobrano danych:\n" + rootMessage(ex),
+                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void showQrPairing(JTextField ip, JTextField token, JButton pull) {
+        if (qrPairingSession != null) {
+            qrPairingSession.close();
+            qrPairingSession = null;
+        }
+        final JDialog[] dialog = new JDialog[1];
+        final JLabel status = new JLabel("Czekam na skan z telefonu…");
+        try {
+            QrPairingSession session = QrPairingSession.start(payload ->
+                SwingUtilities.invokeLater(() -> {
+                    ip.setText(payload.phoneIp);
+                    token.setText(payload.token);
+                    PREFS.put("phoneIp", payload.phoneIp);
+                    PREFS.put("token", payload.token);
+                    status.setText("Połączono z Androidem " + payload.version + ".");
+                    if (dialog[0] != null) dialog[0].dispose();
+                    if (qrPairingSession != null) {
+                        qrPairingSession.close();
+                        qrPairingSession = null;
+                    }
+                    pullFromPhone(payload.phoneIp, payload.token, pull);
+                }));
+            qrPairingSession = session;
+
+            BufferedImage image = qrImage(session.qrText(), 320);
+            JLabel qr = new JLabel(new ImageIcon(image));
+            qr.setHorizontalAlignment(SwingConstants.CENTER);
+
+            JPanel body = new JPanel(new BorderLayout(10, 10));
+            body.setBorder(new EmptyBorder(14, 18, 14, 18));
+            JLabel instructions = new JLabel("<html><b>Na telefonie:</b> EDHOME → Ustawienia "
+                + "→ Skanuj QR z ekranu PC.<br>QR wygasa po 3 minutach i działa wyłącznie w LAN.</html>");
+            body.add(instructions, BorderLayout.NORTH);
+            body.add(qr, BorderLayout.CENTER);
+            body.add(status, BorderLayout.SOUTH);
+
+            JDialog window = new JDialog(this, "EDHOME • połącz telefon przez QR", false);
+            dialog[0] = window;
+            window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+            window.setContentPane(body);
+            window.pack();
+            window.setResizable(false);
+            window.setLocationRelativeTo(this);
+            window.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                    if (qrPairingSession == session) {
+                        qrPairingSession.close();
+                        qrPairingSession = null;
+                    }
+                }
+            });
+            window.setVisible(true);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                "Nie można przygotować QR do połączenia:\n" + rootMessage(ex)
+                    + "\nSprawdź, czy PC jest połączony z tą samą siecią co telefon.",
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static BufferedImage qrImage(String value, int size) throws Exception {
+        BitMatrix bits = new MultiFormatWriter().encode(
+            value, BarcodeFormat.QR_CODE, size, size);
+        BufferedImage image = new BufferedImage(
+            size, size, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                image.setRGB(x, y, bits.get(x, y) ? 0x000000 : 0xFFFFFF);
+        return image;
     }
 
     private void importBackup() {
@@ -439,6 +544,215 @@ public final class EdhomeDesktop extends JFrame {
         public String getColumnName(int column) { return cols[column][0]; }
         public Object getValueAt(int row, int column) {
             return value(rows.get(row), cols[column][1]);
+        }
+    }
+
+    private static final class PairPayload {
+        final String phoneIp;
+        final String token;
+        final String version;
+        PairPayload(String phoneIp, String token, String version) {
+            this.phoneIp = phoneIp;
+            this.token = token;
+            this.version = version;
+        }
+    }
+
+    private static final class QrPairingSession implements AutoCloseable {
+        private final ServerSocket server;
+        private final String host;
+        private final String nonce;
+        private final Consumer<PairPayload> callback;
+        private volatile boolean closed;
+        private Thread thread;
+
+        private QrPairingSession(ServerSocket server, String host, String nonce,
+                Consumer<PairPayload> callback) {
+            this.server = server;
+            this.host = host;
+            this.nonce = nonce;
+            this.callback = callback;
+        }
+
+        static QrPairingSession start(Consumer<PairPayload> callback) throws Exception {
+            String host = localAddress();
+            if (host == null)
+                throw new IOException("Brak lokalnego adresu IPv4 Wi‑Fi/LAN.");
+            byte[] random = new byte[18];
+            new SecureRandom().nextBytes(random);
+            String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+
+            ServerSocket server = new ServerSocket();
+            server.setReuseAddress(true);
+            server.bind(new InetSocketAddress(InetAddress.getByName(host), PAIR_PORT), 4);
+            server.setSoTimeout(180000);
+
+            QrPairingSession session =
+                new QrPairingSession(server, host, nonce, callback);
+            session.thread = new Thread(session::acceptLoop, "edhome-desktop-qr-pair");
+            session.thread.setDaemon(true);
+            session.thread.start();
+            return session;
+        }
+
+        String qrText() {
+            return "edhome://desktop-pair?v=1&host=" + host
+                + "&port=" + PAIR_PORT + "&nonce=" + nonce;
+        }
+
+        private void acceptLoop() {
+            long deadline = System.currentTimeMillis() + 180000L;
+            try {
+                while (!closed && System.currentTimeMillis() < deadline) {
+                    try (Socket peer = server.accept()) {
+                        if (handle(peer)) return;
+                    } catch (SocketTimeoutException timeout) {
+                        return;
+                    } catch (IOException error) {
+                        if (!closed) continue;
+                        return;
+                    }
+                }
+            } finally {
+                close();
+            }
+        }
+
+        private boolean handle(Socket peer) throws IOException {
+            peer.setSoTimeout(7000);
+            InetAddress remote = peer.getInetAddress();
+            if (remote == null
+                    || (!(remote instanceof Inet4Address))
+                    || (!remote.isSiteLocalAddress() && !remote.isLoopbackAddress())) {
+                reply(peer, 403, "{\"error\":\"LAN_ONLY\"}");
+                return false;
+            }
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(
+                peer.getInputStream(), StandardCharsets.US_ASCII));
+            String request = in.readLine();
+            if (request == null || !request.startsWith("POST /pair ")) {
+                reply(peer, 405, "{\"error\":\"PAIR_POST_ONLY\"}");
+                return false;
+            }
+
+            String suppliedNonce = "";
+            int contentLength = -1;
+            int headerBytes = request.length();
+            for (String line; (line = in.readLine()) != null && !line.isEmpty();) {
+                headerBytes += line.length();
+                if (headerBytes > 16384) {
+                    reply(peer, 431, "{\"error\":\"HEADERS_TOO_LARGE\"}");
+                    return false;
+                }
+                int colon = line.indexOf(':');
+                if (colon <= 0) continue;
+                String name = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+                String value = line.substring(colon + 1).trim();
+                if ("x-edhome-nonce".equals(name)) suppliedNonce = value;
+                if ("content-length".equals(name)) {
+                    try { contentLength = Integer.parseInt(value); }
+                    catch (NumberFormatException ignored) { contentLength = -1; }
+                }
+            }
+
+            if (!constantTimeEquals(nonce, suppliedNonce)) {
+                reply(peer, 401, "{\"error\":\"PAIR_NONCE\"}");
+                return false;
+            }
+            if (contentLength <= 0 || contentLength > 2048) {
+                reply(peer, 400, "{\"error\":\"PAIR_BODY\"}");
+                return false;
+            }
+
+            char[] chars = new char[contentLength];
+            int offset = 0;
+            while (offset < chars.length) {
+                int n = in.read(chars, offset, chars.length - offset);
+                if (n < 0) break;
+                offset += n;
+            }
+            if (offset != chars.length) {
+                reply(peer, 400, "{\"error\":\"PAIR_BODY_SHORT\"}");
+                return false;
+            }
+
+            String token = "";
+            String version = "";
+            for (String line : new String(chars).split("\\r?\\n")) {
+                int equals = line.indexOf('=');
+                if (equals <= 0) continue;
+                String key = line.substring(0, equals).trim();
+                String value = line.substring(equals + 1).trim();
+                if ("token".equals(key)) token = value;
+                else if ("version".equals(key)) version = value;
+            }
+            if (!token.matches("[A-Za-z0-9_-]{10,128}")
+                    || !version.matches("[A-Za-z0-9._-]{1,64}")) {
+                reply(peer, 400, "{\"error\":\"PAIR_DATA\"}");
+                return false;
+            }
+
+            String phoneIp = remote.getHostAddress();
+            reply(peer, 200, "{\"ok\":true}");
+            callback.accept(new PairPayload(phoneIp, token, version));
+            return true;
+        }
+
+        @Override public void close() {
+            closed = true;
+            try { server.close(); } catch (IOException ignored) { }
+            if (thread != null && thread != Thread.currentThread()) thread.interrupt();
+        }
+
+        private static void reply(Socket socket, int status, String body) throws IOException {
+            byte[] bytes = body.getBytes(StandardCharsets.US_ASCII);
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
+                socket.getOutputStream(), StandardCharsets.US_ASCII));
+            out.write("HTTP/1.1 " + status + (status == 200 ? " OK" : " Error") + "\r\n");
+            out.write("Content-Type: application/json\r\n");
+            out.write("Content-Length: " + bytes.length + "\r\n");
+            out.write("Connection: close\r\n\r\n");
+            out.flush();
+            socket.getOutputStream().write(bytes);
+            socket.getOutputStream().flush();
+        }
+
+        private static boolean constantTimeEquals(String expected, String supplied) {
+            if (expected == null || supplied == null) return false;
+            return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.US_ASCII),
+                supplied.getBytes(StandardCharsets.US_ASCII));
+        }
+
+        private static String localAddress() {
+            String fallback = null;
+            try {
+                for (NetworkInterface network :
+                        Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                    if (!network.isUp() || network.isLoopback()) continue;
+                    String name = ((network.getName() == null ? "" : network.getName()) + " "
+                        + (network.getDisplayName() == null ? "" : network.getDisplayName()))
+                        .toLowerCase(Locale.ROOT);
+                    boolean virtual = name.contains("virtual") || name.contains("vpn")
+                        || name.contains("tun") || name.contains("tap")
+                        || name.contains("docker") || name.contains("hyper-v")
+                        || name.contains("vmware");
+                    boolean preferred = name.contains("wi-fi") || name.contains("wifi")
+                        || name.contains("wireless") || name.contains("wlan")
+                        || name.contains("ethernet") || name.startsWith("eth");
+                    for (InetAddress address :
+                            Collections.list(network.getInetAddresses())) {
+                        if (!(address instanceof Inet4Address)
+                                || !address.isSiteLocalAddress()
+                                || address.isLoopbackAddress()) continue;
+                        String value = address.getHostAddress();
+                        if (preferred && !virtual) return value;
+                        if (!virtual && fallback == null) fallback = value;
+                    }
+                }
+            } catch (Exception ignored) { }
+            return fallback;
         }
     }
 

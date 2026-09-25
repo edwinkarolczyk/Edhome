@@ -114,6 +114,7 @@ public final class MainActivity extends Activity {
     private final PantryBatchSession pantryBatch = new PantryBatchSession();
     private boolean pantrySingleCameraPending;
     private boolean storageQrCameraPending;
+    private boolean desktopPairQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -7842,6 +7843,117 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void scanDesktopPairQr() {
+        if (desktopPairQrCameraPending || storageQrCameraPending
+                || pantrySingleCameraPending || pantryBatch.active()) return;
+        desktopPairQrCameraPending = true;
+        try {
+            IntentIntegrator qr = new IntentIntegrator(this);
+            qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            qr.setPrompt("EDHOME Desktop: zeskanuj QR z ekranu komputera");
+            qr.setBeepEnabled(false);
+            qr.setOrientationLocked(false);
+            qr.initiateScan();
+        } catch (Exception problem) {
+            desktopPairQrCameraPending = false;
+            DiagnosticLog.error("DESKTOP_QR_SCAN_LAUNCH", problem);
+            alert("Nie można uruchomić skanera QR. Sprawdź uprawnienie aparatu.");
+        }
+    }
+
+    private void pairDesktopFromQr(String raw) {
+        if (raw == null || raw.length() > 512) {
+            alert("To nie jest kod połączenia EDHOME Desktop.");
+            return;
+        }
+        try {
+            Uri uri = Uri.parse(raw);
+            if (!"edhome".equalsIgnoreCase(uri.getScheme())
+                    || !"desktop-pair".equalsIgnoreCase(uri.getHost())
+                    || !"1".equals(uri.getQueryParameter("v")))
+                throw new IllegalArgumentException("Nieprawidłowy QR EDHOME Desktop.");
+
+            String host = uri.getQueryParameter("host");
+            String portText = uri.getQueryParameter("port");
+            String nonce = uri.getQueryParameter("nonce");
+            int port = Integer.parseInt(portText == null ? "" : portText);
+            if (port != 45824)
+                throw new IllegalArgumentException("Nieprawidłowy port parowania.");
+            if (nonce == null || !nonce.matches("[A-Za-z0-9_-]{16,64}"))
+                throw new IllegalArgumentException("Nieprawidłowy kod parowania QR.");
+            if (!isPrivateLanIpv4(host))
+                throw new IllegalArgumentException(
+                    "QR nie wskazuje komputera w lokalnej sieci Wi‑Fi/LAN.");
+
+            final String target = host;
+            final String pairNonce = nonce;
+            new Thread(() -> {
+                String failure = null;
+                try {
+                    String token = prefs.getString(LanSyncServer.TOKEN_PREF, "");
+                    if (token == null || !token.matches("[A-Za-z0-9_-]{10,128}"))
+                        throw new IllegalStateException("Brak kodu telefonu.");
+                    String body = "token=" + token + "\nversion="
+                        + BuildConfig.VERSION_NAME + "\n";
+                    byte[] bytes = body.getBytes(StandardCharsets.US_ASCII);
+                    java.net.HttpURLConnection connection =
+                        (java.net.HttpURLConnection) new java.net.URL(
+                            "http://" + target + ":45824/pair").openConnection();
+                    try {
+                        connection.setConnectTimeout(4000);
+                        connection.setReadTimeout(6000);
+                        connection.setRequestMethod("POST");
+                        connection.setDoOutput(true);
+                        connection.setUseCaches(false);
+                        connection.setRequestProperty("Content-Type",
+                            "text/plain; charset=us-ascii");
+                        connection.setRequestProperty("X-EDHOME-NONCE", pairNonce);
+                        connection.setFixedLengthStreamingMode(bytes.length);
+                        try (OutputStream out = connection.getOutputStream()) {
+                            out.write(bytes);
+                            out.flush();
+                        }
+                        int code = connection.getResponseCode();
+                        if (code != 200)
+                            throw new java.io.IOException("PC odpowiedział HTTP " + code + ".");
+                    } finally {
+                        connection.disconnect();
+                    }
+                } catch (Exception error) {
+                    failure = error.getMessage();
+                    if (failure == null || failure.trim().isEmpty())
+                        failure = error.getClass().getSimpleName();
+                    DiagnosticLog.error("DESKTOP_QR_PAIR", error);
+                }
+                final String problem = failure;
+                runOnUiThread(() -> {
+                    if (problem == null) {
+                        DiagnosticLog.event("DESKTOP_QR_PAIRED");
+                        alert("Połączono z EDHOME Desktop. Komputer pobiera dane z telefonu.");
+                    } else {
+                        alert("Nie udało się połączyć z Desktopem: " + problem
+                            + "\nSprawdź, czy telefon i PC są w tej samej sieci.");
+                    }
+                });
+            }, "edhome-desktop-qr-pair").start();
+        } catch (IllegalArgumentException problem) {
+            DiagnosticLog.event("DESKTOP_QR_REJECTED");
+            alert(problem.getMessage());
+        }
+    }
+
+    private static boolean isPrivateLanIpv4(String host) {
+        if (host == null || !host.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}"))
+            return false;
+        try {
+            java.net.InetAddress address = java.net.InetAddress.getByName(host);
+            return address instanceof java.net.Inet4Address
+                && address.isSiteLocalAddress() && !address.isLoopbackAddress();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name + " • zmiana wyglądu nie zmienia danych.");
@@ -7853,13 +7965,15 @@ public final class MainActivity extends Activity {
             String endpoint = ip == null ? "Brak adresu Wi‑Fi/LAN"
                 : ip + ":" + LanSyncServer.PORT;
             desktop.addView(text(
-                "Pierwsza wersja PC synchronizuje bezpiecznie Android → PC. "
-                + "Telefon i komputer muszą być w tej samej sieci. "
-                + "EDHOME na telefonie musi być uruchomiony podczas pobierania danych.",
+                "Najprościej: na PC wybierz „Pokaż QR do połączenia”, a tutaj "
+                + "naciśnij „Skanuj QR z ekranu PC”. Telefon i komputer muszą być "
+                + "w tej samej sieci Wi‑Fi/LAN. Adres i kod poniżej zostają jako "
+                + "awaryjne połączenie ręczne.",
                 14, false));
             desktop.addView(text("Adres: " + endpoint
                 + "\nKod parowania: " + token
                 + "\nTryb: tylko odczyt na PC", 14, true));
+            smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)
                     getSystemService(Context.CLIPBOARD_SERVICE);
@@ -8546,6 +8660,11 @@ public final class MainActivity extends Activity {
         }
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
+            if (desktopPairQrCameraPending) {
+                desktopPairQrCameraPending = false;
+                if (scan.getContents() != null) pairDesktopFromQr(scan.getContents());
+                return;
+            }
             if (storageQrCameraPending) {
                 storageQrCameraPending = false;
                 if (scan.getContents() != null) openStorageQr(scan.getContents());
