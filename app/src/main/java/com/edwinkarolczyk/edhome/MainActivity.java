@@ -89,6 +89,7 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
+    private LanSyncServer lanSyncServer;
     private PrivatePaycheckVault.Session privatePaycheckSession;
     private String pendingPrivateBankHintKey;
     private String privateBackupForSave;
@@ -161,6 +162,12 @@ public final class MainActivity extends Activity {
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        if (BetaUpdater.isBeta()) {
+            String syncToken = LanSyncServer.ensureToken(prefs);
+            lanSyncServer = new LanSyncServer(syncToken,
+                () -> DataBackup.exportJson(db.getReadableDatabase(), prefs));
+            lanSyncServer.start();
+        }
         ReminderReceiver.schedule(this);
         DeviceTimerReceiver.scheduleAll(this);
         if (getIntent() != null && getIntent().getBooleanExtra("open_timers", false))
@@ -195,6 +202,14 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("AI3D_BUNDLED_MISSING");
             }
         }, "edhome-bundled-3d-icons").start();
+    }
+
+    @Override protected void onDestroy() {
+        if (lanSyncServer != null) {
+            lanSyncServer.stop();
+            lanSyncServer = null;
+        }
+        super.onDestroy();
     }
 
     @Override public void onPause() {
@@ -7710,6 +7725,29 @@ public final class MainActivity extends Activity {
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name + " • zmiana wyglądu nie zmienia danych.");
+        if (BetaUpdater.isBeta()) {
+            LinearLayout desktop = card();
+            desktop.addView(text("EDHOME Desktop • Wi‑Fi", 19, true));
+            String ip = LanSyncServer.localAddress();
+            String token = prefs.getString(LanSyncServer.TOKEN_PREF, "");
+            String endpoint = ip == null ? "Brak adresu Wi‑Fi/LAN"
+                : ip + ":" + LanSyncServer.PORT;
+            desktop.addView(text(
+                "Pierwsza wersja PC synchronizuje bezpiecznie Android → PC. "
+                + "Telefon i komputer muszą być w tej samej sieci. "
+                + "EDHOME na telefonie musi być uruchomiony podczas pobierania danych.",
+                14, false));
+            desktop.addView(text("Adres: " + endpoint
+                + "\nKod parowania: " + token
+                + "\nTryb: tylko odczyt na PC", 14, true));
+            smallButton(desktop, "Kopiuj adres i kod", () -> {
+                ClipboardManager clipboard = (ClipboardManager)
+                    getSystemService(Context.CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                    "EDHOME Desktop", endpoint + "\n" + token));
+                alert("Skopiowano dane połączenia EDHOME Desktop.");
+            });
+        }
         LinearLayout icons3d = card();
         icons3d.addView(text("Ikony kafelków • EDHOME AI 3D", 19, true));
         icons3d.addView(text(IconPack3D.installed(this)
