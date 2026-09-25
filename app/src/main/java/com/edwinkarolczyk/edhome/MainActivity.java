@@ -239,6 +239,15 @@ public final class MainActivity extends Activity {
             render();
         }
         if (unlocked && updater != null) updater.start();
+        if (BetaUpdater.isBeta() && bankNotificationPermissionGranted()
+                && BankNotificationHints.enabled(this)
+                && !BankNotificationListener.isConnected()) {
+            try {
+                android.service.notification.NotificationListenerService
+                    .requestRebind(new ComponentName(this,
+                        BankNotificationListener.class));
+            } catch (RuntimeException ignored) { }
+        }
         if (unlocked && root != null && ("timers".equals(screen)
                 || "paycheck".equals(screen))) render();
     }
