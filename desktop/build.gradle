@@ -2,6 +2,8 @@ plugins {
     id 'application'
 }
 
+version = '0.6.0.40'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)

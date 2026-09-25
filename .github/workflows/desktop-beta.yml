@@ -1,5 +1,8 @@
 name: EDHOME Desktop Beta
 
+env:
+  DESKTOP_VERSION: "0.6.0.40"
+
 on:
   push:
     branches: [beta]
@@ -33,7 +36,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path desktop\build\jpackage | Out-Null
-          jpackage --type app-image --name EDHOME-Desktop-Beta --input desktop\build\install\desktop\lib --main-jar desktop.jar --main-class com.edhome.desktop.EdhomeDesktop --dest desktop\build\jpackage --vendor "EDHOME - Idea by Edwin"
+          jpackage --type app-image --name EDHOME-Desktop-Beta --app-version $env:DESKTOP_VERSION --input desktop\build\install\desktop\lib --main-jar desktop.jar --main-class com.edhome.desktop.EdhomeDesktop --dest desktop\build\jpackage --vendor "EDHOME - Idea by Edwin"
+          Set-Content -Path desktop\build\jpackage\EDHOME-Desktop-Beta\desktop-version.txt -Value $env:DESKTOP_VERSION -Encoding ascii
           Compress-Archive -Path desktop\build\jpackage\EDHOME-Desktop-Beta\* -DestinationPath desktop\build\EDHOME-Desktop-Beta-Windows.zip -Force
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
@@ -54,4 +58,4 @@ jobs:
             gh release create $tag --repo $repo --target "${{ github.sha }}" --prerelease --title "EDHOME Desktop Beta • latest" --notes "Publiczna paczka używana przez aktualizację jednym przyciskiem w EDHOME Desktop."
           }
           gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
-          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta • latest" --notes "Najnowsza publiczna paczka Windows. W aplikacji: Ustawienia → Aktualizuj EDHOME Desktop — 1 klik."
+          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Najnowsza publiczna paczka Windows: $env:DESKTOP_VERSION. W aplikacji: Ustawienia → Aktualizuj EDHOME Desktop — 1 klik."
