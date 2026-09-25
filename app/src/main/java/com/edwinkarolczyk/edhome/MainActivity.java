@@ -5009,9 +5009,23 @@ public final class MainActivity extends Activity {
                 }
             }
             if(ids.isEmpty()) {
+                int possibleStatementMatches=countRecentStatementMatches(signal);
                 entry.addView(text("Automatycznie dodano do kolejki • "
                     +"wybierz, czy to wydatek wspólny, czy prywatny. "
                     +"Saldo bez zmian.",13,false));
+                if(possibleStatementMatches>0) {
+                    entry.addView(text("Uwaga: znaleziono "
+                        +possibleStatementMatches
+                        +" uzgodnione z wyciągiem operacje o tej samej kwocie "
+                        +"i kierunku w podobnym terminie. To może być ten sam zakup.",
+                        13,true));
+                    smallButton(entry,
+                        "To już uzgodnione z wyciągiem • zamknij sygnał",()->{
+                            if(!BankNotificationHints.remove(this,signal.key))
+                                alert("Nie zamknięto sygnału. Spróbuj ponownie.");
+                            render();
+                        });
+                }
                 smallButton(entry,"WSPÓLNY • dodaj do oczekujących",
                     ()->assignBankHintToShared(signal));
                 smallButton(entry,"PRYWATNY • otwórz sejf",
@@ -5041,11 +5055,62 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private int countRecentStatementMatches(BankNotificationHints.Entry signal) {
+        java.time.LocalDate received=Instant.ofEpochMilli(signal.received)
+            .atZone(ZoneId.systemDefault()).toLocalDate();
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT statement_date FROM paycheck_transactions "
+                +"WHERE scope='shared' AND status='confirmed' "
+                +"AND statement_key IS NOT NULL AND kind=? AND amount_grosz=? "
+                +"AND statement_date IS NOT NULL",
+                new String[]{signal.kind,Long.toString(signal.amount)})) {
+            while(c.moveToNext()) {
+                try {
+                    java.time.LocalDate booked=java.time.LocalDate.parse(c.getString(0));
+                    long days=Math.abs(java.time.temporal.ChronoUnit.DAYS
+                        .between(received,booked));
+                    if(days<=2)count++;
+                }catch(Exception invalidDate){ }
+            }
+        }
+        return count;
+    }
+
     /** Assign an auto-collected draft only after explicit shared/private choice.
      * Stable operation ID guarantees retry cannot create the same draft twice.
      */
     private void assignBankHintToShared(BankNotificationHints.Entry signal) {
         if(!BetaUpdater.isBeta())return;
+        if(BankNotificationHints.alreadyHandled(this,signal.key)) {
+            BankNotificationHints.remove(this,signal.key);
+            render();
+            return;
+        }
+        int possible=countRecentStatementMatches(signal);
+        if(possible>0) {
+            new AlertDialog.Builder(this)
+                .setTitle("Możliwy duplikat")
+                .setMessage("W podobnym terminie istnieje już "+possible
+                    +" uzgodniona z wyciągiem operacja o tej samej kwocie "
+                    +"i kierunku. Powiadomienie nie zawiera bankowego ID, więc "
+                    +"EDHOME nie może bezpiecznie zdecydować, czy to ta sama "
+                    +"transakcja.")
+                .setNegativeButton("Anuluj",null)
+                .setNeutralButton("To ta sama • zamknij sygnał",(d,w)->{
+                    if(!BankNotificationHints.remove(this,signal.key))
+                        alert("Nie zamknięto sygnału. Spróbuj ponownie.");
+                    render();
+                })
+                .setPositiveButton("To inna • utwórz wpis",(d,w)->
+                    assignBankHintToSharedNow(signal))
+                .show();
+            return;
+        }
+        assignBankHintToSharedNow(signal);
+    }
+
+    private void assignBankHintToSharedNow(BankNotificationHints.Entry signal) {
         if(BankNotificationHints.alreadyHandled(this,signal.key)) {
             BankNotificationHints.remove(this,signal.key);
             render();
