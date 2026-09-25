@@ -14,6 +14,6 @@ assert 'DataBackup.exportJson' in main
 assert 'PrivatePaycheck' not in server
 assert 'desktop_sync_token' in server
 assert 'isSiteLocalAddress()' in server
-assert 'read-only' in desktop.lower()
+assert 'tylko odczyt' in desktop.lower()
 
 print("desktop sync contract OK")
