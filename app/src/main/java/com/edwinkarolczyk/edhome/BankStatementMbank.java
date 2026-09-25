@@ -162,7 +162,16 @@ final class BankStatementMbank {
     private static String date(String raw) {
         String value=raw.trim();
         try {
-            LocalDate parsed=value.contains(".")
+            LocalDate parsed;
+            // Real XLSX exports can store dates as Excel serial numbers even
+            // when the sheet displays DD.MM.YYYY. 1899-12-30 handles Excel's
+            // historical leap-year offset for modern dates.
+            if(value.matches("[0-9]{4,6}(?:[.]0+)?")) {
+                long serial=Long.parseLong(value.replaceFirst("[.]0+$",""));
+                if(serial<25569||serial>73415)
+                    throw new IllegalArgumentException("Excel date outside 1970-2100");
+                parsed=LocalDate.of(1899,12,30).plusDays(serial);
+            } else parsed=value.contains(".")
                 ?LocalDate.parse(value,PL):LocalDate.parse(value);
             if(parsed.getYear()<1970||parsed.getYear()>2100)
                 throw new IllegalArgumentException("Data poza zakresem.");
