@@ -8401,7 +8401,7 @@ public final class MainActivity extends Activity {
 
     private static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 33);
+            super(context, "edhome-beta-preview.db", null, 34);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -8427,6 +8427,7 @@ public final class MainActivity extends Activity {
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
             PaycheckStore.create(database);
+            BankEvidenceStore.create(database);
             PaycheckGoalsStore.create(database);
             PantryPriceHistoryStore.create(database);
             addDeviceTimers(database);
@@ -8443,7 +8444,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 33) {
+            if (oldVersion < 1 || newVersion > 34) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -8615,6 +8616,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 33) {
                 VehicleDocumentStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_32_TO_33_VEHICLE_DOCUMENTS");
+            }
+            if(oldVersion < 34) {
+                BankEvidenceStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_33_TO_34_BANK_EVIDENCE_QUEUE");
             }
         }
 
