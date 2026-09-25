@@ -49,6 +49,9 @@ import java.util.prefs.Preferences;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
+    private static final String DESKTOP_UPDATE_URL =
+        "https://github.com/edwinkarolczyk/Edhome/releases/download/"
+        + "desktop-beta-latest/EDHOME-Desktop-Beta-Windows.zip";
     private static final Path CACHE = Path.of(System.getProperty("user.home"),
         ".edhome", "desktop-cache.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -243,6 +246,7 @@ public final class EdhomeDesktop extends JFrame {
         JButton qrPair = new JButton("Pokaż QR do połączenia");
         JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
         JButton importFile = new JButton("Wczytaj backup JSON");
+        JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik");
         JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
             + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
             + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
@@ -256,6 +260,7 @@ public final class EdhomeDesktop extends JFrame {
         g.gridy=3; g.gridwidth=2; form.add(qrPair,g);
         g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
         g.gridx=1; form.add(importFile,g);
+        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(updateDesktop,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -269,6 +274,7 @@ public final class EdhomeDesktop extends JFrame {
         });
 
         importFile.addActionListener(e -> importBackup());
+        updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
 
         page.add(form, BorderLayout.NORTH);
         JTextArea notes = new JTextArea(
@@ -386,6 +392,98 @@ public final class EdhomeDesktop extends JFrame {
             for (int x = 0; x < size; x++)
                 image.setRGB(x, y, bits.get(x, y) ? 0x000000 : 0xFFFFFF);
         return image;
+    }
+
+    private void oneClickDesktopUpdate(JButton trigger) {
+        trigger.setEnabled(false);
+        connection.setText("POBIERANIE AKTUALIZACJI DESKTOP…");
+        new SwingWorker<Path,Void>() {
+            @Override protected Path doInBackground() throws Exception {
+                Path launcher = desktopLauncher();
+                Path installDir = launcher.getParent();
+                if (installDir == null)
+                    throw new IOException("Nie można ustalić folderu EDHOME Desktop.");
+
+                HttpClient client = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .connectTimeout(Duration.ofSeconds(8))
+                    .build();
+                HttpRequest request = HttpRequest.newBuilder(URI.create(DESKTOP_UPDATE_URL))
+                    .timeout(Duration.ofMinutes(3))
+                    .header("Accept", "application/octet-stream")
+                    .GET().build();
+                HttpResponse<byte[]> response = client.send(
+                    request, HttpResponse.BodyHandlers.ofByteArray());
+                if (response.statusCode() != 200)
+                    throw new IOException("Serwer aktualizacji odpowiedział HTTP "
+                        + response.statusCode() + ".");
+                if (response.body().length < 5_000_000)
+                    throw new IOException("Pobrana paczka aktualizacji jest niekompletna.");
+
+                Path zip = Files.createTempFile("edhome-desktop-update-", ".zip");
+                Files.write(zip, response.body());
+                Path stage = Files.createTempDirectory("edhome-desktop-stage-");
+                Path script = Files.createTempFile("edhome-desktop-update-", ".ps1");
+                long pid = ProcessHandle.current().pid();
+
+                String ps =
+                    "$ErrorActionPreference = 'Stop'\r\n"
+                    + "$pidToWait = " + pid + "\r\n"
+                    + "Wait-Process -Id $pidToWait -ErrorAction SilentlyContinue\r\n"
+                    + "Start-Sleep -Milliseconds 900\r\n"
+                    + "$zip = " + psQuote(zip.toString()) + "\r\n"
+                    + "$stage = " + psQuote(stage.toString()) + "\r\n"
+                    + "$target = " + psQuote(installDir.toString()) + "\r\n"
+                    + "$exe = " + psQuote(launcher.toString()) + "\r\n"
+                    + "Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force\r\n"
+                    + "& robocopy $stage $target /MIR /R:3 /W:1 /NFL /NDL /NJH /NJS\r\n"
+                    + "if ($LASTEXITCODE -ge 8) { throw 'Nie udało się podmienić plików EDHOME Desktop.' }\r\n"
+                    + "Start-Process -FilePath $exe\r\n"
+                    + "Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue\r\n"
+                    + "Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue\r\n"
+                    + "Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue\r\n";
+                Files.writeString(script, ps, StandardCharsets.UTF_8);
+                return script;
+            }
+
+            @Override protected void done() {
+                try {
+                    Path script = get();
+                    connection.setText("AKTUALIZACJA GOTOWA • restart…");
+                    new ProcessBuilder("powershell.exe", "-NoProfile",
+                        "-ExecutionPolicy", "Bypass", "-File", script.toString())
+                        .directory(script.getParent().toFile())
+                        .start();
+                    dispose();
+                    System.exit(0);
+                } catch (Exception ex) {
+                    trigger.setEnabled(true);
+                    connection.setText("ONLINE • aktualizacja nieudana");
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie udało się zaktualizować Desktopu:\n" + rootMessage(ex)
+                            + "\n\nMożesz nadal używać obecnej wersji.",
+                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private static Path desktopLauncher() throws IOException {
+        String appPath = System.getProperty("jpackage.app-path", "").trim();
+        if (appPath.isBlank())
+            appPath = ProcessHandle.current().info().command().orElse("").trim();
+        if (appPath.isBlank())
+            throw new IOException("Nie znaleziono programu uruchamiającego.");
+        Path launcher = Path.of(appPath).toAbsolutePath().normalize();
+        if (!launcher.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".exe")
+                || !Files.isRegularFile(launcher))
+            throw new IOException(
+                "Aktualizacja jednym przyciskiem działa w paczce Windows EDHOME Desktop.");
+        return launcher;
+    }
+
+    private static String psQuote(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 
     private void importBackup() {
