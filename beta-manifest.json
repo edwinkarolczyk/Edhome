@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 95,
-  "versionName": "0.6.0.30",
-  "changelog": "EDHOME 0.6.0.30 — końcowa stabilizacja PayCheck 0.6: automatyczne ponowne wiązanie NotificationListener po rozłączeniu i wznowieniu aplikacji; lokalny import tekstowych PDF VeloBanku (bez OCR, bez sieci) do ręcznego uzgodnienia; ochrona przed podwójnym wpisem, gdy podobna operacja została już uzgodniona z wyciągiem; diagnostyka nasłuchu pozostaje. Magazyn: poprawione akcje Drukuj / PDF / Udostępnij QR. Zachowane dane, Beta tylko, main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.30/edhome-beta.apk",
-  "sha256": "4ffca08a3eba4e8a7a5806fb3e0a36d34e45400f3a10602a5aeb0a0f988f4007"
+  "versionCode": 96,
+  "versionName": "0.6.0.31",
+  "changelog": "EDHOME 0.6.0.31 — końcowa diagnostyka PayCheck: dwuminutowy test nasłuchu wybranego banku rozróżnia brak odbioru Androida od odebranego, ale nierozpoznanego komunikatu; wynik jest lokalny i bez treści bankowych. Pozostają poprawki 0.6: ponowne wiązanie NotificationListener, lokalny import tekstowych PDF VeloBanku, ochrona przed duplikatem powiadomienie↔wyciąg oraz poprawione Drukuj / PDF / Udostępnij QR. Zachowane dane, Beta tylko, main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.31/edhome-beta.apk",
+  "sha256": "2cd0ca245acae15c60c9e3d5f274c1b93f97b599f320085887fabe42acb4337a"
 }
