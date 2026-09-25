@@ -123,7 +123,7 @@ final class BankStatementWorkbook {
                 &&value.indexOf('\n')<0&&value.indexOf('\r')<0) {
             out.append(value);return;
         }
-        out.append('"').append(value.replace("\"","\""")).append('"');
+        out.append('"').append(value.replace("\"","\"\"")).append('"');
     }
 
     private static int columnIndex(String ref,int fallback) {
