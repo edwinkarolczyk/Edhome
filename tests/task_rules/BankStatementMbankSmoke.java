@@ -69,6 +69,44 @@ final class BankStatementMbankSmoke {
         assertTrue(excel.size()==3
             && excel.get(0).evidenceKey.equals(rows.get(0).evidenceKey),
             "XLSX column A roundtrip");
+
+        // Real XLSX shape: separate columns, Excel serial dates and omitted
+        // blank E/F cells. The workbook reader must preserve column positions.
+        String multi="<worksheet><sheetData>"
+            +"<row r=\"1\">"
+            +"<c r=\"A1\" t=\"inlineStr\"><is><t>#Data księgowania</t></is></c>"
+            +"<c r=\"B1\" t=\"inlineStr\"><is><t>#Data operacji</t></is></c>"
+            +"<c r=\"C1\" t=\"inlineStr\"><is><t>#Opis operacji</t></is></c>"
+            +"<c r=\"D1\" t=\"inlineStr\"><is><t>#Tytuł</t></is></c>"
+            +"<c r=\"E1\" t=\"inlineStr\"><is><t>#Nadawca/Odbiorca</t></is></c>"
+            +"<c r=\"F1\" t=\"inlineStr\"><is><t>#Numer konta</t></is></c>"
+            +"<c r=\"G1\" t=\"inlineStr\"><is><t>#Kwota</t></is></c>"
+            +"<c r=\"H1\" t=\"inlineStr\"><is><t>#Saldo po operacji</t></is></c>"
+            +"</row>"
+            +"<row r=\"2\">"
+            +"<c r=\"A2\"><v>46289</v></c>"
+            +"<c r=\"B2\"><v>46289</v></c>"
+            +"<c r=\"C2\" t=\"inlineStr\"><is><t>PŁATNOŚĆ KARTĄ</t></is></c>"
+            +"<c r=\"D2\" t=\"inlineStr\"><is><t>STACJA TEST</t></is></c>"
+            // E2 and F2 intentionally absent
+            +"<c r=\"G2\"><v>-60.10</v></c>"
+            +"<c r=\"H2\"><v>939.90</v></c>"
+            +"</row></sheetData></worksheet>";
+        ByteArrayOutputStream multiOut=new ByteArrayOutputStream();
+        try(ZipOutputStream zip=new ZipOutputStream(multiOut)) {
+            zip.putNextEntry(new ZipEntry("xl/worksheets/sheet1.xml"));
+            zip.write(multi.getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        String reconstructed=BankStatementWorkbook.textRows(multiOut.toByteArray());
+        assertTrue(reconstructed.startsWith("#Data księgowania;#Data operacji;"),
+            "multi-column header must not be quoted");
+        List<BankStatementCsv.Entry> multiRows=BankStatementMbank.parse(reconstructed);
+        assertTrue(multiRows.size()==1
+            &&multiRows.get(0).date.equals("2026-09-24")
+            &&multiRows.get(0).amountGrosz==6010
+            &&multiRows.get(0).kind.equals("expense"),
+            "real XLSX columns, blanks and Excel serial date");
         System.out.println(
             "mBank: metadata, dates, booked balances, repeated purchases, CSV/XLSX: PASS");
     }
