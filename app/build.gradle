@@ -72,6 +72,8 @@ dependencies {
     // JourneyApps CaptureManager calls androidx.core.content.ContextCompat at runtime.
     // Explicitly package AndroidX Core in Beta; javac alone does not detect a missing runtime class.
     betaImplementation 'androidx.core:core:1.13.1'
+    // Local text extraction for user-selected bank PDFs in Beta only.
+    betaImplementation 'com.tom-roush:pdfbox-android:2.0.27.0'
     // Stable only; beta uses a separate direct-update path with no Play dependency.
     stableImplementation 'com.google.android.play:app-update:2.1.0'
 }
