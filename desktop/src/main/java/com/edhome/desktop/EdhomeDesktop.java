@@ -35,7 +35,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -43,12 +46,20 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.prefs.Preferences;
 
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
+    private static final Color APP_BG = new Color(16, 20, 27);
+    private static final Color APP_SURFACE = new Color(29, 35, 45);
+    private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
+    private static final Color APP_TEXT = new Color(239, 243, 247);
+    private static final Color APP_MUTED = new Color(164, 174, 188);
+    private static final Color APP_ACCENT = new Color(87, 214, 181);
     private static final String DESKTOP_UPDATE_URL =
         "https://github.com/edwinkarolczyk/Edhome/releases/download/"
         + "desktop-beta-latest/EDHOME-Desktop-Beta-Windows.zip";
@@ -84,6 +95,8 @@ public final class EdhomeDesktop extends JFrame {
         setLocationRelativeTo(null);
 
         JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(APP_BG);
+        content.setBackground(APP_BG);
         root.setBorder(new EmptyBorder(14, 14, 14, 14));
         root.add(topBar(), BorderLayout.NORTH);
         root.add(sidebar(), BorderLayout.WEST);
@@ -96,9 +109,12 @@ public final class EdhomeDesktop extends JFrame {
 
     private JComponent topBar() {
         JPanel bar = new JPanel(new BorderLayout(16, 0));
+        bar.setBackground(APP_BG);
         bar.setBorder(new EmptyBorder(0, 0, 12, 0));
         JLabel title = new JLabel("EDHOME  •  DESKTOP BETA");
+        title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 22f));
+        connection.setForeground(APP_ACCENT);
         connection.setHorizontalAlignment(SwingConstants.RIGHT);
         bar.add(title, BorderLayout.WEST);
         bar.add(connection, BorderLayout.EAST);
@@ -107,20 +123,27 @@ public final class EdhomeDesktop extends JFrame {
 
     private JComponent sidebar() {
         JPanel side = new JPanel();
+        side.setBackground(APP_BG);
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
         side.setBorder(new EmptyBorder(0, 0, 0, 14));
-        side.setPreferredSize(new Dimension(180, 1));
+        side.setPreferredSize(new Dimension(190, 1));
         for (String name : NAV) {
             JButton b = new JButton(name);
-            b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+            b.setFocusPainted(false);
+            b.setForeground(APP_TEXT);
+            b.setBackground(APP_SURFACE);
+            b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(APP_SURFACE_2),
+                new EmptyBorder(9, 12, 9, 12)));
+            b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
             b.setAlignmentX(Component.LEFT_ALIGNMENT);
             b.addActionListener(e -> showSection(name));
             side.add(b);
-            side.add(Box.createVerticalStrut(6));
+            side.add(Box.createVerticalStrut(7));
         }
         side.add(Box.createVerticalGlue());
-        JLabel mode = new JLabel("<html><b>MVP:</b> Android → PC<br>odczyt i zapis</html>");
-        mode.setForeground(new Color(110, 110, 110));
+        JLabel mode = new JLabel("<html><b>EDHOME</b><br>Android ↔ PC</html>");
+        mode.setForeground(APP_MUTED);
         side.add(mode);
         return side;
     }
@@ -149,7 +172,7 @@ public final class EdhomeDesktop extends JFrame {
         if ("Spiżarnia".equals(name)) return tablePage("Spiżarnia", "pantry",
             cols("Produkt","name","Ilość","qty","Kategoria","category"));
         if ("Zakupy".equals(name)) return tablePage("Lista zakupów", "shopping_items",
-            cols("Produkt","name","Ilość ×1000","qty_milli","Jednostka","unit",
+            cols("Produkt","name","Ilość","qty_milli","Jednostka","unit",
                  "Kupione","checked","Miejsce","place_id"));
         if ("PayCheck".equals(name)) return tablePage("PayCheck • wspólne", "paycheck_transactions",
             cols("Typ","kind","Kategoria","category","Kwota [gr]","amount_grosz",
@@ -173,7 +196,28 @@ public final class EdhomeDesktop extends JFrame {
 
     private JComponent dashboard() {
         JPanel page = page("Pulpit");
+
+        JPanel hero = new RoundedPanel(APP_SURFACE, 24);
+        hero.setLayout(new BorderLayout(12, 8));
+        hero.setBorder(new EmptyBorder(18, 20, 18, 20));
+        JLabel home = new JLabel(snapshot == null
+            ? "EDHOME • brak połączenia"
+            : "EDHOME • " + householdName());
+        home.setForeground(APP_TEXT);
+        home.setFont(home.getFont().deriveFont(Font.BOLD, 22f));
+        JLabel state = new JLabel(snapshot == null
+            ? "Połącz telefon w Ustawieniach, żeby zobaczyć wspólne dane."
+            : "Wspólne dane z telefonu • edycja na PC • zapis z kontrolą konfliktów");
+        state.setForeground(APP_MUTED);
+        hero.add(home, BorderLayout.NORTH);
+        hero.add(state, BorderLayout.CENTER);
+
+        JPanel north = new JPanel(new BorderLayout(0, 14));
+        north.setBackground(APP_BG);
+        north.add(hero, BorderLayout.NORTH);
+
         JPanel cards = new JPanel(new GridLayout(2, 4, 12, 12));
+        cards.setBackground(APP_BG);
         cards.add(metric("Zadania", count("tasks")));
         cards.add(metric("Do zrobienia", countWhere("tasks","done",0)));
         cards.add(metric("Spiżarnia", count("pantry")));
@@ -182,21 +226,17 @@ public final class EdhomeDesktop extends JFrame {
         cards.add(metric("Pojazdy", count("vehicles")));
         cards.add(metric("PayCheck", count("paycheck_transactions")));
         cards.add(metric("Miejsca", count("places")));
-        page.add(cards, BorderLayout.NORTH);
+        north.add(cards, BorderLayout.CENTER);
+        page.add(north, BorderLayout.NORTH);
 
-        JTextArea info = new JTextArea();
-        info.setEditable(false);
-        info.setLineWrap(true);
-        info.setWrapStyleWord(true);
-        info.setBorder(new EmptyBorder(18, 4, 4, 4));
-        info.setText(snapshot == null
-            ? "Brak danych. Wejdź w Ustawienia, wpisz adres telefonu i kod parowania, "
-              + "a potem wybierz „Pobierz przez Wi‑Fi”."
-            : "Źródło: EDHOME Android " + str(snapshot, "sourceVersion", "?")
-              + "\nUtworzono snapshot: " + str(snapshot, "createdAt", "?")
-              + "\n\nTa wersja PC jest celowo tylko do odczytu. Dzięki temu można już "
-              + "wygodnie przeglądać dane na dużym ekranie bez ryzyka nadpisania telefonu.");
-        page.add(info, BorderLayout.CENTER);
+        JPanel quick = new JPanel(new GridLayout(1, 4, 10, 10));
+        quick.setBackground(APP_BG);
+        quick.setBorder(new EmptyBorder(18, 0, 0, 0));
+        quick.add(quickButton("Dzisiaj", "Dzisiaj"));
+        quick.add(quickButton("Kalendarz", "Kalendarz"));
+        quick.add(quickButton("Magazyn", "Magazyn"));
+        quick.add(quickButton("Zakupy", "Zakupy"));
+        page.add(quick, BorderLayout.CENTER);
         return page;
     }
 
@@ -237,6 +277,7 @@ public final class EdhomeDesktop extends JFrame {
         JPanel page = page("Ustawienia • połączenie z telefonem");
 
         JPanel form = new JPanel(new GridBagLayout());
+        form.setBackground(APP_BG);
         GridBagConstraints g = new GridBagConstraints();
         g.insets = new Insets(6, 6, 6, 6);
         g.fill = GridBagConstraints.HORIZONTAL;
@@ -251,6 +292,7 @@ public final class EdhomeDesktop extends JFrame {
             + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
             + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
             + "Adres i kod poniżej zostają jako awaryjne połączenie ręczne.</html>");
+        help.setForeground(APP_MUTED);
 
         g.gridx=0; g.gridy=0; g.weightx=0; form.add(new JLabel("Adres telefonu:"),g);
         g.gridx=1; g.weightx=1; form.add(ip,g);
@@ -283,7 +325,10 @@ public final class EdhomeDesktop extends JFrame {
           + "Kolejny etap:\n"
           + "• automatyczne wykrywanie telefonu w LAN bez otwierania QR,\n"
           + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
-          + "• edycja na PC po dodaniu updatedAt/deviceId i rozwiązywania konfliktów.");
+          + "• kolejne formularze dodawania/usuwania bez technicznych pól.\n"
+          + "Domyślny widok Desktopu używa nazw, opisów i kart jak EDHOME na telefonie.");
+        notes.setBackground(APP_BG);
+        notes.setForeground(APP_MUTED);
         notes.setEditable(false);
         notes.setLineWrap(true);
         notes.setWrapStyleWord(true);
@@ -507,28 +552,46 @@ public final class EdhomeDesktop extends JFrame {
 
     private JPanel page(String titleText) {
         JPanel page = new JPanel(new BorderLayout(12, 12));
+        page.setBackground(APP_BG);
         page.setBorder(new EmptyBorder(8, 8, 8, 8));
         JLabel title = new JLabel(titleText);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 24f));
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 25f));
         page.add(title, BorderLayout.NORTH);
         return page;
     }
 
     private JPanel metric(String title, int value) {
-        JPanel card = new JPanel(new BorderLayout());
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(210,210,210)),
-            new EmptyBorder(16,16,16,16)));
+        JPanel card = new RoundedPanel(APP_SURFACE, 22);
+        card.setLayout(new BorderLayout(0, 8));
+        card.setBorder(new EmptyBorder(16, 18, 16, 18));
+        JLabel name = new JLabel(title);
+        name.setForeground(APP_MUTED);
         JLabel number = new JLabel(Integer.toString(value));
-        number.setFont(number.getFont().deriveFont(Font.BOLD, 28f));
-        card.add(new JLabel(title), BorderLayout.NORTH);
+        number.setForeground(APP_TEXT);
+        number.setFont(number.getFont().deriveFont(Font.BOLD, 30f));
+        card.add(name, BorderLayout.NORTH);
         card.add(number, BorderLayout.CENTER);
         return card;
+    }
+
+    private JButton quickButton(String label, String target) {
+        JButton button = new JButton(label);
+        button.setFocusPainted(false);
+        button.setForeground(APP_TEXT);
+        button.setBackground(APP_SURFACE_2);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(APP_SURFACE_2),
+            new EmptyBorder(12, 14, 12, 14)));
+        button.addActionListener(e -> showSection(target));
+        return button;
     }
 
     private JComponent placeholderPage(String title, String description) {
         JPanel page = page(title);
         JTextArea note = new JTextArea(description);
+        note.setBackground(APP_BG);
+        note.setForeground(APP_MUTED);
         note.setEditable(false);
         note.setLineWrap(true);
         note.setWrapStyleWord(true);
@@ -543,17 +606,38 @@ public final class EdhomeDesktop extends JFrame {
 
     private JComponent tablePage(String title, JsonArray rows, String[][] columns) {
         JPanel page = page(title);
-        JTable table = new JTable(new JsonTableModel(rows, columns));
-        table.setAutoCreateRowSorter(true);
-        table.setRowHeight(26);
-        page.add(new JScrollPane(table), BorderLayout.CENTER);
+
+        JPanel list = new JPanel();
+        list.setBackground(APP_BG);
+        list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
+        if (rows.size() == 0) {
+            JLabel empty = new JLabel("Brak pozycji.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18, 8, 18, 8));
+            list.add(empty);
+        } else {
+            for (JsonElement el : rows) {
+                if (!el.isJsonObject()) continue;
+                list.add(recordCard(el.getAsJsonObject(), columns));
+                list.add(Box.createVerticalStrut(10));
+            }
+        }
+
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        page.add(scroll, BorderLayout.CENTER);
 
         JPanel footer = new JPanel(new BorderLayout(8, 0));
+        footer.setBackground(APP_BG);
         JLabel count = new JLabel("Pozycji: " + rows.size()
-            + "  •  kliknij komórkę, aby edytować");
+            + "  •  widok użytkowy — bez technicznych ID");
+        count.setForeground(APP_MUTED);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        JButton reload = new JButton("Pobierz ponownie");
-        JButton save = new JButton("Zapisz zmiany do telefonu");
+        actions.setBackground(APP_BG);
+        JButton reload = actionButton("↻ Pobierz z telefonu");
+        JButton save = actionButton("✓ Zapisz zmiany do telefonu");
         reload.addActionListener(e -> reloadFromPhone(reload));
         save.addActionListener(e -> saveChangesToPhone(save));
         actions.add(reload);
@@ -562,6 +646,425 @@ public final class EdhomeDesktop extends JFrame {
         footer.add(actions, BorderLayout.EAST);
         page.add(footer, BorderLayout.SOUTH);
         return page;
+    }
+
+    private JPanel recordCard(JsonObject row, String[][] columns) {
+        JPanel card = new RoundedPanel(APP_SURFACE, 22);
+        card.setLayout(new BorderLayout(12, 12));
+        card.setBorder(new EmptyBorder(15, 18, 15, 18));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 210));
+
+        String mainKey = columns.length == 0 ? "" : columns[0][1];
+        String main = columns.length == 0 ? "Pozycja"
+            : friendlyValue(mainKey, row);
+        if (main.isBlank() || "—".equals(main)) main = "Pozycja";
+        JLabel title = new JLabel(main);
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+
+        JPanel header = new JPanel(new BorderLayout(10, 0));
+        header.setOpaque(false);
+        header.add(title, BorderLayout.CENTER);
+        JButton edit = actionButton("Edytuj");
+        edit.addActionListener(e -> editRow(row, columns));
+        header.add(edit, BorderLayout.EAST);
+        card.add(header, BorderLayout.NORTH);
+
+        JPanel details = new JPanel(new GridLayout(0, 2, 14, 7));
+        details.setOpaque(false);
+        for (int i = 1; i < columns.length; i++) {
+            JLabel label = new JLabel(columns[i][0]);
+            label.setForeground(APP_MUTED);
+            JLabel value = new JLabel(friendlyValue(columns[i][1], row));
+            value.setForeground(APP_TEXT);
+            details.add(label);
+            details.add(value);
+        }
+        card.add(details, BorderLayout.CENTER);
+        return card;
+    }
+
+    private JButton actionButton(String label) {
+        JButton button = new JButton(label);
+        button.setFocusPainted(false);
+        button.setForeground(APP_TEXT);
+        button.setBackground(APP_SURFACE_2);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(APP_SURFACE_2),
+            new EmptyBorder(8, 12, 8, 12)));
+        return button;
+    }
+
+    private String friendlyValue(String key, JsonObject row) {
+        String raw = value(row, key);
+        if (raw.isBlank()) return "—";
+
+        if ("assignee_id".equals(key)) return referenceName("household_members", raw);
+        if ("place_id".equals(key) || "parent_id".equals(key))
+            return placePath(raw);
+        if ("parent_box_id".equals(key)) return referenceName("storage_items", raw);
+        if ("goal_id".equals(key)) return referenceName("paycheck_goals", raw);
+        if ("vehicle_id".equals(key)) return referenceName("vehicles", raw);
+
+        if ("done".equals(key))
+            return "1".equals(raw) ? "Wykonane" : "Do zrobienia";
+        if ("checked".equals(key))
+            return "1".equals(raw) ? "Kupione" : "Do kupienia";
+        if ("mounted".equals(key)) return "1".equals(raw) ? "Założone" : "Zdjęte";
+        if ("current".equals(key)) return "1".equals(raw) ? "Aktualne" : "Archiwalne";
+
+        if ("priority".equals(key)) {
+            switch (raw) {
+                case "low": return "Niski";
+                case "normal": return "Normalny";
+                case "high": return "Wysoki";
+                case "urgent": return "Pilny";
+                default: return raw;
+            }
+        }
+        if ("repeat_rule".equals(key)) {
+            switch (raw) {
+                case "once": return "Jednorazowo";
+                case "daily": return "Codziennie";
+                case "weekly": return "Co tydzień";
+                case "monthly": return "Co miesiąc";
+                case "yearly": return "Co rok";
+                case "every_days": return "Co N dni";
+                case "every_weeks": return "Co N tygodni";
+                case "every_months": return "Co N miesięcy";
+                case "every_years": return "Co N lat";
+                case "before_spring": return "Przed wiosną";
+                case "before_summer": return "Przed latem";
+                case "before_autumn": return "Przed jesienią";
+                case "before_winter": return "Przed zimą";
+                default: return raw;
+            }
+        }
+        if ("task_kind".equals(key)) {
+            if ("waste".equals(raw)) return "Odpady";
+            if ("general".equals(raw)) return "Czynność";
+        }
+        if ("kind".equals(key)) {
+            switch (raw) {
+                case "thing": return "Rzecz";
+                case "box": return "Pudełko";
+                case "income": return "Wpływ";
+                case "expense": return "Wydatek";
+                default: return raw;
+            }
+        }
+        if ("scope".equals(key)) {
+            if ("shared".equals(raw)) return "Wspólne";
+            if ("private".equals(raw)) return "Prywatne";
+        }
+        if ("status".equals(key)) {
+            switch (raw) {
+                case "pending": return "Do potwierdzenia";
+                case "confirmed": return "Potwierdzone";
+                case "active": return "Aktywne";
+                case "done": return "Wykonane";
+                default: return raw;
+            }
+        }
+        if ("confirmation_source".equals(key)) {
+            switch (raw) {
+                case "none": return "Brak";
+                case "manual": return "Ręcznie";
+                case "legacy": return "Starszy wpis";
+                default: return raw;
+            }
+        }
+        if ("category".equals(key)) {
+            switch (raw) {
+                case "shopping": return "Zakupy";
+                case "bills": return "Rachunki";
+                case "home": return "Dom";
+                case "vehicle": return "Pojazdy";
+                case "salary": return "Wynagrodzenie";
+                case "food": return "Żywność";
+                case "household": return "Dom";
+                case "beauty": return "Higiena";
+                case "pet": return "Zwierzęta";
+                case "other": return "Inne";
+                default: return raw;
+            }
+        }
+        if ("amount_grosz".equals(key)) return money(raw);
+        if ("qty_milli".equals(key)) return milli(raw);
+        if (key.endsWith("_at")) return timeValue(raw);
+        return raw;
+    }
+
+    private String referenceName(String tableName, String idText) {
+        if (idText == null || idText.isBlank()) return "—";
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            JsonObject candidate = element.getAsJsonObject();
+            if (idText.equals(value(candidate, "id"))) {
+                String name = value(candidate, "name");
+                return name.isBlank() ? "Pozycja" : name;
+            }
+        }
+        return "Nieznane";
+    }
+
+    private String placePath(String idText) {
+        if (idText == null || idText.isBlank()) return "—";
+        java.util.List<String> names = new ArrayList<>();
+        String currentId = idText;
+        for (int depth = 0; depth < 32 && currentId != null && !currentId.isBlank(); depth++) {
+            JsonObject found = null;
+            for (JsonElement element : table("places")) {
+                if (!element.isJsonObject()) continue;
+                JsonObject candidate = element.getAsJsonObject();
+                if (currentId.equals(value(candidate, "id"))) {
+                    found = candidate;
+                    break;
+                }
+            }
+            if (found == null) break;
+            names.add(0, value(found, "name"));
+            currentId = value(found, "parent_id");
+        }
+        return names.isEmpty() ? "Nieznane" : String.join(" / ", names);
+    }
+
+    private static String money(String raw) {
+        try {
+            long grosz = Long.parseLong(raw);
+            java.math.BigDecimal amount = java.math.BigDecimal.valueOf(grosz, 2);
+            return amount.setScale(2).toPlainString().replace('.', ',') + " zł";
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    private static String milli(String raw) {
+        try {
+            java.math.BigDecimal quantity =
+                java.math.BigDecimal.valueOf(Long.parseLong(raw), 3).stripTrailingZeros();
+            return quantity.toPlainString().replace('.', ',');
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    private static String timeValue(String raw) {
+        try {
+            long millis = Long.parseLong(raw);
+            return DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+                .withZone(ZoneId.systemDefault())
+                .format(Instant.ofEpochMilli(millis));
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    private String householdName() {
+        if (snapshot == null || !snapshot.has("settings")) return "Moje gospodarstwo";
+        JsonObject settings = snapshot.getAsJsonObject("settings");
+        return str(settings, "household", "Moje gospodarstwo");
+    }
+
+    private void editRow(JsonObject row, String[][] columns) {
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(new EmptyBorder(8, 8, 8, 8));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(5, 5, 5, 5);
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.weightx = 1;
+
+        Map<String,JComponent> editors = new LinkedHashMap<>();
+        int y = 0;
+        for (String[] column : columns) {
+            String label = column[0];
+            String key = column[1];
+            JLabel name = new JLabel(label);
+            g.gridx = 0; g.gridy = y; g.weightx = 0;
+            form.add(name, g);
+            JComponent editor = editorFor(key, row);
+            editors.put(key, editor);
+            g.gridx = 1; g.weightx = 1;
+            form.add(editor, g);
+            y++;
+        }
+
+        int result = JOptionPane.showConfirmDialog(this, form,
+            "EDHOME • edytuj", JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        try {
+            for (Map.Entry<String,JComponent> entry : editors.entrySet())
+                applyEditor(row, entry.getKey(), entry.getValue());
+            dirty = true;
+            connection.setText("ONLINE • niezapisane zmiany z PC");
+            showSection(current);
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie zapisano zmiany: " + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private JComponent editorFor(String key, JsonObject row) {
+        String raw = value(row, key);
+        java.util.List<Choice> choices = choicesFor(key, row);
+        if (!choices.isEmpty()) {
+            JComboBox<Choice> box = new JComboBox<>(
+                choices.toArray(new Choice[0]));
+            for (int i = 0; i < choices.size(); i++) {
+                if (choices.get(i).value.equals(raw)) {
+                    box.setSelectedIndex(i);
+                    break;
+                }
+            }
+            return box;
+        }
+
+        if ("assignee_id".equals(key))
+            return referenceCombo("household_members", raw, true);
+        if ("place_id".equals(key) || "parent_id".equals(key))
+            return referenceCombo("places", raw, true);
+        if ("parent_box_id".equals(key))
+            return referenceCombo("storage_items", raw, true);
+
+        JTextField field = new JTextField();
+        if ("amount_grosz".equals(key)) {
+            try {
+                field.setText(java.math.BigDecimal.valueOf(
+                    Long.parseLong(raw), 2).toPlainString());
+            } catch (Exception ignored) { field.setText(raw); }
+        } else if ("qty_milli".equals(key)) {
+            try {
+                field.setText(java.math.BigDecimal.valueOf(
+                    Long.parseLong(raw), 3).stripTrailingZeros().toPlainString());
+            } catch (Exception ignored) { field.setText(raw); }
+        } else field.setText(raw);
+        return field;
+    }
+
+    private java.util.List<Choice> choicesFor(String key, JsonObject row) {
+        java.util.List<Choice> out = new ArrayList<>();
+        if ("done".equals(key) || "checked".equals(key)
+                || "mounted".equals(key) || "current".equals(key)) {
+            out.add(new Choice("0", "Nie"));
+            out.add(new Choice("1", "Tak"));
+        } else if ("priority".equals(key)) {
+            out.add(new Choice("low", "Niski"));
+            out.add(new Choice("normal", "Normalny"));
+            out.add(new Choice("high", "Wysoki"));
+            out.add(new Choice("urgent", "Pilny"));
+        } else if ("repeat_rule".equals(key)) {
+            String[][] values = {
+                {"once","Jednorazowo"},{"daily","Codziennie"},{"weekly","Co tydzień"},
+                {"monthly","Co miesiąc"},{"yearly","Co rok"},{"every_days","Co N dni"},
+                {"every_weeks","Co N tygodni"},{"every_months","Co N miesięcy"},
+                {"every_years","Co N lat"},{"before_spring","Przed wiosną"},
+                {"before_summer","Przed latem"},{"before_autumn","Przed jesienią"},
+                {"before_winter","Przed zimą"}
+            };
+            for (String[] value : values) out.add(new Choice(value[0], value[1]));
+        } else if ("task_kind".equals(key)) {
+            out.add(new Choice("general", "Czynność"));
+            out.add(new Choice("waste", "Odpady"));
+        } else if ("kind".equals(key) && row.has("parent_box_id")) {
+            out.add(new Choice("thing", "Rzecz"));
+            out.add(new Choice("box", "Pudełko"));
+        } else if ("kind".equals(key) && row.has("amount_grosz")) {
+            out.add(new Choice("income", "Wpływ"));
+            out.add(new Choice("expense", "Wydatek"));
+        } else if ("category".equals(key) && row.has("amount_grosz")) {
+            out.add(new Choice("shopping", "Zakupy"));
+            out.add(new Choice("bills", "Rachunki"));
+            out.add(new Choice("home", "Dom"));
+            out.add(new Choice("vehicle", "Pojazdy"));
+            out.add(new Choice("salary", "Wynagrodzenie"));
+            out.add(new Choice("other", "Inne"));
+        } else if ("category".equals(key)) {
+            out.add(new Choice("food", "Żywność"));
+            out.add(new Choice("household", "Dom"));
+            out.add(new Choice("beauty", "Higiena"));
+            out.add(new Choice("pet", "Zwierzęta"));
+            out.add(new Choice("other", "Inne"));
+        }
+        return out;
+    }
+
+    private JComboBox<Choice> referenceCombo(String tableName,
+            String selected, boolean nullable) {
+        java.util.List<Choice> options = new ArrayList<>();
+        if (nullable) options.add(new Choice("", "—"));
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            String id = value(row, "id");
+            String name = value(row, "name");
+            if (!id.isBlank()) options.add(new Choice(id,
+                name.isBlank() ? "Pozycja" : name));
+        }
+        JComboBox<Choice> box = new JComboBox<>(options.toArray(new Choice[0]));
+        for (int i = 0; i < options.size(); i++)
+            if (options.get(i).value.equals(selected)) box.setSelectedIndex(i);
+        return box;
+    }
+
+    private void applyEditor(JsonObject row, String key, JComponent editor) {
+        if (editor instanceof JComboBox<?>) {
+            Object selected = ((JComboBox<?>) editor).getSelectedItem();
+            if (selected instanceof Choice) {
+                String value = ((Choice) selected).value;
+                if (value.isBlank()
+                        && (key.endsWith("_id") || "parent_id".equals(key)))
+                    row.add(key, com.google.gson.JsonNull.INSTANCE);
+                else if (isNumericKey(key)) row.addProperty(key, Long.parseLong(value));
+                else row.addProperty(key, value);
+            }
+            return;
+        }
+
+        String text = ((JTextField) editor).getText().trim();
+        if ("amount_grosz".equals(key)) {
+            long grosz = new java.math.BigDecimal(text.replace(',', '.'))
+                .multiply(java.math.BigDecimal.valueOf(100))
+                .longValueExact();
+            row.addProperty(key, grosz);
+            return;
+        }
+        if ("qty_milli".equals(key)) {
+            long milli = new java.math.BigDecimal(text.replace(',', '.'))
+                .multiply(java.math.BigDecimal.valueOf(1000))
+                .longValueExact();
+            row.addProperty(key, milli);
+            return;
+        }
+        if (isNumericKey(key)) {
+            if (text.isBlank() && key.endsWith("_id"))
+                row.add(key, com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty(key, Long.parseLong(text));
+        } else {
+            if (text.isBlank() && (key.endsWith("_date") || key.endsWith("_until")))
+                row.add(key, com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty(key, text);
+        }
+    }
+
+    private static boolean isNumericKey(String key) {
+        return "done".equals(key) || "checked".equals(key)
+            || "repeat_every".equals(key) || "duration_minutes".equals(key)
+            || "qty".equals(key) || "qty_milli".equals(key)
+            || "amount_grosz".equals(key) || "mileage".equals(key)
+            || key.endsWith("_id");
+    }
+
+    private static final class Choice {
+        final String value;
+        final String label;
+        Choice(String value, String label) {
+            this.value = value == null ? "" : value;
+            this.label = label;
+        }
+        @Override public String toString() { return label; }
     }
 
     private int count(String name) {
@@ -790,6 +1293,28 @@ public final class EdhomeDesktop extends JFrame {
                 JOptionPane.showMessageDialog(EdhomeDesktop.this,
                     "Nieprawidłowa wartość dla pola „" + cols[column][0] + "”.");
             }
+        }
+    }
+
+    private static final class RoundedPanel extends JPanel {
+        private final Color fill;
+        private final int arc;
+        RoundedPanel(Color fill, int arc) {
+            this.fill = fill;
+            this.arc = arc;
+            setOpaque(false);
+        }
+        @Override protected void paintComponent(Graphics graphics) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(fill);
+                g.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
+            } finally {
+                g.dispose();
+            }
+            super.paintComponent(graphics);
         }
     }
 
