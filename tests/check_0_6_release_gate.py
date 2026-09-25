@@ -23,8 +23,8 @@ stable_manifest=(root/"app/src/main/AndroidManifest.xml").read_text(encoding="ut
 # Release identity and data compatibility.
 version=re.search(r"versionName '([^']+)'",gradle).group(1)
 assert version.startswith("0.6.0."), version
-assert "super(context, \"edhome-beta-preview.db\", null, 33)" in main
-assert "private static final int DB_VERSION = 33;" in backup
+assert "super(context, \"edhome-beta-preview.db\", null, 34)" in main
+assert "private static final int DB_VERSION = 34;" in backup
 
 # Shared PayCheck stays pending until a one-time explicit confirmation/match.
 for token in (
@@ -68,10 +68,21 @@ for token in (
     'BankPdfText.extract(this,bytes)',
     'BankStatementVeloPdf.parse(pdfText)',
     'Intent.EXTRA_ALLOW_MULTIPLE',
-    'PaycheckStore.matchStatement(',
+    'BankEvidenceStore.ingest(',
+    'showBankEvidenceQueue(0)',
+    'BankEvidenceStore.match(',
+    'Banki i potwierdzenia • kolejka',
     'countRecentStatementMatches(signal)',
 ):
     assert token in main, token
+queue=(src/"BankEvidenceStore.java").read_text(encoding="utf-8")
+for token in ('CREATE TABLE bank_evidence_queue',
+              'evidence_key TEXT NOT NULL UNIQUE',
+              "CHECK(state IN ('open','matched','dismissed'))",
+              'db.beginTransaction();',
+              'static String match('):
+    assert token in queue,token
+assert '{"bank_evidence_queue", "id", "evidence_key"' in backup
 for token in (
     'diagStage="READ"',
     'diagStage="PDF_TEXT"',
