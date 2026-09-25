@@ -419,14 +419,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.34-signed-apk
+          name: EDHOME-0.6.0.37-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.34 — Magazyn: miniaturę rzeczy i pudełka można wybrać z galerii/folderu albo zrobić aparatem. Poprawiono przepływ A4: przy pojedynczej etykiecie opcja A4 prowadzi do wyboru zbiorczego zamiast sugerować druk zbiorczy 1 szt. Zachowano Desktop MVP i lokalny odczyt po Wi‑Fi/LAN. Beta tylko; main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.37 — poprawiono połączenie EDHOME Desktop po Wi‑Fi/LAN: serwer lokalny potrafi się odtworzyć po błędzie i preferuje właściwy adres Wi‑Fi zamiast interfejsu VPN. Dodano stan listenera powiadomień bankowych w Becie, miniatury Magazynu z galerii/aparatu oraz aktualne etykiety QR/PDF. Beta tylko; main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
