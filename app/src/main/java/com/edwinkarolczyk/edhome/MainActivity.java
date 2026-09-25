@@ -4936,6 +4936,38 @@ public final class MainActivity extends Activity {
             note("Własne powiadomienie EDHOME: "
                 +(BankReceiptNotifier.allowed(this)?"DOZWOLONE":
                     "BRAK ZGODY LUB WYŁĄCZONE"));
+            String testResult=BankNotificationHints.listenerTestResult(this);
+            if("waiting".equals(testResult))
+                note("Test nasłuchu: AKTYWNY do "
+                    +bankSignalTime(BankNotificationHints.listenerTestUntil(this)));
+            else if("recognized".equals(testResult))
+                note("Test nasłuchu: ODEBRANO I ROZPOZNANO • "
+                    +bankSignalTime(BankNotificationHints.listenerTestResultAt(this)));
+            else if("unrecognized".equals(testResult))
+                note("Test nasłuchu: ODEBRANO, ALE NIE ROZPOZNANO • "
+                    +bankSignalTime(BankNotificationHints.listenerTestResultAt(this)));
+            else if("expired".equals(testResult))
+                note("Test nasłuchu: WYGASŁ bez odebranego sygnału banku.");
+            button("Testuj nasłuch banku przez 2 minuty",()->{
+                if(!bankNotificationPermissionGranted()) {
+                    showBankNotificationPermissionGuide();
+                    return;
+                }
+                if(!BankNotificationListener.isConnected()
+                        &&android.os.Build.VERSION.SDK_INT>=24)
+                    android.service.notification.NotificationListenerService
+                        .requestRebind(new ComponentName(this,
+                            BankNotificationListener.class));
+                if(!BankReceiptNotifier.allowed(this))
+                    requestBankReceiptNotificationPermission();
+                if(BankNotificationHints.armListenerTest(this)) {
+                    alert("Test aktywny przez 2 minuty. W tym czasie dowolne "
+                        +"powiadomienie z wybranego banku pokaże, czy Android "
+                        +"przekazał je do EDHOME i czy parser je rozpoznał. "
+                        +"EDHOME nie zapisuje treści komunikatu.");
+                    render();
+                } else alert("Najpierw wybierz co najmniej jedną aplikację bankową.");
+            });
             button("Sprawdź teraz aktywne powiadomienia banków",()->{
                 if(android.os.Build.VERSION.SDK_INT>=24
                         &&bankNotificationPermissionGranted())
