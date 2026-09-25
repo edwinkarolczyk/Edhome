@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 102,
   "versionName": "0.6.0.37",
-  "changelog": "EDHOME 0.6.0.34 — Magazyn: miniaturę rzeczy i pudełka można wybrać z galerii/folderu albo zrobić aparatem. Poprawiono przepływ A4: przy pojedynczej etykiecie opcja A4 prowadzi do wyboru zbiorczego zamiast sugerować druk zbiorczy 1 szt. Zachowano Desktop MVP i lokalny odczyt po Wi‑Fi/LAN. Beta tylko; main bez zmian.",
+  "changelog": "EDHOME 0.6.0.37 — poprawiono połączenie EDHOME Desktop po Wi‑Fi/LAN: serwer lokalny potrafi się odtworzyć po błędzie i preferuje właściwy adres Wi‑Fi zamiast interfejsu VPN. Dodano stan listenera powiadomień bankowych w Becie, miniatury Magazynu z galerii/aparatu oraz aktualne etykiety QR/PDF. Beta tylko; main bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.37/edhome-beta.apk",
   "sha256": "e0696fdef5b84e71d2361c0a905c07444764c15358f7b7047a7a1a41b9c95167"
 }
