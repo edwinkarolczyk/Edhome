@@ -81,6 +81,8 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_AI_3D_PACK = 1220;
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
     private static final int EXPORT_QR_LABELS_PDF = 1222;
+    private static final int TAKE_STORAGE_THUMBNAIL = 1223;
+    private static final int STORAGE_CAMERA_PERMISSION = 7134;
     private byte[] pendingQrLabelsPdf;
     private int pendingQrLabelsCount;
     private String pendingCustomTileId;
@@ -4174,9 +4176,21 @@ public final class MainActivity extends Activity {
     }
 
     private void selectStorageThumbnail(long id) {
-        if(StorageStore.find(db.getReadableDatabase(),id)==null) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null) {
             alert("Rzecz już nie istnieje.");return;
         }
+        new AlertDialog.Builder(this)
+            .setTitle("Miniatura • "+item.name)
+            .setItems(new String[]{"📷 Zrób zdjęcie",
+                "🖼️ Wybierz z galerii / folderu"},(dialog,choice)->{
+                if(choice==0)takeStorageThumbnail(id);
+                else pickStorageThumbnail(id);
+            })
+            .setNegativeButton("Anuluj",null).show();
+    }
+
+    private void pickStorageThumbnail(long id) {
         pendingStorageThumbnailId=id;
         Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         picker.addCategory(Intent.CATEGORY_OPENABLE);
@@ -4186,6 +4200,45 @@ public final class MainActivity extends Activity {
             pendingStorageThumbnailId=0;
             alert("Nie można otworzyć wyboru zdjęcia.");
         }
+    }
+
+    private void takeStorageThumbnail(long id) {
+        pendingStorageThumbnailId=id;
+        if(Build.VERSION.SDK_INT>=23
+                &&checkSelfPermission(android.Manifest.permission.CAMERA)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA},
+                STORAGE_CAMERA_PERMISSION);
+            return;
+        }
+        launchStorageThumbnailCamera();
+    }
+
+    private void launchStorageThumbnailCamera() {
+        long id=pendingStorageThumbnailId;
+        if(id<=0||StorageStore.find(db.getReadableDatabase(),id)==null) {
+            pendingStorageThumbnailId=0;
+            alert("Rzecz już nie istnieje.");return;
+        }
+        Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        if(camera.resolveActivity(getPackageManager())==null) {
+            pendingStorageThumbnailId=0;
+            alert("Nie znaleziono aplikacji aparatu.");return;
+        }
+        try {startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);}
+        catch(Exception error) {
+            pendingStorageThumbnailId=0;
+            alert("Nie można uruchomić aparatu.");
+        }
+    }
+
+    private void saveStorageThumbnail(long id,String thumbnail) {
+        if(StorageStore.find(db.getReadableDatabase(),id)==null)
+            throw new IllegalArgumentException("Rzecz już nie istnieje.");
+        if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit())
+            throw new IllegalStateException("Nie zapisano miniatury.");
+        DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
+        render();
     }
 
     private void storageEditor(String kind, Long itemId) {
