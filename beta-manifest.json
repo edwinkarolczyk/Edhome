@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 102,
-  "versionName": "0.6.0.37",
-  "changelog": "EDHOME 0.6.0.37 — poprawiono połączenie EDHOME Desktop po Wi‑Fi/LAN: serwer lokalny potrafi się odtworzyć po błędzie i preferuje właściwy adres Wi‑Fi zamiast interfejsu VPN. Dodano stan listenera powiadomień bankowych w Becie, miniatury Magazynu z galerii/aparatu oraz aktualne etykiety QR/PDF. Beta tylko; main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.37/edhome-beta.apk",
-  "sha256": "e0696fdef5b84e71d2361c0a905c07444764c15358f7b7047a7a1a41b9c95167"
+  "versionCode": 103,
+  "versionName": "0.6.0.38",
+  "changelog": "EDHOME 0.6.0.38 — Desktop: dodano szybkie parowanie przez QR. Na PC wybierz Pokaż QR do połączenia, a na telefonie Ustawienia → Skanuj QR z ekranu PC. QR jest jednorazowy, wygasa po 3 minutach i działa wyłącznie w lokalnej sieci Wi‑Fi/LAN. Po skanie Desktop zapisuje dane połączenia i automatycznie pobiera snapshot. Beta tylko; main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.38/edhome-beta.apk",
+  "sha256": "9f0f42a4e8214f60822fb41f99552d6714cc959ffe339380c24b11a87dfebb1a"
 }
