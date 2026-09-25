@@ -1,6 +1,7 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Notification;
+import android.content.ComponentName;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import java.lang.ref.WeakReference;
@@ -29,6 +30,15 @@ public final class BankNotificationListener extends NotificationListenerService 
     @Override public void onListenerDisconnected() {
         clearConnected();
         super.onListenerDisconnected();
+        // Android may disconnect a listener under memory pressure or after an
+        // app update. Ask the framework to bind us again; no foreground
+        // service or permanent notification is required.
+        try {
+            requestRebind(new ComponentName(this,
+                BankNotificationListener.class));
+        } catch (RuntimeException ignored) {
+            // The system may be shutting down or the permission may be gone.
+        }
     }
 
     @Override public void onDestroy() {
