@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==30
+assert len(manifest)==31
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -24,7 +24,8 @@ scoped={"vehicles":{"oc_reminder_lead","inspection_reminder_lead"},
         "vehicle_events":{"mileage"},
         "vehicle_tyre_sets":{"tread_tenths"},
         "vehicle_policies":{"goal_id"},
-        "vehicle_costs":{"paycheck_operation_id"}}
+        "vehicle_costs":{"paycheck_operation_id"},
+        "bank_evidence_queue":{"matched_operation_id","matched_at"}}
 missing_types=[]
 missing_nullable=[]
 for table,columns in manifest.items():
@@ -54,16 +55,24 @@ VALUES(1,'Pudełko','box',NULL,1,NULL,NULL,1790000000000)""")
 db.execute("""INSERT INTO paycheck_transactions
 (id,operation_id,scope,kind,category,amount_grosz,note,created_at)
 VALUES(1,'22222222-2222-4222-8222-222222222222','shared','expense','shopping',649,'',1790000000000)""")
+db.execute("""INSERT INTO bank_evidence_queue
+(id,evidence_key,source_kind,source_label,kind,amount_grosz,booking_date,
+ description,imported_at,state,matched_operation_id,matched_at)
+VALUES(1,?,'csv','EDHOME TEST','expense',649,'2026-09-25',
+ 'Test kolejki',1790000000001,'open',NULL,NULL)""",('a'*64,))
 content={}
 for table,columns in manifest.items():
     order=("task_id,position" if table=="task_rotation_members"
            else "pantry_id" if table=="pantry_packages" else "id")
     found=db.execute('SELECT '+",".join(columns)+' FROM "'+table+'" ORDER BY '+order).fetchall()
     content[table]=[dict(zip(columns,row)) for row in found]
-payload=json.loads(json.dumps({"databaseVersion":22,"tables":content},ensure_ascii=False))
+payload=json.loads(json.dumps({"databaseVersion":34,"tables":content},ensure_ascii=False))
 price=payload["tables"]["pantry_purchase_prices"][0]
 assert (price["unit_price_grosz"],price["pantry_id"],price["quantity_milli"])==(649,None,None)
 assert payload["tables"]["storage_items"][0]["lent_to"] is None
+queue=payload["tables"]["bank_evidence_queue"][0]
+assert queue["state"]=="open" and queue["matched_operation_id"] is None
+assert queue["matched_at"] is None
 
 clone=sqlite3.connect(":memory:")
 for (sql,) in db.execute("""SELECT sql FROM sqlite_master WHERE type='table'
@@ -86,4 +95,4 @@ assert restore.index("if (!restored.commit())")<restore.index(
 assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
 assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
 assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 30 tables and all numeric/nullable fields, sample JSON roundtrip, readback and rollback contract PASS")
+print("Backup: 31 tables including bank evidence queue; numeric/nullability, JSON roundtrip and rollback PASS")
