@@ -22,7 +22,7 @@ for expected in (
 for expected in (
     'ReminderReceiver.cancelTask(this, id);',
     'ReminderReceiver.schedule(this);',
-    'super(context, "edhome-beta-preview.db", null, 33',
+    'super(context, "edhome-beta-preview.db", null, 34',
     'ALTER TABLE tasks ADD COLUMN remind_time TEXT',
     'ALTER TABLE tasks ADD COLUMN reminder_lead_days',
 ):
