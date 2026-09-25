@@ -414,14 +414,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.29-signed-apk
+          name: EDHOME-0.6.0.30-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.29 — Magazyn: naprawiony wybór Drukuj / Zapisz PDF / Udostępnij w oknie etykiet QR. PayCheck: diagnostyka nasłuchu banków pokazuje faktyczne połączenie usługi Androida, ostatnie odebrane, nierozpoznane i zapisane zdarzenie oraz zgodę na powiadomienia EDHOME. Przywracanie połączenia i sprawdzanie aktywnych powiadomień na żądanie. Bez treści bankowych w diagnostyce, bez migracji lub kasowania danych; Beta tylko, main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.30 — końcowa stabilizacja PayCheck 0.6: automatyczne ponowne wiązanie NotificationListener po rozłączeniu i wznowieniu aplikacji; lokalny import tekstowych PDF VeloBanku (bez OCR, bez sieci) do ręcznego uzgodnienia; ochrona przed podwójnym wpisem, gdy podobna operacja została już uzgodniona z wyciągiem; diagnostyka nasłuchu pozostaje. Magazyn: poprawione akcje Drukuj / PDF / Udostępnij QR. Zachowane dane, Beta tylko, main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
