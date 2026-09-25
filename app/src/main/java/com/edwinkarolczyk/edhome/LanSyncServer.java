@@ -22,6 +22,16 @@ import java.util.Locale;
 final class LanSyncServer {
     static final int PORT = 45823;
     static final String TOKEN_PREF = "desktop_sync_token";
+    private static volatile long LAST_CLIENT_SEEN_AT;
+
+    static boolean hasRecentClient() {
+        long seen = LAST_CLIENT_SEEN_AT;
+        return seen > 0L && System.currentTimeMillis() - seen < 75000L;
+    }
+
+    static long lastClientSeenAt() {
+        return LAST_CLIENT_SEEN_AT;
+    }
 
     interface SnapshotProvider { String snapshot() throws Exception; }
     interface RestoreProvider { void restore(String snapshot) throws Exception; }
@@ -156,6 +166,7 @@ final class LanSyncServer {
                 reply(peer, 401, "{\"error\":\"PAIRING_REQUIRED\"}");
                 return;
             }
+            LAST_CLIENT_SEEN_AT = System.currentTimeMillis();
 
             String[] parts = request.split(" ");
             if (parts.length < 2) {

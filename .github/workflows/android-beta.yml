@@ -426,7 +426,7 @@ jobs:
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.40 — naprawiono dostęp Desktop do telefonu: lokalny serwer Android ↔ PC działa jako trwała usługa w tle z niskopriorytetowym powiadomieniem, nie kończy się razem z ekranem aplikacji i jest ponownie uruchamiany po starcie telefonu lub aktualizacji aplikacji, gdy Android na to pozwala. Połączenie nadal jest ograniczone do prywatnej sieci LAN, wymaga kodu parowania i zachowuje kontrolę konfliktów SHA-256. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.41 — dodano na górze EDHOME wskaźnik połączenia z Desktopem: zielone ● ⇄ PC oznacza aktywne połączenie, szare ○ ⇄ PC oczekiwanie. Wskaźnik odświeża się bez przeładowywania ekranu i po dotknięciu otwiera ustawienia połączenia. Ustawienia pokazują także aktualny stan PC. Zachowano trwałą usługę LAN z 0.6.0.40. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

@@ -549,14 +549,53 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void appTitleWithConnection() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView appTitle = text("EDHOME  •  "
+            + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
+            25, true);
+        row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        if (BetaUpdater.isBeta()) {
+            TextView badge = text("", 13, true);
+            badge.setGravity(Gravity.CENTER);
+            badge.setMinWidth(dp(84));
+            badge.setPadding(dp(10), dp(6), dp(10), dp(6));
+            badge.setBackground(skin.panel(this, surface, 22));
+            badge.setClickable(true);
+            badge.setFocusable(true);
+            badge.setOnClickListener(v -> go("settings"));
+            touchFeedback(badge);
+
+            Runnable refresh = new Runnable() {
+                @Override public void run() {
+                    if (!badge.isAttachedToWindow()) return;
+                    boolean online = LanSyncServer.hasRecentClient();
+                    badge.setText(online ? "●  ⇄ PC" : "○  ⇄ PC");
+                    badge.setTextColor(online ? accent : subdued);
+                    badge.setContentDescription(online
+                        ? "EDHOME Desktop połączony. Dotknij, aby otworzyć ustawienia."
+                        : "EDHOME Desktop niepołączony. Dotknij, aby otworzyć ustawienia.");
+                    badge.postDelayed(this, 5000L);
+                }
+            };
+            row.addView(badge, new LinearLayout.LayoutParams(-2, -2));
+            badge.post(refresh);
+        }
+        body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
     private void header(String subtitle) {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        appTitleWithConnection();
         note(subtitle);
         button("← Panel główny", () -> go("home"));
     }
 
     private void home() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        appTitleWithConnection();
         note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
         title(prefs.getString("household", "Moje gospodarstwo"));
 
@@ -7965,7 +8004,9 @@ public final class MainActivity extends Activity {
                 14, false));
             desktop.addView(text("Adres: " + endpoint
                 + "\nKod parowania: " + token
-                + "\nTryb: odczyt i zapis • serwer działa w tle", 14, true));
+                + "\nTryb: odczyt i zapis • serwer działa w tle"
+                + "\nStan PC: " + (LanSyncServer.hasRecentClient()
+                    ? "POŁĄCZONY" : "oczekiwanie na komputer"), 14, true));
             smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)
