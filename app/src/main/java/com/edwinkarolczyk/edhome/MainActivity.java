@@ -8384,6 +8384,19 @@ public final class MainActivity extends Activity {
             && MessageDigest.isEqual(expectedHash, actualHash.digest());
     }
 
+    @Override public void onRequestPermissionsResult(int requestCode,
+            String[] permissions,int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode!=STORAGE_CAMERA_PERMISSION)return;
+        boolean granted=grantResults.length>0
+            &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if(granted)launchStorageThumbnailCamera();
+        else {
+            pendingStorageThumbnailId=0;
+            alert("Aby zrobić miniaturę aparatem, zezwól EDHOME na użycie aparatu.");
+        }
+    }
+
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == EXPORT_QR_LABELS_PDF) {
@@ -8504,20 +8517,32 @@ public final class MainActivity extends Activity {
                 alert("Android nie podał pakietu wybranej aplikacji.");
             return;
         }
+        if (request == TAKE_STORAGE_THUMBNAIL) {
+            long id=pendingStorageThumbnailId;
+            pendingStorageThumbnailId=0;
+            if(result==RESULT_OK&&id>0) {
+                try {
+                    Object raw=data==null||data.getExtras()==null?null:
+                        data.getExtras().get("data");
+                    if(!(raw instanceof Bitmap))
+                        throw new IllegalArgumentException(
+                            "Aparat nie zwrócił zdjęcia.");
+                    saveStorageThumbnail(id,StorageThumbs.compress((Bitmap)raw));
+                }catch(Exception error) {
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
+                    alert(error instanceof IllegalArgumentException
+                        ?error.getMessage():"Nie udało się zapisać miniatury.");
+                }
+            }
+            return;
+        }
         if (request == IMPORT_STORAGE_THUMBNAIL) {
             long id=pendingStorageThumbnailId;
             pendingStorageThumbnailId=0;
             if(result==RESULT_OK&&id>0&&data!=null&&data.getData()!=null) {
                 try {
-                    if(StorageStore.find(db.getReadableDatabase(),id)==null)
-                        throw new IllegalArgumentException("Rzecz już nie istnieje.");
-                    String thumbnail=StorageThumbs.compress(getContentResolver(),
-                        data.getData());
-                    if(!prefs.edit().putString(StorageThumbs.key(id),
-                            thumbnail).commit())
-                        throw new IllegalStateException("Nie zapisano miniatury.");
-                    DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
-                    render();
+                    saveStorageThumbnail(id,StorageThumbs.compress(
+                        getContentResolver(),data.getData()));
                 }catch(Exception error) {
                     DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
                     alert(error instanceof IllegalArgumentException
