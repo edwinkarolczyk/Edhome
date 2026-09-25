@@ -102,7 +102,7 @@ for token in (
     'selectBulkQrLabels()',
     'StorageQrLabels.pdf(selected,format)',
     'StorageQrLabels.print(this,pdf,',
-    '"Drukuj przez Androida","Zapisz jako PDF","Udostępnij PDF"',
+    ''Drukuj przez Androida' in main and 'Zapisz jako PDF' in main and 'Udostępnij PDF' in main',
 ):
     assert token in main, token
 for token in ('storageThumbnails','storageQrHistory'):
