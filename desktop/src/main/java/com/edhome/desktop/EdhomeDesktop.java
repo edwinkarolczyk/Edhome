@@ -56,7 +56,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.43";
+    private static final String DESKTOP_VERSION = "0.6.0.44";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -223,8 +223,12 @@ public final class EdhomeDesktop extends JFrame {
         JPanel page = page("Pulpit");
 
         JPanel hero = new RoundedPanel(APP_SURFACE, 24);
-        hero.setLayout(new BorderLayout(12, 8));
+        hero.setLayout(new BorderLayout(16, 10));
         hero.setBorder(new EmptyBorder(18, 20, 18, 20));
+
+        JPanel heroText = new JPanel();
+        heroText.setOpaque(false);
+        heroText.setLayout(new BoxLayout(heroText, BoxLayout.Y_AXIS));
         JLabel home = new JLabel(snapshot == null
             ? "EDHOME • brak połączenia"
             : "EDHOME • " + householdName());
@@ -232,10 +236,18 @@ public final class EdhomeDesktop extends JFrame {
         home.setFont(home.getFont().deriveFont(Font.BOLD, 22f));
         JLabel state = new JLabel(snapshot == null
             ? "Połącz telefon w Ustawieniach, żeby zobaczyć wspólne dane."
-            : "Wspólne dane z telefonu • edycja na PC • zapis z kontrolą konfliktów");
-        state.setForeground(APP_MUTED);
-        hero.add(home, BorderLayout.NORTH);
-        hero.add(state, BorderLayout.CENTER);
+            : connected
+                ? "Telefon ONLINE • dane zsynchronizowane lokalnie"
+                : "Telefon OFFLINE • pokazuję ostatnią lokalną kopię");
+        state.setForeground(connected ? APP_ACCENT : APP_MUTED);
+        heroText.add(home);
+        heroText.add(Box.createVerticalStrut(6));
+        heroText.add(state);
+        hero.add(heroText, BorderLayout.CENTER);
+
+        JButton syncNow = actionButton("↻ Synchronizuj teraz");
+        syncNow.addActionListener(e -> autoConnectSaved(false));
+        hero.add(syncNow, BorderLayout.EAST);
 
         JPanel north = new JPanel(new BorderLayout(0, 14));
         north.setBackground(APP_BG);
@@ -243,26 +255,137 @@ public final class EdhomeDesktop extends JFrame {
 
         JPanel cards = new JPanel(new GridLayout(2, 4, 12, 12));
         cards.setBackground(APP_BG);
-        cards.add(metric("Zadania", count("tasks")));
-        cards.add(metric("Do zrobienia", countWhere("tasks","done",0)));
-        cards.add(metric("Spiżarnia", count("pantry")));
-        cards.add(metric("Magazyn", count("storage_items")));
-        cards.add(metric("Zakupy", countWhere("shopping_items","checked",0)));
-        cards.add(metric("Pojazdy", count("vehicles")));
-        cards.add(metric("PayCheck", count("paycheck_transactions")));
-        cards.add(metric("Miejsca", count("places")));
+        cards.add(metric("Do zrobienia", countWhere("tasks","done",0), "Dzisiaj"));
+        cards.add(metric("Na dziś", countTodayOpenTasks(), "Dzisiaj"));
+        cards.add(metric("Zakupy", countWhere("shopping_items","checked",0), "Zakupy"));
+        cards.add(metric("Magazyn", count("storage_items"), "Magazyn"));
+        cards.add(metric("Spiżarnia", count("pantry"), "Spiżarnia"));
+        cards.add(metric("Pojazdy", count("vehicles"), "Pojazdy"));
+        cards.add(metric("PayCheck", count("paycheck_transactions"), "PayCheck"));
+        cards.add(metric("Miejsca", count("places"), "Miejsca"));
         north.add(cards, BorderLayout.CENTER);
         page.add(north, BorderLayout.NORTH);
 
+        JPanel center = new JPanel(new GridLayout(1, 2, 12, 12));
+        center.setBackground(APP_BG);
+        center.setBorder(new EmptyBorder(18, 0, 0, 0));
+        center.add(dashboardTasksCard());
+        center.add(dashboardShoppingCard());
+        page.add(center, BorderLayout.CENTER);
+
         JPanel quick = new JPanel(new GridLayout(1, 4, 10, 10));
         quick.setBackground(APP_BG);
-        quick.setBorder(new EmptyBorder(18, 0, 0, 0));
+        quick.setBorder(new EmptyBorder(14, 0, 0, 0));
         quick.add(quickButton("Dzisiaj", "Dzisiaj"));
         quick.add(quickButton("Kalendarz", "Kalendarz"));
         quick.add(quickButton("Magazyn", "Magazyn"));
         quick.add(quickButton("Zakupy", "Zakupy"));
-        page.add(quick, BorderLayout.CENTER);
+        page.add(quick, BorderLayout.SOUTH);
         return page;
+    }
+
+    private int countTodayOpenTasks() {
+        String today = LocalDate.now().toString();
+        int count = 0;
+        for (JsonElement el : table("tasks")) {
+            if (!el.isJsonObject()) continue;
+            JsonObject row = el.getAsJsonObject();
+            if (intValue(row, "done") != 0) continue;
+            String due = value(row, "due_date");
+            if (due.isBlank() || due.equals(today)) count++;
+        }
+        return count;
+    }
+
+    private JComponent dashboardTasksCard() {
+        JPanel card = new RoundedPanel(APP_SURFACE, 22);
+        card.setLayout(new BorderLayout(10, 10));
+        card.setBorder(new EmptyBorder(16, 18, 16, 18));
+
+        JLabel title = new JLabel("Dzisiaj");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+        card.add(title, BorderLayout.NORTH);
+
+        JPanel list = new JPanel();
+        list.setOpaque(false);
+        list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
+        String today = LocalDate.now().toString();
+        int shown = 0;
+        for (JsonElement el : table("tasks")) {
+            if (!el.isJsonObject()) continue;
+            JsonObject row = el.getAsJsonObject();
+            if (intValue(row, "done") != 0) continue;
+            String due = value(row, "due_date");
+            if (!due.isBlank() && !due.equals(today)) continue;
+            list.add(dashboardLine(value(row, "title"),
+                due.isBlank() ? "Bez terminu" : "Na dziś"));
+            shown++;
+            if (shown >= 5) break;
+        }
+        if (shown == 0) list.add(dashboardEmpty("Brak zadań na dziś."));
+        card.add(list, BorderLayout.CENTER);
+
+        JButton open = actionButton("Otwórz Dzisiaj");
+        open.addActionListener(e -> showSection("Dzisiaj"));
+        card.add(open, BorderLayout.SOUTH);
+        return card;
+    }
+
+    private JComponent dashboardShoppingCard() {
+        JPanel card = new RoundedPanel(APP_SURFACE, 22);
+        card.setLayout(new BorderLayout(10, 10));
+        card.setBorder(new EmptyBorder(16, 18, 16, 18));
+
+        JLabel title = new JLabel("Lista zakupów");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+        card.add(title, BorderLayout.NORTH);
+
+        JPanel list = new JPanel();
+        list.setOpaque(false);
+        list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
+        int shown = 0;
+        for (JsonElement el : table("shopping_items")) {
+            if (!el.isJsonObject()) continue;
+            JsonObject row = el.getAsJsonObject();
+            if (intValue(row, "checked") != 0) continue;
+            String qty = friendlyValue("qty_milli", row);
+            String unit = value(row, "unit");
+            String detail = "Do kupienia";
+            if (!qty.isBlank() && !"—".equals(qty))
+                detail = qty + (unit.isBlank() ? "" : " " + unit);
+            list.add(dashboardLine(value(row, "name"), detail));
+            shown++;
+            if (shown >= 5) break;
+        }
+        if (shown == 0) list.add(dashboardEmpty("Lista zakupów jest pusta."));
+        card.add(list, BorderLayout.CENTER);
+
+        JButton open = actionButton("Otwórz Zakupy");
+        open.addActionListener(e -> showSection("Zakupy"));
+        card.add(open, BorderLayout.SOUTH);
+        return card;
+    }
+
+    private JComponent dashboardLine(String primary, String secondary) {
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.setOpaque(false);
+        row.setBorder(new EmptyBorder(5, 0, 5, 0));
+        JLabel main = new JLabel(primary == null || primary.isBlank() ? "Pozycja" : primary);
+        main.setForeground(APP_TEXT);
+        JLabel detail = new JLabel(secondary == null ? "" : secondary);
+        detail.setForeground(APP_MUTED);
+        row.add(main, BorderLayout.CENTER);
+        row.add(detail, BorderLayout.EAST);
+        return row;
+    }
+
+    private JComponent dashboardEmpty(String text) {
+        JLabel empty = new JLabel(text);
+        empty.setForeground(APP_MUTED);
+        empty.setBorder(new EmptyBorder(10, 0, 10, 0));
+        return empty;
     }
 
     private JComponent today() {
@@ -386,7 +509,7 @@ public final class EdhomeDesktop extends JFrame {
           + "• automatyczne wykrywanie telefonu w LAN bez otwierania QR,\n"
           + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
           + "• kolejne formularze dodawania/usuwania bez technicznych pól.\n"
-          + "Domyślny widok Desktopu używa nazw, opisów i kart jak EDHOME na telefonie.\n"
+          + "Pulpit pokazuje teraz zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
           + "W ustawieniach możesz też włączyć autostart Windows, start do zasobnika "
           + "oraz automatyczne łączenie i synchronizację w tle.");
         notes.setBackground(APP_BG);
@@ -874,6 +997,10 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JPanel metric(String title, int value) {
+        return metric(title, value, null);
+    }
+
+    private JPanel metric(String title, int value, String target) {
         JPanel card = new RoundedPanel(APP_SURFACE, 22);
         card.setLayout(new BorderLayout(0, 8));
         card.setBorder(new EmptyBorder(16, 18, 16, 18));
@@ -884,6 +1011,17 @@ public final class EdhomeDesktop extends JFrame {
         number.setFont(number.getFont().deriveFont(Font.BOLD, 30f));
         card.add(name, BorderLayout.NORTH);
         card.add(number, BorderLayout.CENTER);
+        if (target != null) {
+            card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            java.awt.event.MouseAdapter open = new java.awt.event.MouseAdapter() {
+                @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                    showSection(target);
+                }
+            };
+            card.addMouseListener(open);
+            name.addMouseListener(open);
+            number.addMouseListener(open);
+        }
         return card;
     }
 
