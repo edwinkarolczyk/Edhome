@@ -32,6 +32,13 @@ assert 'static String addPending(' in private
 assert 'static boolean confirmPending(' in private
 assert '!"pending".equals(entry.status)' in ui
 assert 'privatePaycheckSession.active()' in ui
+for token in ('countRecentStatementMatches(signal)',
+              'Możliwy duplikat',
+              'To ta sama • zamknij sygnał',
+              'To inna • utwórz wpis',
+              'statement_key IS NOT NULL',
+              'ChronoUnit.DAYS'):
+    assert token in ui,token
 assert 'getBooleanExtra("open_paycheck",false)' in ui
 assert '.putExtra("open_paycheck",true)' in (
     root/"BankReceiptNotifier.java").read_text(encoding="utf-8")
