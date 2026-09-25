@@ -50,11 +50,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.prefs.Preferences;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.42";
+    private static final String DESKTOP_VERSION = "0.6.0.43";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -668,7 +670,7 @@ public final class EdhomeDesktop extends JFrame {
 
     private void oneClickDesktopUpdate(JButton trigger) {
         trigger.setEnabled(false);
-        connection.setText("POBIERANIE AKTUALIZACJI DESKTOP…");
+        connection.setText("AKTUALIZACJA • POBIERANIE 0%");
         new SwingWorker<Path,Void>() {
             @Override protected Path doInBackground() throws Exception {
                 Path launcher = desktopLauncher();
@@ -692,58 +694,82 @@ public final class EdhomeDesktop extends JFrame {
                 if (response.body().length < 5_000_000)
                     throw new IOException("Pobrana paczka aktualizacji jest niekompletna.");
 
-                Path zip = Files.createTempFile("edhome-desktop-update-", ".zip");
+                SwingUtilities.invokeLater(() ->
+                    connection.setText("AKTUALIZACJA • ROZPAKOWYWANIE 55%"));
+
+                Path work = Path.of(System.getProperty("user.home"), ".edhome");
+                Files.createDirectories(work);
+                Path zip = Files.createTempFile(work, "desktop-update-", ".zip");
                 Files.write(zip, response.body());
-                Path stage = Files.createTempDirectory("edhome-desktop-stage-");
-                Path script = Files.createTempFile("edhome-desktop-update-", ".ps1");
-                Path log = Path.of(System.getProperty("user.home"),
-                    ".edhome", "desktop-update.log");
-                Files.createDirectories(log.getParent());
+                Path stage = Files.createTempDirectory(work, "desktop-stage-");
+                extractUpdateZip(zip, stage);
+
+                Path stagedExe = stage.resolve("EDHOME-Desktop-Beta.exe");
+                if (!Files.isRegularFile(stagedExe))
+                    throw new IOException(
+                        "Paczka aktualizacji nie zawiera EDHOME-Desktop-Beta.exe.");
+
+                SwingUtilities.invokeLater(() ->
+                    connection.setText("AKTUALIZACJA • GOTOWA DO RESTARTU 90%"));
+
+                Path log = work.resolve("desktop-update.log");
+                Path script = Files.createTempFile(work, "desktop-updater-", ".cmd");
                 long pid = ProcessHandle.current().pid();
 
-                String ps =
-                    "$ErrorActionPreference = 'Stop'\r\n"
-                    + "$log = " + psQuote(log.toString()) + "\r\n"
-                    + "function Log([string]$m) { Add-Content -LiteralPath $log -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' | ' + $m) }\r\n"
-                    + "try {\r\n"
-                    + "  Log 'Start aktualizacji Desktop " + DESKTOP_VERSION + "'\r\n"
-                    + "  $pidToWait = " + pid + "\r\n"
-                    + "  Wait-Process -Id $pidToWait -ErrorAction SilentlyContinue\r\n"
-                    + "  Start-Sleep -Milliseconds 1200\r\n"
-                    + "  $zip = " + psQuote(zip.toString()) + "\r\n"
-                    + "  $stage = " + psQuote(stage.toString()) + "\r\n"
-                    + "  $target = " + psQuote(installDir.toString()) + "\r\n"
-                    + "  $exe = Join-Path $target 'EDHOME-Desktop-Beta.exe'\r\n"
-                    + "  Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force\r\n"
-                    + "  $stagedExe = Join-Path $stage 'EDHOME-Desktop-Beta.exe'\r\n"
-                    + "  if (!(Test-Path -LiteralPath $stagedExe)) { throw 'Paczka nie zawiera EDHOME-Desktop-Beta.exe.' }\r\n"
-                    + "  Log 'Paczka rozpakowana'\r\n"
-                    + "  & robocopy $stage $target /E /COPY:DAT /DCOPY:DAT /R:5 /W:1 /NFL /NDL /NJH /NJS | Out-Null\r\n"
-                    + "  if ($LASTEXITCODE -ge 8) { throw ('Robocopy błąd ' + $LASTEXITCODE) }\r\n"
-                    + "  if (!(Test-Path -LiteralPath $exe)) { throw 'Po aktualizacji brak pliku EXE.' }\r\n"
-                    + "  Log 'Pliki podmienione, uruchamiam EXE'\r\n"
-                    + "  Start-Process -FilePath $exe -WorkingDirectory $target\r\n"
-                    + "  Start-Sleep -Seconds 2\r\n"
-                    + "  Log 'Proces uruchomiony'\r\n"
-                    + "  Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue\r\n"
-                    + "  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue\r\n"
-                    + "} catch {\r\n"
-                    + "  Log ('BŁĄD: ' + $_.Exception.Message)\r\n"
-                    + "  Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue\r\n"
-                    + "  [System.Windows.MessageBox]::Show(('Aktualizacja EDHOME Desktop nie powiodła się.' + [Environment]::NewLine + [Environment]::NewLine + $_.Exception.Message + [Environment]::NewLine + [Environment]::NewLine + 'Log: ' + $log), 'EDHOME Desktop') | Out-Null\r\n"
-                    + "}\r\n";
-                Files.writeString(script, ps, StandardCharsets.UTF_8);
+                String target = installDir.toAbsolutePath().normalize().toString();
+                String exe = installDir.resolve("EDHOME-Desktop-Beta.exe")
+                    .toAbsolutePath().normalize().toString();
+                String batch =
+                    "@echo off\r\n"
+                    + "setlocal\r\n"
+                    + "set \"LOG=" + batEscape(log.toString()) + "\"\r\n"
+                    + "echo [%date% %time%] Start aktualizacji "
+                    + DESKTOP_VERSION + ">>\"%LOG%\"\r\n"
+                    + ":wait\r\n"
+                    + "tasklist /FI \"PID eq " + pid
+                    + "\" /FO CSV /NH | findstr /C:\"" + pid
+                    + "\" >nul 2>&1\r\n"
+                    + "if not errorlevel 1 (\r\n"
+                    + "  >nul 2>&1 ping 127.0.0.1 -n 2\r\n"
+                    + "  goto wait\r\n"
+                    + ")\r\n"
+                    + "echo [%date% %time%] Kopiowanie plikow>>\"%LOG%\"\r\n"
+                    + "robocopy \"" + batEscape(stage.toString()) + "\" \""
+                    + batEscape(target)
+                    + "\" /E /COPY:DAT /DCOPY:DAT /R:5 /W:1 /NFL /NDL /NJH /NJS >>\"%LOG%\" 2>&1\r\n"
+                    + "set RC=%ERRORLEVEL%\r\n"
+                    + "if %RC% GEQ 8 goto fail\r\n"
+                    + "if not exist \"" + batEscape(exe) + "\" goto fail\r\n"
+                    + "echo [%date% %time%] Restart programu>>\"%LOG%\"\r\n"
+                    + "start \"\" /D \"" + batEscape(target) + "\" \""
+                    + batEscape(exe) + "\"\r\n"
+                    + ">nul 2>&1 ping 127.0.0.1 -n 3\r\n"
+                    + "echo [%date% %time%] Restart wydany>>\"%LOG%\"\r\n"
+                    + "rmdir /S /Q \"" + batEscape(stage.toString())
+                    + "\" >nul 2>&1\r\n"
+                    + "del /Q \"" + batEscape(zip.toString())
+                    + "\" >nul 2>&1\r\n"
+                    + "del /Q \"%~f0\" >nul 2>&1\r\n"
+                    + "exit /b 0\r\n"
+                    + ":fail\r\n"
+                    + "echo [%date% %time%] BLAD aktualizacji, robocopy=%RC%>>\"%LOG%\"\r\n"
+                    + "if exist \"" + batEscape(exe)
+                    + "\" start \"\" /D \"" + batEscape(target)
+                    + "\" \"" + batEscape(exe) + "\"\r\n"
+                    + "exit /b 1\r\n";
+                Files.writeString(script, batch, StandardCharsets.UTF_8);
                 return script;
             }
 
             @Override protected void done() {
                 try {
                     Path script = get();
-                    connection.setText("AKTUALIZACJA GOTOWA • restart…");
-                    new ProcessBuilder("powershell.exe", "-NoProfile",
-                        "-ExecutionPolicy", "Bypass", "-File", script.toString())
-                        .directory(script.getParent().toFile())
-                        .start();
+                    connection.setText("AKTUALIZACJA • RESTART 100%");
+                    ProcessBuilder updater = new ProcessBuilder(
+                        "cmd.exe", "/d", "/c", "call \"" + script.toString() + "\"");
+                    updater.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                    updater.redirectError(ProcessBuilder.Redirect.DISCARD);
+                    updater.start();
                     dispose();
                     System.exit(0);
                 } catch (Exception ex) {
@@ -751,11 +777,39 @@ public final class EdhomeDesktop extends JFrame {
                     connection.setText("ONLINE • aktualizacja nieudana");
                     JOptionPane.showMessageDialog(EdhomeDesktop.this,
                         "Nie udało się zaktualizować Desktopu:\n" + rootMessage(ex)
-                            + "\n\nObecna wersja pozostaje bez zmian.",
+                            + "\n\nObecna wersja pozostaje bez zmian."
+                            + "\nLog aktualizacji: "
+                            + Path.of(System.getProperty("user.home"),
+                                ".edhome", "desktop-update.log"),
                         "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
                 }
             }
         }.execute();
+    }
+
+    private static void extractUpdateZip(Path zip, Path stage) throws IOException {
+        Path root = stage.toAbsolutePath().normalize();
+        try (ZipInputStream input = new ZipInputStream(Files.newInputStream(zip))) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                Path target = root.resolve(entry.getName()).normalize();
+                if (!target.startsWith(root))
+                    throw new IOException("Nieprawidłowa ścieżka w paczce aktualizacji.");
+                if (entry.isDirectory()) {
+                    Files.createDirectories(target);
+                } else {
+                    Path parent = target.getParent();
+                    if (parent != null) Files.createDirectories(parent);
+                    Files.copy(input, target,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                input.closeEntry();
+            }
+        }
+    }
+
+    private static String batEscape(String value) {
+        return value.replace("%", "%%").replace("\"", "\"\"");
     }
 
     private static Path desktopLauncher() throws IOException {
