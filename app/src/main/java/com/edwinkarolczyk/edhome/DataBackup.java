@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 33;
+    private static final int DB_VERSION = 34;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -55,6 +55,9 @@ final class DataBackup {
         {"paycheck_transactions", "id", "operation_id", "scope", "kind",
             "category", "amount_grosz", "note", "created_at", "status",
             "confirmation_source", "confirmed_at", "statement_key", "statement_date"},
+        {"bank_evidence_queue", "id", "evidence_key", "source_kind", "source_label",
+            "kind", "amount_grosz", "booking_date", "description", "imported_at",
+            "state", "matched_operation_id", "matched_at"},
         {"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"},
         {"paycheck_goal_allocations", "id", "operation_id", "goal_id",
             "amount_grosz", "created_at"},
@@ -226,7 +229,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
@@ -392,6 +395,7 @@ final class DataBackup {
                 || (inputVersion < 26 && "vehicle_policies".equals(definition[0]))
                 || (inputVersion < 29 && "vehicle_costs".equals(definition[0]))
                 || (inputVersion < 33 && "vehicle_documents".equals(definition[0]))
+                || (inputVersion < 34 && "bank_evidence_queue".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -548,7 +552,10 @@ final class DataBackup {
                             || ("vehicle_policies".equals(definition[0])
                                 && "goal_id".equals(key))
                             || ("vehicle_costs".equals(definition[0])
-                                && "paycheck_operation_id".equals(key))))
+                                && "paycheck_operation_id".equals(key))
+                            || ("bank_evidence_queue".equals(definition[0])
+                                && ("matched_operation_id".equals(key)
+                                    || "matched_at".equals(key)))))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -1121,6 +1128,52 @@ final class DataBackup {
         Map<String, ContentValues> sharedFinance = new HashMap<>();
         for (ContentValues entry : parsed.get("paycheck_transactions"))
             sharedFinance.put(entry.getAsString("operation_id"), entry);
+        Set<String> queueEvidenceKeys = new HashSet<>();
+        for (ContentValues row : parsed.get("bank_evidence_queue")) {
+            String evidence=row.getAsString("evidence_key");
+            String sourceKind=row.getAsString("source_kind");
+            String sourceLabel=row.getAsString("source_label");
+            String kind=row.getAsString("kind");
+            String date=row.getAsString("booking_date");
+            String description=row.getAsString("description");
+            String state=row.getAsString("state");
+            String matched=row.getAsString("matched_operation_id");
+            Long matchedAt=row.getAsLong("matched_at");
+            Long importedAt=row.getAsLong("imported_at");
+            Long amount=row.getAsLong("amount_grosz");
+            if(evidence==null||!evidence.matches("[0-9a-f]{64}")
+                    ||!queueEvidenceKeys.add(evidence)
+                    ||!("csv".equals(sourceKind)||"mbank".equals(sourceKind)
+                        ||"velo_pdf".equals(sourceKind))
+                    ||sourceLabel==null||sourceLabel.trim().isEmpty()
+                    ||sourceLabel.length()>80
+                    ||!("income".equals(kind)||"expense".equals(kind))
+                    ||amount==null||amount<1||amount>MoneyRules.MAX_GROSZ
+                    ||description==null||description.length()>300
+                    ||importedAt==null||importedAt<=0
+                    ||!("open".equals(state)||"matched".equals(state)
+                        ||"dismissed".equals(state)))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy wpis kolejki bankowej.");
+            try {
+                java.time.LocalDate parsedDate=java.time.LocalDate.parse(date);
+                if(parsedDate.getYear()<1970||parsedDate.getYear()>2100)
+                    throw new IllegalArgumentException();
+            }catch(Exception invalidDate) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa data kolejki bankowej.");
+            }
+            if("matched".equals(state)) {
+                ContentValues tx=sharedFinance.get(matched);
+                if(matched==null||matchedAt==null||matchedAt<=0||tx==null
+                        ||!evidence.equals(tx.getAsString("statement_key")))
+                    throw new IllegalArgumentException(
+                        "Uzgodniona kolejka bankowa nie pasuje do PayCheck.");
+            } else if(matched!=null||matchedAt!=null
+                    ||bankStatementOperations.contains(evidence))
+                throw new IllegalArgumentException(
+                    "Otwarty/odrzucony wpis kolejki ma użyty dowód.");
+        }
         Set<String> costOperations = new HashSet<>();
         Set<String> costFinanceOperations = new HashSet<>();
         for (ContentValues cost : parsed.get("vehicle_costs")) {
@@ -1420,6 +1473,7 @@ final class DataBackup {
             || "target_grosz".equals(column) || "goal_id".equals(column)
             || "parent_box_id".equals(column) || "lent_at".equals(column)
             || "created_at".equals(column) || "confirmed_at".equals(column)
+            || "imported_at".equals(column) || "matched_at".equals(column)
             || "item_id".equals(column)
             || "before_qty".equals(column)
             || "after_qty".equals(column) || "happened_at".equals(column)
