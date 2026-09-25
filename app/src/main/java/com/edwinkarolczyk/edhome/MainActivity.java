@@ -249,7 +249,10 @@ public final class MainActivity extends Activity {
 
     @Override public void onResume() {
         super.onResume();
-        if (BetaUpdater.isBeta()) unlocked = true;
+        if (BetaUpdater.isBeta()) {
+            unlocked = true;
+            if (lanSyncServer != null) lanSyncServer.start();
+        }
         if (root != null && !unlocked) render();
         if (privateNeedsRender && root != null) {
             privateNeedsRender = false;

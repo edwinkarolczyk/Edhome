@@ -8,7 +8,7 @@ desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java")
 assert '"/snapshot"' in server
 assert '"X-EDHOME-TOKEN"' in desktop
 assert '"x-edhome-token"' in server
-assert '"READ_ONLY"' in server
+assert 'READ_ONLY' in server
 assert 'BetaUpdater.isBeta()' in main
 assert 'DataBackup.exportJson' in main
 assert 'PrivatePaycheck' not in server

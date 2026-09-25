@@ -49,7 +49,8 @@ final class LanSyncServer {
     }
 
     synchronized void start() {
-        if (acceptThread != null) return;
+        if (acceptThread != null && acceptThread.isAlive()) return;
+        acceptThread = null;
         running = true;
         acceptThread = new Thread(this::acceptLoop, "edhome-lan-sync");
         acceptThread.setDaemon(true);
@@ -66,6 +67,10 @@ final class LanSyncServer {
         Thread thread = acceptThread;
         acceptThread = null;
         if (thread != null) thread.interrupt();
+    }
+
+    synchronized boolean isRunning() {
+        return running && server != null && !server.isClosed();
     }
 
     private void acceptLoop() {
@@ -89,6 +94,9 @@ final class LanSyncServer {
             server = null;
             if (current != null) {
                 try { current.close(); } catch (Exception ignored) { }
+            }
+            synchronized (this) {
+                if (acceptThread == Thread.currentThread()) acceptThread = null;
             }
         }
     }
@@ -208,17 +216,29 @@ final class LanSyncServer {
     }
 
     static String localAddress() {
+        String fallback = null;
         try {
             for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!network.isUp() || network.isLoopback()) continue;
+                String name = network.getName() == null ? ""
+                    : network.getName().toLowerCase(Locale.ROOT);
+                boolean preferred = name.startsWith("wlan")
+                    || name.startsWith("wifi")
+                    || name.startsWith("eth");
+                boolean virtual = name.startsWith("tun")
+                    || name.startsWith("tap")
+                    || name.startsWith("rmnet")
+                    || name.startsWith("p2p");
                 for (InetAddress address : Collections.list(network.getInetAddresses())) {
-                    if (address instanceof Inet4Address
-                            && address.isSiteLocalAddress()
-                            && !address.isLoopbackAddress())
-                        return address.getHostAddress();
+                    if (!(address instanceof Inet4Address)
+                            || !address.isSiteLocalAddress()
+                            || address.isLoopbackAddress()) continue;
+                    String value = address.getHostAddress();
+                    if (preferred) return value;
+                    if (!virtual && fallback == null) fallback = value;
                 }
             }
         } catch (Exception ignored) { }
-        return null;
+        return fallback;
     }
 }
