@@ -23,6 +23,15 @@ for word in ('IMPORT_STATEMENT_CSV','selectStatementCsv','importStatementCsv(',
              'showStatementEntries','matchStatementEntry','PaycheckStore.matchStatement(',
              'DATABASE_MIGRATED_31_TO_32_STATEMENT_MATCH'):
     assert word in ui,word
+for word in ('bankImportDiag(', 'bankImportDiagLine()',
+             '"bank_import_diag_state"', '"bank_import_diag_files"',
+             '"bank_import_diag_rows"', '"bank_import_diag_at"',
+             'diagStage="READ"', 'diagStage="PDF_TEXT"',
+             'diagStage="XLSX_TEXT"', 'diagStage="MBANK_PARSE"',
+             'diagStage="CSV_PARSE"', 'bankImportDiag("OK"',
+             'bankImportDiag("BŁĄD • "+diagStage',
+             'Diagnostyka importu:'):
+    assert word in ui,word
 assert 'inputVersion != 31 && inputVersion != DB_VERSION' in backup
 assert '"statement_key", "statement_date"' in backup
 assert 'bankStatementOperations.add(bankKey)' in backup
