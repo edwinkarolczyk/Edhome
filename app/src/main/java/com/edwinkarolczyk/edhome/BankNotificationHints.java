@@ -25,6 +25,11 @@ final class BankNotificationHints {
     private static final String SEEN_PACKAGE="bank_last_seen_package";
     private static final String SAVED="bank_last_saved_at";
     private static final String UNRECOGNIZED="bank_last_unrecognized_at";
+    private static final String TEST_UNTIL="bank_listener_test_until";
+    private static final String TEST_STARTED="bank_listener_test_started";
+    private static final String TEST_RESULT="bank_listener_test_result";
+    private static final String TEST_RESULT_AT="bank_listener_test_result_at";
+    private static final long TEST_WINDOW_MS=2L*60*1000;
     private static final String ROWS="bank_notification_hints_v1";
     // Processed IDs survive dismissals / Android reconnects; no bank text stored.
     private static final String HANDLED="bank_notification_handled_v1";
@@ -58,6 +63,41 @@ final class BankNotificationHints {
     static long lastSaved(Context c){return pref(c).getLong(SAVED,0);}
     static long lastUnrecognized(Context c){
         return pref(c).getLong(UNRECOGNIZED,0);
+    }
+    static boolean armListenerTest(Context c) {
+        if(!enabled(c)||selected(c).isEmpty())return false;
+        long now=System.currentTimeMillis();
+        return pref(c).edit()
+            .putLong(TEST_STARTED,now)
+            .putLong(TEST_UNTIL,now+TEST_WINDOW_MS)
+            .putString(TEST_RESULT,"waiting")
+            .remove(TEST_RESULT_AT).commit();
+    }
+    static boolean listenerTestArmed(Context c) {
+        return "waiting".equals(pref(c).getString(TEST_RESULT,""))
+            &&pref(c).getLong(TEST_UNTIL,0)>=System.currentTimeMillis();
+    }
+    static long listenerTestUntil(Context c) {
+        return pref(c).getLong(TEST_UNTIL,0);
+    }
+    static long listenerTestStarted(Context c) {
+        return pref(c).getLong(TEST_STARTED,0);
+    }
+    static String listenerTestResult(Context c) {
+        String result=pref(c).getString(TEST_RESULT,"");
+        if("waiting".equals(result)
+                &&pref(c).getLong(TEST_UNTIL,0)<System.currentTimeMillis())
+            return "expired";
+        return result;
+    }
+    static long listenerTestResultAt(Context c) {
+        return pref(c).getLong(TEST_RESULT_AT,0);
+    }
+    private static void finishListenerTest(Context c,boolean recognized) {
+        pref(c).edit().putString(TEST_RESULT,
+            recognized?"recognized":"unrecognized")
+            .putLong(TEST_RESULT_AT,System.currentTimeMillis())
+            .remove(TEST_UNTIL).commit();
     }
     static boolean receiptEnabled(Context c){
         return pref(c).getBoolean(RECEIPT,true);
@@ -128,11 +168,17 @@ final class BankNotificationHints {
             String notificationText) {
         if(sbn==null||!enabled(context)
                 ||!selected(context).contains(sbn.getPackageName()))return;
+        boolean listenerTest=listenerTestArmed(context);
         BankNotificationRules.Hint hint=BankNotificationRules.parse(notificationText);
         if(hint==null){
             pref(context).edit().putLong(UNRECOGNIZED,
                 System.currentTimeMillis()).apply();
             DiagnosticLog.event("BANK_NOTIFICATION_UNRECOGNIZED");
+            if(listenerTest) {
+                finishListenerTest(context,false);
+                BankReceiptNotifier.showListenerTest(context,
+                    sbn.getPackageName(),false);
+            }
             return;
         }
         // Same Android notification, even after service reconnect, has same key.
@@ -150,7 +196,11 @@ final class BankNotificationHints {
         if(persist(context,entries)) {
             pref(context).edit().putLong(SAVED,System.currentTimeMillis()).apply();
             DiagnosticLog.event("BANK_NOTIFICATION_SAVED");
-            BankReceiptNotifier.show(context,saved);
+            if(listenerTest) {
+                finishListenerTest(context,true);
+                BankReceiptNotifier.showListenerTest(context,
+                    sbn.getPackageName(),true);
+            } else BankReceiptNotifier.show(context,saved);
         }
     }
     private static boolean persist(Context context,List<Entry> entries) {
