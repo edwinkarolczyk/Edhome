@@ -96,7 +96,8 @@ for token in (
 for token in (
     'private final java.util.Map<String,Integer> screenScrollY',
     'children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);',
-    'StorageThumbs.compress(getContentResolver(),',
+    'StorageThumbs.compress(',
+    'getContentResolver(),data.getData()',
     'StorageThumbs.read(prefs,item.id)',
     'selectBulkQrLabels()',
     'StorageQrLabels.pdf(selected,format)',
