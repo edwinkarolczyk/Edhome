@@ -112,8 +112,13 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                     || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)
                     || Intent.ACTION_TIMEZONE_CHANGED.equals(action)
-                    || Intent.ACTION_TIME_CHANGED.equals(action))
+                    || Intent.ACTION_TIME_CHANGED.equals(action)) {
                 scheduleAll(context);
+                if (BetaUpdater.isBeta()
+                        && (Intent.ACTION_BOOT_COMPLETED.equals(action)
+                            || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)))
+                    LanSyncService.ensureStarted(context);
+            }
             return;
         }
         if (!preferences(context).getBoolean("timer_notifications_enabled",

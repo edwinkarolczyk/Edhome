@@ -91,7 +91,6 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
-    private LanSyncServer lanSyncServer;
     private PrivatePaycheckVault.Session privatePaycheckSession;
     private String pendingPrivateBankHintKey;
     private String privateBackupForSave;
@@ -166,18 +165,8 @@ public final class MainActivity extends Activity {
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
         if (BetaUpdater.isBeta()) {
-            String syncToken = LanSyncServer.ensureToken(prefs);
-            lanSyncServer = new LanSyncServer(syncToken,
-                () -> DataBackup.exportJson(db.getReadableDatabase(), prefs),
-                json -> {
-                    DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
-                    ReminderReceiver.schedule(this);
-                    DeviceTimerReceiver.scheduleAll(this);
-                    runOnUiThread(() -> {
-                        if (!isFinishing() && !isDestroyed()) render();
-                    });
-                });
-            lanSyncServer.start();
+            LanSyncServer.ensureToken(prefs);
+            LanSyncService.ensureStarted(this);
         }
         ReminderReceiver.schedule(this);
         DeviceTimerReceiver.scheduleAll(this);
@@ -216,10 +205,6 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
-        if (lanSyncServer != null) {
-            lanSyncServer.stop();
-            lanSyncServer = null;
-        }
         super.onDestroy();
     }
 
@@ -259,7 +244,7 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
-        if (BetaUpdater.isBeta() && lanSyncServer != null) lanSyncServer.start();
+        if (BetaUpdater.isBeta()) LanSyncService.ensureStarted(this);
         if (root != null && !unlocked) render();
         if (privateNeedsRender && root != null) {
             privateNeedsRender = false;
@@ -7980,7 +7965,7 @@ public final class MainActivity extends Activity {
                 14, false));
             desktop.addView(text("Adres: " + endpoint
                 + "\nKod parowania: " + token
-                + "\nTryb: tylko odczyt na PC", 14, true));
+                + "\nTryb: odczyt i zapis • serwer działa w tle", 14, true));
             smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)
