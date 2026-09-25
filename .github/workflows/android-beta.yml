@@ -179,13 +179,17 @@ jobs:
             app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
             app/src/main/java/com/edwinkarolczyk/edhome/BankStatementCsv.java \
             app/src/main/java/com/edwinkarolczyk/edhome/BankStatementMbank.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementVeloPdf.java \
             app/src/main/java/com/edwinkarolczyk/edhome/BankStatementWorkbook.java \
             tests/task_rules/BankStatementCsvSmoke.java \
-            tests/task_rules/BankStatementMbankSmoke.java
+            tests/task_rules/BankStatementMbankSmoke.java \
+            tests/task_rules/BankStatementVeloPdfSmoke.java
           java -cp "$RUNNER_TEMP/bank-csv" \
             com.edwinkarolczyk.edhome.BankStatementCsvSmoke
           java -cp "$RUNNER_TEMP/bank-csv" \
             com.edwinkarolczyk.edhome.BankStatementMbankSmoke
+          java -cp "$RUNNER_TEMP/bank-csv" \
+            com.edwinkarolczyk.edhome.BankStatementVeloPdfSmoke
           python3 tests/check_bank_statement_contract.py
       - name: PayCheck provenance and backup regression
         run: python3 tests/check_paycheck_provenance_contract.py
