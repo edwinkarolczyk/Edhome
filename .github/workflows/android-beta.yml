@@ -191,6 +191,7 @@ jobs:
           java -cp "$RUNNER_TEMP/bank-csv" \
             com.edwinkarolczyk.edhome.BankStatementVeloPdfSmoke
           python3 tests/check_bank_statement_contract.py
+          python3 tests/check_bank_evidence_queue_contract.py
       - name: PayCheck provenance and backup regression
         run: python3 tests/check_paycheck_provenance_contract.py
       - name: SQLite migration and backup contract
