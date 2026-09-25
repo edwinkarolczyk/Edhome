@@ -54,7 +54,7 @@ import java.util.prefs.Preferences;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.40";
+    private static final String DESKTOP_VERSION = "0.6.0.41";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -289,6 +289,10 @@ public final class EdhomeDesktop extends JFrame {
         JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
         JButton importFile = new JButton("Wczytaj backup JSON");
         JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
+        JCheckBox autostart = new JCheckBox("Uruchamiaj EDHOME Desktop razem z Windows");
+        autostart.setOpaque(false);
+        autostart.setForeground(APP_TEXT);
+        autostart.setSelected(isAutostartEnabled());
         JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
             + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
             + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
@@ -304,6 +308,7 @@ public final class EdhomeDesktop extends JFrame {
         g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
         g.gridx=1; form.add(importFile,g);
         g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(updateDesktop,g);
+        g.gridy=6; form.add(autostart,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -318,6 +323,18 @@ public final class EdhomeDesktop extends JFrame {
 
         importFile.addActionListener(e -> importBackup());
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
+        autostart.addActionListener(e -> {
+            boolean wanted = autostart.isSelected();
+            try {
+                setAutostartEnabled(wanted);
+                autostart.setSelected(isAutostartEnabled());
+            } catch (Exception error) {
+                autostart.setSelected(!wanted);
+                JOptionPane.showMessageDialog(this,
+                    "Nie udało się zmienić autostartu Windows:\n" + rootMessage(error),
+                    "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+            }
+        });
 
         page.add(form, BorderLayout.NORTH);
         JTextArea notes = new JTextArea(
@@ -327,7 +344,8 @@ public final class EdhomeDesktop extends JFrame {
           + "• automatyczne wykrywanie telefonu w LAN bez otwierania QR,\n"
           + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
           + "• kolejne formularze dodawania/usuwania bez technicznych pól.\n"
-          + "Domyślny widok Desktopu używa nazw, opisów i kart jak EDHOME na telefonie.");
+          + "Domyślny widok Desktopu używa nazw, opisów i kart jak EDHOME na telefonie.\n"
+          + "W ustawieniach możesz też włączyć automatyczny start razem z Windows.");
         notes.setBackground(APP_BG);
         notes.setForeground(APP_MUTED);
         notes.setEditable(false);
@@ -438,6 +456,55 @@ public final class EdhomeDesktop extends JFrame {
             for (int x = 0; x < size; x++)
                 image.setRGB(x, y, bits.get(x, y) ? 0x000000 : 0xFFFFFF);
         return image;
+    }
+
+    private static final String AUTOSTART_REGISTRY =
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    private static final String AUTOSTART_NAME = "EDHOME Desktop Beta";
+
+    private static boolean isAutostartEnabled() {
+        if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win"))
+            return false;
+        try {
+            Process process = new ProcessBuilder("reg", "query", AUTOSTART_REGISTRY,
+                "/v", AUTOSTART_NAME)
+                .redirectErrorStream(true)
+                .start();
+            String output = new String(process.getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8);
+            int code = process.waitFor();
+            if (code != 0 || !output.contains(AUTOSTART_NAME)) return false;
+            Path launcher = desktopLauncher();
+            return output.toLowerCase(Locale.ROOT)
+                .contains(launcher.toString().toLowerCase(Locale.ROOT));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static void setAutostartEnabled(boolean enabled) throws Exception {
+        if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win"))
+            throw new IOException("Autostart jest dostępny tylko w Windows.");
+
+        Process process;
+        if (enabled) {
+            Path launcher = desktopLauncher();
+            String command = "\"" + launcher.toString() + "\"";
+            process = new ProcessBuilder("reg", "add", AUTOSTART_REGISTRY,
+                "/v", AUTOSTART_NAME, "/t", "REG_SZ", "/d", command, "/f")
+                .redirectErrorStream(true)
+                .start();
+        } else {
+            process = new ProcessBuilder("reg", "delete", AUTOSTART_REGISTRY,
+                "/v", AUTOSTART_NAME, "/f")
+                .redirectErrorStream(true)
+                .start();
+        }
+        String output = new String(process.getInputStream().readAllBytes(),
+            StandardCharsets.UTF_8);
+        int code = process.waitFor();
+        if (code != 0 && !( !enabled && code == 1 ))
+            throw new IOException("Windows zwrócił błąd " + code + ": " + output.trim());
     }
 
     private void oneClickDesktopUpdate(JButton trigger) {
