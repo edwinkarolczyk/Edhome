@@ -419,14 +419,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.38-signed-apk
+          name: EDHOME-0.6.0.39-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.38 — Desktop: dodano szybkie parowanie przez QR. Na PC wybierz Pokaż QR do połączenia, a na telefonie Ustawienia → Skanuj QR z ekranu PC. QR jest jednorazowy, wygasa po 3 minutach i działa wyłącznie w lokalnej sieci Wi‑Fi/LAN. Po skanie Desktop zapisuje dane połączenia i automatycznie pobiera snapshot. Beta tylko; main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.39 — naprawiono parowanie Desktop przez QR na Androidzie: ruch HTTP jest dopuszczony wyłącznie w wariancie Beta, a kod QR nadal akceptuje tylko prywatny adres IPv4 w lokalnej sieci. Desktop przechodzi na dwukierunkowy tryb Android ↔ PC: można edytować istniejące dane w tabelach i zapisać je z powrotem do telefonu. Zapis jest chroniony kodem parowania, ograniczeniem do LAN oraz kontrolą konfliktu SHA-256; jeśli dane na telefonie zmieniły się od ostatniego pobrania, zapis z PC zostaje odrzucony. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

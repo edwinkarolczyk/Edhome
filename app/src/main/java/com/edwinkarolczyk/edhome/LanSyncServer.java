@@ -3,9 +3,8 @@ package com.edwinkarolczyk.edhome;
 import android.content.SharedPreferences;
 import android.util.Base64;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -14,26 +13,32 @@ import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Locale;
 
-/** Beta-only local-LAN, read-only snapshot endpoint for EDHOME Desktop. */
+/** Beta-only local-LAN snapshot endpoint for EDHOME Desktop with guarded write-back. */
 final class LanSyncServer {
     static final int PORT = 45823;
     static final String TOKEN_PREF = "desktop_sync_token";
 
     interface SnapshotProvider { String snapshot() throws Exception; }
+    interface RestoreProvider { void restore(String snapshot) throws Exception; }
 
     private final String token;
     private final SnapshotProvider provider;
+    private final RestoreProvider restoreProvider;
+    private final Object writeLock = new Object();
     private volatile boolean running;
     private volatile ServerSocket server;
     private Thread acceptThread;
 
-    LanSyncServer(String token, SnapshotProvider provider) {
+    LanSyncServer(String token, SnapshotProvider provider,
+            RestoreProvider restoreProvider) {
         this.token = token;
         this.provider = provider;
+        this.restoreProvider = restoreProvider;
     }
 
     static String ensureToken(SharedPreferences prefs) {
@@ -103,7 +108,7 @@ final class LanSyncServer {
 
     private void handle(Socket socket) {
         try (Socket peer = socket) {
-            peer.setSoTimeout(5000);
+            peer.setSoTimeout(8000);
             InetAddress remote = peer.getInetAddress();
             if (remote == null
                     || (!remote.isSiteLocalAddress() && !remote.isLoopbackAddress())) {
@@ -111,26 +116,38 @@ final class LanSyncServer {
                 return;
             }
 
-            BufferedReader in = new BufferedReader(new InputStreamReader(
-                peer.getInputStream(), StandardCharsets.US_ASCII));
-            String request = in.readLine();
-            if (request == null || request.length() > 4096) {
+            InputStream in = peer.getInputStream();
+            String request = readLine(in, 4096);
+            if (request == null || request.isEmpty()) {
                 reply(peer, 400, "{\"error\":\"BAD_REQUEST\"}");
                 return;
             }
 
             String supplied = "";
+            String baseSha = "";
+            int contentLength = 0;
             int headerBytes = request.length();
-            for (String line; (line = in.readLine()) != null && !line.isEmpty();) {
+            while (true) {
+                String line = readLine(in, 8192);
+                if (line == null) {
+                    reply(peer, 400, "{\"error\":\"BAD_HEADERS\"}");
+                    return;
+                }
+                if (line.isEmpty()) break;
                 headerBytes += line.length();
                 if (headerBytes > 32768) {
                     reply(peer, 431, "{\"error\":\"HEADERS_TOO_LARGE\"}");
                     return;
                 }
                 int colon = line.indexOf(':');
-                if (colon > 0 && "x-edhome-token".equals(
-                        line.substring(0, colon).trim().toLowerCase(Locale.ROOT))) {
-                    supplied = line.substring(colon + 1).trim();
+                if (colon <= 0) continue;
+                String name = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+                String value = line.substring(colon + 1).trim();
+                if ("x-edhome-token".equals(name)) supplied = value;
+                else if ("x-edhome-base-sha256".equals(name)) baseSha = value;
+                else if ("content-length".equals(name)) {
+                    try { contentLength = Integer.parseInt(value); }
+                    catch (NumberFormatException ignored) { contentLength = -1; }
                 }
             }
 
@@ -141,41 +158,113 @@ final class LanSyncServer {
             }
 
             String[] parts = request.split(" ");
-            if (parts.length < 2 || !"GET".equals(parts[0])) {
-                reply(peer, 405, "{\"error\":\"READ_ONLY\"}");
+            if (parts.length < 2) {
+                reply(peer, 400, "{\"error\":\"BAD_REQUEST\"}");
                 return;
             }
+            String method = parts[0];
+            String path = parts[1];
 
-            if ("/status".equals(parts[1])) {
-                reply(peer, 200, "{\"ok\":true,\"mode\":\"read-only\",\"version\":\""
+            if ("GET".equals(method) && "/status".equals(path)) {
+                reply(peer, 200, "{\"ok\":true,\"mode\":\"read-write\",\"version\":\""
                     + json(BuildConfig.VERSION_NAME) + "\",\"port\":" + PORT + "}");
                 return;
             }
 
-            if ("/snapshot".equals(parts[1])) {
+            if ("GET".equals(method) && "/snapshot".equals(path)) {
                 String snapshot = provider.snapshot();
                 if (snapshot.getBytes(StandardCharsets.UTF_8).length > DataBackup.MAX_BYTES) {
                     reply(peer, 413, "{\"error\":\"SNAPSHOT_TOO_LARGE\"}");
                     return;
                 }
-                reply(peer, 200, snapshot);
+                reply(peer, 200, snapshot, sha256(snapshot));
                 DiagnosticLog.event("DESKTOP_SYNC_SNAPSHOT_SENT");
                 return;
             }
 
-            reply(peer, 404, "{\"error\":\"NOT_FOUND\"}");
+            if ("POST".equals(method) && "/snapshot".equals(path)) {
+                if (contentLength <= 0 || contentLength > DataBackup.MAX_BYTES) {
+                    reply(peer, 413, "{\"error\":\"SNAPSHOT_TOO_LARGE\"}");
+                    return;
+                }
+                if (!baseSha.matches("[0-9a-f]{64}")) {
+                    reply(peer, 428, "{\"error\":\"BASE_REQUIRED\"}");
+                    return;
+                }
+                byte[] body = readExact(in, contentLength);
+                if (body == null) {
+                    reply(peer, 400, "{\"error\":\"BODY_INCOMPLETE\"}");
+                    return;
+                }
+                String incoming = new String(body, StandardCharsets.UTF_8);
+                synchronized (writeLock) {
+                    String current = provider.snapshot();
+                    String currentSha = sha256(current);
+                    if (!constantTimeEquals(currentSha, baseSha)) {
+                        reply(peer, 409, "{\"error\":\"PHONE_CHANGED\"}", currentSha);
+                        return;
+                    }
+                    restoreProvider.restore(incoming);
+                    String updated = provider.snapshot();
+                    reply(peer, 200, updated, sha256(updated));
+                }
+                DiagnosticLog.event("DESKTOP_SYNC_SNAPSHOT_WRITTEN");
+                return;
+            }
+
+            if ("POST".equals(method)) {
+                reply(peer, 404, "{\"error\":\"NOT_FOUND\"}");
+                return;
+            }
+            reply(peer, 405, "{\"error\":\"METHOD_NOT_ALLOWED\"}");
         } catch (Exception error) {
             DiagnosticLog.error("DESKTOP_SYNC_CLIENT", error);
         }
     }
 
+    private static String readLine(InputStream in, int max) throws Exception {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        int previous = -1;
+        while (out.size() <= max) {
+            int value = in.read();
+            if (value < 0) return out.size() == 0 ? null
+                : out.toString(StandardCharsets.US_ASCII.name());
+            if (previous == '\r' && value == '\n') {
+                byte[] bytes = out.toByteArray();
+                int length = Math.max(0, bytes.length - 1);
+                return new String(bytes, 0, length, StandardCharsets.US_ASCII);
+            }
+            out.write(value);
+            previous = value;
+        }
+        throw new IllegalArgumentException("HTTP line too long");
+    }
+
+    private static byte[] readExact(InputStream in, int length) throws Exception {
+        byte[] bytes = new byte[length];
+        int offset = 0;
+        while (offset < length) {
+            int read = in.read(bytes, offset, length - offset);
+            if (read < 0) return null;
+            offset += read;
+        }
+        return bytes;
+    }
+
     private static void reply(Socket socket, int status, String body) throws Exception {
+        reply(socket, status, body, null);
+    }
+
+    private static void reply(Socket socket, int status, String body,
+            String snapshotSha) throws Exception {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
             socket.getOutputStream(), StandardCharsets.US_ASCII));
         out.write("HTTP/1.1 " + status + " " + reason(status) + "\r\n");
         out.write("Content-Type: application/json; charset=utf-8\r\n");
         out.write("Content-Length: " + bytes.length + "\r\n");
+        if (snapshotSha != null && snapshotSha.matches("[0-9a-f]{64}"))
+            out.write("X-EDHOME-SNAPSHOT-SHA256: " + snapshotSha + "\r\n");
         out.write("Cache-Control: no-store\r\n");
         out.write("Connection: close\r\n\r\n");
         out.flush();
@@ -191,7 +280,9 @@ final class LanSyncServer {
             case 403: return "Forbidden";
             case 404: return "Not Found";
             case 405: return "Method Not Allowed";
+            case 409: return "Conflict";
             case 413: return "Payload Too Large";
+            case 428: return "Precondition Required";
             case 431: return "Request Header Fields Too Large";
             default: return "Error";
         }
@@ -214,6 +305,15 @@ final class LanSyncServer {
     private static String json(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
+
+    private static String sha256(String value) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256")
+            .digest(value.getBytes(StandardCharsets.UTF_8));
+        StringBuilder out = new StringBuilder(64);
+        for (byte b : digest) out.append(String.format(Locale.ROOT, "%02x", b & 255));
+        return out.toString();
+    }
+
 
     static String localAddress() {
         String fallback = null;

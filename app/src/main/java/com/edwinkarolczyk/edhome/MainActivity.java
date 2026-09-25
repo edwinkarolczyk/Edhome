@@ -168,7 +168,15 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta()) {
             String syncToken = LanSyncServer.ensureToken(prefs);
             lanSyncServer = new LanSyncServer(syncToken,
-                () -> DataBackup.exportJson(db.getReadableDatabase(), prefs));
+                () -> DataBackup.exportJson(db.getReadableDatabase(), prefs),
+                json -> {
+                    DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
+                    ReminderReceiver.schedule(this);
+                    DeviceTimerReceiver.scheduleAll(this);
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && !isDestroyed()) render();
+                    });
+                });
             lanSyncServer.start();
         }
         ReminderReceiver.schedule(this);

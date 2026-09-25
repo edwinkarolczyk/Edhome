@@ -64,6 +64,8 @@ public final class EdhomeDesktop extends JFrame {
     private final JPanel content = new JPanel(new BorderLayout());
     private final JLabel connection = new JLabel("OFFLINE • lokalna kopia");
     private JsonObject snapshot;
+    private String snapshotHash = "";
+    private boolean dirty;
     private String current = "Pulpit";
     private QrPairingSession qrPairingSession;
 
@@ -114,7 +116,7 @@ public final class EdhomeDesktop extends JFrame {
             side.add(Box.createVerticalStrut(6));
         }
         side.add(Box.createVerticalGlue());
-        JLabel mode = new JLabel("<html><b>MVP:</b> Android → PC<br>tylko odczyt</html>");
+        JLabel mode = new JLabel("<html><b>MVP:</b> Android → PC<br>odczyt i zapis</html>");
         mode.setForeground(new Color(110, 110, 110));
         side.add(mode);
         return side;
@@ -289,8 +291,8 @@ public final class EdhomeDesktop extends JFrame {
         PREFS.put("token", secret);
         if (trigger != null) trigger.setEnabled(false);
         connection.setText("ŁĄCZENIE…");
-        new SwingWorker<JsonObject,Void>() {
-            @Override protected JsonObject doInBackground() throws Exception {
+        new SwingWorker<SnapshotResult,Void>() {
+            @Override protected SnapshotResult doInBackground() throws Exception {
                 return new LanClient(host, PORT, secret).snapshot();
             }
             @Override protected void done() {
@@ -391,6 +393,8 @@ public final class EdhomeDesktop extends JFrame {
             JsonObject parsed = JsonParser.parseString(json).getAsJsonObject();
             validate(parsed);
             snapshot = parsed;
+            snapshotHash = "";
+            dirty = false;
             saveCache(parsed);
             connection.setText("OFFLINE • backup " + str(parsed,"sourceVersion",""));
             showSection(current);
@@ -442,7 +446,19 @@ public final class EdhomeDesktop extends JFrame {
         table.setAutoCreateRowSorter(true);
         table.setRowHeight(26);
         page.add(new JScrollPane(table), BorderLayout.CENTER);
-        JLabel footer = new JLabel("Pozycji: " + rows.size() + "  •  tryb tylko do odczytu");
+
+        JPanel footer = new JPanel(new BorderLayout(8, 0));
+        JLabel count = new JLabel("Pozycji: " + rows.size()
+            + "  •  kliknij komórkę, aby edytować");
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JButton reload = new JButton("Pobierz ponownie");
+        JButton save = new JButton("Zapisz zmiany do telefonu");
+        reload.addActionListener(e -> reloadFromPhone(reload));
+        save.addActionListener(e -> saveChangesToPhone(save));
+        actions.add(reload);
+        actions.add(save);
+        footer.add(count, BorderLayout.WEST);
+        footer.add(actions, BorderLayout.EAST);
         page.add(footer, BorderLayout.SOUTH);
         return page;
     }
@@ -473,6 +489,8 @@ public final class EdhomeDesktop extends JFrame {
                 Files.readString(CACHE, StandardCharsets.UTF_8)).getAsJsonObject();
             validate(cached);
             snapshot = cached;
+            snapshotHash = "";
+            dirty = false;
             connection.setText("OFFLINE • cache Android " + str(cached,"sourceVersion",""));
         } catch (Exception ignored) {
             snapshot = null;
@@ -524,6 +542,97 @@ public final class EdhomeDesktop extends JFrame {
         return result;
     }
 
+    private void reloadFromPhone(JButton trigger) {
+        String host = PREFS.get("phoneIp", "").trim();
+        String secret = PREFS.get("token", "").trim();
+        if (host.isBlank() || secret.isBlank()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw połącz Desktop z telefonem w Ustawieniach.");
+            return;
+        }
+        if (dirty) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                "Masz niezapisane zmiany z PC. Pobrać dane z telefonu i je odrzucić?",
+                "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
+            if (choice != JOptionPane.YES_OPTION) return;
+        }
+        trigger.setEnabled(false);
+        connection.setText("ODŚWIEŻANIE…");
+        new SwingWorker<SnapshotResult,Void>() {
+            @Override protected SnapshotResult doInBackground() throws Exception {
+                return new LanClient(host, PORT, secret).snapshot();
+            }
+            @Override protected void done() {
+                trigger.setEnabled(true);
+                try {
+                    SnapshotResult result = get();
+                    snapshot = result.data;
+                    snapshotHash = result.sha256;
+                    dirty = false;
+                    validate(snapshot);
+                    saveCache(snapshot);
+                    connection.setText("ONLINE • EDYCJA • Android "
+                        + str(snapshot,"sourceVersion",""));
+                    showSection(current);
+                } catch (Exception ex) {
+                    connection.setText("OFFLINE • błąd odświeżania");
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie pobrano danych:\n" + rootMessage(ex),
+                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void saveChangesToPhone(JButton trigger) {
+        if (!dirty) {
+            JOptionPane.showMessageDialog(this, "Nie ma zmian do zapisania.");
+            return;
+        }
+        String host = PREFS.get("phoneIp", "").trim();
+        String secret = PREFS.get("token", "").trim();
+        if (host.isBlank() || secret.isBlank() || snapshotHash.isBlank()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw pobierz świeże dane z telefonu. "
+                    + "Kopia offline nie może nadpisać telefonu.");
+            return;
+        }
+        int choice = JOptionPane.showConfirmDialog(this,
+            "Zapisać zmiany z PC do telefonu?\n"
+                + "EDHOME sprawdzi, czy dane na telefonie nie zmieniły się "
+                + "od ostatniego pobrania.",
+            "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
+        if (choice != JOptionPane.YES_OPTION) return;
+
+        trigger.setEnabled(false);
+        connection.setText("ZAPIS DO TELEFONU…");
+        new SwingWorker<SnapshotResult,Void>() {
+            @Override protected SnapshotResult doInBackground() throws Exception {
+                return new LanClient(host, PORT, secret).write(snapshot, snapshotHash);
+            }
+            @Override protected void done() {
+                trigger.setEnabled(true);
+                try {
+                    SnapshotResult result = get();
+                    snapshot = result.data;
+                    snapshotHash = result.sha256;
+                    dirty = false;
+                    saveCache(snapshot);
+                    connection.setText("ONLINE • EDYCJA • zapisano");
+                    showSection(current);
+                } catch (Exception ex) {
+                    connection.setText("ONLINE • zapis odrzucony");
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie zapisano zmian:\n" + rootMessage(ex)
+                            + "\n\nJeśli telefon zmienił dane w międzyczasie, "
+                            + "wybierz „Pobierz ponownie”, sprawdź różnice "
+                            + "i wprowadź zmianę jeszcze raz.",
+                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
     private static String rootMessage(Throwable error) {
         Throwable x = error;
         while (x.getCause() != null) x = x.getCause();
@@ -531,7 +640,7 @@ public final class EdhomeDesktop extends JFrame {
         return message == null || message.isBlank() ? x.getClass().getSimpleName() : message;
     }
 
-    private static final class JsonTableModel extends AbstractTableModel {
+    private final class JsonTableModel extends AbstractTableModel {
         private final List<JsonObject> rows = new ArrayList<>();
         private final String[][] cols;
 
@@ -769,7 +878,7 @@ public final class EdhomeDesktop extends JFrame {
             this.token = token;
         }
 
-        JsonObject snapshot() throws Exception {
+        SnapshotResult snapshot() throws Exception {
             HttpRequest request = HttpRequest.newBuilder(
                     URI.create("http://" + host + ":" + port + "/snapshot"))
                 .timeout(Duration.ofSeconds(8))
@@ -784,7 +893,36 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IOException("Telefon odpowiedział HTTP " + response.statusCode() + ".");
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             validate(root);
-            return root;
+            return new SnapshotResult(root,
+                response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""));
+        }
+
+        SnapshotResult write(JsonObject data, String baseSha) throws Exception {
+            String json = GSON.toJson(data);
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/snapshot"))
+                .timeout(Duration.ofSeconds(15))
+                .header("X-EDHOME-TOKEN", token)
+                .header("X-EDHOME-BASE-SHA256", baseSha)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+                .build();
+            HttpResponse<String> response =
+                http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 409)
+                throw new IOException("Telefon ma nowsze dane niż kopia na PC.");
+            if (response.statusCode() == 428)
+                throw new IOException("Brak wersji bazowej — pobierz dane ponownie.");
+            if (response.statusCode() == 401)
+                throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon odrzucił zapis: HTTP "
+                    + response.statusCode() + ".");
+            JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+            validate(root);
+            return new SnapshotResult(root,
+                response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""));
         }
 
         private static String normalizeHost(String raw) {

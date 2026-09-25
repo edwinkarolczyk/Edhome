@@ -8,13 +8,13 @@ desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java")
 assert '"/snapshot"' in server
 assert '"X-EDHOME-TOKEN"' in desktop
 assert '"x-edhome-token"' in server
-assert 'READ_ONLY' in server
+assert 'POST' in server
 assert 'BetaUpdater.isBeta()' in main
 assert 'DataBackup.exportJson' in main
 assert 'PrivatePaycheck' not in server
 assert 'desktop_sync_token' in server
 assert 'isSiteLocalAddress()' in server
-assert 'tylko odczyt' in desktop.lower()
+assert 'odczyt i zapis' in desktop.lower()
 
 print("desktop sync contract OK")
 
@@ -27,3 +27,12 @@ assert 'Skanuj QR z ekranu PC' in main
 assert 'DESKTOP_QR_PAIRED' in main
 
 assert 'X-EDHOME-NONCE' in main
+
+manifest = (root / "app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
+assert 'android:usesCleartextTraffic="true"' in manifest
+assert 'X-EDHOME-BASE-SHA256' in desktop
+assert 'x-edhome-base-sha256' in server
+assert 'DESKTOP_SYNC_SNAPSHOT_WRITTEN' in server
+assert 'DataBackup.restoreJson' in main
+assert 'Zapisz zmiany do telefonu' in desktop
+assert '409' in server
