@@ -295,7 +295,10 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-assert 'inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != DB_VERSION' in backup
+for accepted in range(2,34):
+    assert ("inputVersion != "+str(accepted)) in backup
+assert 'inputVersion != DB_VERSION' in backup
+assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
 assert 'inputVersion < 16 && "pantry".equals(definition[0])' in backup
 assert 'PantryCategories.known(values.getAsString("category"))' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
