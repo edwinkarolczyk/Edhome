@@ -53,6 +53,21 @@ for phrase in ('bank_last_seen_at', 'bank_last_saved_at',
                'bank_last_unrecognized_at', 'lastSeenPackage(',
                'putLong(UNRECOGNIZED,', 'putLong(SAVED,'):
     assert phrase in store,phrase
+for phrase in ('bank_listener_test_until','bank_listener_test_started',
+               'bank_listener_test_result','TEST_WINDOW_MS=2L*60*1000',
+               'armListenerTest(', 'listenerTestArmed(',
+               'finishListenerTest(context,false)',
+               'finishListenerTest(context,true)',
+               'BankReceiptNotifier.showListenerTest(context,'):
+    assert phrase in store,phrase
+for phrase in ('showListenerTest(', 'nasłuch działa',
+               'parser nie rozpoznał', 'edhome_bank_listener_test'):
+    assert phrase in receipt,phrase
+for phrase in ('Testuj nasłuch banku przez 2 minuty',
+               'Test nasłuchu: AKTYWNY', 'Test nasłuchu: ODEBRANO I ROZPOZNANO',
+               'Test nasłuchu: ODEBRANO, ALE NIE ROZPOZNANO',
+               'Test nasłuchu: WYGASŁ', 'armListenerTest(this)'):
+    assert phrase in ui,phrase
 for phrase in ('Nasłuch Androida:', 'Ostatni nierozpoznany komunikat bankowy:',
                'Ostatnio zapisany sygnał:', 'Własne powiadomienie EDHOME:',
                'BankNotificationListener.isConnected()',
