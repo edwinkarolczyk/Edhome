@@ -5362,6 +5362,165 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void showBankEvidenceQueue(int filter) {
+        java.util.List<BankEvidenceStore.Row> all=
+            BankEvidenceStore.list(db.getReadableDatabase(),"open");
+        java.util.List<BankEvidenceStore.Row> visible=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        for(BankEvidenceStore.Row row:all) {
+            int pending=BankEvidenceStore.pendingMatches(
+                db.getReadableDatabase(),row);
+            if(filter==1&&pending!=1 || filter==2&&pending<2
+                    || filter==3&&pending!=0
+                    || filter==4&&!"expense".equals(row.kind)
+                    || filter==5&&!"income".equals(row.kind))
+                continue;
+            visible.add(row);
+            String description=row.description.length()>55
+                ?row.description.substring(0,55)+"…":row.description;
+            labels.add(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)+"\n"
+                +(description.isEmpty()?"Bez opisu":description)+"\n"
+                +(pending==1?"✓ 1 propozycja • sprawdź"
+                    :pending>1?"? "+pending+" możliwych wpisów"
+                    :"— Brak oczekującego wpisu"));
+        }
+        String[] filters={"Wszystkie","1 propozycja","Kilka propozycji",
+            "Bez pasującego wpisu","Wydatki −","Wpływy +"};
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("Banki i potwierdzenia • "+visible.size()
+                +" / "+all.size()+"\nFiltr: "+filters[filter])
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                openBankEvidenceRow(visible.get(index)))
+            .setNeutralButton("Filtry",(d,w)->
+                new AlertDialog.Builder(this)
+                    .setTitle("Filtruj kolejkę bankową")
+                    .setItems(filters,(fd,selected)->
+                        showBankEvidenceQueue(selected))
+                    .setNegativeButton("Anuluj",null).show())
+            .setPositiveButton("Odrzucone",(d,w)->
+                showDismissedBankEvidence())
+            .setNegativeButton("Zamknij",null);
+        if(visible.isEmpty())
+            dialog.setMessage(all.isEmpty()
+                ?"Kolejka jest pusta. Dodaj pliki bankowe lub poczekaj na "
+                    +"powiadomienie banku."
+                :"Brak pozycji dla wybranego filtra.");
+        dialog.show();
+    }
+
+    private void openBankEvidenceRow(BankEvidenceStore.Row row) {
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,note,created_at FROM paycheck_transactions "
+                +"WHERE scope='shared' AND status='pending' AND kind=? "
+                +"AND amount_grosz=? ORDER BY id DESC LIMIT 40",
+                new String[]{row.kind,Long.toString(row.amount)})) {
+            while(c.moveToNext()) {
+                ids.add(c.getString(0));
+                String note=c.getString(1);
+                labels.add((note.isEmpty()?"Bez opisu":note)
+                    +" • "+Instant.ofEpochMilli(c.getLong(2))
+                        .atZone(ZoneId.systemDefault()).toLocalDate());
+            }
+        }
+        if(ids.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle(row.sourceLabel+" • "
+                    +("income".equals(row.kind)?"+ ":"− ")
+                    +MoneyRules.format(row.amount))
+                .setMessage(row.date+"\n"+row.description
+                    +"\n\nBrak oczekującego wpisu PayCheck. "
+                    +"Import nie tworzy automatycznie płatności.")
+                .setNegativeButton("Powrót",null)
+                .setPositiveButton("Odrzuć z kolejki",(d,w)->{
+                    if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
+                            row.evidenceKey))
+                        alert("Nie odrzucono wpisu.");
+                    showBankEvidenceQueue(0);
+                }).show();
+            return;
+        }
+        if(ids.size()==1) {
+            confirmBankEvidenceMatch(row,ids.get(0),labels.get(0));
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(row.sourceLabel+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)
+                +" • wybierz właściwy wpis")
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                confirmBankEvidenceMatch(row,ids.get(index),labels.get(index)))
+            .setNeutralButton("Odrzuć dowód",(d,w)->{
+                if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
+                        row.evidenceKey))
+                    alert("Nie odrzucono wpisu.");
+                showBankEvidenceQueue(0);
+            })
+            .setNegativeButton("Powrót",null).show();
+    }
+
+    private void confirmBankEvidenceMatch(BankEvidenceStore.Row row,
+            String operationId,String candidateLabel) {
+        new AlertDialog.Builder(this)
+            .setTitle("Potwierdź parę")
+            .setMessage(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)+"\n"
+                +row.description+"\n\nWpis PayCheck: "+candidateLabel
+                +"\n\nPlik nie jest uwierzytelnionym połączeniem z bankiem. "
+                +"Saldo zmieni się tylko raz po zatwierdzeniu.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zatwierdź parę",(d,w)->{
+                try {
+                    String result=BankEvidenceStore.match(
+                        db.getWritableDatabase(),row.evidenceKey,operationId);
+                    if("MATCHED".equals(result)
+                            ||"ALREADY_MATCHED".equals(result)) {
+                        DiagnosticLog.event("PAYCHECK_BANK_QUEUE_MATCHED");
+                        render();
+                        showBankEvidenceQueue(0);
+                    } else alert("Nie uzgodniono: wpis nie jest już oczekujący "
+                        +"albo dowód został wykorzystany.");
+                }catch(Exception error) {
+                    DiagnosticLog.event("PAYCHECK_BANK_QUEUE_MATCH_FAILED");
+                    alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
+                }
+            }).show();
+    }
+
+    private void showDismissedBankEvidence() {
+        java.util.List<BankEvidenceStore.Row> rows=
+            BankEvidenceStore.list(db.getReadableDatabase(),"dismissed");
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        for(BankEvidenceStore.Row row:rows)
+            labels.add(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount));
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("Odrzucone dowody bankowe • "+rows.size())
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                BankEvidenceStore.Row row=rows.get(index);
+                new AlertDialog.Builder(this)
+                    .setTitle("Przywrócić do kolejki?")
+                    .setMessage(row.sourceLabel+" • "+row.date+" • "
+                        +MoneyRules.format(row.amount))
+                    .setNegativeButton("Nie",null)
+                    .setPositiveButton("Przywróć",(dd,w)->{
+                        if(!BankEvidenceStore.reopen(db.getWritableDatabase(),
+                                row.evidenceKey))
+                            alert("Nie przywrócono wpisu.");
+                        showBankEvidenceQueue(0);
+                    }).show();
+            })
+            .setNegativeButton("Zamknij",null);
+        if(rows.isEmpty())dialog.setMessage("Brak odrzuconych pozycji.");
+        dialog.show();
+    }
+
     private void showStatementEntries(
             java.util.List<BankStatementCsv.Entry> rows, String bank) {
         showFilteredStatementEntries(rows,bank,0);
