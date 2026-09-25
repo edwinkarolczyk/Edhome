@@ -108,8 +108,7 @@ final class BankStatementWorkbook {
             if(values.size()==1)result.append(values.get(0));
             else for(int i=0;i<values.size();i++) {
                 if(i>0)result.append(';');
-                result.append('"').append(values.get(i).replace("\"","\"""))
-                    .append('"');
+                appendSemicolonField(result,values.get(i));
             }
             result.append('\n');
             if(result.length()>BankStatementCsv.MAX_BYTES)
@@ -117,6 +116,14 @@ final class BankStatementWorkbook {
                     "Za dużo danych transakcyjnych w XLSX.");
         }
         return result.toString();
+    }
+
+    private static void appendSemicolonField(StringBuilder out,String value) {
+        if(value.indexOf(';')<0&&value.indexOf('"')<0
+                &&value.indexOf('\n')<0&&value.indexOf('\r')<0) {
+            out.append(value);return;
+        }
+        out.append('"').append(value.replace("\"","\""")).append('"');
     }
 
     private static int columnIndex(String ref,int fallback) {
