@@ -354,6 +354,8 @@ jobs:
           python3 tests/check_private_backup_contract.py
       - name: Update installer single-flight and polling regression
         run: python3 tests/check_updater_contract.py
+      - name: EDHOME 0.6 code-side release gate
+        run: python3 tests/check_0_6_release_gate.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
       - name: Verify actual bundled 100 AI 3D icon images
