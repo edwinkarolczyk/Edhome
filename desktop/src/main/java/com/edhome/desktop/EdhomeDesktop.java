@@ -54,7 +54,7 @@ import java.util.prefs.Preferences;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.41";
+    private static final String DESKTOP_VERSION = "0.6.0.42";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -81,19 +81,35 @@ public final class EdhomeDesktop extends JFrame {
     private JsonObject snapshot;
     private String snapshotHash = "";
     private boolean dirty;
+    private boolean connected;
+    private boolean connecting;
     private String current = "Pulpit";
     private QrPairingSession qrPairingSession;
+    private TrayIcon trayIcon;
+    private javax.swing.Timer reconnectTimer;
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new EdhomeDesktop().setVisible(true));
+        SwingUtilities.invokeLater(EdhomeDesktop::new);
     }
 
     private EdhomeDesktop() {
         super("EDHOME Desktop Beta " + DESKTOP_VERSION);
-        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(1050, 680));
         setSize(1280, 800);
         setLocationRelativeTo(null);
+
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosing(java.awt.event.WindowEvent e) {
+                if (trayIcon != null) {
+                    setVisible(false);
+                    trayIcon.displayMessage("EDHOME Desktop",
+                        "Program działa w tle.", TrayIcon.MessageType.INFO);
+                } else {
+                    shutdownDesktop();
+                }
+            }
+        });
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(APP_BG);
@@ -106,6 +122,12 @@ public final class EdhomeDesktop extends JFrame {
 
         loadCache();
         showSection("Pulpit");
+        initTray();
+        startReconnectLoop();
+
+        boolean startMinimized = PREFS.getBoolean("startMinimized", false);
+        setVisible(!(startMinimized && trayIcon != null));
+        SwingUtilities.invokeLater(() -> autoConnectSaved(true));
     }
 
     private JComponent topBar() {
@@ -293,6 +315,16 @@ public final class EdhomeDesktop extends JFrame {
         autostart.setOpaque(false);
         autostart.setForeground(APP_TEXT);
         autostart.setSelected(isAutostartEnabled());
+
+        JCheckBox startMinimized = new JCheckBox("Po starcie Windows uruchamiaj zminimalizowany do zasobnika");
+        startMinimized.setOpaque(false);
+        startMinimized.setForeground(APP_TEXT);
+        startMinimized.setSelected(PREFS.getBoolean("startMinimized", false));
+
+        JCheckBox autoConnect = new JCheckBox("Automatycznie łącz i synchronizuj z telefonem w tle");
+        autoConnect.setOpaque(false);
+        autoConnect.setForeground(APP_TEXT);
+        autoConnect.setSelected(PREFS.getBoolean("autoConnect", true));
         JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
             + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
             + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
@@ -309,6 +341,8 @@ public final class EdhomeDesktop extends JFrame {
         g.gridx=1; form.add(importFile,g);
         g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(updateDesktop,g);
         g.gridy=6; form.add(autostart,g);
+        g.gridy=7; form.add(startMinimized,g);
+        g.gridy=8; form.add(autoConnect,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -335,6 +369,12 @@ public final class EdhomeDesktop extends JFrame {
                     "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
             }
         });
+        startMinimized.addActionListener(e ->
+            PREFS.putBoolean("startMinimized", startMinimized.isSelected()));
+        autoConnect.addActionListener(e -> {
+            PREFS.putBoolean("autoConnect", autoConnect.isSelected());
+            if (autoConnect.isSelected()) autoConnectSaved(true);
+        });
 
         page.add(form, BorderLayout.NORTH);
         JTextArea notes = new JTextArea(
@@ -345,7 +385,8 @@ public final class EdhomeDesktop extends JFrame {
           + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
           + "• kolejne formularze dodawania/usuwania bez technicznych pól.\n"
           + "Domyślny widok Desktopu używa nazw, opisów i kart jak EDHOME na telefonie.\n"
-          + "W ustawieniach możesz też włączyć automatyczny start razem z Windows.");
+          + "W ustawieniach możesz też włączyć autostart Windows, start do zasobnika "
+          + "oraz automatyczne łączenie i synchronizację w tle.");
         notes.setBackground(APP_BG);
         notes.setForeground(APP_MUTED);
         notes.setEditable(false);
@@ -357,34 +398,152 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void pullFromPhone(String host, String secret, JButton trigger) {
+        pullFromPhone(host, secret, trigger, false);
+    }
+
+    private void pullFromPhone(String host, String secret, JButton trigger,
+            boolean silent) {
+        if (connecting || (silent && dirty)) return;
+        connecting = true;
         PREFS.put("phoneIp", host);
         PREFS.put("token", secret);
         if (trigger != null) trigger.setEnabled(false);
-        connection.setText("ŁĄCZENIE…");
+        connection.setText(silent ? "SYNCHRONIZACJA…" : "ŁĄCZENIE…");
+
         new SwingWorker<SnapshotResult,Void>() {
             @Override protected SnapshotResult doInBackground() throws Exception {
                 return new LanClient(host, PORT, secret).snapshot();
             }
+
             @Override protected void done() {
+                connecting = false;
                 if (trigger != null) trigger.setEnabled(true);
                 try {
                     SnapshotResult result = get();
                     snapshot = result.data;
                     snapshotHash = result.sha256;
+                    connected = true;
                     dirty = false;
                     validate(snapshot);
                     saveCache(snapshot);
-                    connection.setText("ONLINE • EDYCJA • Android "
+                    connection.setText("ONLINE • Android "
                         + str(snapshot,"sourceVersion",""));
-                    showSection(current);
+                    connection.setForeground(APP_ACCENT);
+                    if (!silent) showSection(current);
+                    updateTrayTooltip();
                 } catch (Exception ex) {
-                    connection.setText("OFFLINE • błąd połączenia");
-                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
-                        "Nie pobrano danych:\n" + rootMessage(ex),
-                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                    connected = false;
+                    connection.setText("OFFLINE • ponawiam w tle");
+                    connection.setForeground(new Color(230, 175, 95));
+                    updateTrayTooltip();
+                    if (!silent) {
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            "Nie pobrano danych:\n" + rootMessage(ex),
+                            "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                    }
                 }
             }
         }.execute();
+    }
+
+    private void autoConnectSaved(boolean silent) {
+        if (!PREFS.getBoolean("autoConnect", true) || connecting || dirty) return;
+        String host = PREFS.get("phoneIp", "").trim();
+        String secret = PREFS.get("token", "").trim();
+        if (host.isBlank() || secret.isBlank()) return;
+        pullFromPhone(host, secret, null, silent);
+    }
+
+    private void startReconnectLoop() {
+        reconnectTimer = new javax.swing.Timer(30000, e -> {
+            if (PREFS.getBoolean("autoConnect", true) && !connecting && !dirty)
+                autoConnectSaved(true);
+        });
+        reconnectTimer.setInitialDelay(30000);
+        reconnectTimer.start();
+    }
+
+    private void initTray() {
+        if (!SystemTray.isSupported()) return;
+        try {
+            PopupMenu menu = new PopupMenu();
+
+            MenuItem show = new MenuItem("Pokaż EDHOME");
+            show.addActionListener(e -> SwingUtilities.invokeLater(() -> {
+                setVisible(true);
+                setState(Frame.NORMAL);
+                toFront();
+            }));
+
+            MenuItem sync = new MenuItem("Synchronizuj teraz");
+            sync.addActionListener(e ->
+                SwingUtilities.invokeLater(() -> autoConnectSaved(false)));
+
+            MenuItem settingsItem = new MenuItem("Ustawienia");
+            settingsItem.addActionListener(e -> SwingUtilities.invokeLater(() -> {
+                setVisible(true);
+                setState(Frame.NORMAL);
+                showSection("Ustawienia");
+                toFront();
+            }));
+
+            MenuItem exit = new MenuItem("Zakończ");
+            exit.addActionListener(e ->
+                SwingUtilities.invokeLater(this::shutdownDesktop));
+
+            menu.add(show);
+            menu.add(sync);
+            menu.addSeparator();
+            menu.add(settingsItem);
+            menu.addSeparator();
+            menu.add(exit);
+
+            trayIcon = new TrayIcon(createTrayImage(), "EDHOME Desktop", menu);
+            trayIcon.setImageAutoSize(true);
+            trayIcon.addActionListener(e -> SwingUtilities.invokeLater(() -> {
+                setVisible(true);
+                setState(Frame.NORMAL);
+                toFront();
+            }));
+            SystemTray.getSystemTray().add(trayIcon);
+            updateTrayTooltip();
+        } catch (Exception ignored) {
+            trayIcon = null;
+        }
+    }
+
+    private Image createTrayImage() {
+        BufferedImage image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(APP_SURFACE);
+            g.fillRoundRect(1, 1, 30, 30, 10, 10);
+            g.setColor(APP_ACCENT);
+            g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+            g.drawString("ED", 6, 21);
+        } finally {
+            g.dispose();
+        }
+        return image;
+    }
+
+    private void updateTrayTooltip() {
+        if (trayIcon == null) return;
+        trayIcon.setToolTip("EDHOME Desktop " + DESKTOP_VERSION
+            + (connected ? " • ONLINE" : " • OFFLINE"));
+    }
+
+    private void shutdownDesktop() {
+        if (reconnectTimer != null) reconnectTimer.stop();
+        if (qrPairingSession != null) qrPairingSession.close();
+        if (trayIcon != null) {
+            try { SystemTray.getSystemTray().remove(trayIcon); }
+            catch (Exception ignored) { }
+        }
+        dispose();
+        System.exit(0);
     }
 
     private void showQrPairing(JTextField ip, JTextField token, JButton pull) {
@@ -1271,6 +1430,7 @@ public final class EdhomeDesktop extends JFrame {
                     SnapshotResult result = get();
                     snapshot = result.data;
                     snapshotHash = result.sha256;
+                    connected = true;
                     dirty = false;
                     validate(snapshot);
                     saveCache(snapshot);
@@ -1278,7 +1438,9 @@ public final class EdhomeDesktop extends JFrame {
                         + str(snapshot,"sourceVersion",""));
                     showSection(current);
                 } catch (Exception ex) {
+                    connected = false;
                     connection.setText("OFFLINE • błąd odświeżania");
+                    updateTrayTooltip();
                     JOptionPane.showMessageDialog(EdhomeDesktop.this,
                         "Nie pobrano danych:\n" + rootMessage(ex),
                         "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
