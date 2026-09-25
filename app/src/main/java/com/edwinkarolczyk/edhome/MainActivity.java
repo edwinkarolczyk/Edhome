@@ -4635,6 +4635,8 @@ public final class MainActivity extends Activity {
             showBankNotificationHints();
         }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
+        if(BetaUpdater.isBeta())
+            note("Diagnostyka importu: "+bankImportDiagLine());
         note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
             + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
             + "Plik nie jest automatycznie potwierdzeniem z banku.");
@@ -5228,6 +5230,23 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    private void bankImportDiag(String state,int files,int rows) {
+        if(!BetaUpdater.isBeta()||prefs==null)return;
+        prefs.edit().putString("bank_import_diag_state",state)
+            .putInt("bank_import_diag_files",Math.max(0,files))
+            .putInt("bank_import_diag_rows",Math.max(0,rows))
+            .putLong("bank_import_diag_at",System.currentTimeMillis()).apply();
+    }
+
+    private String bankImportDiagLine() {
+        if(prefs==null)return "brak";
+        String state=prefs.getString("bank_import_diag_state","");
+        if(state.isEmpty())return "brak";
+        return state+" • "+prefs.getInt("bank_import_diag_files",0)
+            +" plik(ów) • "+prefs.getInt("bank_import_diag_rows",0)
+            +" pozycji • "+bankSignalTime(prefs.getLong("bank_import_diag_at",0));
+    }
+
     private String decodeBankStatementText(byte[] bytes) {
         try {
             return StandardCharsets.UTF_8.newDecoder()
@@ -5243,6 +5262,8 @@ public final class MainActivity extends Activity {
     private void importStatementCsv(java.util.List<Uri> files, String bank) {
         if(files==null||bank==null||files.isEmpty())return;
         if(files.size()>10){alert("Wybierz maksymalnie 10 plików na raz.");return;}
+        String diagStage="START";
+        bankImportDiag(diagStage,files.size(),0);
         try {
             java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
             java.util.Set<String> seen=new java.util.HashSet<>();
@@ -5251,6 +5272,7 @@ public final class MainActivity extends Activity {
             int veloPdfFiles=0;
             int genericFiles=0;
             for(Uri uri:files) {
+                diagStage="READ";
                 ByteArrayOutputStream output=new ByteArrayOutputStream();
                 try(InputStream stream=getContentResolver().openInputStream(uri)){
                     if(stream==null)throw new IllegalArgumentException(
@@ -5266,6 +5288,7 @@ public final class MainActivity extends Activity {
                 byte[] bytes=output.toByteArray();
                 java.util.List<BankStatementCsv.Entry> parsed;
                 if(BankPdfText.isPdf(bytes)) {
+                    diagStage="PDF_TEXT";
                     String pdfText=BankPdfText.extract(this,bytes);
                     if(!BankStatementVeloPdf.recognizes(pdfText))
                         throw new IllegalArgumentException(
@@ -5275,6 +5298,7 @@ public final class MainActivity extends Activity {
                 } else {
                     String text;
                     if(BankStatementWorkbook.isXlsx(bytes)) {
+                        diagStage="XLSX_TEXT";
                         text=BankStatementWorkbook.textRows(bytes);
                     } else {
                         String utf8=new String(bytes,StandardCharsets.UTF_8);
@@ -5285,9 +5309,11 @@ public final class MainActivity extends Activity {
                         else text=utf8.indexOf('\uFFFD')>=0?cp1250:utf8;
                     }
                     if(BankStatementMbank.recognizes(text)) {
+                        diagStage="MBANK_PARSE";
                         parsed=BankStatementMbank.parse(text);
                         mbankFiles++;
                     } else {
+                        diagStage="CSV_PARSE";
                         parsed=BankStatementCsv.parse(text,bank);
                         genericFiles++;
                     }
@@ -5300,6 +5326,7 @@ public final class MainActivity extends Activity {
                     entries.add(entry);
                 }
             }
+            bankImportDiag("OK",files.size(),entries.size());
             DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
             java.util.List<String> detectedSources=new java.util.ArrayList<>();
             if(mbankFiles>0)detectedSources.add("mBank");
@@ -5312,6 +5339,7 @@ public final class MainActivity extends Activity {
                     +"Żaden duplikat nie zmieni salda.");
             showStatementEntries(entries,detected);
         }catch(Exception error){
+            bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
             DiagnosticLog.event("PAYCHECK_BANK_FILES_REJECTED");
             alert("Nie wczytano plików: "+(error instanceof IllegalArgumentException
                 ?error.getMessage():"błąd odczytu pliku."));
