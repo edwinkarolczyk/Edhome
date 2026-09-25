@@ -592,8 +592,8 @@ public final class MainActivity extends Activity {
             + ". Dotknij, aby przejść do czynności.");
 
         TextView editHint = text(homeEditMode
-            ? "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮"
-            : "✥  Krócej: menu • dłużej: przeciągnij • dotknij: układaj", 13, false);
+            ? "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar"
+            : "✥  Krócej: menu • dłużej: przeciągnij • 2 palce: rozmiar", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
         editHint.setMinHeight(dp(48));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
@@ -661,13 +661,48 @@ public final class MainActivity extends Activity {
             tile.setOnTouchListener(new View.OnTouchListener() {
                 private float startX, startY;
                 private long downAt;
-                private boolean moved, dragging;
+                private boolean moved, dragging, resizing, resizeChanged;
+                private float resizeScale = 1f;
+                private final android.view.ScaleGestureDetector resizeDetector =
+                    new android.view.ScaleGestureDetector(MainActivity.this,
+                        new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                            @Override public boolean onScale(
+                                    android.view.ScaleGestureDetector detector) {
+                                if (!resizing) return false;
+                                resizeScale *= detector.getScaleFactor();
+                                if (resizeScale > 1.10f || resizeScale < 0.90f)
+                                    resizeChanged = true;
+                                return true;
+                            }
+                        });
+
+                private void finishResize() {
+                    if (!resizing) return;
+                    resizing = false;
+                    tile.removeCallbacks(startDrag);
+                    if (!resizeChanged) return;
+                    boolean currentlyDouble = "double".equals(
+                        prefs.getString("tile_width_" + tileId, "small"));
+                    boolean makeDouble = resizeScale > 1f;
+                    if (makeDouble == currentlyDouble) return;
+                    if (!prefs.edit().putString("tile_width_" + tileId,
+                            makeDouble ? "double" : "small").commit()) {
+                        alert("Nie udało się zapisać rozmiaru kafelka.");
+                        return;
+                    }
+                    DiagnosticLog.event("HOME_TILE_RESIZED",
+                        "id=" + tileId + " width=" + (makeDouble ? "double" : "small"));
+                    tile.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                    render();
+                }
+
                 private final Runnable startDrag = () -> {
-                    if (!moved && !dragging && "home".equals(screen))
+                    if (!moved && !dragging && !resizing && "home".equals(screen))
                         dragging = beginHomeDrag(tile, tileId);
                 };
 
                 @Override public boolean onTouch(View v, MotionEvent event) {
+                    resizeDetector.onTouchEvent(event);
                     switch (event.getActionMasked()) {
                         case MotionEvent.ACTION_DOWN:
                             startX = event.getRawX();
@@ -675,11 +710,23 @@ public final class MainActivity extends Activity {
                             downAt = event.getEventTime();
                             moved = false;
                             dragging = false;
+                            resizing = false;
+                            resizeChanged = false;
+                            resizeScale = 1f;
                             tile.postDelayed(startDrag, prefs.getInt(
                                 HomeTileLayout.DRAG_KEY,
                                 HomeTileLayout.DEFAULT_DRAG_MS));
                             return true;
+                        case MotionEvent.ACTION_POINTER_DOWN:
+                            tile.removeCallbacks(startDrag);
+                            moved = true;
+                            dragging = false;
+                            resizing = event.getPointerCount() >= 2;
+                            resizeChanged = false;
+                            resizeScale = 1f;
+                            return true;
                         case MotionEvent.ACTION_MOVE:
+                            if (resizing) return true;
                             if (Math.abs(event.getRawX() - startX)
                                     > ViewConfiguration.get(MainActivity.this)
                                         .getScaledTouchSlop()
@@ -690,8 +737,14 @@ public final class MainActivity extends Activity {
                                 tile.removeCallbacks(startDrag);
                             }
                             return true;
+                        case MotionEvent.ACTION_POINTER_UP:
+                            return true;
                         case MotionEvent.ACTION_UP:
                             tile.removeCallbacks(startDrag);
+                            if (resizing) {
+                                finishResize();
+                                return true;
+                            }
                             if (!moved && !dragging) {
                                 int shortMs = prefs.getInt(HomeTileLayout.SHORT_KEY,
                                     HomeTileLayout.DEFAULT_SHORT_MS);
@@ -707,6 +760,8 @@ public final class MainActivity extends Activity {
                             return true;
                         case MotionEvent.ACTION_CANCEL:
                             tile.removeCallbacks(startDrag);
+                            resizing = false;
+                            resizeChanged = false;
                             return true;
                         default:
                             return false;
