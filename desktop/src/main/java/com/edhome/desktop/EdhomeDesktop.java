@@ -103,6 +103,7 @@ public final class EdhomeDesktop extends JFrame {
     private long lastFullReconcileAt;
     private long localEditGeneration;
     private boolean stateChecking;
+    private boolean syncConflictPaused;
     private boolean dirty;
     private boolean connected;
     private boolean connecting;
@@ -2662,6 +2663,7 @@ public final class EdhomeDesktop extends JFrame {
                     phoneRevision = result.revision;
                     lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
+                    syncConflictPaused = false;
                     dirty = false;
                     validate(snapshot);
                     saveCache(snapshot);
@@ -2697,7 +2699,7 @@ public final class EdhomeDesktop extends JFrame {
         reconnectTimer = new javax.swing.Timer(10000, e -> {
             if (connecting || autoSaving || editingDialog || stateChecking) return;
             if (dirty && PREFS.getBoolean("autoWrite", true)) {
-                saveChangesToPhone(null, true);
+                if (!syncConflictPaused) saveChangesToPhone(null, true);
                 return;
             }
             if (!PREFS.getBoolean("autoConnect", true) || dirty) return;
@@ -2748,7 +2750,8 @@ public final class EdhomeDesktop extends JFrame {
 
     private void startAutoSaveLoop() {
         autoSaveTimer = new javax.swing.Timer(1500, e -> {
-            if (PREFS.getBoolean("autoWrite", true) && dirty)
+            if (PREFS.getBoolean("autoWrite", true) && dirty
+                    && !syncConflictPaused)
                 saveChangesToPhone(null, true);
         });
         autoSaveTimer.setRepeats(false);
@@ -2756,6 +2759,10 @@ public final class EdhomeDesktop extends JFrame {
 
     private void scheduleAutoSave() {
         if (!PREFS.getBoolean("autoWrite", true) || autoSaveTimer == null) return;
+        if (syncConflictPaused) {
+            connection.setText("KONFLIKT • lokalne zmiany zachowane • synchronizacja wstrzymana");
+            return;
+        }
         autoSaveTimer.restart();
         connection.setText(connected
             ? "ZAPISANO LOKALNIE • synchronizacja za chwilę"
@@ -4936,6 +4943,7 @@ public final class EdhomeDesktop extends JFrame {
                 try {
                     SyncWriteResult result = get();
                     connected = true;
+                    syncConflictPaused = false;
                     syncedSnapshot = result.data.deepCopy();
                     snapshotHash = result.sha256;
                     phoneRevision = result.revision;
@@ -4963,13 +4971,16 @@ public final class EdhomeDesktop extends JFrame {
                     String message = rootMessage(ex);
                     boolean conflict = message.contains("Konflikt")
                         || message.contains("nowsze dane");
+                    boolean firstConflict = conflict && !syncConflictPaused;
+                    if (conflict) syncConflictPaused = true;
                     connection.setText(conflict
-                        ? "KONFLIKT • ten sam rekord zmieniono na innym urządzeniu"
+                        ? "KONFLIKT • lokalne zmiany zachowane • auto-sync wstrzymany"
                         : "ZAPISANO LOKALNIE • synchronizacja oczekuje");
                     if (automatic) {
-                        if (trayIcon != null && conflict)
+                        if (trayIcon != null && firstConflict)
                             trayIcon.displayMessage("EDHOME Desktop",
-                                "Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane.",
+                                "Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane. "
+                                    + "Automatyczne ponawianie zostało wstrzymane.",
                                 TrayIcon.MessageType.WARNING);
                     } else {
                         JOptionPane.showMessageDialog(EdhomeDesktop.this,
