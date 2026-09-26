@@ -4128,17 +4128,28 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private long nextId(String tableName) {
-        long max = 0;
-        for (JsonElement element : table(tableName)) {
-            if (!element.isJsonObject()) continue;
-            try {
-                JsonElement id = element.getAsJsonObject().get("id");
-                if (id != null && !id.isJsonNull()) max = Math.max(max, id.getAsLong());
-            } catch (Exception ignored) { }
+        // New Desktop-created IDs come from a huge positive space instead of
+        // MAX(id)+1. Multiple PCs can therefore work offline without both
+        // creating the same local key. sync_uuid remains the sync identity.
+        for (int attempt = 0; attempt < 128; attempt++) {
+            long random = new SecureRandom().nextLong() & 0x001FFFFFFFFFFFFFL;
+            long candidate = 1_000_000_000_000L + random;
+            boolean used = false;
+            for (JsonElement element : table(tableName)) {
+                if (!element.isJsonObject()) continue;
+                try {
+                    JsonElement id = element.getAsJsonObject().get("id");
+                    if (id != null && !id.isJsonNull()
+                            && id.getAsLong() == candidate) {
+                        used = true;
+                        break;
+                    }
+                } catch (Exception ignored) { }
+            }
+            if (!used) return candidate;
         }
-        if (max == Long.MAX_VALUE)
-            throw new IllegalStateException("Brak wolnego identyfikatora.");
-        return max + 1;
+        throw new IllegalStateException(
+            "Nie udało się wygenerować unikalnego identyfikatora.");
     }
 
     private void deleteRecord(String tableName, JsonObject row) {
