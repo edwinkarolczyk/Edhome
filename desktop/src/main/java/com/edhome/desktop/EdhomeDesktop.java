@@ -234,9 +234,7 @@ public final class EdhomeDesktop extends JFrame {
         if ("Zakupy".equals(name)) return tablePage("Lista zakupów", "shopping_items",
             cols("Produkt","name","Ilość","qty_milli","Jednostka","unit",
                  "Kupione","checked","Miejsce","place_id"));
-        if ("PayCheck".equals(name)) return tablePage("PayCheck • wspólne", "paycheck_transactions",
-            cols("Typ","kind","Kategoria","category","Kwota [gr]","amount_grosz",
-                 "Status","status","Źródło","confirmation_source","Data","created_at"));
+        if ("PayCheck".equals(name)) return paycheck();
         if ("Pojazdy".equals(name)) return tablePage("Pojazdy", "vehicles",
             cols("Nazwa","name","Rejestracja","registration","Przebieg","mileage",
                  "OC do","oc_until","Przegląd do","inspection_until"));
@@ -436,6 +434,384 @@ public final class EdhomeDesktop extends JFrame {
         }
         return tablePage("Dzisiaj", filtered,
             cols("Zadanie","title","Termin","due_date","Priorytet","priority","Osoba","assignee_id"));
+    }
+
+    private JComponent paycheck() {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 12));
+        wrapper.setBackground(APP_BG);
+
+        JPanel tools = new RoundedPanel(APP_SURFACE, 22);
+        tools.setLayout(new BorderLayout(10, 10));
+        tools.setBorder(new EmptyBorder(14, 16, 14, 16));
+
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        left.setOpaque(false);
+        JButton importBank = actionButton("＋ Importuj PDF / CSV / XLSX");
+        JButton queue = actionButton("Banki i potwierdzenia");
+        JButton history = actionButton("Historia importów");
+        left.add(importBank);
+        left.add(queue);
+        left.add(history);
+        tools.add(left, BorderLayout.WEST);
+
+        int open = 0;
+        for (JsonElement element : table("bank_evidence_queue")) {
+            if (element.isJsonObject()
+                    && "open".equals(value(element.getAsJsonObject(), "state"))) open++;
+        }
+        JLabel state = new JLabel("Do sprawdzenia z banku: " + open);
+        state.setForeground(open == 0 ? APP_MUTED : APP_ACCENT);
+        tools.add(state, BorderLayout.EAST);
+
+        importBank.addActionListener(e -> importBankStatement());
+        queue.addActionListener(e -> showBankEvidenceQueue());
+        history.addActionListener(e -> showBankImportHistory());
+
+        wrapper.add(tools, BorderLayout.NORTH);
+        wrapper.add(tablePage("PayCheck • wspólne", "paycheck_transactions",
+            cols("Typ","kind","Kategoria","category","Kwota [gr]","amount_grosz",
+                 "Status","status","Źródło","confirmation_source","Data","created_at")),
+            BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private void importBankStatement() {
+        if (snapshot == null) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw połącz Desktop z EDHOME na telefonie.");
+            return;
+        }
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Wybierz wyciąg bankowy PDF / CSV / XLSX");
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        Path file = chooser.getSelectedFile().toPath();
+
+        String labelHint = JOptionPane.showInputDialog(this,
+            "Nazwa banku / konta.\n"
+                + "mBank i VeloBank są rozpoznawane automatycznie; możesz dopisać np. „konto wspólne”.",
+            PREFS.get("bankImportLabel", ""));
+        if (labelHint == null) return;
+        final String hint = labelHint.trim();
+
+        connection.setText("IMPORT BANKU…");
+        new SwingWorker<DesktopBankImporter.Result,Void>() {
+            @Override protected DesktopBankImporter.Result doInBackground() throws Exception {
+                return DesktopBankImporter.read(file, hint);
+            }
+
+            @Override protected void done() {
+                try {
+                    DesktopBankImporter.Result result = get();
+                    String sourceLabel = hint.isBlank() ? result.bank : hint;
+                    if (sourceLabel.isBlank()) sourceLabel = result.bank;
+                    if (sourceLabel.length() > 80)
+                        throw new IllegalArgumentException(
+                            "Nazwa banku/konta może mieć maksymalnie 80 znaków.");
+                    PREFS.put("bankImportLabel", sourceLabel);
+
+                    Object[] scopes = {
+                        "Wspólne — brakujące utwórz jako oczekujące",
+                        "Prywatne — zachowaj do prywatnego PayCheck",
+                        "Tylko kolejka — zdecyduję później"
+                    };
+                    int scope = JOptionPane.showOptionDialog(EdhomeDesktop.this,
+                        "Rozpoznano: " + result.bank + "\n"
+                            + "Operacji: " + result.entries.size() + "\n\n"
+                            + "Jak potraktować ten import?",
+                        "EDHOME Desktop • PayCheck", JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.QUESTION_MESSAGE, null, scopes, scopes[0]);
+                    if (scope < 0) return;
+
+                    BankIngestSummary summary = ingestBankEvidence(
+                        file, result, sourceLabel, scope);
+                    showSection("PayCheck");
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Import zakończony.\n"
+                            + "Nowe dowody: " + summary.inserted + "\n"
+                            + "Duplikaty pominięte: " + summary.duplicates + "\n"
+                            + "Pasujące oczekujące wpisy: " + summary.suggestions + "\n"
+                            + "Nowe oczekujące wpisy wspólne: " + summary.pendingCreated
+                            + (summary.archivedPdf == null ? ""
+                                : "\nPDF zachowany lokalnie:\n" + summary.archivedPdf),
+                        "EDHOME Desktop • PayCheck", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception error) {
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie zaimportowano wyciągu:\n" + rootMessage(error),
+                        "EDHOME Desktop • PayCheck", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    connection.setText(connected
+                        ? "ONLINE • dane zsynchronizowane" : "OFFLINE • lokalna kopia");
+                }
+            }
+        }.execute();
+    }
+
+    private BankIngestSummary ingestBankEvidence(Path file,
+            DesktopBankImporter.Result result, String sourceLabel, int scope)
+            throws Exception {
+        int inserted = 0, duplicates = 0, suggestions = 0, pendingCreated = 0;
+        JsonArray queue = mutableTable("bank_evidence_queue");
+
+        for (DesktopBankImporter.Entry entry : result.entries) {
+            if (bankEvidenceExists(entry.evidenceKey)) {
+                duplicates++;
+                continue;
+            }
+
+            JsonObject row = new JsonObject();
+            row.addProperty("id", nextId("bank_evidence_queue"));
+            row.addProperty("evidence_key", entry.evidenceKey);
+            row.addProperty("source_kind", result.sourceKind);
+            row.addProperty("source_label", sourceLabel);
+            row.addProperty("kind", entry.kind);
+            row.addProperty("amount_grosz", entry.amountGrosz);
+            row.addProperty("booking_date", entry.date);
+            row.addProperty("description", entry.description);
+            row.addProperty("imported_at", System.currentTimeMillis());
+            row.addProperty("state", "open");
+            row.add("matched_operation_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("matched_at", com.google.gson.JsonNull.INSTANCE);
+            queue.add(row);
+            inserted++;
+
+            java.util.List<JsonObject> matches = pendingMatches(row);
+            if (!matches.isEmpty()) suggestions++;
+
+            if (scope == 0 && matches.isEmpty()) {
+                createPendingFromEvidence(row);
+                pendingCreated++;
+            } else if (scope == 1) {
+                PREFS.put("bank.scope." + entry.evidenceKey, "private");
+            }
+        }
+
+        Path archived = DesktopBankImporter.archiveOriginalPdf(
+            file, result.originalSha256);
+        if (inserted > 0 || pendingCreated > 0) markDirty();
+        appendBankImportHistory(sourceLabel, file, result.originalSha256,
+            inserted, duplicates, archived);
+        return new BankIngestSummary(inserted, duplicates, suggestions,
+            pendingCreated, archived);
+    }
+
+    private boolean bankEvidenceExists(String key) {
+        for (JsonElement element : table("bank_evidence_queue")) {
+            if (element.isJsonObject()
+                    && key.equals(value(element.getAsJsonObject(), "evidence_key")))
+                return true;
+        }
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (element.isJsonObject()
+                    && key.equals(value(element.getAsJsonObject(), "statement_key")))
+                return true;
+        }
+        return false;
+    }
+
+    private java.util.List<JsonObject> pendingMatches(JsonObject evidence) {
+        java.util.List<JsonObject> matches = new ArrayList<>();
+        String kind = value(evidence, "kind");
+        String amount = value(evidence, "amount_grosz");
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if (!"shared".equals(value(tx, "scope"))
+                    || !"pending".equals(value(tx, "status"))
+                    || !kind.equals(value(tx, "kind"))
+                    || !amount.equals(value(tx, "amount_grosz")))
+                continue;
+            matches.add(tx);
+        }
+        return matches;
+    }
+
+    private JsonObject createPendingFromEvidence(JsonObject evidence) {
+        JsonObject tx = new JsonObject();
+        tx.addProperty("id", nextId("paycheck_transactions"));
+        tx.addProperty("operation_id", java.util.UUID.randomUUID().toString());
+        tx.addProperty("scope", "shared");
+        tx.addProperty("kind", value(evidence, "kind"));
+        tx.addProperty("category", "other");
+        tx.addProperty("amount_grosz",
+            Long.parseLong(value(evidence, "amount_grosz")));
+        tx.addProperty("note", value(evidence, "description"));
+        tx.addProperty("created_at", System.currentTimeMillis());
+        tx.addProperty("status", "pending");
+        tx.addProperty("confirmation_source", "none");
+        tx.add("confirmed_at", com.google.gson.JsonNull.INSTANCE);
+        tx.add("statement_key", com.google.gson.JsonNull.INSTANCE);
+        tx.add("statement_date", com.google.gson.JsonNull.INSTANCE);
+        mutableTable("paycheck_transactions").add(tx);
+        return tx;
+    }
+
+    private void showBankEvidenceQueue() {
+        java.util.List<JsonObject> openRows = new ArrayList<>();
+        DefaultListModel<Choice> model = new DefaultListModel<>();
+        for (JsonElement element : table("bank_evidence_queue")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (!"open".equals(value(row, "state"))) continue;
+            openRows.add(row);
+            int candidates = pendingMatches(row).size();
+            String shown = value(row, "booking_date") + " • "
+                + ("expense".equals(value(row, "kind")) ? "Wydatek " : "Wpływ ")
+                + money(value(row, "amount_grosz")) + " • "
+                + value(row, "description") + " • " + value(row, "source_label")
+                + (candidates == 0 ? " • brak dopasowania"
+                    : " • pasujących: " + candidates);
+            model.addElement(new Choice(Integer.toString(openRows.size()-1), shown));
+        }
+        if (openRows.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Brak otwartych pozycji bankowych do potwierdzenia.");
+            return;
+        }
+
+        JList<Choice> list = new JList<>(model);
+        list.setVisibleRowCount(Math.min(14, model.size()));
+        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        list.setSelectedIndex(0);
+        JScrollPane pane = new JScrollPane(list);
+        pane.setPreferredSize(new Dimension(820, 360));
+
+        int ok = JOptionPane.showConfirmDialog(this, pane,
+            "Banki i potwierdzenia • wybierz operację",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION || list.getSelectedValue() == null) return;
+
+        int index = Integer.parseInt(list.getSelectedValue().value);
+        JsonObject evidence = openRows.get(index);
+        Object[] actions = {
+            "Dopasuj i potwierdź",
+            "Utwórz brakujący oczekujący",
+            "Odrzuć dowód",
+            "Zamknij"
+        };
+        int action = JOptionPane.showOptionDialog(this,
+            value(evidence, "description") + "\n"
+                + value(evidence, "booking_date") + " • "
+                + money(value(evidence, "amount_grosz")),
+            "EDHOME Desktop • bank", JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE, null, actions, actions[0]);
+
+        if (action == 0) matchBankEvidence(evidence);
+        else if (action == 1) {
+            java.util.List<JsonObject> existing = pendingMatches(evidence);
+            if (!existing.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "Istnieje już oczekujący wpis o tej kwocie i typie. "
+                        + "Użyj „Dopasuj i potwierdź”, aby uniknąć duplikatu.");
+            } else {
+                createPendingFromEvidence(evidence);
+                markDirty();
+                JOptionPane.showMessageDialog(this,
+                    "Utworzono oczekujący wpis wspólny. Nie zmienia salda do czasu potwierdzenia.");
+            }
+        } else if (action == 2) {
+            evidence.addProperty("state", "dismissed");
+            evidence.add("matched_operation_id", com.google.gson.JsonNull.INSTANCE);
+            evidence.add("matched_at", com.google.gson.JsonNull.INSTANCE);
+            markDirty();
+        }
+        showSection("PayCheck");
+    }
+
+    private void matchBankEvidence(JsonObject evidence) {
+        java.util.List<JsonObject> matches = pendingMatches(evidence);
+        if (matches.isEmpty()) {
+            int create = JOptionPane.showConfirmDialog(this,
+                "Nie ma pasującego oczekującego wpisu. Utworzyć go teraz?",
+                "EDHOME Desktop • PayCheck", JOptionPane.YES_NO_OPTION);
+            if (create != JOptionPane.YES_OPTION) return;
+            matches.add(createPendingFromEvidence(evidence));
+        }
+
+        Choice[] options = new Choice[matches.size()];
+        for (int i=0; i<matches.size(); i++) {
+            JsonObject tx = matches.get(i);
+            options[i] = new Choice(value(tx, "operation_id"),
+                money(value(tx, "amount_grosz")) + " • "
+                    + value(tx, "note") + " • "
+                    + timeValue(value(tx, "created_at")));
+        }
+        Choice selected = (Choice) JOptionPane.showInputDialog(this,
+            "Wybierz oczekujący wpis do potwierdzenia:",
+            "EDHOME Desktop • dopasowanie banku",
+            JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        if (selected == null) return;
+
+        JsonObject tx = null;
+        for (JsonObject candidate : matches)
+            if (selected.value.equals(value(candidate, "operation_id"))) {
+                tx = candidate;
+                break;
+            }
+        if (tx == null) return;
+
+        long now = System.currentTimeMillis();
+        tx.addProperty("status", "confirmed");
+        tx.addProperty("confirmation_source", "manual");
+        tx.addProperty("confirmed_at", now);
+        tx.addProperty("statement_key", value(evidence, "evidence_key"));
+        tx.addProperty("statement_date", value(evidence, "booking_date"));
+        evidence.addProperty("state", "matched");
+        evidence.addProperty("matched_operation_id", value(tx, "operation_id"));
+        evidence.addProperty("matched_at", now);
+        markDirty();
+
+        JOptionPane.showMessageDialog(this,
+            "Dopasowano i potwierdzono wpis. Saldo PayCheck uwzględni go zgodnie z regułami aplikacji.");
+    }
+
+    private void appendBankImportHistory(String sourceLabel, Path file, String sha,
+            int inserted, int duplicates, Path archived) {
+        String line = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+            .withZone(ZoneId.systemDefault()).format(Instant.now())
+            + " • " + sourceLabel + " • " + file.getFileName()
+            + " • nowe " + inserted + " • duplikaty " + duplicates
+            + (archived == null ? "" : " • PDF zachowany");
+        String prior = PREFS.get("bankImportHistory", "");
+        StringBuilder out = new StringBuilder(line);
+        int kept = 0;
+        for (String row : prior.split("\n")) {
+            if (row.isBlank()) continue;
+            if (++kept > 24) break;
+            out.append('\n').append(row);
+        }
+        PREFS.put("bankImportHistory", out.toString());
+    }
+
+    private void showBankImportHistory() {
+        String history = PREFS.get("bankImportHistory", "");
+        JTextArea area = new JTextArea(history.isBlank()
+            ? "Brak importów bankowych na tym komputerze." : history);
+        area.setEditable(false);
+        area.setRows(18);
+        area.setColumns(80);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        JOptionPane.showMessageDialog(this, new JScrollPane(area),
+            "EDHOME Desktop • historia importów bankowych",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static final class BankIngestSummary {
+        final int inserted;
+        final int duplicates;
+        final int suggestions;
+        final int pendingCreated;
+        final Path archivedPdf;
+
+        BankIngestSummary(int inserted, int duplicates, int suggestions,
+                int pendingCreated, Path archivedPdf) {
+            this.inserted = inserted;
+            this.duplicates = duplicates;
+            this.suggestions = suggestions;
+            this.pendingCreated = pendingCreated;
+            this.archivedPdf = archivedPdf;
+        }
     }
 
     private JComponent calendar() {
