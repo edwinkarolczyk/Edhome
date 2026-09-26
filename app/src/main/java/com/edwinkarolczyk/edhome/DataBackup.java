@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 35;
+    private static final int DB_VERSION = 36;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -211,6 +211,7 @@ final class DataBackup {
                 }
                 tables.put(definition[0], rows);
             }
+            result.put("syncRecords", SyncRecordStore.exportMetadata(database));
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
@@ -232,6 +233,10 @@ final class DataBackup {
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
                 || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
+
+        JSONArray syncRecords = root.optJSONArray("syncRecords");
+        if (inputVersion >= 36 && syncRecords == null)
+            throw new IllegalArgumentException("Brak metadanych synchronizacji w kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
         String household = settings.getString("household");
@@ -1399,6 +1404,8 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            SyncRecordStore.restoreMetadata(database,
+                inputVersion >= 36 ? syncRecords : null);
             // Deleted shopping rows intentionally leave receipt/price history.
             // After importing into a fresh database, AUTOINCREMENT would only
             // know IDs still present in shopping_items and could reuse an ID
@@ -1456,6 +1463,24 @@ final class DataBackup {
         } finally {
             database.endTransaction();
         }
+    }
+
+    static String[][] syncDefinitions() {
+        String[][] copy = new String[TABLES.length][];
+        for (int i = 0; i < TABLES.length; i++)
+            copy[i] = TABLES[i].clone();
+        return copy;
+    }
+
+    static String[] syncColumns(String tableName) {
+        if (tableName == null) return null;
+        for (String[] definition : TABLES) {
+            if (!tableName.equals(definition[0])) continue;
+            String[] result = new String[definition.length - 1];
+            System.arraycopy(definition, 1, result, 0, result.length);
+            return result;
+        }
+        return null;
     }
 
     private static String[] columns(String[] table) {
