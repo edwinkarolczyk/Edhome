@@ -2767,6 +2767,11 @@ public final class EdhomeDesktop extends JFrame {
             add.addActionListener(e -> addRecord(tableName, columns));
             actions.add(add);
         }
+        if ("tasks".equals(tableName)) {
+            JButton quick = actionButton("⚡ Szybko dodaj wiele");
+            quick.addActionListener(e -> showQuickTaskWizard());
+            actions.add(quick);
+        }
         if ("storage_items".equals(tableName) || "places".equals(tableName)) {
             JButton labels = actionButton("▣ Etykiety QR");
             labels.addActionListener(e -> showBulkQrLabels(tableName, rows));
@@ -3018,6 +3023,220 @@ public final class EdhomeDesktop extends JFrame {
             || "shopping_items".equals(tableName)
             || "storage_items".equals(tableName)
             || "places".equals(tableName);
+    }
+
+    private void showQuickTaskWizard() {
+        JTextArea input = new JTextArea(12, 52);
+        input.setLineWrap(true);
+        input.setWrapStyleWord(true);
+        input.setText("");
+        input.setToolTipText("Jedno zadanie w jednej linii.");
+
+        JComboBox<Choice> priority = new JComboBox<>(new Choice[]{
+            new Choice("low","Niski"),
+            new Choice("normal","Normalny"),
+            new Choice("high","Wysoki"),
+            new Choice("urgent","Pilny")
+        });
+        priority.setSelectedIndex(1);
+
+        JComboBox<Choice> assignee = quickReferenceCombo(
+            "household_members", "Każdy / nieprzypisane");
+        JComboBox<Choice> place = quickReferenceCombo(
+            "places", "Bez miejsca");
+
+        JCheckBox hasDate = new JCheckBox("Ustaw wspólny termin");
+        JTextField due = new JTextField(LocalDate.now().toString(), 10);
+        due.setEnabled(false);
+        JButton tomorrow = new JButton("Jutro");
+        JButton nextWeek = new JButton("+7 dni");
+        tomorrow.setEnabled(false);
+        nextWeek.setEnabled(false);
+        hasDate.addActionListener(e -> {
+            boolean on = hasDate.isSelected();
+            due.setEnabled(on);
+            tomorrow.setEnabled(on);
+            nextWeek.setEnabled(on);
+        });
+        tomorrow.addActionListener(e -> due.setText(LocalDate.now().plusDays(1).toString()));
+        nextWeek.addActionListener(e -> due.setText(LocalDate.now().plusDays(7).toString()));
+
+        JCheckBox trimNumbers = new JCheckBox(
+            "Usuń numerację i znaczniki z początku linii", true);
+        JCheckBox skipDuplicates = new JCheckBox(
+            "Nie dodawaj identycznych otwartych zadań", true);
+
+        JLabel counter = new JLabel("Pozycji do dodania: 0");
+        counter.setForeground(APP_MUTED);
+        input.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void refresh() {
+                counter.setText("Pozycji do dodania: "
+                    + parseQuickTasks(input.getText(), trimNumbers.isSelected()).size());
+            }
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+        });
+        trimNumbers.addActionListener(e -> counter.setText("Pozycji do dodania: "
+            + parseQuickTasks(input.getText(), trimNumbers.isSelected()).size()));
+
+        JPanel options = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 4, 4, 4);
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.weightx = 1;
+
+        int y = 0;
+        g.gridx=0; g.gridy=y; g.gridwidth=2;
+        options.add(new JLabel("Wklej lub wpisz listę — jedno zadanie w jednej linii:"), g);
+        y++;
+        g.gridy=y;
+        JScrollPane area = new JScrollPane(input);
+        area.setPreferredSize(new Dimension(640, 250));
+        options.add(area, g);
+        y++;
+        g.gridwidth=1;
+        g.gridx=0; g.gridy=y; options.add(new JLabel("Priorytet:"), g);
+        g.gridx=1; options.add(priority, g);
+        y++;
+        g.gridx=0; g.gridy=y; options.add(new JLabel("Osoba:"), g);
+        g.gridx=1; options.add(assignee, g);
+        y++;
+        g.gridx=0; g.gridy=y; options.add(new JLabel("Miejsce:"), g);
+        g.gridx=1; options.add(place, g);
+        y++;
+
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT,6,0));
+        dateRow.add(hasDate); dateRow.add(due); dateRow.add(tomorrow); dateRow.add(nextWeek);
+        g.gridx=0; g.gridy=y; g.gridwidth=2; options.add(dateRow, g);
+        y++;
+        g.gridy=y; options.add(trimNumbers, g);
+        y++;
+        g.gridy=y; options.add(skipDuplicates, g);
+        y++;
+        g.gridy=y; options.add(counter, g);
+
+        Object[] actions = {"Dodaj wszystko", "Anuluj"};
+        int result = JOptionPane.showOptionDialog(this, options,
+            "EDHOME • szybkie dodawanie wielu zadań",
+            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+            null, actions, actions[0]);
+        if (result != 0) return;
+
+        java.util.List<String> tasks =
+            parseQuickTasks(input.getText(), trimNumbers.isSelected());
+        if (tasks.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Wpisz przynajmniej jedno zadanie.");
+            return;
+        }
+        if (tasks.size() > 100) {
+            JOptionPane.showMessageDialog(this,
+                "Jednorazowo można dodać maksymalnie 100 zadań.");
+            return;
+        }
+
+        String dueDate = "";
+        if (hasDate.isSelected()) {
+            try {
+                LocalDate parsed = LocalDate.parse(due.getText().trim());
+                if (parsed.getYear() < 2000 || parsed.getYear() > 2100)
+                    throw new IllegalArgumentException();
+                dueDate = parsed.toString();
+            } catch (Exception invalid) {
+                JOptionPane.showMessageDialog(this,
+                    "Termin musi mieć poprawną datę, np. 2026-09-27.");
+                return;
+            }
+        }
+
+        Choice prio = (Choice) priority.getSelectedItem();
+        Choice person = (Choice) assignee.getSelectedItem();
+        Choice selectedPlace = (Choice) place.getSelectedItem();
+
+        int added = 0, duplicates = 0;
+        java.util.Set<String> batch = new java.util.LinkedHashSet<>();
+        for (String title : tasks) {
+            String normalized = title.trim();
+            if (!batch.add(normalized.toLowerCase(Locale.ROOT))) {
+                duplicates++;
+                continue;
+            }
+            if (skipDuplicates.isSelected() && openTaskExists(normalized)) {
+                duplicates++;
+                continue;
+            }
+
+            JsonObject row = newRowTemplate("tasks");
+            row.addProperty("id", nextId("tasks"));
+            row.addProperty("title", normalized);
+            row.addProperty("priority", prio == null ? "normal" : prio.value);
+            if (dueDate.isBlank()) row.add("due_date", com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("due_date", dueDate);
+
+            if (person == null || person.value.isBlank())
+                row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("assignee_id", Long.parseLong(person.value));
+
+            if (selectedPlace == null || selectedPlace.value.isBlank())
+                row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("place_id", Long.parseLong(selectedPlace.value));
+
+            table("tasks").add(row);
+            added++;
+        }
+
+        if (added > 0) markDirty();
+        showSection("Zadania");
+        JOptionPane.showMessageDialog(this,
+            "Dodano do „Do zrobienia”: " + added
+                + (duplicates > 0 ? "\nPominięto duplikaty: " + duplicates : "")
+                + "\n\nZmiany są lokalne do czasu synchronizacji z telefonem.",
+            "EDHOME • szybkie zadania", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private JComboBox<Choice> quickReferenceCombo(String tableName, String emptyLabel) {
+        java.util.List<Choice> values = new ArrayList<>();
+        values.add(new Choice("", emptyLabel));
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            String id = value(row, "id");
+            String name = value(row, "name");
+            if ("household_members".equals(tableName) && name.isBlank())
+                name = value(row, "display_name");
+            if (!id.isBlank())
+                values.add(new Choice(id, name.isBlank() ? "Pozycja #" + id : name));
+        }
+        return new JComboBox<>(values.toArray(new Choice[0]));
+    }
+
+    private java.util.List<String> parseQuickTasks(String raw, boolean stripPrefix) {
+        java.util.List<String> out = new ArrayList<>();
+        if (raw == null) return out;
+        for (String line : raw.replace("\r\n","\n").replace('\r','\n').split("\n")) {
+            String task = line.trim();
+            if (stripPrefix) {
+                task = task.replaceFirst(
+                    "^(?:[-*•]+|\\[[ xX]?\\]|\\d{1,3}[.)-])\\s*", "");
+            }
+            task = task.trim();
+            if (task.isEmpty()) continue;
+            if (task.length() > 160) task = task.substring(0, 160).trim();
+            out.add(task);
+        }
+        return out;
+    }
+
+    private boolean openTaskExists(String title) {
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject task = element.getAsJsonObject();
+            if (intValue(task, "done") != 0) continue;
+            if (title.equalsIgnoreCase(value(task, "title").trim()))
+                return true;
+        }
+        return false;
     }
 
     private void addRecord(String tableName, String[][] columns) {
