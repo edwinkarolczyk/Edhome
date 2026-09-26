@@ -86,8 +86,16 @@ step34 = bank34.copy()
 nfc35 = statements(section(main, "private static void addNfcLinks",
     "private static void addPlaceSiblingIndex"))
 step35 = nfc35.copy()
-sync36 = statements(section(sync_store, "static void create(SQLiteDatabase db)",
-    "static void ensureAll(SQLiteDatabase db)").replace("db.execSQL(", "database.execSQL("))
+sync36 = [
+    "CREATE TABLE sync_records (sync_uuid TEXT PRIMARY KEY, "
+    "table_name TEXT NOT NULL, row_key TEXT NOT NULL, "
+    "revision INTEGER NOT NULL CHECK(revision>=1), updated_at INTEGER NOT NULL, "
+    "deleted_at INTEGER, row_hash TEXT NOT NULL)",
+    "CREATE UNIQUE INDEX sync_records_live_row_idx "
+    "ON sync_records(table_name,row_key) WHERE deleted_at IS NULL",
+    "CREATE INDEX sync_records_table_idx ON sync_records(table_name,row_key)",
+    "CREATE INDEX sync_records_updated_idx ON sync_records(updated_at)",
+]
 step36 = sync36.copy()
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
@@ -142,7 +150,7 @@ assert version == backup_version == 36, "Database version and backup format diff
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
 expected = schema(fresh)
-assert len(expected) == 33 and len(sync36) == 3 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 33 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
