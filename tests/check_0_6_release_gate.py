@@ -24,7 +24,7 @@ stable_manifest=(root/"app/src/main/AndroidManifest.xml").read_text(encoding="ut
 version=re.search(r"versionName '([^']+)'",gradle).group(1)
 assert version.startswith("0.6.0."), version
 assert "super(context, \"edhome-beta-preview.db\", null, 34)" in main
-assert "private static final int DB_VERSION = 34;" in backup
+assert "private static final int DB_VERSION = 35;" in backup
 
 # Shared PayCheck stays pending until a one-time explicit confirmation/match.
 for token in (

@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==31
+assert len(manifest)==32
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -66,7 +66,7 @@ for table,columns in manifest.items():
            else "pantry_id" if table=="pantry_packages" else "id")
     found=db.execute('SELECT '+",".join(columns)+' FROM "'+table+'" ORDER BY '+order).fetchall()
     content[table]=[dict(zip(columns,row)) for row in found]
-payload=json.loads(json.dumps({"databaseVersion":34,"tables":content},ensure_ascii=False))
+payload=json.loads(json.dumps({"databaseVersion":35,"tables":content},ensure_ascii=False))
 price=payload["tables"]["pantry_purchase_prices"][0]
 assert (price["unit_price_grosz"],price["pantry_id"],price["quantity_milli"])==(649,None,None)
 assert payload["tables"]["storage_items"][0]["lent_to"] is None
@@ -95,4 +95,4 @@ assert restore.index("if (!restored.commit())")<restore.index(
 assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
 assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
 assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 31 tables including bank evidence queue; numeric/nullability, JSON roundtrip and rollback PASS")
+print("Backup: 32 tables including NFC links and bank evidence queue; numeric/nullability, JSON roundtrip and rollback PASS")
