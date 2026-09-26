@@ -449,9 +449,15 @@ public final class EdhomeDesktop extends JFrame {
         JButton importBank = actionButton("＋ Importuj PDF / CSV / XLSX");
         JButton queue = actionButton("Banki i potwierdzenia");
         JButton history = actionButton("Historia importów");
+        JButton analysis = actionButton("Analiza");
+        JButton goals = actionButton("Cele");
+        JButton bulk = actionButton("Masowa edycja");
         left.add(importBank);
         left.add(queue);
         left.add(history);
+        left.add(analysis);
+        left.add(goals);
+        left.add(bulk);
         tools.add(left, BorderLayout.WEST);
 
         int open = 0;
@@ -466,6 +472,9 @@ public final class EdhomeDesktop extends JFrame {
         importBank.addActionListener(e -> importBankStatement());
         queue.addActionListener(e -> showBankEvidenceQueue());
         history.addActionListener(e -> showBankImportHistory());
+        analysis.addActionListener(e -> showPaycheckAnalysis());
+        goals.addActionListener(e -> showPaycheckGoals());
+        bulk.addActionListener(e -> showPaycheckBulkEdit());
 
         wrapper.add(tools, BorderLayout.NORTH);
         wrapper.add(tablePage("PayCheck • wspólne", "paycheck_transactions",
@@ -473,6 +482,297 @@ public final class EdhomeDesktop extends JFrame {
                  "Status","status","Źródło","confirmation_source","Data","created_at")),
             BorderLayout.CENTER);
         return wrapper;
+    }
+
+    private void showPaycheckAnalysis() {
+        java.time.YearMonth now = java.time.YearMonth.now();
+        java.util.SortedMap<java.time.YearMonth,long[]> months = new java.util.TreeMap<>();
+        for (int i=11; i>=0; i--) months.put(now.minusMonths(i), new long[]{0L,0L});
+
+        java.util.Map<String,Long> categories = new java.util.HashMap<>();
+        long currentExpense = 0L, currentIncome = 0L;
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if (!"shared".equals(value(tx, "scope"))
+                    || !"confirmed".equals(value(tx, "status"))) continue;
+            long amount;
+            try { amount = Long.parseLong(value(tx, "amount_grosz")); }
+            catch (Exception invalid) { continue; }
+
+            java.time.YearMonth month = null;
+            String statementDate = value(tx, "statement_date");
+            if (!statementDate.isBlank()) {
+                try { month = java.time.YearMonth.from(LocalDate.parse(statementDate)); }
+                catch (Exception ignored) { }
+            }
+            if (month == null) {
+                try {
+                    month = java.time.YearMonth.from(
+                        Instant.ofEpochMilli(Long.parseLong(value(tx, "created_at")))
+                            .atZone(ZoneId.systemDefault()).toLocalDate());
+                } catch (Exception ignored) { }
+            }
+            if (month == null) continue;
+
+            long[] totals = months.get(month);
+            if (totals != null) {
+                if ("expense".equals(value(tx, "kind"))) totals[0] += amount;
+                else if ("income".equals(value(tx, "kind"))) totals[1] += amount;
+            }
+            if (now.equals(month)) {
+                if ("expense".equals(value(tx, "kind"))) {
+                    currentExpense += amount;
+                    categories.merge(value(tx, "category"), amount, Long::sum);
+                } else if ("income".equals(value(tx, "kind"))) currentIncome += amount;
+            }
+        }
+
+        java.util.List<String> labels = new ArrayList<>();
+        java.util.List<Long> expenses = new ArrayList<>();
+        java.util.List<Long> incomes = new ArrayList<>();
+        DateTimeFormatter monthFormat = DateTimeFormatter.ofPattern("MM/yy");
+        for (java.util.Map.Entry<java.time.YearMonth,long[]> entry : months.entrySet()) {
+            labels.add(entry.getKey().format(monthFormat));
+            expenses.add(entry.getValue()[0]);
+            incomes.add(entry.getValue()[1]);
+        }
+
+        JPanel panel = new JPanel(new BorderLayout(0,10));
+        panel.add(new DesktopPaycheckChart(labels, expenses, incomes), BorderLayout.CENTER);
+
+        StringBuilder summary = new StringBuilder();
+        summary.append("Bieżący miesiąc • wpływy ")
+            .append(money(Long.toString(currentIncome)))
+            .append(" • wydatki ").append(money(Long.toString(currentExpense)))
+            .append(" • bilans ").append(money(Long.toString(currentIncome-currentExpense)))
+            .append("\n\nKategorie wydatków:");
+        java.util.List<java.util.Map.Entry<String,Long>> categoryRows =
+            new ArrayList<>(categories.entrySet());
+        categoryRows.sort((a,b) -> Long.compare(b.getValue(), a.getValue()));
+        for (java.util.Map.Entry<String,Long> row : categoryRows)
+            summary.append("\n• ").append(friendlyValueStaticCategory(row.getKey()))
+                .append(": ").append(money(Long.toString(row.getValue())));
+        JTextArea text = new JTextArea(summary.toString());
+        text.setEditable(false);
+        text.setOpaque(false);
+        text.setRows(Math.min(10, 3 + categoryRows.size()));
+        panel.add(text, BorderLayout.SOUTH);
+
+        JOptionPane.showMessageDialog(this, panel,
+            "PayCheck • analiza 12 miesięcy", JOptionPane.PLAIN_MESSAGE);
+    }
+
+    private static String friendlyValueStaticCategory(String raw) {
+        if ("shopping".equals(raw)) return "Zakupy";
+        if ("bills".equals(raw)) return "Rachunki";
+        if ("home".equals(raw)) return "Dom";
+        if ("vehicle".equals(raw)) return "Pojazdy";
+        if ("salary".equals(raw)) return "Wynagrodzenie";
+        if ("food".equals(raw)) return "Żywność";
+        if ("household".equals(raw)) return "Domowe";
+        if ("beauty".equals(raw)) return "Higiena";
+        if ("pet".equals(raw)) return "Zwierzęta";
+        if ("other".equals(raw) || raw == null || raw.isBlank()) return "Inne";
+        return raw;
+    }
+
+    private void showPaycheckGoals() {
+        while (true) {
+            java.util.List<JsonObject> goals = new ArrayList<>();
+            DefaultListModel<Choice> model = new DefaultListModel<>();
+            for (JsonElement element : table("paycheck_goals")) {
+                if (!element.isJsonObject()) continue;
+                JsonObject goal = element.getAsJsonObject();
+                if (!"shared".equals(value(goal, "scope"))) continue;
+                long id;
+                long target;
+                try {
+                    id = goal.get("id").getAsLong();
+                    target = goal.get("target_grosz").getAsLong();
+                } catch (Exception invalid) { continue; }
+                long saved = allocatedToGoal(id);
+                goals.add(goal);
+                model.addElement(new Choice(Long.toString(id),
+                    value(goal, "name") + " • " + money(Long.toString(saved))
+                        + " / " + money(Long.toString(target))));
+            }
+
+            JList<Choice> list = new JList<>(model);
+            list.setVisibleRowCount(Math.min(10, Math.max(3, model.size())));
+            if (!model.isEmpty()) list.setSelectedIndex(0);
+            JScrollPane pane = new JScrollPane(list);
+            pane.setPreferredSize(new Dimension(620, 260));
+
+            Object[] actions = {"Nowy cel", "Odłóż na cel", "Zamknij"};
+            int action = JOptionPane.showOptionDialog(this, pane,
+                "PayCheck • wspólne cele oszczędnościowe",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                null, actions, actions[0]);
+            if (action == 0) {
+                if (createPaycheckGoal()) showSection("PayCheck");
+            } else if (action == 1) {
+                Choice selected = list.getSelectedValue();
+                if (selected == null) {
+                    JOptionPane.showMessageDialog(this, "Najpierw wybierz cel.");
+                    continue;
+                }
+                if (allocatePaycheckGoal(Long.parseLong(selected.value)))
+                    showSection("PayCheck");
+            } else return;
+        }
+    }
+
+    private boolean createPaycheckGoal() {
+        JTextField name = new JTextField();
+        JTextField amount = new JTextField();
+        JPanel form = new JPanel(new GridLayout(0,2,8,8));
+        form.add(new JLabel("Nazwa celu:")); form.add(name);
+        form.add(new JLabel("Kwota celu [PLN]:")); form.add(amount);
+        int ok = JOptionPane.showConfirmDialog(this, form,
+            "Nowy wspólny cel", JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION) return false;
+        String title = name.getText().trim();
+        if (title.isEmpty() || title.length() > 120) {
+            JOptionPane.showMessageDialog(this, "Nazwa celu: 1–120 znaków.");
+            return false;
+        }
+        try {
+            long target = parsePln(amount.getText());
+            JsonObject goal = new JsonObject();
+            goal.addProperty("id", nextId("paycheck_goals"));
+            goal.addProperty("scope", "shared");
+            goal.addProperty("name", title);
+            goal.addProperty("target_grosz", target);
+            goal.addProperty("created_at", System.currentTimeMillis());
+            mutableTable("paycheck_goals").add(goal);
+            markDirty();
+            return true;
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this, rootMessage(error));
+            return false;
+        }
+    }
+
+    private boolean allocatePaycheckGoal(long goalId) {
+        JsonObject goal = scannerRowById("paycheck_goals", goalId);
+        if (goal == null) return false;
+        long target;
+        try { target = goal.get("target_grosz").getAsLong(); }
+        catch (Exception invalid) { return false; }
+        long saved = allocatedToGoal(goalId);
+        long remaining = Math.max(0L, target - saved);
+        if (remaining == 0) {
+            JOptionPane.showMessageDialog(this, "Ten cel jest już osiągnięty.");
+            return false;
+        }
+        String raw = JOptionPane.showInputDialog(this,
+            value(goal, "name") + "\nPozostało: " + money(Long.toString(remaining))
+                + "\n\nKwota do odłożenia [PLN]:");
+        if (raw == null) return false;
+        try {
+            long amount = parsePln(raw);
+            if (amount > remaining)
+                throw new IllegalArgumentException(
+                    "Kwota przekracza pozostałą wartość celu.");
+            JsonObject allocation = new JsonObject();
+            allocation.addProperty("id", nextId("paycheck_goal_allocations"));
+            allocation.addProperty("operation_id", java.util.UUID.randomUUID().toString());
+            allocation.addProperty("goal_id", goalId);
+            allocation.addProperty("amount_grosz", amount);
+            allocation.addProperty("created_at", System.currentTimeMillis());
+            mutableTable("paycheck_goal_allocations").add(allocation);
+            markDirty();
+            return true;
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this, rootMessage(error));
+            return false;
+        }
+    }
+
+    private long allocatedToGoal(long goalId) {
+        long total = 0L;
+        for (JsonElement element : table("paycheck_goal_allocations")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            try {
+                if (row.get("goal_id").getAsLong() == goalId)
+                    total += row.get("amount_grosz").getAsLong();
+            } catch (Exception ignored) { }
+        }
+        return total;
+    }
+
+    private void showPaycheckBulkEdit() {
+        java.util.List<JsonObject> rows = new ArrayList<>();
+        DefaultListModel<Choice> model = new DefaultListModel<>();
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if (!"shared".equals(value(tx, "scope"))) continue;
+            rows.add(tx);
+            model.addElement(new Choice(Integer.toString(rows.size()-1),
+                ("expense".equals(value(tx, "kind")) ? "− " : "+ ")
+                    + money(value(tx, "amount_grosz")) + " • "
+                    + value(tx, "note") + " • "
+                    + friendlyValueStaticCategory(value(tx, "category"))));
+        }
+        if (rows.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Brak transakcji do edycji.");
+            return;
+        }
+
+        JList<Choice> list = new JList<>(model);
+        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        list.setVisibleRowCount(Math.min(14, model.size()));
+        JScrollPane pane = new JScrollPane(list);
+        pane.setPreferredSize(new Dimension(760, 340));
+        int ok = JOptionPane.showConfirmDialog(this, pane,
+            "Zaznacz transakcje do masowej edycji",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION || list.getSelectedIndices().length == 0) return;
+
+        String[][] categories = {
+            {"shopping","Zakupy"},{"bills","Rachunki"},{"home","Dom"},
+            {"vehicle","Pojazdy"},{"salary","Wynagrodzenie"},{"food","Żywność"},
+            {"household","Domowe"},{"beauty","Higiena"},{"pet","Zwierzęta"},
+            {"other","Inne"}
+        };
+        Choice[] choices = new Choice[categories.length];
+        for (int i=0; i<categories.length; i++)
+            choices[i] = new Choice(categories[i][0], categories[i][1]);
+        Choice category = (Choice) JOptionPane.showInputDialog(this,
+            "Nowa kategoria dla " + list.getSelectedIndices().length + " pozycji:",
+            "PayCheck • masowa edycja", JOptionPane.QUESTION_MESSAGE,
+            null, choices, choices[0]);
+        if (category == null) return;
+
+        int changed = 0;
+        for (int index : list.getSelectedIndices()) {
+            Choice selected = model.get(index);
+            JsonObject tx = rows.get(Integer.parseInt(selected.value));
+            tx.addProperty("category", category.value);
+            changed++;
+        }
+        if (changed > 0) {
+            markDirty();
+            showSection("PayCheck");
+            JOptionPane.showMessageDialog(this,
+                "Zmieniono kategorię dla " + changed + " transakcji.");
+        }
+    }
+
+    private static long parsePln(String raw) {
+        String text = raw == null ? "" : raw.trim().replace(" ","").replace(',', '.');
+        if (!text.matches("[0-9]{1,9}(?:[.][0-9]{1,2})?"))
+            throw new IllegalArgumentException("Podaj poprawną kwotę w PLN.");
+        java.math.BigDecimal value = new java.math.BigDecimal(text)
+            .setScale(2, java.math.RoundingMode.UNNECESSARY);
+        long grosz = value.movePointRight(2).longValueExact();
+        if (grosz < 1 || grosz > 99_999_999_999L)
+            throw new IllegalArgumentException("Kwota poza zakresem.");
+        return grosz;
     }
 
     private void importBankStatement() {
