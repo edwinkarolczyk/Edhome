@@ -64,3 +64,16 @@ assert "Desktop = APK 1:1" in readme
 assert "Zatwierdzony zakres Desktop" in readme
 
 print("EDHOME Desktop approved scope: PASS")
+
+# Quick-task wizard and real desktop calendar.
+for marker in (
+    "showQuickTaskWizard", "Ile to zajmie?", "Kiedy ma być zrobione?",
+    "QuickTaskDraft", "parseQuickDuration", "parseQuickDueDate",
+    "Wklej listę", "DesktopCalendarPanel", "addTaskOnCalendarDate",
+    "openCalendarEvent", "inspection_until", "oc_until"
+):
+    assert marker in desktop, f"Missing quick-task/calendar contract: {marker}"
+calendar = (root / "desktop/src/main/java/com/edhome/desktop/DesktopCalendarPanel.java").read_text(encoding="utf-8")
+for marker in ("Pon","Niedz","Poprzedni","Następny","Agenda","Podwójne kliknięcie"):
+    assert marker in calendar, f"Missing desktop calendar UI contract: {marker}"
+print("EDHOME Desktop quick tasks + calendar: PASS")

@@ -88,6 +88,21 @@ Zakres zatwierdzony dla QR/drukowania, skanowania, importów bankowych, analizy 
 ### Ograniczenia importu PDF banków
 Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0.49 bezpiecznie obsługiwany jest tekstowy PDF VeloBanku. mBank jest obsługiwany przez CSV/XLSX. Zwykły CSV jest obsługiwany, jeśli zawiera stabilny identyfikator transakcji i wymagane kolumny. PDF innych banków jest odrzucany, dopóki nie ma jawnego parsera dla ich układu.
 
+### Szybkie zadania i kalendarz Desktop
+- kreator szybkiego dodawania serii zadań działa w trybie klawiaturowym,
+- przed startem użytkownik wybiera, o które pola kreator ma pytać przy każdym zadaniu,
+- dostępne pytania: szacowany czas, termin, priorytet, wykonawca i miejsce,
+- pola pominięte dostają wartości domyślne: 30 min, bez terminu, normalny priorytet, bez wykonawcy i bez miejsca,
+- po zapisaniu zadania kreator natychmiast pyta o następne; puste „Co trzeba zrobić?” kończy serię,
+- podsumowanie pokazuje liczbę zadań i łączny szacowany czas,
+- dodatkowo pozostaje tryb „Wklej listę” dla seryjnego importu jednej pozycji na linię,
+- kalendarz Desktop ma widok miesiąca od poniedziałku do niedzieli, nawigację miesiącami i przycisk „Dziś”,
+- dzień pokazuje zadania i liczbę dodatkowych pozycji, a agenda pokazuje szczegóły wybranego dnia,
+- podwójne kliknięcie zadania z agendy otwiera edycję,
+- z kalendarza można dodać zadanie bezpośrednio na wybrany dzień,
+- kalendarz pokazuje również terminy OC i przeglądów pojazdów,
+- druk kalendarza pozostaje dostępny.
+
 ## Braki do pełnej zgodności z APK
 
 Poniższe elementy nadal wymagają domknięcia, mimo że zatwierdzony pakiet Desktop 0.6.0.49 jest już funkcjonalny.
