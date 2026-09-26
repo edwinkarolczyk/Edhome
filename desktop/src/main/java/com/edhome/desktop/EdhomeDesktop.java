@@ -4822,6 +4822,7 @@ public final class EdhomeDesktop extends JFrame {
                 if (patchPlan != null && patchPlan.operations > 0) {
                     try {
                         PatchResult patched = client.patch(patchPlan.payload);
+                        applyPatchAck(outgoing, patched.results);
                         return new SyncWriteResult(outgoing, patched.sha256,
                             patched.revision, true, patchPlan.operations);
                     } catch (PatchUnsupportedException oldAndroid) {
@@ -5158,10 +5159,12 @@ public final class EdhomeDesktop extends JFrame {
     private static final class PatchResult {
         final String sha256;
         final long revision;
+        final JsonArray results;
 
-        PatchResult(String sha256, long revision) {
+        PatchResult(String sha256, long revision, JsonArray results) {
             this.sha256 = sha256 == null ? "" : sha256;
             this.revision = revision;
+            this.results = results == null ? new JsonArray() : results;
         }
     }
 
@@ -5451,10 +5454,13 @@ public final class EdhomeDesktop extends JFrame {
                 String detail = "";
                 try {
                     JsonObject error = JsonParser.parseString(response.body()).getAsJsonObject();
-                    detail = error.has("table") && error.has("id")
-                        ? " (" + error.get("table").getAsString()
-                            + " #" + error.get("id").getAsString() + ")"
-                        : "";
+                    if (error.has("table")) {
+                        String key = error.has("rowKey")
+                            ? error.get("rowKey").getAsString()
+                            : (error.has("id") ? error.get("id").getAsString() : "");
+                        detail = " (" + error.get("table").getAsString()
+                            + (key.isBlank() ? "" : " #" + key) + ")";
+                    }
                 } catch (Exception ignored) { }
                 throw new IOException("Konflikt rekordu" + detail
                     + " — ten sam element zmienił się na innym urządzeniu.");
@@ -5466,9 +5472,15 @@ public final class EdhomeDesktop extends JFrame {
                     + response.statusCode() + ".");
             String sha = response.headers()
                 .firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse("");
+            JsonArray results = new JsonArray();
+            try {
+                JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
+                if (body.has("results") && body.get("results").isJsonArray())
+                    results = body.getAsJsonArray("results");
+            } catch (Exception ignored) { }
             long revision = -1L;
             try { revision = state(); } catch (Exception ignored) { }
-            return new PatchResult(sha, revision);
+            return new PatchResult(sha, revision, results);
         }
 
         SnapshotResult write(JsonObject data, String baseSha) throws Exception {
