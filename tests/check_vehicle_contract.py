@@ -12,7 +12,7 @@ for token in (
     "VehicleStore.create(database);", "VehicleTyreStore.create(database);",
     "DATABASE_MIGRATED_24_TO_25_TYRE_SETS",
     "DATABASE_MIGRATED_23_TO_24_VEHICLES",
-    'super(context, "edhome-beta-preview.db", null, 35)',
+    'super(context, "edhome-beta-preview.db", null, 36)',
     'case "vehicles": vehicles(); break;',
     'header("Kalendarz • czynności i pojazdy")',
     "oc_until AS deadline", "inspection_until",
@@ -34,7 +34,7 @@ for token in (
 assert "PaycheckStore" not in store and "PantryBarcodeStore" not in store
 assert "VehicleRules.optionalDate" in store
 assert '"vehicles"' in catalog and 'case "vehicles": return "Pojazdy";' in catalog
-assert 'private static final int DB_VERSION = 35;' in backup
+assert 'private static final int DB_VERSION = 36;' in backup
 assert '{"vehicles", "id", "name", "registration", "mileage",' in backup
 assert '{"vehicle_events", "id", "operation_id", "vehicle_id",' in backup
 assert 'inputVersion < 24 && ("vehicles".equals(definition[0])' in backup
