@@ -615,7 +615,8 @@ public final class EdhomeDesktop extends JFrame {
         }
         ScannerTarget storage = parseStorageQr(code);
         if (storage != null) {
-            openScannedTarget(storage.kind, storage.id, status);
+            openScannedTarget(storage.kind, storage.id,
+                "qr:" + storage.kind + ":" + storage.id, status);
             return;
         }
         if (validProductBarcode(code)) {
@@ -645,7 +646,8 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
-    private void openScannedTarget(String kind, long id, JLabel status) {
+    private void openScannedTarget(String kind, long id, String sourceKey,
+            JLabel status) {
         String tableName;
         String sectionName;
         if ("place".equals(kind)) {
@@ -669,15 +671,143 @@ public final class EdhomeDesktop extends JFrame {
                 "EDHOME Desktop • Skaner", JOptionPane.WARNING_MESSAGE);
             return;
         }
+
         String name = value(row, "name");
         if (name.isBlank()) name = value(row, "title");
         if (name.isBlank()) name = "#" + id;
         status.setText("Odczytano: " + name);
-        int open = JOptionPane.showConfirmDialog(this,
-            "Odczytano: " + name + "\nTyp: " + kind + "\n\nOtworzyć moduł „"
-                + sectionName + "”?",
-            "EDHOME Desktop • Skaner", JOptionPane.YES_NO_OPTION);
-        if (open == JOptionPane.YES_OPTION) showSection(sectionName);
+
+        String prefKey = scanDefaultKey(sourceKey);
+        String remembered = prefKey.isBlank() ? "" : PREFS.get(prefKey, "");
+        if (!remembered.isBlank()
+                && performScannedAction(remembered, kind, tableName, sectionName, row, status))
+            return;
+
+        java.util.List<String> actions = new ArrayList<>();
+        actions.add("Otwórz");
+        actions.add("Edytuj");
+        if ("thing".equals(kind) || "box".equals(kind)) {
+            actions.add("Przenieś");
+            actions.add(value(row, "lent_to").isBlank() ? "Wypożycz" : "Zwrot");
+            actions.add("QR / etykieta");
+        } else if ("place".equals(kind)) {
+            actions.add("QR / etykieta");
+        }
+        actions.add("Ustaw domyślną akcję…");
+        actions.add("Anuluj");
+
+        int selected = JOptionPane.showOptionDialog(this,
+            "Odczytano: " + name + "\nTyp: " + kind + "\n\nWybierz działanie:",
+            "EDHOME Desktop • Skaner", JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE, null, actions.toArray(), actions.get(0));
+        if (selected < 0 || selected >= actions.size()) return;
+        String label = actions.get(selected);
+        if ("Anuluj".equals(label)) return;
+        if ("Ustaw domyślną akcję…".equals(label)) {
+            chooseDefaultScanAction(prefKey, kind, row);
+            return;
+        }
+        performScannedAction(scanActionId(label), kind, tableName,
+            sectionName, row, status);
+    }
+
+    private boolean performScannedAction(String action, String kind,
+            String tableName, String sectionName, JsonObject row, JLabel status) {
+        if ("open".equals(action)) {
+            showSection(sectionName);
+            return true;
+        }
+        if ("edit".equals(action) || "move".equals(action)) {
+            String[][] columns = scannedColumns(kind);
+            if (columns.length == 0) return false;
+            editRow(row, columns);
+            return true;
+        }
+        if ("lend".equals(action) && ("thing".equals(kind) || "box".equals(kind))) {
+            if (value(row, "lent_to").isBlank()) {
+                String person = JOptionPane.showInputDialog(this,
+                    "Komu wypożyczono?", "EDHOME • wypożyczenie",
+                    JOptionPane.QUESTION_MESSAGE);
+                if (person == null) return true;
+                person = person.trim();
+                if (person.isEmpty()) {
+                    JOptionPane.showMessageDialog(this, "Podaj osobę lub nazwę odbiorcy.");
+                    return true;
+                }
+                row.addProperty("lent_to", person);
+                row.addProperty("lent_at", System.currentTimeMillis());
+                markDirty();
+                status.setText("Wypożyczono: " + value(row, "name") + " → " + person);
+            } else {
+                row.add("lent_to", com.google.gson.JsonNull.INSTANCE);
+                row.add("lent_at", com.google.gson.JsonNull.INSTANCE);
+                markDirty();
+                status.setText("Zwrot: " + value(row, "name"));
+            }
+            showSection("Magazyn");
+            return true;
+        }
+        if ("label".equals(action) && ("thing".equals(kind)
+                || "box".equals(kind) || "place".equals(kind))) {
+            DesktopQrLabels.Label label = qrLabel(tableName, row);
+            if (label != null) showQrLabelWorkflow(java.util.List.of(label));
+            return true;
+        }
+        return false;
+    }
+
+    private void chooseDefaultScanAction(String prefKey, String kind, JsonObject row) {
+        if (prefKey.isBlank()) return;
+        java.util.List<String> labels = new ArrayList<>();
+        labels.add("Otwórz");
+        labels.add("Edytuj");
+        if ("thing".equals(kind) || "box".equals(kind)) {
+            labels.add("Przenieś");
+            labels.add(value(row, "lent_to").isBlank() ? "Wypożycz / Zwrot" : "Zwrot / Wypożycz");
+            labels.add("QR / etykieta");
+        } else if ("place".equals(kind)) {
+            labels.add("QR / etykieta");
+        }
+        labels.add("Zawsze pytaj");
+
+        Object chosen = JOptionPane.showInputDialog(this,
+            "Domyślna akcja dla tego konkretnego QR/NFC:",
+            "EDHOME Desktop • domyślna akcja",
+            JOptionPane.QUESTION_MESSAGE, null, labels.toArray(), labels.get(0));
+        if (chosen == null) return;
+        String label = String.valueOf(chosen);
+        if ("Zawsze pytaj".equals(label)) PREFS.remove(prefKey);
+        else PREFS.put(prefKey, scanActionId(label));
+    }
+
+    private static String scanActionId(String label) {
+        if (label.startsWith("Otwórz")) return "open";
+        if (label.startsWith("Edytuj")) return "edit";
+        if (label.startsWith("Przenieś")) return "move";
+        if (label.startsWith("Wypożycz") || label.startsWith("Zwrot")) return "lend";
+        if (label.startsWith("QR / etykieta")) return "label";
+        return "";
+    }
+
+    private static String scanDefaultKey(String sourceKey) {
+        if (sourceKey == null || sourceKey.isBlank()) return "";
+        String safe = sourceKey.replaceAll("[^A-Za-z0-9:_-]", "_");
+        if (safe.length() > 70) safe = safe.substring(0, 70);
+        return "scan." + safe;
+    }
+
+    private static String[][] scannedColumns(String kind) {
+        if ("thing".equals(kind) || "box".equals(kind))
+            return cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
+                "Miejsce","place_id","Wypożyczone","lent_to");
+        if ("place".equals(kind))
+            return cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id");
+        if ("pantry".equals(kind))
+            return cols("Produkt","name","Ilość","qty","Kategoria","category");
+        if ("vehicle".equals(kind))
+            return cols("Nazwa","name","Rejestracja","registration","Przebieg","mileage",
+                "OC do","oc_until","Przegląd do","inspection_until");
+        return new String[0][0];
     }
 
     private void processPantryBarcode(String barcode, JLabel status) {
@@ -842,7 +972,7 @@ public final class EdhomeDesktop extends JFrame {
         if (link != null) {
             try {
                 openScannedTarget(value(link, "target_kind"),
-                    link.get("target_id").getAsLong(), status);
+                    link.get("target_id").getAsLong(), "nfc:" + uid, status);
             } catch (Exception invalid) {
                 status.setText("Uszkodzone powiązanie NFC.");
             }
