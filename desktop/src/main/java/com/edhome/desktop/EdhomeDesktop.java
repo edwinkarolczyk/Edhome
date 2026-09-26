@@ -61,7 +61,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.46";
+    private static final String DESKTOP_VERSION = "0.6.0.47";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -555,7 +555,7 @@ public final class EdhomeDesktop extends JFrame {
           + "Desktop nie nadpisze telefonu po cichu.\n\n"
           + "Kolejny etap:\n"
           + "• synchronizacja przyrostowa rekordów zamiast pełnego snapshotu,\n"
-          + "• formularze Dodaj/Usuń dla kolejnych modułów,\n"
+          + "• kolejne operacje modułowe poza już dodanym CRUD zadań, zakupów, magazynu i miejsc,\n"
           + "• pełna zgodność funkcji Android ↔ Desktop.\n"
           + "Pulpit pokazuje zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
           + "Autostart Windows, zasobnik i ponowne wykrywanie telefonu po zmianie IP pozostają aktywne.");
@@ -1139,10 +1139,15 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JComponent tablePage(String title, String table, String[][] columns) {
-        return tablePage(title, table(table), columns);
+        return tablePage(title, table(table), columns, table);
     }
 
     private JComponent tablePage(String title, JsonArray rows, String[][] columns) {
+        return tablePage(title, rows, columns, null);
+    }
+
+    private JComponent tablePage(String title, JsonArray rows, String[][] columns,
+            String tableName) {
         JPanel page = page(title);
 
         JPanel list = new JPanel();
@@ -1156,7 +1161,7 @@ public final class EdhomeDesktop extends JFrame {
         } else {
             for (JsonElement el : rows) {
                 if (!el.isJsonObject()) continue;
-                list.add(recordCard(el.getAsJsonObject(), columns));
+                list.add(recordCard(el.getAsJsonObject(), columns, tableName));
                 list.add(Box.createVerticalStrut(10));
             }
         }
@@ -1178,6 +1183,11 @@ public final class EdhomeDesktop extends JFrame {
         JButton save = actionButton("✓ Zapisz zmiany do telefonu");
         reload.addActionListener(e -> reloadFromPhone(reload));
         save.addActionListener(e -> saveChangesToPhone(save));
+        if (canAddTable(tableName)) {
+            JButton add = actionButton("＋ Dodaj");
+            add.addActionListener(e -> addRecord(tableName, columns));
+            actions.add(add);
+        }
         actions.add(reload);
         actions.add(save);
         footer.add(count, BorderLayout.WEST);
@@ -1186,7 +1196,7 @@ public final class EdhomeDesktop extends JFrame {
         return page;
     }
 
-    private JPanel recordCard(JsonObject row, String[][] columns) {
+    private JPanel recordCard(JsonObject row, String[][] columns, String tableName) {
         JPanel card = new RoundedPanel(APP_SURFACE, 22);
         card.setLayout(new BorderLayout(12, 12));
         card.setBorder(new EmptyBorder(15, 18, 15, 18));
@@ -1203,9 +1213,17 @@ public final class EdhomeDesktop extends JFrame {
         JPanel header = new JPanel(new BorderLayout(10, 0));
         header.setOpaque(false);
         header.add(title, BorderLayout.CENTER);
+        JPanel rowActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        rowActions.setOpaque(false);
         JButton edit = actionButton("Edytuj");
         edit.addActionListener(e -> editRow(row, columns));
-        header.add(edit, BorderLayout.EAST);
+        rowActions.add(edit);
+        if (canDeleteTable(tableName)) {
+            JButton remove = actionButton("Usuń");
+            remove.addActionListener(e -> deleteRecord(tableName, row));
+            rowActions.add(remove);
+        }
+        header.add(rowActions, BorderLayout.EAST);
         card.add(header, BorderLayout.NORTH);
 
         JPanel details = new JPanel(new GridLayout(0, 2, 14, 7));
@@ -1220,6 +1238,226 @@ public final class EdhomeDesktop extends JFrame {
         }
         card.add(details, BorderLayout.CENTER);
         return card;
+    }
+
+    private boolean canAddTable(String tableName) {
+        return "tasks".equals(tableName)
+            || "pantry".equals(tableName)
+            || "shopping_items".equals(tableName)
+            || "storage_items".equals(tableName)
+            || "vehicles".equals(tableName)
+            || "places".equals(tableName);
+    }
+
+    private boolean canDeleteTable(String tableName) {
+        return "tasks".equals(tableName)
+            || "shopping_items".equals(tableName)
+            || "storage_items".equals(tableName)
+            || "places".equals(tableName);
+    }
+
+    private void addRecord(String tableName, String[][] columns) {
+        JsonObject row = newRowTemplate(tableName);
+        if (row == null) return;
+        if (!editRow(row, columns)) return;
+        table(tableName).add(row);
+        showSection(current);
+    }
+
+    private JsonObject newRowTemplate(String tableName) {
+        JsonObject row = new JsonObject();
+        long id = nextId(tableName);
+        long now = System.currentTimeMillis();
+        if ("tasks".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("title", "Nowa czynność");
+            row.addProperty("done", 0);
+            row.add("due_date", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("repeat_rule", "once");
+            row.addProperty("repeat_every", 1);
+            row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("priority", "normal");
+            row.addProperty("duration_minutes", 30);
+            row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("task_kind", "general");
+            row.add("waste_fraction", com.google.gson.JsonNull.INSTANCE);
+            row.add("remind_time", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("reminder_lead_days", 0);
+            return row;
+        }
+        if ("pantry".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowy produkt");
+            row.addProperty("qty", 0);
+            row.addProperty("category", "other");
+            return row;
+        }
+        if ("shopping_items".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowy zakup " + id);
+            row.add("qty_milli", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("unit", "szt.");
+            row.addProperty("checked", 0);
+            row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            return row;
+        }
+        if ("storage_items".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowa rzecz");
+            row.addProperty("kind", "thing");
+            row.add("parent_box_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("lent_to", com.google.gson.JsonNull.INSTANCE);
+            row.add("lent_at", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("created_at", now);
+            return row;
+        }
+        if ("vehicles".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowy pojazd");
+            row.addProperty("registration", "");
+            row.addProperty("mileage", 0);
+            row.addProperty("oc_until", "");
+            row.addProperty("inspection_until", "");
+            row.addProperty("notes", "");
+            row.add("oc_reminder_lead", com.google.gson.JsonNull.INSTANCE);
+            row.add("inspection_reminder_lead", com.google.gson.JsonNull.INSTANCE);
+            return row;
+        }
+        if ("places".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowe miejsce " + id);
+            row.addProperty("kind", "");
+            row.add("parent_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("icon", "places");
+            return row;
+        }
+        return null;
+    }
+
+    private long nextId(String tableName) {
+        long max = 0;
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            try {
+                JsonElement id = element.getAsJsonObject().get("id");
+                if (id != null && !id.isJsonNull()) max = Math.max(max, id.getAsLong());
+            } catch (Exception ignored) { }
+        }
+        if (max == Long.MAX_VALUE)
+            throw new IllegalStateException("Brak wolnego identyfikatora.");
+        return max + 1;
+    }
+
+    private void deleteRecord(String tableName, JsonObject row) {
+        long id;
+        try { id = Long.parseLong(value(row, "id")); }
+        catch (Exception invalid) {
+            JOptionPane.showMessageDialog(this, "Ta pozycja nie ma poprawnego ID.");
+            return;
+        }
+        String label = value(row, "name");
+        if (label.isBlank()) label = value(row, "title");
+        int choice = JOptionPane.showConfirmDialog(this,
+            "Usunąć „" + (label.isBlank() ? "pozycję" : label) + "”?",
+            "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
+        if (choice != JOptionPane.YES_OPTION) return;
+
+        try {
+            if ("tasks".equals(tableName)) {
+                removeRowsByLong("task_rotation_members", "task_id", id);
+                table("tasks").remove(row);
+            } else if ("shopping_items".equals(tableName)) {
+                table("shopping_items").remove(row);
+            } else if ("storage_items".equals(tableName)) {
+                if (!value(row, "lent_to").isBlank())
+                    throw new IllegalStateException("Najpierw odnotuj zwrot wypożyczonej rzeczy.");
+                if (hasReference("storage_items", "parent_box_id", id))
+                    throw new IllegalStateException("Najpierw opróżnij pudełko.");
+                JsonObject event = new JsonObject();
+                event.addProperty("id", nextId("storage_events"));
+                event.addProperty("item_id", id);
+                event.addProperty("name_snapshot", value(row, "name"));
+                event.addProperty("action", "removed");
+                event.addProperty("details", "Usunięto z EDHOME Desktop");
+                event.addProperty("happened_at", System.currentTimeMillis());
+                table("storage_events").add(event);
+                table("storage_items").remove(row);
+                removeStorageThumbnail(id);
+            } else if ("places".equals(tableName)) {
+                if (hasReference("places", "parent_id", id))
+                    throw new IllegalStateException("Najpierw przenieś lub usuń podmiejsca.");
+                if (hasReference("storage_items", "place_id", id))
+                    throw new IllegalStateException("Najpierw przenieś rzeczy i pudełka z tego miejsca.");
+                if (hasReference("vehicle_tyre_sets", "place_id", id))
+                    throw new IllegalStateException("Najpierw przenieś komplet opon z tego miejsca.");
+                setNullWhere("tasks", "place_id", id);
+                setNullWhere("shopping_items", "place_id", id);
+                setNullWhere("shopping_receipts", "place_id", id);
+                table("places").remove(row);
+            } else return;
+            markDirty();
+            showSection(current);
+            return true;
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this, rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private boolean hasReference(String tableName, String key, long id) {
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            try {
+                JsonElement value = element.getAsJsonObject().get(key);
+                if (value != null && !value.isJsonNull() && value.getAsLong() == id)
+                    return true;
+            } catch (Exception ignored) { }
+        }
+        return false;
+    }
+
+    private void removeRowsByLong(String tableName, String key, long id) {
+        JsonArray rows = table(tableName);
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            JsonElement element = rows.get(i);
+            if (!element.isJsonObject()) continue;
+            try {
+                JsonElement value = element.getAsJsonObject().get(key);
+                if (value != null && !value.isJsonNull() && value.getAsLong() == id)
+                    rows.remove(i);
+            } catch (Exception ignored) { }
+        }
+    }
+
+    private void setNullWhere(String tableName, String key, long id) {
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            JsonObject candidate = element.getAsJsonObject();
+            try {
+                JsonElement value = candidate.get(key);
+                if (value != null && !value.isJsonNull() && value.getAsLong() == id)
+                    candidate.add(key, com.google.gson.JsonNull.INSTANCE);
+            } catch (Exception ignored) { }
+        }
+    }
+
+    private void removeStorageThumbnail(long itemId) {
+        if (snapshot == null || !snapshot.has("settings")
+                || !snapshot.get("settings").isJsonObject()) return;
+        JsonObject settings = snapshot.getAsJsonObject("settings");
+        JsonElement thumbsElement = settings.get("storageThumbnails");
+        if (thumbsElement == null || !thumbsElement.isJsonArray()) return;
+        JsonArray thumbs = thumbsElement.getAsJsonArray();
+        for (int i = thumbs.size() - 1; i >= 0; i--) {
+            JsonElement element = thumbs.get(i);
+            if (!element.isJsonObject()) continue;
+            try {
+                JsonElement id = element.getAsJsonObject().get("itemId");
+                if (id != null && !id.isJsonNull() && id.getAsLong() == itemId)
+                    thumbs.remove(i);
+            } catch (Exception ignored) { }
+        }
     }
 
     private JButton actionButton(String label) {
@@ -1404,7 +1642,7 @@ public final class EdhomeDesktop extends JFrame {
         return str(settings, "household", "Moje gospodarstwo");
     }
 
-    private void editRow(JsonObject row, String[][] columns) {
+    private boolean editRow(JsonObject row, String[][] columns) {
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(new EmptyBorder(8, 8, 8, 8));
         GridBagConstraints g = new GridBagConstraints();
@@ -1430,7 +1668,7 @@ public final class EdhomeDesktop extends JFrame {
         int result = JOptionPane.showConfirmDialog(this, form,
             "EDHOME • edytuj", JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.PLAIN_MESSAGE);
-        if (result != JOptionPane.OK_OPTION) return;
+        if (result != JOptionPane.OK_OPTION) return false;
 
         try {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
@@ -1441,6 +1679,7 @@ public final class EdhomeDesktop extends JFrame {
             JOptionPane.showMessageDialog(this,
                 "Nie zapisano zmiany: " + rootMessage(error),
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+            return false;
         }
     }
 
