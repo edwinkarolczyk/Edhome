@@ -60,7 +60,7 @@ assert '{"nfc_links"' in backup
 
 # Incremental record sync v2 + backward-compatible v1.
 assert '"/patch"' in server
-assert '"edhome-record-patch"' in server
+assert '"edhome-record-patch"' in sync_store
 assert 'RevisionProvider' in server
 assert 'DESKTOP_SYNC_PATCH_WRITTEN' in server
 assert 'DESKTOP_SYNC_PATCH_CONFLICT' in server
