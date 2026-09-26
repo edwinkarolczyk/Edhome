@@ -20,6 +20,7 @@ cost_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleCostStore.
 document_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleDocumentStore.java").read_text(encoding="utf-8")
 tyre_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleTyreStore.java").read_text(encoding="utf-8")
 vehicle_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleStore.java").read_text(encoding="utf-8")
+sync_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -85,6 +86,9 @@ step34 = bank34.copy()
 nfc35 = statements(section(main, "private static void addNfcLinks",
     "private static void addPlaceSiblingIndex"))
 step35 = nfc35.copy()
+sync36 = statements(section(sync_store, "static void create(SQLiteDatabase db)",
+    "static void ensureAll(SQLiteDatabase db)").replace("db.execSQL(", "database.execSQL("))
+step36 = sync36.copy()
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
 step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
@@ -133,12 +137,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 35, "Database version and backup format differ"
+assert version == backup_version == 36, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
 expected = schema(fresh)
-assert len(expected) == 32 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 33 and len(sync36) == 3 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -216,6 +220,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step33)  # vehicle document register
     execute(db, step34)  # v33 to v34, persistent bank evidence queue
     execute(db, step35)  # v34 to v35, NFC links
+    execute(db, step36)  # v35 to v36, sync UUID/revision/tombstone sidecar
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -293,13 +298,14 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
 
 definitions = section(backup, "private static final String[][] TABLES = {", "};")
 table_defs = re.findall(r'\{\s*"([^"]+)"\s*,([^{}]+)\}', definitions, re.S)
-assert len(table_defs) == len(expected), "A table is missing from backup definition"
+assert len(table_defs) == len(expected) - 1, "A domain table is missing from backup definition"
+assert "sync_records" in expected, "Synchronization sidecar table missing"
 for table, fields in table_defs:
     columns = re.findall(r'"([^"]+)"', fields)
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-for accepted in range(2,35):
+for accepted in range(2,36):
     assert ("inputVersion != "+str(accepted)) in backup
 assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
