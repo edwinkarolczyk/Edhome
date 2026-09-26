@@ -2871,9 +2871,12 @@ public final class EdhomeDesktop extends JFrame {
             actions.add(add);
         }
         if ("tasks".equals(tableName)) {
-            JButton quick = actionButton("⚡ Szybko dodaj wiele");
+            JButton quick = actionButton("⚡ Szybkie zadania");
             quick.addActionListener(e -> showQuickTaskWizard());
             actions.add(quick);
+            JButton paste = actionButton("Wklej listę");
+            paste.addActionListener(e -> showQuickTaskBulkPaste());
+            actions.add(paste);
         }
         if ("storage_items".equals(tableName) || "places".equals(tableName)) {
             JButton labels = actionButton("▣ Etykiety QR");
@@ -3129,6 +3132,289 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void showQuickTaskWizard() {
+        JCheckBox askDuration = new JCheckBox("Ile to zajmie?",
+            PREFS.getBoolean("quick.ask.duration", true));
+        JCheckBox askDue = new JCheckBox("Kiedy ma być zrobione?",
+            PREFS.getBoolean("quick.ask.due", true));
+        JCheckBox askPriority = new JCheckBox("Jaki priorytet?",
+            PREFS.getBoolean("quick.ask.priority", false));
+        JCheckBox askAssignee = new JCheckBox("Kto ma zrobić?",
+            PREFS.getBoolean("quick.ask.assignee", false));
+        JCheckBox askPlace = new JCheckBox("Gdzie / w jakim miejscu?",
+            PREFS.getBoolean("quick.ask.place", false));
+
+        JPanel fields = new JPanel();
+        fields.setLayout(new BoxLayout(fields, BoxLayout.Y_AXIS));
+        fields.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JLabel intro = new JLabel("<html><b>Wybierz, o co kreator ma pytać przy każdym zadaniu.</b><br>"
+            + "Niezaznaczone pola dostaną wartości domyślne:<br>"
+            + "30 min • bez terminu • priorytet normalny • bez osoby • bez miejsca.</html>");
+        fields.add(intro);
+        fields.add(Box.createVerticalStrut(10));
+        fields.add(askDuration);
+        fields.add(askDue);
+        fields.add(askPriority);
+        fields.add(askAssignee);
+        fields.add(askPlace);
+
+        int setup = JOptionPane.showConfirmDialog(this, fields,
+            "EDHOME • szybkie zadania • wybór pytań",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (setup != JOptionPane.OK_OPTION) return;
+
+        PREFS.putBoolean("quick.ask.duration", askDuration.isSelected());
+        PREFS.putBoolean("quick.ask.due", askDue.isSelected());
+        PREFS.putBoolean("quick.ask.priority", askPriority.isSelected());
+        PREFS.putBoolean("quick.ask.assignee", askAssignee.isSelected());
+        PREFS.putBoolean("quick.ask.place", askPlace.isSelected());
+
+        java.util.List<QuickTaskDraft> drafts = new ArrayList<>();
+        int totalMinutes = 0;
+
+        while (true) {
+            String progress = drafts.isEmpty()
+                ? "Pierwsze zadanie"
+                : "Dodano do kreatora: " + drafts.size()
+                    + " • razem około " + formatMinutes(totalMinutes);
+            String title = (String) JOptionPane.showInputDialog(this,
+                progress + "\n\nCo trzeba zrobić?\n"
+                    + "Enter = dalej • puste pole lub Anuluj = zakończ serię",
+                "EDHOME • szybkie zadania",
+                JOptionPane.QUESTION_MESSAGE, null, null, "");
+            if (title == null || title.trim().isEmpty()) break;
+            title = title.trim();
+            if (title.length() > 160) {
+                JOptionPane.showMessageDialog(this,
+                    "Nazwa zadania może mieć maksymalnie 160 znaków.");
+                continue;
+            }
+
+            int minutes = 30;
+            if (askDuration.isSelected()) {
+                String raw = (String) JOptionPane.showInputDialog(this,
+                    "Ile to zajmie?\n"
+                        + "Przykłady: 20, 45 min, 1h, 1h 30, 1:30",
+                    "EDHOME • " + title,
+                    JOptionPane.QUESTION_MESSAGE, null, null, "30 min");
+                if (raw == null) break;
+                try {
+                    minutes = parseQuickDuration(raw);
+                } catch (Exception invalid) {
+                    JOptionPane.showMessageDialog(this,
+                        "Nie rozumiem czasu. Wpisz np. 30 min, 1h albo 1h 30.");
+                    continue;
+                }
+            }
+
+            String dueDate = "";
+            if (askDue.isSelected()) {
+                String raw = (String) JOptionPane.showInputDialog(this,
+                    "Kiedy ma być zrobione?\n"
+                        + "Możesz wpisać: dziś, jutro, +7, bez terminu, "
+                        + "27.09.2026 lub 2026-09-27",
+                    "EDHOME • " + title,
+                    JOptionPane.QUESTION_MESSAGE, null, null, "bez terminu");
+                if (raw == null) break;
+                try {
+                    LocalDate parsed = parseQuickDueDate(raw);
+                    dueDate = parsed == null ? "" : parsed.toString();
+                } catch (Exception invalid) {
+                    JOptionPane.showMessageDialog(this,
+                        "Nie rozumiem terminu. Wpisz np. dziś, jutro, +7, "
+                            + "bez terminu albo konkretną datę.");
+                    continue;
+                }
+            }
+
+            String priority = "normal";
+            if (askPriority.isSelected()) {
+                Choice chosen = (Choice) JOptionPane.showInputDialog(this,
+                    "Jaki priorytet?", "EDHOME • " + title,
+                    JOptionPane.QUESTION_MESSAGE, null,
+                    new Choice[]{
+                        new Choice("low","Niski"),
+                        new Choice("normal","Normalny"),
+                        new Choice("high","Wysoki"),
+                        new Choice("urgent","Pilny")
+                    },
+                    new Choice("normal","Normalny"));
+                if (chosen == null) break;
+                priority = chosen.value;
+            }
+
+            String assigneeId = "";
+            if (askAssignee.isSelected()) {
+                JComboBox<Choice> people = quickReferenceCombo(
+                    "household_members", "Każdy / nieprzypisane");
+                int choice = JOptionPane.showConfirmDialog(this, people,
+                    "Kto ma zrobić? • " + title,
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                if (choice != JOptionPane.OK_OPTION) break;
+                Choice selected = (Choice) people.getSelectedItem();
+                assigneeId = selected == null ? "" : selected.value;
+            }
+
+            String placeId = "";
+            if (askPlace.isSelected()) {
+                JComboBox<Choice> places = quickReferenceCombo(
+                    "places", "Bez miejsca");
+                int choice = JOptionPane.showConfirmDialog(this, places,
+                    "Gdzie? • " + title,
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                if (choice != JOptionPane.OK_OPTION) break;
+                Choice selected = (Choice) places.getSelectedItem();
+                placeId = selected == null ? "" : selected.value;
+            }
+
+            if (openTaskExists(title)) {
+                int duplicate = JOptionPane.showConfirmDialog(this,
+                    "Otwarte zadanie o tej nazwie już istnieje:\n"
+                        + title + "\n\nDodać mimo to?",
+                    "EDHOME • możliwy duplikat",
+                    JOptionPane.YES_NO_OPTION);
+                if (duplicate != JOptionPane.YES_OPTION) continue;
+            }
+
+            drafts.add(new QuickTaskDraft(
+                title, minutes, dueDate, priority, assigneeId, placeId));
+            totalMinutes += minutes;
+        }
+
+        if (drafts.isEmpty()) return;
+
+        StringBuilder summary = new StringBuilder();
+        summary.append("Zadania: ").append(drafts.size())
+            .append("\nŁączny szacowany czas: ")
+            .append(formatMinutes(totalMinutes)).append("\n\n");
+        for (int i=0; i<Math.min(12, drafts.size()); i++) {
+            QuickTaskDraft draft = drafts.get(i);
+            summary.append("• ").append(draft.title)
+                .append(" • ").append(formatMinutes(draft.minutes));
+            if (!draft.dueDate.isBlank())
+                summary.append(" • ").append(formatQuickDate(draft.dueDate));
+            summary.append('\n');
+        }
+        if (drafts.size() > 12)
+            summary.append("… i ").append(drafts.size() - 12)
+                .append(" kolejnych\n");
+
+        int save = JOptionPane.showConfirmDialog(this,
+            summary + "\nZapisać wszystkie do „Do zrobienia”?",
+            "EDHOME • podsumowanie szybkich zadań",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (save != JOptionPane.YES_OPTION) return;
+
+        long id = nextId("tasks");
+        for (QuickTaskDraft draft : drafts) {
+            JsonObject row = newRowTemplate("tasks");
+            row.addProperty("id", id++);
+            row.addProperty("title", draft.title);
+            row.addProperty("duration_minutes", draft.minutes);
+            row.addProperty("priority", draft.priority);
+            if (draft.dueDate.isBlank())
+                row.add("due_date", com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("due_date", draft.dueDate);
+            if (draft.assigneeId.isBlank())
+                row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("assignee_id", Long.parseLong(draft.assigneeId));
+            if (draft.placeId.isBlank())
+                row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("place_id", Long.parseLong(draft.placeId));
+            table("tasks").add(row);
+        }
+
+        markDirty();
+        showSection("Zadania");
+        JOptionPane.showMessageDialog(this,
+            "Dodano " + drafts.size() + " zadań.\n"
+                + "Łączny szacowany czas: " + formatMinutes(totalMinutes)
+                + "\n\nMożesz teraz zsynchronizować je z telefonem.",
+            "EDHOME • szybkie zadania", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static int parseQuickDuration(String raw) {
+        String text = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT)
+            .replace("godziny","h").replace("godzin","h").replace("godz.","h")
+            .replace("minuty","min").replace("minut","min").replace("min.","min");
+        if (text.matches("\\d{1,4}")) {
+            int minutes = Integer.parseInt(text);
+            if (minutes >= 1 && minutes <= 1440) return minutes;
+        }
+        if (text.matches("\\d{1,2}:\\d{1,2}")) {
+            String[] parts = text.split(":");
+            int hours = Integer.parseInt(parts[0]);
+            int minutes = Integer.parseInt(parts[1]);
+            int total = hours * 60 + minutes;
+            if (minutes < 60 && total >= 1 && total <= 1440) return total;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+            "^(?:(\\d{1,2})\\s*h)?\\s*(?:(\\d{1,3})\\s*min)?$").matcher(text);
+        if (matcher.matches() && (matcher.group(1) != null || matcher.group(2) != null)) {
+            int hours = matcher.group(1) == null ? 0 : Integer.parseInt(matcher.group(1));
+            int minutes = matcher.group(2) == null ? 0 : Integer.parseInt(matcher.group(2));
+            int total = hours * 60 + minutes;
+            if (minutes < 60 && total >= 1 && total <= 1440) return total;
+        }
+        throw new IllegalArgumentException("duration");
+    }
+
+    private static LocalDate parseQuickDueDate(String raw) {
+        String text = raw == null ? "" : raw.trim().toLowerCase(Locale.forLanguageTag("pl-PL"));
+        if (text.isEmpty() || "bez".equals(text) || "brak".equals(text)
+                || "bez terminu".equals(text)) return null;
+        if ("dziś".equals(text) || "dzis".equals(text) || "dzisiaj".equals(text))
+            return LocalDate.now();
+        if ("jutro".equals(text)) return LocalDate.now().plusDays(1);
+        if ("pojutrze".equals(text)) return LocalDate.now().plusDays(2);
+        if (text.matches("\\+\\d{1,3}"))
+            return LocalDate.now().plusDays(Long.parseLong(text.substring(1)));
+        try {
+            if (text.matches("\\d{2}[.]\\d{2}[.]\\d{4}"))
+                return LocalDate.parse(text,
+                    DateTimeFormatter.ofPattern("dd.MM.uuuu")
+                        .withResolverStyle(java.time.format.ResolverStyle.STRICT));
+            return LocalDate.parse(text);
+        } catch (Exception invalid) {
+            throw new IllegalArgumentException("date");
+        }
+    }
+
+    private static String formatMinutes(int minutes) {
+        int hours = minutes / 60;
+        int rest = minutes % 60;
+        if (hours == 0) return rest + " min";
+        if (rest == 0) return hours + " h";
+        return hours + " h " + rest + " min";
+    }
+
+    private static String formatQuickDate(String iso) {
+        try {
+            return LocalDate.parse(iso).format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+        } catch (Exception ignored) {
+            return iso;
+        }
+    }
+
+    private static final class QuickTaskDraft {
+        final String title;
+        final int minutes;
+        final String dueDate;
+        final String priority;
+        final String assigneeId;
+        final String placeId;
+
+        QuickTaskDraft(String title, int minutes, String dueDate,
+                String priority, String assigneeId, String placeId) {
+            this.title = title;
+            this.minutes = minutes;
+            this.dueDate = dueDate == null ? "" : dueDate;
+            this.priority = priority == null ? "normal" : priority;
+            this.assigneeId = assigneeId == null ? "" : assigneeId;
+            this.placeId = placeId == null ? "" : placeId;
+        }
+    }
+
+    private void showQuickTaskBulkPaste() {
         JTextArea input = new JTextArea(12, 52);
         input.setLineWrap(true);
         input.setWrapStyleWord(true);
