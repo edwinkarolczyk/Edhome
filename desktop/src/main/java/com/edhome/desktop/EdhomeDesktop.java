@@ -537,6 +537,29 @@ public final class EdhomeDesktop extends JFrame {
             }.execute();
         });
 
+        camera.addActionListener(e -> {
+            camera.setEnabled(false);
+            status.setText("Uruchamiam kamerę — pokaż QR lub kod do obiektywu…");
+            new SwingWorker<String,Void>() {
+                @Override protected String doInBackground() throws Exception {
+                    return DesktopHardwareScanner.readCodeFromWebcam(Duration.ofSeconds(20));
+                }
+                @Override protected void done() {
+                    camera.setEnabled(true);
+                    try {
+                        String raw = get();
+                        input.setText(raw);
+                        processDesktopScan(raw, status);
+                    } catch (Exception error) {
+                        status.setText("Kamera: brak odczytu.");
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            rootMessage(error), "EDHOME Desktop",
+                            JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }.execute();
+        });
+
         nfc.addActionListener(e -> {
             nfc.setEnabled(false);
             status.setText("Przyłóż tag do czytnika NFC…");
@@ -565,7 +588,7 @@ public final class EdhomeDesktop extends JFrame {
         JTextArea help = new JTextArea(
             "Obsługiwane ścieżki:\n"
           + "• skaner USB/bezprzewodowy w trybie klawiatury — EAN/UPC/GTIN i QR,\n"
-          + "• QR/kod z pliku PNG/JPG lub zrzutu ekranu,\n"
+          + "• QR/kod bezpośrednio z kamery/webcam,\n"\n          + "• QR/kod z pliku PNG/JPG lub zrzutu ekranu,\n"
           + "• NFC przez czytnik Windows PC/SC — odczyt UID i przypisanie tagu do "
           + "rzeczy, pudełka, miejsca, produktu albo pojazdu.\n\n"
           + "Kod EDHOME STORAGE otwiera właściwą rzecz/pudełko/miejsce. "
