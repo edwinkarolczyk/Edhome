@@ -34,7 +34,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 3. zabezpieczona przed konfliktem równoczesnej edycji,
 4. sprawdzona testem zgodności APK ↔ Desktop.
 
-## Aktualny stan Desktop
+## Aktualny stan Desktop — 0.6.0.49
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -46,66 +46,43 @@ Aktualna linia Desktop obsługuje:
 - kontrolę konfliktu snapshotu,
 - aktualizację Desktop jednym przyciskiem,
 - autostart z Windows i start zminimalizowany,
-- panel Skaner: skaner USB/klawiaturowy, QR/kod z kamery lub obrazu i NFC PC/SC,
+- skaner USB/klawiaturowy,
+- QR/kody bezpośrednio z kamery/webcam,
+- QR/kody z obrazu lub zrzutu ekranu,
+- NFC przez Windows PC/SC,
 - trwałe, synchronizowane powiązania tagów NFC z obiektami EDHOME,
-- podstawowe widoki: Pulpit, Dzisiaj, Kalendarz, Zadania, Czynności, Magazyn, Spiżarnia, Zakupy, PayCheck, Pojazdy, Odpady, Timery, Energia, SUPLA, Miejsca i Ustawienia.
+- akcje po QR/NFC: otwarcie, edycja, przeniesienie, wypożyczenie/zwrot i etykieta QR tam, gdzie operacja ma zastosowanie,
+- zapamiętywanie domyślnej akcji dla konkretnego QR/NFC,
+- pojedyncze i zbiorcze etykiety QR dla rzeczy, pudełek i miejsc,
+- formaty etykiet 40 × 30 mm, 50 × 30 mm, 70 × 50 mm, A4 zbiorczo i własny rozmiar,
+- podgląd etykiet, eksport do PDF i bezpośredni wydruk,
+- zapamiętywanie drukarki etykiet,
+- PayCheck: lokalny import PDF/CSV/XLSX, kolejka dowodów bankowych, deduplikacja i ręczne dopasowanie,
+- bezpieczny parser VeloBank PDF oraz mBank CSV/XLSX; nieznane układy PDF są odrzucane zamiast zgadywane,
+- zachowywanie oryginalnych PDF bankowych lokalnie na komputerze,
+- tworzenie brakujących wspólnych operacji z wyciągu jako oczekujących — bez zmiany salda przed potwierdzeniem,
+- historia importów bankowych i obsługa wielu etykiet bank/konto,
+- analiza PayCheck z porównaniem 12 miesięcy i kategoriami,
+- wspólne cele oszczędnościowe,
+- masowa zmiana kategorii transakcji,
+- prywatny PayCheck jako osobny zaszyfrowany sejf zgodny z formatem przenośnej kopii Androida,
+- import/eksport zaszyfrowanej kopii prywatnego PayCheck,
+- prywatne operacje bankowe jako oczekujące, z idempotencją,
+- drukowanie kalendarza, zadań i czynności w A4 z podglądem,
+- podstawowe widoki: Pulpit, Dzisiaj, Kalendarz, Zadania, Czynności, Magazyn, Spiżarnia, Zakupy, PayCheck, Pojazdy, Odpady, Timery, Energia, SUPLA, Miejsca, Skaner i Ustawienia.
 
-Desktop **nie jest już read-only**.
+Desktop **nie jest read-only**. Prywatny PayCheck pozostaje celowo poza zwykłym snapshotem Android ↔ PC; przenoszenie prywatnych finansów odbywa się wyłącznie przez zaszyfrowany format sejfu.
 
 ## Zatwierdzony zakres Desktop — decyzja użytkownika
 
-Poniższe funkcje są **wymaganym zakresem EDHOME Desktop** i należy je traktować jako obowiązkowe przy dalszym rozwoju.
+Zakres zatwierdzony dla QR/drukowania, skanowania, importów bankowych, analizy PayCheck, prywatnego PayCheck oraz drukowania kalendarza i zadań jest wdrożony w linii 0.6.0.49. Regresje tego zakresu są chronione testem `tests/check_desktop_approved_scope.py`.
 
-### QR, etykiety i drukowanie
-- drukowanie pojedynczej etykiety QR bezpośrednio z karty rzeczy, pudełka lub miejsca,
-- drukowanie wielu etykiet QR jednocześnie,
-- gotowe formaty: 40 × 30 mm, 50 × 30 mm, 70 × 50 mm oraz A4 zbiorczo,
-- własny rozmiar etykiety,
-- podgląd przed drukiem,
-- zapamiętywanie osobnej drukarki przeznaczonej do etykiet,
-- eksport etykiet do PDF,
-- bezpośredni druk bez konieczności tworzenia PDF.
-
-### Skanowanie na PC
-- skaner USB lub bezprzewodowy działający jak klawiatura,
-- skanowanie QR i kodów bezpośrednio kamerą PC,
-- odczyt QR/kodu ze zdjęcia lub zrzutu ekranu,
-- NFC przez czytnik USB / Windows PC/SC,
-- po skanowaniu menu akcji: Otwórz / Edytuj / Przenieś / Wypożycz / Zwrot,
-- możliwość ustawienia domyślnej akcji dla konkretnego QR lub NFC.
-
-### PayCheck — banki i wyciągi
-- wgrywanie wyciągów bankowych PDF,
-- automatyczne rozpoznawanie banku,
-- import CSV,
-- import XLSX,
-- automatyczne odczytywanie transakcji z wyciągu,
-- każda zaimportowana operacja trafia najpierw do kolejki „Do potwierdzenia”,
-- automatyczne dopasowywanie transakcji do wydatków dodanych wcześniej z telefonu lub z powiadomień bankowych,
-- brakujące transakcje z wyciągu są tworzone jako oczekujące, a nie księgowane bez potwierdzenia,
-- ponowny import tego samego wyciągu nie może tworzyć duplikatów,
-- historia importów bankowych,
-- przy operacji pytanie: wspólne czy prywatne,
-- obsługa wielu banków i wielu kont,
-- oryginalny PDF wyciągu może być zachowany lokalnie jako źródło potwierdzenia.
-
-### PayCheck — analiza
-- odczyt kwoty, daty i sprzedawcy z dokumentu,
-- wykresy i porównania miesięcy,
-- prywatny PayCheck dostępny na PC,
-- cele oszczędnościowe,
-- masowa edycja wielu transakcji.
-
-### Drukowanie i praca biurowa
-- drukowanie kalendarza,
-- drukowanie czynności i zadań.
-
-### Zasada implementacyjna
-Powyższy zakres jest nadrzędny wobec uproszczonego MVP. Funkcja nie jest ukończona tylko dlatego, że istnieje ekran lub tabela — musi realizować pełny przepływ użytkownika, walidację i synchronizację Android ↔ PC.
+### Ograniczenia importu PDF banków
+Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0.49 bezpiecznie obsługiwany jest tekstowy PDF VeloBanku. mBank jest obsługiwany przez CSV/XLSX. Zwykły CSV jest obsługiwany, jeśli zawiera stabilny identyfikator transakcji i wymagane kolumny. PDF innych banków jest odrzucany, dopóki nie ma jawnego parsera dla ich układu.
 
 ## Braki do pełnej zgodności z APK
 
-Poniższe elementy istnieją w aktualnym APK, ale Desktop nie ma jeszcze ich pełnego odpowiednika.
+Poniższe elementy nadal wymagają domknięcia, mimo że zatwierdzony pakiet Desktop 0.6.0.49 jest już funkcjonalny.
 
 ### Pulpit i personalizacja
 - konfigurowalne kafelki,
@@ -119,125 +96,66 @@ Poniższe elementy istnieją w aktualnym APK, ale Desktop nie ma jeszcze ich pe�
 
 ### Czynności, zadania i domownicy
 - domownicy/wykonawcy,
-- grafik tygodniowy,
-- wyjątki grafiku,
-- przypisanie wykonawcy,
+- grafik tygodniowy i wyjątki,
 - rotacja wykonawców,
-- pełne reguły powtarzania,
-- przypomnienia czynności,
-- historia wykonań pojedynczej czynności,
-- historia wszystkich wykonań,
+- pełne przypomnienia i historia wykonań,
 - kompletna logika zaległych czynności.
 
 ### Kalendarz
-Desktop pokazuje obecnie głównie listę terminów. Brakuje zgodności z widokiem APK:
-- nawigacji po datach,
-- przejścia do konkretnej daty,
-- obsługi zaległych,
-- prezentacji wszystkich typów zdarzeń,
-- OC i przeglądów pojazdów jako zdarzeń,
-- pełnego powiązania czynności z kalendarzem.
+- pełny widok kalendarzowy miesiąc/tydzień/dzień,
+- nawigacja po datach i zaległych,
+- wszystkie typy zdarzeń,
+- pełne powiązanie zdarzeń pojazdów i czynności.
 
 ### Spiżarnia
-- skanowanie kodów produktów,
-- szybkie +1 / -1,
-- skanowanie seryjne,
-- ręczne wpisanie kodu,
-- historia skanów,
-- filtrowanie kategoriami,
-- wyszukiwarka,
-- historia cen,
-- pełna obsługa opakowań i ilości,
-- logika wyjmowania produktu,
-- integracja z remanentem.
+Skanowanie pojedynczego kodu i szybkie +1/−1 są dostępne. Nadal brakuje:
+- skanowania seryjnego,
+- pełnej historii skanów,
+- filtrów kategorii i wyszukiwarki zgodnych z APK,
+- pełnej historii cen i obsługi opakowań,
+- pełnego kreatora remanentu.
 
 ### Zakupy
-- przyjęcie zakupu bezpośrednio do spiżarni,
+- pełne przyjęcie zakupu do spiżarni,
 - wybór miejsca docelowego,
-- zapis ceny zakupu,
-- powiązanie z historią cen,
-- rozróżnienie „kupione” / „przyjęte do spiżarni”,
-- kompletna logika potwierdzenia przyjęcia.
+- zapis ceny i historia cen,
+- pełna logika „kupione” kontra „przyjęte”.
 
 ### Magazyn i Miejsca
-- zdjęcia i miniaturki rzeczy,
-- QR rzeczy, pudełek i miejsc,
-- pełna obsługa kamery/webcam do QR (USB/klawiatura i odczyt z obrazu są już obsługiwane),
-- skanowanie QR,
-- drukowanie pojedynczych i zbiorczych etykiet,
-- PDF i udostępnianie etykiet,
-- historia skanowania i drukowania,
-- przenoszenie rzeczy/pudełek,
-- wypożyczenie i zwrot,
-- pełne drzewo lokalizacji,
-- działania po zeskanowaniu QR.
+QR/NFC, etykiety, druk, przenoszenie oraz wypożyczenie/zwrot po skanie są dostępne. Nadal brakuje:
+- pełnej obsługi zdjęć i miniaturek,
+- historii skanowania i drukowania zgodnej 1:1 z APK,
+- kompletnego drzewa i wszystkich operacji modułu magazynowego poza ścieżką skanera.
 
 ### PayCheck
-Desktop ma podstawową obsługę wspólnych transakcji, ale brakuje:
-- pełnej kolejki „do potwierdzenia”,
-- potwierdzania na podstawie banku/wyciągu,
-- importu CSV / mBank / XLSX,
-- obsługi powiadomień bankowych lub desktopowego odpowiednika,
-- kolejki banków i potwierdzeń,
-- celów wspólnych,
-- pełnej historii źródła potwierdzenia,
-- prywatnego PayCheck,
-- szyfrowanego sejfu,
-- eksportu/importu zaszyfrowanej kopii prywatnych finansów.
+Import bankowy, kolejka, analiza, cele, masowa edycja i prywatny sejf są dostępne. Nadal brakuje:
+- parserów PDF dla kolejnych banków poza obsługiwanym VeloBankiem,
+- pełnej zgodności wszystkich ekranów i historii PayCheck z APK,
+- desktopowego odpowiednika odbioru systemowych powiadomień bankowych w czasie rzeczywistym.
 
 ### Pojazdy
 - historia polis OC,
 - przypomnienia OC i przeglądu,
-- widoczność terminów w kalendarzu,
-- dokumenty pojazdu,
-- koszty pojazdu,
-- przekazanie kosztu do oczekujących PayCheck,
+- dokumenty i koszty pojazdu,
+- integracja kosztów z oczekującym PayCheck,
 - historia serwisu,
-- komplety opon,
-- stan i lokalizacja opon,
-- montaż/demontaż kompletu.
+- komplety opon, ich stan, lokalizacja i montaż/demontaż.
 
-### Odpady
-- kreator dodawania terminu,
-- cykle odbioru,
-- przypomnienia,
-- pełna integracja z Czynnościami i kalendarzem.
-
-### Minutniki
-- uruchamianie minutnika,
-- pozostały czas,
-- zatrzymanie bez wykonania,
-- potwierdzenie zakończenia,
-- powiadomienia o zakończeniu.
+### Odpady i minutniki
+- pełne kreatory, cykle, powiadomienia i integracja z kalendarzem,
+- pełna obsługa start/stop/potwierdzenie minutnika.
 
 ### Remanent
-Desktop nie ma jeszcze pełnego kreatora remanentu:
 - rozpoczęcie/wznowienie sesji,
 - licznik postępu,
-- „zgadza się”,
-- podanie faktycznego stanu,
-- brak na półce,
-- pominięcie pozycji,
-- cofnięcie ostatniej odpowiedzi,
-- zatwierdzenie korekt,
-- wykrywanie konfliktów,
-- anulowanie bez zmian.
+- korekty, pomijanie i cofanie,
+- wykrywanie konfliktów i końcowe zatwierdzenie.
 
-### Kopia danych, aktualizacje i diagnostyka
-Desktop ma własną aktualizację jednym przyciskiem, ale do zgodności z APK należy jeszcze domknąć:
-- pełny eksport kopii danych,
-- pełne przywracanie kopii,
-- diagnostykę i eksport logów,
-- wspólny status synchronizacji i wersji,
-- kontrolę zgodności wersji Android ↔ Desktop.
-
-### Ustawienia
-- nazwa gospodarstwa,
-- globalne przypomnienia,
-- godziny ciszy,
-- ustawienia skanera/spiżarni,
-- ustawienia wyglądu zgodne z APK,
-- pozostałe ustawienia modułów dostępne w aplikacji Android.
+### Kopia danych, diagnostyka i ustawienia
+- pełny eksport/przywracanie wspólnej kopii danych z poziomu Desktop,
+- diagnostyka i eksport logów,
+- kompletna kontrola zgodności wersji Android ↔ Desktop,
+- pełna zgodność ustawień wyglądu, przypomnień i godzin ciszy z APK.
 
 ## Kryterium ukończenia Desktop
 
