@@ -95,3 +95,12 @@ for marker in (
 ):
     assert marker in desktop, f"Missing annual waste wizard contract: {marker}"
 print("EDHOME Desktop annual waste wizard: PASS")
+
+# Compact list cards and synchronized storage thumbnails.
+for marker in (
+    "card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 94))",
+    "compactActionButton", "storageThumbnailLabel",
+    "storageThumbnails", "jpegBase64", "ImageIO.read"
+):
+    assert marker in desktop, f"Missing compact-card/thumbnail contract: {marker}"
+print("EDHOME Desktop compact cards + thumbnails: PASS")

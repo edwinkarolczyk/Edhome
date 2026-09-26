@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.54
+## Aktualny stan Desktop — 0.6.0.55
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -132,6 +132,14 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - przy datach odbioru EDHOME automatycznie wylicza dzień wystawienia o wybraną liczbę dni wcześniej,
 - końcowe podsumowanie zapisuje cały rok do Czynności i Kalendarza,
 - istniejące identyczne terminy są pomijane, aby nie tworzyć duplikatów.
+
+### Kompaktowe listy i miniaturki
+- karty list Desktop są domyślnie kompaktowe i mieszczą około 2–3× więcej pozycji na ekranie niż poprzedni układ,
+- tytuł i najważniejsze pola są ułożone poziomo; przyciski akcji pozostają po prawej,
+- długie wartości są skracane w karcie, a pełna treść jest dostępna w podpowiedzi,
+- Magazyn/Rzeczy pokazuje miniaturę 56×56 px, jeżeli telefon ma zapisaną miniaturę dla danej rzeczy,
+- Desktop korzysta wyłącznie z małego `storageThumbnails/jpegBase64` z synchronizowanego snapshotu; nie pobiera oryginalnego zdjęcia ani zewnętrznego URI,
+- brak miniatury nie rezerwuje pustego miejsca w karcie.
 
 ## Braki do pełnej zgodności z APK
 

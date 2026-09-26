@@ -12,11 +12,13 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
 
 import javax.swing.*;
+import javax.imageio.ImageIO;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.AbstractTableModel;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -66,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.54";
+    private static final String DESKTOP_VERSION = "0.6.0.55";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3317,29 +3319,58 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JPanel recordCard(JsonObject row, String[][] columns, String tableName) {
-        JPanel card = new RoundedPanel(APP_SURFACE, 22);
-        card.setLayout(new BorderLayout(12, 12));
-        card.setBorder(new EmptyBorder(15, 18, 15, 18));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 210));
+        JPanel card = new RoundedPanel(APP_SURFACE, 18);
+        card.setLayout(new BorderLayout(10, 0));
+        card.setBorder(new EmptyBorder(8, 10, 8, 10));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 94));
+        card.setPreferredSize(new Dimension(1, 82));
+
+        JPanel left = new JPanel(new BorderLayout(10, 0));
+        left.setOpaque(false);
+
+        if ("storage_items".equals(tableName)) {
+            JLabel thumbnail = storageThumbnailLabel(row);
+            if (thumbnail != null) left.add(thumbnail, BorderLayout.WEST);
+        }
+
+        JPanel text = new JPanel(new BorderLayout(0, 4));
+        text.setOpaque(false);
 
         String mainKey = columns.length == 0 ? "" : columns[0][1];
         String main = columns.length == 0 ? "Pozycja"
             : friendlyValue(mainKey, row);
         if (main.isBlank() || "—".equals(main)) main = "Pozycja";
-        JLabel title = new JLabel(main);
+        JLabel title = new JLabel(compactText(main, 52));
+        title.setToolTipText(main);
         title.setForeground(APP_TEXT);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 15f));
+        text.add(title, BorderLayout.NORTH);
 
-        JPanel header = new JPanel(new BorderLayout(10, 0));
-        header.setOpaque(false);
-        header.add(title, BorderLayout.CENTER);
-        JPanel rowActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        int detailCount = Math.max(0, columns.length - 1);
+        JPanel details = new JPanel(new GridLayout(1, Math.max(1, detailCount), 10, 0));
+        details.setOpaque(false);
+        for (int i = 1; i < columns.length; i++) {
+            String full = friendlyValue(columns[i][1], row);
+            JLabel value = new JLabel("<html><span style='color:#A4AEBB'>"
+                + html(columns[i][0]) + ":</span> "
+                + html(compactText(full, 24)) + "</html>");
+            value.setToolTipText(columns[i][0] + ": " + full);
+            value.setForeground(APP_TEXT);
+            value.setFont(value.getFont().deriveFont(11.5f));
+            details.add(value);
+        }
+        text.add(details, BorderLayout.CENTER);
+        left.add(text, BorderLayout.CENTER);
+        card.add(left, BorderLayout.CENTER);
+
+        JPanel rowActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 13));
         rowActions.setOpaque(false);
-        JButton edit = actionButton("Edytuj");
+        JButton edit = compactActionButton("Edytuj");
         edit.addActionListener(e -> editRow(row, columns));
         rowActions.add(edit);
         if ("storage_items".equals(tableName) || "places".equals(tableName)) {
-            JButton qr = actionButton("QR / etykieta");
+            JButton qr = compactActionButton("QR");
+            qr.setToolTipText("QR / etykieta");
             qr.addActionListener(e -> {
                 DesktopQrLabels.Label label = qrLabel(tableName, row);
                 if (label != null) showQrLabelWorkflow(java.util.List.of(label));
@@ -3347,25 +3378,76 @@ public final class EdhomeDesktop extends JFrame {
             rowActions.add(qr);
         }
         if (canDeleteTable(tableName)) {
-            JButton remove = actionButton("Usuń");
+            JButton remove = compactActionButton("Usuń");
             remove.addActionListener(e -> deleteRecord(tableName, row));
             rowActions.add(remove);
         }
-        header.add(rowActions, BorderLayout.EAST);
-        card.add(header, BorderLayout.NORTH);
-
-        JPanel details = new JPanel(new GridLayout(0, 2, 14, 7));
-        details.setOpaque(false);
-        for (int i = 1; i < columns.length; i++) {
-            JLabel label = new JLabel(columns[i][0]);
-            label.setForeground(APP_MUTED);
-            JLabel value = new JLabel(friendlyValue(columns[i][1], row));
-            value.setForeground(APP_TEXT);
-            details.add(label);
-            details.add(value);
-        }
-        card.add(details, BorderLayout.CENTER);
+        card.add(rowActions, BorderLayout.EAST);
         return card;
+    }
+
+    private JButton compactActionButton(String label) {
+        JButton button = new JButton(label);
+        button.setFocusPainted(false);
+        button.setForeground(APP_TEXT);
+        button.setBackground(APP_SURFACE_2);
+        button.setFont(button.getFont().deriveFont(11f));
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(APP_SURFACE_2),
+            new EmptyBorder(5, 8, 5, 8)));
+        return button;
+    }
+
+    private JLabel storageThumbnailLabel(JsonObject row) {
+        long itemId;
+        try { itemId = row.get("id").getAsLong(); }
+        catch (Exception invalid) { return null; }
+        if (snapshot == null || !snapshot.has("settings")
+                || !snapshot.get("settings").isJsonObject()) return null;
+        JsonElement thumbs = snapshot.getAsJsonObject("settings")
+            .get("storageThumbnails");
+        if (thumbs == null || !thumbs.isJsonArray()) return null;
+
+        for (JsonElement element : thumbs.getAsJsonArray()) {
+            if (!element.isJsonObject()) continue;
+            JsonObject thumb = element.getAsJsonObject();
+            try {
+                if (!thumb.has("itemId") || thumb.get("itemId").getAsLong() != itemId)
+                    continue;
+                String encoded = value(thumb, "jpegBase64");
+                if (encoded.isBlank() || encoded.length() > 50000) return null;
+                byte[] bytes;
+                try { bytes = Base64.getDecoder().decode(encoded); }
+                catch (IllegalArgumentException plainFailed) {
+                    bytes = Base64.getMimeDecoder().decode(encoded);
+                }
+                BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
+                if (image == null) return null;
+                Image scaled = image.getScaledInstance(56, 56, Image.SCALE_SMOOTH);
+                JLabel label = new JLabel(new ImageIcon(scaled));
+                label.setPreferredSize(new Dimension(56, 56));
+                label.setToolTipText("Miniatura zdjęcia");
+                return label;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static String compactText(String text, int max) {
+        if (text == null) return "";
+        String normalized = text.replace('\n', ' ').replace('\r', ' ').trim();
+        if (normalized.length() <= max) return normalized;
+        return normalized.substring(0, Math.max(1, max - 1)).trim() + "…";
+    }
+
+    private static String html(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;");
     }
 
     private static boolean printableReportTitle(String title) {
