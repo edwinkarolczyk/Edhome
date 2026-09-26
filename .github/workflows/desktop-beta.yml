@@ -41,14 +41,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path desktop\build\jpackage | Out-Null
           jpackage --type app-image --name EDHOME-Desktop-Beta --app-version $env:DESKTOP_VERSION --input desktop\build\install\desktop\lib --main-jar desktop.jar --main-class com.edhome.desktop.EdhomeDesktop --dest desktop\build\jpackage --vendor "EDHOME - Idea by Edwin"
           Set-Content -Path desktop\build\jpackage\EDHOME-Desktop-Beta\desktop-version.txt -Value $env:DESKTOP_VERSION -Encoding ascii
-          @"
-Zalecane: zainstaluj EDHOME przez EDHOME-Desktop-Beta-Setup.exe.
-
-Jeżeli używasz wersji portable ZIP:
-- wypakuj CAŁĄ zawartość ZIP,
-- nie przenoś samego EDHOME-Desktop-Beta.exe,
-- foldery app i runtime muszą pozostać obok pliku EXE.
-"@ | Set-Content -Path desktop\build\jpackage\EDHOME-Desktop-Beta\URUCHOMIENIE.txt -Encoding utf8
+          @(
+            "Zalecane: zainstaluj EDHOME przez EDHOME-Desktop-Beta-Setup.exe.",
+            "",
+            "Jeżeli używasz wersji portable ZIP:",
+            "- wypakuj CAŁĄ zawartość ZIP,",
+            "- nie przenoś samego EDHOME-Desktop-Beta.exe,",
+            "- foldery app i runtime muszą pozostać obok pliku EXE."
+          ) | Set-Content -Path desktop\build\jpackage\EDHOME-Desktop-Beta\URUCHOMIENIE.txt -Encoding utf8
           Compress-Archive -Path desktop\build\jpackage\EDHOME-Desktop-Beta\* -DestinationPath desktop\build\EDHOME-Desktop-Beta-Windows.zip -Force
       - name: Smoke test packaged EXE and JVM
         shell: pwsh
