@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.6.0.49"
+  DESKTOP_VERSION: "0.6.0.50"
 
 on:
   push:
@@ -41,12 +41,38 @@ jobs:
           New-Item -ItemType Directory -Force -Path desktop\build\jpackage | Out-Null
           jpackage --type app-image --name EDHOME-Desktop-Beta --app-version $env:DESKTOP_VERSION --input desktop\build\install\desktop\lib --main-jar desktop.jar --main-class com.edhome.desktop.EdhomeDesktop --dest desktop\build\jpackage --vendor "EDHOME - Idea by Edwin"
           Set-Content -Path desktop\build\jpackage\EDHOME-Desktop-Beta\desktop-version.txt -Value $env:DESKTOP_VERSION -Encoding ascii
+          @"
+Zalecane: zainstaluj EDHOME przez EDHOME-Desktop-Beta-Setup.exe.
+
+Jeżeli używasz wersji portable ZIP:
+- wypakuj CAŁĄ zawartość ZIP,
+- nie przenoś samego EDHOME-Desktop-Beta.exe,
+- foldery app i runtime muszą pozostać obok pliku EXE.
+"@ | Set-Content -Path desktop\build\jpackage\EDHOME-Desktop-Beta\URUCHOMIENIE.txt -Encoding utf8
           Compress-Archive -Path desktop\build\jpackage\EDHOME-Desktop-Beta\* -DestinationPath desktop\build\EDHOME-Desktop-Beta-Windows.zip -Force
-      - name: Upload Windows package
+      - name: Smoke test packaged EXE and JVM
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path desktop\build\jpackage\EDHOME-Desktop-Beta\EDHOME-Desktop-Beta.exe
+          & $exe --smoke-test
+          if ($LASTEXITCODE -ne 0) {
+            throw "EDHOME packaged launcher failed JVM smoke test with exit code $LASTEXITCODE"
+          }
+      - name: Build Windows Setup EXE
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path desktop\build\installer | Out-Null
+          jpackage --type exe --app-image desktop\build\jpackage\EDHOME-Desktop-Beta --dest desktop\build\installer --win-per-user-install --win-dir-chooser --win-menu --win-menu-group "EDHOME" --win-shortcut --win-upgrade-uuid "0b8c81e7-4f1f-4b2f-a813-0bd1596792cf"
+          $installer = Get-ChildItem desktop\build\installer\*.exe | Select-Object -First 1
+          if (-not $installer) { throw "jpackage did not produce Windows installer EXE" }
+          Copy-Item $installer.FullName desktop\build\EDHOME-Desktop-Beta-Setup.exe -Force
+      - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
           name: EDHOME-Desktop-Beta-Windows
-          path: desktop/build/EDHOME-Desktop-Beta-Windows.zip
+          path: |
+            desktop/build/EDHOME-Desktop-Beta-Setup.exe
+            desktop/build/EDHOME-Desktop-Beta-Windows.zip
           if-no-files-found: error
           retention-days: 14
       - name: Publish one-click Desktop update
@@ -60,5 +86,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --repo $repo --target "${{ github.sha }}" --prerelease --title "EDHOME Desktop Beta • latest" --notes "Publiczna paczka używana przez aktualizację jednym przyciskiem w EDHOME Desktop."
           }
-          gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
-          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Najnowsza publiczna paczka Windows: $env:DESKTOP_VERSION. W aplikacji: Ustawienia → Aktualizuj EDHOME Desktop — 1 klik."
+          gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Setup.exe desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
+          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION. ZALECANE: EDHOME-Desktop-Beta-Setup.exe — normalna instalacja z dołączonym runtime. Portable ZIP pozostaje dla aktualizacji 1-klik i zastosowań przenośnych; nie wolno uruchamiać samego EXE bez folderów app i runtime."

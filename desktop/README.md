@@ -34,7 +34,15 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 3. zabezpieczona przed konfliktem równoczesnej edycji,
 4. sprawdzona testem zgodności APK ↔ Desktop.
 
-## Aktualny stan Desktop — 0.6.0.49
+## Instalacja Windows
+
+**Zalecany sposób:** pobierz i uruchom `EDHOME-Desktop-Beta-Setup.exe`. Instalator zawiera wymagany runtime, tworzy wpis EDHOME w menu Start i może utworzyć skrót na pulpicie. Użytkownik nie musi instalować Javy.
+
+`EDHOME-Desktop-Beta-Windows.zip` pozostaje wersją portable i pakietem aktualizacji. Po wypakowaniu plik `EDHOME-Desktop-Beta.exe` musi pozostać razem z folderami `app` i `runtime`. Skopiowanie samego EXE powoduje błąd `Failed to launch JVM`.
+
+Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
+
+## Aktualny stan Desktop — 0.6.0.50
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -75,7 +83,7 @@ Desktop **nie jest read-only**. Prywatny PayCheck pozostaje celowo poza zwykłym
 
 ## Zatwierdzony zakres Desktop — decyzja użytkownika
 
-Zakres zatwierdzony dla QR/drukowania, skanowania, importów bankowych, analizy PayCheck, prywatnego PayCheck oraz drukowania kalendarza i zadań jest wdrożony w linii 0.6.0.49. Regresje tego zakresu są chronione testem `tests/check_desktop_approved_scope.py`.
+Zakres zatwierdzony dla QR/drukowania, skanowania, importów bankowych, analizy PayCheck, prywatnego PayCheck oraz drukowania kalendarza i zadań jest wdrożony w linii 0.6.0.50. Regresje tego zakresu są chronione testem `tests/check_desktop_approved_scope.py`.
 
 ### Ograniczenia importu PDF banków
 Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0.49 bezpiecznie obsługiwany jest tekstowy PDF VeloBanku. mBank jest obsługiwany przez CSV/XLSX. Zwykły CSV jest obsługiwany, jeśli zawiera stabilny identyfikator transakcji i wymagane kolumny. PDF innych banków jest odrzucany, dopóki nie ma jawnego parsera dla ich układu.

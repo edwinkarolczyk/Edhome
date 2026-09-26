@@ -61,7 +61,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.49";
+    private static final String DESKTOP_VERSION = "0.6.0.50";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -100,6 +100,14 @@ public final class EdhomeDesktop extends JFrame {
     private final Map<String,Integer> sectionScrollY = new java.util.HashMap<>();
 
     public static void main(String[] args) {
+        if (args != null) {
+            for (String arg : args) {
+                if ("--smoke-test".equals(arg)) {
+                    System.out.println("EDHOME_DESKTOP_SMOKE_OK " + DESKTOP_VERSION);
+                    return;
+                }
+            }
+        }
         SwingUtilities.invokeLater(EdhomeDesktop::new);
     }
 
