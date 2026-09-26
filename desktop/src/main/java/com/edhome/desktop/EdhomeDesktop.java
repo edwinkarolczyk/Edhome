@@ -588,7 +588,8 @@ public final class EdhomeDesktop extends JFrame {
         JTextArea help = new JTextArea(
             "Obsługiwane ścieżki:\n"
           + "• skaner USB/bezprzewodowy w trybie klawiatury — EAN/UPC/GTIN i QR,\n"
-          + "• QR/kod bezpośrednio z kamery/webcam,\n"\n          + "• QR/kod z pliku PNG/JPG lub zrzutu ekranu,\n"
+          + "• QR/kod bezpośrednio z kamery/webcam,\n"
+          + "• QR/kod z pliku PNG/JPG lub zrzutu ekranu,\n"
           + "• NFC przez czytnik Windows PC/SC — odczyt UID i przypisanie tagu do "
           + "rzeczy, pudełka, miejsca, produktu albo pojazdu.\n\n"
           + "Kod EDHOME STORAGE otwiera właściwą rzecz/pudełko/miejsce. "
