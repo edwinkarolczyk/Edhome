@@ -46,22 +46,26 @@ final class LanSyncServer {
     interface SnapshotProvider { String snapshot() throws Exception; }
     interface RestoreProvider { void restore(String snapshot) throws Exception; }
     interface RevisionProvider { long revision() throws Exception; }
+    interface PatchProvider { String patch(String incoming) throws Exception; }
 
     private final String token;
     private final SnapshotProvider provider;
     private final RestoreProvider restoreProvider;
     private final RevisionProvider revisionProvider;
+    private final PatchProvider patchProvider;
     private final Object writeLock = new Object();
     private volatile boolean running;
     private volatile ServerSocket server;
     private Thread acceptThread;
 
     LanSyncServer(String token, SnapshotProvider provider,
-            RestoreProvider restoreProvider, RevisionProvider revisionProvider) {
+            RestoreProvider restoreProvider, RevisionProvider revisionProvider,
+            PatchProvider patchProvider) {
         this.token = token;
         this.provider = provider;
         this.restoreProvider = restoreProvider;
         this.revisionProvider = revisionProvider;
+        this.patchProvider = patchProvider;
     }
 
     static String ensureToken(SharedPreferences prefs) {
@@ -225,20 +229,25 @@ final class LanSyncServer {
                 String incoming = new String(body, StandardCharsets.UTF_8);
                 synchronized (writeLock) {
                     try {
-                        int count = applyRecordPatch(incoming);
+                        if (patchProvider == null)
+                            throw new IllegalStateException("Patch provider unavailable.");
+                        String patchResult = patchProvider.patch(incoming);
                         String updated = provider.snapshot();
                         String updatedSha = sha256(updated);
-                        reply(peer, 200, "{\"ok\":true,\"operations\":" + count + "}", updatedSha);
-                        DiagnosticLog.event("DESKTOP_SYNC_PATCH_WRITTEN", "operations=" + count);
-                    } catch (RowConflict conflict) {
+                        reply(peer, 200, patchResult, updatedSha);
+                        DiagnosticLog.event("DESKTOP_SYNC_PATCH_WRITTEN");
+                    } catch (SyncRecordStore.SyncConflict conflict) {
                         String current = provider.snapshot();
                         reply(peer, 409,
                             "{\"error\":\"ROW_CONFLICT\",\"table\":\""
-                                + json(conflict.table) + "\",\"id\":\""
-                                + json(conflict.id) + "\"}",
+                                + json(conflict.table) + "\",\"rowKey\":\""
+                                + json(conflict.rowKey) + "\",\"syncUuid\":\""
+                                + json(conflict.syncUuid) + "\",\"expectedRevision\":"
+                                + conflict.expectedRevision + ",\"actualRevision\":"
+                                + conflict.actualRevision + "}",
                             sha256(current));
                         DiagnosticLog.event("DESKTOP_SYNC_PATCH_CONFLICT",
-                            conflict.table + "#" + conflict.id);
+                            conflict.table + "#" + conflict.rowKey);
                     } catch (IllegalArgumentException invalid) {
                         reply(peer, 400, "{\"error\":\"BAD_PATCH\",\"message\":\""
                             + json(invalid.getMessage() == null ? "invalid" : invalid.getMessage())
@@ -288,6 +297,7 @@ final class LanSyncServer {
         }
     }
 
+    @Deprecated
     private int applyRecordPatch(String incoming) throws Exception {
         JSONObject patch = new JSONObject(incoming);
         if (!"edhome-record-patch".equals(patch.optString("format"))
