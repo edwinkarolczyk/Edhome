@@ -96,6 +96,7 @@ public final class EdhomeDesktop extends JFrame {
     private javax.swing.Timer reconnectTimer;
     private javax.swing.Timer autoSaveTimer;
     private boolean autoSaving;
+    private boolean editingDialog;
     private final Map<String,Integer> sectionScrollY = new java.util.HashMap<>();
 
     public static void main(String[] args) {
@@ -604,6 +605,10 @@ public final class EdhomeDesktop extends JFrame {
             @Override protected void done() {
                 connecting = false;
                 if (trigger != null) trigger.setEnabled(true);
+                if (editingDialog) {
+                    connection.setText("ONLINE • odświeżę po zakończeniu edycji");
+                    return;
+                }
                 try {
                     SnapshotResult result = get();
                     snapshot = result.data;
@@ -633,7 +638,7 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void autoConnectSaved(boolean silent) {
-        if (!PREFS.getBoolean("autoConnect", true) || connecting || dirty) return;
+        if (!PREFS.getBoolean("autoConnect", true) || connecting || dirty || editingDialog) return;
         String host = PREFS.get("phoneIp", "").trim();
         String secret = PREFS.get("token", "").trim();
         if (host.isBlank() || secret.isBlank()) return;
@@ -642,7 +647,7 @@ public final class EdhomeDesktop extends JFrame {
 
     private void startReconnectLoop() {
         reconnectTimer = new javax.swing.Timer(30000, e -> {
-            if (connecting || autoSaving) return;
+            if (connecting || autoSaving || editingDialog) return;
             if (dirty && PREFS.getBoolean("autoWrite", true))
                 saveChangesToPhone(null, true);
             else if (PREFS.getBoolean("autoConnect", true) && !dirty)
@@ -1664,9 +1669,15 @@ public final class EdhomeDesktop extends JFrame {
             y++;
         }
 
-        int result = JOptionPane.showConfirmDialog(this, form,
-            "EDHOME • edytuj", JOptionPane.OK_CANCEL_OPTION,
-            JOptionPane.PLAIN_MESSAGE);
+        int result;
+        editingDialog = true;
+        try {
+            result = JOptionPane.showConfirmDialog(this, form,
+                "EDHOME • edytuj", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        } finally {
+            editingDialog = false;
+        }
         if (result != JOptionPane.OK_OPTION) return false;
 
         try {
