@@ -52,7 +52,7 @@ assert version_name and re.fullmatch(r"0\.6\.0\.\d+", version_name.group(1))
 assert "versionNameSuffix ''" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
-assert len(context["schema"](db))==31
+assert len(context["schema"](db))==32
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes) "
            "VALUES(1,'Audi A4','WD 123',150000,'2027-09-01','2027-08-05','')")
 db.execute("INSERT INTO vehicle_events(operation_id,vehicle_id,kind,event_date,mileage,note) "
