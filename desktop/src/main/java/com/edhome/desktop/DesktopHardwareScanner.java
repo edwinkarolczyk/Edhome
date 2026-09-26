@@ -1,7 +1,9 @@
 package com.edhome.desktop;
 
+import com.github.sarxos.webcam.Webcam;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.MultiFormatReader;
+import com.google.zxing.NotFoundException;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.Result;
 import com.google.zxing.common.HybridBinarizer;
@@ -23,16 +25,58 @@ final class DesktopHardwareScanner {
     static String readCodeFromImage(Path file) throws Exception {
         BufferedImage image = ImageIO.read(file.toFile());
         if (image == null) throw new IllegalArgumentException("Nieobsługiwany format obrazu.");
+        return decodeImage(image);
+    }
+
+    static String readCodeFromWebcam(Duration timeout) throws Exception {
+        Webcam webcam = Webcam.getDefault();
+        if (webcam == null)
+            throw new IllegalStateException(
+                "Windows nie widzi kamery. Podłącz webcam albo użyj skanera USB/obrazu.");
+        boolean openedHere = false;
+        try {
+            if (!webcam.isOpen()) {
+                webcam.open();
+                openedHere = true;
+            }
+            long deadline = System.currentTimeMillis()
+                + Math.max(3000L, timeout.toMillis());
+            while (System.currentTimeMillis() < deadline) {
+                BufferedImage frame = webcam.getImage();
+                if (frame != null) {
+                    try {
+                        return decodeImage(frame);
+                    } catch (NotFoundException noCodeYet) {
+                        // Keep scanning subsequent frames until timeout.
+                    }
+                }
+                Thread.sleep(120L);
+            }
+            throw new IllegalStateException(
+                "Kamera działa, ale nie odczytano QR/kodu. Ustaw kod bliżej i popraw oświetlenie.");
+        } finally {
+            if (openedHere) {
+                try { webcam.close(); } catch (Exception ignored) { }
+            }
+        }
+    }
+
+    private static String decodeImage(BufferedImage image) throws Exception {
         int width = image.getWidth(), height = image.getHeight();
         int[] pixels = new int[width * height];
         image.getRGB(0, 0, width, height, pixels, 0, width);
         BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(
             new RGBLuminanceSource(width, height, pixels)));
-        Result result = new MultiFormatReader().decode(bitmap);
-        String text = result.getText();
-        if (text == null || text.trim().isEmpty())
-            throw new IllegalArgumentException("Kod nie zawiera danych.");
-        return text.trim();
+        MultiFormatReader reader = new MultiFormatReader();
+        try {
+            Result result = reader.decode(bitmap);
+            String text = result.getText();
+            if (text == null || text.trim().isEmpty())
+                throw new IllegalArgumentException("Kod nie zawiera danych.");
+            return text.trim();
+        } finally {
+            reader.reset();
+        }
     }
 
     static String readNfcUid(Duration timeout) throws Exception {
