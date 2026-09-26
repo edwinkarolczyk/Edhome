@@ -52,6 +52,57 @@ Aktualna linia Desktop obsługuje:
 
 Desktop **nie jest już read-only**.
 
+## Zatwierdzony zakres Desktop — decyzja użytkownika
+
+Poniższe funkcje są **wymaganym zakresem EDHOME Desktop** i należy je traktować jako obowiązkowe przy dalszym rozwoju.
+
+### QR, etykiety i drukowanie
+- drukowanie pojedynczej etykiety QR bezpośrednio z karty rzeczy, pudełka lub miejsca,
+- drukowanie wielu etykiet QR jednocześnie,
+- gotowe formaty: 40 × 30 mm, 50 × 30 mm, 70 × 50 mm oraz A4 zbiorczo,
+- własny rozmiar etykiety,
+- podgląd przed drukiem,
+- zapamiętywanie osobnej drukarki przeznaczonej do etykiet,
+- eksport etykiet do PDF,
+- bezpośredni druk bez konieczności tworzenia PDF.
+
+### Skanowanie na PC
+- skaner USB lub bezprzewodowy działający jak klawiatura,
+- skanowanie QR i kodów bezpośrednio kamerą PC,
+- odczyt QR/kodu ze zdjęcia lub zrzutu ekranu,
+- NFC przez czytnik USB / Windows PC/SC,
+- po skanowaniu menu akcji: Otwórz / Edytuj / Przenieś / Wypożycz / Zwrot,
+- możliwość ustawienia domyślnej akcji dla konkretnego QR lub NFC.
+
+### PayCheck — banki i wyciągi
+- wgrywanie wyciągów bankowych PDF,
+- automatyczne rozpoznawanie banku,
+- import CSV,
+- import XLSX,
+- automatyczne odczytywanie transakcji z wyciągu,
+- każda zaimportowana operacja trafia najpierw do kolejki „Do potwierdzenia”,
+- automatyczne dopasowywanie transakcji do wydatków dodanych wcześniej z telefonu lub z powiadomień bankowych,
+- brakujące transakcje z wyciągu są tworzone jako oczekujące, a nie księgowane bez potwierdzenia,
+- ponowny import tego samego wyciągu nie może tworzyć duplikatów,
+- historia importów bankowych,
+- przy operacji pytanie: wspólne czy prywatne,
+- obsługa wielu banków i wielu kont,
+- oryginalny PDF wyciągu może być zachowany lokalnie jako źródło potwierdzenia.
+
+### PayCheck — analiza
+- odczyt kwoty, daty i sprzedawcy z dokumentu,
+- wykresy i porównania miesięcy,
+- prywatny PayCheck dostępny na PC,
+- cele oszczędnościowe,
+- masowa edycja wielu transakcji.
+
+### Drukowanie i praca biurowa
+- drukowanie kalendarza,
+- drukowanie czynności i zadań.
+
+### Zasada implementacyjna
+Powyższy zakres jest nadrzędny wobec uproszczonego MVP. Funkcja nie jest ukończona tylko dlatego, że istnieje ekran lub tabela — musi realizować pełny przepływ użytkownika, walidację i synchronizację Android ↔ PC.
+
 ## Braki do pełnej zgodności z APK
 
 Poniższe elementy istnieją w aktualnym APK, ale Desktop nie ma jeszcze ich pełnego odpowiednika.
