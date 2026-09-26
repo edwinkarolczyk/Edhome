@@ -4635,10 +4635,32 @@ public final class EdhomeDesktop extends JFrame {
     private static final class SnapshotResult {
         final JsonObject data;
         final String sha256;
+        final long revision;
 
         SnapshotResult(JsonObject data, String sha256) {
+            this(data, sha256, -1L);
+        }
+
+        SnapshotResult(JsonObject data, String sha256, long revision) {
             this.data = data;
             this.sha256 = sha256 == null ? "" : sha256;
+            this.revision = revision;
+        }
+    }
+
+    private static final class PatchResult {
+        final String sha256;
+        final long revision;
+
+        PatchResult(String sha256, long revision) {
+            this.sha256 = sha256 == null ? "" : sha256;
+            this.revision = revision;
+        }
+    }
+
+    private static final class PatchUnsupportedException extends IOException {
+        PatchUnsupportedException() {
+            super("Telefon ma starszą wersję synchronizacji przyrostowej.");
         }
     }
 
@@ -4879,8 +4901,67 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IOException("Telefon odpowiedział HTTP " + response.statusCode() + ".");
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             validate(root);
+            long revision = -1L;
+            try { revision = state(); } catch (Exception ignored) { }
             return new SnapshotResult(root,
-                response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""));
+                response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""),
+                revision);
+        }
+
+        long state() throws Exception {
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/state"))
+                .timeout(Duration.ofSeconds(4))
+                .header("X-EDHOME-TOKEN", token)
+                .header("Accept", "application/json")
+                .GET().build();
+            HttpResponse<String> response =
+                http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 404) return -1L;
+            if (response.statusCode() == 401)
+                throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon odpowiedział HTTP " + response.statusCode() + ".");
+            JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+            return root.has("revision") ? root.get("revision").getAsLong() : -1L;
+        }
+
+        PatchResult patch(JsonObject patch) throws Exception {
+            String json = GSON.toJson(patch);
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/patch"))
+                .timeout(Duration.ofSeconds(15))
+                .header("X-EDHOME-TOKEN", token)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+                .build();
+            HttpResponse<String> response =
+                http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 404)
+                throw new PatchUnsupportedException();
+            if (response.statusCode() == 409) {
+                String detail = "";
+                try {
+                    JsonObject error = JsonParser.parseString(response.body()).getAsJsonObject();
+                    detail = error.has("table") && error.has("id")
+                        ? " (" + error.get("table").getAsString()
+                            + " #" + error.get("id").getAsString() + ")"
+                        : "";
+                } catch (Exception ignored) { }
+                throw new IOException("Konflikt rekordu" + detail
+                    + " — ten sam element zmienił się na innym urządzeniu.");
+            }
+            if (response.statusCode() == 401)
+                throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon odrzucił zmianę rekordową: HTTP "
+                    + response.statusCode() + ".");
+            String sha = response.headers()
+                .firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse("");
+            long revision = -1L;
+            try { revision = state(); } catch (Exception ignored) { }
+            return new PatchResult(sha, revision);
         }
 
         SnapshotResult write(JsonObject data, String baseSha) throws Exception {
@@ -4907,8 +4988,11 @@ public final class EdhomeDesktop extends JFrame {
                     + response.statusCode() + ".");
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             validate(root);
+            long revision = -1L;
+            try { revision = state(); } catch (Exception ignored) { }
             return new SnapshotResult(root,
-                response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""));
+                response.headers().firstValue("X-EDHOME-SNAPSHOT-SHA256").orElse(""),
+                revision);
         }
 
         static String discover(String token, int port) {
