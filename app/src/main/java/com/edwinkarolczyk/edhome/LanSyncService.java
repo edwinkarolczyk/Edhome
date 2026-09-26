@@ -78,9 +78,21 @@ public final class LanSyncService extends Service {
                 sendBroadcast(new Intent(
                     "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED")
                     .setPackage(getPackageName()));
-            });
+            },
+            this::databaseRevision);
         server.start();
         DiagnosticLog.event("DESKTOP_SYNC_SERVICE_STARTED");
+    }
+
+    private long databaseRevision() {
+        if (db == null) return -1L;
+        try (android.database.Cursor cursor = db.getReadableDatabase()
+                .rawQuery("PRAGMA data_version", null)) {
+            return cursor.moveToFirst() ? cursor.getLong(0) : -1L;
+        } catch (Exception error) {
+            DiagnosticLog.error("DESKTOP_SYNC_DATA_VERSION", error);
+            return -1L;
+        }
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
