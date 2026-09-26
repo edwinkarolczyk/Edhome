@@ -77,3 +77,11 @@ calendar = (root / "desktop/src/main/java/com/edhome/desktop/DesktopCalendarPane
 for marker in ("Pon","Niedz","Poprzedni","Następny","Agenda","Podwójne kliknięcie"):
     assert marker in calendar, f"Missing desktop calendar UI contract: {marker}"
 print("EDHOME Desktop quick tasks + calendar: PASS")
+
+# Desktop must be single-instance.
+for marker in (
+    "desktop-instance.lock", "tryLock()", "OverlappingFileLockException",
+    "EDHOME Desktop jest już uruchomiony", "releaseSingleInstanceLock"
+):
+    assert marker in desktop, f"Missing single-instance contract: {marker}"
+print("EDHOME Desktop single-instance guard: PASS")

@@ -32,6 +32,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -61,7 +65,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.51";
+    private static final String DESKTOP_VERSION = "0.6.0.52";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -73,6 +77,10 @@ public final class EdhomeDesktop extends JFrame {
         + "desktop-beta-latest/EDHOME-Desktop-Beta-Windows.zip";
     private static final Path CACHE = Path.of(System.getProperty("user.home"),
         ".edhome", "desktop-cache.json");
+    private static final Path INSTANCE_LOCK_PATH = Path.of(
+        System.getProperty("user.home"), ".edhome", "desktop-instance.lock");
+    private static FileChannel instanceLockChannel;
+    private static FileLock instanceLock;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Preferences PREFS =
         Preferences.userRoot().node("edhome/desktop-beta");
@@ -108,7 +116,74 @@ public final class EdhomeDesktop extends JFrame {
                 }
             }
         }
-        SwingUtilities.invokeLater(EdhomeDesktop::new);
+
+        if (!acquireSingleInstanceLock()) {
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                null,
+                "EDHOME Desktop jest już uruchomiony.\n"
+                    + "Sprawdź pasek zadań lub ikonę EDHOME obok zegara.",
+                "EDHOME Desktop",
+                JOptionPane.INFORMATION_MESSAGE));
+            return;
+        }
+
+        Runtime.getRuntime().addShutdownHook(new Thread(
+            EdhomeDesktop::releaseSingleInstanceLock,
+            "edhome-single-instance-release"));
+
+        SwingUtilities.invokeLater(() -> {
+            try {
+                new EdhomeDesktop();
+            } catch (Throwable error) {
+                releaseSingleInstanceLock();
+                JOptionPane.showMessageDialog(null,
+                    "Nie udało się uruchomić EDHOME Desktop:\n"
+                        + rootMessage(error),
+                    "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    private static synchronized boolean acquireSingleInstanceLock() {
+        try {
+            Files.createDirectories(INSTANCE_LOCK_PATH.getParent());
+            instanceLockChannel = FileChannel.open(INSTANCE_LOCK_PATH,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            try {
+                instanceLock = instanceLockChannel.tryLock();
+            } catch (OverlappingFileLockException alreadyLocked) {
+                instanceLock = null;
+            }
+            if (instanceLock == null) {
+                try { instanceLockChannel.close(); } catch (Exception ignored) { }
+                instanceLockChannel = null;
+                return false;
+            }
+            return true;
+        } catch (Exception error) {
+            try {
+                if (instanceLockChannel != null) instanceLockChannel.close();
+            } catch (Exception ignored) { }
+            instanceLockChannel = null;
+            instanceLock = null;
+            JOptionPane.showMessageDialog(null,
+                "Nie można sprawdzić blokady pojedynczej instancji EDHOME.\n"
+                    + "Program nie zostanie uruchomiony, aby nie otworzyć dwóch kopii.\n\n"
+                    + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private static synchronized void releaseSingleInstanceLock() {
+        if (instanceLock != null) {
+            try { instanceLock.release(); } catch (Exception ignored) { }
+            instanceLock = null;
+        }
+        if (instanceLockChannel != null) {
+            try { instanceLockChannel.close(); } catch (Exception ignored) { }
+            instanceLockChannel = null;
+        }
     }
 
     private EdhomeDesktop() {
@@ -2438,6 +2513,7 @@ public final class EdhomeDesktop extends JFrame {
             catch (Exception ignored) { }
         }
         dispose();
+        releaseSingleInstanceLock();
         System.exit(0);
     }
 

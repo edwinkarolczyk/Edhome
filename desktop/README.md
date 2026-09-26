@@ -103,6 +103,12 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - kalendarz pokazuje również terminy OC i przeglądów pojazdów,
 - druk kalendarza pozostaje dostępny.
 
+### Jedna instancja Desktop
+- Windows może uruchomić tylko jedną instancję EDHOME Desktop dla danego użytkownika,
+- druga próba uruchomienia pokazuje komunikat, że EDHOME już działa i kończy drugi proces,
+- blokada korzysta z systemowego locka pliku `~/.edhome/desktop-instance.lock`,
+- lock jest zwalniany przy zamknięciu procesu, również po awarii systemowej/JVM; sam plik może pozostać, ale bez aktywnego locka nie blokuje kolejnego uruchomienia.
+
 ## Braki do pełnej zgodności z APK
 
 Poniższe elementy nadal wymagają domknięcia, mimo że zatwierdzony pakiet Desktop 0.6.0.49 jest już funkcjonalny.
