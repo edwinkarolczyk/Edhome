@@ -85,3 +85,13 @@ for marker in (
 ):
     assert marker in desktop, f"Missing single-instance contract: {marker}"
 print("EDHOME Desktop single-instance guard: PASS")
+
+# Annual waste schedule wizard.
+for marker in (
+    "showWasteYearWizard", "Roczny kreator odpadów",
+    "Styczeń", "parseWasteMonthDays", "WasteScheduleEntry",
+    "Wpisuję daty ODBIORU", "Wpisuję bezpośrednio daty WYSTAWIENIA",
+    "Pomiń miesiąc", "← Wstecz"
+):
+    assert marker in desktop, f"Missing annual waste wizard contract: {marker}"
+print("EDHOME Desktop annual waste wizard: PASS")

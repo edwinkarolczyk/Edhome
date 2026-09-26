@@ -56,3 +56,18 @@ assert 'DATABASE_MIGRATED_34_TO_35_NFC_LINKS' in main
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
 assert 'DB_VERSION = 35' in backup
 assert '{"nfc_links"' in backup
+
+# Incremental record sync v1.
+assert '"/patch"' in server
+assert '"edhome-record-patch"' in server
+assert 'RevisionProvider' in server
+assert 'DESKTOP_SYNC_PATCH_WRITTEN' in server
+assert 'DESKTOP_SYNC_PATCH_CONFLICT' in server
+assert 'PRAGMA data_version' in service
+assert 'buildRecordPatch' in desktop
+assert 'baseRowSha256' in desktop
+assert 'PatchUnsupportedException' in desktop
+assert 'new javax.swing.Timer(1500' in desktop
+assert '180000L' in desktop
+assert 'ZAPISANO LOKALNIE' in desktop
+print("desktop incremental sync contract OK")

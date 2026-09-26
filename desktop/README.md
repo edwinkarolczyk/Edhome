@@ -109,6 +109,26 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - blokada korzysta z systemowego locka pliku `~/.edhome/desktop-instance.lock`,
 - lock jest zwalniany przy zamknięciu procesu, również po awarii systemowej/JVM; sam plik może pozostać, ale bez aktywnego locka nie blokuje kolejnego uruchomienia.
 
+### Synchronizacja przyrostowa 0.6.0.53
+- zmiana na PC jest zapisywana do lokalnego cache natychmiast,
+- po około 1,5 s bez kolejnej edycji Desktop wysyła tylko zmienione rekordy,
+- każda operacja rekordowa zawiera hash wersji bazowej konkretnego rekordu,
+- równoległe zmiany różnych rekordów mogą zostać scalone bez globalnego konfliktu,
+- równoległa zmiana tego samego rekordu kończy się konfliktem zamiast cichego nadpisania,
+- Desktop wykonuje lekki heartbeat stanu Androida co 10 s,
+- pełne pojednanie danych pozostaje zabezpieczeniem wykonywanym co około 3 minuty,
+- starszy Android lub zmiany nieobsługiwane rekordowo automatycznie korzystają z dotychczasowego bezpiecznego snapshotu.
+
+### Roczny kreator odpadów
+- kreator prowadzi miesiąc po miesiącu od stycznia do grudnia,
+- obsługuje: Zmieszane, Metale i tworzywa, Papier, Szkło, Bio i Inne,
+- w jednym miesiącu można podać kilka terminów tej samej frakcji, np. `5, 19`,
+- można cofać się do poprzedniego miesiąca lub pominąć miesiąc,
+- na początku wybiera się tryb: daty odbioru albo daty wystawienia,
+- przy datach odbioru EDHOME automatycznie wylicza dzień wystawienia o wybraną liczbę dni wcześniej,
+- końcowe podsumowanie zapisuje cały rok do Czynności i Kalendarza,
+- istniejące identyczne terminy są pomijane, aby nie tworzyć duplikatów.
+
 ## Braki do pełnej zgodności z APK
 
 Poniższe elementy nadal wymagają domknięcia, mimo że zatwierdzony pakiet Desktop 0.6.0.49 jest już funkcjonalny.
