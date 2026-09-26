@@ -2370,6 +2370,9 @@ public final class EdhomeDesktop extends JFrame {
                     SnapshotResult result = get();
                     snapshot = result.data;
                     snapshotHash = result.sha256;
+                    syncedSnapshot = snapshot.deepCopy();
+                    phoneRevision = result.revision;
+                    lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
                     dirty = false;
                     validate(snapshot);
@@ -4455,6 +4458,9 @@ public final class EdhomeDesktop extends JFrame {
                     SnapshotResult result = get();
                     snapshot = result.data;
                     snapshotHash = result.sha256;
+                    syncedSnapshot = snapshot.deepCopy();
+                    phoneRevision = result.revision;
+                    lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
                     dirty = false;
                     validate(snapshot);
