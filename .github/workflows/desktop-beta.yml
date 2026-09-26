@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.6.0.48"
+  DESKTOP_VERSION: "0.6.0.49"
 
 on:
   push:
@@ -11,6 +11,7 @@ on:
       - "settings.gradle"
       - "build.gradle"
       - ".github/workflows/desktop-beta.yml"
+      - "tests/check_desktop_approved_scope.py"
   workflow_dispatch:
 
 jobs:
@@ -30,6 +31,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+      - name: Desktop approved-scope contract
+        run: python tests/check_desktop_approved_scope.py
       - name: Compile and install distribution
         run: gradle --no-daemon :desktop:clean :desktop:installDist
       - name: Build Windows app image
