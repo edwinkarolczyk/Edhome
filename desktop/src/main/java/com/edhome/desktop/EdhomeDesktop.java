@@ -1398,7 +1398,6 @@ public final class EdhomeDesktop extends JFrame {
             } else return;
             markDirty();
             showSection(current);
-            return true;
         } catch (Exception error) {
             JOptionPane.showMessageDialog(this, rootMessage(error),
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
@@ -1675,6 +1674,7 @@ public final class EdhomeDesktop extends JFrame {
                 applyEditor(row, entry.getKey(), entry.getValue());
             markDirty();
             showSection(current);
+            return true;
         } catch (Exception error) {
             JOptionPane.showMessageDialog(this,
                 "Nie zapisano zmiany: " + rootMessage(error),
