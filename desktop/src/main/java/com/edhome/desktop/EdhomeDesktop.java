@@ -1572,9 +1572,294 @@ public final class EdhomeDesktop extends JFrame {
             if ("waste".equalsIgnoreCase(value(row,"task_kind"))
                     || !value(row,"waste_fraction").isBlank()) filtered.add(row);
         }
-        return tablePage("Odpady", filtered,
+
+        JPanel wrapper = new JPanel(new BorderLayout(0, 10));
+        wrapper.setBackground(APP_BG);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actions.setBackground(APP_BG);
+        JButton year = actionButton("🗓 Roczny kreator odpadów");
+        year.addActionListener(e -> showWasteYearWizard());
+        actions.add(year);
+        JLabel hint = new JLabel(
+            "Styczeń → grudzień • kilka frakcji i kilka terminów w miesiącu");
+        hint.setForeground(APP_MUTED);
+        actions.add(hint);
+        wrapper.add(actions, BorderLayout.NORTH);
+        wrapper.add(tablePage("Odpady", filtered,
             cols("Frakcja","waste_fraction","Termin","due_date","Wystawione","done",
-                 "Przypomnienie","remind_time"));
+                 "Przypomnienie","remind_time")), BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private void showWasteYearWizard() {
+        JSpinner year = new JSpinner(new SpinnerNumberModel(
+            LocalDate.now().getYear(), 2020, 2100, 1));
+        JComboBox<Choice> mode = new JComboBox<>(new Choice[]{
+            new Choice("pickup", "Wpisuję daty ODBIORU — EDHOME wyliczy dzień wystawienia"),
+            new Choice("putout", "Wpisuję bezpośrednio daty WYSTAWIENIA")
+        });
+        JSpinner leadDays = new JSpinner(new SpinnerNumberModel(1, 0, 7, 1));
+        JLabel leadLabel = new JLabel("Wystaw ile dni przed odbiorem:");
+        mode.addActionListener(e -> {
+            Choice selected = (Choice) mode.getSelectedItem();
+            boolean pickup = selected != null && "pickup".equals(selected.value);
+            leadDays.setEnabled(pickup);
+            leadLabel.setEnabled(pickup);
+        });
+
+        JPanel start = new JPanel(new GridLayout(0, 2, 8, 8));
+        start.add(new JLabel("Rok harmonogramu:")); start.add(year);
+        start.add(new JLabel("Jakie daty wpisujesz:")); start.add(mode);
+        start.add(leadLabel); start.add(leadDays);
+
+        int setup = JOptionPane.showConfirmDialog(this, start,
+            "EDHOME • roczny kreator odpadów",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (setup != JOptionPane.OK_OPTION) return;
+
+        int selectedYear = ((Number) year.getValue()).intValue();
+        Choice selectedMode = (Choice) mode.getSelectedItem();
+        boolean pickupMode = selectedMode != null
+            && "pickup".equals(selectedMode.value);
+        int lead = pickupMode ? ((Number) leadDays.getValue()).intValue() : 0;
+
+        String[] keys = {"mixed","plastic","paper","glass","bio","other"};
+        String[] labels = {
+            "Zmieszane", "Metale i tworzywa", "Papier", "Szkło", "Bio", "Inne"
+        };
+        java.util.Map<Integer,java.util.Map<String,String>> months =
+            new java.util.LinkedHashMap<>();
+
+        int month = 1;
+        while (month <= 12) {
+            java.time.YearMonth ym = java.time.YearMonth.of(selectedYear, month);
+            String monthName = capitalizeMonth(ym.getMonth()
+                .getDisplayName(java.time.format.TextStyle.FULL,
+                    Locale.forLanguageTag("pl-PL")));
+
+            java.util.Map<String,String> saved =
+                months.getOrDefault(month, new java.util.LinkedHashMap<>());
+            JCheckBox[] enabled = new JCheckBox[keys.length];
+            JTextField[] days = new JTextField[keys.length];
+
+            JPanel panel = new JPanel(new GridBagLayout());
+            GridBagConstraints g = new GridBagConstraints();
+            g.insets = new Insets(4, 4, 4, 4);
+            g.fill = GridBagConstraints.HORIZONTAL;
+            g.weightx = 1;
+
+            JLabel title = new JLabel("<html><b>" + monthName + " "
+                + selectedYear + "</b><br>Podaj dni "
+                + (pickupMode ? "odbioru" : "wystawienia")
+                + ". Możesz wpisać kilka, np. <b>5, 19</b>.</html>");
+            g.gridx=0; g.gridy=0; g.gridwidth=2;
+            panel.add(title, g);
+
+            for (int i=0; i<keys.length; i++) {
+                String prior = saved.getOrDefault(keys[i], "");
+                enabled[i] = new JCheckBox(labels[i], !prior.isBlank());
+                days[i] = new JTextField(prior, 14);
+                days[i].setEnabled(enabled[i].isSelected());
+                final int index = i;
+                enabled[i].addActionListener(e ->
+                    days[index].setEnabled(enabled[index].isSelected()));
+
+                g.gridy=i+1; g.gridwidth=1; g.gridx=0;
+                panel.add(enabled[i], g);
+                g.gridx=1;
+                panel.add(days[i], g);
+            }
+
+            Object[] options = month == 1
+                ? new Object[]{"Dalej →", "Pomiń miesiąc", "Anuluj"}
+                : new Object[]{"← Wstecz", "Dalej →", "Pomiń miesiąc", "Anuluj"};
+            int action = JOptionPane.showOptionDialog(this, panel,
+                "Odpady " + selectedYear + " • " + monthName + " • "
+                    + month + "/12",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                null, options, options[month == 1 ? 0 : 1]);
+            if (action < 0 || "Anuluj".equals(String.valueOf(options[action]))) return;
+            String chosen = String.valueOf(options[action]);
+
+            if ("← Wstecz".equals(chosen)) {
+                month = Math.max(1, month - 1);
+                continue;
+            }
+            if ("Pomiń miesiąc".equals(chosen)) {
+                months.remove(month);
+                month++;
+                continue;
+            }
+
+            java.util.Map<String,String> entered = new java.util.LinkedHashMap<>();
+            boolean invalid = false;
+            for (int i=0; i<keys.length; i++) {
+                if (!enabled[i].isSelected()) continue;
+                String raw = days[i].getText().trim();
+                try {
+                    parseWasteMonthDays(selectedYear, month, raw);
+                    entered.put(keys[i], raw);
+                } catch (Exception error) {
+                    JOptionPane.showMessageDialog(this,
+                        labels[i] + ": " + rootMessage(error),
+                        "EDHOME • " + monthName, JOptionPane.WARNING_MESSAGE);
+                    invalid = true;
+                    break;
+                }
+            }
+            if (invalid) continue;
+            if (entered.isEmpty()) months.remove(month);
+            else months.put(month, entered);
+            month++;
+        }
+
+        java.util.List<WasteScheduleEntry> schedule = new ArrayList<>();
+        for (java.util.Map.Entry<Integer,java.util.Map<String,String>> monthEntry
+                : months.entrySet()) {
+            int monthNumber = monthEntry.getKey();
+            for (int i=0; i<keys.length; i++) {
+                String raw = monthEntry.getValue().get(keys[i]);
+                if (raw == null || raw.isBlank()) continue;
+                for (int day : parseWasteMonthDays(selectedYear, monthNumber, raw)) {
+                    LocalDate entered = LocalDate.of(selectedYear, monthNumber, day);
+                    LocalDate putOut = pickupMode ? entered.minusDays(lead) : entered;
+                    schedule.add(new WasteScheduleEntry(
+                        keys[i], labels[i], entered, putOut, pickupMode));
+                }
+            }
+        }
+        schedule.sort(java.util.Comparator.comparing(entry -> entry.putOutDate));
+
+        if (schedule.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Nie podano żadnego terminu odpadów.");
+            return;
+        }
+
+        StringBuilder summary = new StringBuilder();
+        summary.append("Rok: ").append(selectedYear)
+            .append("\nTerminy: ").append(schedule.size())
+            .append("\nTryb: ")
+            .append(pickupMode
+                ? "daty odbioru → wystawienie " + lead + " dni wcześniej"
+                : "daty wystawienia")
+            .append("\n\n");
+        for (int i=0; i<Math.min(22, schedule.size()); i++) {
+            WasteScheduleEntry entry = schedule.get(i);
+            summary.append("• ")
+                .append(entry.putOutDate.format(DateTimeFormatter.ofPattern("dd.MM")))
+                .append(" • ").append(entry.label);
+            if (entry.pickupMode)
+                summary.append(" • odbiór ")
+                    .append(entry.enteredDate.format(
+                        DateTimeFormatter.ofPattern("dd.MM")));
+            summary.append('\n');
+        }
+        if (schedule.size() > 22)
+            summary.append("… i ").append(schedule.size() - 22)
+                .append(" kolejnych terminów\n");
+
+        int save = JOptionPane.showConfirmDialog(this,
+            summary + "\nZapisać cały harmonogram do Czynności i Kalendarza?",
+            "EDHOME • odpady " + selectedYear,
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (save != JOptionPane.YES_OPTION) return;
+
+        int added = 0, duplicates = 0;
+        for (WasteScheduleEntry entry : schedule) {
+            String due = entry.putOutDate.toString();
+            if (wasteTaskExists(entry.fraction, due)) {
+                duplicates++;
+                continue;
+            }
+            JsonObject task = newRowTemplate("tasks");
+            task.addProperty("id", nextId("tasks"));
+            task.addProperty("title", "Wystaw: " + entry.label
+                + (entry.pickupMode
+                    ? " • odbiór "
+                        + entry.enteredDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                    : ""));
+            task.addProperty("done", 0);
+            task.addProperty("due_date", due);
+            task.addProperty("repeat_rule", "once");
+            task.addProperty("repeat_every", 1);
+            task.addProperty("priority", "normal");
+            task.addProperty("duration_minutes", 5);
+            task.addProperty("task_kind", "waste");
+            task.addProperty("waste_fraction", entry.fraction);
+            task.add("remind_time", com.google.gson.JsonNull.INSTANCE);
+            task.addProperty("reminder_lead_days", 0);
+            table("tasks").add(task);
+            added++;
+        }
+
+        if (added > 0) markDirty();
+        showSection("Odpady");
+        JOptionPane.showMessageDialog(this,
+            "Dodano terminów: " + added
+                + (duplicates > 0 ? "\nPominięto istniejące: " + duplicates : "")
+                + "\n\nHarmonogram jest widoczny także w Kalendarzu.",
+            "EDHOME • odpady " + selectedYear,
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static java.util.List<Integer> parseWasteMonthDays(
+            int year, int month, String raw) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.isBlank())
+            throw new IllegalArgumentException("Wpisz co najmniej jeden dzień miesiąca.");
+        int max = java.time.YearMonth.of(year, month).lengthOfMonth();
+        java.util.Set<Integer> unique = new java.util.TreeSet<>();
+        for (String token : text.split("[,;\\s]+")) {
+            if (token.isBlank()) continue;
+            int day;
+            try { day = Integer.parseInt(token); }
+            catch (NumberFormatException invalid) {
+                throw new IllegalArgumentException(
+                    "Wpisuj numery dni, np. 5, 19.");
+            }
+            if (day < 1 || day > max)
+                throw new IllegalArgumentException(
+                    "Dzień " + day + " nie istnieje w tym miesiącu.");
+            unique.add(day);
+        }
+        if (unique.isEmpty())
+            throw new IllegalArgumentException("Wpisz co najmniej jeden dzień miesiąca.");
+        return new ArrayList<>(unique);
+    }
+
+    private boolean wasteTaskExists(String fraction, String dueDate) {
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if ("waste".equals(value(row, "task_kind"))
+                    && fraction.equals(value(row, "waste_fraction"))
+                    && dueDate.equals(value(row, "due_date")))
+                return true;
+        }
+        return false;
+    }
+
+    private static String capitalizeMonth(String text) {
+        if (text == null || text.isBlank()) return "";
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
+    }
+
+    private static final class WasteScheduleEntry {
+        final String fraction;
+        final String label;
+        final LocalDate enteredDate;
+        final LocalDate putOutDate;
+        final boolean pickupMode;
+
+        WasteScheduleEntry(String fraction, String label, LocalDate enteredDate,
+                LocalDate putOutDate, boolean pickupMode) {
+            this.fraction = fraction;
+            this.label = label;
+            this.enteredDate = enteredDate;
+            this.putOutDate = putOutDate;
+            this.pickupMode = pickupMode;
+        }
     }
 
 
