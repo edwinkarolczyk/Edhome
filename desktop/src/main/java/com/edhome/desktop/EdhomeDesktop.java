@@ -65,7 +65,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.52";
+    private static final String DESKTOP_VERSION = "0.6.0.53";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -94,7 +94,12 @@ public final class EdhomeDesktop extends JFrame {
     private final JPanel content = new JPanel(new BorderLayout());
     private final JLabel connection = new JLabel("OFFLINE • lokalna kopia");
     private JsonObject snapshot;
+    private JsonObject syncedSnapshot;
     private String snapshotHash = "";
+    private long phoneRevision = -1L;
+    private long lastFullReconcileAt;
+    private long localEditGeneration;
+    private boolean stateChecking;
     private boolean dirty;
     private boolean connected;
     private boolean connecting;
@@ -2398,19 +2403,60 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void startReconnectLoop() {
-        reconnectTimer = new javax.swing.Timer(30000, e -> {
-            if (connecting || autoSaving || editingDialog) return;
-            if (dirty && PREFS.getBoolean("autoWrite", true))
+        reconnectTimer = new javax.swing.Timer(10000, e -> {
+            if (connecting || autoSaving || editingDialog || stateChecking) return;
+            if (dirty && PREFS.getBoolean("autoWrite", true)) {
                 saveChangesToPhone(null, true);
-            else if (PREFS.getBoolean("autoConnect", true) && !dirty)
+                return;
+            }
+            if (!PREFS.getBoolean("autoConnect", true) || dirty) return;
+            if (!connected) {
                 autoConnectSaved(true);
+                return;
+            }
+            checkPhoneState();
         });
-        reconnectTimer.setInitialDelay(30000);
+        reconnectTimer.setInitialDelay(10000);
         reconnectTimer.start();
     }
 
+    private void checkPhoneState() {
+        if (stateChecking || connecting || autoSaving || dirty || editingDialog) return;
+        String host = PREFS.get("phoneIp", "").trim();
+        String secret = PREFS.get("token", "").trim();
+        if (host.isBlank() || secret.isBlank()) return;
+
+        long now = System.currentTimeMillis();
+        if (lastFullReconcileAt > 0 && now - lastFullReconcileAt >= 180000L) {
+            pullFromPhone(host, secret, null, true);
+            return;
+        }
+
+        stateChecking = true;
+        new SwingWorker<Long,Void>() {
+            @Override protected Long doInBackground() throws Exception {
+                return new LanClient(host, PORT, secret).state();
+            }
+            @Override protected void done() {
+                stateChecking = false;
+                try {
+                    long revision = get();
+                    if (revision < 0) return; // starszy Android: pełna kontrola co 3 min
+                    if (phoneRevision >= 0 && revision != phoneRevision) {
+                        phoneRevision = revision;
+                        pullFromPhone(host, secret, null, true);
+                    } else {
+                        phoneRevision = revision;
+                    }
+                } catch (Exception ignored) {
+                    // Lekki heartbeat nie zmienia stanu offline. Pełny reconnect zrobi pętla.
+                }
+            }
+        }.execute();
+    }
+
     private void startAutoSaveLoop() {
-        autoSaveTimer = new javax.swing.Timer(1200, e -> {
+        autoSaveTimer = new javax.swing.Timer(1500, e -> {
             if (PREFS.getBoolean("autoWrite", true) && dirty)
                 saveChangesToPhone(null, true);
         });
@@ -2421,15 +2467,21 @@ public final class EdhomeDesktop extends JFrame {
         if (!PREFS.getBoolean("autoWrite", true) || autoSaveTimer == null) return;
         autoSaveTimer.restart();
         connection.setText(connected
-            ? "ONLINE • zmiana czeka na auto-zapis"
-            : "OFFLINE • zmiana czeka na telefon");
+            ? "ZAPISANO LOKALNIE • synchronizacja za chwilę"
+            : "ZAPISANO LOKALNIE • czeka na telefon");
     }
 
     private void markDirty() {
         dirty = true;
+        localEditGeneration++;
+        try {
+            if (snapshot != null) saveCache(snapshot);
+        } catch (Exception error) {
+            connection.setText("BŁĄD • nie zapisano lokalnej kopii");
+        }
         scheduleAutoSave();
         if (!PREFS.getBoolean("autoWrite", true))
-            connection.setText("ONLINE • niezapisane zmiany z PC");
+            connection.setText("ZAPISANO LOKALNIE • synchronizacja ręczna");
     }
 
     private void initTray() {
