@@ -73,15 +73,27 @@ public final class LanSyncService extends Service {
             () -> DataBackup.exportJson(db.getReadableDatabase(), prefs),
             json -> {
                 DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
-                ReminderReceiver.schedule(this);
-                DeviceTimerReceiver.scheduleAll(this);
-                sendBroadcast(new Intent(
-                    "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED")
-                    .setPackage(getPackageName()));
+                afterDataChange();
             },
-            this::databaseRevision);
+            this::databaseRevision,
+            this::applyRecordPatch);
         server.start();
         DiagnosticLog.event("DESKTOP_SYNC_SERVICE_STARTED");
+    }
+
+    private String applyRecordPatch(String incoming) throws Exception {
+        String result = SyncRecordStore.applyPatch(
+            db.getWritableDatabase(), incoming);
+        afterDataChange();
+        return result;
+    }
+
+    private void afterDataChange() {
+        ReminderReceiver.schedule(this);
+        DeviceTimerReceiver.scheduleAll(this);
+        sendBroadcast(new Intent(
+            "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED")
+            .setPackage(getPackageName()));
     }
 
     private long databaseRevision() {
