@@ -3,8 +3,6 @@ package com.edwinkarolczyk.edhome;
 import android.content.SharedPreferences;
 import android.util.Base64;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.BufferedWriter;
 import java.io.InputStream;
@@ -18,14 +16,8 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /** Beta-only local-LAN endpoint for EDHOME Desktop with guarded incremental writes. */
 final class LanSyncServer {
@@ -294,142 +286,6 @@ final class LanSyncServer {
             reply(peer, 405, "{\"error\":\"METHOD_NOT_ALLOWED\"}");
         } catch (Exception error) {
             DiagnosticLog.error("DESKTOP_SYNC_CLIENT", error);
-        }
-    }
-
-    @Deprecated
-    private int applyRecordPatch(String incoming) throws Exception {
-        JSONObject patch = new JSONObject(incoming);
-        if (!"edhome-record-patch".equals(patch.optString("format"))
-                || patch.optInt("version", -1) != 1)
-            throw new IllegalArgumentException("Nieobsługiwany format patcha.");
-        JSONArray ops = patch.optJSONArray("operations");
-        if (ops == null || ops.length() < 1 || ops.length() > MAX_PATCH_OPS)
-            throw new IllegalArgumentException("Patch musi zawierać 1–" + MAX_PATCH_OPS + " operacji.");
-
-        String current = provider.snapshot();
-        JSONObject root = new JSONObject(current);
-        JSONObject tables = root.optJSONObject("tables");
-        if (tables == null) throw new IllegalArgumentException("Brak tabel w snapshotcie.");
-
-        Set<String> touched = new HashSet<>();
-        for (int i = 0; i < ops.length(); i++) {
-            JSONObject op = ops.optJSONObject(i);
-            if (op == null) throw new IllegalArgumentException("Operacja #" + i + " nie jest obiektem.");
-
-            String table = op.optString("table", "");
-            String id = op.optString("id", "");
-            String action = op.optString("action", "");
-            String base = op.optString("baseRowSha256", "");
-            if (table.isEmpty() || table.length() > 80
-                    || id.isEmpty() || id.length() > 80
-                    || !("upsert".equals(action) || "delete".equals(action))
-                    || !("ABSENT".equals(base) || base.matches("[0-9a-f]{64}")))
-                throw new IllegalArgumentException("Nieprawidłowa operacja patcha #" + i + ".");
-            if (!touched.add(table + "\u0000" + id))
-                throw new IllegalArgumentException("Ten sam rekord występuje w patchu więcej niż raz.");
-            if (!tables.has(table) || !(tables.opt(table) instanceof JSONArray))
-                throw new IllegalArgumentException("Nieznana tabela: " + table);
-
-            JSONArray rows = tables.getJSONArray(table);
-            int index = findRow(rows, id);
-            String actual = index < 0 ? "ABSENT" : rowHash(rows.getJSONObject(index));
-            if (!sameBase(base, actual)) throw new RowConflict(table, id);
-
-            if ("delete".equals(action)) {
-                if (index >= 0) rows.remove(index);
-                continue;
-            }
-
-            JSONObject row = op.optJSONObject("row");
-            if (row == null || !id.equals(rowId(row)))
-                throw new IllegalArgumentException("ID rekordu nie zgadza się z operacją.");
-            if (row.toString().getBytes(StandardCharsets.UTF_8).length > 256 * 1024)
-                throw new IllegalArgumentException("Rekord patcha jest za duży.");
-            if (index < 0) rows.put(row);
-            else rows.put(index, row);
-        }
-
-        restoreProvider.restore(root.toString());
-        return ops.length();
-    }
-
-    private static int findRow(JSONArray rows, String id) {
-        for (int i = 0; i < rows.length(); i++) {
-            JSONObject row = rows.optJSONObject(i);
-            if (row != null && id.equals(rowId(row))) return i;
-        }
-        return -1;
-    }
-
-    private static String rowId(JSONObject row) {
-        Object value = row.opt("id");
-        if (value == null || value == JSONObject.NULL) return "";
-        if (value instanceof Number) {
-            try {
-                return new java.math.BigDecimal(value.toString())
-                    .stripTrailingZeros().toPlainString();
-            } catch (Exception ignored) { }
-        }
-        return String.valueOf(value);
-    }
-
-    private static boolean sameBase(String expected, String actual) {
-        if ("ABSENT".equals(expected) || "ABSENT".equals(actual))
-            return expected.equals(actual);
-        return constantTimeEquals(expected, actual);
-    }
-
-    private static String rowHash(JSONObject row) throws Exception {
-        return sha256(canonical(row));
-    }
-
-    private static String canonical(Object value) throws Exception {
-        if (value == null || value == JSONObject.NULL) return "null";
-        if (value instanceof JSONObject) {
-            JSONObject object = (JSONObject) value;
-            List<String> keys = new ArrayList<>();
-            Iterator<String> iterator = object.keys();
-            while (iterator.hasNext()) keys.add(iterator.next());
-            keys.sort(Comparator.naturalOrder());
-            StringBuilder out = new StringBuilder("{");
-            for (int i = 0; i < keys.size(); i++) {
-                if (i > 0) out.append(',');
-                String key = keys.get(i);
-                out.append(JSONObject.quote(key)).append(':')
-                    .append(canonical(object.get(key)));
-            }
-            return out.append('}').toString();
-        }
-        if (value instanceof JSONArray) {
-            JSONArray array = (JSONArray) value;
-            StringBuilder out = new StringBuilder("[");
-            for (int i = 0; i < array.length(); i++) {
-                if (i > 0) out.append(',');
-                out.append(canonical(array.get(i)));
-            }
-            return out.append(']').toString();
-        }
-        if (value instanceof Number) {
-            try {
-                java.math.BigDecimal number = new java.math.BigDecimal(value.toString());
-                if (number.compareTo(java.math.BigDecimal.ZERO) == 0) return "0";
-                return number.stripTrailingZeros().toPlainString();
-            } catch (Exception ignored) {
-                return String.valueOf(value);
-            }
-        }
-        if (value instanceof Boolean) return value.toString();
-        return JSONObject.quote(String.valueOf(value));
-    }
-
-    private static final class RowConflict extends Exception {
-        final String table;
-        final String id;
-        RowConflict(String table, String id) {
-            super(table + "#" + id);
-            this.table = table;
-            this.id = id;
         }
     }
 
