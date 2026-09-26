@@ -2211,6 +2211,11 @@ public final class EdhomeDesktop extends JFrame {
             labels.addActionListener(e -> showBulkQrLabels(tableName, rows));
             actions.add(labels);
         }
+        if (printableReportTitle(title)) {
+            JButton print = actionButton("🖨 Drukuj");
+            print.addActionListener(e -> printTableReport(title, rows, columns));
+            actions.add(print);
+        }
         actions.add(reload);
         actions.add(save);
         footer.add(count, BorderLayout.WEST);
@@ -2269,6 +2274,46 @@ public final class EdhomeDesktop extends JFrame {
         }
         card.add(details, BorderLayout.CENTER);
         return card;
+    }
+
+    private static boolean printableReportTitle(String title) {
+        return title != null && (title.startsWith("Kalendarz")
+            || title.startsWith("Zadania") || title.startsWith("Czynności"));
+    }
+
+    private void printTableReport(String title, JsonArray rows, String[][] columns) {
+        try {
+            byte[] pdf = DesktopReportPdf.table(title, rows, columns);
+            DesktopQrLabels.showPreview(this, pdf);
+
+            String[] printers = DesktopQrLabels.printerNames();
+            if (printers.length == 0) {
+                JOptionPane.showMessageDialog(this,
+                    "Windows nie widzi żadnej drukarki.",
+                    "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            JComboBox<String> printer = new JComboBox<>(printers);
+            String remembered = PREFS.get("reportPrinter", "");
+            if (!remembered.isBlank()) printer.setSelectedItem(remembered);
+            JSpinner copies = new JSpinner(new SpinnerNumberModel(1,1,20,1));
+            JPanel form = new JPanel(new GridLayout(0,2,8,8));
+            form.add(new JLabel("Drukarka:")); form.add(printer);
+            form.add(new JLabel("Liczba kopii:")); form.add(copies);
+            int ok = JOptionPane.showConfirmDialog(this, form,
+                "Drukuj • " + title, JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+            if (ok != JOptionPane.OK_OPTION) return;
+
+            String selected = String.valueOf(printer.getSelectedItem());
+            PREFS.put("reportPrinter", selected);
+            DesktopQrLabels.print(pdf, selected,
+                ((Number)copies.getValue()).intValue());
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie wydrukowano raportu:\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private DesktopQrLabels.Label qrLabel(String tableName, JsonObject row) {
