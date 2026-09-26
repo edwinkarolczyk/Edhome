@@ -5,6 +5,7 @@ server = (root / "app/src/main/java/com/edwinkarolczyk/edhome/LanSyncServer.java
 main = (root / "app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 service = (root / "app/src/main/java/com/edwinkarolczyk/edhome/LanSyncService.java").read_text(encoding="utf-8")
 desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").read_text(encoding="utf-8")
+sync_store = (root / "app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 
 assert '"/snapshot"' in server
 assert '"X-EDHOME-TOKEN"' in desktop
@@ -57,7 +58,7 @@ backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").
 assert 'DB_VERSION = 36' in backup
 assert '{"nfc_links"' in backup
 
-# Incremental record sync v1.
+# Incremental record sync v2 + backward-compatible v1.
 assert '"/patch"' in server
 assert '"edhome-record-patch"' in server
 assert 'RevisionProvider' in server
@@ -71,3 +72,30 @@ assert 'new javax.swing.Timer(1500' in desktop
 assert '180000L' in desktop
 assert 'ZAPISANO LOKALNIE' in desktop
 print("desktop incremental sync contract OK")
+
+# Hardening: direct SQLite patching, UUID identity, revisions and tombstones.
+patch_handler = server.split('if ("POST".equals(method) && "/patch".equals(path))',1)[1].split(
+    'if ("POST".equals(method) && "/snapshot".equals(path))',1)[0]
+assert 'patchProvider.patch(incoming)' in patch_handler
+assert 'restoreProvider.restore' not in patch_handler
+assert 'applyRecordPatch(incoming)' not in patch_handler
+assert 'SyncRecordStore.applyPatch' in service
+
+for token in (
+    'sync_records', 'sync_uuid', 'revision', 'updated_at', 'deleted_at',
+    'row_hash', 'UUID.randomUUID()', 'applyPatch(SQLiteDatabase db',
+    'db.update(', 'db.delete(', 'insertOrThrow', 'baseRevision',
+    'SyncConflict'
+):
+    assert token in sync_store, "Missing hardened sync contract: "+token
+
+assert 'DATABASE_MIGRATED_35_TO_36_SYNC_RECORDS' in main
+assert 'SyncRecordStore.create(database)' in main
+assert 'syncRecords' in backup
+assert 'SyncRecordStore.restoreMetadata' in backup
+assert 'payload.addProperty("version", 2)' in desktop
+assert 'syncUuid' in desktop and 'baseRevision' in desktop and 'rowKey' in desktop
+assert 'ensureDesktopSyncMetadata' in desktop
+assert 'applyPatchAck' in desktop
+assert '1_000_000_000_000L' in desktop
+print("desktop sync v2 hardening contract OK")
