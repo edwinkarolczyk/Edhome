@@ -2,6 +2,18 @@
 
 Desktopowy klient EDHOME dla Windows.
 
+## Zasada technologiczna
+
+Desktop ma być **funkcjonalny, wygodny i zgodny z EDHOME**, ale nie ma obowiązku pozostać aplikacją javową. Java/Swing jest obecną implementacją, a nie ograniczeniem architektury. Jeżeli inna technologia zapewni lepszą obsługę Windows, urządzeń, aparatu, NFC, drukowania lub interfejsu, klient Desktop może zostać przeniesiony bez zmiany kontraktu danych Android ↔ PC.
+
+Sprzęt dostępny przy komputerze jest częścią funkcji Desktop. EDHOME PC ma obsługiwać skanowanie, gdy użytkownik podłączy odpowiednie urządzenie:
+- skaner kodów/QR USB lub bezprzewodowy działający jak klawiatura,
+- QR i kody z obrazu/zrzutu ekranu,
+- czytnik NFC zgodny z Windows PC/SC,
+- docelowo także bezpośrednią kamerę/webcam do QR, jeśli jest dostępna.
+
+NFC nie jest tylko lokalnym dodatkiem PC. Powiązania tagów z rzeczami, pudełkami, miejscami, produktami i pojazdami są częścią synchronizowanych danych EDHOME.
+
 ## Zasada nadrzędna: Desktop = APK 1:1
 
 EDHOME Desktop **nie jest uproszczonym dodatkiem do aplikacji Android**. Docelowo ma zapewniać pełną zgodność funkcjonalną z aktualną wersją EDHOME Beta APK.
@@ -34,6 +46,8 @@ Aktualna linia Desktop obsługuje:
 - kontrolę konfliktu snapshotu,
 - aktualizację Desktop jednym przyciskiem,
 - autostart z Windows i start zminimalizowany,
+- panel Skaner: skaner USB/klawiaturowy, QR/kod z obrazu i NFC PC/SC,
+- trwałe, synchronizowane powiązania tagów NFC z obiektami EDHOME,
 - podstawowe widoki: Pulpit, Dzisiaj, Kalendarz, Zadania, Czynności, Magazyn, Spiżarnia, Zakupy, PayCheck, Pojazdy, Odpady, Timery, Energia, SUPLA, Miejsca i Ustawienia.
 
 Desktop **nie jest już read-only**.
@@ -97,6 +111,7 @@ Desktop pokazuje obecnie głównie listę terminów. Brakuje zgodności z widoki
 ### Magazyn i Miejsca
 - zdjęcia i miniaturki rzeczy,
 - QR rzeczy, pudełek i miejsc,
+- pełna obsługa kamery/webcam do QR (USB/klawiatura i odczyt z obrazu są już obsługiwane),
 - skanowanie QR,
 - drukowanie pojedynczych i zbiorczych etykiet,
 - PDF i udostępnianie etykiet,

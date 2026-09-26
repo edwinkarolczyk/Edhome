@@ -8923,7 +8923,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 34);
+            super(context, "edhome-beta-preview.db", null, 35);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -8948,6 +8948,7 @@ public final class MainActivity extends Activity {
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            addNfcLinks(database);
             PaycheckStore.create(database);
             BankEvidenceStore.create(database);
             PaycheckGoalsStore.create(database);
@@ -8966,7 +8967,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 34) {
+            if (oldVersion < 1 || newVersion > 35) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -9143,6 +9144,21 @@ public final class MainActivity extends Activity {
                 BankEvidenceStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_33_TO_34_BANK_EVIDENCE_QUEUE");
             }
+            if(oldVersion < 35) {
+                addNfcLinks(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_34_TO_35_NFC_LINKS");
+            }
+        }
+
+        private static void addNfcLinks(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE nfc_links ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "uid TEXT NOT NULL COLLATE NOCASE UNIQUE, "
+                + "target_kind TEXT NOT NULL CHECK(target_kind IN "
+                + "('thing','box','place','pantry','vehicle')), "
+                + "target_id INTEGER NOT NULL, created_at INTEGER NOT NULL)");
+            database.execSQL("CREATE INDEX nfc_links_target_idx "
+                + "ON nfc_links(target_kind,target_id)");
         }
 
         private static void addPlaceSiblingIndex(SQLiteDatabase database) {

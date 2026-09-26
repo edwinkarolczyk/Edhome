@@ -419,14 +419,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.39-signed-apk
+          name: EDHOME-0.6.0.42-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.41 — dodano na górze EDHOME wskaźnik połączenia z Desktopem: zielone ● ⇄ PC oznacza aktywne połączenie, szare ○ ⇄ PC oczekiwanie. Wskaźnik odświeża się bez przeładowywania ekranu i po dotknięciu otwiera ustawienia połączenia. Ustawienia pokazują także aktualny stan PC. Zachowano trwałą usługę LAN z 0.6.0.40. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.42 — przygotowano trwałe, synchronizowane powiązania NFC dla EDHOME Desktop. Migracja bazy 34→35 dodaje nfc_links bez utraty istniejących danych. Desktop 0.6.0.48 może przypisywać tag NFC do rzeczy, pudełka, miejsca, produktu lub pojazdu i synchronizować powiązanie z telefonem. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

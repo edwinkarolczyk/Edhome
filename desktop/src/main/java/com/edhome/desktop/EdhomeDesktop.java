@@ -61,7 +61,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.47";
+    private static final String DESKTOP_VERSION = "0.6.0.48";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -80,7 +80,7 @@ public final class EdhomeDesktop extends JFrame {
     private static final String[] NAV = {
         "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
         "Magazyn", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
-        "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Ustawienia"
+        "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
     };
 
     private final JPanel content = new JPanel(new BorderLayout());
@@ -251,6 +251,7 @@ public final class EdhomeDesktop extends JFrame {
             + "W pierwszym desktop MVP integracja nie odpytuje jeszcze SUPLA.");
         if ("Miejsca".equals(name)) return tablePage("Miejsca", "places",
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
+        if ("Skaner".equals(name)) return scanner();
         return settings();
     }
 
@@ -454,6 +455,486 @@ public final class EdhomeDesktop extends JFrame {
         return tablePage("Odpady", filtered,
             cols("Frakcja","waste_fraction","Termin","due_date","Wystawione","done",
                  "Przypomnienie","remind_time"));
+    }
+
+
+    private JComponent scanner() {
+        JPanel page = page("Skaner • QR / kody produktów / NFC");
+        JPanel card = new RoundedPanel(APP_SURFACE, 22);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(new EmptyBorder(18, 20, 18, 20));
+
+        JLabel intro = new JLabel("<html><b>Skanowanie na PC jest pełnoprawną funkcją EDHOME.</b><br>"
+            + "Możesz użyć skanera USB działającego jak klawiatura, odczytać QR/kod z obrazu "
+            + "albo użyć czytnika NFC zgodnego z Windows PC/SC.</html>");
+        intro.setForeground(APP_TEXT);
+        intro.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(intro);
+        card.add(Box.createVerticalStrut(14));
+
+        JTextField input = new JTextField();
+        input.setToolTipText("Zeskanuj kod czytnikiem USB albo wklej treść QR/kodu");
+        input.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        input.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(input);
+        card.add(Box.createVerticalStrut(10));
+
+        JLabel status = new JLabel("Gotowy do skanowania.");
+        status.setForeground(APP_MUTED);
+        status.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actions.setOpaque(false);
+        actions.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JButton read = actionButton("Odczytaj kod");
+        JButton image = actionButton("QR / kod z obrazu");
+        JButton nfc = actionButton("Skanuj NFC");
+        actions.add(read);
+        actions.add(image);
+        actions.add(nfc);
+        card.add(actions);
+        card.add(Box.createVerticalStrut(12));
+        card.add(status);
+
+        Runnable process = () -> {
+            String raw = input.getText().trim();
+            if (raw.isEmpty()) {
+                status.setText("Brak kodu.");
+                input.requestFocusInWindow();
+                return;
+            }
+            processDesktopScan(raw, status);
+            input.selectAll();
+            input.requestFocusInWindow();
+        };
+        read.addActionListener(e -> process.run());
+        input.addActionListener(e -> process.run());
+
+        image.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Wybierz obraz z QR lub kodem kreskowym");
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            image.setEnabled(false);
+            status.setText("Odczytuję kod z obrazu…");
+            new SwingWorker<String,Void>() {
+                @Override protected String doInBackground() throws Exception {
+                    return DesktopHardwareScanner.readCodeFromImage(
+                        chooser.getSelectedFile().toPath());
+                }
+                @Override protected void done() {
+                    image.setEnabled(true);
+                    try {
+                        String raw = get();
+                        input.setText(raw);
+                        processDesktopScan(raw, status);
+                    } catch (Exception error) {
+                        status.setText("Nie udało się odczytać obrazu.");
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            "Nie znaleziono poprawnego QR/kodu:\n" + rootMessage(error),
+                            "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }.execute();
+        });
+
+        nfc.addActionListener(e -> {
+            nfc.setEnabled(false);
+            status.setText("Przyłóż tag do czytnika NFC…");
+            new SwingWorker<String,Void>() {
+                @Override protected String doInBackground() throws Exception {
+                    return DesktopHardwareScanner.readNfcUid(Duration.ofSeconds(15));
+                }
+                @Override protected void done() {
+                    nfc.setEnabled(true);
+                    try {
+                        String uid = get();
+                        input.setText("NFC:" + uid);
+                        processNfcUid(uid, status);
+                    } catch (Exception error) {
+                        status.setText("NFC: brak odczytu.");
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            rootMessage(error), "EDHOME Desktop",
+                            JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }.execute();
+        });
+
+        page.add(card, BorderLayout.NORTH);
+
+        JTextArea help = new JTextArea(
+            "Obsługiwane ścieżki:\n"
+          + "• skaner USB/bezprzewodowy w trybie klawiatury — EAN/UPC/GTIN i QR,\n"
+          + "• QR/kod z pliku PNG/JPG lub zrzutu ekranu,\n"
+          + "• NFC przez czytnik Windows PC/SC — odczyt UID i przypisanie tagu do "
+          + "rzeczy, pudełka, miejsca, produktu albo pojazdu.\n\n"
+          + "Kod EDHOME STORAGE otwiera właściwą rzecz/pudełko/miejsce. "
+          + "Kod produktu może od razu zmienić stan Spiżarni po potwierdzeniu. "
+          + "Nieznany poprawny kod produktu można utworzyć jako nowy produkt.");
+        help.setEditable(false);
+        help.setOpaque(false);
+        help.setForeground(APP_MUTED);
+        help.setLineWrap(true);
+        help.setWrapStyleWord(true);
+        help.setBorder(new EmptyBorder(18, 4, 4, 4));
+        page.add(help, BorderLayout.CENTER);
+        SwingUtilities.invokeLater(input::requestFocusInWindow);
+        return page;
+    }
+
+    private void processDesktopScan(String raw, JLabel status) {
+        String code = raw == null ? "" : raw.trim();
+        if (code.isEmpty()) return;
+        if (code.regionMatches(true, 0, "NFC:", 0, 4)) {
+            processNfcUid(code.substring(4), status);
+            return;
+        }
+        ScannerTarget storage = parseStorageQr(code);
+        if (storage != null) {
+            openScannedTarget(storage.kind, storage.id, status);
+            return;
+        }
+        if (validProductBarcode(code)) {
+            processPantryBarcode(code, status);
+            return;
+        }
+        status.setText("Nieznany kod: " + code);
+        JOptionPane.showMessageDialog(this,
+            "Kod został odczytany, ale EDHOME nie rozpoznaje jeszcze jego typu.\n\n" + code,
+            "EDHOME Desktop • Skaner", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static ScannerTarget parseStorageQr(String value) {
+        final String prefix = "EDHOME:STORAGE:1:";
+        if (value == null || !value.startsWith(prefix)) return null;
+        String rest = value.substring(prefix.length());
+        int colon = rest.indexOf(':');
+        if (colon <= 0 || rest.indexOf(':', colon + 1) >= 0) return null;
+        String kind = rest.substring(0, colon);
+        if (!"thing".equals(kind) && !"box".equals(kind) && !"place".equals(kind))
+            return null;
+        try {
+            long id = Long.parseLong(rest.substring(colon + 1));
+            return id > 0 ? new ScannerTarget(kind, id) : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private void openScannedTarget(String kind, long id, JLabel status) {
+        String tableName;
+        String sectionName;
+        if ("place".equals(kind)) {
+            tableName = "places";
+            sectionName = "Miejsca";
+        } else if ("pantry".equals(kind)) {
+            tableName = "pantry";
+            sectionName = "Spiżarnia";
+        } else if ("vehicle".equals(kind)) {
+            tableName = "vehicles";
+            sectionName = "Pojazdy";
+        } else {
+            tableName = "storage_items";
+            sectionName = "Magazyn";
+        }
+        JsonObject row = scannerRowById(tableName, id);
+        if (row == null) {
+            status.setText("Tag wskazuje obiekt, którego nie ma w aktualnych danych.");
+            JOptionPane.showMessageDialog(this,
+                "Obiekt #" + id + " (" + kind + ") nie istnieje w aktualnym snapshotcie.",
+                "EDHOME Desktop • Skaner", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String name = value(row, "name");
+        if (name.isBlank()) name = value(row, "title");
+        if (name.isBlank()) name = "#" + id;
+        status.setText("Odczytano: " + name);
+        int open = JOptionPane.showConfirmDialog(this,
+            "Odczytano: " + name + "\nTyp: " + kind + "\n\nOtworzyć moduł „"
+                + sectionName + "”?",
+            "EDHOME Desktop • Skaner", JOptionPane.YES_NO_OPTION);
+        if (open == JOptionPane.YES_OPTION) showSection(sectionName);
+    }
+
+    private void processPantryBarcode(String barcode, JLabel status) {
+        JsonObject link = scannerPantryLink(barcode);
+        if (link == null) {
+            int add = JOptionPane.showConfirmDialog(this,
+                "Nieznany kod produktu:\n" + barcode
+                    + "\n\nDodać nowy produkt do Spiżarni?",
+                "EDHOME Desktop • Skaner", JOptionPane.YES_NO_OPTION);
+            if (add == JOptionPane.YES_OPTION)
+                addUnknownPantryBarcode(barcode, status);
+            else
+                status.setText("Nieznany kod produktu.");
+            return;
+        }
+        long pantryId;
+        try { pantryId = link.get("pantry_id").getAsLong(); }
+        catch (Exception invalid) {
+            status.setText("Uszkodzone powiązanie kodu.");
+            return;
+        }
+        JsonObject item = scannerRowById("pantry", pantryId);
+        if (item == null) {
+            status.setText("Kod wskazuje nieistniejący produkt.");
+            return;
+        }
+        String name = value(item, "name");
+        int qty = intValue(item, "qty");
+        Object[] options = {"Dodaj +1", "Wyjmij −1", "Otwórz Spiżarnię", "Anuluj"};
+        int choice = JOptionPane.showOptionDialog(this,
+            name + "\nStan: " + qty + "\nKod: " + barcode,
+            "EDHOME Desktop • Spiżarnia", JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        if (choice == 0) adjustPantryFromScan(item, barcode, 1, status);
+        else if (choice == 1) adjustPantryFromScan(item, barcode, -1, status);
+        else if (choice == 2) showSection("Spiżarnia");
+    }
+
+    private JsonObject scannerPantryLink(String barcode) {
+        for (String candidate : barcodeCandidates(barcode)) {
+            for (JsonElement element : table("pantry_barcodes")) {
+                if (!element.isJsonObject()) continue;
+                JsonObject row = element.getAsJsonObject();
+                if (candidate.equals(value(row, "barcode"))) return row;
+            }
+        }
+        return null;
+    }
+
+    private static List<String> barcodeCandidates(String barcode) {
+        List<String> result = new ArrayList<>();
+        if (!validProductBarcode(barcode)) return result;
+        result.add(barcode);
+        if (barcode.length() == 12) {
+            if (validProductBarcode("0" + barcode)) result.add("0" + barcode);
+            if (validProductBarcode("00" + barcode)) result.add("00" + barcode);
+        } else if (barcode.length() == 13) {
+            if (barcode.startsWith("0") && validProductBarcode(barcode.substring(1)))
+                result.add(barcode.substring(1));
+            if (validProductBarcode("0" + barcode)) result.add("0" + barcode);
+        } else if (barcode.length() == 14 && barcode.startsWith("0")) {
+            if (validProductBarcode(barcode.substring(1))) result.add(barcode.substring(1));
+            if (barcode.startsWith("00") && validProductBarcode(barcode.substring(2)))
+                result.add(barcode.substring(2));
+        }
+        return result;
+    }
+
+    private static boolean validProductBarcode(String barcode) {
+        if (barcode == null) return false;
+        int n = barcode.length();
+        if (n != 8 && n != 12 && n != 13 && n != 14) return false;
+        int sum = 0;
+        for (int i = n - 2, weight = 3; i >= 0; i--, weight = 4 - weight) {
+            char digit = barcode.charAt(i);
+            if (digit < '0' || digit > '9') return false;
+            sum += (digit - '0') * weight;
+        }
+        char check = barcode.charAt(n - 1);
+        return check >= '0' && check <= '9'
+            && (10 - sum % 10) % 10 == check - '0';
+    }
+
+    private void addUnknownPantryBarcode(String barcode, JLabel status) {
+        if (snapshot == null) {
+            JOptionPane.showMessageDialog(this, "Najpierw połącz EDHOME z telefonem.");
+            return;
+        }
+        String name = JOptionPane.showInputDialog(this,
+            "Nazwa nowego produktu:", "Nowy produkt", JOptionPane.QUESTION_MESSAGE);
+        if (name == null) return;
+        name = name.trim();
+        if (name.isEmpty() || name.length() > 160) {
+            JOptionPane.showMessageDialog(this, "Nazwa musi mieć 1–160 znaków.");
+            return;
+        }
+        long pantryId = nextId("pantry");
+        JsonObject item = new JsonObject();
+        item.addProperty("id", pantryId);
+        item.addProperty("name", name);
+        item.addProperty("qty", 0);
+        item.addProperty("category", "other");
+        mutableTable("pantry").add(item);
+
+        JsonObject link = new JsonObject();
+        link.addProperty("id", nextId("pantry_barcodes"));
+        link.addProperty("pantry_id", pantryId);
+        link.addProperty("barcode", barcode);
+        mutableTable("pantry_barcodes").add(link);
+
+        JsonObject pack = new JsonObject();
+        pack.addProperty("pantry_id", pantryId);
+        pack.addProperty("unit", "szt.");
+        pack.addProperty("size_milli", 1000);
+        mutableTable("pantry_packages").add(pack);
+
+        adjustPantryFromScan(item, barcode, 1, status);
+    }
+
+    private void adjustPantryFromScan(JsonObject item, String barcode, int delta,
+            JLabel status) {
+        int before = intValue(item, "qty");
+        int after = before + delta;
+        if (after < 0) {
+            JOptionPane.showMessageDialog(this, "Stan produktu nie może spaść poniżej zera.");
+            return;
+        }
+        item.addProperty("qty", after);
+        JsonObject move = new JsonObject();
+        move.addProperty("id", nextId("pantry_movements"));
+        move.addProperty("operation_id", java.util.UUID.randomUUID().toString());
+        move.addProperty("pantry_id", item.get("id").getAsLong());
+        move.addProperty("barcode", barcode);
+        move.addProperty("name_snapshot", value(item, "name"));
+        move.addProperty("kind", delta > 0 ? "ADD" : "TAKE");
+        move.addProperty("qty", 1);
+        move.addProperty("before_qty", before);
+        move.addProperty("after_qty", after);
+        move.addProperty("happened_at", System.currentTimeMillis());
+        mutableTable("pantry_movements").add(move);
+        markDirty();
+        status.setText(value(item, "name") + " • stan: " + after
+            + (delta > 0 ? " (+1)" : " (−1)"));
+    }
+
+    private void processNfcUid(String rawUid, JLabel status) {
+        String uid = rawUid == null ? "" : rawUid.replaceAll("[^0-9A-Fa-f]", "")
+            .toUpperCase(Locale.ROOT);
+        if (uid.length() < 4 || uid.length() > 64) {
+            status.setText("Nieprawidłowy UID NFC.");
+            return;
+        }
+        JsonObject link = null;
+        for (JsonElement element : table("nfc_links")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (uid.equalsIgnoreCase(value(row, "uid"))) {
+                link = row;
+                break;
+            }
+        }
+        if (link != null) {
+            try {
+                openScannedTarget(value(link, "target_kind"),
+                    link.get("target_id").getAsLong(), status);
+            } catch (Exception invalid) {
+                status.setText("Uszkodzone powiązanie NFC.");
+            }
+            return;
+        }
+        status.setText("NFC " + uid + " • nieprzypisany.");
+        int bind = JOptionPane.showConfirmDialog(this,
+            "Tag NFC " + uid + " nie jest jeszcze przypisany.\nPrzypisać go do obiektu EDHOME?",
+            "EDHOME Desktop • NFC", JOptionPane.YES_NO_OPTION);
+        if (bind == JOptionPane.YES_OPTION) bindNfcUid(uid, status);
+    }
+
+    private void bindNfcUid(String uid, JLabel status) {
+        if (snapshot == null) {
+            JOptionPane.showMessageDialog(this, "Najpierw połącz EDHOME z telefonem.");
+            return;
+        }
+        int dbVersion = 0;
+        try { dbVersion = snapshot.get("databaseVersion").getAsInt(); }
+        catch (Exception ignored) { }
+        if (dbVersion < 35) {
+            JOptionPane.showMessageDialog(this,
+                "Telefon ma starszy format danych. Zaktualizuj EDHOME Beta na telefonie, "
+                    + "a potem zsynchronizuj ponownie przed przypisaniem NFC.",
+                "EDHOME Desktop • NFC", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        List<Choice> choices = new ArrayList<>();
+        for (JsonElement e : table("storage_items")) {
+            if (!e.isJsonObject()) continue;
+            JsonObject row = e.getAsJsonObject();
+            String kind = value(row, "kind");
+            if (!"thing".equals(kind) && !"box".equals(kind)) continue;
+            choices.add(new Choice(kind + ":" + value(row, "id"),
+                ("thing".equals(kind) ? "Rzecz • " : "Pudełko • ") + value(row, "name")));
+        }
+        for (JsonElement e : table("places")) {
+            if (!e.isJsonObject()) continue;
+            JsonObject row = e.getAsJsonObject();
+            choices.add(new Choice("place:" + value(row, "id"),
+                "Miejsce • " + value(row, "name")));
+        }
+        for (JsonElement e : table("pantry")) {
+            if (!e.isJsonObject()) continue;
+            JsonObject row = e.getAsJsonObject();
+            choices.add(new Choice("pantry:" + value(row, "id"),
+                "Spiżarnia • " + value(row, "name")));
+        }
+        for (JsonElement e : table("vehicles")) {
+            if (!e.isJsonObject()) continue;
+            JsonObject row = e.getAsJsonObject();
+            choices.add(new Choice("vehicle:" + value(row, "id"),
+                "Pojazd • " + value(row, "name")));
+        }
+        if (choices.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Nie ma obiektu, do którego można przypisać NFC.");
+            return;
+        }
+        JComboBox<Choice> target = new JComboBox<>(choices.toArray(new Choice[0]));
+        int answer = JOptionPane.showConfirmDialog(this, target,
+            "Przypisz NFC " + uid, JOptionPane.OK_CANCEL_OPTION);
+        if (answer != JOptionPane.OK_OPTION) return;
+        Choice selected = (Choice) target.getSelectedItem();
+        if (selected == null) return;
+        String[] parts = selected.value.split(":", 2);
+        if (parts.length != 2) return;
+        long id;
+        try { id = Long.parseLong(parts[1]); }
+        catch (NumberFormatException invalid) { return; }
+
+        JsonObject row = new JsonObject();
+        row.addProperty("id", nextId("nfc_links"));
+        row.addProperty("uid", uid);
+        row.addProperty("target_kind", parts[0]);
+        row.addProperty("target_id", id);
+        row.addProperty("created_at", System.currentTimeMillis());
+        mutableTable("nfc_links").add(row);
+        markDirty();
+        status.setText("NFC " + uid + " przypisany do: " + selected.label);
+    }
+
+    private JsonObject scannerRowById(String tableName, long id) {
+        for (JsonElement element : table(tableName)) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            try {
+                if (row.has("id") && !row.get("id").isJsonNull()
+                        && row.get("id").getAsLong() == id) return row;
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
+    private JsonArray mutableTable(String name) {
+        if (snapshot == null || !snapshot.has("tables")
+                || !snapshot.get("tables").isJsonObject())
+            throw new IllegalStateException("Brak danych EDHOME.");
+        JsonObject tables = snapshot.getAsJsonObject("tables");
+        JsonElement currentRows = tables.get(name);
+        if (currentRows == null || currentRows.isJsonNull()) {
+            JsonArray created = new JsonArray();
+            tables.add(name, created);
+            return created;
+        }
+        if (!currentRows.isJsonArray())
+            throw new IllegalStateException("Nieprawidłowa tabela " + name + ".");
+        return currentRows.getAsJsonArray();
+    }
+
+    private static final class ScannerTarget {
+        final String kind;
+        final long id;
+        ScannerTarget(String kind, long id) {
+            this.kind = kind;
+            this.id = id;
+        }
     }
 
     private JComponent settings() {
