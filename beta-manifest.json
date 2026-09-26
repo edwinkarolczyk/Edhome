@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 107,
-  "versionName": "0.6.0.42",
-  "changelog": "EDHOME 0.6.0.42 — przygotowano trwałe, synchronizowane powiązania NFC dla EDHOME Desktop. Migracja bazy 34→35 dodaje nfc_links bez utraty istniejących danych. Desktop 0.6.0.48 może przypisywać tag NFC do rzeczy, pudełka, miejsca, produktu lub pojazdu i synchronizować powiązanie z telefonem. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.42/edhome-beta.apk",
-  "sha256": "41db9748ed607fb8bb959385d710636c02d04b7e5eb81d2dd87c8888570743fe"
+  "versionCode": 108,
+  "versionName": "0.6.0.43",
+  "changelog": "EDHOME 0.6.0.43 — synchronizacja Android ↔ Desktop otrzymuje bezpieczny zapis przyrostowy rekordów, lekki heartbeat bazy i konflikty na poziomie konkretnego rekordu. Zachowano fallback do pełnego snapshotu dla starszych klientów i zmian ustawień. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.43/edhome-beta.apk",
+  "sha256": "7e2641d560f5c64797fa4bc5121fe03416f67c5fa78a877930975cad4d5fe8c4"
 }
