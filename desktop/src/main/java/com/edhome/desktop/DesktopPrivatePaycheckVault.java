@@ -174,12 +174,23 @@ final class DesktopPrivatePaycheckVault {
 
     static String add(Session session, String kind, String category, long grosz,
             String note, String status) throws Exception {
+        return addWithId(session, UUID.randomUUID().toString(), kind, category,
+            grosz, note, status);
+    }
+
+    static String addWithId(Session session, String id, String kind,
+            String category, long grosz, String note, String status) throws Exception {
+        if (id == null || !id.matches("[0-9a-fA-F-]{36}"))
+            throw new GeneralSecurityException("Nieprawidłowy identyfikator prywatnego wpisu.");
         validateEntry(kind, category, grosz, note, System.currentTimeMillis(), status);
         JsonObject plain = readPlain(session);
         JsonArray rows = plain.getAsJsonArray("entries");
+        for (JsonElement element : rows) {
+            JsonObject prior = element.getAsJsonObject();
+            if (id.equals(prior.get("id").getAsString())) return id;
+        }
         if (rows.size() >= MAX_ENTRIES)
             throw new IllegalStateException("Prywatny sejf osiągnął limit wpisów.");
-        String id = UUID.randomUUID().toString();
         JsonObject entry = new JsonObject();
         entry.addProperty("kind", kind);
         entry.addProperty("category", category);
