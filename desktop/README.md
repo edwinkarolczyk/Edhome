@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.50
+## Aktualny stan Desktop — 0.6.0.54
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -83,7 +83,7 @@ Desktop **nie jest read-only**. Prywatny PayCheck pozostaje celowo poza zwykłym
 
 ## Zatwierdzony zakres Desktop — decyzja użytkownika
 
-Zakres zatwierdzony dla QR/drukowania, skanowania, importów bankowych, analizy PayCheck, prywatnego PayCheck oraz drukowania kalendarza i zadań jest wdrożony w linii 0.6.0.50. Regresje tego zakresu są chronione testem `tests/check_desktop_approved_scope.py`.
+Zakres zatwierdzony dla QR/drukowania, skanowania, importów bankowych, analizy PayCheck, prywatnego PayCheck oraz drukowania kalendarza i zadań jest wdrożony w linii 0.6.0.54. Regresje tego zakresu są chronione testem `tests/check_desktop_approved_scope.py`.
 
 ### Ograniczenia importu PDF banków
 Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0.49 bezpiecznie obsługiwany jest tekstowy PDF VeloBanku. mBank jest obsługiwany przez CSV/XLSX. Zwykły CSV jest obsługiwany, jeśli zawiera stabilny identyfikator transakcji i wymagane kolumny. PDF innych banków jest odrzucany, dopóki nie ma jawnego parsera dla ich układu.
@@ -109,15 +109,19 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - blokada korzysta z systemowego locka pliku `~/.edhome/desktop-instance.lock`,
 - lock jest zwalniany przy zamknięciu procesu, również po awarii systemowej/JVM; sam plik może pozostać, ale bez aktywnego locka nie blokuje kolejnego uruchomienia.
 
-### Synchronizacja przyrostowa 0.6.0.53
-- zmiana na PC jest zapisywana do lokalnego cache natychmiast,
-- po około 1,5 s bez kolejnej edycji Desktop wysyła tylko zmienione rekordy,
-- każda operacja rekordowa zawiera hash wersji bazowej konkretnego rekordu,
-- równoległe zmiany różnych rekordów mogą zostać scalone bez globalnego konfliktu,
-- równoległa zmiana tego samego rekordu kończy się konfliktem zamiast cichego nadpisania,
-- Desktop wykonuje lekki heartbeat stanu Androida co 10 s,
-- pełne pojednanie danych pozostaje zabezpieczeniem wykonywanym co około 3 minuty,
-- starszy Android lub zmiany nieobsługiwane rekordowo automatycznie korzystają z dotychczasowego bezpiecznego snapshotu.
+### Synchronizacja wielourządzeniowa v2 — Desktop 0.6.0.54 / Android 0.6.0.44
+- zapis na PC trafia do lokalnego cache natychmiast,
+- po około 1,5 s ciszy Desktop wysyła wyłącznie zmienione rekordy,
+- Android zapisuje patch bezpośrednio do właściwych rekordów SQLite w jednej transakcji; ścieżka /patch nie wykonuje pełnego restore bazy,
+- każdy synchronizowany rekord ma niezależny globalny `sync_uuid` w warstwie `sync_records`,
+- metadane zawierają `revision`, `updated_at` i hash treści rekordu,
+- lokalna zmiana zrobiona na Androidzie jest wykrywana po hash i podbija rewizję bez przerabiania wszystkich modułów,
+- usunięcie pozostawia tombstone `deleted_at`, więc urządzenie wracające po dłuższym offline nie powinno wskrzesić starego rekordu,
+- nowe rekordy Desktop dostają kolizyjnie odporne duże ID zamiast MAX(id)+1,
+- różne rekordy mogą zostać zmienione równolegle; stale zmieniany ten sam rekord kończy się konfliktem zamiast cichego nadpisania,
+- protokół v2 używa `syncUuid + rowKey + baseRevision`; stary patch v1 jest przyjmowany kompatybilnie,
+- Desktop wykonuje lekki heartbeat stanu Androida co 10 s, a pełne pojednanie pozostaje kontrolą bezpieczeństwa co około 3 minuty,
+- pełny snapshot pozostaje ścieżką zgodności dla ustawień i starszych klientów, ale nie jest używany przez normalny endpoint rekordowy `/patch`.
 
 ### Roczny kreator odpadów
 - kreator prowadzi miesiąc po miesiącu od stycznia do grudnia,
@@ -131,7 +135,7 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 
 ## Braki do pełnej zgodności z APK
 
-Poniższe elementy nadal wymagają domknięcia, mimo że zatwierdzony pakiet Desktop 0.6.0.49 jest już funkcjonalny.
+Poniższe elementy nadal wymagają domknięcia mimo funkcjonalnego Desktop 0.6.0.54.
 
 ### Pulpit i personalizacja
 - konfigurowalne kafelki,
