@@ -1376,9 +1376,112 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JComponent calendar() {
-        return tablePage("Kalendarz • najbliższe terminy", "tasks",
-            cols("Termin","due_date","Zadanie","title","Powtarzanie","repeat_rule",
-                 "Przypomnienie","remind_time","Wykonane","done"));
+        java.util.List<DesktopCalendarPanel.Event> events = new ArrayList<>();
+
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject task = element.getAsJsonObject();
+            String due = value(task, "due_date");
+            if (due.isBlank()) continue;
+            try {
+                LocalDate date = LocalDate.parse(due);
+                long id = task.get("id").getAsLong();
+                String title = value(task, "title");
+                String kind = value(task, "task_kind");
+                String subtitle = "waste".equals(kind)
+                    ? "Odpady"
+                    : friendlyValue("priority", task);
+                String assignee = friendlyValue("assignee_id", task);
+                if (!"—".equals(assignee) && !"Nieznane".equals(assignee))
+                    subtitle += " • " + assignee;
+                events.add(new DesktopCalendarPanel.Event(
+                    "task:" + id, date, title, subtitle,
+                    intValue(task, "done") == 1, true));
+            } catch (Exception ignored) { }
+        }
+
+        for (JsonElement element : table("vehicles")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject vehicle = element.getAsJsonObject();
+            long id;
+            try { id = vehicle.get("id").getAsLong(); }
+            catch (Exception invalid) { continue; }
+            String name = value(vehicle, "name");
+            if (name.isBlank()) name = value(vehicle, "registration");
+            addVehicleCalendarEvent(events, vehicle, id, name,
+                "oc_until", "OC");
+            addVehicleCalendarEvent(events, vehicle, id, name,
+                "inspection_until", "Przegląd");
+        }
+
+        JPanel page = page("Kalendarz");
+        DesktopCalendarPanel calendar = new DesktopCalendarPanel(
+            events,
+            this::openCalendarEvent,
+            this::addTaskOnCalendarDate,
+            () -> printTableReport("Kalendarz", table("tasks"),
+                cols("Zadanie","title","Termin","due_date",
+                     "Priorytet","priority","Wykonane","done")));
+        page.add(calendar, BorderLayout.CENTER);
+        return page;
+    }
+
+    private void addVehicleCalendarEvent(
+            java.util.List<DesktopCalendarPanel.Event> events,
+            JsonObject vehicle, long id, String name, String key, String label) {
+        String raw = value(vehicle, key);
+        if (raw.isBlank()) return;
+        try {
+            LocalDate date = LocalDate.parse(raw);
+            events.add(new DesktopCalendarPanel.Event(
+                "vehicle:" + id, date,
+                label + " • " + (name.isBlank() ? "Pojazd" : name),
+                "Pojazdy", false, true));
+        } catch (Exception ignored) { }
+    }
+
+    private void openCalendarEvent(String key) {
+        if (key == null || !key.contains(":")) return;
+        String[] parts = key.split(":", 2);
+        long id;
+        try { id = Long.parseLong(parts[1]); }
+        catch (Exception invalid) { return; }
+
+        if ("task".equals(parts[0])) {
+            JsonObject row = scannerRowById("tasks", id);
+            if (row == null) return;
+            editRow(row, cols(
+                "Tytuł","title",
+                "Termin","due_date",
+                "Priorytet","priority",
+                "Wykonane","done",
+                "Osoba","assignee_id"));
+            return;
+        }
+        if ("vehicle".equals(parts[0])) {
+            JsonObject row = scannerRowById("vehicles", id);
+            if (row == null) return;
+            editRow(row, cols(
+                "Nazwa","name",
+                "Rejestracja","registration",
+                "Przebieg","mileage",
+                "OC do","oc_until",
+                "Przegląd do","inspection_until"));
+        }
+    }
+
+    private void addTaskOnCalendarDate(LocalDate date) {
+        JsonObject row = newRowTemplate("tasks");
+        if (row == null) return;
+        row.addProperty("due_date", date.toString());
+        if (!editRow(row, cols(
+                "Tytuł","title",
+                "Termin","due_date",
+                "Priorytet","priority",
+                "Osoba","assignee_id"))) return;
+        table("tasks").add(row);
+        markDirty();
+        showSection("Kalendarz");
     }
 
     private JComponent waste() {
