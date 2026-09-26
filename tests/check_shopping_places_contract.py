@@ -40,7 +40,7 @@ for phrase in (
 assert 'pricePerUnitGrosz' in cost and 'quantityMilli == null) return null;' in cost
 assert 'BigDecimal.valueOf(quantityMilli, 3)' in cost
 assert 'RoundingMode.HALF_UP' in cost
-assert 'private static final int DB_VERSION = 35;' in backup
+assert 'private static final int DB_VERSION = 36;' in backup
 assert '"shopping_items", "id", "name", "qty_milli", "unit", "checked",' in backup
 assert '"packages", "before_qty", "after_qty", "happened_at",' in backup
 assert 'if (inputVersion < 23' in backup
