@@ -3,6 +3,7 @@ package com.edwinkarolczyk.edhome;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteConstraintException;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -127,7 +128,8 @@ final class SyncRecordStore {
                     throw new IllegalArgumentException("Nieprawidłowy rekord synchronizacji.");
                 String uuid = item.optString("syncUuid", "");
                 String table = item.optString("table", "");
-                String rowKey = item.optString("rowKey", "");
+                String rowKey = normalizeRowKey(table,
+                    item.optString("rowKey", ""));
                 long revision = item.optLong("revision", 0L);
                 long updatedAt = item.optLong("updatedAt", 0L);
                 Long deletedAt = item.isNull("deletedAt")
@@ -135,7 +137,7 @@ final class SyncRecordStore {
                 String hash = item.optString("rowHash", "");
                 if (!uuid.matches("[0-9a-fA-F-]{36}")
                         || DataBackup.syncColumns(table) == null
-                        || rowKey(table, rowKey) == null
+                        || rowKey == null
                         || revision < 1 || updatedAt < 1
                         || (deletedAt != null && deletedAt < 1)
                         || !(hash.matches("[0-9a-f]{64}") || "DELETED".equals(hash))
@@ -183,6 +185,9 @@ final class SyncRecordStore {
                 results.put(result);
             }
             db.setTransactionSuccessful();
+        } catch (SQLiteConstraintException constraint) {
+            throw new IllegalArgumentException(
+                "Zmiana narusza reguły integralności danych.", constraint);
         } finally {
             db.endTransaction();
         }
@@ -197,13 +202,13 @@ final class SyncRecordStore {
     private static JSONObject applyV2(SQLiteDatabase db, JSONObject op,
             Set<String> touched) throws Exception {
         String table = op.optString("table", "");
-        String rowKey = op.optString("rowKey", "");
+        String rowKey = normalizeRowKey(table, op.optString("rowKey", ""));
         String syncUuid = op.optString("syncUuid", "").toLowerCase(Locale.ROOT);
         String action = op.optString("action", "");
         long baseRevision = op.optLong("baseRevision", -1L);
 
         if (DataBackup.syncColumns(table) == null
-                || rowKey(table, rowKey) == null
+                || rowKey == null
                 || !syncUuid.matches("[0-9a-f-]{36}")
                 || !("upsert".equals(action) || "delete".equals(action))
                 || baseRevision < 0)
@@ -456,10 +461,18 @@ final class SyncRecordStore {
         }
     }
 
-    private static String rowKey(String table, String rowKey) {
+    private static String normalizeRowKey(String table, String raw) {
         try {
-            Selection selection = selection(table, rowKey);
-            return selection == null ? null : rowKey;
+            String[] keys = keyColumns(table);
+            if (keys == null) return null;
+            String[] values = raw.split(":", -1);
+            if (values.length != keys.length) return null;
+            StringBuilder out = new StringBuilder();
+            for (int i = 0; i < values.length; i++) {
+                if (i > 0) out.append(':');
+                out.append(canonicalLong(values[i]));
+            }
+            return out.toString();
         } catch (Exception invalid) {
             return null;
         }
