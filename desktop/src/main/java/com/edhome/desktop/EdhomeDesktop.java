@@ -1698,6 +1698,11 @@ public final class EdhomeDesktop extends JFrame {
             add.addActionListener(e -> addRecord(tableName, columns));
             actions.add(add);
         }
+        if ("storage_items".equals(tableName) || "places".equals(tableName)) {
+            JButton labels = actionButton("▣ Etykiety QR");
+            labels.addActionListener(e -> showBulkQrLabels(tableName, rows));
+            actions.add(labels);
+        }
         actions.add(reload);
         actions.add(save);
         footer.add(count, BorderLayout.WEST);
@@ -1728,6 +1733,14 @@ public final class EdhomeDesktop extends JFrame {
         JButton edit = actionButton("Edytuj");
         edit.addActionListener(e -> editRow(row, columns));
         rowActions.add(edit);
+        if ("storage_items".equals(tableName) || "places".equals(tableName)) {
+            JButton qr = actionButton("QR / etykieta");
+            qr.addActionListener(e -> {
+                DesktopQrLabels.Label label = qrLabel(tableName, row);
+                if (label != null) showQrLabelWorkflow(java.util.List.of(label));
+            });
+            rowActions.add(qr);
+        }
         if (canDeleteTable(tableName)) {
             JButton remove = actionButton("Usuń");
             remove.addActionListener(e -> deleteRecord(tableName, row));
@@ -1748,6 +1761,133 @@ public final class EdhomeDesktop extends JFrame {
         }
         card.add(details, BorderLayout.CENTER);
         return card;
+    }
+
+    private DesktopQrLabels.Label qrLabel(String tableName, JsonObject row) {
+        try {
+            long id = row.get("id").getAsLong();
+            String name = value(row, "name");
+            if ("places".equals(tableName)) {
+                return new DesktopQrLabels.Label("place", id, name,
+                    placePath(Long.toString(id)));
+            }
+            if ("storage_items".equals(tableName)) {
+                String kind = value(row, "kind");
+                if (!"thing".equals(kind) && !"box".equals(kind)) return null;
+                String location = placePath(value(row, "place_id"));
+                String parent = value(row, "parent_box_id");
+                if (!parent.isBlank()) {
+                    String box = referenceName("storage_items", parent);
+                    location = "Pudełko: " + box
+                        + ("—".equals(location) ? "" : " • " + location);
+                }
+                return new DesktopQrLabels.Label(kind, id, name, location);
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    private void showBulkQrLabels(String tableName, JsonArray rows) {
+        DefaultListModel<DesktopQrLabels.Label> model = new DefaultListModel<>();
+        for (JsonElement element : rows) {
+            if (!element.isJsonObject()) continue;
+            DesktopQrLabels.Label label = qrLabel(tableName, element.getAsJsonObject());
+            if (label != null) model.addElement(label);
+        }
+        if (model.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Brak pozycji możliwych do wydrukowania.");
+            return;
+        }
+        JList<DesktopQrLabels.Label> list = new JList<>(model);
+        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        list.setVisibleRowCount(Math.min(12, model.size()));
+        list.setSelectionInterval(0, model.size() - 1);
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setPreferredSize(new Dimension(620, Math.min(420, 40 + model.size() * 28)));
+        int answer = JOptionPane.showConfirmDialog(this, scroll,
+            "Zaznacz etykiety QR", JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) return;
+        java.util.List<DesktopQrLabels.Label> selected = list.getSelectedValuesList();
+        if (selected.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Zaznacz przynajmniej jedną etykietę.");
+            return;
+        }
+        showQrLabelWorkflow(selected);
+    }
+
+    private void showQrLabelWorkflow(java.util.List<DesktopQrLabels.Label> labels) {
+        JComboBox<String> format = new JComboBox<>(DesktopQrLabels.FORMATS);
+        JTextField customW = new JTextField("40", 6);
+        JTextField customH = new JTextField("30", 6);
+        JSpinner copies = new JSpinner(new SpinnerNumberModel(1, 1, 99, 1));
+
+        String[] printers = DesktopQrLabels.printerNames();
+        JComboBox<String> printer = new JComboBox<>(printers.length == 0
+            ? new String[]{"— brak drukarki —"} : printers);
+        String remembered = PREFS.get("labelPrinter", "");
+        if (!remembered.isBlank()) printer.setSelectedItem(remembered);
+
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
+        form.add(new JLabel("Format:"));
+        form.add(format);
+        form.add(new JLabel("Własna szerokość [mm]:"));
+        form.add(customW);
+        form.add(new JLabel("Własna wysokość [mm]:"));
+        form.add(customH);
+        form.add(new JLabel("Drukarka etykiet:"));
+        form.add(printer);
+        form.add(new JLabel("Liczba kopii:"));
+        form.add(copies);
+        form.add(new JLabel("Etykiet:"));
+        form.add(new JLabel(Integer.toString(labels.size())));
+
+        int ok = JOptionPane.showConfirmDialog(this, form,
+            "EDHOME • etykiety QR", JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION) return;
+
+        try {
+            float width = parseMillimeters(customW.getText());
+            float height = parseMillimeters(customH.getText());
+            DesktopQrLabels.FormatSpec spec =
+                DesktopQrLabels.preset(format.getSelectedIndex(), width, height);
+            byte[] pdf = DesktopQrLabels.pdf(labels, spec);
+
+            DesktopQrLabels.showPreview(this, pdf);
+
+            Object[] options = {"Drukuj", "Zapisz PDF", "Drukuj + PDF", "Zamknij"};
+            int action = JOptionPane.showOptionDialog(this,
+                "Podgląd gotowy. Co zrobić z etykietami?",
+                "EDHOME • etykiety QR", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+
+            String chosenPrinter = printers.length == 0 ? ""
+                : String.valueOf(printer.getSelectedItem());
+            if (!chosenPrinter.isBlank()) PREFS.put("labelPrinter", chosenPrinter);
+            int copyCount = ((Number)copies.getValue()).intValue();
+
+            if (action == 0 || action == 2)
+                DesktopQrLabels.print(pdf, chosenPrinter, copyCount);
+            if (action == 1 || action == 2) {
+                Path saved = DesktopQrLabels.savePdf(this, pdf);
+                if (saved != null)
+                    JOptionPane.showMessageDialog(this,
+                        "Zapisano etykiety:\n" + saved.toAbsolutePath());
+            }
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie udało się przygotować etykiet QR:\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static float parseMillimeters(String raw) {
+        try {
+            return Float.parseFloat(raw.trim().replace(',', '.'));
+        } catch (Exception invalid) {
+            throw new IllegalArgumentException("Podaj poprawny rozmiar etykiety w milimetrach.");
+        }
     }
 
     private boolean canAddTable(String tableName) {
