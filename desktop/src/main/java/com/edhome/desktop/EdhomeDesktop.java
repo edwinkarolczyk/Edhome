@@ -61,7 +61,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.45";
+    private static final String DESKTOP_VERSION = "0.6.0.46";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -94,6 +94,9 @@ public final class EdhomeDesktop extends JFrame {
     private QrPairingSession qrPairingSession;
     private TrayIcon trayIcon;
     private javax.swing.Timer reconnectTimer;
+    private javax.swing.Timer autoSaveTimer;
+    private boolean autoSaving;
+    private final Map<String,Integer> sectionScrollY = new java.util.HashMap<>();
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(EdhomeDesktop::new);
@@ -131,6 +134,7 @@ public final class EdhomeDesktop extends JFrame {
         showSection("Pulpit");
         initTray();
         startReconnectLoop();
+        startAutoSaveLoop();
 
         boolean startMinimized = PREFS.getBoolean("startMinimized", false);
         setVisible(!(startMinimized && trayIcon != null));
@@ -179,11 +183,36 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void showSection(String name) {
+        rememberCurrentScroll();
         current = name;
         content.removeAll();
         content.add(section(name), BorderLayout.CENTER);
         content.revalidate();
         content.repaint();
+        int restore = sectionScrollY.getOrDefault(name, 0);
+        SwingUtilities.invokeLater(() -> {
+            JScrollPane scroll = firstScrollPane(content);
+            if (scroll != null)
+                scroll.getVerticalScrollBar().setValue(Math.max(0, restore));
+        });
+    }
+
+    private void rememberCurrentScroll() {
+        if (current == null || current.isBlank()) return;
+        JScrollPane scroll = firstScrollPane(content);
+        if (scroll != null)
+            sectionScrollY.put(current, scroll.getVerticalScrollBar().getValue());
+    }
+
+    private static JScrollPane firstScrollPane(Component root) {
+        if (root instanceof JScrollPane) return (JScrollPane) root;
+        if (root instanceof Container) {
+            for (Component child : ((Container) root).getComponents()) {
+                JScrollPane found = firstScrollPane(child);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private JComponent section(String name) {
@@ -451,10 +480,15 @@ public final class EdhomeDesktop extends JFrame {
         startMinimized.setForeground(APP_TEXT);
         startMinimized.setSelected(PREFS.getBoolean("startMinimized", false));
 
-        JCheckBox autoConnect = new JCheckBox("Automatycznie łącz i synchronizuj z telefonem w tle");
+        JCheckBox autoConnect = new JCheckBox("Automatycznie pobieraj zmiany z telefonu w tle");
         autoConnect.setOpaque(false);
         autoConnect.setForeground(APP_TEXT);
         autoConnect.setSelected(PREFS.getBoolean("autoConnect", true));
+
+        JCheckBox autoWrite = new JCheckBox("Automatycznie zapisuj zmiany z PC do telefonu");
+        autoWrite.setOpaque(false);
+        autoWrite.setForeground(APP_TEXT);
+        autoWrite.setSelected(PREFS.getBoolean("autoWrite", true));
         JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
             + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
             + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
@@ -473,6 +507,7 @@ public final class EdhomeDesktop extends JFrame {
         g.gridy=6; form.add(autostart,g);
         g.gridy=7; form.add(startMinimized,g);
         g.gridy=8; form.add(autoConnect,g);
+        g.gridy=9; form.add(autoWrite,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -505,18 +540,25 @@ public final class EdhomeDesktop extends JFrame {
             PREFS.putBoolean("autoConnect", autoConnect.isSelected());
             if (autoConnect.isSelected()) autoConnectSaved(true);
         });
+        autoWrite.addActionListener(e -> {
+            PREFS.putBoolean("autoWrite", autoWrite.isSelected());
+            if (autoWrite.isSelected() && dirty) scheduleAutoSave();
+        });
 
         page.add(form, BorderLayout.NORTH);
         JTextArea notes = new JTextArea(
             "Połączenie QR jest jednorazowo potwierdzane losowym kodem i działa tylko w sieci lokalnej.\n"
           + "Po zeskanowaniu Desktop zapisuje adres telefonu oraz kod lokalnego odczytu i od razu pobiera dane.\n\n"
+          + "Automatyczna wymiana działa w obie strony: telefon → PC jest odświeżany w tle, "
+          + "a zmiany wykonane na PC są automatycznie zapisywane do telefonu po krótkiej chwili.\n"
+          + "Zapis nadal używa kontroli wersji SHA-256 — przy równoczesnej zmianie tych samych danych "
+          + "Desktop nie nadpisze telefonu po cichu.\n\n"
           + "Kolejny etap:\n"
-          + "• automatyczne wykrywanie telefonu w LAN po zmianie adresu IP,\n"
-          + "• synchronizacja przyrostowa zamiast pełnego snapshotu,\n"
-          + "• kolejne formularze dodawania/usuwania bez technicznych pól.\n"
-          + "Pulpit pokazuje teraz zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
-          + "W ustawieniach możesz też włączyć autostart Windows, start do zasobnika "
-          + "oraz automatyczne łączenie i synchronizację w tle.");
+          + "• synchronizacja przyrostowa rekordów zamiast pełnego snapshotu,\n"
+          + "• formularze Dodaj/Usuń dla kolejnych modułów,\n"
+          + "• pełna zgodność funkcji Android ↔ Desktop.\n"
+          + "Pulpit pokazuje zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
+          + "Autostart Windows, zasobnik i ponowne wykrywanie telefonu po zmianie IP pozostają aktywne.");
         notes.setBackground(APP_BG);
         notes.setForeground(APP_MUTED);
         notes.setEditable(false);
@@ -573,7 +615,7 @@ public final class EdhomeDesktop extends JFrame {
                     connection.setText("ONLINE • Android "
                         + str(snapshot,"sourceVersion",""));
                     connection.setForeground(APP_ACCENT);
-                    if (!silent) showSection(current);
+                    showSection(current);
                     updateTrayTooltip();
                 } catch (Exception ex) {
                     connected = false;
@@ -600,11 +642,37 @@ public final class EdhomeDesktop extends JFrame {
 
     private void startReconnectLoop() {
         reconnectTimer = new javax.swing.Timer(30000, e -> {
-            if (PREFS.getBoolean("autoConnect", true) && !connecting && !dirty)
+            if (connecting || autoSaving) return;
+            if (dirty && PREFS.getBoolean("autoWrite", true))
+                saveChangesToPhone(null, true);
+            else if (PREFS.getBoolean("autoConnect", true) && !dirty)
                 autoConnectSaved(true);
         });
         reconnectTimer.setInitialDelay(30000);
         reconnectTimer.start();
+    }
+
+    private void startAutoSaveLoop() {
+        autoSaveTimer = new javax.swing.Timer(1200, e -> {
+            if (PREFS.getBoolean("autoWrite", true) && dirty)
+                saveChangesToPhone(null, true);
+        });
+        autoSaveTimer.setRepeats(false);
+    }
+
+    private void scheduleAutoSave() {
+        if (!PREFS.getBoolean("autoWrite", true) || autoSaveTimer == null) return;
+        autoSaveTimer.restart();
+        connection.setText(connected
+            ? "ONLINE • zmiana czeka na auto-zapis"
+            : "OFFLINE • zmiana czeka na telefon");
+    }
+
+    private void markDirty() {
+        dirty = true;
+        scheduleAutoSave();
+        if (!PREFS.getBoolean("autoWrite", true))
+            connection.setText("ONLINE • niezapisane zmiany z PC");
     }
 
     private void initTray() {
@@ -681,6 +749,7 @@ public final class EdhomeDesktop extends JFrame {
 
     private void shutdownDesktop() {
         if (reconnectTimer != null) reconnectTimer.stop();
+        if (autoSaveTimer != null) autoSaveTimer.stop();
         if (qrPairingSession != null) qrPairingSession.close();
         if (trayIcon != null) {
             try { SystemTray.getSystemTray().remove(trayIcon); }
@@ -1366,8 +1435,7 @@ public final class EdhomeDesktop extends JFrame {
         try {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
                 applyEditor(row, entry.getKey(), entry.getValue());
-            dirty = true;
-            connection.setText("ONLINE • niezapisane zmiany z PC");
+            markDirty();
             showSection(current);
         } catch (Exception error) {
             JOptionPane.showMessageDialog(this,
@@ -1636,7 +1704,8 @@ public final class EdhomeDesktop extends JFrame {
                 return new LanClient(host, PORT, secret).snapshot();
             }
             @Override protected void done() {
-                trigger.setEnabled(true);
+                autoSaving = false;
+                if (trigger != null) trigger.setEnabled(true);
                 try {
                     SnapshotResult result = get();
                     snapshot = result.data;
@@ -1661,27 +1730,43 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void saveChangesToPhone(JButton trigger) {
+        saveChangesToPhone(trigger, false);
+    }
+
+    private void saveChangesToPhone(JButton trigger, boolean automatic) {
         if (!dirty) {
-            JOptionPane.showMessageDialog(this, "Nie ma zmian do zapisania.");
+            if (!automatic)
+                JOptionPane.showMessageDialog(this, "Nie ma zmian do zapisania.");
+            return;
+        }
+        if (autoSaving || connecting) {
+            if (automatic) scheduleAutoSave();
             return;
         }
         String host = PREFS.get("phoneIp", "").trim();
         String secret = PREFS.get("token", "").trim();
         if (host.isBlank() || secret.isBlank() || snapshotHash.isBlank()) {
+            if (automatic) {
+                connection.setText("OFFLINE • zmiana czeka na świeże połączenie");
+                return;
+            }
             JOptionPane.showMessageDialog(this,
                 "Najpierw pobierz świeże dane z telefonu. "
                     + "Kopia offline nie może nadpisać telefonu.");
             return;
         }
-        int choice = JOptionPane.showConfirmDialog(this,
-            "Zapisać zmiany z PC do telefonu?\n"
-                + "EDHOME sprawdzi, czy dane na telefonie nie zmieniły się "
-                + "od ostatniego pobrania.",
-            "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
-        if (choice != JOptionPane.YES_OPTION) return;
+        if (!automatic) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                "Zapisać zmiany z PC do telefonu?\n"
+                    + "EDHOME sprawdzi, czy dane na telefonie nie zmieniły się "
+                    + "od ostatniego pobrania.",
+                "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
+            if (choice != JOptionPane.YES_OPTION) return;
+        }
 
-        trigger.setEnabled(false);
-        connection.setText("ZAPIS DO TELEFONU…");
+        autoSaving = true;
+        if (trigger != null) trigger.setEnabled(false);
+        connection.setText(automatic ? "AUTO-SYNC • zapis do telefonu…" : "ZAPIS DO TELEFONU…");
         new SwingWorker<SnapshotResult,Void>() {
             @Override protected SnapshotResult doInBackground() throws Exception {
                 return new LanClient(host, PORT, secret).write(snapshot, snapshotHash);
@@ -1694,16 +1779,29 @@ public final class EdhomeDesktop extends JFrame {
                     snapshotHash = result.sha256;
                     dirty = false;
                     saveCache(snapshot);
-                    connection.setText("ONLINE • EDYCJA • zapisano");
-                    showSection(current);
+                    connection.setText(automatic
+                        ? "ONLINE • auto-sync zapisany"
+                        : "ONLINE • EDYCJA • zapisano");
+                    if (!automatic) showSection(current);
+                    updateTrayTooltip();
                 } catch (Exception ex) {
-                    connection.setText("ONLINE • zapis odrzucony");
-                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
-                        "Nie zapisano zmian:\n" + rootMessage(ex)
-                            + "\n\nJeśli telefon zmienił dane w międzyczasie, "
-                            + "wybierz „Pobierz ponownie”, sprawdź różnice "
-                            + "i wprowadź zmianę jeszcze raz.",
-                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                    String message = rootMessage(ex);
+                    connection.setText(message.contains("nowsze dane")
+                        ? "KONFLIKT • telefon ma nowsze dane"
+                        : "OFFLINE • auto-zapis oczekuje");
+                    if (automatic) {
+                        if (trayIcon != null && message.contains("nowsze dane"))
+                            trayIcon.displayMessage("EDHOME Desktop",
+                                "Konflikt synchronizacji. Zmiany z PC nie zostały nadpisane.",
+                                TrayIcon.MessageType.WARNING);
+                    } else {
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            "Nie zapisano zmian:\n" + message
+                                + "\n\nJeśli telefon zmienił dane w międzyczasie, "
+                                + "wybierz „Pobierz ponownie”, sprawdź różnice "
+                                + "i wprowadź zmianę jeszcze raz.",
+                            "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                    }
                 }
             }
         }.execute();
@@ -1758,8 +1856,7 @@ public final class EdhomeDesktop extends JFrame {
                         target.add(key, com.google.gson.JsonNull.INSTANCE);
                     else target.addProperty(key, text);
                 }
-                dirty = true;
-                connection.setText("ONLINE • niezapisane zmiany z PC");
+                markDirty();
                 fireTableCellUpdated(row, column);
             } catch (Exception invalid) {
                 JOptionPane.showMessageDialog(EdhomeDesktop.this,
