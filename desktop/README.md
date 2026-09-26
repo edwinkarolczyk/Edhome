@@ -10,7 +10,7 @@ Sprzęt dostępny przy komputerze jest częścią funkcji Desktop. EDHOME PC ma 
 - skaner kodów/QR USB lub bezprzewodowy działający jak klawiatura,
 - QR i kody z obrazu/zrzutu ekranu,
 - czytnik NFC zgodny z Windows PC/SC,
-- docelowo także bezpośrednią kamerę/webcam do QR, jeśli jest dostępna.
+- bezpośrednią kamerę/webcam do QR, jeśli jest dostępna.
 
 NFC nie jest tylko lokalnym dodatkiem PC. Powiązania tagów z rzeczami, pudełkami, miejscami, produktami i pojazdami są częścią synchronizowanych danych EDHOME.
 
@@ -46,7 +46,7 @@ Aktualna linia Desktop obsługuje:
 - kontrolę konfliktu snapshotu,
 - aktualizację Desktop jednym przyciskiem,
 - autostart z Windows i start zminimalizowany,
-- panel Skaner: skaner USB/klawiaturowy, QR/kod z obrazu i NFC PC/SC,
+- panel Skaner: skaner USB/klawiaturowy, QR/kod z kamery lub obrazu i NFC PC/SC,
 - trwałe, synchronizowane powiązania tagów NFC z obiektami EDHOME,
 - podstawowe widoki: Pulpit, Dzisiaj, Kalendarz, Zadania, Czynności, Magazyn, Spiżarnia, Zakupy, PayCheck, Pojazdy, Odpady, Timery, Energia, SUPLA, Miejsca i Ustawienia.
 
