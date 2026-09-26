@@ -11,8 +11,8 @@ gradle = Path("app/build.gradle").read_text()
 for token in (
     'ShoppingReceiptStore.create(database);',
     'DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS',
-    'super(context, "edhome-beta-preview.db", null, 35)',
-    'oldVersion < 1 || newVersion > 35',
+    'super(context, "edhome-beta-preview.db", null, 36)',
+    'oldVersion < 1 || newVersion > 36',
     'ShoppingReceiptStore.received(',
     'smallButton(box, "Przyjmij do spiżarni"',
     'chooseShoppingReceipt(shoppingId, name)',
@@ -35,7 +35,7 @@ for token in (
 ):
     assert token in store, token
 for token in (
-    'DB_VERSION = 35;',
+    'DB_VERSION = 36;',
     '{"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",',
     'inputVersion < 18 && "shopping_receipts".equals(definition[0])',
     'Podwójne przyjęcie zakupów w kopii.',
