@@ -488,9 +488,11 @@ public final class EdhomeDesktop extends JFrame {
         actions.setAlignmentX(Component.LEFT_ALIGNMENT);
         JButton read = actionButton("Odczytaj kod");
         JButton image = actionButton("QR / kod z obrazu");
+        JButton camera = actionButton("Skanuj QR kamerą");
         JButton nfc = actionButton("Skanuj NFC");
         actions.add(read);
         actions.add(image);
+        actions.add(camera);
         actions.add(nfc);
         card.add(actions);
         card.add(Box.createVerticalStrut(12));
