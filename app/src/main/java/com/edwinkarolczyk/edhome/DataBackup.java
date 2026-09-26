@@ -580,6 +580,19 @@ final class DataBackup {
                         throw new IllegalArgumentException(
                             "Nieprawidłowe lub powielone ID.");
                 }
+                if ("nfc_links".equals(definition[0])) {
+                    String uid = values.getAsString("uid");
+                    String kind = values.getAsString("target_kind");
+                    Long target = values.getAsLong("target_id");
+                    Long created = values.getAsLong("created_at");
+                    if (uid == null || !uid.matches("[0-9A-Fa-f]{4,64}")
+                            || !java.util.Arrays.asList("thing", "box", "place",
+                                "pantry", "vehicle").contains(kind)
+                            || target == null || target < 1
+                            || created == null || created < 1)
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowe powiązanie NFC w kopii.");
+                }
                 if ("places".equals(definition[0])) {
                     String name = values.getAsString("name");
                     String kind = values.getAsString("kind");
@@ -1481,6 +1494,7 @@ final class DataBackup {
             || "after_qty".equals(column) || "happened_at".equals(column)
             || "mileage".equals(column) || "vehicle_id".equals(column)
             || "tread_tenths".equals(column) || "mounted".equals(column)
+            || "target_id".equals(column)
             || "current".equals(column);
     }
 }
