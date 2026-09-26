@@ -54,7 +54,7 @@ assert 'DesktopHardwareScanner' in desktop
 assert '"nfc_links"' in desktop
 assert 'DATABASE_MIGRATED_34_TO_35_NFC_LINKS' in main
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
-assert 'DB_VERSION = 35' in backup
+assert 'DB_VERSION = 36' in backup
 assert '{"nfc_links"' in backup
 
 # Incremental record sync v1.
