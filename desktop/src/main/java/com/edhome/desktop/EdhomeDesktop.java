@@ -2764,7 +2764,10 @@ public final class EdhomeDesktop extends JFrame {
         dirty = true;
         localEditGeneration++;
         try {
-            if (snapshot != null) saveCache(snapshot);
+            if (snapshot != null) {
+                ensureDesktopSyncMetadata(snapshot);
+                saveCache(snapshot);
+            }
         } catch (Exception error) {
             connection.setText("BŁĄD • nie zapisano lokalnej kopii");
         }
@@ -4893,69 +4896,207 @@ public final class EdhomeDesktop extends JFrame {
             JsonElement baseSettings = baseline.get("settings");
             JsonElement nowSettings = current.get("settings");
             if (!canonicalJson(baseSettings).equals(canonicalJson(nowSettings)))
-                return null; // ustawienia nadal idą bezpiecznym pełnym snapshotem
+                return null; // ustawienia nadal idą pełnym, chronionym snapshotem
 
             if (!baseline.has("tables") || !baseline.get("tables").isJsonObject()
                     || !current.has("tables") || !current.get("tables").isJsonObject())
                 return null;
 
-            JsonObject baseTables = baseline.getAsJsonObject("tables");
-            JsonObject nowTables = current.getAsJsonObject("tables");
-            java.util.Set<String> names = new java.util.TreeSet<>();
-            names.addAll(baseTables.keySet());
-            names.addAll(nowTables.keySet());
+            if (baseline.has("syncRecords") && baseline.get("syncRecords").isJsonArray()
+                    && current.has("syncRecords") && current.get("syncRecords").isJsonArray())
+                return buildRecordPatchV2(baseline, current);
 
-            JsonArray operations = new JsonArray();
-            for (String table : names) {
-                if (!baseTables.has(table) || !nowTables.has(table)
-                        || !baseTables.get(table).isJsonArray()
-                        || !nowTables.get(table).isJsonArray())
-                    return null;
-
-                JsonArray before = baseTables.getAsJsonArray(table);
-                JsonArray after = nowTables.getAsJsonArray(table);
-                if (canonicalJson(before).equals(canonicalJson(after))) continue;
-
-                java.util.Map<String,JsonObject> beforeRows = patchRowsById(before);
-                java.util.Map<String,JsonObject> afterRows = patchRowsById(after);
-                if (beforeRows == null || afterRows == null) return null;
-
-                java.util.Set<String> ids = new java.util.TreeSet<>();
-                ids.addAll(beforeRows.keySet());
-                ids.addAll(afterRows.keySet());
-                for (String id : ids) {
-                    JsonObject oldRow = beforeRows.get(id);
-                    JsonObject newRow = afterRows.get(id);
-                    if (oldRow != null && newRow != null
-                            && canonicalJson(oldRow).equals(canonicalJson(newRow)))
-                        continue;
-
-                    JsonObject operation = new JsonObject();
-                    operation.addProperty("table", table);
-                    operation.addProperty("id", id);
-                    if (newRow == null) {
-                        operation.addProperty("action", "delete");
-                        operation.addProperty("baseRowSha256", rowSha256(oldRow));
-                    } else {
-                        operation.addProperty("action", "upsert");
-                        operation.addProperty("baseRowSha256",
-                            oldRow == null ? "ABSENT" : rowSha256(oldRow));
-                        operation.add("row", newRow.deepCopy());
-                    }
-                    operations.add(operation);
-                    if (operations.size() > 500) return null;
-                }
-            }
-
-            if (operations.size() == 0) return null;
-            JsonObject payload = new JsonObject();
-            payload.addProperty("format", "edhome-record-patch");
-            payload.addProperty("version", 1);
-            payload.add("operations", operations);
-            return new RecordPatchPlan(payload, operations.size());
+            return buildLegacyRecordPatch(baseline, current);
         } catch (Exception invalid) {
             return null;
         }
+    }
+
+    private static RecordPatchPlan buildRecordPatchV2(
+            JsonObject baseline, JsonObject current) throws Exception {
+        JsonObject baseTables = baseline.getAsJsonObject("tables");
+        JsonObject nowTables = current.getAsJsonObject("tables");
+        java.util.Map<String,JsonObject> baseMeta = syncMetaByRow(baseline);
+        java.util.Map<String,JsonObject> nowMeta = syncMetaByRow(current);
+
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        names.addAll(baseTables.keySet());
+        names.addAll(nowTables.keySet());
+
+        JsonArray operations = new JsonArray();
+        for (String table : names) {
+            if (!baseTables.has(table) || !nowTables.has(table)
+                    || !baseTables.get(table).isJsonArray()
+                    || !nowTables.get(table).isJsonArray())
+                return null;
+
+            JsonArray before = baseTables.getAsJsonArray(table);
+            JsonArray after = nowTables.getAsJsonArray(table);
+            if (canonicalJson(before).equals(canonicalJson(after))) continue;
+
+            java.util.Map<String,JsonObject> beforeRows =
+                patchRowsByKey(table, before);
+            java.util.Map<String,JsonObject> afterRows =
+                patchRowsByKey(table, after);
+            if (beforeRows == null || afterRows == null) return null;
+
+            java.util.Set<String> keys = new java.util.TreeSet<>();
+            keys.addAll(beforeRows.keySet());
+            keys.addAll(afterRows.keySet());
+
+            for (String rowKey : keys) {
+                JsonObject oldRow = beforeRows.get(rowKey);
+                JsonObject newRow = afterRows.get(rowKey);
+                if (oldRow != null && newRow != null
+                        && canonicalJson(oldRow).equals(canonicalJson(newRow)))
+                    continue;
+
+                String metaKey = table + "\u0000" + rowKey;
+                JsonObject meta = oldRow != null
+                    ? baseMeta.get(metaKey) : nowMeta.get(metaKey);
+                if (meta == null
+                        || !meta.has("syncUuid")
+                        || !meta.has("revision"))
+                    return null;
+
+                String syncUuid = meta.get("syncUuid").getAsString();
+                long revision = meta.get("revision").getAsLong();
+                if (!syncUuid.matches("[0-9a-fA-F-]{36}")
+                        || (oldRow == null && revision != 0L)
+                        || (oldRow != null && revision < 1L))
+                    return null;
+
+                JsonObject operation = new JsonObject();
+                operation.addProperty("table", table);
+                operation.addProperty("rowKey", rowKey);
+                operation.addProperty("syncUuid",
+                    syncUuid.toLowerCase(Locale.ROOT));
+                operation.addProperty("baseRevision", revision);
+                if (newRow == null) {
+                    operation.addProperty("action", "delete");
+                } else {
+                    operation.addProperty("action", "upsert");
+                    operation.add("row", newRow.deepCopy());
+                }
+                operations.add(operation);
+                if (operations.size() > 500) return null;
+            }
+        }
+
+        if (operations.size() == 0) return null;
+        JsonObject payload = new JsonObject();
+        payload.addProperty("format", "edhome-record-patch");
+        payload.addProperty("version", 2);
+        payload.add("operations", operations);
+        return new RecordPatchPlan(payload, operations.size());
+    }
+
+    private static RecordPatchPlan buildLegacyRecordPatch(
+            JsonObject baseline, JsonObject current) throws Exception {
+        JsonObject baseTables = baseline.getAsJsonObject("tables");
+        JsonObject nowTables = current.getAsJsonObject("tables");
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        names.addAll(baseTables.keySet());
+        names.addAll(nowTables.keySet());
+
+        JsonArray operations = new JsonArray();
+        for (String table : names) {
+            if (!baseTables.has(table) || !nowTables.has(table)
+                    || !baseTables.get(table).isJsonArray()
+                    || !nowTables.get(table).isJsonArray())
+                return null;
+
+            JsonArray before = baseTables.getAsJsonArray(table);
+            JsonArray after = nowTables.getAsJsonArray(table);
+            if (canonicalJson(before).equals(canonicalJson(after))) continue;
+
+            java.util.Map<String,JsonObject> beforeRows = patchRowsById(before);
+            java.util.Map<String,JsonObject> afterRows = patchRowsById(after);
+            if (beforeRows == null || afterRows == null) return null;
+
+            java.util.Set<String> ids = new java.util.TreeSet<>();
+            ids.addAll(beforeRows.keySet());
+            ids.addAll(afterRows.keySet());
+            for (String id : ids) {
+                JsonObject oldRow = beforeRows.get(id);
+                JsonObject newRow = afterRows.get(id);
+                if (oldRow != null && newRow != null
+                        && canonicalJson(oldRow).equals(canonicalJson(newRow)))
+                    continue;
+
+                JsonObject operation = new JsonObject();
+                operation.addProperty("table", table);
+                operation.addProperty("id", id);
+                if (newRow == null) {
+                    operation.addProperty("action", "delete");
+                    operation.addProperty("baseRowSha256", rowSha256(oldRow));
+                } else {
+                    operation.addProperty("action", "upsert");
+                    operation.addProperty("baseRowSha256",
+                        oldRow == null ? "ABSENT" : rowSha256(oldRow));
+                    operation.add("row", newRow.deepCopy());
+                }
+                operations.add(operation);
+                if (operations.size() > 500) return null;
+            }
+        }
+
+        if (operations.size() == 0) return null;
+        JsonObject payload = new JsonObject();
+        payload.addProperty("format", "edhome-record-patch");
+        payload.addProperty("version", 1);
+        payload.add("operations", operations);
+        return new RecordPatchPlan(payload, operations.size());
+    }
+
+    private static java.util.Map<String,JsonObject> syncMetaByRow(JsonObject root) {
+        java.util.Map<String,JsonObject> result = new java.util.LinkedHashMap<>();
+        if (root == null || !root.has("syncRecords")
+                || !root.get("syncRecords").isJsonArray()) return result;
+        for (JsonElement element : root.getAsJsonArray("syncRecords")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject meta = element.getAsJsonObject();
+            if (!meta.has("table") || !meta.has("rowKey")) continue;
+            if (meta.has("deletedAt") && !meta.get("deletedAt").isJsonNull()) continue;
+            result.put(meta.get("table").getAsString() + "\u0000"
+                + meta.get("rowKey").getAsString(), meta);
+        }
+        return result;
+    }
+
+    private static java.util.Map<String,JsonObject> patchRowsByKey(
+            String table, JsonArray rows) {
+        java.util.Map<String,JsonObject> result = new java.util.LinkedHashMap<>();
+        for (JsonElement element : rows) {
+            if (!element.isJsonObject()) return null;
+            JsonObject row = element.getAsJsonObject();
+            String key = patchRowKey(table, row);
+            if (key == null || key.isBlank() || result.put(key, row) != null)
+                return null;
+        }
+        return result;
+    }
+
+    private static String patchRowKey(String table, JsonObject row) {
+        try {
+            if ("task_rotation_members".equals(table))
+                return canonicalId(row.get("task_id")) + ":"
+                    + canonicalId(row.get("member_id"));
+            if ("pantry_packages".equals(table))
+                return canonicalId(row.get("pantry_id"));
+            return canonicalId(row.get("id"));
+        } catch (Exception invalid) {
+            return null;
+        }
+    }
+
+    private static String canonicalId(JsonElement id) {
+        if (id == null || id.isJsonNull() || !id.isJsonPrimitive()
+                || !id.getAsJsonPrimitive().isNumber())
+            throw new IllegalArgumentException("Brak numerycznego klucza rekordu.");
+        java.math.BigDecimal number =
+            new java.math.BigDecimal(id.getAsString());
+        return Long.toString(number.longValueExact());
     }
 
     private static java.util.Map<String,JsonObject> patchRowsById(JsonArray rows) {
@@ -4971,18 +5112,75 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private static String patchRowId(JsonObject row) {
-        JsonElement id = row.get("id");
-        if (id == null || id.isJsonNull() || !id.isJsonPrimitive()) return null;
-        JsonPrimitive primitive = id.getAsJsonPrimitive();
-        if (primitive.isNumber()) {
-            try {
-                java.math.BigDecimal number =
-                    new java.math.BigDecimal(primitive.getAsString());
-                if (number.compareTo(java.math.BigDecimal.ZERO) == 0) return "0";
-                return number.stripTrailingZeros().toPlainString();
-            } catch (Exception ignored) { }
+        try {
+            return canonicalId(row.get("id"));
+        } catch (Exception ignored) {
+            return null;
         }
-        return primitive.getAsString();
+    }
+
+    private static void ensureDesktopSyncMetadata(JsonObject root) throws Exception {
+        if (root == null || !root.has("syncRecords")
+                || !root.get("syncRecords").isJsonArray()
+                || !root.has("tables") || !root.get("tables").isJsonObject())
+            return;
+
+        JsonArray metadata = root.getAsJsonArray("syncRecords");
+        java.util.Map<String,JsonObject> active = syncMetaByRow(root);
+        JsonObject tables = root.getAsJsonObject("tables");
+        long now = System.currentTimeMillis();
+
+        for (String table : tables.keySet()) {
+            JsonElement tableElement = tables.get(table);
+            if (!tableElement.isJsonArray()) continue;
+            for (JsonElement element : tableElement.getAsJsonArray()) {
+                if (!element.isJsonObject()) continue;
+                JsonObject row = element.getAsJsonObject();
+                String rowKey = patchRowKey(table, row);
+                if (rowKey == null) continue;
+                String key = table + "\u0000" + rowKey;
+                if (active.containsKey(key)) continue;
+
+                JsonObject meta = new JsonObject();
+                meta.addProperty("syncUuid", java.util.UUID.randomUUID().toString());
+                meta.addProperty("table", table);
+                meta.addProperty("rowKey", rowKey);
+                meta.addProperty("revision", 0L);
+                meta.addProperty("updatedAt", now);
+                meta.add("deletedAt", com.google.gson.JsonNull.INSTANCE);
+                meta.addProperty("rowHash", rowSha256(row));
+                metadata.add(meta);
+                active.put(key, meta);
+            }
+        }
+    }
+
+    private static void applyPatchAck(JsonObject root, JsonArray results) {
+        if (root == null || results == null || results.size() == 0
+                || !root.has("syncRecords") || !root.get("syncRecords").isJsonArray())
+            return;
+        JsonArray metadata = root.getAsJsonArray("syncRecords");
+        java.util.Map<String,Integer> index = new java.util.HashMap<>();
+        for (int i = 0; i < metadata.size(); i++) {
+            JsonElement element = metadata.get(i);
+            if (!element.isJsonObject()) continue;
+            JsonObject meta = element.getAsJsonObject();
+            if (meta.has("syncUuid"))
+                index.put(meta.get("syncUuid").getAsString().toLowerCase(Locale.ROOT), i);
+        }
+        for (JsonElement element : results) {
+            if (!element.isJsonObject()) continue;
+            JsonObject meta = element.getAsJsonObject();
+            if (!meta.has("syncUuid")) continue;
+            String uuid = meta.get("syncUuid").getAsString().toLowerCase(Locale.ROOT);
+            Integer position = index.get(uuid);
+            if (position == null) {
+                metadata.add(meta.deepCopy());
+                index.put(uuid, metadata.size() - 1);
+            } else {
+                metadata.set(position, meta.deepCopy());
+            }
+        }
     }
 
     private static String rowSha256(JsonObject row) throws Exception {
