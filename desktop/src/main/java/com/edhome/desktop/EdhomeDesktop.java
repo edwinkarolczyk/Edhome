@@ -4494,68 +4494,283 @@ public final class EdhomeDesktop extends JFrame {
             if (automatic) scheduleAutoSave();
             return;
         }
+
         String host = PREFS.get("phoneIp", "").trim();
         String secret = PREFS.get("token", "").trim();
-        if (host.isBlank() || secret.isBlank() || snapshotHash.isBlank()) {
+        if (host.isBlank() || secret.isBlank() || snapshotHash.isBlank()
+                || syncedSnapshot == null) {
             if (automatic) {
-                connection.setText("OFFLINE • zmiana czeka na świeże połączenie");
+                connection.setText("ZAPISANO LOKALNIE • czeka na świeże połączenie");
                 return;
             }
             JOptionPane.showMessageDialog(this,
                 "Najpierw pobierz świeże dane z telefonu. "
-                    + "Kopia offline nie może nadpisać telefonu.");
+                    + "Zmiany lokalne są bezpieczne, ale wymagają aktualnej bazy do scalenia.");
             return;
         }
+
         if (!automatic) {
             int choice = JOptionPane.showConfirmDialog(this,
-                "Zapisać zmiany z PC do telefonu?\n"
-                    + "EDHOME sprawdzi, czy dane na telefonie nie zmieniły się "
-                    + "od ostatniego pobrania.",
+                "Zsynchronizować zmiany z PC?\n"
+                    + "EDHOME wyśle tylko zmienione rekordy i sprawdzi konflikty "
+                    + "na poziomie konkretnej pozycji.",
                 "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
             if (choice != JOptionPane.YES_OPTION) return;
         }
 
+        final JsonObject outgoing = snapshot.deepCopy();
+        final JsonObject baseline = syncedSnapshot.deepCopy();
+        final long generation = localEditGeneration;
+        final RecordPatchPlan patchPlan = buildRecordPatch(baseline, outgoing);
+        final String baseSnapshotSha = snapshotHash;
+
         autoSaving = true;
         if (trigger != null) trigger.setEnabled(false);
-        connection.setText(automatic ? "AUTO-SYNC • zapis do telefonu…" : "ZAPIS DO TELEFONU…");
-        new SwingWorker<SnapshotResult,Void>() {
-            @Override protected SnapshotResult doInBackground() throws Exception {
-                return new LanClient(host, PORT, secret).write(snapshot, snapshotHash);
+        connection.setText(patchPlan != null && patchPlan.operations > 0
+            ? "SYNC • wysyłam " + patchPlan.operations + " zmian rekordowych…"
+            : "SYNC • pełne pojednanie danych…");
+
+        new SwingWorker<SyncWriteResult,Void>() {
+            @Override protected SyncWriteResult doInBackground() throws Exception {
+                LanClient client = new LanClient(host, PORT, secret);
+                if (patchPlan != null && patchPlan.operations > 0) {
+                    try {
+                        PatchResult patched = client.patch(patchPlan.payload);
+                        return new SyncWriteResult(outgoing, patched.sha256,
+                            patched.revision, true, patchPlan.operations);
+                    } catch (PatchUnsupportedException oldAndroid) {
+                        // Kompatybilność: starszy Android nadal przyjmie bezpieczny snapshot.
+                    }
+                }
+                SnapshotResult full = client.write(outgoing, baseSnapshotSha);
+                return new SyncWriteResult(full.data, full.sha256,
+                    full.revision, false, 0);
             }
+
             @Override protected void done() {
-                trigger.setEnabled(true);
+                autoSaving = false;
+                if (trigger != null) trigger.setEnabled(true);
                 try {
-                    SnapshotResult result = get();
-                    snapshot = result.data;
+                    SyncWriteResult result = get();
+                    connected = true;
+                    syncedSnapshot = result.data.deepCopy();
                     snapshotHash = result.sha256;
-                    dirty = false;
-                    saveCache(snapshot);
-                    connection.setText(automatic
-                        ? "ONLINE • auto-sync zapisany"
-                        : "ONLINE • EDYCJA • zapisano");
+                    phoneRevision = result.revision;
+                    if (!result.patchUsed)
+                        lastFullReconcileAt = System.currentTimeMillis();
+
+                    if (localEditGeneration == generation) {
+                        snapshot = result.data.deepCopy();
+                        dirty = false;
+                        saveCache(snapshot);
+                    } else {
+                        // Użytkownik zdążył zrobić kolejne zmiany w czasie synchronizacji.
+                        dirty = true;
+                        saveCache(snapshot);
+                        scheduleAutoSave();
+                    }
+
+                    connection.setText(result.patchUsed
+                        ? "ONLINE • zsynchronizowano " + result.operations
+                            + (result.operations == 1 ? " zmianę" : " zmiany")
+                        : "ONLINE • pełne pojednanie zakończone");
                     if (!automatic) showSection(current);
                     updateTrayTooltip();
                 } catch (Exception ex) {
                     String message = rootMessage(ex);
-                    connection.setText(message.contains("nowsze dane")
-                        ? "KONFLIKT • telefon ma nowsze dane"
-                        : "OFFLINE • auto-zapis oczekuje");
+                    boolean conflict = message.contains("Konflikt")
+                        || message.contains("nowsze dane");
+                    connection.setText(conflict
+                        ? "KONFLIKT • ten sam rekord zmieniono na innym urządzeniu"
+                        : "ZAPISANO LOKALNIE • synchronizacja oczekuje");
                     if (automatic) {
-                        if (trayIcon != null && message.contains("nowsze dane"))
+                        if (trayIcon != null && conflict)
                             trayIcon.displayMessage("EDHOME Desktop",
-                                "Konflikt synchronizacji. Zmiany z PC nie zostały nadpisane.",
+                                "Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane.",
                                 TrayIcon.MessageType.WARNING);
                     } else {
                         JOptionPane.showMessageDialog(EdhomeDesktop.this,
-                            "Nie zapisano zmian:\n" + message
-                                + "\n\nJeśli telefon zmienił dane w międzyczasie, "
-                                + "wybierz „Pobierz ponownie”, sprawdź różnice "
-                                + "i wprowadź zmianę jeszcze raz.",
+                            "Nie zsynchronizowano zmian:\n" + message
+                                + "\n\nLokalna kopia na PC została zachowana.",
                             "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
                     }
                 }
             }
         }.execute();
+    }
+
+    private static RecordPatchPlan buildRecordPatch(
+            JsonObject baseline, JsonObject current) {
+        if (baseline == null || current == null) return null;
+        try {
+            JsonElement baseSettings = baseline.get("settings");
+            JsonElement nowSettings = current.get("settings");
+            if (!canonicalJson(baseSettings).equals(canonicalJson(nowSettings)))
+                return null; // ustawienia nadal idą bezpiecznym pełnym snapshotem
+
+            if (!baseline.has("tables") || !baseline.get("tables").isJsonObject()
+                    || !current.has("tables") || !current.get("tables").isJsonObject())
+                return null;
+
+            JsonObject baseTables = baseline.getAsJsonObject("tables");
+            JsonObject nowTables = current.getAsJsonObject("tables");
+            java.util.Set<String> names = new java.util.TreeSet<>();
+            names.addAll(baseTables.keySet());
+            names.addAll(nowTables.keySet());
+
+            JsonArray operations = new JsonArray();
+            for (String table : names) {
+                if (!baseTables.has(table) || !nowTables.has(table)
+                        || !baseTables.get(table).isJsonArray()
+                        || !nowTables.get(table).isJsonArray())
+                    return null;
+
+                JsonArray before = baseTables.getAsJsonArray(table);
+                JsonArray after = nowTables.getAsJsonArray(table);
+                if (canonicalJson(before).equals(canonicalJson(after))) continue;
+
+                java.util.Map<String,JsonObject> beforeRows = patchRowsById(before);
+                java.util.Map<String,JsonObject> afterRows = patchRowsById(after);
+                if (beforeRows == null || afterRows == null) return null;
+
+                java.util.Set<String> ids = new java.util.TreeSet<>();
+                ids.addAll(beforeRows.keySet());
+                ids.addAll(afterRows.keySet());
+                for (String id : ids) {
+                    JsonObject oldRow = beforeRows.get(id);
+                    JsonObject newRow = afterRows.get(id);
+                    if (oldRow != null && newRow != null
+                            && canonicalJson(oldRow).equals(canonicalJson(newRow)))
+                        continue;
+
+                    JsonObject operation = new JsonObject();
+                    operation.addProperty("table", table);
+                    operation.addProperty("id", id);
+                    if (newRow == null) {
+                        operation.addProperty("action", "delete");
+                        operation.addProperty("baseRowSha256", rowSha256(oldRow));
+                    } else {
+                        operation.addProperty("action", "upsert");
+                        operation.addProperty("baseRowSha256",
+                            oldRow == null ? "ABSENT" : rowSha256(oldRow));
+                        operation.add("row", newRow.deepCopy());
+                    }
+                    operations.add(operation);
+                    if (operations.size() > 500) return null;
+                }
+            }
+
+            if (operations.size() == 0) return null;
+            JsonObject payload = new JsonObject();
+            payload.addProperty("format", "edhome-record-patch");
+            payload.addProperty("version", 1);
+            payload.add("operations", operations);
+            return new RecordPatchPlan(payload, operations.size());
+        } catch (Exception invalid) {
+            return null;
+        }
+    }
+
+    private static java.util.Map<String,JsonObject> patchRowsById(JsonArray rows) {
+        java.util.Map<String,JsonObject> result = new java.util.LinkedHashMap<>();
+        for (JsonElement element : rows) {
+            if (!element.isJsonObject()) return null;
+            JsonObject row = element.getAsJsonObject();
+            String id = patchRowId(row);
+            if (id == null || id.isBlank() || result.put(id, row) != null)
+                return null;
+        }
+        return result;
+    }
+
+    private static String patchRowId(JsonObject row) {
+        JsonElement id = row.get("id");
+        if (id == null || id.isJsonNull() || !id.isJsonPrimitive()) return null;
+        JsonPrimitive primitive = id.getAsJsonPrimitive();
+        if (primitive.isNumber()) {
+            try {
+                java.math.BigDecimal number =
+                    new java.math.BigDecimal(primitive.getAsString());
+                if (number.compareTo(java.math.BigDecimal.ZERO) == 0) return "0";
+                return number.stripTrailingZeros().toPlainString();
+            } catch (Exception ignored) { }
+        }
+        return primitive.getAsString();
+    }
+
+    private static String rowSha256(JsonObject row) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256")
+            .digest(canonicalJson(row).getBytes(StandardCharsets.UTF_8));
+        StringBuilder out = new StringBuilder(64);
+        for (byte value : digest)
+            out.append(String.format(Locale.ROOT, "%02x", value & 0xFF));
+        return out.toString();
+    }
+
+    private static String canonicalJson(JsonElement element) {
+        if (element == null || element.isJsonNull()) return "null";
+        if (element.isJsonObject()) {
+            JsonObject object = element.getAsJsonObject();
+            java.util.List<String> keys = new ArrayList<>(object.keySet());
+            java.util.Collections.sort(keys);
+            StringBuilder out = new StringBuilder("{");
+            for (int i = 0; i < keys.size(); i++) {
+                if (i > 0) out.append(',');
+                String key = keys.get(i);
+                out.append(GSON.toJson(key)).append(':')
+                    .append(canonicalJson(object.get(key)));
+            }
+            return out.append('}').toString();
+        }
+        if (element.isJsonArray()) {
+            JsonArray array = element.getAsJsonArray();
+            StringBuilder out = new StringBuilder("[");
+            for (int i = 0; i < array.size(); i++) {
+                if (i > 0) out.append(',');
+                out.append(canonicalJson(array.get(i)));
+            }
+            return out.append(']').toString();
+        }
+        JsonPrimitive primitive = element.getAsJsonPrimitive();
+        if (primitive.isBoolean()) return Boolean.toString(primitive.getAsBoolean());
+        if (primitive.isNumber()) {
+            try {
+                java.math.BigDecimal number =
+                    new java.math.BigDecimal(primitive.getAsString());
+                if (number.compareTo(java.math.BigDecimal.ZERO) == 0) return "0";
+                return number.stripTrailingZeros().toPlainString();
+            } catch (Exception ignored) {
+                return primitive.getAsString();
+            }
+        }
+        return GSON.toJson(primitive.getAsString());
+    }
+
+    private static final class RecordPatchPlan {
+        final JsonObject payload;
+        final int operations;
+
+        RecordPatchPlan(JsonObject payload, int operations) {
+            this.payload = payload;
+            this.operations = operations;
+        }
+    }
+
+    private static final class SyncWriteResult {
+        final JsonObject data;
+        final String sha256;
+        final long revision;
+        final boolean patchUsed;
+        final int operations;
+
+        SyncWriteResult(JsonObject data, String sha256, long revision,
+                boolean patchUsed, int operations) {
+            this.data = data;
+            this.sha256 = sha256 == null ? "" : sha256;
+            this.revision = revision;
+            this.patchUsed = patchUsed;
+            this.operations = operations;
+        }
     }
 
     private static String rootMessage(Throwable error) {
