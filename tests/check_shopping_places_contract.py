@@ -40,11 +40,11 @@ for phrase in (
 assert 'pricePerUnitGrosz' in cost and 'quantityMilli == null) return null;' in cost
 assert 'BigDecimal.valueOf(quantityMilli, 3)' in cost
 assert 'RoundingMode.HALF_UP' in cost
-assert 'private static final int DB_VERSION = 34;' in backup
+assert 'private static final int DB_VERSION = 35;' in backup
 assert '"shopping_items", "id", "name", "qty_milli", "unit", "checked",' in backup
 assert '"packages", "before_qty", "after_qty", "happened_at",' in backup
 assert 'if (inputVersion < 23' in backup
-assert 'inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != DB_VERSION' in backup
 assert 'Zakup ma nieistniejące miejsce.' in backup
 assert 'Przyjęcie ma nieistniejące miejsce.' in backup
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle

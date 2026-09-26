@@ -39,4 +39,4 @@ except sqlite3.IntegrityError:
     pass
 assert db.execute("SELECT COUNT(*) FROM vehicle_documents").fetchone()==(1,)
 assert db.execute("SELECT COUNT(*) FROM paycheck_transactions").fetchone()==(0,)
-print("Vehicle documents: SQLite v34, one-time ID, ledger isolation and backup contract PASS")
+print("Vehicle documents: SQLite v35, one-time ID, ledger isolation and backup contract PASS")

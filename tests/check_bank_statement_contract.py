@@ -33,7 +33,7 @@ for word in ('bankImportDiag(', 'bankImportDiagLine()',
              'bankImportDiag("BŁĄD • "+diagStage',
              'Diagnostyka importu:'):
     assert word in ui,word
-assert 'inputVersion != 33 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 33 && inputVersion != 34 && inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
 assert '"statement_key", "statement_date"' in backup
 assert 'bankStatementOperations.add(bankKey)' in backup

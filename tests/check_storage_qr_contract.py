@@ -14,7 +14,7 @@ gradle=Path("app/build.gradle").read_text()
 for token in (
     'StorageStore.createTables(database);',
     'DATABASE_MIGRATED_18_TO_19_STORAGE_QR',
-    'super(context, "edhome-beta-preview.db", null, 34)',
+    'super(context, "edhome-beta-preview.db", null, 35)',
     'case "storage": storage(); break;',
     'private boolean storageQrCameraPending;',
     'if (storageQrCameraPending) {',
@@ -44,7 +44,7 @@ for token in (
     assert token in store, "Missing storage safety: "+token
 
 for token in (
-    'DB_VERSION = 34;',
+    'DB_VERSION = 35;',
     '{"storage_items", "id", "name", "kind", "parent_box_id", "place_id",',
     '{"storage_events", "id", "item_id", "name_snapshot", "action",',
     'inputVersion < 19 && ("storage_items".equals(definition[0])',

@@ -51,7 +51,7 @@ for token in ('{"pantry_product_details", "id", "pantry_id", "brand", "image_url
               'inputVersion < 15 && "pantry_product_details".equals(definition[0])',
               "Nieprawidłowe powiązanie zdjęcia.",
               "Nieprawidłowe dane zdjęcia w kopii.",
-              "DB_VERSION = 34;"):
+              "DB_VERSION = 35;"):
     assert token in backup, "Missing backup contract: " + token
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 assert "if (found == null) {\n            name = new EditText(this);" in main
