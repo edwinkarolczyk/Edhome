@@ -452,12 +452,14 @@ public final class EdhomeDesktop extends JFrame {
         JButton analysis = actionButton("Analiza");
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
+        JButton privatePay = actionButton("Prywatny PayCheck");
         left.add(importBank);
         left.add(queue);
         left.add(history);
         left.add(analysis);
         left.add(goals);
         left.add(bulk);
+        left.add(privatePay);
         tools.add(left, BorderLayout.WEST);
 
         int open = 0;
@@ -475,6 +477,7 @@ public final class EdhomeDesktop extends JFrame {
         analysis.addActionListener(e -> showPaycheckAnalysis());
         goals.addActionListener(e -> showPaycheckGoals());
         bulk.addActionListener(e -> showPaycheckBulkEdit());
+        privatePay.addActionListener(e -> showPrivatePaycheck());
 
         wrapper.add(tools, BorderLayout.NORTH);
         wrapper.add(tablePage("PayCheck • wspólne", "paycheck_transactions",
@@ -773,6 +776,256 @@ public final class EdhomeDesktop extends JFrame {
         if (grosz < 1 || grosz > 99_999_999_999L)
             throw new IllegalArgumentException("Kwota poza zakresem.");
         return grosz;
+    }
+
+    private void showPrivatePaycheck() {
+        DesktopPrivatePaycheckVault.Session session = null;
+        try {
+            session = openPrivatePaycheckSession();
+            if (session == null) return;
+
+            while (session.active()) {
+                java.util.List<DesktopPrivatePaycheckVault.Entry> entries =
+                    DesktopPrivatePaycheckVault.entries(session);
+                DefaultListModel<Choice> model = new DefaultListModel<>();
+                long balance = 0L;
+                int pending = 0;
+                for (int i=0; i<entries.size(); i++) {
+                    DesktopPrivatePaycheckVault.Entry entry = entries.get(i);
+                    if ("pending".equals(entry.status)) pending++;
+                    else balance += "income".equals(entry.kind)
+                        ? entry.grosz : -entry.grosz;
+                    String label = ("pending".equals(entry.status) ? "OCZEKUJE • " : "")
+                        + ("income".equals(entry.kind) ? "+ " : "− ")
+                        + money(Long.toString(entry.grosz)) + " • "
+                        + friendlyValueStaticCategory(entry.category) + " • "
+                        + entry.note + " • "
+                        + timeValue(Long.toString(entry.date));
+                    model.addElement(new Choice(Integer.toString(i), label));
+                }
+
+                JList<Choice> list = new JList<>(model);
+                list.setVisibleRowCount(Math.min(12, Math.max(4, model.size())));
+                if (!model.isEmpty()) list.setSelectedIndex(0);
+                JScrollPane pane = new JScrollPane(list);
+                pane.setPreferredSize(new Dimension(760, 320));
+
+                JPanel view = new JPanel(new BorderLayout(0,8));
+                JLabel summary = new JLabel("Saldo potwierdzone: "
+                    + money(Long.toString(balance))
+                    + "   •   oczekujące: " + pending
+                    + "   •   wpisy: " + entries.size());
+                view.add(summary, BorderLayout.NORTH);
+                view.add(pane, BorderLayout.CENTER);
+
+                Object[] actions = {
+                    "Dodaj prywatny wpis",
+                    "Potwierdź oczekującą",
+                    "Prywatne operacje z banku",
+                    "Eksportuj zaszyfrowaną kopię",
+                    "Zamknij"
+                };
+                int action = JOptionPane.showOptionDialog(this, view,
+                    "Prywatny PayCheck • zaszyfrowany lokalnie",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, actions, actions[0]);
+                if (action == 0) addPrivatePaycheckEntry(session);
+                else if (action == 1) confirmPrivatePending(session);
+                else if (action == 2) importPrivateBankEvidence(session);
+                else if (action == 3) exportPrivatePaycheck();
+                else break;
+            }
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Prywatny PayCheck: " + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            if (session != null) session.close();
+        }
+    }
+
+    private DesktopPrivatePaycheckVault.Session openPrivatePaycheckSession()
+            throws Exception {
+        if (!DesktopPrivatePaycheckVault.configured()) {
+            Object[] setup = {
+                "Utwórz pusty sejf",
+                "Importuj zaszyfrowaną kopię z telefonu",
+                "Anuluj"
+            };
+            int choice = JOptionPane.showOptionDialog(this,
+                "Prywatny PayCheck nie jest jeszcze skonfigurowany na tym komputerze.\n"
+                    + "Nie trafia do zwykłej synchronizacji Android ↔ PC.",
+                "Prywatny PayCheck", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, setup, setup[0]);
+            if (choice == 0) {
+                JPasswordField first = new JPasswordField();
+                JPasswordField second = new JPasswordField();
+                JPanel form = new JPanel(new GridLayout(0,2,8,8));
+                form.add(new JLabel("Hasło kopii/sejfu (12–64):")); form.add(first);
+                form.add(new JLabel("Powtórz hasło:")); form.add(second);
+                int ok = JOptionPane.showConfirmDialog(this, form,
+                    "Utwórz prywatny sejf", JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE);
+                if (ok != JOptionPane.OK_OPTION) return null;
+                char[] a = first.getPassword();
+                char[] b = second.getPassword();
+                try {
+                    if (!java.util.Arrays.equals(a,b))
+                        throw new IllegalArgumentException("Hasła nie są takie same.");
+                    return DesktopPrivatePaycheckVault.create(a);
+                } finally {
+                    java.util.Arrays.fill(a,'\0');
+                    java.util.Arrays.fill(b,'\0');
+                }
+            }
+            if (choice == 1) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setDialogTitle("Wybierz zaszyfrowaną kopię prywatnego PayCheck");
+                if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return null;
+                char[] password = askPrivatePassword(
+                    "Hasło zaszyfrowanej kopii z telefonu");
+                if (password == null) return null;
+                try {
+                    return DesktopPrivatePaycheckVault.importArchive(
+                        chooser.getSelectedFile().toPath(), password);
+                } finally {
+                    java.util.Arrays.fill(password,'\0');
+                }
+            }
+            return null;
+        }
+
+        char[] password = askPrivatePassword("Odblokuj prywatny PayCheck");
+        if (password == null) return null;
+        try {
+            return DesktopPrivatePaycheckVault.unlock(password);
+        } finally {
+            java.util.Arrays.fill(password,'\0');
+        }
+    }
+
+    private char[] askPrivatePassword(String title) {
+        JPasswordField field = new JPasswordField();
+        JPanel panel = new JPanel(new BorderLayout(0,8));
+        panel.add(new JLabel("Hasło prywatnego sejfu / kopii:"), BorderLayout.NORTH);
+        panel.add(field, BorderLayout.CENTER);
+        int ok = JOptionPane.showConfirmDialog(this, panel, title,
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        return ok == JOptionPane.OK_OPTION ? field.getPassword() : null;
+    }
+
+    private void addPrivatePaycheckEntry(DesktopPrivatePaycheckVault.Session session)
+            throws Exception {
+        Choice[] kinds = {
+            new Choice("expense","Wydatek"),
+            new Choice("income","Wpływ")
+        };
+        Choice[] categories = privateCategoryChoices();
+        JComboBox<Choice> kind = new JComboBox<>(kinds);
+        JComboBox<Choice> category = new JComboBox<>(categories);
+        JTextField amount = new JTextField();
+        JTextField note = new JTextField();
+        JPanel form = new JPanel(new GridLayout(0,2,8,8));
+        form.add(new JLabel("Typ:")); form.add(kind);
+        form.add(new JLabel("Kategoria:")); form.add(category);
+        form.add(new JLabel("Kwota [PLN]:")); form.add(amount);
+        form.add(new JLabel("Opis:")); form.add(note);
+        int ok = JOptionPane.showConfirmDialog(this, form,
+            "Nowy prywatny wpis", JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION) return;
+        Choice k = (Choice)kind.getSelectedItem();
+        Choice cat = (Choice)category.getSelectedItem();
+        if (k == null || cat == null) return;
+        long grosz = parsePln(amount.getText());
+        String description = note.getText().trim();
+        if (description.length() > 160)
+            throw new IllegalArgumentException("Opis prywatny może mieć maks. 160 znaków.");
+        DesktopPrivatePaycheckVault.add(session, k.value, cat.value,
+            grosz, description, "confirmed");
+    }
+
+    private void confirmPrivatePending(DesktopPrivatePaycheckVault.Session session)
+            throws Exception {
+        java.util.List<DesktopPrivatePaycheckVault.Entry> pending = new ArrayList<>();
+        java.util.List<Choice> choices = new ArrayList<>();
+        for (DesktopPrivatePaycheckVault.Entry entry :
+                DesktopPrivatePaycheckVault.entries(session)) {
+            if (!"pending".equals(entry.status)) continue;
+            pending.add(entry);
+            choices.add(new Choice(entry.id,
+                ("income".equals(entry.kind) ? "+ " : "− ")
+                    + money(Long.toString(entry.grosz)) + " • "
+                    + entry.note + " • " + timeValue(Long.toString(entry.date))));
+        }
+        if (choices.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Brak prywatnych wpisów oczekujących.");
+            return;
+        }
+        Choice selected = (Choice) JOptionPane.showInputDialog(this,
+            "Wybierz wpis do potwierdzenia:",
+            "Prywatny PayCheck", JOptionPane.QUESTION_MESSAGE,
+            null, choices.toArray(), choices.get(0));
+        if (selected != null)
+            DesktopPrivatePaycheckVault.confirm(session, selected.value);
+    }
+
+    private void importPrivateBankEvidence(
+            DesktopPrivatePaycheckVault.Session session) throws Exception {
+        int imported = 0;
+        for (JsonElement element : table("bank_evidence_queue")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject evidence = element.getAsJsonObject();
+            if (!"open".equals(value(evidence, "state"))) continue;
+            String key = value(evidence, "evidence_key");
+            if (!"private".equals(PREFS.get("bank.scope." + key, ""))) continue;
+
+            String deterministic = java.util.UUID.nameUUIDFromBytes(
+                ("EDHOME_PRIVATE_BANK:" + key)
+                    .getBytes(StandardCharsets.UTF_8)).toString();
+            DesktopPrivatePaycheckVault.addWithId(session, deterministic,
+                value(evidence, "kind"), "other",
+                Long.parseLong(value(evidence, "amount_grosz")),
+                value(evidence, "description"), "pending");
+            evidence.addProperty("state", "dismissed");
+            evidence.add("matched_operation_id", com.google.gson.JsonNull.INSTANCE);
+            evidence.add("matched_at", com.google.gson.JsonNull.INSTANCE);
+            PREFS.remove("bank.scope." + key);
+            imported++;
+        }
+        if (imported > 0) {
+            markDirty();
+            JOptionPane.showMessageDialog(this,
+                "Dodano do prywatnego PayCheck jako oczekujące: " + imported);
+        } else JOptionPane.showMessageDialog(this,
+            "Brak prywatnych operacji bankowych oczekujących na przeniesienie.");
+    }
+
+    private void exportPrivatePaycheck() throws Exception {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Eksportuj zaszyfrowaną kopię prywatnego PayCheck");
+        chooser.setSelectedFile(new java.io.File(
+            "EDHOME-private-paycheck-encrypted.json"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        Path target = chooser.getSelectedFile().toPath();
+        DesktopPrivatePaycheckVault.exportArchive(target);
+        JOptionPane.showMessageDialog(this,
+            "Zapisano zaszyfrowaną kopię:\n" + target.toAbsolutePath());
+    }
+
+    private static Choice[] privateCategoryChoices() {
+        return new Choice[]{
+            new Choice("shopping","Zakupy"),
+            new Choice("bills","Rachunki"),
+            new Choice("home","Dom"),
+            new Choice("vehicle","Pojazdy"),
+            new Choice("salary","Wynagrodzenie"),
+            new Choice("food","Żywność"),
+            new Choice("household","Domowe"),
+            new Choice("beauty","Higiena"),
+            new Choice("pet","Zwierzęta"),
+            new Choice("other","Inne")
+        };
     }
 
     private void importBankStatement() {
