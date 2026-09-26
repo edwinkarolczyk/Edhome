@@ -8923,7 +8923,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 35);
+            super(context, "edhome-beta-preview.db", null, 36);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -8963,11 +8963,12 @@ public final class MainActivity extends Activity {
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
             PantryPackageStore.create(database);
+            SyncRecordStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 35) {
+            if (oldVersion < 1 || newVersion > 36) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -9147,6 +9148,16 @@ public final class MainActivity extends Activity {
             if(oldVersion < 35) {
                 addNfcLinks(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_34_TO_35_NFC_LINKS");
+            }
+            if(oldVersion < 36) {
+                try {
+                    SyncRecordStore.create(database);
+                    SyncRecordStore.ensureAll(database);
+                } catch (Exception error) {
+                    throw new IllegalStateException(
+                        "Nie udało się utworzyć metadanych synchronizacji.", error);
+                }
+                DiagnosticLog.event("DATABASE_MIGRATED_35_TO_36_SYNC_RECORDS");
             }
         }
 
