@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.68";
+    private static final String DESKTOP_VERSION = "0.6.0.69";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3135,6 +3135,7 @@ public final class EdhomeDesktop extends JFrame {
         JTextField token = new JTextField(PREFS.get("token", ""), 18);
         JButton qrPair = new JButton("Pokaż QR do połączenia");
         JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
+        JButton saveConnection = new JButton("Zapisz adres i kod");
         JButton diagnose = new JButton("Diagnostyka połączenia PC ↔ telefon");
         JButton importFile = new JButton("Wczytaj backup JSON");
         JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
@@ -3171,17 +3172,43 @@ public final class EdhomeDesktop extends JFrame {
         g.gridy=3; g.gridwidth=2; form.add(qrPair,g);
         g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
         g.gridx=1; form.add(importFile,g);
-        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(diagnose,g);
-        g.gridy=6; form.add(updateDesktop,g);
-        g.gridy=7; form.add(autostart,g);
-        g.gridy=8; form.add(startMinimized,g);
-        g.gridy=9; form.add(autoConnect,g);
-        g.gridy=10; form.add(autoWrite,g);
+        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(saveConnection,g);
+        g.gridy=6; form.add(diagnose,g);
+        g.gridy=7; form.add(updateDesktop,g);
+        g.gridy=8; form.add(autostart,g);
+        g.gridy=9; form.add(startMinimized,g);
+        g.gridy=10; form.add(autoConnect,g);
+        g.gridy=11; form.add(autoWrite,g);
+
+        Runnable saveConnectionFields = () -> {
+            String host = normalizePhoneHost(ip.getText());
+            String secret = token.getText().trim();
+            ip.setText(host);
+            PREFS.put("phoneIp", host);
+            PREFS.put("token", secret);
+        };
+        java.awt.event.FocusAdapter saveOnFocusLost = new java.awt.event.FocusAdapter() {
+            @Override public void focusLost(java.awt.event.FocusEvent event) {
+                saveConnectionFields.run();
+            }
+        };
+        ip.addFocusListener(saveOnFocusLost);
+        token.addFocusListener(saveOnFocusLost);
+        ip.addActionListener(e -> saveConnectionFields.run());
+        token.addActionListener(e -> saveConnectionFields.run());
+        saveConnection.addActionListener(e -> {
+            saveConnectionFields.run();
+            JOptionPane.showMessageDialog(this,
+                "Zapisano adres telefonu i kod parowania.");
+        });
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
-            String host = ip.getText().trim();
+            String host = normalizePhoneHost(ip.getText());
             String secret = token.getText().trim();
+            ip.setText(host);
+            PREFS.put("phoneIp", host);
+            PREFS.put("token", secret);
             if (host.isBlank() || secret.isBlank()) {
                 JOptionPane.showMessageDialog(this, "Wpisz adres telefonu i kod parowania.");
                 return;
@@ -3189,9 +3216,13 @@ public final class EdhomeDesktop extends JFrame {
             pullFromPhone(host, secret, pull);
         });
 
-        diagnose.addActionListener(e ->
-            diagnosePhoneConnection(ip.getText().trim(),
-                token.getText().trim(), diagnose));
+        diagnose.addActionListener(e -> {
+            String host = normalizePhoneHost(ip.getText());
+            ip.setText(host);
+            PREFS.put("phoneIp", host);
+            PREFS.put("token", token.getText().trim());
+            diagnosePhoneConnection(host, token.getText().trim(), diagnose);
+        });
         importFile.addActionListener(e -> importBackup());
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         autostart.addActionListener(e -> {
@@ -3329,6 +3360,21 @@ public final class EdhomeDesktop extends JFrame {
         }.execute();
     }
 
+    private static String normalizePhoneHost(String raw) {
+        String host = raw == null ? "" : raw.trim();
+        if (host.startsWith("http://")) host = host.substring(7);
+        else if (host.startsWith("https://")) host = host.substring(8);
+        int slash = host.indexOf('/');
+        if (slash >= 0) host = host.substring(0, slash);
+        int colon = host.lastIndexOf(':');
+        if (colon > 0 && host.indexOf(':') == colon) {
+            String port = host.substring(colon + 1);
+            if (port.matches("[0-9]{1,5}"))
+                host = host.substring(0, colon);
+        }
+        return host.trim();
+    }
+
     private void pullFromPhone(String host, String secret, JButton trigger) {
         pullFromPhone(host, secret, trigger, false);
     }
@@ -3336,6 +3382,8 @@ public final class EdhomeDesktop extends JFrame {
     private void pullFromPhone(String host, String secret, JButton trigger,
             boolean silent) {
         if (connecting || (silent && dirty)) return;
+        host = normalizePhoneHost(host);
+        if (host.isBlank()) return;
         connecting = true;
         PREFS.put("phoneIp", host);
         PREFS.put("token", secret);
