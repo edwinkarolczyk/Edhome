@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 124,
-  "versionName": "0.6.0.59",
-  "changelog": "EDHOME 0.6.0.59 — synchronizacja Desktop → Android odświeża od razu aktualnie otwarty widok telefonu. Odświeżenie zachowuje bieżący ekran i pozycję przewinięcia zamiast wymagać wyjścia i ponownego wejścia do modułu. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.59/edhome-beta.apk",
-  "sha256": "1673aeace56586e77e6537d016412ba2b6a3de6ee59a31d0aef6d5d10debb345"
+  "versionCode": 125,
+  "versionName": "0.6.0.60",
+  "changelog": "EDHOME 0.6.0.60 — ekran główny: kafelki zmniejszone o około 30%, z kompaktową siatką i mniejszymi odstępami. Podpisy, edycja układu, kafelki podwójne i przeciąganie pozostają bez zmian. Pozostałe ekrany nie są zmniejszane. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.60/edhome-beta.apk",
+  "sha256": "355d4312b342e016891bfb36a6cc5c1913579e760936aad24692aec76501ba4b"
 }
