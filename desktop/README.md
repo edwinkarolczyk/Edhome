@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.55
+## Aktualny stan Desktop — 0.6.0.56
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -140,6 +140,17 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - Magazyn/Rzeczy pokazuje miniaturę 56×56 px, jeżeli telefon ma zapisaną miniaturę dla danej rzeczy,
 - Desktop korzysta wyłącznie z małego `storageThumbnails/jpegBase64` z synchronizowanego snapshotu; nie pobiera oryginalnego zdjęcia ani zewnętrznego URI,
 - brak miniatury nie rezerwuje pustego miejsca w karcie.
+
+### Pomieszczenia i fizyczna lokalizacja
+- osobna zakładka `Pomieszczenia` buduje jeden widok z istniejących danych `places` i `storage_items`,
+- `Miejsca` pozostają edytorem struktury, a `Pomieszczenia` służą do szybkiego sprawdzania gdzie coś fizycznie się znajduje,
+- drzewo pokazuje hierarchię: pomieszczenie → podmiejsce/strefa → pudełko → rzecz/narzędzie,
+- po zaznaczeniu elementu Desktop pokazuje pełną ścieżkę lokalizacji,
+- wyszukiwarka `Gdzie jest` odnajduje pomieszczenia, pudełka i rzeczy po nazwie lub ścieżce,
+- elementy bez poprawnie przypisanego miejsca trafiają do grupy `Bez przypisanego miejsca`,
+- rzecz/pudełko pokazuje miniaturę 96×96 px, jeśli synchronizowana miniatura istnieje,
+- zaznaczone miejsce lub element magazynu można edytować bez opuszczania widoku `Pomieszczenia`,
+- widok nie tworzy drugiej bazy ani kopii magazynu; korzysta z tych samych rekordów co Android i moduł Magazyn.
 
 ## Braki do pełnej zgodności z APK
 

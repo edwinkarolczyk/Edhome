@@ -104,3 +104,18 @@ for marker in (
 ):
     assert marker in desktop, f"Missing compact-card/thumbnail contract: {marker}"
 print("EDHOME Desktop compact cards + thumbnails: PASS")
+
+# Rooms/location browser: one physical tree over places + storage.
+rooms = (root / "desktop/src/main/java/com/edhome/desktop/DesktopRoomsPanel.java").read_text(encoding="utf-8")
+for marker in (
+    '"Pomieszczenia"', 'DesktopRoomsPanel', 'editRoomNode',
+    'table("places")', 'table("storage_items")'
+):
+    assert marker in desktop, f"Missing rooms integration contract: {marker}"
+for marker in (
+    'Bez przypisanego miejsca', 'Gdzie jest:', 'Pełna lokalizacja:',
+    'parent_box_id', 'parent_id', 'place_id', 'storageThumbnails',
+    'jpegBase64', 'Wybierz pomieszczenie, pudełko lub rzecz'
+):
+    assert marker in rooms, f"Missing rooms tree contract: {marker}"
+print("EDHOME Desktop rooms/location tree: PASS")
