@@ -3382,10 +3382,10 @@ public final class EdhomeDesktop extends JFrame {
     private void pullFromPhone(String host, String secret, JButton trigger,
             boolean silent) {
         if (connecting || (silent && dirty)) return;
-        host = normalizePhoneHost(host);
-        if (host.isBlank()) return;
+        final String targetHost = normalizePhoneHost(host);
+        if (targetHost.isBlank()) return;
         connecting = true;
-        PREFS.put("phoneIp", host);
+        PREFS.put("phoneIp", targetHost);
         PREFS.put("token", secret);
         if (trigger != null) trigger.setEnabled(false);
         connection.setText(silent ? "SYNCHRONIZACJA…" : "ŁĄCZENIE…");
@@ -3394,7 +3394,7 @@ public final class EdhomeDesktop extends JFrame {
             @Override protected SnapshotResult doInBackground() throws Exception {
                 Exception first;
                 try {
-                    return new LanClient(host, PORT, secret).snapshot();
+                    return new LanClient(targetHost, PORT, secret).snapshot();
                 } catch (Exception error) {
                     first = error;
                 }
@@ -3402,7 +3402,7 @@ public final class EdhomeDesktop extends JFrame {
                 SwingUtilities.invokeLater(() ->
                     connection.setText("SZUKAM TELEFONU W SIECI LAN…"));
                 String discovered = LanClient.discover(secret, PORT);
-                if (discovered != null && !discovered.equals(host)) {
+                if (discovered != null && !discovered.equals(targetHost)) {
                     PREFS.put("phoneIp", discovered);
                     return new LanClient(discovered, PORT, secret).snapshot();
                 }
