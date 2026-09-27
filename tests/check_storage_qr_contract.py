@@ -57,7 +57,8 @@ for token in (
 assert 'EDHOME:STORAGE:1:' in qr
 assert 'id INTEGER PRIMARY KEY AUTOINCREMENT' in store
 assert 'CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT' in main
-assert 'nie będzie przydzielony nowemu obiektowi' in main
+assert 'QR zostanie unieważniony' in main
+assert 'przydzielony nowemu obiektowi' in main
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 
 expression=store.split('static void createTables(SQLiteDatabase db)',1)[1].split('static final class Item',1)[0]
