@@ -147,3 +147,12 @@ assert 'OFFLINE • szukam telefonu po zmianie IP' in desktop
 assert 'connected = false;' in desktop
 assert 'SwingUtilities.invokeLater(() -> autoConnectSaved(true))' in desktop
 print("desktop DHCP reconnect contract OK")
+
+# Phone LAN self-tests must never impersonate a real Desktop client.
+assert 'isThisDeviceAddress(InetAddress remote)' in server
+assert 'remote.isLoopbackAddress()' in server
+assert 'if (!selfClient)' in server
+assert 'LAST_CLIENT_SEEN_AT = System.currentTimeMillis();' in server
+assert 'syncTransfer = !selfClient' in server
+assert 'Self-test telefonu: nie jest liczony jako połączenie PC' in main
+print("desktop self-test isolation contract OK")
