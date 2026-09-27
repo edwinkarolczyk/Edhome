@@ -97,6 +97,10 @@ assert 'localAddresses()' in desktop
 assert 'LinkedHashSet<String> prefixes' in desktop
 assert 'newFixedThreadPool(96)' in desktop
 assert 'ExecutorCompletionService<String>' in desktop
+assert 'Diagnostyka połączenia PC ↔ telefon' in desktop
+assert 'diagnosePhoneConnection' in desktop
+assert 'TCP ' in desktop and 'BRAK POŁĄCZENIA' in desktop
+assert 'Automatyczne szukanie telefonu' in desktop
 print("desktop incremental sync contract OK")
 
 # Hardening: direct SQLite patching, UUID identity, revisions and tombstones.
