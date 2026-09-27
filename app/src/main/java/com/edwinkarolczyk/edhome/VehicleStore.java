@@ -60,6 +60,7 @@ final class VehicleStore {
                 new String[]{Long.toString(id)});
             db.delete("vehicle_costs","vehicle_id=?",
                 new String[]{Long.toString(id)});
+            NfcLinkStore.clearTarget(db,"vehicle",id);
             boolean deleted=db.delete("vehicles","id=?",
                 new String[]{Long.toString(id)})==1;
             db.setTransactionSuccessful();

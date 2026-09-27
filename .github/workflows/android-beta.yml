@@ -335,6 +335,8 @@ jobs:
           python3 tests/check_storage_qr_contract.py
       - name: Storage location and place deletion regression
         run: python3 tests/check_storage_integrity_contract.py
+      - name: NFC UID binding, Android reader and object lifecycle contract
+        run: python3 tests/check_nfc_contract.py
       - name: PayCheck grosze and shared-only ledger contract
         run: |
           mkdir -p "$RUNNER_TEMP/edhome-paycheck"
@@ -419,14 +421,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.46-signed-apk
+          name: EDHOME-0.6.0.49-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.46 — kompaktowe karty Czynności: przyciski Edytuj, Historia i Usuń są domyślnie schowane i rozwijają się po dotknięciu karty; ponowne dotknięcie je chowa. Zawiera też przygotowane wcześniej zmiany 0.6.0.44–0.6.0.45: synchronizację v2 i wydmuszkę Plan domu / posesji. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.49 — pełne NFC na telefonie: Rzecz, Pudełko, Miejsce, Produkt i Pojazd mają Przypisz tag NFC / Zmień tag / Usuń powiązanie. Naklejki i breloki są rozpoznawane po UID; ponowne przyłożenie otwiera właściwy obiekt. NFC jest opcjonalne sprzętowo, działa offline, jest w backupie i synchronizuje się z Desktopem. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

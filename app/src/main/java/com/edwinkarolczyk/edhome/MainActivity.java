@@ -24,6 +24,8 @@ import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
@@ -88,6 +90,9 @@ public final class MainActivity extends Activity {
     private String pendingCustomTileId;
     private long pendingStorageThumbnailId;
     private String pendingStatementBank;
+    private NfcAdapter nfcAdapter;
+    private PendingNfcTarget pendingNfcTarget;
+    private AlertDialog nfcAssignmentDialog;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -165,6 +170,7 @@ public final class MainActivity extends Activity {
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         if (BetaUpdater.isBeta()) {
             LanSyncServer.ensureToken(prefs);
             LanSyncService.ensureStarted(this);
@@ -184,6 +190,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
+        root.post(() -> handleNfcIntent(getIntent()));
         // The icon pack is part of the signed APK. Unpack in the background
         // without resetting the home screen, asking for ZIP or changing data.
         new Thread(() -> {
@@ -206,10 +213,16 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        disableNfcReaderMode();
+        if (nfcAssignmentDialog != null) {
+            nfcAssignmentDialog.dismiss();
+            nfcAssignmentDialog = null;
+        }
         super.onDestroy();
     }
 
     @Override public void onPause() {
+        disableNfcReaderMode();
         // Hide every private view BEFORE dropping FLAG_SECURE or taking a Recents snapshot.
         if (privateAuthDialog != null) {
             AlertDialog dialog = privateAuthDialog;
@@ -245,6 +258,7 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
+        enableNfcReaderMode();
         if (BetaUpdater.isBeta()) LanSyncService.ensureStarted(this);
         if (root != null && !unlocked) render();
         if (privateNeedsRender && root != null) {
@@ -275,6 +289,265 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && intent != null
                 && intent.getBooleanExtra("open_paycheck",false))
             go("paycheck");
+        handleNfcIntent(intent);
+    }
+
+    private static final class PendingNfcTarget {
+        final String kind;
+        final long id;
+        final String name;
+        PendingNfcTarget(String kind,long id,String name) {
+            this.kind=kind;
+            this.id=id;
+            this.name=name;
+        }
+    }
+
+    private void enableNfcReaderMode() {
+        if(nfcAdapter==null || !nfcAdapter.isEnabled())return;
+        int flags=NfcAdapter.FLAG_READER_NFC_A
+            |NfcAdapter.FLAG_READER_NFC_B
+            |NfcAdapter.FLAG_READER_NFC_F
+            |NfcAdapter.FLAG_READER_NFC_V
+            |NfcAdapter.FLAG_READER_NFC_BARCODE
+            |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+        try {
+            nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,null);
+        } catch(Exception error) {
+            DiagnosticLog.error("NFC_READER_ENABLE",error);
+        }
+    }
+
+    private void disableNfcReaderMode() {
+        if(nfcAdapter==null)return;
+        try { nfcAdapter.disableReaderMode(this); }
+        catch(Exception ignored) { }
+    }
+
+    private void onNfcTagDiscovered(Tag tag) {
+        final String uid;
+        try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
+        catch(Exception error) {
+            runOnUiThread(() -> alert(error.getMessage()));
+            return;
+        }
+        runOnUiThread(() -> handleNfcUid(uid));
+    }
+
+    private void handleNfcIntent(Intent intent) {
+        if(intent==null)return;
+        String action=intent.getAction();
+        if(!NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
+                && !NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
+                && !NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action))return;
+        Tag tag;
+        if(Build.VERSION.SDK_INT>=33)
+            tag=intent.getParcelableExtra(NfcAdapter.EXTRA_TAG,Tag.class);
+        else
+            tag=(Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+        if(tag!=null)onNfcTagDiscovered(tag);
+    }
+
+    private void handleNfcUid(String uid) {
+        if(!unlocked)return;
+        try {
+            NfcLinkStore.Link current=NfcLinkStore.findByUid(
+                db.getReadableDatabase(),uid);
+            if(pendingNfcTarget!=null) {
+                PendingNfcTarget target=pendingNfcTarget;
+                if(current!=null && current.kind.equals(target.kind)
+                        && current.targetId==target.id) {
+                    finishNfcAssignment(target,uid);
+                    return;
+                }
+                if(current!=null) {
+                    String old=NfcLinkStore.targetName(db.getReadableDatabase(),
+                        current.kind,current.targetId);
+                    new AlertDialog.Builder(this)
+                        .setTitle("Ten tag jest już używany")
+                        .setMessage("NFC "+NfcLinkStore.shortUid(uid)+" jest przypisany do: "
+                            +NfcLinkStore.kindLabel(current.kind)+" • "
+                            +(old.isEmpty()?"#"+current.targetId:old)
+                            +"\n\nPrzenieść tag do: "+target.name+"?")
+                        .setNegativeButton("Nie",null)
+                        .setPositiveButton("Przenieś",(d,w)->
+                            finishNfcAssignment(target,uid))
+                        .show();
+                    return;
+                }
+                finishNfcAssignment(target,uid);
+                return;
+            }
+            if(current==null) {
+                new AlertDialog.Builder(this)
+                    .setTitle("Nieznany tag NFC")
+                    .setMessage("UID: "+NfcLinkStore.shortUid(uid)
+                        +"\n\nAby go przypisać, otwórz Rzecz, Pudełko, Miejsce, "
+                        +"Produkt lub Pojazd i wybierz „Przypisz tag NFC”.")
+                    .setPositiveButton("OK",null).show();
+                DiagnosticLog.event("NFC_UNKNOWN_TAG");
+                return;
+            }
+            openNfcTarget(current);
+        } catch(Exception error) {
+            DiagnosticLog.error("NFC_READ",error);
+            alert("Nie udało się obsłużyć tagu NFC. Dane nie zostały zmienione.");
+        }
+    }
+
+    private void finishNfcAssignment(PendingNfcTarget target,String uid) {
+        try {
+            NfcLinkStore.bind(db.getWritableDatabase(),uid,target.kind,target.id);
+            pendingNfcTarget=null;
+            if(nfcAssignmentDialog!=null) {
+                nfcAssignmentDialog.dismiss();
+                nfcAssignmentDialog=null;
+            }
+            DiagnosticLog.event("NFC_TAG_ASSIGNED");
+            render();
+            alert("NFC przypisany\n"+target.name+"\nUID: "
+                +NfcLinkStore.shortUid(uid));
+        } catch(Exception error) {
+            DiagnosticLog.error("NFC_ASSIGN",error);
+            alert(error.getMessage()==null?"Nie zapisano NFC.":error.getMessage());
+        }
+    }
+
+    private void beginNfcAssignment(String kind,long id,String name) {
+        if(nfcAdapter==null) {
+            alert("Ten telefon nie ma sprzętowego NFC. Powiązanie możesz nadal "
+                +"utworzyć z EDHOME Desktop przez czytnik PC/SC.");
+            return;
+        }
+        if(!NfcLinkStore.targetExists(db.getReadableDatabase(),kind,id)) {
+            alert("Obiekt już nie istnieje.");
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Włącz NFC")
+                .setMessage("NFC jest wyłączone. Włącz je w ustawieniach telefonu "
+                    +"i wróć do EDHOME.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Ustawienia NFC",(d,w)->{
+                    try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+                    catch(Exception unavailable) {
+                        startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                    }
+                }).show();
+            return;
+        }
+        pendingNfcTarget=new PendingNfcTarget(kind,id,name);
+        if(nfcAssignmentDialog!=null)nfcAssignmentDialog.dismiss();
+        nfcAssignmentDialog=new AlertDialog.Builder(this)
+            .setTitle("Przypisz tag NFC")
+            .setMessage(name+"\n\nPrzyłóż teraz naklejkę NFC albo brelok do telefonu. "
+                +"EDHOME zapisze tylko UID — nie nadpisuje pamięci taga.")
+            .setNegativeButton("Anuluj",(d,w)->pendingNfcTarget=null)
+            .create();
+        nfcAssignmentDialog.setOnCancelListener(d->pendingNfcTarget=null);
+        nfcAssignmentDialog.show();
+        DiagnosticLog.event("NFC_ASSIGN_WAITING");
+    }
+
+    private void showNfcTargetMenu(LinearLayout owner,String kind,long id,String name) {
+        NfcLinkStore.Link link=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),kind,id);
+        if(link==null) {
+            beginNfcAssignment(kind,id,name);
+            return;
+        }
+        String[] actions={"Zmień tag NFC","Usuń powiązanie NFC","Pokaż UID"};
+        new AlertDialog.Builder(this)
+            .setTitle("NFC • "+name)
+            .setMessage("Przypisany UID: "+NfcLinkStore.shortUid(link.uid))
+            .setItems(actions,(dialog,which)->{
+                if(which==0)beginNfcAssignment(kind,id,name);
+                else if(which==1)new AlertDialog.Builder(this)
+                    .setTitle("Usunąć powiązanie NFC?")
+                    .setMessage(name+"\nTag nie zostanie skasowany ani zapisany — "
+                        +"EDHOME tylko zapomni jego UID.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń powiązanie",(d,w)->{
+                        if(NfcLinkStore.clearTarget(db.getWritableDatabase(),kind,id)) {
+                            DiagnosticLog.event("NFC_TAG_UNLINKED");
+                            render();
+                        }
+                    }).show();
+                else alert("UID NFC: "+link.uid);
+            })
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void nfcTargetButton(LinearLayout owner,String kind,long id,String name) {
+        NfcLinkStore.Link link=null;
+        try { link=NfcLinkStore.findByTarget(db.getReadableDatabase(),kind,id); }
+        catch(Exception ignored) { }
+        String label=link==null
+            ? "NFC • Przypisz tag NFC"
+            : "NFC • "+NfcLinkStore.shortUid(link.uid)+" • Zarządzaj";
+        smallButton(owner,label,()->showNfcTargetMenu(owner,kind,id,name));
+    }
+
+    private void openNfcTarget(NfcLinkStore.Link link) {
+        String name=NfcLinkStore.targetName(
+            db.getReadableDatabase(),link.kind,link.targetId);
+        if(name.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Stare powiązanie NFC")
+                .setMessage("Obiekt przypisany do tego tagu już nie istnieje. "
+                    +"Usunąć stare powiązanie?")
+                .setNegativeButton("Zostaw",null)
+                .setPositiveButton("Usuń",(d,w)->{
+                    NfcLinkStore.clearUid(db.getWritableDatabase(),link.uid);
+                    render();
+                }).show();
+            return;
+        }
+        if("thing".equals(link.kind)||"box".equals(link.kind)) {
+            expandStorageNfcPath(link.targetId);
+            go("storage");
+        } else if("place".equals(link.kind)) {
+            go("places");
+        } else if("pantry".equals(link.kind)) {
+            pantrySearch=name;
+            pantryCategoryFilter="";
+            go("pantry");
+        } else if("vehicle".equals(link.kind)) {
+            prefs.edit().putBoolean("vehicle_collapsed_"+link.targetId,false).apply();
+            go("vehicles");
+        }
+        DiagnosticLog.event("NFC_TARGET_OPENED");
+        if(root!=null)root.postDelayed(() ->
+            alert("NFC • "+NfcLinkStore.kindLabel(link.kind)+"\n"+name),120);
+    }
+
+    private void expandStorageNfcPath(long itemId) {
+        android.content.SharedPreferences.Editor edit=prefs.edit();
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),itemId);
+        java.util.Set<Long> seen=new java.util.HashSet<>();
+        while(item!=null && seen.add(item.id)) {
+            if("box".equals(item.kind))
+                edit.putBoolean("storage_tree_box_"+item.id,false);
+            if(item.placeId!=null)expandStoragePlacePath(edit,item.placeId);
+            item=item.boxId==null?null:
+                StorageStore.find(db.getReadableDatabase(),item.boxId);
+        }
+        edit.apply();
+    }
+
+    private void expandStoragePlacePath(
+            android.content.SharedPreferences.Editor edit,long placeId) {
+        java.util.Set<Long> seen=new java.util.HashSet<>();
+        Long current=placeId;
+        while(current!=null && seen.add(current)) {
+            edit.putBoolean("storage_tree_place_"+current,false);
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT parent_id FROM places WHERE id=?",
+                    new String[]{Long.toString(current)})) {
+                current=c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
+            }
+        }
     }
 
     @Override public void onBackPressed() {
@@ -3076,6 +3349,7 @@ public final class MainActivity extends Activity {
                     render();
                 });
                 box.addView(vehicleHeading);
+                nfcTargetButton(box,"vehicle",id,item.name);
                 if (!item.registration.isEmpty())
                     box.addView(text("Rejestracja: " + item.registration, 14, false));
                 if (collapsed) continue;
@@ -3926,6 +4200,7 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta())
             smallButton(box,"QR i etykieta miejsca",
                 () -> showPlaceQr(entry));
+        nfcTargetButton(box,"place",entry.id,entry.name);
         box.setOnLongClickListener(v -> {
             String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
                 "Usuń"};
@@ -4253,6 +4528,7 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta())
             smallButton(children,"QR i etykieta miejsca",
                 () -> showPlaceQr(place));
+        nfcTargetButton(children,"place",place.id,place.name);
         for(PlaceEntry child:places)
             if(child.parent!=null&&child.parent==place.id)
                 storageTreePlace(child,places,items,drawnPlaces,
@@ -4297,6 +4573,7 @@ public final class MainActivity extends Activity {
         if(item.lentTo!=null)
             details.addView(text("Wypożyczono: "+item.lentTo,13,false));
         smallButton(details,"Pokaż QR",()->showStorageQr(item));
+        nfcTargetButton(details,item.kind,item.id,item.name);
         if (BetaUpdater.isBeta())
             smallButton(details,"Drukuj etykietę / PDF / Udostępnij",
                 () -> selectQrLabelFormat(java.util.Collections.singletonList(
@@ -7043,6 +7320,7 @@ public final class MainActivity extends Activity {
                 box.addView(text(PantryPackageRules.summary(
                     qty, pack.unit, pack.sizeMilli), 14, false));
                 box.addView(text(PantryCategories.label(category), 13, false));
+                nfcTargetButton(box,"pantry",id,name);
                 if (details != null && !details.brand.isEmpty())
                     box.addView(text("Marka: " + details.brand, 13, false));
                 try (Cursor prices = PantryPriceHistoryStore.forProduct(
@@ -10175,6 +10453,7 @@ public final class MainActivity extends Activity {
                     new Object[]{id});
                 database.execSQL("UPDATE shopping_receipts SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});
+                NfcLinkStore.clearTarget(database,"place",id);
                 database.delete("places", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
                 return true;
@@ -10370,6 +10649,7 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(id)});
                 database.delete("pantry_packages", "pantry_id=?",
                     new String[]{Long.toString(id)});
+                NfcLinkStore.clearTarget(database,"pantry",id);
                 database.delete("pantry", "id=?",
                     new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
