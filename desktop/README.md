@@ -152,27 +152,29 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - zaznaczone miejsce lub element magazynu można edytować bez opuszczania widoku `Pomieszczenia`,
 - widok nie tworzy drugiej bazy ani kopii magazynu; korzysta z tych samych rekordów co Android i moduł Magazyn.
 
-### Mapa domu i prowadzenie do celu
-- osobna zakładka `Mapa` korzysta z tych samych `places` i `storage_items`, co Magazyn i Pomieszczenia,
-- domyślne poziomy to `Piwnica`, `Parter` i `Piętro`,
-- układ pomieszczeń jest rysowany jako ściany/prostokąty i można go przeciągać w trybie edycji,
-- można dodać istniejące miejsce do wybranego poziomu bez tworzenia kopii miejsca,
-- geometria mapy i przejścia są zapisane lokalnie w `~/.edhome/floor-map.json`,
-- użytkownik definiuje przejścia/drzwi/schody klikając dwa pomieszczenia; przejścia mogą łączyć różne poziomy,
-- `Jestem tutaj` ustawia ręcznie aktualne pomieszczenie,
-- wyszukiwarka `Gdzie jest` znajduje pomieszczenie albo rzecz/pudełko/narzędzie z Magazynu,
-- rzecz w pudełku dziedziczy lokalizację przez łańcuch `parent_box_id` aż do `place_id`,
-- trasa jest wyznaczana grafowo po zdefiniowanych przejściach i pokazana jako lista kroków oraz linia na mapie,
-- bieżące pomieszczenie i cel są wyróżnione wizualnie,
-- v1 nie udaje automatycznej lokalizacji wewnątrz budynku: `Jestem tutaj` jest wybierane ręcznie; później może być ustawiane przez QR/NFC pomieszczenia.
+### Plan domu / posesji — docelowy edytor CAD-like
+- prototyp mapy 0.6.0.57 nie jest docelowym UX; nie rozwijać dalej modelu „przesuwanych gotowych prostokątów”,
+- użytkownik rysuje pomieszczenie kliknięciem i przeciągnięciem prostokąta; po puszczeniu nadaje nazwę,
+- oprócz prostokątów musi być możliwe rysowanie osobnych ścian i pomieszczeń o kształtach L/T/nieregularnych,
+- gotowe pomieszczenia są domyślnie zablokowane; dopiero tryb `Edytuj plan` pozwala przesuwać, skalować i usuwać,
+- kondygnacje działają warstwowo: Piwnica / Parter / Piętro / kolejne; podczas rysowania wyższej kondygnacji niższa pozostaje widoczna jako wyszarzony półprzezroczysty podkład,
+- wszystkie kondygnacje mają wspólny punkt odniesienia 0,0,
+- włączyć siatkę pomocniczą z przyciąganiem; dokładna skala/metraż może zostać dodana później,
+- narzędzia edytora: Pomieszczenie, Ściana, Drzwi, Schody, Opis, Usuń, Cofnij,
+- obsłużyć podkład JPG oraz DXF; DWG traktować jako opcjonalny import po zweryfikowaniu biblioteki/konwersji, bez uzależniania podstawowego edytora od DWG,
+- użytkownik wybiera rozmiar obszaru roboczego posesji/podwórka, aby na jednym planie rozmieścić kilka budynków i pomieszczeń,
+- narysowane pomieszczenie ma być przypinane do istniejącego rekordu `places` albo tworzyć nowe Miejsce po potwierdzeniu,
+- wewnątrz pomieszczenia można później rozmieszczać regały, pudełka i rzeczy/narzędzia; nadal korzystają z istniejących `place_id` i `parent_box_id`,
+- drzwi i schody tworzą graf przejść potrzebny później do wyznaczania trasy „jak dojść”,
+- bieżąca lokalizacja w pierwszej wersji może być wskazywana ręcznie; później QR/NFC pomieszczenia może ją ustawiać automatycznie.
 
-### SUPLA — zaplanowana nakładka na tę samą mapę
-- nie tworzyć osobnej mapy SUPLA,
-- wykorzystać dokładnie tę samą geometrię poziomów, pomieszczeń, ścian i przejść,
-- druga warstwa ma pokazywać urządzenia SUPLA w przypisanych pomieszczeniach, ich stan i podstawowe akcje,
-- planowana nakładka: urządzenia online/offline, włączone/wyłączone, wartości czujników, pralka/suszarka i inne wspierane urządzenia,
-- przypisanie urządzenia SUPLA ma wskazywać istniejące `place_id`; zmiana planu domu ma automatycznie obowiązywać także nakładkę SUPLA,
-- ten zakres jest zapisany na później i nie jest częścią v0.6.0.57.
+### SUPLA — zaplanowana nakładka na ten sam plan
+- nie tworzyć drugiego planu dla SUPLA,
+- używać dokładnie tej samej geometrii posesji, budynków, kondygnacji, ścian, pomieszczeń, drzwi i schodów,
+- nakładka SUPLA pokazuje urządzenia przypisane do istniejącego `place_id`, ich stan online/offline, włączone/wyłączone, czujniki i wspierane akcje,
+- zmiana geometrii planu automatycznie obowiązuje warstwę SUPLA,
+- zakres SUPLA pozostaje na później.
+
 
 ## Braki do pełnej zgodności z APK
 

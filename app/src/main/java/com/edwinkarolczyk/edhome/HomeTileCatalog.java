@@ -11,12 +11,12 @@ import java.util.Set;
 final class HomeTileCatalog {
     static final String ORDER_KEY = "home_tiles_v2_order";
     static final List<String> STARTER_IDS = Collections.unmodifiableList(Arrays.asList(
-        "tasks", "calendar", "places", "pantry", "audit",
+        "tasks", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "today",
         "timers", "shopping", "paycheck", "waste", "storage", "vehicles"
     ));
     static final List<String> TARGETS = Collections.unmodifiableList(Arrays.asList(
-        "tasks", "today", "calendar", "places", "pantry", "audit",
+        "tasks", "today", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "timers", "shopping",
         "paycheck", "paycheck_private", "waste", "storage", "vehicles", "diagnostics"
     ));
@@ -43,6 +43,7 @@ final class HomeTileCatalog {
             case "today": return "Na dziś";
             case "calendar": return "Kalendarz";
             case "places": return "Miejsca";
+            case "floorplan": return "Plan domu / posesji";
             case "pantry": return "Spiżarnia";
             case "audit": return "Remanent";
             case "updates": return "Aktualizacje";
@@ -67,6 +68,7 @@ final class HomeTileCatalog {
             case "paycheck": case "paycheck_private": return "cabinet";
             case "waste": return "box";
             case "storage": return "shelf";
+            case "floorplan": return "garage";
             case "vehicles": return "garage";
             case "diagnostics": return "settings";
             default: return target;

@@ -159,6 +159,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedState);
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
+        ensureFloorPlanShellTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
@@ -456,6 +457,7 @@ public final class MainActivity extends Activity {
                 case "pantry": pantry(); break;
                 case "shopping": shopping(); break;
                 case "places": places(); break;
+                case "floorplan": floorPlanShell(); break;
                 case "storage": storage(); break;
                 case "vehicles": vehicles(); break;
                 case "paycheck": paycheck(); break;
@@ -848,6 +850,30 @@ public final class MainActivity extends Activity {
         // Keep this card informative; no second fixed menu below the tile grid.
         note("Działa offline. Przypomnienia włączysz w Ustawieniach; skaner "
             + "i synchronizacja są w kolejnych etapach.");
+    }
+
+    private void ensureFloorPlanShellTileSeeded() {
+        if (prefs.getBoolean("floorplan_shell_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        boolean present = false;
+        for (String tileId : order) {
+            String target = prefs.getString("tile_target_" + tileId,
+                HomeTileCatalog.defaultTarget(tileId));
+            if ("floorplan".equals(target)) {
+                present = true;
+                break;
+            }
+        }
+        if (!present && !order.contains("floorplan")) order.add("floorplan");
+        SharedPreferences.Editor edit = prefs.edit()
+            .putBoolean("floorplan_shell_seeded_v1", true);
+        if (!present)
+            edit.putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order));
+        if (edit.commit())
+            DiagnosticLog.event("FLOORPLAN_SHELL_TILE_SEEDED");
     }
 
     private String homeTileTarget(String id) {
@@ -7785,6 +7811,34 @@ public final class MainActivity extends Activity {
                     go("pantry");
                 }).show();
         });
+    }
+
+    private void floorPlanShell() {
+        header("Plan domu / posesji");
+
+        LinearLayout intro = card();
+        intro.addView(text("Nowa funkcja — wydmuszka", 20, true));
+        intro.addView(text(
+            "Moduł został dodany do EDHOME, ale edytor planu nie jest jeszcze aktywny. "
+                + "Na tym etapie niczego tu nie zapisujesz ani nie rysujesz.",
+            15, false));
+
+        LinearLayout scope = card();
+        scope.addView(text("Docelowy zakres", 18, true));
+        scope.addView(text("• rysowanie pomieszczeń prostokątem oraz ścian nieregularnych", 14, false));
+        scope.addView(text("• poziomy: piwnica, parter, piętro i kolejne warstwy", 14, false));
+        scope.addView(text("• niższa kondygnacja wyszarzona jako podkład podczas rysowania wyższej", 14, false));
+        scope.addView(text("• wspólny punkt 0,0 i siatka pomocnicza", 14, false));
+        scope.addView(text("• drzwi, schody, opisy i blokowanie gotowych elementów", 14, false));
+        scope.addView(text("• import JPG oraz DXF jako szablonu; DWG po weryfikacji obsługi", 14, false));
+        scope.addView(text("• wybór rozmiaru obszaru posesji/podwórka i kilka budynków", 14, false));
+        scope.addView(text("• przypięcie pomieszczenia do istniejącego Miejsca lub utworzenie nowego", 14, false));
+        scope.addView(text("• wyposażenie wewnątrz: regał → pudełko → rzecz/narzędzie", 14, false));
+        scope.addView(text("• później ta sama mapa jako nakładka urządzeń SUPLA", 14, false));
+
+        note("To jest tylko punkt wejścia do przyszłego edytora. "
+            + "Układ pomieszczeń nie jest jeszcze zapisywany z telefonu.");
+        DiagnosticLog.event("FLOORPLAN_SHELL_VIEW");
     }
 
     private void placeholder(String name, String why) {
