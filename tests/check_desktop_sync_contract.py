@@ -49,6 +49,12 @@ assert 'DESKTOP_SYNC_WATCHDOG_RESTART' in service
 assert 'endpointRunning()' in service
 assert 'Napraw / uruchom połączenie PC' in main
 assert 'Serwer LAN:' in main
+assert 'LAST_CONNECTION_ATTEMPT_AT' in server
+assert 'lastConnectionResult()' in server
+assert 'odrzucono: nieprawidłowy kod parowania' in server
+assert 'Ostatnia próba PC:' in main
+assert 'Serwer LAN działa • czeka na PC' in service
+assert 'Połączono z EDHOME Desktop' in service
 
 assert 'hasRecentClient()' in server
 assert 'LAST_CLIENT_SEEN_AT' in server
