@@ -824,6 +824,39 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private int desktopConnectionGreen() {
+        return skin.light ? Color.rgb(31, 153, 101) : Color.rgb(105, 232, 177);
+    }
+
+    private int desktopConnectionRed() {
+        return skin.light ? Color.rgb(208, 62, 62) : Color.rgb(255, 109, 109);
+    }
+
+    private String desktopLastSyncTime() {
+        long when = LanSyncServer.lastSyncActivityAt();
+        if (when <= 0L) return "jeszcze nie synchronizowano";
+        return Instant.ofEpochMilli(when).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+    }
+
+    private void showDesktopConnectionStatus() {
+        boolean online = LanSyncServer.hasRecentClient();
+        boolean syncing = online && LanSyncServer.isSyncing();
+        String state = syncing ? "SYNCHRONIZACJA"
+            : (online ? "POŁĄCZONO" : "NIEPOŁĄCZONE");
+        String message = "Stan: " + state
+            + "\nOstatnia wymiana danych: " + desktopLastSyncTime()
+            + (online
+                ? "\n\nTelefon i EDHOME Desktop widzą się w sieci lokalnej."
+                : "\n\nEDHOME czeka na komputer w tej samej sieci Wi‑Fi/LAN.");
+        new AlertDialog.Builder(this)
+            .setTitle("EDHOME Desktop")
+            .setMessage(message)
+            .setNegativeButton("Zamknij", null)
+            .setPositiveButton("Ustawienia połączenia", (d, w) -> go("settings"))
+            .show();
+    }
+
     private void appTitleWithConnection() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -837,24 +870,35 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta()) {
             TextView badge = text("", 13, true);
             badge.setGravity(Gravity.CENTER);
-            badge.setMinWidth(dp(84));
+            badge.setMinWidth(dp(92));
             badge.setPadding(dp(10), dp(6), dp(10), dp(6));
             badge.setBackground(skin.panel(this, surface, 22));
             badge.setClickable(true);
             badge.setFocusable(true);
-            badge.setOnClickListener(v -> go("settings"));
+            badge.setOnClickListener(v -> showDesktopConnectionStatus());
             touchFeedback(badge);
 
             Runnable refresh = new Runnable() {
+                private boolean pulse;
                 @Override public void run() {
                     if (!badge.isAttachedToWindow()) return;
                     boolean online = LanSyncServer.hasRecentClient();
-                    badge.setText(online ? "●  ⇄ PC" : "○  ⇄ PC");
-                    badge.setTextColor(online ? accent : subdued);
-                    badge.setContentDescription(online
-                        ? "EDHOME Desktop połączony. Dotknij, aby otworzyć ustawienia."
-                        : "EDHOME Desktop niepołączony. Dotknij, aby otworzyć ustawienia.");
-                    badge.postDelayed(this, 5000L);
+                    boolean syncing = online && LanSyncServer.isSyncing();
+                    if (syncing) {
+                        badge.setText(pulse ? "●  →   PC" : "●    ← PC");
+                        pulse = !pulse;
+                    } else {
+                        badge.setText("●  ⇄ PC");
+                        pulse = false;
+                    }
+                    badge.setTextColor(online
+                        ? desktopConnectionGreen() : desktopConnectionRed());
+                    badge.setContentDescription(syncing
+                        ? "EDHOME Desktop synchronizuje dane."
+                        : (online
+                            ? "EDHOME Desktop połączony."
+                            : "EDHOME Desktop niepołączony."));
+                    badge.postDelayed(this, syncing ? 320L : 1200L);
                 }
             };
             row.addView(badge, new LinearLayout.LayoutParams(-2, -2));
@@ -8526,8 +8570,10 @@ public final class MainActivity extends Activity {
             desktop.addView(text("Adres: " + endpoint
                 + "\nKod parowania: " + token
                 + "\nTryb: odczyt i zapis • serwer działa w tle"
-                + "\nStan PC: " + (LanSyncServer.hasRecentClient()
-                    ? "POŁĄCZONY" : "oczekiwanie na komputer"), 14, true));
+                + "\nStan PC: " + (LanSyncServer.isSyncing()
+                    ? "SYNCHRONIZACJA"
+                    : (LanSyncServer.hasRecentClient()
+                        ? "POŁĄCZONY" : "NIEPOŁĄCZONY")), 14, true));
             smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)

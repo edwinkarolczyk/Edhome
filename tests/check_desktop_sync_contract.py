@@ -47,8 +47,17 @@ assert 'FOREGROUND_SERVICE_CONNECTED_DEVICE' in manifest
 
 assert 'hasRecentClient()' in server
 assert 'LAST_CLIENT_SEEN_AT' in server
+assert 'isSyncing()' in server
+assert 'LAST_SYNC_ACTIVITY_AT' in server
+assert 'ACTIVE_SYNC_COUNT' in server
+assert 'beginSyncActivity()' in server
+assert 'endSyncActivity()' in server
 assert '●  ⇄ PC' in main
-assert '○  ⇄ PC' in main
+assert '●  →   PC' in main
+assert '●    ← PC' in main
+assert 'desktopConnectionGreen()' in main
+assert 'desktopConnectionRed()' in main
+assert 'desktopLastSyncTime()' in main
 assert 'Stan PC:' in main
 assert '"Skaner"' in desktop
 assert 'DesktopHardwareScanner' in desktop

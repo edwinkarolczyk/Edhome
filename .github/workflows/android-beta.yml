@@ -421,14 +421,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.49-signed-apk
+          name: EDHOME-0.6.0.50-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.49 — pełne NFC na telefonie: Rzecz, Pudełko, Miejsce, Produkt i Pojazd mają Przypisz tag NFC / Zmień tag / Usuń powiązanie. Naklejki i breloki są rozpoznawane po UID; ponowne przyłożenie otwiera właściwy obiekt. NFC jest opcjonalne sprzętowo, działa offline, jest w backupie i synchronizuje się z Desktopem. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.50 — wskaźnik połączenia z Desktopem: czerwony = brak połączenia, zielony = połączono, podczas rzeczywistej wymiany danych strzałki migają naprzemiennie. Dotknięcie wskaźnika pokazuje stan i czas ostatniej synchronizacji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

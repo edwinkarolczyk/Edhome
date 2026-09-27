@@ -18,6 +18,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Beta-only local-LAN endpoint for EDHOME Desktop with guarded incremental writes. */
 final class LanSyncServer {
@@ -25,6 +26,9 @@ final class LanSyncServer {
     static final String TOKEN_PREF = "desktop_sync_token";
     private static final int MAX_PATCH_OPS = 500;
     private static volatile long LAST_CLIENT_SEEN_AT;
+    private static volatile long LAST_SYNC_ACTIVITY_AT;
+    private static final AtomicInteger ACTIVE_SYNC_COUNT = new AtomicInteger();
+
 
     static boolean hasRecentClient() {
         long seen = LAST_CLIENT_SEEN_AT;
@@ -33,6 +37,26 @@ final class LanSyncServer {
 
     static long lastClientSeenAt() {
         return LAST_CLIENT_SEEN_AT;
+    }
+
+    static boolean isSyncing() {
+        if (ACTIVE_SYNC_COUNT.get() > 0) return true;
+        long activity = LAST_SYNC_ACTIVITY_AT;
+        return activity > 0L && System.currentTimeMillis() - activity < 1500L;
+    }
+
+    static long lastSyncActivityAt() {
+        return LAST_SYNC_ACTIVITY_AT;
+    }
+
+    private static void beginSyncActivity() {
+        ACTIVE_SYNC_COUNT.incrementAndGet();
+        LAST_SYNC_ACTIVITY_AT = System.currentTimeMillis();
+    }
+
+    private static void endSyncActivity() {
+        LAST_SYNC_ACTIVITY_AT = System.currentTimeMillis();
+        ACTIVE_SYNC_COUNT.decrementAndGet();
     }
 
     interface SnapshotProvider { String snapshot() throws Exception; }
@@ -126,6 +150,7 @@ final class LanSyncServer {
     }
 
     private void handle(Socket socket) {
+        boolean syncTransfer = false;
         try (Socket peer = socket) {
             peer.setSoTimeout(10000);
             InetAddress remote = peer.getInetAddress();
@@ -184,6 +209,11 @@ final class LanSyncServer {
             }
             String method = parts[0];
             String path = parts[1];
+
+            syncTransfer = ("GET".equals(method) && "/snapshot".equals(path))
+                || ("POST".equals(method)
+                    && ("/patch".equals(path) || "/snapshot".equals(path)));
+            if (syncTransfer) beginSyncActivity();
 
             if ("GET".equals(method) && "/status".equals(path)) {
                 reply(peer, 200, "{\"ok\":true,\"mode\":\"read-write-incremental\",\"version\":\""
@@ -286,6 +316,8 @@ final class LanSyncServer {
             reply(peer, 405, "{\"error\":\"METHOD_NOT_ALLOWED\"}");
         } catch (Exception error) {
             DiagnosticLog.error("DESKTOP_SYNC_CLIENT", error);
+        } finally {
+            if (syncTransfer) endSyncActivity();
         }
     }
 
