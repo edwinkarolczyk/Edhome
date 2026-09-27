@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 122,
-  "versionName": "0.6.0.57",
-  "changelog": "EDHOME 0.6.0.57 — rozszerzona diagnostyka telefonu i połączenia z PC: raport pokazuje wersję aplikacji/Androida, IP telefonu, stan serwera LAN, test localhost i Wi‑Fi, ostatnią próbę oraz adres PC, wynik autoryzacji i stan synchronizacji. W Ustawieniach dodano kopiowanie diagnostyki telefonu i do 20 000 znaków logów diagnostycznych jednym przyciskiem. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.57/edhome-beta.apk",
-  "sha256": "74e11f21791f0495b05be0becc24a5178f8e60cee08154c0cde6abeca796c85e"
+  "versionCode": 123,
+  "versionName": "0.6.0.58",
+  "changelog": "EDHOME 0.6.0.58 — poprawka diagnostyki Android ↔ Desktop: testy wykonywane przez sam telefon na 127.0.0.1 i własnym adresie Wi‑Fi nie są już liczone jako połączenie PC, nie ustawiają statusu POŁĄCZONY i nie nadpisują ostatniego adresu/próby Desktopu. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.58/edhome-beta.apk",
+  "sha256": "6109c394bf0da80f705670a6b194f573297514531a6ca065aa1a5fcae369739a"
 }
