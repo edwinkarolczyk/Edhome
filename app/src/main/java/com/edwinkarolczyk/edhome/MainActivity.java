@@ -845,6 +845,8 @@ public final class MainActivity extends Activity {
         String state = syncing ? "SYNCHRONIZACJA"
             : (online ? "POŁĄCZONO" : "NIEPOŁĄCZONE");
         String message = "Stan: " + state
+            + "\nSerwer LAN telefonu: "
+            + (LanSyncService.endpointRunning() ? "DZIAŁA" : "NIE DZIAŁA / URUCHAMIA SIĘ")
             + "\nOstatnia wymiana danych: " + desktopLastSyncTime()
             + (online
                 ? "\n\nTelefon i EDHOME Desktop widzą się w sieci lokalnej."
@@ -8591,10 +8593,18 @@ public final class MainActivity extends Activity {
             desktop.addView(text("Adres: " + endpoint
                 + "\nKod parowania: " + token
                 + "\nTryb: odczyt i zapis • serwer działa w tle"
+                + "\nSerwer LAN: " + (LanSyncService.endpointRunning()
+                    ? "DZIAŁA" : "NIE DZIAŁA / URUCHAMIA SIĘ")
                 + "\nStan PC: " + (LanSyncServer.isSyncing()
                     ? "SYNCHRONIZACJA"
                     : (LanSyncServer.hasRecentClient()
                         ? "POŁĄCZONY" : "NIEPOŁĄCZONY")), 14, true));
+            smallButton(desktop, "Napraw / uruchom połączenie PC", () -> {
+                LanSyncService.ensureStarted(this);
+                alert("Ponownie uruchamiam serwer LAN EDHOME. "
+                    + "Po kilku sekundach spróbuj połączyć Desktop jeszcze raz.");
+                if (root != null) root.postDelayed(() -> render(), 1800L);
+            });
             smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)
