@@ -9133,7 +9133,9 @@ public final class MainActivity extends Activity {
         boolean isHome = "home".equals(screen);
         int viewport = getResources().getDisplayMetrics().widthPixels;
         float density = getResources().getDisplayMetrics().density;
-        int columns = HomeTileLayout.columns(Math.round(viewport / density));
+        int columns = isHome
+            ? HomeTileLayout.homeColumns(Math.round(viewport / density))
+            : HomeTileLayout.columns(Math.round(viewport / density));
         int span = isHome && "double".equals(
             prefs.getString("tile_width_" + id, "small"))
             ? Math.min(2, columns) : 1;
@@ -9146,7 +9148,8 @@ public final class MainActivity extends Activity {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setTag(0);
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-            rowParams.setMargins(0, 0, 0, dp(9));
+            rowParams.setMargins(0, 0, 0,
+                dp(isHome ? HomeTileLayout.HOME_GAP_DP : 9));
             grid.addView(row, rowParams);
             used = 0;
         }
@@ -9154,8 +9157,9 @@ public final class MainActivity extends Activity {
 
         // Page has 16dp on each side; width determines columns, not height.
         int contentWidth = Math.max(dp(1), viewport - dp(32));
+        int tileGapDp = isHome ? HomeTileLayout.HOME_GAP_DP : 9;
         int side = Math.max(dp(1),
-            (contentWidth - dp(9) * (columns - 1)) / columns);
+            (contentWidth - dp(tileGapDp) * (columns - 1)) / columns);
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
@@ -9179,11 +9183,13 @@ public final class MainActivity extends Activity {
         // Reserve space for the caption and drag handle. The icon fills the
         // remaining square visual area; double-wide tiles get a taller icon
         // without stretching its 3D artwork horizontally.
-        int tileHeight = isHome ? side + dp(76) : side;
+        int tileHeight = isHome
+            ? side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP) : side;
         LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(side * span + dp(9) * (span - 1),
-                tileHeight);
-        if (row.getChildCount() > 0) params.setMargins(dp(9), 0, 0, 0);
+            new LinearLayout.LayoutParams(
+                side * span + dp(tileGapDp) * (span - 1), tileHeight);
+        if (row.getChildCount() > 0)
+            params.setMargins(dp(tileGapDp), 0, 0, 0);
         row.addView(tile, params);
 
         if (isHome) {
@@ -9231,7 +9237,7 @@ public final class MainActivity extends Activity {
             });
         }
 
-        int iconWidth = side * span + dp(9) * (span - 1) - dp(10);
+        int iconWidth = side * span + dp(tileGapDp) * (span - 1) - dp(10);
         int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
         int displayedIconSize = isHome
             ? Math.max(dp(24), Math.min(iconWidth, iconHeight))
