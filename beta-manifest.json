@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 120,
-  "versionName": "0.6.0.55",
-  "changelog": "EDHOME 0.6.0.55 — hotfix LAN Android: serwer synchronizacji jawnie nasłuchuje po IPv4 na 0.0.0.0:45823, czyli na wszystkich interfejsach telefonu. To eliminuje przypadek, w którym wildcard systemowy nie wystawiał portu na Wi‑Fi. Diagnostyka połączenia pozostaje bez zmian. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.55/edhome-beta.apk",
-  "sha256": "751dc04fdb91638dba2a5996ae22db14719ae8ce5a229f929bd4bc9e82e12fb2"
+  "versionCode": 121,
+  "versionName": "0.6.0.56",
+  "changelog": "EDHOME 0.6.0.56 — diagnostyka LAN Android: dodany lokalny self-test serwera EDHOME. Telefon sprawdza 127.0.0.1:45823 oraz własny adres Wi‑Fi:45823 i rozróżnia problem usługi, bindu Androida oraz blokadę sieci/routera. Zachowany jawny bind IPv4 0.0.0.0:45823. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.56/edhome-beta.apk",
+  "sha256": "6304d8d4f754aaf483a9d9e39c16b878c41133141cd8382973a5ede744b0ef36"
 }
