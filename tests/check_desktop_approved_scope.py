@@ -66,9 +66,16 @@ for marker in ("Sklep / odbiorca","nativeOpenFiles","FileDialog","subscriptions"
     assert marker in budget, f"Missing improved PayCheck import UX: {marker}"
 for marker in ("paycheck-merchant-rules.json","BIEDRONKA","NETFLIX","TAURON","remember"):
     assert marker in merchant_rules, f"Missing merchant rules: {marker}"
-for marker in ("Usuń wpis","showPaycheckDelete","deletePaycheckTransaction",
-               "paycheck_operation_id"):
-    assert marker in desktop, f"Missing Desktop PayCheck delete: {marker}"
+for marker in ("Usuń wpisy","showPaycheckDelete","deletePaycheckTransaction",
+               "deletePaycheckTransactions","Zaznacz wszystko",
+               "MULTIPLE_INTERVAL_SELECTION","paycheck_operation_id"):
+    assert marker in desktop, f"Missing Desktop PayCheck bulk delete: {marker}"
+for marker in ('"pantry".equals(tableName)', '"vehicles".equals(tableName)',
+               '"device_timers".equals(tableName)', 'hasOpenAuditSession()',
+               'removeRowsByLong("vehicle_events"'):
+    assert marker in desktop, f"Missing global main-record delete contract: {marker}"
+for marker in ("Usuń cel","paycheck_goal_allocations","Usuń zaznaczone"):
+    assert marker in desktop, f"Missing PayCheck related-record delete: {marker}"
 for marker in ("paycheckDashboardStats", "paycheckMetricCard",
                "paycheckTransactionsView", "editPaycheckCategory",
                "paycheckMerchantStatsPanel", "paycheckCategoryStatsPanel",
@@ -85,6 +92,9 @@ for marker in (
 ):
     assert marker in private + desktop, f"Missing private PayCheck contract: {marker}"
 assert "private_paycheck" not in desktop.split("mutableTable(", 1)[-1]
+for marker in ('static int delete(Session session', '"subscriptions"', '"fuel"',
+               '"insurance"', '"loans"'):
+    assert marker in private, f"Missing private PayCheck delete/category compatibility: {marker}"
 
 # Calendar/tasks printing.
 for marker in ("DesktopReportPdf", "printTableReport", "Kalendarz", "Czynności", "Zadania"):

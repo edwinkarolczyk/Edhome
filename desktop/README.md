@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.62
+## Aktualny stan Desktop — 0.6.0.63
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -70,7 +70,7 @@ Aktualna linia Desktop obsługuje:
 - import do „Budżetu przyszłego” działa teraz w trybie **najpierw podgląd, potem decyzja**: dla rozpoznanego wyciągu bankowego pokazuje przed kreatorem datę, opis, kwotę, typ i bank oraz pozwala `Dodaj do budżetu / Pomiń / Pomiń resztę pliku / Zakończ import`; kwota i data z banku są przekazywane do kreatora bez ponownego przepisywania,
 - Desktop 0.6.0.61 używa natywnego okna wyboru pliku Windows dla importów PayCheck; podgląd ma pole `Sklep / odbiorca`, pamięć lokalnych reguł sklep→kategoria oraz podpowiedzi dla popularnych sklepów, stacji, subskrypcji i dostawców mediów,
 - słownik kategorii obejmuje m.in. Subskrypcje, Media, Paliwo, Transport, Zdrowie, Odzież, Restauracje, Rozrywkę, Edukację, Dzieci, Ubezpieczenia, Kredyty i raty, Świadczenia, Oszczędności/inwestycje i Transfery,
-- wspólny PayCheck ma `Usuń wpis`; przy usunięciu pozycji uzgodnionej z bankiem dowód wraca do kolejki, a powiązany koszt pojazdu pozostaje poza PayCheck.\n- Desktop 0.6.0.62 przebudowuje główny PayCheck w dashboard zamiast generycznych dużych kart: saldo, wpływy miesiąca, wydatki miesiąca i liczba oczekujących są widoczne na górze, niżej znajduje się zwarta lista transakcji z bezpośrednią zmianą kategorii i usuwaniem.\n- główny PayCheck ma zakładki `Transakcje / Sklepy / Kategorie`; statystyki sklepów liczą rozpoznane wydatki z ostatnich 12 miesięcy i bieżącego miesiąca, a zakładka Kategorie wykorzystuje rozszerzony wspólny słownik kategorii.
+- wspólny PayCheck ma `Usuń wpis`; przy usunięciu pozycji uzgodnionej z bankiem dowód wraca do kolejki, a powiązany koszt pojazdu pozostaje poza PayCheck.\n- Desktop 0.6.0.62 przebudowuje główny PayCheck w dashboard zamiast generycznych dużych kart: saldo, wpływy miesiąca, wydatki miesiąca i liczba oczekujących są widoczne na górze, niżej znajduje się zwarta lista transakcji z bezpośrednią zmianą kategorii i usuwaniem.\n- główny PayCheck ma zakładki `Transakcje / Sklepy / Kategorie`; statystyki sklepów liczą rozpoznane wydatki z ostatnich 12 miesięcy i bieżącego miesiąca, a zakładka Kategorie wykorzystuje rozszerzony wspólny słownik kategorii.\n- Desktop 0.6.0.63 zmienia `Usuń wpisy` PayCheck na wielokrotny wybór z `Zaznacz wszystko`; jedno potwierdzenie usuwa wszystkie zaznaczone pozycje i poprawnie ponownie otwiera powiązane dowody bankowe.\n- możliwość usunięcia obejmuje wszystkie główne rekordy edytowalne w Desktopie: Czynności/Zadania (także Dzisiaj i Odpady), Spiżarnię, Zakupy, Magazyn, Pojazdy, Timery i Miejsca; zależności są czyszczone lub blokowane z komunikatem zamiast pozostawiania osieroconych danych.\n- cele PayCheck można usuwać, a prywatny PayCheck obsługuje wielokrotne usuwanie zaznaczonych wpisów; prywatny sejf akceptuje pełny nowy słownik kategorii.
 - plan „Budżet przyszły” jest celowo lokalny i wersjonowany w `~/.edhome/paycheck-budget-plan.json`; nie księguje planu jako wydatku i nie zmienia salda przed faktycznym potwierdzeniem,
 - bezpieczny parser VeloBank PDF oraz mBank CSV/XLSX; nieznane układy PDF są odrzucane zamiast zgadywane,
 - zachowywanie oryginalnych PDF bankowych lokalnie na komputerze,

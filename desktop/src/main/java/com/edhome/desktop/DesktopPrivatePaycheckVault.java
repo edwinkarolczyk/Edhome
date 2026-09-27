@@ -206,6 +206,24 @@ final class DesktopPrivatePaycheckVault {
         return id;
     }
 
+    static int delete(Session session, java.util.Collection<String> ids)
+            throws Exception {
+        if(ids==null||ids.isEmpty())return 0;
+        java.util.Set<String> wanted=new java.util.HashSet<>(ids);
+        JsonObject plain=readPlain(session);
+        JsonArray rows=plain.getAsJsonArray("entries");
+        int removed=0;
+        for(int i=rows.size()-1;i>=0;i--){
+            JsonObject item=rows.get(i).getAsJsonObject();
+            if(wanted.contains(item.get("id").getAsString())){
+                rows.remove(i);
+                removed++;
+            }
+        }
+        if(removed>0)savePlain(session,plain);
+        return removed;
+    }
+
     static boolean confirm(Session session, String id) throws Exception {
         JsonObject plain = readPlain(session);
         for (JsonElement element : plain.getAsJsonArray("entries")) {
@@ -299,8 +317,12 @@ final class DesktopPrivatePaycheckVault {
     }
 
     private static boolean validCategory(String value) {
-        return java.util.Set.of("shopping","bills","home","vehicle","salary",
-            "food","household","beauty","pet","other").contains(value);
+        return java.util.Set.of(
+            "shopping","food","subscriptions","utilities","bills","home",
+            "household","vehicle","fuel","transport","health","beauty",
+            "clothing","restaurants","entertainment","education","children",
+            "pet","insurance","loans","salary","benefits","savings",
+            "transfers","other").contains(value);
     }
 
     private static void validatePortablePassword(char[] password)

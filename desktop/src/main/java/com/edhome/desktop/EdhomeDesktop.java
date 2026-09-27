@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.62";
+    private static final String DESKTOP_VERSION = "0.6.0.63";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -580,7 +580,8 @@ public final class EdhomeDesktop extends JFrame {
             if (due.isBlank() || due.equals(today)) filtered.add(row);
         }
         return tablePage("Dzisiaj", filtered,
-            cols("Zadanie","title","Termin","due_date","Priorytet","priority","Osoba","assignee_id"));
+            cols("Zadanie","title","Termin","due_date","Priorytet","priority","Osoba","assignee_id"),
+            "tasks");
     }
 
     private JComponent paycheck() {
@@ -613,7 +614,7 @@ public final class EdhomeDesktop extends JFrame {
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
         JButton history = actionButton("Historia importów");
-        JButton deleteTx = actionButton("Usuń wpis");
+        JButton deleteTx = actionButton("Usuń wpisy");
         JButton privatePay = actionButton("Prywatny PayCheck");
         JButton refresh = actionButton("↻ Odśwież");
 
@@ -1166,7 +1167,7 @@ public final class EdhomeDesktop extends JFrame {
             JScrollPane pane = new JScrollPane(list);
             pane.setPreferredSize(new Dimension(620, 260));
 
-            Object[] actions = {"Nowy cel", "Odłóż na cel", "Zamknij"};
+            Object[] actions = {"Nowy cel", "Odłóż na cel", "Usuń cel", "Zamknij"};
             int action = JOptionPane.showOptionDialog(this, pane,
                 "PayCheck • wspólne cele oszczędnościowe",
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
@@ -1181,6 +1182,27 @@ public final class EdhomeDesktop extends JFrame {
                 }
                 if (allocatePaycheckGoal(Long.parseLong(selected.value)))
                     showSection("PayCheck");
+            } else if (action == 2) {
+                Choice selected = list.getSelectedValue();
+                if (selected == null) {
+                    JOptionPane.showMessageDialog(this, "Najpierw wybierz cel.");
+                    continue;
+                }
+                long goalId=Long.parseLong(selected.value);
+                JsonObject goal=scannerRowById("paycheck_goals",goalId);
+                if(goal==null)continue;
+                int yes=JOptionPane.showConfirmDialog(this,
+                    "Usunąć cel „"+value(goal,"name")+"”?\n"
+                        +"Przypisane kwoty celu zostaną usunięte. "
+                        +"Nie usuwa to transakcji PayCheck.",
+                    "Usuń cel",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+                if(yes==JOptionPane.YES_OPTION){
+                    removeRowsByLong("paycheck_goal_allocations","goal_id",goalId);
+                    setNullWhere("vehicle_policies","goal_id",goalId);
+                    table("paycheck_goals").remove(goal);
+                    markDirty();
+                    showSection("PayCheck");
+                }
             } else return;
         }
     }
@@ -1336,56 +1358,96 @@ public final class EdhomeDesktop extends JFrame {
             JOptionPane.showMessageDialog(this,"Brak wpisów PayCheck do usunięcia.");
             return;
         }
+
         JList<Choice> list=new JList<>(model);
-        list.setVisibleRowCount(Math.min(14,model.size()));
+        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        list.setVisibleRowCount(Math.min(16,model.size()));
         list.setSelectedIndex(0);
         JScrollPane pane=new JScrollPane(list);
-        pane.setPreferredSize(new Dimension(820,340));
-        if(JOptionPane.showConfirmDialog(this,pane,
-                "Wybierz wpis PayCheck do usunięcia",
+        pane.setPreferredSize(new Dimension(860,360));
+
+        JButton all=new JButton("Zaznacz wszystko");
+        JButton none=new JButton("Wyczyść zaznaczenie");
+        all.addActionListener(e->{
+            if(!model.isEmpty())list.setSelectionInterval(0,model.size()-1);
+        });
+        none.addActionListener(e->list.clearSelection());
+        JPanel controls=new JPanel(new FlowLayout(FlowLayout.LEFT,8,0));
+        controls.add(all);
+        controls.add(none);
+        controls.add(new JLabel("Ctrl / Shift także działa"));
+
+        JPanel content=new JPanel(new BorderLayout(0,8));
+        content.add(pane,BorderLayout.CENTER);
+        content.add(controls,BorderLayout.SOUTH);
+
+        if(JOptionPane.showConfirmDialog(this,content,
+                "Zaznacz wpisy PayCheck do usunięcia",
                 JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)
-                !=JOptionPane.OK_OPTION || list.getSelectedIndex()<0) return;
-        deletePaycheckTransaction(rows.get(list.getSelectedIndex()));
+                !=JOptionPane.OK_OPTION) return;
+
+        int[] indices=list.getSelectedIndices();
+        if(indices.length==0){
+            JOptionPane.showMessageDialog(this,"Zaznacz co najmniej jeden wpis.");
+            return;
+        }
+        java.util.List<JsonObject> selected=new ArrayList<>();
+        for(int index:indices)selected.add(rows.get(index));
+        deletePaycheckTransactions(selected);
     }
 
     private void deletePaycheckTransaction(JsonObject tx) {
         if(tx==null)return;
-        String operationId=value(tx,"operation_id");
-        String statementKey=value(tx,"statement_key");
-        int yes=JOptionPane.showConfirmDialog(this,
-            "Usunąć wpis?\n\n"
-            +("confirmed".equals(value(tx,"status"))
-                ?"To jest POTWIERDZONY wpis — saldo zostanie przeliczone.\n"
-                :"To jest wpis oczekujący — saldo się nie zmieni.\n")
-            +(!statementKey.isBlank()
-                ?"Dowód bankowy wróci do kolejki „do sprawdzenia”.\n":"")
-            +"Powiązany koszt pojazdu pozostanie jako koszt poza PayCheck.",
-            "Usuń wpis PayCheck",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+        deletePaycheckTransactions(java.util.List.of(tx));
+    }
+
+    private void deletePaycheckTransactions(java.util.List<JsonObject> selected) {
+        if(selected==null||selected.isEmpty())return;
+        int confirmed=0,matched=0;
+        for(JsonObject tx:selected){
+            if("confirmed".equals(value(tx,"status")))confirmed++;
+            if(!value(tx,"statement_key").isBlank())matched++;
+        }
+
+        String message="Usunąć zaznaczone wpisy: "+selected.size()+"?\n\n"
+            +"Potwierdzone: "+confirmed+" — saldo zostanie przeliczone.\n"
+            +"Oczekujące: "+(selected.size()-confirmed)+" — nie wpływają na saldo."
+            +(matched>0?"\nPowiązane z bankiem: "+matched
+                +" — ich dowody wrócą do kolejki „do sprawdzenia”。":"")
+            +"\nPowiązane koszty pojazdów pozostaną w historii pojazdów poza PayCheck.";
+        int yes=JOptionPane.showConfirmDialog(this,message,
+            "Usuń wpisy PayCheck",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
         if(yes!=JOptionPane.YES_OPTION)return;
 
-        if(!statementKey.isBlank()){
-            for(JsonElement e:mutableTable("bank_evidence_queue")){
-                if(!e.isJsonObject())continue;
-                JsonObject evidence=e.getAsJsonObject();
-                if(statementKey.equals(value(evidence,"evidence_key"))
-                        &&"matched".equals(value(evidence,"state"))){
-                    evidence.addProperty("state","open");
-                    evidence.add("matched_operation_id",com.google.gson.JsonNull.INSTANCE);
-                    evidence.add("matched_at",com.google.gson.JsonNull.INSTANCE);
+        int removed=0;
+        for(JsonObject tx:new ArrayList<>(selected)){
+            String operationId=value(tx,"operation_id");
+            String statementKey=value(tx,"statement_key");
+            if(!statementKey.isBlank()){
+                for(JsonElement e:mutableTable("bank_evidence_queue")){
+                    if(!e.isJsonObject())continue;
+                    JsonObject evidence=e.getAsJsonObject();
+                    if(statementKey.equals(value(evidence,"evidence_key"))
+                            &&"matched".equals(value(evidence,"state"))){
+                        evidence.addProperty("state","open");
+                        evidence.add("matched_operation_id",com.google.gson.JsonNull.INSTANCE);
+                        evidence.add("matched_at",com.google.gson.JsonNull.INSTANCE);
+                    }
                 }
             }
-        }
-        if(!operationId.isBlank()){
-            for(JsonElement e:mutableTable("vehicle_costs")){
-                if(!e.isJsonObject())continue;
-                JsonObject cost=e.getAsJsonObject();
-                if(operationId.equals(value(cost,"paycheck_operation_id")))
-                    cost.add("paycheck_operation_id",com.google.gson.JsonNull.INSTANCE);
+            if(!operationId.isBlank()){
+                for(JsonElement e:mutableTable("vehicle_costs")){
+                    if(!e.isJsonObject())continue;
+                    JsonObject cost=e.getAsJsonObject();
+                    if(operationId.equals(value(cost,"paycheck_operation_id")))
+                        cost.add("paycheck_operation_id",com.google.gson.JsonNull.INSTANCE);
+                }
             }
+            if(mutableTable("paycheck_transactions").remove(tx))removed++;
         }
-        mutableTable("paycheck_transactions").remove(tx);
-        markDirty();
+        if(removed>0)markDirty();
         showSection("PayCheck");
+        JOptionPane.showMessageDialog(this,"Usunięto wpisów PayCheck: "+removed+".");
     }
 
     private static long parsePln(String raw) {
@@ -1427,6 +1489,7 @@ public final class EdhomeDesktop extends JFrame {
                 }
 
                 JList<Choice> list = new JList<>(model);
+                list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
                 list.setVisibleRowCount(Math.min(12, Math.max(4, model.size())));
                 if (!model.isEmpty()) list.setSelectedIndex(0);
                 JScrollPane pane = new JScrollPane(list);
@@ -1444,6 +1507,7 @@ public final class EdhomeDesktop extends JFrame {
                     "Dodaj prywatny wpis",
                     "Potwierdź oczekującą",
                     "Prywatne operacje z banku",
+                    "Usuń zaznaczone",
                     "Eksportuj zaszyfrowaną kopię",
                     "Zamknij"
                 };
@@ -1454,7 +1518,22 @@ public final class EdhomeDesktop extends JFrame {
                 if (action == 0) addPrivatePaycheckEntry(session);
                 else if (action == 1) confirmPrivatePending(session);
                 else if (action == 2) importPrivateBankEvidence(session);
-                else if (action == 3) exportPrivatePaycheck();
+                else if (action == 3) {
+                    int[] selected=list.getSelectedIndices();
+                    if(selected.length==0){
+                        JOptionPane.showMessageDialog(this,"Zaznacz prywatne wpisy do usunięcia.");
+                        continue;
+                    }
+                    java.util.List<String> ids=new ArrayList<>();
+                    for(int index:selected)ids.add(entries.get(index).id);
+                    int yes=JOptionPane.showConfirmDialog(this,
+                        "Usunąć zaznaczone prywatne wpisy: "+ids.size()+"?",
+                        "Prywatny PayCheck",JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+                    if(yes==JOptionPane.YES_OPTION)
+                        DesktopPrivatePaycheckVault.delete(session,ids);
+                }
+                else if (action == 4) exportPrivatePaycheck();
                 else break;
             }
         } catch (Exception error) {
@@ -2134,7 +2213,7 @@ public final class EdhomeDesktop extends JFrame {
         wrapper.add(actions, BorderLayout.NORTH);
         wrapper.add(tablePage("Odpady", filtered,
             cols("Frakcja","waste_fraction","Termin","due_date","Wystawione","done",
-                 "Przypomnienie","remind_time")), BorderLayout.CENTER);
+                 "Przypomnienie","remind_time"), "tasks"), BorderLayout.CENTER);
         return wrapper;
     }
 
@@ -4178,8 +4257,11 @@ public final class EdhomeDesktop extends JFrame {
 
     private boolean canDeleteTable(String tableName) {
         return "tasks".equals(tableName)
+            || "pantry".equals(tableName)
             || "shopping_items".equals(tableName)
             || "storage_items".equals(tableName)
+            || "vehicles".equals(tableName)
+            || "device_timers".equals(tableName)
             || "places".equals(tableName);
     }
 
@@ -4793,8 +4875,18 @@ public final class EdhomeDesktop extends JFrame {
         }
         String label = value(row, "name");
         if (label.isBlank()) label = value(row, "title");
+        String impact="";
+        if("vehicles".equals(tableName))
+            impact="\nHistoria serwisu, opony, polisy, dokumenty i koszty tego pojazdu "
+                +"zostaną usunięte. Transakcje PayCheck pozostaną.";
+        else if("pantry".equals(tableName))
+            impact="\nKody i dane bieżącego produktu zostaną usunięte. "
+                +"Historia ruchów i zakupów pozostanie.";
+        else if("device_timers".equals(tableName))
+            impact="\nTimer zniknie po synchronizacji także z telefonu.";
         int choice = JOptionPane.showConfirmDialog(this,
-            "Usunąć „" + (label.isBlank() ? "pozycję" : label) + "”?",
+            "Usunąć „" + (label.isBlank() ? "pozycję" : label) + "”?"
+                +impact,
             "EDHOME Desktop", JOptionPane.YES_NO_OPTION);
         if (choice != JOptionPane.YES_OPTION) return;
 
@@ -4802,6 +4894,14 @@ public final class EdhomeDesktop extends JFrame {
             if ("tasks".equals(tableName)) {
                 removeRowsByLong("task_rotation_members", "task_id", id);
                 table("tasks").remove(row);
+            } else if ("pantry".equals(tableName)) {
+                if (hasOpenAuditSession())
+                    throw new IllegalStateException(
+                        "Najpierw zakończ lub anuluj aktywny remanent.");
+                removeRowsByLong("pantry_barcodes","pantry_id",id);
+                removeRowsByLong("pantry_product_details","pantry_id",id);
+                removeRowsByLong("pantry_packages","pantry_id",id);
+                table("pantry").remove(row);
             } else if ("shopping_items".equals(tableName)) {
                 table("shopping_items").remove(row);
             } else if ("storage_items".equals(tableName)) {
@@ -4819,6 +4919,15 @@ public final class EdhomeDesktop extends JFrame {
                 table("storage_events").add(event);
                 table("storage_items").remove(row);
                 removeStorageThumbnail(id);
+            } else if ("vehicles".equals(tableName)) {
+                removeRowsByLong("vehicle_events","vehicle_id",id);
+                removeRowsByLong("vehicle_tyre_sets","vehicle_id",id);
+                removeRowsByLong("vehicle_policies","vehicle_id",id);
+                removeRowsByLong("vehicle_documents","vehicle_id",id);
+                removeRowsByLong("vehicle_costs","vehicle_id",id);
+                table("vehicles").remove(row);
+            } else if ("device_timers".equals(tableName)) {
+                table("device_timers").remove(row);
             } else if ("places".equals(tableName)) {
                 if (hasReference("places", "parent_id", id))
                     throw new IllegalStateException("Najpierw przenieś lub usuń podmiejsca.");
@@ -4837,6 +4946,19 @@ public final class EdhomeDesktop extends JFrame {
             JOptionPane.showMessageDialog(this, rootMessage(error),
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private boolean hasOpenAuditSession() {
+        for(JsonElement element:table("audit_sessions")){
+            if(!element.isJsonObject())continue;
+            JsonObject row=element.getAsJsonObject();
+            String status=value(row,"status");
+            String completed=value(row,"completed_at");
+            if(completed.isBlank()
+                    &&!("completed".equals(status)||"cancelled".equals(status)))
+                return true;
+        }
+        return false;
     }
 
     private boolean hasReference(String tableName, String key, long id) {
