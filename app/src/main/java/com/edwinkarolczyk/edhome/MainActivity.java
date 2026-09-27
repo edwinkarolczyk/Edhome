@@ -839,6 +839,17 @@ public final class MainActivity extends Activity {
             .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 
+    private String desktopLastAttempt() {
+        long when = LanSyncServer.lastConnectionAttemptAt();
+        if (when <= 0L) return "brak próby z PC";
+        String time = Instant.ofEpochMilli(when).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String remote = LanSyncServer.lastRemote();
+        String result = LanSyncServer.lastConnectionResult();
+        return time + " • " + result
+            + (remote == null || remote.isEmpty() ? "" : " • " + remote);
+    }
+
     private void showDesktopConnectionStatus() {
         boolean online = LanSyncServer.hasRecentClient();
         boolean syncing = online && LanSyncServer.isSyncing();
@@ -847,6 +858,7 @@ public final class MainActivity extends Activity {
         String message = "Stan: " + state
             + "\nSerwer LAN telefonu: "
             + (LanSyncService.endpointRunning() ? "DZIAŁA" : "NIE DZIAŁA / URUCHAMIA SIĘ")
+            + "\nOstatnia próba PC: " + desktopLastAttempt()
             + "\nOstatnia wymiana danych: " + desktopLastSyncTime()
             + (online
                 ? "\n\nTelefon i EDHOME Desktop widzą się w sieci lokalnej."
@@ -8598,7 +8610,8 @@ public final class MainActivity extends Activity {
                 + "\nStan PC: " + (LanSyncServer.isSyncing()
                     ? "SYNCHRONIZACJA"
                     : (LanSyncServer.hasRecentClient()
-                        ? "POŁĄCZONY" : "NIEPOŁĄCZONY")), 14, true));
+                        ? "POŁĄCZONY" : "NIEPOŁĄCZONY"))
+                + "\nOstatnia próba PC: " + desktopLastAttempt(), 14, true));
             smallButton(desktop, "Napraw / uruchom połączenie PC", () -> {
                 LanSyncService.ensureStarted(this);
                 alert("Ponownie uruchamiam serwer LAN EDHOME. "
