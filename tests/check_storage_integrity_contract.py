@@ -13,6 +13,8 @@ assert method.index('SELECT 1 FROM storage_items WHERE place_id=? LIMIT 1') < me
 assert method.index('SELECT 1 FROM vehicle_tyre_sets WHERE place_id=? LIMIT 1') < method.index('UPDATE tasks SET place_id=NULL')
 assert method.index('UPDATE tasks SET place_id=NULL') < method.index('database.delete("places"')
 assert 'Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon.' in main
+assert 'smallButton(box,"Usuń miejsce"' in main
+assert 'editorBuilder.setNeutralButton("Usuń", null)' in main
 for value in (
     'private static String placePath(SQLiteDatabase db,long placeId)',
     'SELECT name,parent_id FROM places WHERE id=?',
