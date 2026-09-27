@@ -9289,6 +9289,12 @@ public final class MainActivity extends Activity {
         note("Pliki w aplikacji: do 1 MB każdy (bieżący i poprzedni segment). "
             + "Wklejanie do czatu ma oddzielny limit znaków; pełny eksport .txt go nie ma.");
         note("Nie zapisujemy PIN-u, nazw produktów, treści finansów ani powiadomień. Log Androida całego telefonu nie jest zbierany.");
+        button("Diagnostyka telefonu / połączenia z PC",
+            this::testPhoneLanServer);
+        button("Kopiuj diagnostykę telefonu",
+            () -> runPhoneLanDiagnostics(true));
+        button("Kopiuj logi diagnostyczne • 20 000 znaków",
+            this::copyDiagnosticLogsFromSettings);
         note("Ile znaków skopiować do czatu?");
         final int[] chatLimits = {5000, 12000, 20000};
         Spinner chatSize = new Spinner(this);
