@@ -140,10 +140,14 @@ floor_map = (root / "desktop/src/main/java/com/edhome/desktop/DesktopFloorMapPan
 for marker in ('"Mapa"', 'DesktopFloorMapPanel', 'table("places")', 'table("storage_items")'):
     assert marker in desktop, f"Missing floor map integration: {marker}"
 for marker in (
-    '"Piwnica"', '"Parter"', '"Piętro"', 'Jestem tutaj:', 'Gdzie jest:',
-    'Dodaj przejście', 'Edycja układu', 'shortestPath',
+    '"Piwnica"', '"Parter"', '"Piętro"', '"Podwórko"', 'Jestem tutaj:', 'Gdzie jest:',
+    'Dodaj przejście', 'Edytuj plan', 'shortestPath',
     'edhome-desktop-floor-map', 'floor-map.json',
-    'parent_box_id', 'place_id', 'Pełna lokalizacja'
+    'parent_box_id', 'place_id', 'Pełna lokalizacja',
+    'Import JPG', 'Import DXF', 'Rozmiar posesji',
+    'Dodaj budynek', 'Dodaj pomieszczenie', 'Dodaj strefę',
+    'Siatka: WŁ.', 'Snap: WŁ.', 'Właściwości',
+    'floor-map-assets', 'propertyWidthMeters', 'propertyHeightMeters'
 ):
     assert marker in floor_map, f"Missing visual floor-map contract: {marker}"
 print("EDHOME Desktop visual floor map + routing: PASS")

@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.58
+## Aktualny stan Desktop — 0.6.0.59
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -155,6 +155,10 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - widok nie tworzy drugiej bazy ani kopii magazynu; korzysta z tych samych rekordów co Android i moduł Magazyn.
 
 ### Plan domu / posesji — docelowy edytor CAD-like
+- Desktop 0.6.0.59 wdraża zatwierdzony układ ekranu: drzewo Struktura po lewej, duży plan pośrodku, panel Właściwości po prawej, górny pasek Import JPG / Import DXF / Rozmiar posesji / Dodaj budynek / Dodaj pomieszczenie / Dodaj strefę oraz przełączniki kondygnacji, siatki i snap,
+- JPG działa jako rzeczywisty lokalny podkład planu i jest kopiowany do `~/.edhome/floor-map-assets`; DXF można już przypiąć do planu jako źródło szablonu, ale parser geometrii pozostaje następnym krokiem,
+- można ustawić wymiary posesji, przełączać Podwórko / Parter / Piętro / Piwnicę, przeciągać istniejące pomieszczenia w trybie `Edytuj plan` oraz korzystać z przyciągania do siatki,
+- istniejący `floor-map.json` v1 jest czytany kompatybilnie; nowy zapis v2 zachowuje dotychczasowe pomieszczenia i przejścia oraz dodaje parametry widoku, rozmiar posesji i źródła podkładów,
 - prototyp mapy 0.6.0.57 nie jest docelowym UX; nie rozwijać dalej modelu „przesuwanych gotowych prostokątów”,
 - użytkownik rysuje pomieszczenie kliknięciem i przeciągnięciem prostokąta; po puszczeniu nadaje nazwę,
 - oprócz prostokątów musi być możliwe rysowanie osobnych ścian i pomieszczeń o kształtach L/T/nieregularnych,
