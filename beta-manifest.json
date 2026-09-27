@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 108,
-  "versionName": "0.6.0.43",
-  "changelog": "EDHOME 0.6.0.43 — synchronizacja Android ↔ Desktop otrzymuje bezpieczny zapis przyrostowy rekordów, lekki heartbeat bazy i konflikty na poziomie konkretnego rekordu. Zachowano fallback do pełnego snapshotu dla starszych klientów i zmian ustawień. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.43/edhome-beta.apk",
-  "sha256": "7e2641d560f5c64797fa4bc5121fe03416f67c5fa78a877930975cad4d5fe8c4"
+  "versionCode": 111,
+  "versionName": "0.6.0.46",
+  "changelog": "EDHOME 0.6.0.46 — kompaktowe karty Czynności: przyciski Edytuj, Historia i Usuń są domyślnie schowane i rozwijają się po dotknięciu karty; ponowne dotknięcie je chowa. Zawiera też przygotowane wcześniej zmiany 0.6.0.44–0.6.0.45: synchronizację v2 i wydmuszkę Plan domu / posesji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.46/edhome-beta.apk",
+  "sha256": "fb58191396f890cb2879d1e60b23f0108d6175a3a759641564531ace7946a312"
 }
