@@ -10,6 +10,8 @@ bank = (root / "desktop/src/main/java/com/edhome/desktop/DesktopBankImporter.jav
 private = (root / "desktop/src/main/java/com/edhome/desktop/DesktopPrivatePaycheckVault.java").read_text(encoding="utf-8")
 report = (root / "desktop/src/main/java/com/edhome/desktop/DesktopReportPdf.java").read_text(encoding="utf-8")
 chart = (root / "desktop/src/main/java/com/edhome/desktop/DesktopPaycheckChart.java").read_text(encoding="utf-8")
+budget = (root / "desktop/src/main/java/com/edhome/desktop/DesktopBudgetPlanner.java").read_text(encoding="utf-8")
+budget_doc = (root / "desktop/src/main/java/com/edhome/desktop/DesktopBudgetDocumentReader.java").read_text(encoding="utf-8")
 gradle = (root / "desktop/build.gradle").read_text(encoding="utf-8")
 readme = (root / "desktop/README.md").read_text(encoding="utf-8")
 
@@ -45,6 +47,19 @@ for marker in (
     "paycheck_goals", "paycheck_goal_allocations", "DesktopPaycheckChart"
 ):
     assert marker in desktop + chart, f"Missing PayCheck desktop tool: {marker}"
+
+# Future budget planner: plan is separate from real ledger and supports document-guided setup.
+for marker in (
+    "Budżet przyszły", "Importuj PDF / XLSX / CSV", "Rachunek cykliczny",
+    "Rata / kredyt", "Dochód cykliczny", "Co 2 miesiące",
+    "Kiedy ten cykl się kończy?", "Prognoza 12 miesięcy",
+    "paycheck-budget-plan.json"
+):
+    assert marker in budget + desktop, f"Missing future budget contract: {marker}"
+for marker in ("PDF", "XLSX", "CSV", "TAURON", "Wodociągi", "detectProvider", "extractAmounts"):
+    assert marker in budget_doc, f"Missing budget document reader: {marker}"
+assert 'mutableTable("paycheck_transactions")' not in budget
+print("EDHOME Desktop future budget wizard: PASS")
 
 # Private PayCheck must stay encrypted and outside ordinary snapshot tables.
 for marker in (
