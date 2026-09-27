@@ -8586,6 +8586,58 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private boolean lanTcpSelfTest(String host) {
+        if (host == null || host.isBlank()) return false;
+        try (java.net.Socket socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress(
+                host, LanSyncServer.PORT), 1800);
+            return socket.isConnected();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void testPhoneLanServer() {
+        LanSyncService.ensureStarted(this);
+        new Thread(() -> {
+            try {
+                Thread.sleep(500L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            String ip = LanSyncServer.localAddress();
+            boolean endpoint = LanSyncService.endpointRunning();
+            boolean loopback = lanTcpSelfTest("127.0.0.1");
+            boolean wifi = ip != null && lanTcpSelfTest(ip);
+            StringBuilder result = new StringBuilder()
+                .append("Serwer EDHOME: ")
+                .append(endpoint ? "DZIAŁA" : "NIE DZIAŁA")
+                .append("\n127.0.0.1:").append(LanSyncServer.PORT)
+                .append(": ").append(loopback ? "OK" : "BŁĄD")
+                .append("\n")
+                .append(ip == null ? "Wi‑Fi IPv4: BRAK ADRESU"
+                    : ip + ":" + LanSyncServer.PORT + ": "
+                        + (wifi ? "OK" : "BŁĄD"))
+                .append("\n\n");
+            if (loopback && wifi) {
+                result.append("Telefon wystawia port poprawnie. Jeżeli PC nadal ma timeout, ")
+                    .append("ruch blokuje sieć/router albo izolacja klientów Wi‑Fi.");
+            } else if (loopback) {
+                result.append("Serwer działa lokalnie, ale nie jest osiągalny przez własny adres Wi‑Fi. ")
+                    .append("Problem jest po stronie interfejsu/bindu Androida.");
+            } else {
+                result.append("Serwer EDHOME nie przyjmuje nawet lokalnego połączenia. ")
+                    .append("Problem jest po stronie usługi LAN telefonu.");
+            }
+            final String message = result.toString();
+            runOnUiThread(() -> new AlertDialog.Builder(this)
+                .setTitle("Test serwera LAN telefonu")
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .show());
+        }, "edhome-lan-selftest").start();
+    }
+
     private void settings() {
         header("Ustawienia");
         note("Aktywny styl: " + skin.name + " • zmiana wyglądu nie zmienia danych.");
@@ -8618,6 +8670,7 @@ public final class MainActivity extends Activity {
                     + "Po kilku sekundach spróbuj połączyć Desktop jeszcze raz.");
                 if (root != null) root.postDelayed(() -> render(), 1800L);
             });
+            smallButton(desktop, "Test serwera LAN telefonu", this::testPhoneLanServer);
             smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)
