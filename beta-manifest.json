@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 111,
-  "versionName": "0.6.0.46",
+  "versionCode": 112,
+  "versionName": "0.6.0.47",
   "changelog": "EDHOME 0.6.0.46 — kompaktowe karty Czynności: przyciski Edytuj, Historia i Usuń są domyślnie schowane i rozwijają się po dotknięciu karty; ponowne dotknięcie je chowa. Zawiera też przygotowane wcześniej zmiany 0.6.0.44–0.6.0.45: synchronizację v2 i wydmuszkę Plan domu / posesji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.46/edhome-beta.apk",
-  "sha256": "fb58191396f890cb2879d1e60b23f0108d6175a3a759641564531ace7946a312"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.47/edhome-beta.apk",
+  "sha256": "e6448cabd7ae7bc0d3b5c64832c07427005dc70337a01a1dcdc01f909f0e0965"
 }
