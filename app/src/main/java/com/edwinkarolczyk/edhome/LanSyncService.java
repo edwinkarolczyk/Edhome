@@ -8,7 +8,9 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 
 /**
  * Keeps the local EDHOME Desktop endpoint alive independently from MainActivity.
@@ -18,10 +20,33 @@ import android.os.IBinder;
 public final class LanSyncService extends Service {
     private static final String CHANNEL = "edhome-desktop-lan";
     private static final int NOTIFICATION_ID = 1700042;
+    private static final long WATCHDOG_MS = 5000L;
+    private static volatile boolean ENDPOINT_RUNNING;
 
     private MainActivity.LocalDb db;
     private LanSyncServer server;
     private SharedPreferences prefs;
+    private Handler watchdogHandler;
+    private final Runnable watchdog = new Runnable() {
+        @Override public void run() {
+            LanSyncServer current = server;
+            if (current == null) {
+                ENDPOINT_RUNNING = false;
+            } else {
+                if (!current.isRunning()) {
+                    DiagnosticLog.event("DESKTOP_SYNC_WATCHDOG_RESTART");
+                    current.start();
+                }
+                ENDPOINT_RUNNING = current.isRunning();
+            }
+            if (watchdogHandler != null)
+                watchdogHandler.postDelayed(this, WATCHDOG_MS);
+        }
+    };
+
+    static boolean endpointRunning() {
+        return ENDPOINT_RUNNING;
+    }
 
     static void ensureStarted(Context context) {
         if (!BetaUpdater.isBeta()) return;
@@ -78,6 +103,9 @@ public final class LanSyncService extends Service {
             this::databaseRevision,
             this::applyRecordPatch);
         server.start();
+        ENDPOINT_RUNNING = server.isRunning();
+        watchdogHandler = new Handler(Looper.getMainLooper());
+        watchdogHandler.postDelayed(watchdog, 1200L);
         DiagnosticLog.event("DESKTOP_SYNC_SERVICE_STARTED");
     }
 
@@ -115,7 +143,14 @@ public final class LanSyncService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (server != null) server.start();
+        if (server != null) {
+            server.start();
+            ENDPOINT_RUNNING = server.isRunning();
+        }
+        if (watchdogHandler != null) {
+            watchdogHandler.removeCallbacks(watchdog);
+            watchdogHandler.postDelayed(watchdog, 500L);
+        }
         return START_STICKY;
     }
 
@@ -124,6 +159,11 @@ public final class LanSyncService extends Service {
     }
 
     @Override public void onDestroy() {
+        ENDPOINT_RUNNING = false;
+        if (watchdogHandler != null) {
+            watchdogHandler.removeCallbacks(watchdog);
+            watchdogHandler = null;
+        }
         if (server != null) {
             server.stop();
             server = null;
