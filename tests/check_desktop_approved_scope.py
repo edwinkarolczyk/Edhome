@@ -30,7 +30,10 @@ assert "EDHOME:STORAGE:1:" in labels
 for marker in (
     "readCodeFromWebcam", "readNfcUid", "TerminalFactory",
     "Skanuj QR kamerą", "Skanuj NFC", "Ustaw domyślną akcję",
-    "Wypożycz", "Zwrot", "scanDefaultKey"
+    "Wypożycz", "Zwrot", "scanDefaultKey",
+    "showDesktopNfcManager", "readAndAssignDesktopNfc",
+    "Zmień tag NFC", "Usuń powiązanie NFC", "commitDesktopNfcLink",
+    "removeDesktopNfcTarget"
 ):
     assert marker in scanner + desktop, f"Missing scanner contract: {marker}"
 
@@ -177,3 +180,6 @@ for marker in (
 ):
     assert marker in floor_map, f"Missing visual floor-map contract: {marker}"
 print("EDHOME Desktop visual floor map + routing: PASS")
+
+for marker in ('"pantry".equals(tableName)', '"vehicles".equals(tableName)', '"places".equals(tableName)', '"storage_items".equals(tableName)'):
+    assert marker in desktop, f"Missing NFC-capable Desktop table: {marker}"

@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.63";
+    private static final String DESKTOP_VERSION = "0.6.0.64";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3076,13 +3076,7 @@ public final class EdhomeDesktop extends JFrame {
         try { id = Long.parseLong(parts[1]); }
         catch (NumberFormatException invalid) { return; }
 
-        JsonObject row = new JsonObject();
-        row.addProperty("id", nextId("nfc_links"));
-        row.addProperty("uid", uid);
-        row.addProperty("target_kind", parts[0]);
-        row.addProperty("target_id", id);
-        row.addProperty("created_at", System.currentTimeMillis());
-        mutableTable("nfc_links").add(row);
+        commitDesktopNfcLink(uid, parts[0], id);
         markDirty();
         status.setText("NFC " + uid + " przypisany do: " + selected.label);
     }
@@ -4006,6 +4000,17 @@ public final class EdhomeDesktop extends JFrame {
             });
             rowActions.add(qr);
         }
+        String nfcKind = nfcKindForRecord(tableName, row);
+        if (nfcKind != null) {
+            JButton nfc = compactActionButton("NFC");
+            JsonObject link = nfcLinkForTarget(nfcKind, longValue(row, "id"));
+            nfc.setToolTipText(link == null
+                ? "Przypisz tag NFC"
+                : "NFC " + compactText(value(link, "uid"), 16)
+                    + " • Zmień / Usuń powiązanie");
+            nfc.addActionListener(e -> showDesktopNfcManager(tableName, row));
+            rowActions.add(nfc);
+        }
         if (canDeleteTable(tableName)) {
             JButton remove = compactActionButton("Usuń");
             remove.addActionListener(e -> deleteRecord(tableName, row));
@@ -4013,6 +4018,155 @@ public final class EdhomeDesktop extends JFrame {
         }
         card.add(rowActions, BorderLayout.EAST);
         return card;
+    }
+
+    private String nfcKindForRecord(String tableName, JsonObject row) {
+        if ("storage_items".equals(tableName)) {
+            String kind = value(row, "kind");
+            return "thing".equals(kind) || "box".equals(kind) ? kind : null;
+        }
+        if ("places".equals(tableName)) return "place";
+        if ("pantry".equals(tableName)) return "pantry";
+        if ("vehicles".equals(tableName)) return "vehicle";
+        return null;
+    }
+
+    private JsonObject nfcLinkForTarget(String kind, long targetId) {
+        if (kind == null || targetId <= 0) return null;
+        for (JsonElement element : table("nfc_links")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            try {
+                if (kind.equals(value(link, "target_kind"))
+                        && link.get("target_id").getAsLong() == targetId)
+                    return link;
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
+    private JsonObject nfcLinkForUid(String uid) {
+        if (uid == null) return null;
+        for (JsonElement element : table("nfc_links")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            if (uid.equalsIgnoreCase(value(link, "uid"))) return link;
+        }
+        return null;
+    }
+
+    private void showDesktopNfcManager(String tableName, JsonObject row) {
+        String kind = nfcKindForRecord(tableName, row);
+        long id = longValue(row, "id");
+        if (kind == null || id <= 0) return;
+        String name = value(row, "name");
+        if (name.isBlank()) name = "#" + id;
+        JsonObject link = nfcLinkForTarget(kind, id);
+        if (link == null) {
+            readAndAssignDesktopNfc(kind, id, name);
+            return;
+        }
+        Object[] actions = {"Zmień tag NFC", "Usuń powiązanie NFC",
+            "Pokaż UID", "Anuluj"};
+        int choice = JOptionPane.showOptionDialog(this,
+            "Obiekt: " + name + "\nUID: " + value(link, "uid"),
+            "EDHOME Desktop • NFC", JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE, null, actions, actions[0]);
+        if (choice == 0) readAndAssignDesktopNfc(kind, id, name);
+        else if (choice == 1) {
+            int yes = JOptionPane.showConfirmDialog(this,
+                "Usunąć powiązanie NFC z „" + name + "”?\n"
+                    + "Tag fizyczny nie zostanie zapisany ani skasowany.",
+                "EDHOME Desktop • NFC", JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if (yes == JOptionPane.YES_OPTION) {
+                removeDesktopNfcTarget(kind, id);
+                markDirty();
+                showSection(current);
+            }
+        } else if (choice == 2) {
+            JOptionPane.showMessageDialog(this,
+                "UID NFC: " + value(link, "uid"),
+                "EDHOME Desktop • NFC", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    private void readAndAssignDesktopNfc(String kind, long id, String name) {
+        JOptionPane.showMessageDialog(this,
+            "Po zamknięciu tego komunikatu przyłóż naklejkę NFC albo brelok "
+                + "do czytnika PC/SC.\nEDHOME odczyta UID i nie zapisuje niczego "
+                + "w pamięci taga.",
+            "Przypisz tag NFC • " + name, JOptionPane.INFORMATION_MESSAGE);
+        new SwingWorker<String,Void>() {
+            @Override protected String doInBackground() throws Exception {
+                return DesktopHardwareScanner.readNfcUid(Duration.ofSeconds(15));
+            }
+            @Override protected void done() {
+                try {
+                    String uid = get();
+                    assignDesktopNfc(uid, kind, id, name);
+                } catch (Exception error) {
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        rootMessage(error), "EDHOME Desktop • NFC",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+    private void assignDesktopNfc(String uid, String kind, long id, String name) {
+        JsonObject existing = nfcLinkForUid(uid);
+        if (existing != null) {
+            String oldKind = value(existing, "target_kind");
+            long oldId = longValue(existing, "target_id");
+            if (!oldKind.equals(kind) || oldId != id) {
+                int yes = JOptionPane.showConfirmDialog(this,
+                    "Ten tag jest już przypisany do "
+                        + oldKind + " #" + oldId + ".\nPrzenieść go do „"
+                        + name + "”?",
+                    "EDHOME Desktop • NFC", JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+                if (yes != JOptionPane.YES_OPTION) return;
+            }
+        }
+        commitDesktopNfcLink(uid, kind, id);
+        markDirty();
+        showSection(current);
+        JOptionPane.showMessageDialog(this,
+            "NFC przypisany do: " + name + "\nUID: " + uid,
+            "EDHOME Desktop • NFC", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void commitDesktopNfcLink(String uid, String kind, long id) {
+        JsonArray links = mutableTable("nfc_links");
+        for (int i = links.size() - 1; i >= 0; i--) {
+            JsonElement element = links.get(i);
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            boolean sameUid = uid.equalsIgnoreCase(value(link, "uid"));
+            boolean sameTarget = kind.equals(value(link, "target_kind"))
+                && longValue(link, "target_id") == id;
+            if (sameUid || sameTarget) links.remove(i);
+        }
+        JsonObject row = new JsonObject();
+        row.addProperty("id", nextId("nfc_links"));
+        row.addProperty("uid", uid);
+        row.addProperty("target_kind", kind);
+        row.addProperty("target_id", id);
+        row.addProperty("created_at", System.currentTimeMillis());
+        links.add(row);
+    }
+
+    private void removeDesktopNfcTarget(String kind, long id) {
+        JsonArray links = table("nfc_links");
+        for (int i = links.size() - 1; i >= 0; i--) {
+            JsonElement element = links.get(i);
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            if (kind.equals(value(link, "target_kind"))
+                    && longValue(link, "target_id") == id)
+                links.remove(i);
+        }
     }
 
     private JButton compactActionButton(String label) {
@@ -4901,6 +5055,7 @@ public final class EdhomeDesktop extends JFrame {
                 removeRowsByLong("pantry_barcodes","pantry_id",id);
                 removeRowsByLong("pantry_product_details","pantry_id",id);
                 removeRowsByLong("pantry_packages","pantry_id",id);
+                removeDesktopNfcTarget("pantry",id);
                 table("pantry").remove(row);
             } else if ("shopping_items".equals(tableName)) {
                 table("shopping_items").remove(row);
@@ -4917,6 +5072,7 @@ public final class EdhomeDesktop extends JFrame {
                 event.addProperty("details", "Usunięto z EDHOME Desktop");
                 event.addProperty("happened_at", System.currentTimeMillis());
                 table("storage_events").add(event);
+                removeDesktopNfcTarget(value(row,"kind"),id);
                 table("storage_items").remove(row);
                 removeStorageThumbnail(id);
             } else if ("vehicles".equals(tableName)) {
@@ -4925,6 +5081,7 @@ public final class EdhomeDesktop extends JFrame {
                 removeRowsByLong("vehicle_policies","vehicle_id",id);
                 removeRowsByLong("vehicle_documents","vehicle_id",id);
                 removeRowsByLong("vehicle_costs","vehicle_id",id);
+                removeDesktopNfcTarget("vehicle",id);
                 table("vehicles").remove(row);
             } else if ("device_timers".equals(tableName)) {
                 table("device_timers").remove(row);
@@ -4938,6 +5095,7 @@ public final class EdhomeDesktop extends JFrame {
                 setNullWhere("tasks", "place_id", id);
                 setNullWhere("shopping_items", "place_id", id);
                 setNullWhere("shopping_receipts", "place_id", id);
+                removeDesktopNfcTarget("place",id);
                 table("places").remove(row);
             } else return;
             markDirty();

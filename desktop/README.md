@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.63
+## Aktualny stan Desktop — 0.6.0.64
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -59,6 +59,7 @@ Aktualna linia Desktop obsługuje:
 - QR/kody z obrazu lub zrzutu ekranu,
 - NFC przez Windows PC/SC,
 - trwałe, synchronizowane powiązania tagów NFC z obiektami EDHOME,
+- Desktop 0.6.0.64 pokazuje akcję `NFC` bezpośrednio przy Rzeczy, Pudełku, Miejscu, Produkcie i Pojeździe; można przypisać tag z czytnika PC/SC, zmienić tag i usunąć powiązanie, a usunięcie obiektu czyści jego NFC bez osieroconych UID,
 - akcje po QR/NFC: otwarcie, edycja, przeniesienie, wypożyczenie/zwrot i etykieta QR tam, gdzie operacja ma zastosowanie,
 - zapamiętywanie domyślnej akcji dla konkretnego QR/NFC,
 - pojedyncze i zbiorcze etykiety QR dla rzeczy, pudełek i miejsc,
