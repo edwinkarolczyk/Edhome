@@ -9,10 +9,11 @@ layout = (root / "HomeTileLayout.java").read_text(encoding="utf-8")
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 
 for token in (
-    'int columns = HomeTileLayout.columns(Math.round(viewport / density));',
+    'HomeTileLayout.homeColumns(Math.round(viewport / density))',
+    'HomeTileLayout.columns(Math.round(viewport / density))',
     'used + span > columns',
     'int contentWidth = Math.max(dp(1), viewport - dp(32));',
-    '(contentWidth - dp(9) * (columns - 1)) / columns',
+    '(contentWidth - dp(tileGapDp) * (columns - 1)) / columns',
     'tile.setOnTouchListener(new View.OnTouchListener()',
     'tile.postDelayed(startDrag, prefs.getInt(',
     'tile.removeCallbacks(startDrag);',
@@ -44,8 +45,11 @@ for token in (
     assert token in backup, token
 # Big native/AI 3D icons are sized from actual tile geometry, not a 46dp
 # thumbnail, and the optional ZIP picker never gates ordinary APK updates.
-assert 'int tileHeight = isHome ? side + dp(76) : side;' in main
-assert 'int iconWidth = side * span + dp(9) * (span - 1) - dp(10);' in main
+assert 'HomeTileLayout.HOME_EXTRA_HEIGHT_DP' in main
+assert 'HOME_MIN_TILE_DP = 73' in layout
+assert 'HOME_GAP_DP = 6' in layout
+assert 'HOME_EXTRA_HEIGHT_DP = 53' in layout
+assert 'side * span + dp(tileGapDp) * (span - 1)' in main
 assert 'int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);' in main
 assert 'Math.min(iconWidth, iconHeight)' in main
 assert 'trim3dTransparentMargins(image)' in main
