@@ -421,14 +421,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.53-signed-apk
+          name: EDHOME-0.6.0.54-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.53 — hotfix Android ↔ Desktop: serwer LAN sam wznawia nasłuch po błędzie portu lub restarcie, Ustawienia pokazują stan serwera i mają przycisk Napraw / uruchom połączenie PC. Zachowane poprawki Magazynu z 0.6.0.52: jawne usuwanie miejsca, NFC od razu po dodaniu rzeczy/pudełka i unikalność QR. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.54 — diagnostyka Android ↔ Desktop: powiadomienie pokazuje prawdziwy stan (czeka na PC / połączono / synchronizacja), Ustawienia pokazują ostatnią próbę PC i powód odrzucenia, w tym zły kod parowania. Serwer LAN nadal sam się wznawia. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
