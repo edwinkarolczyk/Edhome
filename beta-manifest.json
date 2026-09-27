@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 123,
-  "versionName": "0.6.0.58",
-  "changelog": "EDHOME 0.6.0.58 — poprawka diagnostyki Android ↔ Desktop: testy wykonywane przez sam telefon na 127.0.0.1 i własnym adresie Wi‑Fi nie są już liczone jako połączenie PC, nie ustawiają statusu POŁĄCZONY i nie nadpisują ostatniego adresu/próby Desktopu. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.58/edhome-beta.apk",
-  "sha256": "6109c394bf0da80f705670a6b194f573297514531a6ca065aa1a5fcae369739a"
+  "versionCode": 124,
+  "versionName": "0.6.0.59",
+  "changelog": "EDHOME 0.6.0.59 — synchronizacja Desktop → Android odświeża od razu aktualnie otwarty widok telefonu. Odświeżenie zachowuje bieżący ekran i pozycję przewinięcia zamiast wymagać wyjścia i ponownego wejścia do modułu. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.59/edhome-beta.apk",
+  "sha256": "1673aeace56586e77e6537d016412ba2b6a3de6ee59a31d0aef6d5d10debb345"
 }
