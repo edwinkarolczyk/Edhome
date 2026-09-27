@@ -55,6 +55,9 @@ for token in (
 ):
     assert token in backup, "Missing storage backup: "+token
 assert 'EDHOME:STORAGE:1:' in qr
+assert 'id INTEGER PRIMARY KEY AUTOINCREMENT' in store
+assert 'CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT' in main
+assert 'nie będzie przydzielony nowemu obiektowi' in main
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 
 expression=store.split('static void createTables(SQLiteDatabase db)',1)[1].split('static final class Item',1)[0]
@@ -72,6 +75,13 @@ try:
 except sqlite3.IntegrityError:
     pass
 assert db.execute("SELECT count(*) FROM storage_items").fetchone()[0]==2
+# AUTOINCREMENT is part of the QR identity guarantee: a deleted local ID
+# must never be reassigned to a different thing/box.
+old_max=db.execute("SELECT max(id) FROM storage_items").fetchone()[0]
+db.execute("DELETE FROM storage_items WHERE id=2")
+db.execute("DELETE FROM storage_items WHERE id=1")
+new_id=db.execute("INSERT INTO storage_items(name,kind,created_at) VALUES ('Next','box',3)").lastrowid
+assert new_id>old_max, (old_max,new_id)
 print("Storage QR, place inheritance, cycle prevention, history, backup v19: PASS")
 
 # QR label printing contract: place IDs remain distinct from things/boxes.
