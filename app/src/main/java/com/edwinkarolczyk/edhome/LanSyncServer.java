@@ -27,6 +27,9 @@ final class LanSyncServer {
     private static final int MAX_PATCH_OPS = 500;
     private static volatile long LAST_CLIENT_SEEN_AT;
     private static volatile long LAST_SYNC_ACTIVITY_AT;
+    private static volatile long LAST_CONNECTION_ATTEMPT_AT;
+    private static volatile String LAST_CONNECTION_RESULT = "brak próby";
+    private static volatile String LAST_REMOTE = "";
     private static final AtomicInteger ACTIVE_SYNC_COUNT = new AtomicInteger();
 
 
@@ -37,6 +40,24 @@ final class LanSyncServer {
 
     static long lastClientSeenAt() {
         return LAST_CLIENT_SEEN_AT;
+    }
+
+    static long lastConnectionAttemptAt() {
+        return LAST_CONNECTION_ATTEMPT_AT;
+    }
+
+    static String lastConnectionResult() {
+        return LAST_CONNECTION_RESULT;
+    }
+
+    static String lastRemote() {
+        return LAST_REMOTE;
+    }
+
+    private static void markAttempt(InetAddress remote, String result) {
+        LAST_CONNECTION_ATTEMPT_AT = System.currentTimeMillis();
+        LAST_CONNECTION_RESULT = result == null ? "" : result;
+        LAST_REMOTE = remote == null ? "" : remote.getHostAddress();
     }
 
     static boolean isSyncing() {
@@ -156,9 +177,11 @@ final class LanSyncServer {
             InetAddress remote = peer.getInetAddress();
             if (remote == null
                     || (!remote.isSiteLocalAddress() && !remote.isLoopbackAddress())) {
+                markAttempt(remote, "odrzucono: poza siecią LAN");
                 reply(peer, 403, "{\"error\":\"LAN_ONLY\"}");
                 return;
             }
+            markAttempt(remote, "PC dotarł do telefonu");
 
             InputStream in = peer.getInputStream();
             String request = readLine(in, 4096);
@@ -196,11 +219,13 @@ final class LanSyncServer {
             }
 
             if (!constantTimeEquals(token, supplied)) {
+                markAttempt(remote, "odrzucono: nieprawidłowy kod parowania");
                 DiagnosticLog.event("DESKTOP_SYNC_DENIED");
                 reply(peer, 401, "{\"error\":\"PAIRING_REQUIRED\"}");
                 return;
             }
             LAST_CLIENT_SEEN_AT = System.currentTimeMillis();
+            markAttempt(remote, "autoryzowano PC");
 
             String[] parts = request.split(" ");
             if (parts.length < 2) {
@@ -216,6 +241,7 @@ final class LanSyncServer {
             if (syncTransfer) beginSyncActivity();
 
             if ("GET".equals(method) && "/status".equals(path)) {
+                markAttempt(remote, "połączono");
                 reply(peer, 200, "{\"ok\":true,\"mode\":\"read-write-incremental\",\"version\":\""
                     + json(BuildConfig.VERSION_NAME) + "\",\"port\":" + PORT + "}");
                 return;
