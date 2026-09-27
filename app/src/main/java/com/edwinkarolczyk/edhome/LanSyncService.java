@@ -39,6 +39,7 @@ public final class LanSyncService extends Service {
                 }
                 ENDPOINT_RUNNING = current.isRunning();
             }
+            updateNotificationStatus();
             if (watchdogHandler != null)
                 watchdogHandler.postDelayed(this, WATCHDOG_MS);
         }
@@ -85,7 +86,7 @@ public final class LanSyncService extends Service {
         Notification notification = new Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME Desktop")
-            .setContentText("Połączenie lokalne Wi‑Fi gotowe")
+            .setContentText("Serwer LAN uruchamia się • czeka na PC")
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -107,6 +108,37 @@ public final class LanSyncService extends Service {
         watchdogHandler = new Handler(Looper.getMainLooper());
         watchdogHandler.postDelayed(watchdog, 1200L);
         DiagnosticLog.event("DESKTOP_SYNC_SERVICE_STARTED");
+    }
+
+    private void updateNotificationStatus() {
+        NotificationManager manager = (NotificationManager)
+            getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        String state;
+        if (!ENDPOINT_RUNNING)
+            state = "Serwer LAN uruchamia się • czeka na PC";
+        else if (LanSyncServer.isSyncing())
+            state = "Synchronizacja z PC…";
+        else if (LanSyncServer.hasRecentClient())
+            state = "Połączono z EDHOME Desktop";
+        else
+            state = "Serwer LAN działa • czeka na PC";
+
+        Intent open = new Intent(this, MainActivity.class)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pending = PendingIntent.getActivity(this, 0, open,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification notification = new Notification.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_edhome)
+            .setContentTitle("EDHOME Desktop")
+            .setContentText(state)
+            .setContentIntent(pending)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .build();
+        manager.notify(NOTIFICATION_ID, notification);
     }
 
     private String applyRecordPatch(String incoming) throws Exception {
