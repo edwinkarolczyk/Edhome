@@ -140,3 +140,10 @@ assert 'ensureDesktopSyncMetadata' in desktop
 assert 'applyPatchAck' in desktop
 assert '1_000_000_000_000L' in desktop
 print("desktop sync v2 hardening contract OK")
+
+
+# DHCP/IP change recovery: failed heartbeat must drop ONLINE state and trigger rediscovery.
+assert 'OFFLINE • szukam telefonu po zmianie IP' in desktop
+assert 'connected = false;' in desktop
+assert 'SwingUtilities.invokeLater(() -> autoConnectSaved(true))' in desktop
+print("desktop DHCP reconnect contract OK")
