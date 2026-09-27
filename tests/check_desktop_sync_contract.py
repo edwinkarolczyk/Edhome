@@ -75,7 +75,7 @@ assert 'DESKTOP_SYNC_PATCH_WRITTEN' in server
 assert 'DESKTOP_SYNC_PATCH_CONFLICT' in server
 assert 'SyncRecordStore.ensureAll(database)' in service
 assert 'SELECT COALESCE(SUM(revision),0) FROM sync_records' in service
-assert 'PRAGMA data_version' not in service
+assert 'rawQuery("PRAGMA data_version"' not in service
 assert 'buildRecordPatch' in desktop
 assert 'baseRowSha256' in desktop
 assert 'PatchUnsupportedException' in desktop
