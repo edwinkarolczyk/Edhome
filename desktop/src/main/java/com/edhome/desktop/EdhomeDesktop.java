@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.65";
+    private static final String DESKTOP_VERSION = "0.6.0.66";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3166,11 +3166,12 @@ public final class EdhomeDesktop extends JFrame {
         g.gridy=3; g.gridwidth=2; form.add(qrPair,g);
         g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
         g.gridx=1; form.add(importFile,g);
-        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(updateDesktop,g);
-        g.gridy=6; form.add(autostart,g);
-        g.gridy=7; form.add(startMinimized,g);
-        g.gridy=8; form.add(autoConnect,g);
-        g.gridy=9; form.add(autoWrite,g);
+        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(diagnose,g);
+        g.gridy=6; form.add(updateDesktop,g);
+        g.gridy=7; form.add(autostart,g);
+        g.gridy=8; form.add(startMinimized,g);
+        g.gridy=9; form.add(autoConnect,g);
+        g.gridy=10; form.add(autoWrite,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -3183,6 +3184,9 @@ public final class EdhomeDesktop extends JFrame {
             pullFromPhone(host, secret, pull);
         });
 
+        diagnose.addActionListener(e ->
+            diagnosePhoneConnection(ip.getText().trim(),
+                token.getText().trim(), diagnose));
         importFile.addActionListener(e -> importBackup());
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         autostart.addActionListener(e -> {
@@ -3230,6 +3234,94 @@ public final class EdhomeDesktop extends JFrame {
         notes.setBorder(new EmptyBorder(20, 4, 4, 4));
         page.add(notes, BorderLayout.CENTER);
         return page;
+    }
+
+    private void diagnosePhoneConnection(String rawHost, String secret,
+            JButton trigger) {
+        if (rawHost == null || rawHost.isBlank()) {
+            JOptionPane.showMessageDialog(this,
+                "Wpisz adres telefonu z EDHOME Android.");
+            return;
+        }
+        trigger.setEnabled(false);
+        connection.setText("DIAGNOSTYKA SIECI…");
+        new SwingWorker<String,Void>() {
+            @Override protected String doInBackground() {
+                String host;
+                try {
+                    host = LanClient.normalizeHost(rawHost);
+                } catch (Exception error) {
+                    return "Błędny adres telefonu: " + rootMessage(error);
+                }
+
+                java.util.List<String> locals = QrPairingSession.localAddresses();
+                StringBuilder report = new StringBuilder();
+                report.append("EDHOME Desktop ").append(DESKTOP_VERSION).append("\n")
+                    .append("Telefon: ").append(host).append(":").append(PORT).append("\n")
+                    .append("IPv4 Windows: ")
+                    .append(locals.isEmpty() ? "BRAK" : String.join(", ", locals))
+                    .append("\n\n");
+
+                boolean tcp = false;
+                try (Socket socket = new Socket()) {
+                    socket.connect(new InetSocketAddress(host, PORT), 2500);
+                    tcp = true;
+                    report.append("TCP ").append(PORT).append(": OK — PC dociera do telefonu.\n");
+                } catch (Exception error) {
+                    report.append("TCP ").append(PORT).append(": BRAK POŁĄCZENIA — ")
+                        .append(rootMessage(error)).append("\n")
+                        .append("Najczęściej: nieaktualny IP telefonu, sieć gościnna/AP isolation, ")
+                        .append("VPN albo filtr/firewall.\n");
+                }
+
+                if (tcp && secret != null && !secret.isBlank()) {
+                    try {
+                        long revision = new LanClient(host, PORT, secret).state();
+                        report.append("Kod parowania / EDHOME: OK")
+                            .append(revision >= 0 ? " • rewizja " + revision : "")
+                            .append("\n");
+                    } catch (Exception error) {
+                        report.append("Kod parowania / EDHOME: BŁĄD — ")
+                            .append(rootMessage(error)).append("\n");
+                    }
+                } else if (tcp) {
+                    report.append("Kod parowania: nie podano — pominięto autoryzację.\n");
+                }
+
+                if (!tcp && secret != null && !secret.isBlank()) {
+                    report.append("\nAutomatyczne szukanie telefonu: ");
+                    String discovered = LanClient.discover(secret, PORT);
+                    if (discovered == null) {
+                        report.append("nie znaleziono EDHOME w aktywnych podsieciach.");
+                    } else {
+                        report.append("znaleziono ").append(discovered).append(":").append(PORT);
+                        PREFS.put("phoneIp", discovered);
+                    }
+                }
+                return report.toString();
+            }
+
+            @Override protected void done() {
+                trigger.setEnabled(true);
+                connection.setText(connected
+                    ? "ONLINE • połączono" : "OFFLINE • diagnostyka zakończona");
+                try {
+                    JTextArea area = new JTextArea(get(), 13, 58);
+                    area.setEditable(false);
+                    area.setLineWrap(true);
+                    area.setWrapStyleWord(true);
+                    area.setCaretPosition(0);
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        new JScrollPane(area),
+                        "EDHOME Desktop • diagnostyka sieci",
+                        JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception error) {
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie wykonano diagnostyki:\n" + rootMessage(error),
+                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     private void pullFromPhone(String host, String secret, JButton trigger) {
