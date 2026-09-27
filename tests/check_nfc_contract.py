@@ -29,6 +29,8 @@ for token in (
     'NFC_TAG_ASSIGNED',
     'NFC_TAG_UNLINKED',
     'NFC_TARGET_OPENED',
+    'Przypisać teraz tag NFC?',
+    'beginNfcAssignment(kind,newId,newName)',
 ):
     assert token in main, token
 
