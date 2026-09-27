@@ -56,6 +56,9 @@ assert 'Ostatnia próba PC:' in main
 assert 'Serwer LAN działa • czeka na PC' in service
 assert 'InetAddress.getByName("0.0.0.0")' in server
 assert 'bind=0.0.0.0 port=' in server
+assert 'Test serwera LAN telefonu' in main
+assert 'lanTcpSelfTest("127.0.0.1")' in main
+assert 'Problem jest po stronie interfejsu/bindu Androida.' in main
 assert 'Połączono z EDHOME Desktop' in service
 
 assert 'hasRecentClient()' in server
