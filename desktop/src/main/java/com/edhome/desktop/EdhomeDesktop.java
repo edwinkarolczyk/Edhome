@@ -3131,6 +3131,7 @@ public final class EdhomeDesktop extends JFrame {
         JTextField token = new JTextField(PREFS.get("token", ""), 18);
         JButton qrPair = new JButton("Pokaż QR do połączenia");
         JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
+        JButton diagnose = new JButton("Diagnostyka połączenia PC ↔ telefon");
         JButton importFile = new JButton("Wczytaj backup JSON");
         JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
         JCheckBox autostart = new JCheckBox("Uruchamiaj EDHOME Desktop razem z Windows");
