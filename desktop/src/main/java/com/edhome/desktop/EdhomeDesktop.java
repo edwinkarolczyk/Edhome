@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.67";
+    private static final String DESKTOP_VERSION = "0.6.0.68";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3230,7 +3230,7 @@ public final class EdhomeDesktop extends JFrame {
           + "• kolejne operacje modułowe poza już dodanym CRUD zadań, zakupów, magazynu i miejsc,\n"
           + "• pełna zgodność funkcji Android ↔ Desktop.\n"
           + "Pulpit pokazuje zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
-          + "Autostart Windows, zasobnik i ponowne wykrywanie telefonu po zmianie IP pozostają aktywne.");
+          + "Autostart Windows, zasobnik i automatyczne ponowne wykrywanie telefonu po zmianie IP (DHCP) pozostają aktywne.");
         notes.setBackground(APP_BG);
         notes.setForeground(APP_MUTED);
         notes.setEditable(false);
@@ -3455,7 +3455,11 @@ public final class EdhomeDesktop extends JFrame {
                         phoneRevision = revision;
                     }
                 } catch (Exception ignored) {
-                    // Lekki heartbeat nie zmienia stanu offline. Pełny reconnect zrobi pętla.
+                    connected = false;
+                    connection.setText("OFFLINE • szukam telefonu po zmianie IP");
+                    connection.setForeground(new Color(230, 175, 95));
+                    updateTrayTooltip();
+                    SwingUtilities.invokeLater(() -> autoConnectSaved(true));
                 }
             }
         }.execute();
