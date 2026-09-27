@@ -7,10 +7,17 @@ import java.math.RoundingMode;
 final class MoneyRules {
     static final long MAX_GROSZ = 99_999_999_999L;
     static final String[] CATEGORIES = {
-        "shopping","bills","home","vehicle","salary","other"
+        "shopping","food","subscriptions","utilities","bills","home","household",
+        "vehicle","fuel","transport","health","beauty","clothing","restaurants",
+        "entertainment","education","children","pet","insurance","loans",
+        "salary","benefits","savings","transfers","other"
     };
     static final String[] CATEGORY_LABELS = {
-        "Zakupy","Rachunki","Dom","Pojazdy","Wynagrodzenie","Inne"
+        "Zakupy","Żywność","Subskrypcje","Media • prąd / woda / gaz","Rachunki",
+        "Dom","Domowe","Pojazdy","Paliwo","Transport","Zdrowie","Higiena",
+        "Odzież","Restauracje / jedzenie na mieście","Rozrywka","Edukacja",
+        "Dzieci","Zwierzęta","Ubezpieczenia","Kredyty i raty","Wynagrodzenie",
+        "Świadczenia","Oszczędności / inwestycje","Przelewy / transfery","Inne"
     };
     private MoneyRules() { }
 

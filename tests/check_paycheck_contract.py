@@ -32,6 +32,9 @@ for token in (
     'if(previous.moveToFirst())return "DUPLICATE";',
     'db.beginTransaction();',
     'db.setTransactionSuccessful();',
+    'static String delete(',
+    'evidence.put("state","open");',
+    'vehicleLink.putNull("paycheck_operation_id");',
 ):
     assert token in store,token
 for token in (
@@ -45,6 +48,11 @@ for token in (
 ):
     assert token in backup,token
 assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
+for token in ('"subscriptions"','"utilities"','"fuel"','"health"',
+              '"insurance"','"loans"','"benefits"','"savings"'):
+    assert token in rules, token
+for token in ('Usuń wpis','deleteSharedPaycheckEntry(','PAYCHECK_SHARED_DELETED'):
+    assert token in main, token
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
 # Receipt and barcode commit must never automatically post to PayCheck.

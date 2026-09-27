@@ -4891,6 +4891,8 @@ public final class MainActivity extends Activity {
                 if ("pending".equals(status))
                     smallButton(entry, "Potwierdź po sprawdzeniu banku / wyciągu",
                         () -> confirmSharedPaycheckEntry(operationId));
+                smallButton(entry, "Usuń wpis", () ->
+                    deleteSharedPaycheckEntry(operationId));
             }
         }
         if(count==0)note("Brak transakcji wspólnych.");
@@ -5903,6 +5905,29 @@ public final class MainActivity extends Activity {
                 } catch (Exception error) {
                     DiagnosticLog.error("PAYCHECK_CONFIRM", error);
                     alert("Nie udało się potwierdzić. Saldo pozostało bez zmian.");
+                }
+            }).show();
+    }
+
+    private void deleteSharedPaycheckEntry(String operationId) {
+        new AlertDialog.Builder(this)
+            .setTitle("Usunąć wpis PayCheck?")
+            .setMessage("Usunięcie potwierdzonego wpisu przeliczy saldo. "
+                +"Jeżeli wpis był uzgodniony z wyciągiem, dowód bankowy wróci "
+                +"do kolejki „do sprawdzenia”. Powiązany koszt pojazdu pozostanie "
+                +"w historii pojazdu jako koszt poza PayCheck.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń",(dialog,which)->{
+                try {
+                    String result=PaycheckStore.delete(
+                        db.getWritableDatabase(),operationId);
+                    if("DELETED".equals(result)) {
+                        DiagnosticLog.event("PAYCHECK_SHARED_DELETED");
+                        render();
+                    } else alert("Wpis już nie istnieje.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_DELETE",error);
+                    alert("Nie udało się usunąć wpisu. Dane bez zmian.");
                 }
             }).show();
     }
