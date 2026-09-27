@@ -156,3 +156,14 @@ assert 'LAST_CLIENT_SEEN_AT = System.currentTimeMillis();' in server
 assert 'syncTransfer = !selfClient' in server
 assert 'Self-test telefonu: nie jest liczony jako połączenie PC' in main
 print("desktop self-test isolation contract OK")
+
+# Android UI must refresh the currently visible screen after Desktop writes data.
+assert 'DESKTOP_DATA_CHANGED_UI_REFRESH' in main
+assert 'desktopDataChangedReceiver' in main
+assert 'new IntentFilter(' in main
+assert 'DESKTOP_DATA_CHANGED' in main
+assert 'registerReceiver(desktopDataChangedReceiver' in main
+assert 'unregisterReceiver(desktopDataChangedReceiver)' in main
+assert 'if (root != null && !isFinishing()) render();' in main
+assert 'screenScrollY' in main
+print("desktop-to-android live view refresh contract OK")
