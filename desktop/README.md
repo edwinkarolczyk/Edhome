@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.56
+## Aktualny stan Desktop — 0.6.0.57
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -151,6 +151,28 @@ Automatyczne rozpoznanie banku nie oznacza zgadywania układu dokumentu. W 0.6.0
 - rzecz/pudełko pokazuje miniaturę 96×96 px, jeśli synchronizowana miniatura istnieje,
 - zaznaczone miejsce lub element magazynu można edytować bez opuszczania widoku `Pomieszczenia`,
 - widok nie tworzy drugiej bazy ani kopii magazynu; korzysta z tych samych rekordów co Android i moduł Magazyn.
+
+### Mapa domu i prowadzenie do celu
+- osobna zakładka `Mapa` korzysta z tych samych `places` i `storage_items`, co Magazyn i Pomieszczenia,
+- domyślne poziomy to `Piwnica`, `Parter` i `Piętro`,
+- układ pomieszczeń jest rysowany jako ściany/prostokąty i można go przeciągać w trybie edycji,
+- można dodać istniejące miejsce do wybranego poziomu bez tworzenia kopii miejsca,
+- geometria mapy i przejścia są zapisane lokalnie w `~/.edhome/floor-map.json`,
+- użytkownik definiuje przejścia/drzwi/schody klikając dwa pomieszczenia; przejścia mogą łączyć różne poziomy,
+- `Jestem tutaj` ustawia ręcznie aktualne pomieszczenie,
+- wyszukiwarka `Gdzie jest` znajduje pomieszczenie albo rzecz/pudełko/narzędzie z Magazynu,
+- rzecz w pudełku dziedziczy lokalizację przez łańcuch `parent_box_id` aż do `place_id`,
+- trasa jest wyznaczana grafowo po zdefiniowanych przejściach i pokazana jako lista kroków oraz linia na mapie,
+- bieżące pomieszczenie i cel są wyróżnione wizualnie,
+- v1 nie udaje automatycznej lokalizacji wewnątrz budynku: `Jestem tutaj` jest wybierane ręcznie; później może być ustawiane przez QR/NFC pomieszczenia.
+
+### SUPLA — zaplanowana nakładka na tę samą mapę
+- nie tworzyć osobnej mapy SUPLA,
+- wykorzystać dokładnie tę samą geometrię poziomów, pomieszczeń, ścian i przejść,
+- druga warstwa ma pokazywać urządzenia SUPLA w przypisanych pomieszczeniach, ich stan i podstawowe akcje,
+- planowana nakładka: urządzenia online/offline, włączone/wyłączone, wartości czujników, pralka/suszarka i inne wspierane urządzenia,
+- przypisanie urządzenia SUPLA ma wskazywać istniejące `place_id`; zmiana planu domu ma automatycznie obowiązywać także nakładkę SUPLA,
+- ten zakres jest zapisany na później i nie jest częścią v0.6.0.57.
 
 ## Braki do pełnej zgodności z APK
 

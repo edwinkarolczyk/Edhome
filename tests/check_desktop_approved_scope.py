@@ -119,3 +119,16 @@ for marker in (
 ):
     assert marker in rooms, f"Missing rooms tree contract: {marker}"
 print("EDHOME Desktop rooms/location tree: PASS")
+
+# Visual building map and local route planner.
+floor_map = (root / "desktop/src/main/java/com/edhome/desktop/DesktopFloorMapPanel.java").read_text(encoding="utf-8")
+for marker in ('"Mapa"', 'DesktopFloorMapPanel', 'table("places")', 'table("storage_items")'):
+    assert marker in desktop, f"Missing floor map integration: {marker}"
+for marker in (
+    '"Piwnica"', '"Parter"', '"Piętro"', 'Jestem tutaj:', 'Gdzie jest:',
+    'Dodaj przejście', 'Edycja układu', 'shortestPath',
+    'edhome-desktop-floor-map', 'floor-map.json',
+    'parent_box_id', 'place_id', 'Pełna lokalizacja'
+):
+    assert marker in floor_map, f"Missing visual floor-map contract: {marker}"
+print("EDHOME Desktop visual floor map + routing: PASS")

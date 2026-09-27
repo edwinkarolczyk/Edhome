@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.56";
+    private static final String DESKTOP_VERSION = "0.6.0.57";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -90,7 +90,7 @@ public final class EdhomeDesktop extends JFrame {
 
     private static final String[] NAV = {
         "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
-        "Magazyn", "Pomieszczenia", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
+        "Magazyn", "Pomieszczenia", "Mapa", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
         "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
     };
 
@@ -322,6 +322,7 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
                  "Miejsce","place_id","Wypożyczone","lent_to"));
         if ("Pomieszczenia".equals(name)) return rooms();
+        if ("Mapa".equals(name)) return floorMap();
         if ("Spiżarnia".equals(name)) return tablePage("Spiżarnia", "pantry",
             cols("Produkt","name","Ilość","qty","Kategoria","category"));
         if ("Zakupy".equals(name)) return tablePage("Lista zakupów", "shopping_items",
@@ -344,6 +345,21 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
         if ("Skaner".equals(name)) return scanner();
         return settings();
+    }
+
+    private JComponent floorMap() {
+        return new DesktopFloorMapPanel(
+            table("places"),
+            table("storage_items"),
+            placeId -> {
+                JsonObject row = scannerRowById("places", placeId);
+                if (row == null) return;
+                editRow(row, cols(
+                    "Nazwa","name",
+                    "Typ","kind",
+                    "Nadrzędne","parent_id"));
+                showSection("Mapa");
+            });
     }
 
     private JComponent rooms() {
