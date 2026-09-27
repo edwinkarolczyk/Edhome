@@ -42,7 +42,7 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.6.0.59
+## Aktualny stan Desktop — 0.6.0.60
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
@@ -67,6 +67,7 @@ Aktualna linia Desktop obsługuje:
 - zapamiętywanie drukarki etykiet,
 - PayCheck: lokalny import PDF/CSV/XLSX, kolejka dowodów bankowych, deduplikacja i ręczne dopasowanie,
 - PayCheck: osobny „Budżet przyszły” z kreatorem ręcznym i importem PDF/XLSX/CSV/TXT, rozpoznawaniem kwot i dostawców (m.in. TAURON/woda/banki), ratami/kredytami, cyklami, datą końcową/liczbą rat oraz prognozą 12 miesięcy zestawioną z potwierdzonymi transakcjami,
+- import do „Budżetu przyszłego” działa teraz w trybie **najpierw podgląd, potem decyzja**: dla rozpoznanego wyciągu bankowego pokazuje przed kreatorem datę, opis, kwotę, typ i bank oraz pozwala `Dodaj do budżetu / Pomiń / Pomiń resztę pliku / Zakończ import`; kwota i data z banku są przekazywane do kreatora bez ponownego przepisywania,
 - plan „Budżet przyszły” jest celowo lokalny i wersjonowany w `~/.edhome/paycheck-budget-plan.json`; nie księguje planu jako wydatku i nie zmienia salda przed faktycznym potwierdzeniem,
 - bezpieczny parser VeloBank PDF oraz mBank CSV/XLSX; nieznane układy PDF są odrzucane zamiast zgadywane,
 - zachowywanie oryginalnych PDF bankowych lokalnie na komputerze,

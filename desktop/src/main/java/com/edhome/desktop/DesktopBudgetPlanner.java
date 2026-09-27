@@ -74,6 +74,24 @@ final class DesktopBudgetPlanner {
         @Override public String toString() { return money(grosz); }
     }
 
+    private static final class ImportSeed {
+        long amountGrosz;
+        String suggestedName = "";
+        String provider = "";
+        String typeHint = "";
+        String categoryHint = "";
+        String startDate = "";
+        String sourceDocumentName = "";
+        String sourceDocumentSha256 = "";
+        String description = "";
+        String kind = "";
+    }
+
+    private static final int REVIEW_ADD = 0;
+    private static final int REVIEW_SKIP = 1;
+    private static final int REVIEW_SKIP_FILE = 2;
+    private static final int REVIEW_STOP_ALL = 3;
+
     private DesktopBudgetPlanner() { }
 
     static void show(Component owner, JsonArray paycheckTransactions) {
@@ -177,9 +195,33 @@ final class DesktopBudgetPlanner {
         boolean changed = false;
 
         for (java.io.File selected : files) {
+            java.nio.file.Path path = selected.toPath();
+
+            DesktopBankImporter.Result bank = tryReadBankStatement(path);
+            if (bank != null && bank.entries != null && !bank.entries.isEmpty()) {
+                for (int i=0; i<bank.entries.size(); i++) {
+                    DesktopBankImporter.Entry entry = bank.entries.get(i);
+                    ImportSeed seed = seedFromBank(selected.getName(), bank, entry);
+                    int decision = reviewImportedCandidate(owner, seed,
+                        i + 1, bank.entries.size(), true);
+                    if (decision == REVIEW_STOP_ALL) return changed;
+                    if (decision == REVIEW_SKIP_FILE) break;
+                    if (decision == REVIEW_SKIP) continue;
+
+                    BudgetItem item = runWizard(owner, null, null,
+                        seed.amountGrosz, seed);
+                    if (item != null) {
+                        plan.items.add(item);
+                        save(plan);
+                        changed = true;
+                    }
+                }
+                continue;
+            }
+
             DesktopBudgetDocumentReader.DocumentData doc;
             try {
-                doc = DesktopBudgetDocumentReader.read(selected.toPath());
+                doc = DesktopBudgetDocumentReader.read(path);
             } catch (Exception error) {
                 JOptionPane.showMessageDialog(owner,
                     selected.getName() + ":\n" + rootMessage(error),
@@ -187,27 +229,44 @@ final class DesktopBudgetPlanner {
                 continue;
             }
 
-            List<Long> amounts = selectAmounts(owner, doc);
-            if (amounts == null) continue;
-            if (amounts.isEmpty()) {
-                int manual = JOptionPane.showConfirmDialog(owner,
-                    "W " + doc.fileName + " nie wybrano żadnej kwoty.\n"
-                        + "Otworzyć kreator i wpisać kwotę ręcznie?",
-                    "Import dokumentu", JOptionPane.YES_NO_OPTION);
-                if (manual == JOptionPane.YES_OPTION) {
-                    BudgetItem item = runWizard(owner, null, doc, null);
+            if (doc.amountsGrosz.isEmpty()) {
+                Object[] actions = {
+                    "Dodaj ręcznie",
+                    "Pomiń ten plik",
+                    "Zakończ import"
+                };
+                int action = JOptionPane.showOptionDialog(owner,
+                    "<html><b>" + escapeHtml(doc.fileName) + "</b><br><br>"
+                        + "Nie znalazłem jednoznacznej kwoty do pokazania.<br>"
+                        + "Możesz przejść do ręcznego kreatora albo pominąć dokument.</html>",
+                    "Najpierw sprawdź dane",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE,
+                    null, actions, actions[1]);
+                if (action == 2 || action < 0) return changed;
+                if (action == 0) {
+                    BudgetItem item = runWizard(owner, null, doc, null, null);
                     if (item != null) {
                         plan.items.add(item);
+                        save(plan);
                         changed = true;
                     }
                 }
                 continue;
             }
 
-            for (long amount : amounts) {
-                BudgetItem item = runWizard(owner, null, doc, amount);
+            for (int i=0; i<doc.amountsGrosz.size(); i++) {
+                ImportSeed seed = seedFromDocument(doc, doc.amountsGrosz.get(i));
+                int decision = reviewImportedCandidate(owner, seed,
+                    i + 1, doc.amountsGrosz.size(), false);
+                if (decision == REVIEW_STOP_ALL) return changed;
+                if (decision == REVIEW_SKIP_FILE) break;
+                if (decision == REVIEW_SKIP) continue;
+
+                BudgetItem item = runWizard(owner, null, doc,
+                    seed.amountGrosz, seed);
                 if (item != null) {
                     plan.items.add(item);
+                    save(plan);
                     changed = true;
                 }
             }
@@ -215,38 +274,113 @@ final class DesktopBudgetPlanner {
         return changed;
     }
 
-    private static List<Long> selectAmounts(Component owner,
-            DesktopBudgetDocumentReader.DocumentData doc) {
-        if (doc.amountsGrosz.isEmpty()) return new ArrayList<>();
-        DefaultListModel<AmountChoice> model = new DefaultListModel<>();
-        for (long amount : doc.amountsGrosz) model.addElement(new AmountChoice(amount));
-        JList<AmountChoice> list = new JList<>(model);
-        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        list.setVisibleRowCount(Math.min(12, model.size()));
-        if (!model.isEmpty()) list.setSelectionInterval(0, model.size()-1);
-        JScrollPane pane = new JScrollPane(list);
-        pane.setPreferredSize(new Dimension(420, Math.min(360, 70 + model.size()*24)));
+    private static DesktopBankImporter.Result tryReadBankStatement(Path file) {
+        String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (!(lower.endsWith(".pdf") || lower.endsWith(".csv")
+                || lower.endsWith(".xlsx") || lower.endsWith(".txt"))) return null;
+        try {
+            // The bank parser gives us structured date/description/kind/amount.
+            // A neutral label is only used by generic CSV when the file has no bank name.
+            return DesktopBankImporter.read(file, "Wyciąg bankowy");
+        } catch (Exception ignored) {
+            // Not every household document is a bank statement. Fall back to the
+            // general document reader instead of treating that as an import error.
+            return null;
+        }
+    }
 
-        JPanel panel = new JPanel(new BorderLayout(0,8));
-        String hint = doc.providerHint == null || doc.providerHint.isBlank()
-            ? "Nie rozpoznano dostawcy." : "Rozpoznano: " + doc.providerHint;
-        panel.add(new JLabel("<html><b>" + escapeHtml(doc.fileName) + "</b><br>"
-            + escapeHtml(hint) + "<br>"
-            + "Zaznacz kwoty, o które kreator ma zapytać po kolei.</html>"),
-            BorderLayout.NORTH);
-        panel.add(pane, BorderLayout.CENTER);
+    private static ImportSeed seedFromBank(String fileName,
+            DesktopBankImporter.Result bank, DesktopBankImporter.Entry entry) {
+        ImportSeed seed = new ImportSeed();
+        seed.amountGrosz = entry.amountGrosz;
+        seed.description = entry.description == null ? "" : entry.description.trim();
+        seed.suggestedName = seed.description.isBlank()
+            ? ("expense".equals(entry.kind) ? "Wydatek z banku" : "Wpływ z banku")
+            : truncate(seed.description, 140);
+        seed.provider = bank.bank == null ? "" : bank.bank;
+        seed.kind = entry.kind == null ? "" : entry.kind;
+        seed.typeHint = "income".equals(seed.kind) ? "recurring_income" : "bill";
+        seed.categoryHint = "income".equals(seed.kind) ? "salary" : "bills";
+        seed.startDate = entry.date == null ? "" : entry.date;
+        seed.sourceDocumentName = fileName == null ? "" : fileName;
+        seed.sourceDocumentSha256 = bank.originalSha256 == null ? "" : bank.originalSha256;
+        return seed;
+    }
 
-        int ok = JOptionPane.showConfirmDialog(owner, panel,
-            "Kwoty znalezione w dokumencie",
-            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (ok != JOptionPane.OK_OPTION) return null;
-        List<Long> result = new ArrayList<>();
-        for (AmountChoice choice : list.getSelectedValuesList()) result.add(choice.grosz);
-        return result;
+    private static ImportSeed seedFromDocument(
+            DesktopBudgetDocumentReader.DocumentData doc, long amount) {
+        ImportSeed seed = new ImportSeed();
+        seed.amountGrosz = amount;
+        seed.suggestedName = doc.suggestedName == null ? "" : doc.suggestedName;
+        seed.provider = doc.providerHint == null ? "" : doc.providerHint;
+        seed.typeHint = doc.typeHint == null ? "" : doc.typeHint;
+        seed.categoryHint = doc.categoryHint == null ? "" : doc.categoryHint;
+        seed.sourceDocumentName = doc.fileName == null ? "" : doc.fileName;
+        seed.sourceDocumentSha256 = doc.sha256 == null ? "" : doc.sha256;
+        seed.description = "Kwota znaleziona w dokumencie";
+        return seed;
+    }
+
+    private static int reviewImportedCandidate(Component owner, ImportSeed seed,
+            int index, int total, boolean bankStructured) {
+        JPanel panel = new JPanel(new BorderLayout(0,10));
+
+        String source = seed.provider == null || seed.provider.isBlank()
+            ? seed.sourceDocumentName : seed.provider;
+        JLabel heading = new JLabel("<html><b>Pozycja " + index + " z " + total + "</b>"
+            + (source == null || source.isBlank() ? "" : " • " + escapeHtml(source))
+            + "</html>");
+        panel.add(heading, BorderLayout.NORTH);
+
+        JPanel data = new JPanel(new GridLayout(0,2,8,8));
+        data.add(new JLabel("Data:"));
+        data.add(new JLabel(seed.startDate == null || seed.startDate.isBlank()
+            ? "—" : seed.startDate));
+        data.add(new JLabel("Typ z pliku:"));
+        data.add(new JLabel("income".equals(seed.kind) ? "Wpływ"
+            : "expense".equals(seed.kind) ? "Wydatek" : "Nieustalony"));
+        data.add(new JLabel("Kwota:"));
+        JLabel amount = new JLabel(money(seed.amountGrosz));
+        amount.setFont(amount.getFont().deriveFont(Font.BOLD, 16f));
+        data.add(amount);
+        data.add(new JLabel("Plik:"));
+        data.add(new JLabel(seed.sourceDocumentName == null ? "—"
+            : seed.sourceDocumentName));
+        panel.add(data, BorderLayout.CENTER);
+
+        JTextArea description = new JTextArea(
+            seed.description == null || seed.description.isBlank()
+                ? "(brak dodatkowego opisu)" : seed.description);
+        description.setEditable(false);
+        description.setLineWrap(true);
+        description.setWrapStyleWord(true);
+        description.setRows(bankStructured ? 5 : 3);
+        description.setBorder(BorderFactory.createTitledBorder(
+            bankStructured ? "Opis transakcji" : "Dane rozpoznane"));
+        panel.add(new JScrollPane(description), BorderLayout.SOUTH);
+
+        Object[] actions = {
+            "Dodaj do budżetu",
+            "Pomiń",
+            "Pomiń resztę pliku",
+            "Zakończ import"
+        };
+        int action = JOptionPane.showOptionDialog(owner, panel,
+            "Najpierw sprawdź dane • " + index + "/" + total,
+            JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+            null, actions, actions[0]);
+        if (action < 0) return REVIEW_STOP_ALL;
+        return action;
     }
 
     private static BudgetItem runWizard(Component owner, BudgetItem existing,
             DesktopBudgetDocumentReader.DocumentData doc, Long importedAmount) {
+        return runWizard(owner, existing, doc, importedAmount, null);
+    }
+
+    private static BudgetItem runWizard(Component owner, BudgetItem existing,
+            DesktopBudgetDocumentReader.DocumentData doc, Long importedAmount,
+            ImportSeed importSeed) {
         BudgetItem base = existing == null ? new BudgetItem() : copy(existing);
 
         Choice[] types = {
@@ -258,6 +392,8 @@ final class DesktopBudgetPlanner {
             new Choice("recurring_other","Inny koszt cykliczny")
         };
         String suggestedType = existing != null ? existing.type
+            : importSeed != null && importSeed.typeHint != null
+                && !importSeed.typeHint.isBlank() ? importSeed.typeHint
             : doc != null && doc.typeHint != null && !doc.typeHint.isBlank()
                 ? doc.typeHint : "bill";
         Choice type = choose(owner, "Co oznacza ta kwota?",
@@ -268,6 +404,8 @@ final class DesktopBudgetPlanner {
             || "one_time_income".equals(base.type)) ? "income" : "expense";
 
         String suggestedName = existing != null ? existing.name
+            : importSeed != null && importSeed.suggestedName != null
+                && !importSeed.suggestedName.isBlank() ? importSeed.suggestedName
             : doc != null ? doc.suggestedName : "";
         String name = askText(owner, "Nazwa pozycji:", suggestedName,
             "Kreator budżetu • nazwa", false);
@@ -278,18 +416,25 @@ final class DesktopBudgetPlanner {
         }
         base.name = name.trim();
 
-        String amountDefault = importedAmount != null ? formatInput(importedAmount)
-            : existing != null ? formatInput(existing.amountGrosz) : "";
-        String amountRaw = askText(owner, "Kwota [PLN]:", amountDefault,
-            "Kreator budżetu • kwota", false);
-        if (amountRaw == null) return null;
-        try { base.amountGrosz = parsePln(amountRaw); }
-        catch (Exception error) {
-            JOptionPane.showMessageDialog(owner, rootMessage(error));
-            return null;
+        if (importedAmount != null) {
+            // Amount was already shown in the review step. Do not force the user
+            // to remember/retype bank data that EDHOME has just parsed.
+            base.amountGrosz = importedAmount;
+        } else {
+            String amountDefault = existing != null ? formatInput(existing.amountGrosz) : "";
+            String amountRaw = askText(owner, "Kwota [PLN]:", amountDefault,
+                "Kreator budżetu • kwota", false);
+            if (amountRaw == null) return null;
+            try { base.amountGrosz = parsePln(amountRaw); }
+            catch (Exception error) {
+                JOptionPane.showMessageDialog(owner, rootMessage(error));
+                return null;
+            }
         }
 
         String providerDefault = existing != null ? existing.provider
+            : importSeed != null && importSeed.provider != null
+                && !importSeed.provider.isBlank() ? importSeed.provider
             : doc != null ? doc.providerHint : "";
         String providerLabel = "loan".equals(base.type) ? "Bank / pożyczkodawca:"
             : "Dostawca / odbiorca (opcjonalnie):";
@@ -306,6 +451,8 @@ final class DesktopBudgetPlanner {
             new Choice("other","Inne")
         };
         String suggestedCategory = existing != null ? existing.category
+            : importSeed != null && importSeed.categoryHint != null
+                && !importSeed.categoryHint.isBlank() ? importSeed.categoryHint
             : doc != null && doc.categoryHint != null && !doc.categoryHint.isBlank()
                 ? doc.categoryHint
                 : "recurring_income".equals(base.type) || "one_time_income".equals(base.type)
@@ -332,7 +479,10 @@ final class DesktopBudgetPlanner {
         } else base.amountMode = "fixed";
 
         String dateDefault = existing != null && existing.startDate != null
-            && !existing.startDate.isBlank() ? existing.startDate : LocalDate.now().toString();
+            && !existing.startDate.isBlank() ? existing.startDate
+            : importSeed != null && importSeed.startDate != null
+                && !importSeed.startDate.isBlank() ? importSeed.startDate
+            : LocalDate.now().toString();
         String dateLabel = recurring ? "Od kiedy? [RRRR-MM-DD]:" : "Data [RRRR-MM-DD]:";
         String startRaw = askText(owner, dateLabel, dateDefault,
             "Kreator budżetu • termin", false);
@@ -443,7 +593,10 @@ final class DesktopBudgetPlanner {
             base.createdAt = System.currentTimeMillis();
         }
         base.active = true;
-        if (doc != null) {
+        if (importSeed != null) {
+            base.sourceDocumentName = importSeed.sourceDocumentName;
+            base.sourceDocumentSha256 = importSeed.sourceDocumentSha256;
+        } else if (doc != null) {
             base.sourceDocumentName = doc.fileName;
             base.sourceDocumentSha256 = doc.sha256;
         }
@@ -739,4 +892,12 @@ final class DesktopBudgetPlanner {
         if (raw == null) return "";
         return raw.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
     }
+
+    private static String truncate(String raw, int max) {
+        if (raw == null) return "";
+        String value = raw.trim();
+        if (value.length() <= max) return value;
+        return value.substring(0, Math.max(1, max - 1)) + "…";
+    }
 }
+

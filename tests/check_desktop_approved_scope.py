@@ -53,7 +53,9 @@ for marker in (
     "Budżet przyszły", "Importuj PDF / XLSX / CSV", "Rachunek cykliczny",
     "Rata / kredyt", "Dochód cykliczny", "Co 2 miesiące",
     "Kiedy ten cykl się kończy?", "Prognoza 12 miesięcy",
-    "paycheck-budget-plan.json"
+    "paycheck-budget-plan.json",
+    "Najpierw sprawdź dane", "Dodaj do budżetu", "Pomiń resztę pliku",
+    "Zakończ import", "tryReadBankStatement", "Opis transakcji"
 ):
     assert marker in budget + desktop, f"Missing future budget contract: {marker}"
 for marker in ("PDF", "XLSX", "CSV", "TAURON", "Wodociągi", "detectProvider", "extractAmounts"):
