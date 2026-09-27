@@ -7,12 +7,14 @@ import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.ComponentName;
 import android.content.pm.ResolveInfo;
 import android.provider.Settings;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
@@ -106,6 +108,17 @@ public final class MainActivity extends Activity {
     private LinearLayout body;
     private boolean unlocked;
     private boolean stableUpdateChecked;
+    private boolean desktopDataReceiverRegistered;
+    private final BroadcastReceiver desktopDataChangedReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent == null
+                    || !"com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED"
+                        .equals(intent.getAction())) return;
+            DiagnosticLog.event("DESKTOP_DATA_CHANGED_UI_REFRESH",
+                "screen=" + screen);
+            if (root != null && !isFinishing()) render();
+        }
+    };
     private String screen = "home";
     private String calendarMonth = YearMonth.now().toString();
     private String calendarDay = LocalDate.now().toString();
@@ -212,6 +225,20 @@ public final class MainActivity extends Activity {
         }, "edhome-bundled-3d-icons").start();
     }
 
+    @Override protected void onStart() {
+        super.onStart();
+        if (BetaUpdater.isBeta() && !desktopDataReceiverRegistered) {
+            IntentFilter filter = new IntentFilter(
+                "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                registerReceiver(desktopDataChangedReceiver, filter,
+                    Context.RECEIVER_NOT_EXPORTED);
+            else
+                registerReceiver(desktopDataChangedReceiver, filter);
+            desktopDataReceiverRegistered = true;
+        }
+    }
+
     @Override protected void onDestroy() {
         disableNfcReaderMode();
         if (nfcAssignmentDialog != null) {
@@ -248,6 +275,11 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onStop() {
+        if (desktopDataReceiverRegistered) {
+            try { unregisterReceiver(desktopDataChangedReceiver); }
+            catch (IllegalArgumentException ignored) { }
+            desktopDataReceiverRegistered = false;
+        }
         super.onStop();
         if (!BetaUpdater.isBeta()) unlocked = false;
         DiagnosticLog.event(BetaUpdater.isBeta()
