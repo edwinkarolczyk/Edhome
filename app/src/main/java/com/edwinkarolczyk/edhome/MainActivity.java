@@ -8620,6 +8620,7 @@ public final class MainActivity extends Activity {
             .append("\nWi‑Fi IPv4: ")
             .append(ip == null ? "BRAK ADRESU"
                 : ip + ":" + LanSyncServer.PORT + " — " + (wifi ? "OK" : "BŁĄD"))
+            .append("\nSelf-test telefonu: nie jest liczony jako połączenie PC")
             .append("\nStan PC: ")
             .append(LanSyncServer.isSyncing() ? "SYNCHRONIZACJA"
                 : (LanSyncServer.hasRecentClient() ? "POŁĄCZONY" : "NIEPOŁĄCZONY"))
