@@ -66,8 +66,15 @@ for marker in ("Sklep / odbiorca","nativeOpenFiles","FileDialog","subscriptions"
     assert marker in budget, f"Missing improved PayCheck import UX: {marker}"
 for marker in ("paycheck-merchant-rules.json","BIEDRONKA","NETFLIX","TAURON","remember"):
     assert marker in merchant_rules, f"Missing merchant rules: {marker}"
-for marker in ("Usuń wpis","showPaycheckDelete","paycheck_operation_id"):
+for marker in ("Usuń wpis","showPaycheckDelete","deletePaycheckTransaction",
+               "paycheck_operation_id"):
     assert marker in desktop, f"Missing Desktop PayCheck delete: {marker}"
+for marker in ("paycheckDashboardStats", "paycheckMetricCard",
+               "paycheckTransactionsView", "editPaycheckCategory",
+               "paycheckMerchantStatsPanel", "paycheckCategoryStatsPanel",
+               "Ostatnie transakcje", 'tabs.addTab("Sklepy"',
+               'tabs.addTab("Kategorie"'):
+    assert marker in desktop, f"Missing PayCheck dashboard UX: {marker}"
 print("EDHOME Desktop future budget wizard: PASS")
 
 # Private PayCheck must stay encrypted and outside ordinary snapshot tables.

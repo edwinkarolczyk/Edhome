@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.61";
+    private static final String DESKTOP_VERSION = "0.6.0.62";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -584,61 +584,451 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JComponent paycheck() {
-        JPanel wrapper = new JPanel(new BorderLayout(0, 12));
-        wrapper.setBackground(APP_BG);
+        JPanel page = page("PayCheck • wspólny budżet");
+        JPanel body = new JPanel(new BorderLayout(0, 12));
+        body.setBackground(APP_BG);
 
-        JPanel tools = new RoundedPanel(APP_SURFACE, 22);
-        tools.setLayout(new BorderLayout(10, 10));
-        tools.setBorder(new EmptyBorder(14, 16, 14, 16));
+        long[] stats = paycheckDashboardStats();
+        JPanel metrics = new JPanel(new GridLayout(1, 4, 10, 10));
+        metrics.setBackground(APP_BG);
+        metrics.add(paycheckMetricCard("Saldo potwierdzone",
+            money(Long.toString(stats[0])), "Tylko zaksięgowane pozycje"));
+        metrics.add(paycheckMetricCard("Wpływy • ten miesiąc",
+            money(Long.toString(stats[1])), "Potwierdzone wpływy"));
+        metrics.add(paycheckMetricCard("Wydatki • ten miesiąc",
+            money(Long.toString(stats[2])), "Potwierdzone wydatki"));
+        metrics.add(paycheckMetricCard("Do potwierdzenia",
+            Long.toString(stats[3]), "Nie zmieniają jeszcze salda"));
 
-        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        left.setOpaque(false);
-        JButton importBank = actionButton("＋ Importuj PDF / CSV / XLSX");
+        JPanel actions = new RoundedPanel(APP_SURFACE, 22);
+        actions.setLayout(new BorderLayout(10, 10));
+        actions.setBorder(new EmptyBorder(12, 14, 12, 14));
+
+        JPanel buttons = new JPanel(new GridLayout(2, 5, 8, 8));
+        buttons.setOpaque(false);
+        JButton importBank = actionButton("＋ Import banku");
         JButton queue = actionButton("Banki i potwierdzenia");
-        JButton history = actionButton("Historia importów");
-        JButton analysis = actionButton("Analiza");
         JButton futureBudget = actionButton("Budżet przyszły");
+        JButton analysis = actionButton("Analiza 12 mies.");
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
+        JButton history = actionButton("Historia importów");
         JButton deleteTx = actionButton("Usuń wpis");
         JButton privatePay = actionButton("Prywatny PayCheck");
-        left.add(importBank);
-        left.add(queue);
-        left.add(history);
-        left.add(analysis);
-        left.add(futureBudget);
-        left.add(goals);
-        left.add(bulk);
-        left.add(deleteTx);
-        left.add(privatePay);
-        tools.add(left, BorderLayout.WEST);
+        JButton refresh = actionButton("↻ Odśwież");
+
+        buttons.add(importBank);
+        buttons.add(queue);
+        buttons.add(futureBudget);
+        buttons.add(analysis);
+        buttons.add(goals);
+        buttons.add(bulk);
+        buttons.add(history);
+        buttons.add(deleteTx);
+        buttons.add(privatePay);
+        buttons.add(refresh);
 
         int open = 0;
         for (JsonElement element : table("bank_evidence_queue")) {
             if (element.isJsonObject()
                     && "open".equals(value(element.getAsJsonObject(), "state"))) open++;
         }
-        JLabel state = new JLabel("Do sprawdzenia z banku: " + open);
-        state.setForeground(open == 0 ? APP_MUTED : APP_ACCENT);
-        tools.add(state, BorderLayout.EAST);
+        JLabel bankState = new JLabel(open == 0
+            ? "Bank • brak pozycji wymagających sprawdzenia"
+            : "Bank • do sprawdzenia: " + open);
+        bankState.setForeground(open == 0 ? APP_MUTED : APP_ACCENT);
+        actions.add(buttons, BorderLayout.CENTER);
+        actions.add(bankState, BorderLayout.SOUTH);
 
         importBank.addActionListener(e -> importBankStatement());
         queue.addActionListener(e -> showBankEvidenceQueue());
-        history.addActionListener(e -> showBankImportHistory());
-        analysis.addActionListener(e -> showPaycheckAnalysis());
         futureBudget.addActionListener(e ->
             DesktopBudgetPlanner.show(this, table("paycheck_transactions")));
+        analysis.addActionListener(e -> showPaycheckAnalysis());
         goals.addActionListener(e -> showPaycheckGoals());
         bulk.addActionListener(e -> showPaycheckBulkEdit());
+        history.addActionListener(e -> showBankImportHistory());
         deleteTx.addActionListener(e -> showPaycheckDelete());
         privatePay.addActionListener(e -> showPrivatePaycheck());
+        refresh.addActionListener(e -> showSection("PayCheck"));
 
-        wrapper.add(tools, BorderLayout.NORTH);
-        wrapper.add(tablePage("PayCheck • wspólne", "paycheck_transactions",
-            cols("Typ","kind","Kategoria","category","Kwota [gr]","amount_grosz",
-                 "Status","status","Źródło","confirmation_source","Data","created_at")),
-            BorderLayout.CENTER);
-        return wrapper;
+        JPanel top = new JPanel(new BorderLayout(0, 10));
+        top.setBackground(APP_BG);
+        top.add(metrics, BorderLayout.NORTH);
+        top.add(actions, BorderLayout.CENTER);
+        body.add(top, BorderLayout.NORTH);
+
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.setBackground(APP_BG);
+        tabs.setForeground(APP_TEXT);
+        tabs.addTab("Transakcje", paycheckTransactionsView());
+        tabs.addTab("Sklepy", paycheckMerchantStatsPanel());
+        tabs.addTab("Kategorie", paycheckCategoryStatsPanel());
+        body.add(tabs, BorderLayout.CENTER);
+
+        page.add(body, BorderLayout.CENTER);
+        return page;
+    }
+
+    private long[] paycheckDashboardStats() {
+        long balance = 0L;
+        long monthIncome = 0L;
+        long monthExpense = 0L;
+        long pending = 0L;
+        java.time.YearMonth now = java.time.YearMonth.now();
+
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if (!"shared".equals(value(tx, "scope"))) continue;
+            if ("pending".equals(value(tx, "status"))) {
+                pending++;
+                continue;
+            }
+            if (!"confirmed".equals(value(tx, "status"))) continue;
+
+            long amount;
+            try { amount = Long.parseLong(value(tx, "amount_grosz")); }
+            catch (Exception invalid) { continue; }
+
+            boolean income = "income".equals(value(tx, "kind"));
+            balance += income ? amount : -amount;
+            LocalDate date = paycheckTransactionDate(tx);
+            if (date != null && now.equals(java.time.YearMonth.from(date))) {
+                if (income) monthIncome += amount;
+                else monthExpense += amount;
+            }
+        }
+        return new long[]{balance, monthIncome, monthExpense, pending};
+    }
+
+    private JPanel paycheckMetricCard(String title, String value, String subtitle) {
+        JPanel card = new RoundedPanel(APP_SURFACE, 20);
+        card.setLayout(new BorderLayout(0, 5));
+        card.setBorder(new EmptyBorder(12, 14, 12, 14));
+
+        JLabel name = new JLabel(title);
+        name.setForeground(APP_MUTED);
+        name.setFont(name.getFont().deriveFont(12f));
+        JLabel number = new JLabel(value);
+        number.setForeground(APP_TEXT);
+        number.setFont(number.getFont().deriveFont(Font.BOLD, 22f));
+        JLabel hint = new JLabel(subtitle);
+        hint.setForeground(APP_MUTED);
+        hint.setFont(hint.getFont().deriveFont(10f));
+
+        card.add(name, BorderLayout.NORTH);
+        card.add(number, BorderLayout.CENTER);
+        card.add(hint, BorderLayout.SOUTH);
+        return card;
+    }
+
+    private JComponent paycheckTransactionsView() {
+        JPanel section = new RoundedPanel(APP_SURFACE, 22);
+        section.setLayout(new BorderLayout(0, 10));
+        section.setBorder(new EmptyBorder(12, 14, 12, 14));
+
+        java.util.List<JsonObject> rows = new ArrayList<>();
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if ("shared".equals(value(tx, "scope"))) rows.add(tx);
+        }
+        rows.sort((a,b) -> Long.compare(paycheckSortTime(b), paycheckSortTime(a)));
+
+        JPanel heading = new JPanel(new BorderLayout());
+        heading.setOpaque(false);
+        JLabel title = new JLabel("Ostatnie transakcje");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
+        JLabel count = new JLabel(rows.size() + " wpisów");
+        count.setForeground(APP_MUTED);
+        heading.add(title, BorderLayout.WEST);
+        heading.add(count, BorderLayout.EAST);
+        section.add(heading, BorderLayout.NORTH);
+
+        JPanel list = new JPanel();
+        list.setBackground(APP_SURFACE);
+        list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
+
+        int shown = 0;
+        for (JsonObject tx : rows) {
+            list.add(paycheckTransactionRow(tx));
+            list.add(Box.createVerticalStrut(6));
+            if (++shown >= 100) break;
+        }
+        if (shown == 0) {
+            JLabel empty = new JLabel(
+                "Brak transakcji. Zaimportuj bank albo dodaj wpis na telefonie.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(20, 8, 20, 8));
+            list.add(empty);
+        }
+
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_SURFACE);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        section.add(scroll, BorderLayout.CENTER);
+        return section;
+    }
+
+    private JComponent paycheckTransactionRow(JsonObject tx) {
+        JPanel row = new RoundedPanel(APP_SURFACE_2, 16);
+        row.setLayout(new BorderLayout(12, 0));
+        row.setBorder(new EmptyBorder(9, 12, 9, 10));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 82));
+
+        boolean income = "income".equals(value(tx, "kind"));
+        JLabel amount = new JLabel((income ? "+ " : "− ")
+            + money(value(tx, "amount_grosz")));
+        amount.setForeground(income ? APP_ACCENT : APP_TEXT);
+        amount.setFont(amount.getFont().deriveFont(Font.BOLD, 17f));
+        amount.setPreferredSize(new Dimension(145, 44));
+        row.add(amount, BorderLayout.WEST);
+
+        JPanel details = new JPanel();
+        details.setOpaque(false);
+        details.setLayout(new BoxLayout(details, BoxLayout.Y_AXIS));
+        String note = value(tx, "note");
+        JLabel main = new JLabel(note.isBlank()
+            ? friendlyValueStaticCategory(value(tx, "category")) : note);
+        main.setForeground(APP_TEXT);
+        main.setFont(main.getFont().deriveFont(Font.BOLD, 13f));
+
+        String meta = friendlyValueStaticCategory(value(tx, "category"))
+            + "   •   " + paycheckDateLabel(tx)
+            + "   •   " + paycheckStatusLabel(tx);
+        JLabel secondary = new JLabel(meta);
+        secondary.setForeground("pending".equals(value(tx, "status"))
+            ? APP_ACCENT : APP_MUTED);
+        secondary.setFont(secondary.getFont().deriveFont(11f));
+
+        details.add(main);
+        details.add(Box.createVerticalStrut(5));
+        details.add(secondary);
+        row.add(details, BorderLayout.CENTER);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        actions.setOpaque(false);
+        JButton category = paycheckSmallButton("Kategoria");
+        JButton delete = paycheckSmallButton("Usuń");
+        category.addActionListener(e -> editPaycheckCategory(tx));
+        delete.addActionListener(e -> deletePaycheckTransaction(tx));
+        actions.add(category);
+        if ("pending".equals(value(tx, "status"))) {
+            JButton bank = paycheckSmallButton("Bank");
+            bank.addActionListener(e -> showBankEvidenceQueue());
+            actions.add(bank);
+        }
+        actions.add(delete);
+        row.add(actions, BorderLayout.EAST);
+        return row;
+    }
+
+    private JButton paycheckSmallButton(String label) {
+        JButton button = actionButton(label);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(APP_SURFACE_2),
+            new EmptyBorder(5, 8, 5, 8)));
+        return button;
+    }
+
+    private void editPaycheckCategory(JsonObject tx) {
+        Choice[] choices = privateCategoryChoices();
+        Choice selected = choices[0];
+        String currentCategory = value(tx, "category");
+        for (Choice choice : choices)
+            if (choice.value.equals(currentCategory)) selected = choice;
+
+        Choice category = (Choice) JOptionPane.showInputDialog(this,
+            "Kategoria tej transakcji:",
+            "PayCheck • kategoria",
+            JOptionPane.QUESTION_MESSAGE, null, choices, selected);
+        if (category == null || category.value.equals(currentCategory)) return;
+
+        tx.addProperty("category", category.value);
+        DesktopMerchantRules.Match merchant =
+            DesktopMerchantRules.detect(value(tx, "note"));
+        if (merchant != null)
+            DesktopMerchantRules.remember(merchant.label, category.value);
+        markDirty();
+        showSection("PayCheck");
+    }
+
+    private JComponent paycheckMerchantStatsPanel() {
+        JPanel panel = new RoundedPanel(APP_SURFACE, 22);
+        panel.setLayout(new BorderLayout(0, 10));
+        panel.setBorder(new EmptyBorder(12, 14, 12, 14));
+        JLabel title = new JLabel(
+            "Sklepy / odbiorcy • rozpoznane z opisów i Twoich reguł");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+        panel.add(title, BorderLayout.NORTH);
+
+        java.time.YearMonth now = java.time.YearMonth.now();
+        java.time.YearMonth first = now.minusMonths(11);
+        java.util.Map<String,long[]> stats = new java.util.HashMap<>();
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if (!"shared".equals(value(tx, "scope"))
+                    || !"confirmed".equals(value(tx, "status"))
+                    || !"expense".equals(value(tx, "kind"))) continue;
+            LocalDate date = paycheckTransactionDate(tx);
+            if (date == null) continue;
+            java.time.YearMonth month = java.time.YearMonth.from(date);
+            if (month.isBefore(first) || month.isAfter(now)) continue;
+
+            DesktopMerchantRules.Match merchant =
+                DesktopMerchantRules.detect(value(tx, "note"));
+            if (merchant == null) continue;
+            long amount;
+            try { amount = Long.parseLong(value(tx, "amount_grosz")); }
+            catch (Exception invalid) { continue; }
+
+            long[] row = stats.computeIfAbsent(merchant.label, ignored -> new long[3]);
+            row[0] += amount;
+            row[1]++;
+            if (now.equals(month)) row[2] += amount;
+        }
+
+        java.util.List<java.util.Map.Entry<String,long[]>> rows =
+            new ArrayList<>(stats.entrySet());
+        rows.sort((a,b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
+        panel.add(paycheckStatsRows(rows, true), BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JComponent paycheckCategoryStatsPanel() {
+        JPanel panel = new RoundedPanel(APP_SURFACE, 22);
+        panel.setLayout(new BorderLayout(0, 10));
+        panel.setBorder(new EmptyBorder(12, 14, 12, 14));
+        JLabel title = new JLabel("Kategorie wydatków • ostatnie 12 miesięcy");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+        panel.add(title, BorderLayout.NORTH);
+
+        java.time.YearMonth now = java.time.YearMonth.now();
+        java.time.YearMonth first = now.minusMonths(11);
+        java.util.Map<String,long[]> stats = new java.util.HashMap<>();
+        for (JsonElement element : table("paycheck_transactions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject tx = element.getAsJsonObject();
+            if (!"shared".equals(value(tx, "scope"))
+                    || !"confirmed".equals(value(tx, "status"))
+                    || !"expense".equals(value(tx, "kind"))) continue;
+            LocalDate date = paycheckTransactionDate(tx);
+            if (date == null) continue;
+            java.time.YearMonth month = java.time.YearMonth.from(date);
+            if (month.isBefore(first) || month.isAfter(now)) continue;
+
+            long amount;
+            try { amount = Long.parseLong(value(tx, "amount_grosz")); }
+            catch (Exception invalid) { continue; }
+            String category = friendlyValueStaticCategory(value(tx, "category"));
+            long[] row = stats.computeIfAbsent(category, ignored -> new long[3]);
+            row[0] += amount;
+            row[1]++;
+            if (now.equals(month)) row[2] += amount;
+        }
+
+        java.util.List<java.util.Map.Entry<String,long[]>> rows =
+            new ArrayList<>(stats.entrySet());
+        rows.sort((a,b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
+        panel.add(paycheckStatsRows(rows, false), BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JComponent paycheckStatsRows(
+            java.util.List<java.util.Map.Entry<String,long[]>> rows,
+            boolean merchants) {
+        JPanel list = new JPanel();
+        list.setBackground(APP_SURFACE);
+        list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
+
+        JPanel header = new JPanel(new GridLayout(1, 4, 8, 0));
+        header.setBackground(APP_SURFACE_2);
+        header.setBorder(new EmptyBorder(7, 10, 7, 10));
+        header.add(paycheckStatsLabel(merchants ? "Sklep / odbiorca" : "Kategoria", true));
+        header.add(paycheckStatsLabel("Ten miesiąc", true));
+        header.add(paycheckStatsLabel("12 miesięcy", true));
+        header.add(paycheckStatsLabel("Transakcje / średnia", true));
+        list.add(header);
+        list.add(Box.createVerticalStrut(5));
+
+        if (rows.isEmpty()) {
+            JLabel empty = new JLabel(merchants
+                ? "Brak rozpoznanych sklepów. EDHOME zacznie je kojarzyć po klasyfikacji importów."
+                : "Brak potwierdzonych wydatków do statystyk.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18, 10, 18, 10));
+            list.add(empty);
+        } else {
+            for (java.util.Map.Entry<String,long[]> entry : rows) {
+                long total = entry.getValue()[0];
+                long count = entry.getValue()[1];
+                long current = entry.getValue()[2];
+                JPanel row = new JPanel(new GridLayout(1, 4, 8, 0));
+                row.setBackground(APP_SURFACE);
+                row.setBorder(new EmptyBorder(7, 10, 7, 10));
+                row.add(paycheckStatsLabel(entry.getKey(), false));
+                row.add(paycheckStatsLabel(money(Long.toString(current)), false));
+                row.add(paycheckStatsLabel(money(Long.toString(total)), false));
+                row.add(paycheckStatsLabel(count + " • śr. "
+                    + money(Long.toString(count == 0 ? 0 : total / count)), false));
+                list.add(row);
+                list.add(new JSeparator());
+            }
+        }
+
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_SURFACE);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        return scroll;
+    }
+
+    private JLabel paycheckStatsLabel(String text, boolean bold) {
+        JLabel label = new JLabel(text);
+        label.setForeground(bold ? APP_TEXT : APP_MUTED);
+        label.setFont(label.getFont().deriveFont(
+            bold ? Font.BOLD : Font.PLAIN, 12f));
+        return label;
+    }
+
+    private LocalDate paycheckTransactionDate(JsonObject tx) {
+        String statement = value(tx, "statement_date");
+        if (!statement.isBlank()) {
+            try { return LocalDate.parse(statement); }
+            catch (Exception ignored) { }
+        }
+        try {
+            return Instant.ofEpochMilli(Long.parseLong(value(tx, "created_at")))
+                .atZone(ZoneId.systemDefault()).toLocalDate();
+        } catch (Exception ignored) { return null; }
+    }
+
+    private long paycheckSortTime(JsonObject tx) {
+        try { return Long.parseLong(value(tx, "created_at")); }
+        catch (Exception ignored) { }
+        LocalDate date = paycheckTransactionDate(tx);
+        if (date == null) return 0L;
+        return date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+
+    private String paycheckDateLabel(JsonObject tx) {
+        LocalDate date = paycheckTransactionDate(tx);
+        return date == null ? "bez daty"
+            : date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+    }
+
+    private String paycheckStatusLabel(JsonObject tx) {
+        if ("pending".equals(value(tx, "status"))) return "Do potwierdzenia";
+        if (!value(tx, "statement_key").isBlank()) return "Potwierdzone • bank";
+        if ("manual".equals(value(tx, "confirmation_source")))
+            return "Potwierdzone ręcznie";
+        return "Potwierdzone";
     }
 
     private void showPaycheckAnalysis() {
@@ -942,16 +1332,24 @@ public final class EdhomeDesktop extends JFrame {
                     +friendlyValueStaticCategory(value(tx,"category"))
                     +(note.isBlank()?"":" • "+note)));
         }
-        if(rows.isEmpty()){JOptionPane.showMessageDialog(this,"Brak wpisów PayCheck do usunięcia.");return;}
+        if(rows.isEmpty()){
+            JOptionPane.showMessageDialog(this,"Brak wpisów PayCheck do usunięcia.");
+            return;
+        }
         JList<Choice> list=new JList<>(model);
         list.setVisibleRowCount(Math.min(14,model.size()));
         list.setSelectedIndex(0);
         JScrollPane pane=new JScrollPane(list);
         pane.setPreferredSize(new Dimension(820,340));
-        if(JOptionPane.showConfirmDialog(this,pane,"Wybierz wpis PayCheck do usunięcia",
-                JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)
-            return;
-        JsonObject tx=rows.get(list.getSelectedIndex());
+        if(JOptionPane.showConfirmDialog(this,pane,
+                "Wybierz wpis PayCheck do usunięcia",
+                JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)
+                !=JOptionPane.OK_OPTION || list.getSelectedIndex()<0) return;
+        deletePaycheckTransaction(rows.get(list.getSelectedIndex()));
+    }
+
+    private void deletePaycheckTransaction(JsonObject tx) {
+        if(tx==null)return;
         String operationId=value(tx,"operation_id");
         String statementKey=value(tx,"statement_key");
         int yes=JOptionPane.showConfirmDialog(this,
@@ -964,6 +1362,7 @@ public final class EdhomeDesktop extends JFrame {
             +"Powiązany koszt pojazdu pozostanie jako koszt poza PayCheck.",
             "Usuń wpis PayCheck",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
         if(yes!=JOptionPane.YES_OPTION)return;
+
         if(!statementKey.isBlank()){
             for(JsonElement e:mutableTable("bank_evidence_queue")){
                 if(!e.isJsonObject())continue;
@@ -987,7 +1386,6 @@ public final class EdhomeDesktop extends JFrame {
         mutableTable("paycheck_transactions").remove(tx);
         markDirty();
         showSection("PayCheck");
-        JOptionPane.showMessageDialog(this,"Wpis PayCheck został usunięty.");
     }
 
     private static long parsePln(String raw) {
@@ -4586,21 +4984,7 @@ public final class EdhomeDesktop extends JFrame {
                 default: return raw;
             }
         }
-        if ("category".equals(key)) {
-            switch (raw) {
-                case "shopping": return "Zakupy";
-                case "bills": return "Rachunki";
-                case "home": return "Dom";
-                case "vehicle": return "Pojazdy";
-                case "salary": return "Wynagrodzenie";
-                case "food": return "Żywność";
-                case "household": return "Dom";
-                case "beauty": return "Higiena";
-                case "pet": return "Zwierzęta";
-                case "other": return "Inne";
-                default: return raw;
-            }
-        }
+        if ("category".equals(key)) return friendlyValueStaticCategory(raw);
         if ("amount_grosz".equals(key)) return money(raw);
         if ("qty_milli".equals(key)) return milli(raw);
         if (key.endsWith("_at")) return timeValue(raw);
@@ -4794,15 +5178,10 @@ public final class EdhomeDesktop extends JFrame {
             out.add(new Choice("income", "Wpływ"));
             out.add(new Choice("expense", "Wydatek"));
         } else if ("category".equals(key) && row.has("amount_grosz")) {
-            out.add(new Choice("shopping", "Zakupy"));
-            out.add(new Choice("bills", "Rachunki"));
-            out.add(new Choice("home", "Dom"));
-            out.add(new Choice("vehicle", "Pojazdy"));
-            out.add(new Choice("salary", "Wynagrodzenie"));
-            out.add(new Choice("other", "Inne"));
+            for (Choice category : privateCategoryChoices()) out.add(category);
         } else if ("category".equals(key)) {
             out.add(new Choice("food", "Żywność"));
-            out.add(new Choice("household", "Dom"));
+            out.add(new Choice("household", "Domowe"));
             out.add(new Choice("beauty", "Higiena"));
             out.add(new Choice("pet", "Zwierzęta"));
             out.add(new Choice("other", "Inne"));
