@@ -7,7 +7,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.IOException;
@@ -78,6 +77,8 @@ final class DesktopBudgetPlanner {
         long amountGrosz;
         String suggestedName = "";
         String provider = "";
+        String sourceLabel = "";
+        String merchantLabel = "";
         String typeHint = "";
         String categoryHint = "";
         String startDate = "";
@@ -180,18 +181,9 @@ final class DesktopBudgetPlanner {
     }
 
     private static boolean importDocuments(Component owner, PlanFile plan) throws Exception {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Dokumenty do budżetu • PDF / XLSX / CSV");
-        chooser.setMultiSelectionEnabled(true);
-        chooser.setFileFilter(new FileNameExtensionFilter(
-            "Dokumenty budżetu (PDF, XLSX, CSV, TXT)", "pdf","xlsx","csv","txt"));
-        if (chooser.showOpenDialog(owner) != JFileChooser.APPROVE_OPTION) return false;
-
-        java.io.File[] files = chooser.getSelectedFiles();
-        if (files == null || files.length == 0) {
-            java.io.File single = chooser.getSelectedFile();
-            if (single != null) files = new java.io.File[]{single};
-        }
+        java.io.File[] files = nativeOpenFiles(owner,
+            "Wybierz dokumenty budżetu • PDF / XLSX / CSV / TXT");
+        if (files.length == 0) return false;
         boolean changed = false;
 
         for (java.io.File selected : files) {
@@ -297,10 +289,16 @@ final class DesktopBudgetPlanner {
         seed.suggestedName = seed.description.isBlank()
             ? ("expense".equals(entry.kind) ? "Wydatek z banku" : "Wpływ z banku")
             : truncate(seed.description, 140);
-        seed.provider = bank.bank == null ? "" : bank.bank;
+        seed.sourceLabel = bank.bank == null ? "" : bank.bank;
+        DesktopMerchantRules.Match merchant=DesktopMerchantRules.detect(seed.description);
+        if(merchant!=null){
+            seed.merchantLabel=merchant.label;
+            seed.provider=merchant.label;
+        }
         seed.kind = entry.kind == null ? "" : entry.kind;
         seed.typeHint = "income".equals(seed.kind) ? "recurring_income" : "bill";
-        seed.categoryHint = "income".equals(seed.kind) ? "salary" : "bills";
+        seed.categoryHint = merchant!=null ? merchant.category
+            : "income".equals(seed.kind) ? "salary" : "other";
         seed.startDate = entry.date == null ? "" : entry.date;
         seed.sourceDocumentName = fileName == null ? "" : fileName;
         seed.sourceDocumentSha256 = bank.originalSha256 == null ? "" : bank.originalSha256;
@@ -313,6 +311,8 @@ final class DesktopBudgetPlanner {
         seed.amountGrosz = amount;
         seed.suggestedName = doc.suggestedName == null ? "" : doc.suggestedName;
         seed.provider = doc.providerHint == null ? "" : doc.providerHint;
+        seed.merchantLabel = seed.provider;
+        seed.sourceLabel = seed.provider;
         seed.typeHint = doc.typeHint == null ? "" : doc.typeHint;
         seed.categoryHint = doc.categoryHint == null ? "" : doc.categoryHint;
         seed.sourceDocumentName = doc.fileName == null ? "" : doc.fileName;
@@ -323,53 +323,56 @@ final class DesktopBudgetPlanner {
 
     private static int reviewImportedCandidate(Component owner, ImportSeed seed,
             int index, int total, boolean bankStructured) {
-        JPanel panel = new JPanel(new BorderLayout(0,10));
+        JPanel panel=new JPanel(new BorderLayout(0,10));
+        String source=seed.sourceLabel==null||seed.sourceLabel.isBlank()
+            ?seed.sourceDocumentName:seed.sourceLabel;
+        panel.add(new JLabel("<html><b>Pozycja "+index+" z "+total+"</b>"
+            +(source==null||source.isBlank()?"":" • "+escapeHtml(source))+"</html>"),
+            BorderLayout.NORTH);
 
-        String source = seed.provider == null || seed.provider.isBlank()
-            ? seed.sourceDocumentName : seed.provider;
-        JLabel heading = new JLabel("<html><b>Pozycja " + index + " z " + total + "</b>"
-            + (source == null || source.isBlank() ? "" : " • " + escapeHtml(source))
-            + "</html>");
-        panel.add(heading, BorderLayout.NORTH);
-
-        JPanel data = new JPanel(new GridLayout(0,2,8,8));
+        JPanel data=new JPanel(new GridLayout(0,2,8,8));
         data.add(new JLabel("Data:"));
-        data.add(new JLabel(seed.startDate == null || seed.startDate.isBlank()
-            ? "—" : seed.startDate));
+        data.add(new JLabel(seed.startDate==null||seed.startDate.isBlank()?"—":seed.startDate));
         data.add(new JLabel("Typ z pliku:"));
-        data.add(new JLabel("income".equals(seed.kind) ? "Wpływ"
-            : "expense".equals(seed.kind) ? "Wydatek" : "Nieustalony"));
+        data.add(new JLabel("income".equals(seed.kind)?"Wpływ":
+            "expense".equals(seed.kind)?"Wydatek":"Nieustalony"));
         data.add(new JLabel("Kwota:"));
-        JLabel amount = new JLabel(money(seed.amountGrosz));
-        amount.setFont(amount.getFont().deriveFont(Font.BOLD, 16f));
+        JLabel amount=new JLabel(money(seed.amountGrosz));
+        amount.setFont(amount.getFont().deriveFont(Font.BOLD,16f));
         data.add(amount);
-        data.add(new JLabel("Plik:"));
-        data.add(new JLabel(seed.sourceDocumentName == null ? "—"
-            : seed.sourceDocumentName));
-        panel.add(data, BorderLayout.CENTER);
+        data.add(new JLabel("Bank / źródło:"));
+        data.add(new JLabel(source==null||source.isBlank()?"—":source));
 
-        JTextArea description = new JTextArea(
-            seed.description == null || seed.description.isBlank()
-                ? "(brak dodatkowego opisu)" : seed.description);
+        JTextField merchant=new JTextField(seed.merchantLabel==null?"":seed.merchantLabel);
+        data.add(new JLabel("Sklep / odbiorca:"));
+        data.add(merchant);
+        String suggestion=DesktopMerchantRules.suggestedCategory(merchant.getText().trim());
+        data.add(new JLabel("Podpowiedź kategorii:"));
+        data.add(new JLabel(categoryLabel(suggestion.isBlank()?seed.categoryHint:suggestion)));
+        panel.add(data,BorderLayout.CENTER);
+
+        JTextArea description=new JTextArea(seed.description==null||seed.description.isBlank()
+            ?"(brak dodatkowego opisu)":seed.description);
         description.setEditable(false);
         description.setLineWrap(true);
         description.setWrapStyleWord(true);
-        description.setRows(bankStructured ? 5 : 3);
+        description.setRows(bankStructured?5:3);
         description.setBorder(BorderFactory.createTitledBorder(
-            bankStructured ? "Opis transakcji" : "Dane rozpoznane"));
-        panel.add(new JScrollPane(description), BorderLayout.SOUTH);
+            bankStructured?"Opis transakcji":"Dane rozpoznane"));
+        panel.add(new JScrollPane(description),BorderLayout.SOUTH);
 
-        Object[] actions = {
-            "Dodaj do budżetu",
-            "Pomiń",
-            "Pomiń resztę pliku",
-            "Zakończ import"
-        };
-        int action = JOptionPane.showOptionDialog(owner, panel,
-            "Najpierw sprawdź dane • " + index + "/" + total,
-            JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
-            null, actions, actions[0]);
-        if (action < 0) return REVIEW_STOP_ALL;
+        Object[] actions={"Dodaj do budżetu","Pomiń","Pomiń resztę pliku","Zakończ import"};
+        int action=JOptionPane.showOptionDialog(owner,panel,
+            "Najpierw sprawdź dane • "+index+"/"+total,
+            JOptionPane.DEFAULT_OPTION,JOptionPane.QUESTION_MESSAGE,
+            null,actions,actions[0]);
+        if(action<0)return REVIEW_STOP_ALL;
+        if(action==REVIEW_ADD){
+            seed.merchantLabel=merchant.getText().trim();
+            seed.provider=seed.merchantLabel;
+            String learned=DesktopMerchantRules.suggestedCategory(seed.merchantLabel);
+            if(!learned.isBlank())seed.categoryHint=learned;
+        }
         return action;
     }
 
@@ -443,13 +446,7 @@ final class DesktopBudgetPlanner {
         if (provider == null) return null;
         base.provider = provider.trim();
 
-        Choice[] categories = {
-            new Choice("bills","Rachunki"), new Choice("home","Dom"),
-            new Choice("vehicle","Pojazdy"), new Choice("salary","Wynagrodzenie"),
-            new Choice("shopping","Zakupy"), new Choice("food","Żywność"),
-            new Choice("household","Domowe"), new Choice("pet","Zwierzęta"),
-            new Choice("other","Inne")
-        };
+        Choice[] categories = budgetCategoryChoices();
         String suggestedCategory = existing != null ? existing.category
             : importSeed != null && importSeed.categoryHint != null
                 && !importSeed.categoryHint.isBlank() ? importSeed.categoryHint
@@ -605,6 +602,9 @@ final class DesktopBudgetPlanner {
             summary(base) + "\n\nZapisać do Budżetu przyszłego?",
             "Kreator budżetu • podsumowanie",
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if(save==JOptionPane.OK_OPTION && importSeed!=null
+                && importSeed.merchantLabel!=null && !importSeed.merchantLabel.isBlank())
+            DesktopMerchantRules.remember(importSeed.merchantLabel,base.category);
         return save == JOptionPane.OK_OPTION ? base : null;
     }
 
@@ -734,6 +734,44 @@ final class DesktopBudgetPlanner {
             } catch (Exception ignored) { }
         }
         return new long[]{expenses,incomes};
+    }
+
+    private static Choice[] budgetCategoryChoices() {
+        return new Choice[]{
+            new Choice("shopping","Zakupy"),new Choice("food","Żywność"),
+            new Choice("subscriptions","Subskrypcje"),
+            new Choice("utilities","Media • prąd / woda / gaz"),
+            new Choice("bills","Rachunki"),new Choice("home","Dom"),
+            new Choice("household","Domowe"),new Choice("vehicle","Pojazdy"),
+            new Choice("fuel","Paliwo"),new Choice("transport","Transport"),
+            new Choice("health","Zdrowie"),new Choice("beauty","Higiena"),
+            new Choice("clothing","Odzież"),
+            new Choice("restaurants","Restauracje / jedzenie na mieście"),
+            new Choice("entertainment","Rozrywka"),new Choice("education","Edukacja"),
+            new Choice("children","Dzieci"),new Choice("pet","Zwierzęta"),
+            new Choice("insurance","Ubezpieczenia"),new Choice("loans","Kredyty i raty"),
+            new Choice("salary","Wynagrodzenie"),new Choice("benefits","Świadczenia"),
+            new Choice("savings","Oszczędności / inwestycje"),
+            new Choice("transfers","Przelewy / transfery"),new Choice("other","Inne")
+        };
+    }
+    private static String categoryLabel(String id){
+        for(Choice c:budgetCategoryChoices())if(c.value.equals(id))return c.label;
+        return "Inne";
+    }
+    private static java.io.File[] nativeOpenFiles(Component owner,String title){
+        Window window=owner instanceof Window?(Window)owner:SwingUtilities.getWindowAncestor(owner);
+        Frame frame=window instanceof Frame?(Frame)window:null;
+        FileDialog dialog=new FileDialog(frame,title,FileDialog.LOAD);
+        dialog.setMultipleMode(true);
+        dialog.setFilenameFilter((dir,name)->{
+            String lower=name.toLowerCase(Locale.ROOT);
+            return lower.endsWith(".pdf")||lower.endsWith(".xlsx")
+                ||lower.endsWith(".csv")||lower.endsWith(".txt");
+        });
+        dialog.setVisible(true);
+        java.io.File[] files=dialog.getFiles();
+        return files==null?new java.io.File[0]:files;
     }
 
     private static int selectedIndex(JList<Choice> list) {

@@ -12,6 +12,7 @@ report = (root / "desktop/src/main/java/com/edhome/desktop/DesktopReportPdf.java
 chart = (root / "desktop/src/main/java/com/edhome/desktop/DesktopPaycheckChart.java").read_text(encoding="utf-8")
 budget = (root / "desktop/src/main/java/com/edhome/desktop/DesktopBudgetPlanner.java").read_text(encoding="utf-8")
 budget_doc = (root / "desktop/src/main/java/com/edhome/desktop/DesktopBudgetDocumentReader.java").read_text(encoding="utf-8")
+merchant_rules = (root / "desktop/src/main/java/com/edhome/desktop/DesktopMerchantRules.java").read_text(encoding="utf-8")
 gradle = (root / "desktop/build.gradle").read_text(encoding="utf-8")
 readme = (root / "desktop/README.md").read_text(encoding="utf-8")
 
@@ -61,6 +62,12 @@ for marker in (
 for marker in ("PDF", "XLSX", "CSV", "TAURON", "Wodociągi", "detectProvider", "extractAmounts"):
     assert marker in budget_doc, f"Missing budget document reader: {marker}"
 assert 'mutableTable("paycheck_transactions")' not in budget
+for marker in ("Sklep / odbiorca","nativeOpenFiles","FileDialog","subscriptions","fuel","loans"):
+    assert marker in budget, f"Missing improved PayCheck import UX: {marker}"
+for marker in ("paycheck-merchant-rules.json","BIEDRONKA","NETFLIX","TAURON","remember"):
+    assert marker in merchant_rules, f"Missing merchant rules: {marker}"
+for marker in ("Usuń wpis","showPaycheckDelete","paycheck_operation_id"):
+    assert marker in desktop, f"Missing Desktop PayCheck delete: {marker}"
 print("EDHOME Desktop future budget wizard: PASS")
 
 # Private PayCheck must stay encrypted and outside ordinary snapshot tables.

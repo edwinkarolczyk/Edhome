@@ -259,13 +259,13 @@ final class DesktopBudgetDocumentReader {
     private static String detectCategory(String text, String type, String provider) {
         String t = normalize(text);
         if ("recurring_income".equals(type)) return "salary";
-        if ("loan".equals(type)) return "bills";
+        if ("loan".equals(type)) return "loans";
         if ("TAURON".equals(provider) || "PGE".equals(provider)
                 || "Energa".equals(provider) || "E.ON".equals(provider)
                 || "ORLEN".equals(provider) || "Wodociągi".equals(provider))
-            return "bills";
+            return "utilities";
         if (t.contains("ubezpieczen") || t.contains("polisa") || t.contains("oc "))
-            return "vehicle";
+            return "insurance";
         if (t.contains("czynsz") || t.contains("dom") || t.contains("mieszkan"))
             return "home";
         return "bills";

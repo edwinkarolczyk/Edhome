@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.60";
+    private static final String DESKTOP_VERSION = "0.6.0.61";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -600,6 +600,7 @@ public final class EdhomeDesktop extends JFrame {
         JButton futureBudget = actionButton("Budżet przyszły");
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
+        JButton deleteTx = actionButton("Usuń wpis");
         JButton privatePay = actionButton("Prywatny PayCheck");
         left.add(importBank);
         left.add(queue);
@@ -608,6 +609,7 @@ public final class EdhomeDesktop extends JFrame {
         left.add(futureBudget);
         left.add(goals);
         left.add(bulk);
+        left.add(deleteTx);
         left.add(privatePay);
         tools.add(left, BorderLayout.WEST);
 
@@ -628,6 +630,7 @@ public final class EdhomeDesktop extends JFrame {
             DesktopBudgetPlanner.show(this, table("paycheck_transactions")));
         goals.addActionListener(e -> showPaycheckGoals());
         bulk.addActionListener(e -> showPaycheckBulkEdit());
+        deleteTx.addActionListener(e -> showPaycheckDelete());
         privatePay.addActionListener(e -> showPrivatePaycheck());
 
         wrapper.add(tools, BorderLayout.NORTH);
@@ -719,14 +722,29 @@ public final class EdhomeDesktop extends JFrame {
 
     private static String friendlyValueStaticCategory(String raw) {
         if ("shopping".equals(raw)) return "Zakupy";
+        if ("food".equals(raw)) return "Żywność";
+        if ("subscriptions".equals(raw)) return "Subskrypcje";
+        if ("utilities".equals(raw)) return "Media • prąd / woda / gaz";
         if ("bills".equals(raw)) return "Rachunki";
         if ("home".equals(raw)) return "Dom";
-        if ("vehicle".equals(raw)) return "Pojazdy";
-        if ("salary".equals(raw)) return "Wynagrodzenie";
-        if ("food".equals(raw)) return "Żywność";
         if ("household".equals(raw)) return "Domowe";
+        if ("vehicle".equals(raw)) return "Pojazdy";
+        if ("fuel".equals(raw)) return "Paliwo";
+        if ("transport".equals(raw)) return "Transport";
+        if ("health".equals(raw)) return "Zdrowie";
         if ("beauty".equals(raw)) return "Higiena";
+        if ("clothing".equals(raw)) return "Odzież";
+        if ("restaurants".equals(raw)) return "Restauracje / jedzenie na mieście";
+        if ("entertainment".equals(raw)) return "Rozrywka";
+        if ("education".equals(raw)) return "Edukacja";
+        if ("children".equals(raw)) return "Dzieci";
         if ("pet".equals(raw)) return "Zwierzęta";
+        if ("insurance".equals(raw)) return "Ubezpieczenia";
+        if ("loans".equals(raw)) return "Kredyty i raty";
+        if ("salary".equals(raw)) return "Wynagrodzenie";
+        if ("benefits".equals(raw)) return "Świadczenia";
+        if ("savings".equals(raw)) return "Oszczędności / inwestycje";
+        if ("transfers".equals(raw)) return "Przelewy / transfery";
         if ("other".equals(raw) || raw == null || raw.isBlank()) return "Inne";
         return raw;
     }
@@ -887,15 +905,7 @@ public final class EdhomeDesktop extends JFrame {
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (ok != JOptionPane.OK_OPTION || list.getSelectedIndices().length == 0) return;
 
-        String[][] categories = {
-            {"shopping","Zakupy"},{"bills","Rachunki"},{"home","Dom"},
-            {"vehicle","Pojazdy"},{"salary","Wynagrodzenie"},{"food","Żywność"},
-            {"household","Domowe"},{"beauty","Higiena"},{"pet","Zwierzęta"},
-            {"other","Inne"}
-        };
-        Choice[] choices = new Choice[categories.length];
-        for (int i=0; i<categories.length; i++)
-            choices[i] = new Choice(categories[i][0], categories[i][1]);
+        Choice[] choices = privateCategoryChoices();
         Choice category = (Choice) JOptionPane.showInputDialog(this,
             "Nowa kategoria dla " + list.getSelectedIndices().length + " pozycji:",
             "PayCheck • masowa edycja", JOptionPane.QUESTION_MESSAGE,
@@ -915,6 +925,69 @@ public final class EdhomeDesktop extends JFrame {
             JOptionPane.showMessageDialog(this,
                 "Zmieniono kategorię dla " + changed + " transakcji.");
         }
+    }
+
+    private void showPaycheckDelete() {
+        java.util.List<JsonObject> rows=new ArrayList<>();
+        DefaultListModel<Choice> model=new DefaultListModel<>();
+        for(JsonElement element:table("paycheck_transactions")){
+            if(!element.isJsonObject())continue;
+            JsonObject tx=element.getAsJsonObject();
+            if(!"shared".equals(value(tx,"scope")))continue;
+            rows.add(tx);
+            String note=value(tx,"note");
+            model.addElement(new Choice(Integer.toString(rows.size()-1),
+                ("income".equals(value(tx,"kind"))?"+ ":"− ")
+                    +money(value(tx,"amount_grosz"))+" • "
+                    +friendlyValueStaticCategory(value(tx,"category"))
+                    +(note.isBlank()?"":" • "+note)));
+        }
+        if(rows.isEmpty()){JOptionPane.showMessageDialog(this,"Brak wpisów PayCheck do usunięcia.");return;}
+        JList<Choice> list=new JList<>(model);
+        list.setVisibleRowCount(Math.min(14,model.size()));
+        list.setSelectedIndex(0);
+        JScrollPane pane=new JScrollPane(list);
+        pane.setPreferredSize(new Dimension(820,340));
+        if(JOptionPane.showConfirmDialog(this,pane,"Wybierz wpis PayCheck do usunięcia",
+                JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)
+            return;
+        JsonObject tx=rows.get(list.getSelectedIndex());
+        String operationId=value(tx,"operation_id");
+        String statementKey=value(tx,"statement_key");
+        int yes=JOptionPane.showConfirmDialog(this,
+            "Usunąć wpis?\n\n"
+            +("confirmed".equals(value(tx,"status"))
+                ?"To jest POTWIERDZONY wpis — saldo zostanie przeliczone.\n"
+                :"To jest wpis oczekujący — saldo się nie zmieni.\n")
+            +(!statementKey.isBlank()
+                ?"Dowód bankowy wróci do kolejki „do sprawdzenia”.\n":"")
+            +"Powiązany koszt pojazdu pozostanie jako koszt poza PayCheck.",
+            "Usuń wpis PayCheck",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+        if(yes!=JOptionPane.YES_OPTION)return;
+        if(!statementKey.isBlank()){
+            for(JsonElement e:mutableTable("bank_evidence_queue")){
+                if(!e.isJsonObject())continue;
+                JsonObject evidence=e.getAsJsonObject();
+                if(statementKey.equals(value(evidence,"evidence_key"))
+                        &&"matched".equals(value(evidence,"state"))){
+                    evidence.addProperty("state","open");
+                    evidence.add("matched_operation_id",com.google.gson.JsonNull.INSTANCE);
+                    evidence.add("matched_at",com.google.gson.JsonNull.INSTANCE);
+                }
+            }
+        }
+        if(!operationId.isBlank()){
+            for(JsonElement e:mutableTable("vehicle_costs")){
+                if(!e.isJsonObject())continue;
+                JsonObject cost=e.getAsJsonObject();
+                if(operationId.equals(value(cost,"paycheck_operation_id")))
+                    cost.add("paycheck_operation_id",com.google.gson.JsonNull.INSTANCE);
+            }
+        }
+        mutableTable("paycheck_transactions").remove(tx);
+        markDirty();
+        showSection("PayCheck");
+        JOptionPane.showMessageDialog(this,"Wpis PayCheck został usunięty.");
     }
 
     private static long parsePln(String raw) {
@@ -1166,16 +1239,21 @@ public final class EdhomeDesktop extends JFrame {
 
     private static Choice[] privateCategoryChoices() {
         return new Choice[]{
-            new Choice("shopping","Zakupy"),
-            new Choice("bills","Rachunki"),
-            new Choice("home","Dom"),
-            new Choice("vehicle","Pojazdy"),
-            new Choice("salary","Wynagrodzenie"),
-            new Choice("food","Żywność"),
-            new Choice("household","Domowe"),
-            new Choice("beauty","Higiena"),
-            new Choice("pet","Zwierzęta"),
-            new Choice("other","Inne")
+            new Choice("shopping","Zakupy"),new Choice("food","Żywność"),
+            new Choice("subscriptions","Subskrypcje"),
+            new Choice("utilities","Media • prąd / woda / gaz"),
+            new Choice("bills","Rachunki"),new Choice("home","Dom"),
+            new Choice("household","Domowe"),new Choice("vehicle","Pojazdy"),
+            new Choice("fuel","Paliwo"),new Choice("transport","Transport"),
+            new Choice("health","Zdrowie"),new Choice("beauty","Higiena"),
+            new Choice("clothing","Odzież"),
+            new Choice("restaurants","Restauracje / jedzenie na mieście"),
+            new Choice("entertainment","Rozrywka"),new Choice("education","Edukacja"),
+            new Choice("children","Dzieci"),new Choice("pet","Zwierzęta"),
+            new Choice("insurance","Ubezpieczenia"),new Choice("loans","Kredyty i raty"),
+            new Choice("salary","Wynagrodzenie"),new Choice("benefits","Świadczenia"),
+            new Choice("savings","Oszczędności / inwestycje"),
+            new Choice("transfers","Przelewy / transfery"),new Choice("other","Inne")
         };
     }
 
@@ -1186,10 +1264,18 @@ public final class EdhomeDesktop extends JFrame {
             return;
         }
 
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Wybierz wyciąg bankowy PDF / CSV / XLSX");
-        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        Path file = chooser.getSelectedFile().toPath();
+        FileDialog chooser=new FileDialog(this,
+            "Wybierz wyciąg bankowy PDF / CSV / XLSX",FileDialog.LOAD);
+        chooser.setMultipleMode(false);
+        chooser.setFilenameFilter((dir,name)->{
+            String lower=name.toLowerCase(Locale.ROOT);
+            return lower.endsWith(".pdf")||lower.endsWith(".csv")
+                ||lower.endsWith(".xlsx")||lower.endsWith(".txt");
+        });
+        chooser.setVisible(true);
+        java.io.File[] files=chooser.getFiles();
+        if(files==null||files.length==0)return;
+        Path file=files[0].toPath();
 
         String labelHint = JOptionPane.showInputDialog(this,
             "Nazwa banku / konta.\n"
