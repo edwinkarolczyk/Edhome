@@ -10,6 +10,9 @@ final class HomeTileLayout {
     static final int[] DRAG_OPTIONS = {900, 1100, 1400, 1800};
     private static final int MIN_TILE_DP = 104;
     private static final int GAP_DP = 9;
+    static final int HOME_MIN_TILE_DP = 73;
+    static final int HOME_GAP_DP = 6;
+    static final int HOME_EXTRA_HEIGHT_DP = 53;
     private static final int PAGE_PADDING_DP = 32;
 
     private HomeTileLayout() { }
@@ -18,6 +21,14 @@ final class HomeTileLayout {
     static int columns(int viewportDp) {
         int content = Math.max(1, viewportDp - PAGE_PADDING_DP);
         int fit = (content + GAP_DP) / (MIN_TILE_DP + GAP_DP);
+        return Math.max(1, Math.min(6, fit));
+    }
+
+    /** Home tiles are 30% more compact than the legacy/action grid. */
+    static int homeColumns(int viewportDp) {
+        int content = Math.max(1, viewportDp - PAGE_PADDING_DP);
+        int fit = (content + HOME_GAP_DP)
+            / (HOME_MIN_TILE_DP + HOME_GAP_DP);
         return Math.max(1, Math.min(6, fit));
     }
 
