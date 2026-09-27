@@ -2019,6 +2019,18 @@ public final class MainActivity extends Activity {
                     row.addView(text("acknowledged".equals(status)
                         ? "✓ Potwierdzono" : "■ Zatrzymano", 13, false));
                 }
+                smallButton(row,"Usuń minutnik",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć minutnik?")
+                        .setMessage(name+"\nWpis zniknie także z historii "
+                            +"minutników.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            DeviceTimerReceiver.cancel(this,id);
+                            db.deleteDeviceTimer(id);
+                            DiagnosticLog.event("DEVICE_TIMER_DELETED");
+                            render();
+                        }).show());
             }
         }
         if (active + finished + past == 0)
@@ -3200,6 +3212,22 @@ public final class MainActivity extends Activity {
                             + "\n" + history.getString(3), 13, false));
                     }
                 }
+                smallButton(box,"Usuń pojazd",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć pojazd?")
+                        .setMessage(item.name+"\nHistoria serwisu, opony, "
+                            +"polisy, dokumenty i koszty pojazdu zostaną "
+                            +"usunięte. Wpisy PayCheck pozostaną.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            if(VehicleStore.delete(
+                                    db.getWritableDatabase(),id)) {
+                                prefs.edit().remove(
+                                    "vehicle_collapsed_"+id).apply();
+                                DiagnosticLog.event("VEHICLE_DELETED");
+                                render();
+                            }
+                        }).show());
             }
         }
         if (shown == 0)
@@ -4851,6 +4879,8 @@ public final class MainActivity extends Activity {
         note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
             + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
             + "Plik nie jest automatycznie potwierdzeniem z banku.");
+        button("Usuń wiele wpisów PayCheck",
+            this::deleteSharedPaycheckEntriesBulk);
         title("Do potwierdzenia • bez wpływu na saldo");
         try (Cursor pending = db.getReadableDatabase().rawQuery(
                 "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
@@ -5909,6 +5939,72 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    private void deleteSharedPaycheckEntriesBulk() {
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,kind,category,amount_grosz,note,status "
+                +"FROM paycheck_transactions WHERE scope='shared' "
+                +"ORDER BY id DESC LIMIT 200",null)) {
+            while(c.moveToNext()) {
+                ids.add(c.getString(0));
+                labels.add(("income".equals(c.getString(1))?"+ ":"− ")
+                    +MoneyRules.format(c.getLong(3))+" • "
+                    +MoneyRules.categoryLabel(c.getString(2))
+                    +(c.getString(4).isEmpty()?"":" • "+c.getString(4))
+                    +("pending".equals(c.getString(5))
+                        ?" • DO POTWIERDZENIA":""));
+            }
+        }
+        if(ids.isEmpty()) {
+            alert("Brak wpisów PayCheck do usunięcia.");
+            return;
+        }
+
+        boolean[] checked=new boolean[ids.size()];
+        new AlertDialog.Builder(this)
+            .setTitle("Usuń wiele wpisów PayCheck")
+            .setMultiChoiceItems(labels.toArray(new String[0]),checked,
+                (dialog,which,isChecked)->checked[which]=isChecked)
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Wszystkie",(dialog,which)->{
+                java.util.Arrays.fill(checked,true);
+                confirmBulkPaycheckDelete(ids,checked);
+            })
+            .setPositiveButton("Dalej",(dialog,which)->
+                confirmBulkPaycheckDelete(ids,checked))
+            .show();
+    }
+
+    private void confirmBulkPaycheckDelete(
+            java.util.List<String> ids, boolean[] checked) {
+        java.util.List<String> selected=new java.util.ArrayList<>();
+        for(int i=0;i<checked.length && i<ids.size();i++)
+            if(checked[i])selected.add(ids.get(i));
+        if(selected.isEmpty()) {
+            alert("Nie zaznaczono żadnego wpisu.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Usunąć zaznaczone?")
+            .setMessage("Wpisów: "+selected.size()
+                +"\nPotwierdzone pozycje zmienią saldo. "
+                +"Dowody bankowe wrócą do kolejki „do sprawdzenia”.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń zaznaczone",(dialog,which)->{
+                try {
+                    int removed=PaycheckStore.deleteMany(
+                        db.getWritableDatabase(),selected);
+                    DiagnosticLog.event("PAYCHECK_SHARED_BULK_DELETED");
+                    render();
+                    alert("Usunięto wpisów PayCheck: "+removed+".");
+                } catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_BULK_DELETE",error);
+                    alert("Nie udało się usunąć zaznaczonych wpisów.");
+                }
+            }).show();
+    }
+
     private void deleteSharedPaycheckEntry(String operationId) {
         new AlertDialog.Builder(this)
             .setTitle("Usunąć wpis PayCheck?")
@@ -6146,6 +6242,9 @@ public final class MainActivity extends Activity {
                 confirmationDialog.getWindow().addFlags(
                     android.view.WindowManager.LayoutParams.FLAG_SECURE);
         });
+        if(!entries.isEmpty())
+            button("Usuń wiele prywatnych wpisów", () ->
+                deletePrivatePaycheckEntries(entries));
         title("Historia prywatna • " + entries.size());
         int shown = 0;
         for (PrivatePaycheckVault.Entry entry : entries) {
@@ -6184,6 +6283,45 @@ public final class MainActivity extends Activity {
             note("Brak prywatnych wpisów. Wspólny budżet pozostaje osobny.");
     }
 
+
+    private void deletePrivatePaycheckEntries(
+            java.util.List<PrivatePaycheckVault.Entry> entries) {
+        if(privatePaycheckSession==null
+                || !privatePaycheckSession.active())return;
+        String[] labels=new String[entries.size()];
+        boolean[] checked=new boolean[entries.size()];
+        for(int i=0;i<entries.size();i++) {
+            PrivatePaycheckVault.Entry entry=entries.get(i);
+            labels[i]=("income".equals(entry.kind)?"+ ":"− ")
+                +MoneyRules.format(entry.amountGrosz)+" • "
+                +MoneyRules.categoryLabel(entry.category)
+                +(entry.note.isEmpty()?"":" • "+entry.note);
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Usuń prywatne wpisy")
+            .setMultiChoiceItems(labels,checked,
+                (dialog,which,isChecked)->checked[which]=isChecked)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń zaznaczone",(dialog,which)->{
+                java.util.List<String> ids=new java.util.ArrayList<>();
+                for(int i=0;i<checked.length;i++)
+                    if(checked[i])ids.add(entries.get(i).operationId);
+                if(ids.isEmpty()) {
+                    alert("Nie zaznaczono żadnego wpisu.");
+                    return;
+                }
+                try {
+                    int removed=PrivatePaycheckVault.deleteMany(
+                        this,privatePaycheckSession,ids);
+                    DiagnosticLog.event(
+                        "PAYCHECK_PRIVATE_BULK_DELETED");
+                    render();
+                    alert("Usunięto prywatnych wpisów: "+removed+".");
+                } catch(Exception error) {
+                    alert("Nie udało się usunąć prywatnych wpisów.");
+                }
+            }).show();
+    }
 
     private EditText securePrivatePassword(String hint) {
         EditText input = new EditText(this);
@@ -6372,6 +6510,20 @@ public final class MainActivity extends Activity {
                     smallButton(entry, "+ Odłóż na cel", () ->
                         allocateSharedPaycheckGoal(id, name, target, saved));
                 } else entry.addView(text("✓ Cel osiągnięty", 14, true));
+                smallButton(entry,"Usuń cel",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć cel?")
+                        .setMessage(name+"\nPrzypisane kwoty celu "
+                            +"zostaną usunięte. Nie usuwa to transakcji "
+                            +"PayCheck.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(d,w)->{
+                            PaycheckGoalsStore.deleteGoal(
+                                db.getWritableDatabase(),id);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_GOAL_DELETED");
+                            render();
+                        }).show());
             }
         }
         if (goals == 0) note("Nie masz jeszcze wspólnych celów finansowych.");
@@ -10074,6 +10226,11 @@ public final class MainActivity extends Activity {
                 "acknowledged".equals(nextStatus)
                     ? new String[]{Long.toString(id), Long.toString(now)}
                     : new String[]{Long.toString(id)}) == 1;
+        }
+
+        void deleteDeviceTimer(long id) {
+            getWritableDatabase().delete("device_timers","id=?",
+                new String[]{Long.toString(id)});
         }
 
         boolean addShoppingItem(String name, Long amount, String unit,

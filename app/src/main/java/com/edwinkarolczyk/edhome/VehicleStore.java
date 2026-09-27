@@ -46,6 +46,27 @@ final class VehicleStore {
         }
     }
 
+    static boolean delete(SQLiteDatabase db, long id) {
+        db.beginTransaction();
+        try {
+            if(find(db,id)==null)return false;
+            db.delete("vehicle_events","vehicle_id=?",
+                new String[]{Long.toString(id)});
+            db.delete("vehicle_tyre_sets","vehicle_id=?",
+                new String[]{Long.toString(id)});
+            db.delete("vehicle_policies","vehicle_id=?",
+                new String[]{Long.toString(id)});
+            db.delete("vehicle_documents","vehicle_id=?",
+                new String[]{Long.toString(id)});
+            db.delete("vehicle_costs","vehicle_id=?",
+                new String[]{Long.toString(id)});
+            boolean deleted=db.delete("vehicles","id=?",
+                new String[]{Long.toString(id)})==1;
+            db.setTransactionSuccessful();
+            return deleted;
+        } finally {db.endTransaction();}
+    }
+
     static Vehicle find(SQLiteDatabase db, long id) {
         try (Cursor c = db.rawQuery(
                 "SELECT id,name,registration,mileage,oc_until,inspection_until,notes,"

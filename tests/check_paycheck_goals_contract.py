@@ -17,6 +17,8 @@ for token in (
     'if (already > target || grosz > target - already) return "OVER_TARGET";',
     'db.beginTransaction();',
     'db.setTransactionSuccessful();',
+    'static boolean deleteGoal(',
+    'db.delete("paycheck_goal_allocations","goal_id=?"',
 ):
     assert token in source, "Goal accounting guard absent: "+token
 for token in (
@@ -25,6 +27,8 @@ for token in (
     'PaycheckGoalsStore.addGoal(',
     'PaycheckGoalsStore.allocate(',
     'PAYCHECK_SHARED_GOAL_ALLOCATED',
+    'PAYCHECK_SHARED_GOAL_DELETED',
+    'Usuń cel',
     'Nie zmienia salda wspólnego PayCheck.',
     'DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS',
     'super(context, "edhome-beta-preview.db", null, 36)',

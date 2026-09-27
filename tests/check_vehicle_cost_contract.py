@@ -8,6 +8,7 @@ src=Path("app/src/main/java/com/edwinkarolczyk/edhome")
 store=(src/"VehicleCostStore.java").read_text(encoding="utf-8")
 main=(src/"MainActivity.java").read_text(encoding="utf-8")
 backup=(src/"DataBackup.java").read_text(encoding="utf-8")
+vehicle=(src/"VehicleStore.java").read_text(encoding="utf-8")
 for token in ("db.beginTransaction();","db.insertOrThrow(\"paycheck_transactions\"",
               "db.insertOrThrow(\"vehicle_costs\"",
               "db.setTransactionSuccessful();","db.endTransaction();",
@@ -17,6 +18,7 @@ for token in ("db.beginTransaction();","db.insertOrThrow(\"paycheck_transactions
               'transaction.put("category","vehicle");'):
     assert token in store, token
 for token in ("private void editVehicleCost(","VehicleCostStore.record(",
+              "Usuń pojazd","VEHICLE_DELETED",
               "paycheck.setChecked(false);","Zapisz koszt pojazdu",
               "VehicleCostStore.create(database);",
               "DATABASE_MIGRATED_28_TO_29_VEHICLE_COSTS"):
@@ -59,3 +61,9 @@ db.execute("INSERT INTO vehicle_costs(operation_id,vehicle_id,kind,paid_on,"
 assert db.execute("SELECT COUNT(*) FROM paycheck_transactions").fetchone()==(1,)
 assert db.execute("SELECT COUNT(*) FROM vehicle_costs").fetchone()==(2,)
 print("Linked vehicle costs, one shared PayCheck expense, unlinked costs and v29 migration: PASS")
+
+for token in ('static boolean delete(SQLiteDatabase db, long id)',
+              'db.delete("vehicle_events"', 'db.delete("vehicle_tyre_sets"',
+              'db.delete("vehicle_policies"', 'db.delete("vehicle_documents"',
+              'db.delete("vehicle_costs"'):
+    assert token in vehicle, token

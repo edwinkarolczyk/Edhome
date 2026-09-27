@@ -231,6 +231,28 @@ final class PrivatePaycheckVault {
         }
     }
 
+    static int deleteMany(Context context, Session session,
+            java.util.Collection<String> operationIds) throws Exception {
+        if(operationIds==null || operationIds.isEmpty())return 0;
+        java.util.Set<String> unique=
+            new java.util.LinkedHashSet<>(operationIds);
+        for(String id:unique)
+            if(id==null || !id.matches("[0-9a-fA-F-]{36}"))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy prywatny wpis.");
+        try(SQLiteDatabase db=openDatabase(context,session)) {
+            db.beginTransaction();
+            try {
+                int removed=0;
+                for(String id:unique)
+                    removed+=db.delete("private_paycheck_entries",
+                        "operation_id=?",new String[]{id});
+                db.setTransactionSuccessful();
+                return removed;
+            } finally {db.endTransaction();}
+        }
+    }
+
     static List<Entry> entries(Context context, Session session)
             throws Exception {
         List<Entry> rows = new ArrayList<>();

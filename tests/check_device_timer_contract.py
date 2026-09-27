@@ -43,3 +43,8 @@ assert "MIN_MINUTES = 1" in rules and "MAX_MINUTES = 1440" in rules
 assert "DeviceTimerReceiver.scheduleAll(this);" in main
 assert 'prefs.edit().putBoolean("timer_notifications_enabled"' in main
 print("Device timer alarms, backup, opt-in, UI, reboot, stale event guard: PASS")
+
+# Every timer row must be explicitly removable, including running/history rows.
+for token in ('Usuń minutnik','deleteDeviceTimer(long id)',
+              'DEVICE_TIMER_DELETED','DeviceTimerReceiver.cancel(this,id)'):
+    assert token in main, token

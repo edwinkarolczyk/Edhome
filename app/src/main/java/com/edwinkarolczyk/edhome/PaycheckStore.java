@@ -132,32 +132,57 @@ final class PaycheckStore {
             throw new IllegalArgumentException("Nieprawidłowa transakcja.");
         db.beginTransaction();
         try {
-            String statementKey=null;
-            try(Cursor row=db.rawQuery(
-                    "SELECT statement_key FROM paycheck_transactions "
-                    +"WHERE operation_id=? AND scope='shared'",
-                    new String[]{operationId})) {
-                if(!row.moveToFirst())return "MISSING";
-                if(!row.isNull(0))statementKey=row.getString(0);
-            }
-            if(statementKey!=null && !statementKey.isEmpty()) {
-                ContentValues evidence=new ContentValues();
-                evidence.put("state","open");
-                evidence.putNull("matched_operation_id");
-                evidence.putNull("matched_at");
-                db.update("bank_evidence_queue",evidence,
-                    "evidence_key=? AND state='matched' AND matched_operation_id=?",
-                    new String[]{statementKey,operationId});
-            }
-            ContentValues vehicleLink=new ContentValues();
-            vehicleLink.putNull("paycheck_operation_id");
-            db.update("vehicle_costs",vehicleLink,
-                "paycheck_operation_id=?",new String[]{operationId});
-            int deleted=db.delete("paycheck_transactions",
-                "operation_id=? AND scope='shared'",new String[]{operationId});
+            int deleted=deleteInside(db,operationId);
             db.setTransactionSuccessful();
             return deleted==1?"DELETED":"MISSING";
         } finally {db.endTransaction();}
+    }
+
+    static int deleteMany(SQLiteDatabase db,java.util.List<String> operationIds) {
+        if(operationIds==null || operationIds.isEmpty())return 0;
+        db.beginTransaction();
+        try {
+            int deleted=0;
+            java.util.Set<String> unique=
+                new java.util.LinkedHashSet<>(operationIds);
+            for(String operationId:unique) {
+                if(operationId==null
+                        || !operationId.matches("[0-9a-fA-F-]{36}"))
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowa transakcja.");
+                deleted+=deleteInside(db,operationId);
+            }
+            db.setTransactionSuccessful();
+            return deleted;
+        } finally {db.endTransaction();}
+    }
+
+    private static int deleteInside(SQLiteDatabase db,String operationId) {
+        String statementKey=null;
+        try(Cursor row=db.rawQuery(
+                "SELECT statement_key FROM paycheck_transactions "
+                +"WHERE operation_id=? AND scope='shared'",
+                new String[]{operationId})) {
+            if(!row.moveToFirst())return 0;
+            if(!row.isNull(0))statementKey=row.getString(0);
+        }
+        if(statementKey!=null && !statementKey.isEmpty()) {
+            ContentValues evidence=new ContentValues();
+            evidence.put("state","open");
+            evidence.putNull("matched_operation_id");
+            evidence.putNull("matched_at");
+            db.update("bank_evidence_queue",evidence,
+                "evidence_key=? AND state='matched' "
+                +"AND matched_operation_id=?",
+                new String[]{statementKey,operationId});
+        }
+        ContentValues vehicleLink=new ContentValues();
+        vehicleLink.putNull("paycheck_operation_id");
+        db.update("vehicle_costs",vehicleLink,
+            "paycheck_operation_id=?",new String[]{operationId});
+        return db.delete("paycheck_transactions",
+            "operation_id=? AND scope='shared'",
+            new String[]{operationId});
     }
 
     static long sharedBalance(SQLiteDatabase db) {

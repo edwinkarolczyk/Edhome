@@ -33,6 +33,8 @@ for token in (
     'db.beginTransaction();',
     'db.setTransactionSuccessful();',
     'static String delete(',
+    'static int deleteMany(',
+    'deleteInside(db,operationId)',
     'evidence.put("state","open");',
     'vehicleLink.putNull("paycheck_operation_id");',
 ):
@@ -51,7 +53,9 @@ assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
 for token in ('"subscriptions"','"utilities"','"fuel"','"health"',
               '"insurance"','"loans"','"benefits"','"savings"'):
     assert token in rules, token
-for token in ('Usuń wpis','deleteSharedPaycheckEntry(','PAYCHECK_SHARED_DELETED'):
+for token in ('Usuń wpis','deleteSharedPaycheckEntry(','PAYCHECK_SHARED_DELETED',
+              'Usuń wiele wpisów PayCheck','deleteSharedPaycheckEntriesBulk',
+              'PAYCHECK_SHARED_BULK_DELETED'):
     assert token in main, token
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None

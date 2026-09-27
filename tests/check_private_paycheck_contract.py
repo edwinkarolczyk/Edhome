@@ -34,6 +34,7 @@ for token in (
     'db.beginTransaction();',
     'db.setTransactionSuccessful();',
     'return "DUPLICATE";',
+    'static int deleteMany(Context context, Session session',
 ):
     assert token in vault, "Vault guard missing: "+token
 for token in (
@@ -60,6 +61,8 @@ for token in (
     'PayCheck • prywatny sejf',
     'PrivatePaycheckVault.entries(this, privatePaycheckSession)',
     'PrivatePaycheckVault.add(',
+    'Usuń wiele prywatnych wpisów',
+    'PAYCHECK_PRIVATE_BULK_DELETED',
 ):
     assert token in ui, "Private UI guard missing: "+token
 assert ui.index('if ("paycheck_private".equals(screen)) {') < ui.index('super.onPause();')
