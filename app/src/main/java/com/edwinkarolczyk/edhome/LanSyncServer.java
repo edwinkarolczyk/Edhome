@@ -146,9 +146,11 @@ final class LanSyncServer {
         try {
             ServerSocket listener = new ServerSocket();
             listener.setReuseAddress(true);
-            listener.bind(new InetSocketAddress(PORT));
+            InetAddress anyIpv4 = InetAddress.getByName("0.0.0.0");
+            listener.bind(new InetSocketAddress(anyIpv4, PORT));
             server = listener;
-            DiagnosticLog.event("DESKTOP_SYNC_LISTENING", "port=" + PORT);
+            DiagnosticLog.event("DESKTOP_SYNC_LISTENING",
+                "bind=0.0.0.0 port=" + PORT);
             while (running) {
                 Socket socket = listener.accept();
                 Thread worker = new Thread(() -> handle(socket), "edhome-lan-client");
