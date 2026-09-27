@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.64";
+    private static final String DESKTOP_VERSION = "0.6.0.65";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -6463,8 +6463,9 @@ public final class EdhomeDesktop extends JFrame {
                 supplied.getBytes(StandardCharsets.US_ASCII));
         }
 
-        private static String localAddress() {
-            String fallback = null;
+        private static java.util.List<String> localAddresses() {
+            java.util.LinkedHashSet<String> preferred = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<String> fallback = new java.util.LinkedHashSet<>();
             try {
                 for (NetworkInterface network :
                         Collections.list(NetworkInterface.getNetworkInterfaces())) {
@@ -6475,8 +6476,8 @@ public final class EdhomeDesktop extends JFrame {
                     boolean virtual = name.contains("virtual") || name.contains("vpn")
                         || name.contains("tun") || name.contains("tap")
                         || name.contains("docker") || name.contains("hyper-v")
-                        || name.contains("vmware");
-                    boolean preferred = name.contains("wi-fi") || name.contains("wifi")
+                        || name.contains("vmware") || name.contains("wsl");
+                    boolean preferredNetwork = name.contains("wi-fi") || name.contains("wifi")
                         || name.contains("wireless") || name.contains("wlan")
                         || name.contains("ethernet") || name.startsWith("eth");
                     for (InetAddress address :
@@ -6485,12 +6486,20 @@ public final class EdhomeDesktop extends JFrame {
                                 || !address.isSiteLocalAddress()
                                 || address.isLoopbackAddress()) continue;
                         String value = address.getHostAddress();
-                        if (preferred && !virtual) return value;
-                        if (!virtual && fallback == null) fallback = value;
+                        if (virtual) continue;
+                        if (preferredNetwork) preferred.add(value);
+                        else fallback.add(value);
                     }
                 }
             } catch (Exception ignored) { }
-            return fallback;
+            java.util.ArrayList<String> result = new java.util.ArrayList<>(preferred);
+            result.addAll(fallback);
+            return result;
+        }
+
+        private static String localAddress() {
+            java.util.List<String> addresses = localAddresses();
+            return addresses.isEmpty() ? null : addresses.get(0);
         }
     }
 
@@ -6626,25 +6635,44 @@ public final class EdhomeDesktop extends JFrame {
         }
 
         static String discover(String token, int port) {
-            String local = QrPairingSession.localAddress();
-            if (local == null || !local.matches("[0-9]+(\\.[0-9]+){3}"))
-                return null;
-            int dot = local.lastIndexOf('.');
-            if (dot <= 0) return null;
-            String prefix = local.substring(0, dot + 1);
+            java.util.List<String> locals = QrPairingSession.localAddresses();
+            if (locals.isEmpty()) return null;
 
-            ExecutorService pool = Executors.newFixedThreadPool(32);
+            java.util.LinkedHashSet<String> localSet =
+                new java.util.LinkedHashSet<>(locals);
+            java.util.LinkedHashSet<String> prefixes =
+                new java.util.LinkedHashSet<>();
+            for (String local : locals) {
+                if (local == null || !local.matches("[0-9]+(\\.[0-9]+){3}"))
+                    continue;
+                int dot = local.lastIndexOf('.');
+                if (dot > 0) prefixes.add(local.substring(0, dot + 1));
+            }
+            if (prefixes.isEmpty()) return null;
+
+            ExecutorService pool = Executors.newFixedThreadPool(96);
+            java.util.concurrent.ExecutorCompletionService<String> completion =
+                new java.util.concurrent.ExecutorCompletionService<>(pool);
+            int submitted = 0;
             try {
-                java.util.List<Callable<String>> tasks = new ArrayList<>();
-                for (int i = 1; i <= 254; i++) {
-                    String candidate = prefix + i;
-                    if (candidate.equals(local)) continue;
-                    tasks.add(() -> probe(candidate, port, token) ? candidate : null);
+                for (String prefix : prefixes) {
+                    for (int i = 1; i <= 254; i++) {
+                        String candidate = prefix + i;
+                        if (localSet.contains(candidate)) continue;
+                        completion.submit(() ->
+                            probe(candidate, port, token) ? candidate : null);
+                        submitted++;
+                    }
                 }
-                java.util.List<Future<String>> futures =
-                    pool.invokeAll(tasks, 6, TimeUnit.SECONDS);
-                for (Future<String> future : futures) {
-                    if (future.isCancelled()) continue;
+
+                long deadline = System.nanoTime()
+                    + TimeUnit.SECONDS.toNanos(8);
+                for (int i = 0; i < submitted; i++) {
+                    long remaining = deadline - System.nanoTime();
+                    if (remaining <= 0L) break;
+                    Future<String> future = completion.poll(
+                        remaining, TimeUnit.NANOSECONDS);
+                    if (future == null) break;
                     try {
                         String host = future.get();
                         if (host != null) return host;
