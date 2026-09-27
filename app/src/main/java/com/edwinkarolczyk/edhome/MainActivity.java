@@ -8597,7 +8597,61 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void testPhoneLanServer() {
+    private String buildPhoneLanDiagnosticsReport() {
+        String ip = LanSyncServer.localAddress();
+        boolean endpoint = LanSyncService.endpointRunning();
+        boolean loopback = lanTcpSelfTest("127.0.0.1");
+        boolean wifi = ip != null && lanTcpSelfTest(ip);
+        String remote = LanSyncServer.lastRemote();
+        String attemptResult = LanSyncServer.lastConnectionResult();
+
+        StringBuilder result = new StringBuilder()
+            .append("EDHOME Android ").append(BuildConfig.VERSION_NAME)
+            .append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
+            .append("Android SDK: ").append(Build.VERSION.SDK_INT).append("\n")
+            .append("Urządzenie: ").append(Build.MANUFACTURER)
+            .append(" ").append(Build.MODEL).append("\n")
+            .append("Adres telefonu: ")
+            .append(ip == null ? "BRAK" : ip)
+            .append(":").append(LanSyncServer.PORT).append("\n")
+            .append("Serwer LAN: ").append(endpoint ? "DZIAŁA" : "NIE DZIAŁA")
+            .append("\n127.0.0.1:").append(LanSyncServer.PORT)
+            .append(": ").append(loopback ? "OK" : "BŁĄD")
+            .append("\nWi‑Fi IPv4: ")
+            .append(ip == null ? "BRAK ADRESU"
+                : ip + ":" + LanSyncServer.PORT + " — " + (wifi ? "OK" : "BŁĄD"))
+            .append("\nStan PC: ")
+            .append(LanSyncServer.isSyncing() ? "SYNCHRONIZACJA"
+                : (LanSyncServer.hasRecentClient() ? "POŁĄCZONY" : "NIEPOŁĄCZONY"))
+            .append("\nOstatnia próba PC: ").append(desktopLastAttempt())
+            .append("\nOstatni adres PC: ")
+            .append(remote == null || remote.isBlank() ? "brak" : remote)
+            .append("\nOstatni wynik: ")
+            .append(attemptResult == null || attemptResult.isBlank()
+                ? "brak" : attemptResult)
+            .append("\n\n");
+
+        if (loopback && wifi) {
+            result.append("Wniosek telefonu: serwer EDHOME wystawia port poprawnie. ")
+                .append("Jeżeli Desktop nadal nie pobiera danych mimo TCP OK, ")
+                .append("trzeba sprawdzić warstwę HTTP/autoryzacji/snapshotu, nie samą sieć.");
+        } else if (loopback) {
+            result.append("Wniosek telefonu: serwer działa lokalnie, ale własny adres Wi‑Fi ")
+                .append("nie przyjmuje połączenia. Problem jest po stronie interfejsu/bindu Androida.");
+        } else {
+            result.append("Wniosek telefonu: serwer EDHOME nie przyjmuje nawet połączenia lokalnego. ")
+                .append("Problem jest po stronie usługi LAN telefonu.");
+        }
+
+        DiagnosticLog.event("PHONE_LAN_DIAGNOSTICS",
+            "endpoint=" + endpoint
+            + " loopback=" + loopback
+            + " wifi=" + wifi
+            + " recentPc=" + LanSyncServer.hasRecentClient());
+        return result.toString();
+    }
+
+    private void runPhoneLanDiagnostics(boolean copyToClipboard) {
         LanSyncService.ensureStarted(this);
         new Thread(() -> {
             try {
@@ -8605,37 +8659,60 @@ public final class MainActivity extends Activity {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
-            String ip = LanSyncServer.localAddress();
-            boolean endpoint = LanSyncService.endpointRunning();
-            boolean loopback = lanTcpSelfTest("127.0.0.1");
-            boolean wifi = ip != null && lanTcpSelfTest(ip);
-            StringBuilder result = new StringBuilder()
-                .append("Serwer EDHOME: ")
-                .append(endpoint ? "DZIAŁA" : "NIE DZIAŁA")
-                .append("\n127.0.0.1:").append(LanSyncServer.PORT)
-                .append(": ").append(loopback ? "OK" : "BŁĄD")
-                .append("\n")
-                .append(ip == null ? "Wi‑Fi IPv4: BRAK ADRESU"
-                    : ip + ":" + LanSyncServer.PORT + ": "
-                        + (wifi ? "OK" : "BŁĄD"))
-                .append("\n\n");
-            if (loopback && wifi) {
-                result.append("Telefon wystawia port poprawnie. Jeżeli PC nadal ma timeout, ")
-                    .append("ruch blokuje sieć/router albo izolacja klientów Wi‑Fi.");
-            } else if (loopback) {
-                result.append("Serwer działa lokalnie, ale nie jest osiągalny przez własny adres Wi‑Fi. ")
-                    .append("Problem jest po stronie interfejsu/bindu Androida.");
-            } else {
-                result.append("Serwer EDHOME nie przyjmuje nawet lokalnego połączenia. ")
-                    .append("Problem jest po stronie usługi LAN telefonu.");
-            }
-            final String message = result.toString();
-            runOnUiThread(() -> new AlertDialog.Builder(this)
-                .setTitle("Test serwera LAN telefonu")
-                .setMessage(message)
-                .setPositiveButton("OK", null)
-                .show());
-        }, "edhome-lan-selftest").start();
+            final String report = buildPhoneLanDiagnosticsReport();
+            runOnUiThread(() -> {
+                if (copyToClipboard) {
+                    ClipboardManager clipboard = (ClipboardManager)
+                        getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText(
+                            "EDHOME diagnostyka telefonu", report));
+                        DiagnosticLog.event("PHONE_LAN_DIAGNOSTICS_COPIED");
+                        alert("Skopiowano diagnostykę telefonu. Wklej ją do czatu.");
+                    } else {
+                        alert("Schowek jest niedostępny.");
+                    }
+                    return;
+                }
+                TextView reportView = text(report, 13, false);
+                reportView.setTextIsSelectable(true);
+                ScrollView scroll = new ScrollView(this);
+                scroll.addView(reportView);
+                new AlertDialog.Builder(this)
+                    .setTitle("Diagnostyka połączenia z PC")
+                    .setView(scroll)
+                    .setPositiveButton("OK", null)
+                    .setNeutralButton("Kopiuj", (dialog, which) -> {
+                        ClipboardManager clipboard = (ClipboardManager)
+                            getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (clipboard != null) {
+                            clipboard.setPrimaryClip(ClipData.newPlainText(
+                                "EDHOME diagnostyka telefonu", report));
+                            DiagnosticLog.event("PHONE_LAN_DIAGNOSTICS_COPIED");
+                        }
+                    })
+                    .show();
+            });
+        }, "edhome-phone-diagnostics").start();
+    }
+
+    private void testPhoneLanServer() {
+        runPhoneLanDiagnostics(false);
+    }
+
+    private void copyDiagnosticLogsFromSettings() {
+        DiagnosticLog.event("SETTINGS_DIAGNOSTIC_LOGS_COPIED");
+        String report = DiagnosticLog.readForChat(20000);
+        ClipboardManager clipboard = (ClipboardManager)
+            getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            alert("Schowek jest niedostępny.");
+            return;
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText(
+            "EDHOME beta diagnostics", report));
+        alert("Skopiowano " + report.length()
+            + " znaków logów diagnostycznych. Wklej je do czatu.");
     }
 
     private void settings() {
@@ -8670,7 +8747,10 @@ public final class MainActivity extends Activity {
                     + "Po kilku sekundach spróbuj połączyć Desktop jeszcze raz.");
                 if (root != null) root.postDelayed(() -> render(), 1800L);
             });
-            smallButton(desktop, "Test serwera LAN telefonu", this::testPhoneLanServer);
+            smallButton(desktop, "Diagnostyka połączenia z PC",
+                this::testPhoneLanServer);
+            smallButton(desktop, "Kopiuj diagnostykę telefonu",
+                () -> runPhoneLanDiagnostics(true));
             smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
             smallButton(desktop, "Kopiuj adres i kod", () -> {
                 ClipboardManager clipboard = (ClipboardManager)
@@ -8861,7 +8941,19 @@ public final class MainActivity extends Activity {
             + quietHoursEnd() + ". Android może opóźnić alarm przez "
             + "oszczędzanie baterii. Tytuły czynności nie pojawiają się "
             + "na ekranie blokady.");
-        if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
+        if (DiagnosticLog.enabled()) {
+            LinearLayout diagnostics = card();
+            diagnostics.addView(text("Diagnostyka i logi", 19, true));
+            diagnostics.addView(text(
+                "Szybkie narzędzia do sprawdzenia telefonu i skopiowania logów bez eksportowania pliku.",
+                14, false));
+            smallButton(diagnostics, "Kopiuj logi diagnostyczne",
+                this::copyDiagnosticLogsFromSettings);
+            smallButton(diagnostics, "Kopiuj diagnostykę telefonu",
+                () -> runPhoneLanDiagnostics(true));
+            smallButton(diagnostics, "Otwórz pełną diagnostykę BETA",
+                () -> go("diagnostics"));
+        }
         button("Kopia danych / przenoszenie", () -> go("backup"));
         note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
     }
