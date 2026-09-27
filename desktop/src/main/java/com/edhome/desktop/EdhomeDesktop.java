@@ -5615,6 +5615,11 @@ public final class EdhomeDesktop extends JFrame {
         catch (Exception ignored) { return 0; }
     }
 
+    private static long longValue(JsonObject row, String key) {
+        try { return row.has(key) && !row.get(key).isJsonNull() ? row.get(key).getAsLong() : 0L; }
+        catch (Exception ignored) { return 0L; }
+    }
+
     private static String[][] cols(String... pairs) {
         String[][] result = new String[pairs.length/2][2];
         for (int i=0;i<pairs.length;i+=2) {
