@@ -98,11 +98,18 @@ public final class LanSyncService extends Service {
 
     private long databaseRevision() {
         if (db == null) return -1L;
-        try (android.database.Cursor cursor = db.getReadableDatabase()
-                .rawQuery("PRAGMA data_version", null)) {
-            return cursor.moveToFirst() ? cursor.getLong(0) : -1L;
+        try {
+            android.database.sqlite.SQLiteDatabase database =
+                db.getWritableDatabase();
+            // Refresh the sidecar first. Unlike PRAGMA data_version this also
+            // observes writes performed through this service's own connection.
+            SyncRecordStore.ensureAll(database);
+            try (android.database.Cursor cursor = database.rawQuery(
+                    "SELECT COALESCE(SUM(revision),0) FROM sync_records", null)) {
+                return cursor.moveToFirst() ? cursor.getLong(0) : -1L;
+            }
         } catch (Exception error) {
-            DiagnosticLog.error("DESKTOP_SYNC_DATA_VERSION", error);
+            DiagnosticLog.error("DESKTOP_SYNC_REVISION", error);
             return -1L;
         }
     }
