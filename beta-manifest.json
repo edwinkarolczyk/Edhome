@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 115,
-  "versionName": "0.6.0.50",
-  "changelog": "EDHOME 0.6.0.50 — wskaźnik połączenia z Desktopem: czerwony = brak połączenia, zielony = połączono, podczas rzeczywistej wymiany danych strzałki migają naprzemiennie. Dotknięcie wskaźnika pokazuje stan i czas ostatniej synchronizacji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.50/edhome-beta.apk",
-  "sha256": "191c5ac5ac0170a47d32eb5c97c54466ea31d79fdc8db2bfda132da5f8e0b7bc"
+  "versionCode": 118,
+  "versionName": "0.6.0.53",
+  "changelog": "EDHOME 0.6.0.53 — hotfix Android ↔ Desktop: serwer LAN sam wznawia nasłuch po błędzie portu lub restarcie, Ustawienia pokazują stan serwera i mają przycisk Napraw / uruchom połączenie PC. Zachowane poprawki Magazynu z 0.6.0.52: jawne usuwanie miejsca, NFC od razu po dodaniu rzeczy/pudełka i unikalność QR. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.53/edhome-beta.apk",
+  "sha256": "4b1764ecb2f2f83d8e8c76d9da436e207724e4718475ebb1b6803982c562bbf3"
 }
