@@ -14,6 +14,13 @@ public final class HomeTileLayoutSmoke {
         equal(HomeTileLayout.columns(600), 5, "large phone/tablet");
         equal(HomeTileLayout.columns(800), 6, "tablet");
         equal(HomeTileLayout.columns(1500), 6, "readability cap");
+        equal(HomeTileLayout.homeColumns(160), 1, "compact very narrow");
+        equal(HomeTileLayout.homeColumns(320), 3, "compact small phone");
+        equal(HomeTileLayout.homeColumns(360), 4, "compact narrow phone");
+        equal(HomeTileLayout.homeColumns(393), 4, "compact regular phone");
+        equal(HomeTileLayout.homeColumns(600), 6, "compact large phone/tablet");
+        equal(HomeTileLayout.homeColumns(800), 6, "compact tablet");
+        equal(HomeTileLayout.homeColumns(1500), 6, "compact readability cap");
         if (!HomeTileLayout.validPair(450, 1100)
                 || !HomeTileLayout.validPair(800, 1100)
                 || HomeTileLayout.validPair(800, 900)
