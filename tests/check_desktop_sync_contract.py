@@ -93,6 +93,10 @@ assert 'PatchUnsupportedException' in desktop
 assert 'new javax.swing.Timer(1500' in desktop
 assert '180000L' in desktop
 assert 'ZAPISANO LOKALNIE' in desktop
+assert 'localAddresses()' in desktop
+assert 'LinkedHashSet<String> prefixes' in desktop
+assert 'newFixedThreadPool(96)' in desktop
+assert 'ExecutorCompletionService<String>' in desktop
 print("desktop incremental sync contract OK")
 
 # Hardening: direct SQLite patching, UUID identity, revisions and tombstones.
