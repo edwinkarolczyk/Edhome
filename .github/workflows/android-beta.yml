@@ -419,14 +419,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.44-signed-apk
+          name: EDHOME-0.6.0.46-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.44 — synchronizacja v2: bezpośrednie transakcyjne patche SQLite bez pełnego restore, globalny sync_uuid, revision/updated_at, tombstones usunięć, wykrywanie lokalnych zmian Androida przez hash rekordu i migracja DB 35→36. Kompatybilność patch v1 zachowana. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.46 — kompaktowe karty Czynności: przyciski Edytuj, Historia i Usuń są domyślnie schowane i rozwijają się po dotknięciu karty; ponowne dotknięcie je chowa. Zawiera też przygotowane wcześniej zmiany 0.6.0.44–0.6.0.45: synchronizację v2 i wydmuszkę Plan domu / posesji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

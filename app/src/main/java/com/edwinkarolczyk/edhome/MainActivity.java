@@ -2157,6 +2157,7 @@ public final class MainActivity extends Activity {
         });
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setVisibility(View.GONE);
         box.addView(actions);
         taskAction(actions, "Edytuj", () -> editTask(id, name, due, rule, every));
         taskAction(actions, "Historia", () -> showTaskHistory(id, name));
@@ -2170,6 +2171,17 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event("TASK_DELETED");
                     render();
                 }).show());
+        box.setClickable(true);
+        box.setFocusable(true);
+        box.setContentDescription(name + ". Dotknij kartę, aby pokazać opcje.");
+        touchFeedback(box);
+        box.setOnClickListener(v -> {
+            boolean expand = actions.getVisibility() != View.VISIBLE;
+            actions.setVisibility(expand ? View.VISIBLE : View.GONE);
+            box.setContentDescription(name + (expand
+                ? ". Opcje są widoczne. Dotknij kartę, aby je schować."
+                : ". Dotknij kartę, aby pokazać opcje."));
+        });
     }
 
     private void taskAction(LinearLayout row, String label, Runnable run) {
