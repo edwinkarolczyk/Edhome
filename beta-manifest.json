@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 119,
-  "versionName": "0.6.0.54",
-  "changelog": "EDHOME 0.6.0.54 — diagnostyka Android ↔ Desktop: powiadomienie pokazuje prawdziwy stan (czeka na PC / połączono / synchronizacja), Ustawienia pokazują ostatnią próbę PC i powód odrzucenia, w tym zły kod parowania. Serwer LAN nadal sam się wznawia. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.54/edhome-beta.apk",
-  "sha256": "a7f0f948b6c47d295bd32f31c30318a377a3630e94e368aba5bb20f89f5b3c4d"
+  "versionCode": 120,
+  "versionName": "0.6.0.55",
+  "changelog": "EDHOME 0.6.0.55 — hotfix LAN Android: serwer synchronizacji jawnie nasłuchuje po IPv4 na 0.0.0.0:45823, czyli na wszystkich interfejsach telefonu. To eliminuje przypadek, w którym wildcard systemowy nie wystawiał portu na Wi‑Fi. Diagnostyka połączenia pozostaje bez zmian. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.55/edhome-beta.apk",
+  "sha256": "751dc04fdb91638dba2a5996ae22db14719ae8ce5a229f929bd4bc9e82e12fb2"
 }
