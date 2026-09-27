@@ -4245,8 +4245,6 @@ public final class MainActivity extends Activity {
             smallButton(box,"QR i etykieta miejsca",
                 () -> showPlaceQr(entry));
         nfcTargetButton(box,"place",entry.id,entry.name);
-        smallButton(box,"Usuń miejsce",()->
-            confirmDeletePlace(entry,childCount));
         box.setOnLongClickListener(v -> {
             String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
                 "Usuń"};
@@ -4269,11 +4267,6 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmDeletePlace(PlaceEntry entry, int childCount) {
-        confirmDeletePlace(entry, childCount, null);
-    }
-
-    private void confirmDeletePlace(PlaceEntry entry, int childCount,
-            Runnable afterDelete) {
         if (childCount > 0) {
             alert("Najpierw przenieś lub usuń podmiejsca. "
                 + "Nie usuwamy całej gałęzi przypadkowo.");
@@ -4292,7 +4285,6 @@ public final class MainActivity extends Activity {
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
-                if (afterDelete != null) afterDelete.run();
                 render();
             }).show();
     }
@@ -4396,13 +4388,11 @@ public final class MainActivity extends Activity {
         ScrollView scroller = new ScrollView(this);
         scroller.setFillViewport(false);
         scroller.addView(layout);
-        AlertDialog.Builder editorBuilder = new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(id == null ? "Nowe miejsce" : "Edytuj / przenieś miejsce")
             .setView(scroller)
             .setNegativeButton("Anuluj", null)
-            .setPositiveButton("Zapisz", null);
-        if (id != null) editorBuilder.setNeutralButton("Usuń", null);
-        AlertDialog dialog = editorBuilder.create();
+            .setPositiveButton("Zapisz", null).create();
         dialog.setOnShowListener(ignored -> {
             dialog.getWindow().setBackgroundDrawable(
                 skin.panel(this, surface, 28));
@@ -4437,23 +4427,6 @@ public final class MainActivity extends Activity {
                         alert("Nie można zapisać miejsca.");
                     }
                 });
-            if (id != null)
-                dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
-                    .setOnClickListener(v -> {
-                        PlaceEntry current = null;
-                        int children = 0;
-                        for (PlaceEntry candidate : readPlaces()) {
-                            if (candidate.id == id) current = candidate;
-                            if (candidate.parent != null && candidate.parent == id)
-                                children++;
-                        }
-                        if (current == null) {
-                            alert("Miejsce już nie istnieje.");
-                            dialog.dismiss();
-                            return;
-                        }
-                        confirmDeletePlace(current, children, dialog::dismiss);
-                    });
         });
         dialog.show();
     }
