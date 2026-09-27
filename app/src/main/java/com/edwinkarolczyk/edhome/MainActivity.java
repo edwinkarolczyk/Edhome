@@ -4245,6 +4245,8 @@ public final class MainActivity extends Activity {
             smallButton(box,"QR i etykieta miejsca",
                 () -> showPlaceQr(entry));
         nfcTargetButton(box,"place",entry.id,entry.name);
+        smallButton(box,"Usuń miejsce",()->
+            confirmDeletePlace(entry,childCount));
         box.setOnLongClickListener(v -> {
             String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
                 "Usuń"};
@@ -4267,6 +4269,11 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmDeletePlace(PlaceEntry entry, int childCount) {
+        confirmDeletePlace(entry, childCount, null);
+    }
+
+    private void confirmDeletePlace(PlaceEntry entry, int childCount,
+            Runnable afterDelete) {
         if (childCount > 0) {
             alert("Najpierw przenieś lub usuń podmiejsca. "
                 + "Nie usuwamy całej gałęzi przypadkowo.");
@@ -4275,7 +4282,8 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Usunąć miejsce?")
             .setMessage(db.placePath(entry.id)
                 + "\nPrzypisane czynności pozostaną bez miejsca. "
-                + "Historia wykonań zostanie zachowana.")
+                + "QR tego miejsca przestanie działać i nie zostanie "
+                + "przydzielony nowemu miejscu. Historia wykonań zostanie zachowana.")
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
@@ -4284,6 +4292,7 @@ public final class MainActivity extends Activity {
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
+                if (afterDelete != null) afterDelete.run();
                 render();
             }).show();
     }
@@ -4387,11 +4396,13 @@ public final class MainActivity extends Activity {
         ScrollView scroller = new ScrollView(this);
         scroller.setFillViewport(false);
         scroller.addView(layout);
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        AlertDialog.Builder editorBuilder = new AlertDialog.Builder(this)
             .setTitle(id == null ? "Nowe miejsce" : "Edytuj / przenieś miejsce")
             .setView(scroller)
             .setNegativeButton("Anuluj", null)
-            .setPositiveButton("Zapisz", null).create();
+            .setPositiveButton("Zapisz", null);
+        if (id != null) editorBuilder.setNeutralButton("Usuń", null);
+        AlertDialog dialog = editorBuilder.create();
         dialog.setOnShowListener(ignored -> {
             dialog.getWindow().setBackgroundDrawable(
                 skin.panel(this, surface, 28));
@@ -4426,6 +4437,23 @@ public final class MainActivity extends Activity {
                         alert("Nie można zapisać miejsca.");
                     }
                 });
+            if (id != null)
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+                    .setOnClickListener(v -> {
+                        PlaceEntry current = null;
+                        int children = 0;
+                        for (PlaceEntry candidate : readPlaces()) {
+                            if (candidate.id == id) current = candidate;
+                            if (candidate.parent != null && candidate.parent == id)
+                                children++;
+                        }
+                        if (current == null) {
+                            alert("Miejsce już nie istnieje.");
+                            dialog.dismiss();
+                            return;
+                        }
+                        confirmDeletePlace(current, children, dialog::dismiss);
+                    });
         });
         dialog.show();
     }
@@ -4636,7 +4664,8 @@ public final class MainActivity extends Activity {
         }
         smallButton(details,"Usuń",()->new AlertDialog.Builder(this)
             .setTitle(isBox?"Usunąć pudełko?":"Usunąć rzecz?")
-            .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
+            .setMessage(item.name+" — QR zostanie unieważniony i nie będzie "
+                +"przydzielony nowemu obiektowi. Historia pozostanie.")
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Usuń",(dialog,which)->{
                 try{
@@ -4767,13 +4796,30 @@ public final class MainActivity extends Activity {
             .setPositiveButton(existing==null?"Dodaj":"Przenieś",(d,w)->{
                 try{
                     int i=destination.getSelectedItemPosition();
-                    if(existing==null)StorageStore.create(db.getWritableDatabase(),
-                        name.getText().toString(),kind,boxIds.get(i),placeIds.get(i));
+                    long createdId=0L;
+                    String createdName=name.getText().toString().trim();
+                    if(existing==null)createdId=StorageStore.create(
+                        db.getWritableDatabase(),createdName,kind,
+                        boxIds.get(i),placeIds.get(i));
                     else StorageStore.move(db.getWritableDatabase(),existing.id,
                         boxIds.get(i),placeIds.get(i));
                     DiagnosticLog.event(existing==null?
                         "STORAGE_CREATED":"STORAGE_MOVED");
                     render();
+                    if(existing==null) {
+                        final long newId=createdId;
+                        final String newName=createdName;
+                        new AlertDialog.Builder(this)
+                            .setTitle("box".equals(kind)
+                                ?"Pudełko dodane":"Rzecz dodana")
+                            .setMessage("QR jest już przypisany automatycznie i "
+                                +"pozostaje unikalny dla tego obiektu.\n\n"
+                                +"Przypisać teraz tag NFC?")
+                            .setNegativeButton("Później",null)
+                            .setPositiveButton("Przypisz NFC",(nd,nw)->
+                                beginNfcAssignment(kind,newId,newName))
+                            .show();
+                    }
                 }catch(Exception problem){alert(problem.getMessage());}
             }).show();
     }
@@ -5022,7 +5068,8 @@ public final class MainActivity extends Activity {
             for(PlaceEntry place:readPlaces())
                 if(place.id==target.id) { found=place;break; }
             if(found==null) {
-                alert("Nie znaleziono tego miejsca w lokalnym EDHOME.");return;
+                alert("Ten QR wskazuje usunięte lub nieobecne miejsce. "
+                    +"Nie zostanie przypisany nowemu miejscu.");return;
             }
             final PlaceEntry place=found;
             StorageQrLabels.log(this,"Skan miejsca",qrLabel(place));
@@ -5052,7 +5099,8 @@ public final class MainActivity extends Activity {
         StorageStore.Item item=StorageStore.find(
             db.getReadableDatabase(),target.id);
         if(item==null||!item.kind.equals(target.kind)){
-            alert("Nie znaleziono obiektu o tym QR w lokalnym magazynie.");
+            alert("Ten QR wskazuje usuniętą lub nieobecną rzecz/pudełko. "
+                +"Nie zostanie przypisany nowemu obiektowi.");
             return;
         }
         StorageQrLabels.log(this,"Skan "+("box".equals(item.kind)
