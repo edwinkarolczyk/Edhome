@@ -156,3 +156,13 @@ assert 'LAST_CLIENT_SEEN_AT = System.currentTimeMillis();' in server
 assert 'syncTransfer = !selfClient' in server
 assert 'Self-test telefonu: nie jest liczony jako połączenie PC' in main
 print("desktop self-test isolation contract OK")
+
+# Desktop manual pairing address must persist and accept copied host:port.
+assert 'normalizePhoneHost(String raw)' in desktop
+assert 'Zapisz adres i kod' in desktop
+assert 'saveConnectionFields' in desktop
+assert 'PREFS.put("phoneIp", host)' in desktop
+assert 'PREFS.put("token", secret)' in desktop
+assert 'host.lastIndexOf(\':\')' in desktop
+assert 'targetHost = normalizePhoneHost(host)' in desktop
+print("desktop manual phone address persistence contract OK")
