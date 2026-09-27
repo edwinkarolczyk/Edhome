@@ -183,3 +183,14 @@ print("EDHOME Desktop visual floor map + routing: PASS")
 
 for marker in ('"pantry".equals(tableName)', '"vehicles".equals(tableName)', '"places".equals(tableName)', '"storage_items".equals(tableName)'):
     assert marker in desktop, f"Missing NFC-capable Desktop table: {marker}"
+
+
+# Main Desktop window opens taller and stays within the usable Windows desktop.
+for marker in (
+    'getMaximumWindowBounds()',
+    'Math.min(940, usableScreen.height - 16)',
+    'setSize(initialWidth, initialHeight)'
+):
+    assert marker in desktop, f"Missing adaptive taller-window contract: {marker}"
+assert 'setSize(1280, 800)' not in desktop
+print("EDHOME Desktop adaptive taller window: PASS")
