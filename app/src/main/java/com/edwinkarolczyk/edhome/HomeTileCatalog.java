@@ -13,12 +13,12 @@ final class HomeTileCatalog {
     static final List<String> STARTER_IDS = Collections.unmodifiableList(Arrays.asList(
         "tasks", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "today",
-        "timers", "shopping", "paycheck", "waste", "storage", "vehicles"
+        "timers", "shopping", "paycheck", "waste", "scanner", "storage", "vehicles"
     ));
     static final List<String> TARGETS = Collections.unmodifiableList(Arrays.asList(
         "tasks", "today", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "timers", "shopping",
-        "paycheck", "paycheck_private", "waste", "storage", "vehicles", "diagnostics"
+        "paycheck", "paycheck_private", "waste", "scanner", "storage", "vehicles", "diagnostics"
     ));
 
     private HomeTileCatalog() { }
@@ -54,6 +54,7 @@ final class HomeTileCatalog {
             case "paycheck": return "PayCheck";
             case "paycheck_private": return "Moje finanse";
             case "waste": return "Odpady";
+            case "scanner": return "Skaner";
             case "storage": return "Magazyn";
             case "vehicles": return "Pojazdy";
             case "diagnostics": return "Diagnostyka";
@@ -67,6 +68,7 @@ final class HomeTileCatalog {
             case "shopping": return "box";
             case "paycheck": case "paycheck_private": return "cabinet";
             case "waste": return "box";
+            case "scanner": return "audit";
             case "storage": return "shelf";
             case "floorplan": return "garage";
             case "vehicles": return "garage";
