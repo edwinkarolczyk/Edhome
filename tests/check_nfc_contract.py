@@ -28,11 +28,17 @@ for token in (
     'Usuń powiązanie NFC',
     'NFC_TAG_ASSIGNED',
     'NFC_TAG_UNLINKED',
-    'NFC_TARGET_OPENED',
+    'NFC_TARGET_SCANNED',
     'Przypisać teraz tag NFC?',
     'beginNfcAssignment(kind,newId,newName)',
 ):
     assert token in main, token
+
+# A known NFC tag now enters the central Scanner routing. It may show actions
+# or open immediately according to the saved per-object/type/global rule.
+assert 'handleKnownNfcScan(current);' in main
+assert 'resolveScanAction("nfc", link.kind, link.targetId)' in main
+assert 'showScannedTargetActions("nfc", link.kind, link.targetId, name)' in main
 
 # Each agreed target is exposed in the object UI.
 for token in (
