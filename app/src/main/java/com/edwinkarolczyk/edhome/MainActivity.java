@@ -131,6 +131,7 @@ public final class MainActivity extends Activity {
     private final PantryBatchSession pantryBatch = new PantryBatchSession();
     private boolean pantrySingleCameraPending;
     private boolean storageQrCameraPending;
+    private boolean centralScannerCameraPending;
     private boolean desktopPairQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
@@ -178,6 +179,7 @@ public final class MainActivity extends Activity {
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
         ensureFloorPlanShellTileSeeded();
+        ensureScannerTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
@@ -420,7 +422,7 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("NFC_UNKNOWN_TAG");
                 return;
             }
-            openNfcTarget(current);
+            handleKnownNfcScan(current);
         } catch(Exception error) {
             DiagnosticLog.error("NFC_READ",error);
             alert("Nie udało się obsłużyć tagu NFC. Dane nie zostały zmienione.");
@@ -522,36 +524,7 @@ public final class MainActivity extends Activity {
     }
 
     private void openNfcTarget(NfcLinkStore.Link link) {
-        String name=NfcLinkStore.targetName(
-            db.getReadableDatabase(),link.kind,link.targetId);
-        if(name.isEmpty()) {
-            new AlertDialog.Builder(this)
-                .setTitle("Stare powiązanie NFC")
-                .setMessage("Obiekt przypisany do tego tagu już nie istnieje. "
-                    +"Usunąć stare powiązanie?")
-                .setNegativeButton("Zostaw",null)
-                .setPositiveButton("Usuń",(d,w)->{
-                    NfcLinkStore.clearUid(db.getWritableDatabase(),link.uid);
-                    render();
-                }).show();
-            return;
-        }
-        if("thing".equals(link.kind)||"box".equals(link.kind)) {
-            expandStorageNfcPath(link.targetId);
-            go("storage");
-        } else if("place".equals(link.kind)) {
-            go("places");
-        } else if("pantry".equals(link.kind)) {
-            pantrySearch=name;
-            pantryCategoryFilter="";
-            go("pantry");
-        } else if("vehicle".equals(link.kind)) {
-            prefs.edit().putBoolean("vehicle_collapsed_"+link.targetId,false).apply();
-            go("vehicles");
-        }
-        DiagnosticLog.event("NFC_TARGET_OPENED");
-        if(root!=null)root.postDelayed(() ->
-            alert("NFC • "+NfcLinkStore.kindLabel(link.kind)+"\n"+name),120);
+        handleKnownNfcScan(link);
     }
 
     private void expandStorageNfcPath(long itemId) {
@@ -768,7 +741,7 @@ public final class MainActivity extends Activity {
                 case "paycheck": paycheck(); break;
                 case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
-                case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
+                case "scanner": scannerHub(); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
                 case "updates": updates(); break;
@@ -1211,8 +1184,8 @@ public final class MainActivity extends Activity {
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
         // All module navigation belongs in user-configurable tiles above.
         // Keep this card informative; no second fixed menu below the tile grid.
-        note("Działa offline. Przypomnienia włączysz w Ustawieniach; skaner "
-            + "i synchronizacja są w kolejnych etapach.");
+        note("Działa offline. Skaner EDHOME obsługuje QR, NFC i kody produktów; "
+            + "przypomnienia włączysz w Ustawieniach.");
     }
 
     private void ensureFloorPlanShellTileSeeded() {
@@ -1237,6 +1210,34 @@ public final class MainActivity extends Activity {
             edit.putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order));
         if (edit.commit())
             DiagnosticLog.event("FLOORPLAN_SHELL_TILE_SEEDED");
+    }
+
+    private void ensureScannerTileSeeded() {
+        if (prefs.getBoolean("scanner_tile_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        boolean present = false;
+        for (String tileId : order) {
+            String target = prefs.getString("tile_target_" + tileId,
+                HomeTileCatalog.defaultTarget(tileId));
+            if ("scanner".equals(target)) {
+                present = true;
+                break;
+            }
+        }
+        if (!present && !order.contains("scanner")) {
+            int storageAt = order.indexOf("storage");
+            if (storageAt < 0) order.add("scanner");
+            else order.add(storageAt, "scanner");
+        }
+        SharedPreferences.Editor edit = prefs.edit()
+            .putBoolean("scanner_tile_seeded_v1", true);
+        if (!present)
+            edit.putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order));
+        if (edit.commit())
+            DiagnosticLog.event("SCANNER_TILE_SEEDED");
     }
 
     private String homeTileTarget(String id) {
@@ -4478,6 +4479,337 @@ public final class MainActivity extends Activity {
     }
 
 
+
+    private static final String SCAN_DEFAULT_GLOBAL = "scan_default_global";
+
+    private void scannerHub() {
+        header("Skaner EDHOME");
+        note("Jeden skaner dla QR EDHOME, NFC i kodów produktów. "
+            + "Najpierw rozpoznaję obiekt, potem pokazuję właściwe działania.");
+        LinearLayout state = card();
+        state.addView(text("Po zeskanowaniu domyślnie", 18, true));
+        state.addView(text(scanActionLabel(
+            prefs.getString(SCAN_DEFAULT_GLOBAL, "show")), 15, false));
+        smallButton(state, "Zmień ustawienie ogólne", this::showGlobalScanDefaultDialog);
+
+        button("▣ Skanuj QR / kod kreskowy", () -> {
+            if (centralScannerCameraPending || pantrySingleCameraPending
+                    || pantryBatch.active()) return;
+            centralScannerCameraPending = true;
+            try {
+                IntentIntegrator scanner = new IntentIntegrator(this);
+                scanner.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES);
+                scanner.setPrompt("EDHOME: QR, kod produktu lub etykieta");
+                scanner.setBeepEnabled(false);
+                scanner.setOrientationLocked(false);
+                scanner.initiateScan();
+            } catch (Exception problem) {
+                centralScannerCameraPending = false;
+                DiagnosticLog.error("CENTRAL_SCANNER_LAUNCH", problem);
+                alert("Nie można uruchomić aparatu. Sprawdź uprawnienie kamery.");
+            }
+        });
+
+        button("NFC • Przyłóż tag do telefonu", () -> {
+            if (nfcAdapter == null) {
+                alert("Ten telefon nie ma sprzętowego NFC.");
+                return;
+            }
+            if (!nfcAdapter.isEnabled()) {
+                alert("NFC jest wyłączone. Włącz NFC i wróć do Skanera EDHOME.");
+                return;
+            }
+            alert("Skaner NFC jest aktywny. Przyłóż naklejkę albo brelok do telefonu.");
+        });
+
+        LinearLayout rules = card();
+        rules.addView(text("Jak działają reguły", 18, true));
+        rules.addView(text(
+            "1. Reguła konkretnego obiektu przez QR/NFC\n"
+            + "2. Reguła typu, np. wszystkie Pudełka przez NFC\n"
+            + "3. Ustawienie ogólne\n\n"
+            + "Usuń, −1, rozpinanie NFC i inne operacje zmieniające dane "
+            + "zawsze wymagają osobnego potwierdzenia.", 14, false));
+    }
+
+    private String scanSpecificKey(String source, String kind, long id) {
+        return "scan_default_" + source + "_" + kind + "_" + id;
+    }
+
+    private String scanTypeKey(String source, String kind) {
+        return "scan_default_" + source + "_" + kind;
+    }
+
+    private String resolveScanAction(String source, String kind, long id) {
+        String specific = prefs.getString(scanSpecificKey(source, kind, id), "");
+        if ("show".equals(specific) || "open".equals(specific)) return specific;
+        String byType = prefs.getString(scanTypeKey(source, kind), "");
+        if ("show".equals(byType) || "open".equals(byType)) return byType;
+        String global = prefs.getString(SCAN_DEFAULT_GLOBAL, "show");
+        return "open".equals(global) ? "open" : "show";
+    }
+
+    private String scanActionLabel(String action) {
+        return "open".equals(action) ? "Otwórz obiekt automatycznie"
+            : "Pokaż działania";
+    }
+
+    private void showGlobalScanDefaultDialog() {
+        String[] options = {"Pokaż działania", "Otwórz obiekt automatycznie"};
+        new AlertDialog.Builder(this)
+            .setTitle("Po zeskanowaniu • ogólnie")
+            .setSingleChoiceItems(options,
+                "open".equals(prefs.getString(SCAN_DEFAULT_GLOBAL, "show")) ? 1 : 0,
+                (dialog, which) -> {
+                    prefs.edit().putString(SCAN_DEFAULT_GLOBAL,
+                        which == 1 ? "open" : "show").apply();
+                    dialog.dismiss();
+                    render();
+                })
+            .setNegativeButton("Anuluj", null).show();
+    }
+
+    private void showScanDefaultDialog(String source, String kind, long id,
+            String name) {
+        String label = NfcLinkStore.kindLabel(kind);
+        String sourceLabel = "nfc".equals(source) ? "NFC" : "QR";
+        String[] options = {
+            "Ten obiekt: pokaż działania",
+            "Ten obiekt: otwórz automatycznie",
+            "Wszystkie " + label + " przez " + sourceLabel + ": pokaż działania",
+            "Wszystkie " + label + " przez " + sourceLabel + ": otwórz automatycznie",
+            "Ten obiekt: dziedzicz regułę typu / ogólną"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Po skanie • " + name)
+            .setItems(options, (dialog, which) -> {
+                SharedPreferences.Editor edit = prefs.edit();
+                if (which == 0)
+                    edit.putString(scanSpecificKey(source, kind, id), "show");
+                else if (which == 1)
+                    edit.putString(scanSpecificKey(source, kind, id), "open");
+                else if (which == 2)
+                    edit.putString(scanTypeKey(source, kind), "show");
+                else if (which == 3)
+                    edit.putString(scanTypeKey(source, kind), "open");
+                else
+                    edit.remove(scanSpecificKey(source, kind, id));
+                edit.apply();
+                DiagnosticLog.event("SCAN_DEFAULT_SAVED",
+                    "source=" + source + " kind=" + kind);
+            })
+            .setNegativeButton("Anuluj", null).show();
+    }
+
+    private void handleCentralScan(String raw) {
+        String code = raw == null ? "" : raw.trim();
+        if (code.isEmpty()) return;
+        StorageQr.Target storageTarget = StorageQr.decode(code);
+        if (storageTarget != null) {
+            handleStorageTargetScan(storageTarget.kind, storageTarget.id, "qr");
+            return;
+        }
+        if (PantryScanRules.validBarcode(code)) {
+            showProductBarcodeActions(code);
+            return;
+        }
+        alert("Kod został odczytany, ale EDHOME nie rozpoznaje jeszcze jego typu.");
+        DiagnosticLog.event("CENTRAL_SCANNER_UNKNOWN");
+    }
+
+    private void showProductBarcodeActions(String barcode) {
+        final PantryBarcodeStore.Item item;
+        try {
+            item = PantryBarcodeStore.find(db.getReadableDatabase(), barcode);
+        } catch (Exception problem) {
+            DiagnosticLog.error("CENTRAL_PRODUCT_READ", problem);
+            alert("Nie udało się odczytać produktu.");
+            return;
+        }
+        if (item == null) {
+            new AlertDialog.Builder(this)
+                .setTitle("Nieznany kod produktu")
+                .setMessage(barcode)
+                .setNegativeButton("Zamknij", null)
+                .setPositiveButton("Dodaj / wyszukaj produkt",
+                    (d,w) -> onPantryBarcode(barcode, "ADD"))
+                .show();
+            return;
+        }
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(16), dp(12), dp(16), dp(10));
+        actions.addView(text(item.name, 18, true));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Produkt • " + barcode)
+            .setView(actions).setNegativeButton("Zamknij", null).create();
+        smallButton(actions, "Otwórz produkt", () -> {
+            dialog.dismiss();
+            pantrySearch = item.name;
+            pantryCategoryFilter = "";
+            go("pantry");
+        });
+        smallButton(actions, "Dodaj +1", () -> {
+            dialog.dismiss();
+            onPantryBarcode(barcode, "ADD");
+        });
+        smallButton(actions, "Wyciągnij −1", () -> {
+            dialog.dismiss();
+            onPantryBarcode(barcode, "TAKE");
+        });
+        dialog.show();
+    }
+
+    private void handleKnownNfcScan(NfcLinkStore.Link link) {
+        String name = NfcLinkStore.targetName(
+            db.getReadableDatabase(), link.kind, link.targetId);
+        if (name.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Stare powiązanie NFC")
+                .setMessage("Obiekt przypisany do tego tagu już nie istnieje. "
+                    + "Usunąć stare powiązanie?")
+                .setNegativeButton("Zostaw", null)
+                .setPositiveButton("Usuń", (d,w) -> {
+                    NfcLinkStore.clearUid(db.getWritableDatabase(), link.uid);
+                    render();
+                }).show();
+            return;
+        }
+        if ("open".equals(resolveScanAction("nfc", link.kind, link.targetId)))
+            openScannedTarget(link.kind, link.targetId, name);
+        else
+            showScannedTargetActions("nfc", link.kind, link.targetId, name);
+        DiagnosticLog.event("NFC_TARGET_SCANNED");
+    }
+
+    private void handleStorageTargetScan(String kind, long id, String source) {
+        String name = NfcLinkStore.targetName(db.getReadableDatabase(), kind, id);
+        if (name.isEmpty()) {
+            alert("Ten kod wskazuje usunięty lub nieobecny obiekt. "
+                + "Nie zostanie przypisany nowemu obiektowi.");
+            return;
+        }
+        if ("open".equals(resolveScanAction(source, kind, id)))
+            openScannedTarget(kind, id, name);
+        else
+            showScannedTargetActions(source, kind, id, name);
+    }
+
+    private void openScannedTarget(String kind, long id, String name) {
+        if ("thing".equals(kind) || "box".equals(kind)) {
+            expandStorageNfcPath(id);
+            go("storage");
+        } else if ("place".equals(kind)) {
+            go("places");
+        } else if ("pantry".equals(kind)) {
+            pantrySearch = name;
+            pantryCategoryFilter = "";
+            go("pantry");
+        } else if ("vehicle".equals(kind)) {
+            prefs.edit().putBoolean("vehicle_collapsed_" + id, false).apply();
+            go("vehicles");
+        }
+        DiagnosticLog.event("SCANNED_TARGET_OPENED",
+            "kind=" + kind + " id=" + id);
+    }
+
+    private void showScannedTargetActions(String source, String kind, long id,
+            String name) {
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(16), dp(12), dp(16), dp(10));
+        actions.addView(text(("nfc".equals(source) ? "NFC" : "QR")
+            + " • " + NfcLinkStore.kindLabel(kind), 14, false));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(name).setView(actions)
+            .setNegativeButton("Zamknij", null).create();
+
+        smallButton(actions, "Otwórz", () -> {
+            dialog.dismiss();
+            openScannedTarget(kind, id, name);
+        });
+
+        if ("thing".equals(kind) || "box".equals(kind)) {
+            StorageStore.Item item = StorageStore.find(db.getReadableDatabase(), id);
+            if (item != null) {
+                smallButton(actions, "Przenieś / edytuj", () -> {
+                    dialog.dismiss();
+                    storageEditor(item.kind, item.id);
+                });
+                if ("thing".equals(kind) && item.lentTo == null)
+                    smallButton(actions, "Wypożycz", () -> {
+                        dialog.dismiss();
+                        askStorageLend(item);
+                    });
+                else if ("thing".equals(kind) && item.lentTo != null)
+                    smallButton(actions, "Potwierdź zwrot", () -> {
+                        dialog.dismiss();
+                        new AlertDialog.Builder(this)
+                            .setTitle("Potwierdzić zwrot?")
+                            .setMessage(name)
+                            .setNegativeButton("Anuluj", null)
+                            .setPositiveButton("Zwróć", (d,w) -> {
+                                try {
+                                    StorageStore.returned(db.getWritableDatabase(), id);
+                                    render();
+                                } catch (Exception issue) {
+                                    alert(issue.getMessage());
+                                }
+                            }).show();
+                    });
+                smallButton(actions, "QR / etykieta", () -> {
+                    dialog.dismiss();
+                    showStorageQr(item);
+                });
+            }
+        } else if ("place".equals(kind)) {
+            PlaceEntry place = null;
+            for (PlaceEntry candidate : readPlaces())
+                if (candidate.id == id) { place = candidate; break; }
+            final PlaceEntry selected = place;
+            if (selected != null) {
+                smallButton(actions, "Edytuj / przenieś miejsce", () -> {
+                    dialog.dismiss();
+                    placeEditor(selected.id, selected.name, selected.kind,
+                        selected.parent, selected.icon);
+                });
+                smallButton(actions, "QR / etykieta", () -> {
+                    dialog.dismiss();
+                    showPlaceQr(selected);
+                });
+            }
+        } else if ("pantry".equals(kind)) {
+            smallButton(actions, "Dodaj +1", () -> {
+                dialog.dismiss();
+                new AlertDialog.Builder(this)
+                    .setTitle("Dodać +1?")
+                    .setMessage(name)
+                    .setNegativeButton("Anuluj", null)
+                    .setPositiveButton("Dodaj", (d,w) -> {
+                        db.changeStock(id, 1);
+                        DiagnosticLog.event("SCAN_PANTRY_INCREMENT");
+                        render();
+                    }).show();
+            });
+            smallButton(actions, "Wyciągnij −1", () -> {
+                dialog.dismiss();
+                new AlertDialog.Builder(this)
+                    .setTitle("Wyciągnąć −1?")
+                    .setMessage(name)
+                    .setNegativeButton("Anuluj", null)
+                    .setPositiveButton("Wyciągnij", (d,w) -> {
+                        db.changeStock(id, -1);
+                        DiagnosticLog.event("SCAN_PANTRY_DECREMENT");
+                        render();
+                    }).show();
+            });
+        }
+
+        smallButton(actions, "Po zeskanowaniu domyślnie…", () ->
+            showScanDefaultDialog(source, kind, id, name));
+        dialog.show();
+    }
+
     private void storage() {
         header("Rzeczy • pudełka • QR");
         note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
@@ -4490,17 +4822,7 @@ public final class MainActivity extends Activity {
             button("◷ Historia skanowania i drukowania QR",
                 this::showQrHistory);
         }
-        button("▣ Skanuj QR rzeczy, pudełka lub miejsca", () -> {
-            if (storageQrCameraPending || pantrySingleCameraPending
-                    || pantryBatch.active()) return;
-            storageQrCameraPending = true;
-            IntentIntegrator qr = new IntentIntegrator(this);
-            qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-            qr.setPrompt("EDHOME: QR rzeczy, pudełka lub miejsca");
-            qr.setBeepEnabled(false);
-            qr.setOrientationLocked(false);
-            qr.initiateScan();
-        });
+        button("▣ Skaner EDHOME • QR / NFC / kody", () -> go("scanner"));
         button("← Miejsca", () -> go("places"));
         // One read-only tree: Miejsce → podmiejsce → pudełko → rzecz.
         // Collapsing hides descendants without changing database relations.
@@ -5080,108 +5402,12 @@ public final class MainActivity extends Activity {
     }
 
     private void openStorageQr(String value) {
-        StorageQr.Target target=StorageQr.decode(value);
-        if(target==null){alert("To nie jest QR EDHOME.");return;}
-        if ("place".equals(target.kind)) {
-            PlaceEntry found=null;
-            for(PlaceEntry place:readPlaces())
-                if(place.id==target.id) { found=place;break; }
-            if(found==null) {
-                alert("Ten QR wskazuje usunięte lub nieobecne miejsce. "
-                    +"Nie zostanie przypisany nowemu miejscu.");return;
-            }
-            final PlaceEntry place=found;
-            StorageQrLabels.log(this,"Skan miejsca",qrLabel(place));
-            LinearLayout card=new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(dp(16),dp(12),dp(16),dp(10));
-            card.addView(text(db.placePath(place.id),15,false));
-            AlertDialog dialog=new AlertDialog.Builder(this)
-                .setTitle("Miejsce • "+place.name).setView(card)
-                .setNegativeButton("Zamknij",null).create();
-            smallButton(card,"Pokaż QR / etykieta",()->{
-                dialog.dismiss();showPlaceQr(place);
-            });
-            smallButton(card,"Edytuj / przenieś miejsce",()->{
-                dialog.dismiss();placeEditor(place.id,place.name,place.kind,
-                    place.parent,place.icon);
-            });
-            smallButton(card,"Otwórz Miejsca",()->{
-                dialog.dismiss();go("places");
-            });
-            smallButton(card,"Historia QR",()->{
-                dialog.dismiss();showQrHistory();
-            });
-            dialog.show();
+        StorageQr.Target target = StorageQr.decode(value);
+        if (target == null) {
+            alert("To nie jest QR EDHOME.");
             return;
         }
-        StorageStore.Item item=StorageStore.find(
-            db.getReadableDatabase(),target.id);
-        if(item==null||!item.kind.equals(target.kind)){
-            alert("Ten QR wskazuje usuniętą lub nieobecną rzecz/pudełko. "
-                +"Nie zostanie przypisany nowemu obiektowi.");
-            return;
-        }
-        StorageQrLabels.log(this,"Skan "+("box".equals(item.kind)
-            ?"pudełka":"rzeczy"),qrLabel(item));
-        LinearLayout controls=new LinearLayout(this);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        controls.setPadding(dp(16),dp(12),dp(16),dp(10));
-        controls.addView(text(StorageStore.location(
-            db.getReadableDatabase(),item),14,false));
-        if(item.lentTo!=null)
-            controls.addView(text("Wypożyczono: "+item.lentTo,14,false));
-        AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle(item.name).setView(controls)
-            .setNegativeButton("Zamknij",null).create();
-        smallButton(controls,"Pokaż QR / etykieta",()->{
-            dialog.dismiss();showStorageQr(item);
-        });
-        if(item.lentTo==null) {
-            smallButton(controls,"Przenieś",()->{
-                dialog.dismiss();storageEditor(item.kind,item.id);
-            });
-            if("thing".equals(item.kind))
-                smallButton(controls,"Wypożycz",()->{
-                    dialog.dismiss();askStorageLend(item);
-                });
-        } else {
-            smallButton(controls,"Potwierdź zwrot",()->{
-                dialog.dismiss();
-                new AlertDialog.Builder(this).setTitle("Potwierdzić zwrot?")
-                    .setMessage(item.name)
-                    .setNegativeButton("Anuluj",null)
-                    .setPositiveButton("Zwróć",(d,w)->{
-                        try {
-                            StorageStore.returned(
-                                db.getWritableDatabase(),item.id);
-                            render();
-                        }catch(Exception issue){alert(issue.getMessage());}
-                    }).show();
-            });
-        }
-        smallButton(controls,"Historia obiektu",()->{
-            dialog.dismiss();
-            StringBuilder history=new StringBuilder();
-            try(Cursor c=db.getReadableDatabase().rawQuery(
-                    "SELECT action,details,happened_at FROM storage_events "
-                    +"WHERE item_id=? ORDER BY id DESC LIMIT 30",
-                    new String[]{Long.toString(item.id)})) {
-                while(c.moveToNext()) {
-                    if(history.length()>0)history.append("\n");
-                    history.append(c.getString(0)).append(" • ")
-                        .append(c.getString(1));
-                }
-            }
-            new AlertDialog.Builder(this).setTitle("Historia • "+item.name)
-                .setMessage(history.length()==0?"Brak operacji":
-                    history.toString())
-                .setPositiveButton("Zamknij",null).show();
-        });
-        smallButton(controls,"Otwórz Magazyn",()->{
-            dialog.dismiss();go("storage");
-        });
-        dialog.show();
+        handleStorageTargetScan(target.kind, target.id, "qr");
     }
 
     private void paycheck() {
@@ -9495,6 +9721,12 @@ public final class MainActivity extends Activity {
         }
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
+            if (centralScannerCameraPending) {
+                centralScannerCameraPending = false;
+                if (scan.getContents() != null)
+                    handleCentralScan(scan.getContents());
+                return;
+            }
             if (desktopPairQrCameraPending) {
                 desktopPairQrCameraPending = false;
                 if (scan.getContents() != null) pairDesktopFromQr(scan.getContents());
