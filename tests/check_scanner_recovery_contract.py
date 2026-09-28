@@ -35,5 +35,27 @@ assert "operationExists(db, operationId)" in store
 assert "db.beginTransaction();" in store and "db.setTransactionSuccessful();" in store
 assert "db.endTransaction();" in store and "movement.put(\"operation_id\", operationId);" in store
 assert "if (!active || cameraPending || awaitingConfirmation) return false;" in batch
+
+# Central EDHOME scanner must unify QR/NFC/product handling and keep destructive
+# actions behind explicit confirmation.
+for marker in (
+    'case "scanner": scannerHub(); break;',
+    'button("▣ Skanuj QR / kod kreskowy"',
+    'NFC • Przyłóż tag do telefonu',
+    'handleStorageTargetScan(storageTarget.kind, storageTarget.id, "qr")',
+    'handleKnownNfcScan(current);',
+    'showProductBarcodeActions(code);',
+    'resolveScanAction(String source, String kind, long id)',
+    'scanSpecificKey(source, kind, id)',
+    'scanTypeKey(source, kind)',
+    'SCAN_DEFAULT_GLOBAL',
+    'Po zeskanowaniu domyślnie…',
+    '.setTitle("Wyciągnąć −1?")',
+    '.setPositiveButton("Wyciągnij"',
+):
+    assert marker in main, "Central scanner contract missing: " + marker
+assert main.index('case "scanner": scannerHub(); break;') < main.index('case "audit": audit(); break;')
+assert 'placeholder("Skaner"' not in main
+
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
-print("Scanner camera/read/commit failure recovery, duplicate and SQLite guards: PASS")
+print("Scanner recovery + central QR/NFC/product action routing: PASS")
