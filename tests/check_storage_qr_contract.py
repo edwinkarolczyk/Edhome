@@ -94,8 +94,8 @@ for token in (
     'selectBulkQrLabels()', 'selectQrLabelFormat(',
     'StorageQrLabels.pdf(selected,format)', 'StorageQrLabels.print(this,pdf,',
     'Intent.ACTION_CREATE_DOCUMENT', '"application/pdf"',
-    'StorageQrLabels.log(this,"Skan miejsca",qrLabel(place))',
-    'StorageQrLabels.log(this,"Skan "+',
+    'StorageQrLabels.log(this, "Skan miejsca", qrLabel(place))',
+    'StorageQrLabels.log(this,\n                        "Skan " +',
     'showQrHistory()', 'StorageStore.returned(',
 ):
     assert token in (qr+"\n"+main), "Missing QR integration: "+token
