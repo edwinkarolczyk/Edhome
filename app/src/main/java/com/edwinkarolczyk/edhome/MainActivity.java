@@ -4689,6 +4689,21 @@ public final class MainActivity extends Activity {
                 + "Nie zostanie przypisany nowemu obiektowi.");
             return;
         }
+        if ("qr".equals(source)) {
+            if ("place".equals(kind)) {
+                for (PlaceEntry place : readPlaces())
+                    if (place.id == id) {
+                        StorageQrLabels.log(this, "Skan miejsca", qrLabel(place));
+                        break;
+                    }
+            } else {
+                StorageStore.Item item = StorageStore.find(db.getReadableDatabase(), id);
+                if (item != null)
+                    StorageQrLabels.log(this,
+                        "Skan " + ("box".equals(kind) ? "pudełka" : "rzeczy"),
+                        qrLabel(item));
+            }
+        }
         if ("open".equals(resolveScanAction(source, kind, id)))
             openScannedTarget(kind, id, name);
         else
