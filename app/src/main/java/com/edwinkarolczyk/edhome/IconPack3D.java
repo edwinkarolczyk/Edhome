@@ -86,6 +86,7 @@ final class IconPack3D {
             case "paycheck": return PREFIX + "paycheck";
             case "paycheck_private": return PREFIX + "paycheck_private";
             case "waste": return PREFIX + "waste";
+            case "scanner": return PREFIX + "checklist";
             case "storage": return PREFIX + "storage";
             case "vehicles": return PREFIX + "vehicles";
             case "diagnostics": return PREFIX + "diagnostics";
