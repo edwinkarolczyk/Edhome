@@ -23,9 +23,9 @@ for token in (
     'beginHomeDrag(tile, tileId);',
     'HOME_TILE_GESTURE_TIMING_SAVED',
     'HomeTileLayout.validPair(menuMs, moveMs)',
-    'prefs.edit().putInt(HomeTileLayout.SHORT_KEY, menuMs)',
-    '.putInt(HomeTileLayout.DRAG_KEY, moveMs).commit()',
-    'Kafelki • czas przytrzymania',
+    'prefs.edit().putInt(HomeTileLayout.SHORT_KEY,menuMs)',
+    '.putInt(HomeTileLayout.DRAG_KEY,moveMs).apply()',
+    'Czas przytrzymania kafelków',
 ):
     assert token in main, token
 
@@ -54,7 +54,7 @@ assert 'int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);' in main
 assert 'Math.min(iconWidth, iconHeight)' in main
 assert 'trim3dTransparentMargins(image)' in main
 assert 'Opcjonalnie: importuj paczkę ikon ZIP' in main
-assert '.putBoolean("icon_style_explicit", true).commit()' in main
+assert '.putBoolean("icon_style_explicit",true).apply()' in main
 assert 'DEFAULT_SHORT_MS = 450' in layout
 assert 'DEFAULT_DRAG_MS = 1100' in layout
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
