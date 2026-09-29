@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.70";
+    private static final String DESKTOP_VERSION = "0.6.0.71";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3631,6 +3631,7 @@ public final class EdhomeDesktop extends JFrame {
                 saveCache(snapshot);
             }
         } catch (Exception error) {
+            DesktopDiagnosticLog.error("LOCAL_CACHE_SAVE", error);
             connection.setText("BŁĄD • nie zapisano lokalnej kopii");
         }
         scheduleAutoSave();
@@ -5816,16 +5817,52 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
-    private static void saveCache(JsonObject data) throws IOException {
+    private static synchronized void saveCache(JsonObject data) throws IOException {
         Files.createDirectories(CACHE.getParent());
-        Path temp = CACHE.resolveSibling(CACHE.getFileName() + ".tmp");
-        Files.writeString(temp, GSON.toJson(data), StandardCharsets.UTF_8);
+        Path temp = Files.createTempFile(CACHE.getParent(),
+            CACHE.getFileName().toString() + ".", ".tmp");
+        boolean committed = false;
         try {
-            Files.move(temp, CACHE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
-            Files.move(temp, CACHE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(temp, GSON.toJson(data), StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                java.nio.file.StandardOpenOption.WRITE);
+
+            IOException atomicFailure = null;
+            try {
+                Files.move(temp, CACHE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                committed = true;
+                return;
+            } catch (IOException error) {
+                atomicFailure = error;
+            }
+
+            IOException last = atomicFailure;
+            for (int attempt = 0; attempt < 4; attempt++) {
+                try {
+                    if (attempt > 0) {
+                        try { Thread.sleep(75L * attempt); }
+                        catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("Przerwano ponawianie zapisu cache.", interrupted);
+                        }
+                    }
+                    Files.move(temp, CACHE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    committed = true;
+                    return;
+                } catch (IOException retryError) {
+                    last = retryError;
+                }
+            }
+            throw last == null
+                ? new IOException("Nie udało się zapisać lokalnej kopii EDHOME.")
+                : last;
+        } finally {
+            if (!committed) {
+                try { Files.deleteIfExists(temp); } catch (IOException ignored) { }
+            }
         }
     }
 
