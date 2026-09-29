@@ -1387,7 +1387,7 @@ public final class MainActivity extends Activity {
                 ? showcaseHomeLabel(homeTileTarget(tileId))
                 : homeTileLabel(tileId);
             caption.setText(visibleLabel);
-            tile.setContentDescription(visibleLabel)
+            tile.setContentDescription(visibleLabel
                 + ". Dotknij, aby otworzyć. Krócej przytrzymaj dla menu; "
                 + "dłużej dla przeciągania. Czasy: Ustawienia.");
             // Accessibility long-click still opens the actions menu.
