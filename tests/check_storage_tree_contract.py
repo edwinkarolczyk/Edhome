@@ -42,7 +42,19 @@ assert 'boolean visible=isBox?storageBoxesVisible():storageThingsVisible();' in 
 assert 'childDepth=depth+1;' in ui
 assert 'ukrywanie niczego nie usuwa' in ui
 assert 'storageTemporaryKind=kind;' in s
-assert 'Rzeczy (np. narzędzia)' in s
+assert 'Rzeczy / narzędzia' in s
 assert '"Pudełka",STORAGE_SHOW_BOXES_PREF' in s
 assert '"Miejsca",STORAGE_SHOW_PLACES_PREF' in s
+assert 'STORAGE_ACTION_PREFIX = "storage_action_"' in s
+assert 'private boolean storageActionVisible(String kind,String action)' in s
+assert 'storageActionVisible(item.kind,"photo")' in ui
+assert 'storageActionVisible(item.kind,"qr")' in ui
+assert 'storageActionVisible(item.kind,"nfc")' in ui
+assert 'storageActionVisible(item.kind,"print")' in ui
+assert 'storageActionVisible(item.kind,"move")' in ui
+assert 'storageActionVisible(item.kind,"lend")' in ui
+assert 'storageActionVisible(item.kind,"delete")' in ui
+assert 'settingsStorageAction(thingActions,"thing","photo","Zdjęcie / miniatura")' in s
+assert 'settingsStorageAction(boxActions,"box","nfc","NFC")' in s
+assert 'settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca")' in s
 print("Storage tree: persistent branch state, hierarchy, CRUD/QR actions and no flat duplicate list PASS")
