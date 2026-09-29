@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 126,
-  "versionName": "0.6.0.61",
-  "changelog": "EDHOME 0.6.0.61 — centralny Skaner EDHOME przed Magazynem: jeden ekran dla QR, NFC i kodów produktów. Po QR/NFC pokazuje kontekstowe akcje (otwórz, przenieś/edytuj, wypożycz/zwrot, etykieta, stan Spiżarni), a zachowanie po skanie można ustawić ogólnie, dla typu albo dla konkretnego obiektu. Operacje zmieniające dane nadal wymagają potwierdzenia. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.61/edhome-beta.apk",
-  "sha256": "56da80aca70b3523fdac1eff41d17cc10cf8f09b9ddfb6c0e59b49c99c7a6bae"
+  "versionCode": 127,
+  "versionName": "0.6.0.62",
+  "changelog": "EDHOME 0.6.0.62 — poprawka NFC w centralnym Skanerze EDHOME. Wejście do skanera i przycisk NFC wymuszają świeżą sesję ReaderMode, zniknął blokujący modal OK, a ekran pokazuje stały status nasłuchu i potwierdzenie odczytu UID. Reguły obiekt → typ → ogólna pozostają bez zmian; poprawiono też teksty typu „Wszystkie pudełka”. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.62/edhome-beta.apk",
+  "sha256": "a4fba9f4ab2ba89a92880f9ec186cc924abb76f2ced11239e13e1c83c1cd9f24"
 }
