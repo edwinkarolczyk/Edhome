@@ -9999,8 +9999,9 @@ public final class MainActivity extends Activity {
             ? (skin.showcase() && !homeEditMode
                 ? 3 : HomeTileLayout.homeColumns(Math.round(viewport / density)))
             : HomeTileLayout.columns(Math.round(viewport / density));
-        int span = isHome && "double".equals(
-            prefs.getString("tile_width_" + id, "small"))
+        int span = isHome
+            && !(skin.showcase() && !homeEditMode)
+            && "double".equals(prefs.getString("tile_width_" + id, "small"))
             ? Math.min(2, columns) : 1;
         LinearLayout row = grid.getChildCount() == 0
             ? null : (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
