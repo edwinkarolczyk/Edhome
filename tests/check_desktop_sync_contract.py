@@ -195,3 +195,14 @@ print("desktop diagnostics transfer + local log contract OK")
 assert 'rootCause(problem)' in desktop_log
 assert 'root=' in desktop_log and 'message=' in desktop_log
 print("desktop diagnostics root-cause contract OK")
+
+
+# Local Desktop cache must tolerate Windows file locks and concurrent cache writes.
+for marker in (
+    'private static synchronized void saveCache(JsonObject data)',
+    'Files.createTempFile(CACHE.getParent()',
+    'Thread.sleep(75L * attempt)',
+    'DesktopDiagnosticLog.error("LOCAL_CACHE_SAVE", error)'
+):
+    assert marker in desktop, "Missing resilient local cache save contract: " + marker
+print("desktop resilient local cache save contract OK")
