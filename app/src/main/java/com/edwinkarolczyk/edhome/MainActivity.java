@@ -4893,6 +4893,7 @@ public final class MainActivity extends Activity {
     private static final String STORAGE_SHOW_THINGS_PREF = "storage_show_things";
     private static final String STORAGE_SHOW_BOXES_PREF = "storage_show_boxes";
     private static final String STORAGE_SHOW_PLACES_PREF = "storage_show_places";
+    private static final String STORAGE_GALLERY_PREF = "storage_gallery_enabled";
     private static final String STORAGE_ACTION_PREFIX = "storage_action_";
 
     private boolean storageThingsVisible() {
@@ -5302,6 +5303,8 @@ public final class MainActivity extends Activity {
                 if(item!=null)items.add(item);
             }
         }
+        if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))
+            storageThingsGallery(items);
         title("Podgląd magazynu");
         note("Widok: "
             +(showPlaces?"miejsca ":"")
@@ -5364,6 +5367,77 @@ public final class MainActivity extends Activity {
             while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
                 +" • "+c.getString(2));
         }
+    }
+
+    private void storageThingsGallery(java.util.List<StorageStore.Item> items) {
+        java.util.List<StorageStore.Item> things=new java.util.ArrayList<>();
+        for(StorageStore.Item item:items)
+            if(!"box".equals(item.kind))things.add(item);
+        if(things.isEmpty())return;
+
+        title("Galeria rzeczy");
+        note("Szybki podgląd tego, co masz. Dotknij miniatury, aby otworzyć rzecz. "
+            +"Brak zdjęcia nie ukrywa przedmiotu.");
+        LinearLayout grid=new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+
+        for(int i=0;i<things.size();i+=2) {
+            LinearLayout row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            grid.addView(row,new LinearLayout.LayoutParams(-1,-2));
+            for(int slot=0;slot<2;slot++) {
+                int index=i+slot;
+                if(index>=things.size()) {
+                    View spacer=new View(this);
+                    LinearLayout.LayoutParams empty=new LinearLayout.LayoutParams(
+                        0,dp(1),1f);
+                    empty.setMargins(dp(4),0,dp(4),0);
+                    row.addView(spacer,empty);
+                    continue;
+                }
+                StorageStore.Item item=things.get(index);
+                LinearLayout tile=new LinearLayout(this);
+                tile.setOrientation(LinearLayout.VERTICAL);
+                tile.setPadding(dp(10),dp(10),dp(10),dp(10));
+                tile.setBackground(skin.panel(this,surface,22));
+                tile.setElevation(dp(2));
+                tile.setClickable(true);
+                tile.setFocusable(true);
+                touchFeedback(tile);
+
+                Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+                if(thumbnail!=null) {
+                    ImageView image=new ImageView(this);
+                    image.setImageBitmap(thumbnail);
+                    image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    tile.addView(image,new LinearLayout.LayoutParams(-1,dp(118)));
+                } else {
+                    TextView missing=text("◉\nBrak zdjęcia",14,true);
+                    missing.setGravity(Gravity.CENTER);
+                    missing.setTextColor(subdued);
+                    tile.addView(missing,new LinearLayout.LayoutParams(-1,dp(118)));
+                }
+
+                TextView name=text(item.name,15,true);
+                name.setMaxLines(2);
+                tile.addView(name);
+                TextView location=text(
+                    StorageStore.location(db.getReadableDatabase(),item),11,false);
+                location.setTextColor(subdued);
+                location.setMaxLines(2);
+                tile.addView(location);
+                tile.setContentDescription("Rzecz: "+item.name+" • otwórz");
+                tile.setOnClickListener(v->storageEditor(item.kind,item.id));
+
+                LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(
+                    0,-2,1f);
+                cell.setMargins(dp(4),dp(4),dp(4),dp(4));
+                row.addView(tile,cell);
+            }
+        }
+        DiagnosticLog.event("STORAGE_THINGS_GALLERY_VIEWED",
+            "count="+things.size());
     }
 
     /** Reparent a newly built card into its branch while retaining card style. */
@@ -9653,6 +9727,8 @@ public final class MainActivity extends Activity {
 
         LinearLayout storageSettings=settingsAccordion("storage","Magazyn",
             "Co widać w Magazynie i które przyciski mają być pokazywane.",false);
+        settingsYesNo(storageSettings,"Galeria miniaturek rzeczy",
+            STORAGE_GALLERY_PREF,true,null);
         LinearLayout types=settingsNestedAccordion(storageSettings,"storage_types",
             "Widoczne typy",true);
         settingsYesNo(types,"Rzeczy / narzędzia",STORAGE_SHOW_THINGS_PREF,true,null);
