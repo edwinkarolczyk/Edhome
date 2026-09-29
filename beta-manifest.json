@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 132,
-  "versionName": "0.6.0.67",
-  "changelog": "EDHOME 0.6.0.67 — Magazyn dostał Galerię rzeczy: dwukolumnową siatkę miniaturek wszystkich Rzeczy z nazwą i lokalizacją. Rzecz bez zdjęcia ma czytelny placeholder, dotknięcie kafelka otwiera jej kartę, a galerię można wyłączyć w Ustawienia → Magazyn. Do roadmapy rozwoju po 1.0 dopisano lokalne rozpoznawanie własnych Rzeczy po zdjęciu; QR/NFC pozostają metodami jednoznacznymi. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.67/edhome-beta.apk",
-  "sha256": "6cf882977b7f67201580b59083f7c6d8c430694a7e871c5865e5c7236705432c"
+  "versionCode": 133,
+  "versionName": "0.6.0.68",
+  "changelog": "EDHOME 0.6.0.68 — ekran Start pozostaje siatką 3 × 3. Gdy jest więcej niż 9 kafelków, kolejne zestawy są dostępne jako strony przewijane palcem w lewo/prawo. Kropki pod siatką pokazują liczbę stron, a aktywna strona jest wyraźnie zaznaczona. W trybie edycji można przeciągać kafelki w obrębie strony oraz przenosić je na poprzednią lub następną stronę. Układ jest zapisywany. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.68/edhome-beta.apk",
+  "sha256": "6c05c6b1bb8fe24e53e7720e3d1aba0fcce61d5daf8ca655503e2a8354b0c522"
 }
