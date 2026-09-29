@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 127,
-  "versionName": "0.6.0.62",
-  "changelog": "EDHOME 0.6.0.62 — poprawka NFC w centralnym Skanerze EDHOME. Wejście do skanera i przycisk NFC wymuszają świeżą sesję ReaderMode, zniknął blokujący modal OK, a ekran pokazuje stały status nasłuchu i potwierdzenie odczytu UID. Reguły obiekt → typ → ogólna pozostają bez zmian; poprawiono też teksty typu „Wszystkie pudełka”. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.62/edhome-beta.apk",
-  "sha256": "a4fba9f4ab2ba89a92880f9ec186cc924abb76f2ced11239e13e1c83c1cd9f24"
+  "versionCode": 128,
+  "versionName": "0.6.0.63",
+  "changelog": "EDHOME 0.6.0.63 — poprawiony kontrast okna po skanie NFC/QR we wszystkich motywach. W Ustawieniach dodano widoczność typów Magazynu: Rzeczy (np. narzędzia), Pudełka i Miejsca — ukrycie nie kasuje danych ani QR/NFC. Dodano też wybór: nasłuch NFC w całej aplikacji albo tylko w Skanerze/przy przypisywaniu. Skan ukrytego obiektu nadal może go tymczasowo otworzyć. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.63/edhome-beta.apk",
+  "sha256": "54e2721e0a4f0389fc491ba3f7705bbf729a24dababf87e5ee16b1abe4249518"
 }
