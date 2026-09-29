@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -20,6 +22,7 @@ final class DialogContrast {
     static final int HINT = 0xFF667085;
     static final int LABEL = 0xFF475467;
     static final int LINE = 0xFF98A2B3;
+    static final int BUTTON_BACKGROUND = 0xFFF2F4F7;
 
     private DialogContrast() { }
 
@@ -33,6 +36,12 @@ final class DialogContrast {
             input.setBackgroundTintList(new ColorStateList(
                 new int[][] {new int[] {android.R.attr.state_focused}, new int[] {}},
                 new int[] {accent, LINE}));
+            return;
+        }
+        if (root instanceof Button && !(root instanceof CompoundButton)) {
+            Button button = (Button) root;
+            button.setTextColor(TEXT);
+            button.setBackgroundTintList(ColorStateList.valueOf(BUTTON_BACKGROUND));
             return;
         }
         if (root instanceof TextView) {
