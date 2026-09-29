@@ -32,11 +32,17 @@ for marker in (
     "((TextView) view).setTextColor(TEXT);",
     "view.setBackgroundColor(BACKGROUND);",
     "if (root instanceof Spinner) return;",
+    "static final int BUTTON_BACKGROUND = 0xFFF2F4F7;",
+    "root instanceof Button && !(root instanceof CompoundButton)",
+    "button.setTextColor(TEXT);",
+    "button.setBackgroundTintList(ColorStateList.valueOf(BUTTON_BACKGROUND));",
 ):
     assert marker in contrast, marker
 
 assert "return DialogContrast.spinnerAdapter(this, labels);" in main
 assert "DialogContrast.apply(form, lightDialogAccent());" in main
+assert "lightDialogForm(actions);" in area(
+    "private void showScannedTargetActions(", "private void storage()")
 assert "return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items)" in main
 assert "((TextView) view).setTextColor(ink);" in main  # dark screen stays unchanged
 assert "UiSkin.TRAINER.equals(skin.name)" in main
