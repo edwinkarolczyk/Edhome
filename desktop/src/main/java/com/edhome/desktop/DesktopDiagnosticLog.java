@@ -33,10 +33,17 @@ final class DesktopDiagnosticLog {
     }
 
     static void error(String event, Throwable problem) {
+        Throwable root = rootCause(problem);
         StringBuilder info = new StringBuilder("type=")
             .append(problem == null ? "unknown" : problem.getClass().getSimpleName());
-        if (problem != null) {
-            StackTraceElement[] frames = problem.getStackTrace();
+        if (root != null && root != problem) {
+            info.append(" root=").append(root.getClass().getSimpleName());
+        }
+        if (root != null && root.getMessage() != null && !root.getMessage().isBlank()) {
+            info.append(" message=").append(safe(root.getMessage()));
+        }
+        if (root != null) {
+            StackTraceElement[] frames = root.getStackTrace();
             for (int i = 0; i < Math.min(10, frames.length); i++) {
                 info.append(" | ").append(frames[i].getClassName())
                     .append("#").append(frames[i].getMethodName())
@@ -44,6 +51,15 @@ final class DesktopDiagnosticLog {
             }
         }
         append("ERROR_" + safe(event), info.toString());
+    }
+
+    private static Throwable rootCause(Throwable problem) {
+        Throwable current = problem;
+        for (int i = 0; current != null && current.getCause() != null
+                && current.getCause() != current && i < 12; i++) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     static String readFullText() {
