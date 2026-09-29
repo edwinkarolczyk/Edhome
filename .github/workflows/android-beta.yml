@@ -428,7 +428,7 @@ jobs:
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.61 — centralny Skaner EDHOME przed Magazynem: jeden ekran dla QR, NFC i kodów produktów. Po QR/NFC pokazuje kontekstowe akcje (otwórz, przenieś/edytuj, wypożycz/zwrot, etykieta, stan Spiżarni), a zachowanie po skanie można ustawić ogólnie, dla typu albo dla konkretnego obiektu. Operacje zmieniające dane nadal wymagają potwierdzenia. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.62 — poprawka NFC w centralnym Skanerze EDHOME. Wejście do skanera i przycisk NFC wymuszają świeżą sesję ReaderMode, zniknął blokujący modal OK, a ekran pokazuje stały status nasłuchu i potwierdzenie odczytu UID. Reguły obiekt → typ → ogólna pozostają bez zmian; poprawiono też teksty typu „Wszystkie pudełka”. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
