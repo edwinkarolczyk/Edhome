@@ -10,15 +10,19 @@ gradle=Path("app/build.gradle").read_text(encoding="utf-8")
 settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
 card=main.split("private LinearLayout card() {",1)[1].split("private Button button(",1)[0]
 assert "body.addView(box, params);" in card, "card() must attach its own view"
-assert "LinearLayout gestures = card();" in settings
-assert "body.addView(gestures);" not in settings, "Settings attaches same card twice"
-assert "gestures.addView(shortHold);" in settings
-assert "gestures.addView(dragHold);" in settings
-assert "smallButton(gestures" in settings
-assert "LinearLayout appearance = card();" in settings
-assert "body.addView(appearance);" not in settings
-assert 'themeChoice.setSelection(Math.max(0, currentTheme));' in settings
-assert 'prefs.edit().putString("theme", selectedTheme).commit()' in settings
+assert 'private LinearLayout settingsAccordion(' in main
+assert 'private LinearLayout settingsNestedAccordion(' in main
+assert 'settingsAccordion("nfc","NFC"' in settings
+assert 'settingsAccordion("storage","Magazyn"' in settings
+assert 'settingsAccordion("scanner","Skaner QR / produkty"' in settings
+assert 'settingsAccordion("appearance","Wygląd i kafelki"' in settings
+assert 'settingsAccordion("notifications","Powiadomienia"' in settings
+assert 'settingsAccordion("data","Dane i diagnostyka"' in settings
+assert 'content.setVisibility(open?View.VISIBLE:View.GONE);' in main
+assert 'prefs.edit().putBoolean("settings_open_"+key,nowOpen).apply();' in main
+assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
+assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
+assert 'prefs.edit().putString("theme",selectedTheme).apply();' in settings
 assert "int[] chatLimits = {5000, 12000, 20000};" in main
 assert "chatSize.setSelection(1);" in main
 assert "DiagnosticLog.readForChat(limit)" in main
