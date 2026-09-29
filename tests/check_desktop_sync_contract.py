@@ -6,6 +6,8 @@ main = (root / "app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").
 service = (root / "app/src/main/java/com/edwinkarolczyk/edhome/LanSyncService.java").read_text(encoding="utf-8")
 desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").read_text(encoding="utf-8")
 sync_store = (root / "app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
+desktop_log = (root / "desktop/src/main/java/com/edhome/desktop/DesktopDiagnosticLog.java").read_text(encoding="utf-8")
+phone_log = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DiagnosticLog.java").read_text(encoding="utf-8")
 
 assert '"/snapshot"' in server
 assert '"X-EDHOME-TOKEN"' in desktop
@@ -167,3 +169,24 @@ assert 'unregisterReceiver(desktopDataChangedReceiver)' in main
 assert 'if (root != null && !isFinishing()) render();' in main
 assert 'screenScrollY' in main
 print("desktop-to-android live view refresh contract OK")
+
+
+# Phone diagnostics transfer: download first, delete only after Desktop ACK.
+for marker in ('"/diagnostics"', '"/diagnostics/ack"', '"x-edhome-diagnostics-id"',
+               'replyNoContent(peer)', 'DiagnosticLog.clearIfTransferred'):
+    assert marker in server, "Missing phone diagnostics transfer contract: " + marker
+for marker in ('transferId()', 'clearIfTransferred(String expectedId)',
+               'MessageDigest.getInstance("SHA-256")'):
+    assert marker in phone_log, "Missing safe diagnostics cleanup: " + marker
+for marker in ('Pobierz nowe logi z telefonu', 'downloadPhoneDiagnostics',
+               'ackDiagnostics', 'X-EDHOME-DIAGNOSTICS-ID',
+               'Brak nowych logów diagnostycznych na telefonie',
+               'Kopiuj diagnostykę EDHOME Desktop',
+               'Zapisz diagnostykę Desktop TXT'):
+    assert marker in desktop, "Missing Desktop diagnostics UX: " + marker
+for marker in ('edhome-desktop.log', 'edhome-desktop.previous.log',
+               'MAX_BYTES', 'readFullText()', 'readForClipboard()'):
+    assert marker in desktop_log, "Missing Desktop rolling diagnostics log: " + marker
+assert 'Files.writeString(target, result.text, StandardCharsets.UTF_8)' in desktop
+assert '.ackDiagnostics(result.id)' in desktop
+print("desktop diagnostics transfer + local log contract OK")
