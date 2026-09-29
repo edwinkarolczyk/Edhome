@@ -1143,34 +1143,72 @@ public final class MainActivity extends Activity {
 
     private void home() {
         appTitleWithConnection();
-        note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
-        title(prefs.getString("household", "Moje gospodarstwo"));
-
-        LinearLayout summary = card();
-        LinearLayout planHeader = new LinearLayout(this);
-        planHeader.setOrientation(LinearLayout.HORIZONTAL);
-        planHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView planTitle = text("Twój domowy plan", 21, true);
-        planHeader.addView(planTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-        HomeIllustration homeMark = new HomeIllustration(this, skin);
-        planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(68), dp(52)));
-        summary.addView(planHeader);
         int overdue = db.overdueTasks();
-        summary.addView(text("Do zrobienia: " + db.openTasks()
-            + "     Zaległe: " + overdue, 16, true));
-        TextView reminder = text(overdue == 0
-            ? "✓  Brak zaległych czynności."
-            : "•  Otwórz zaległe i wybierz, co wykonać dziś.", 14, false);
-        reminder.setTextColor(overdue == 0 ? accent : ink);
-        summary.addView(reminder);
-        summary.setOnClickListener(v -> {
-            tasksFilter = overdue == 0 ? "today" : "overdue";
-            go("tasks");
-        });
-        touchFeedback(summary);
-        summary.setContentDescription("Twój domowy plan. Do zrobienia: "
-            + db.openTasks() + ". Zaległe: " + overdue
-            + ". Dotknij, aby przejść do czynności.");
+        if (skin.showcase()) {
+            String date = LocalDate.now().format(DateTimeFormatter.ofPattern(
+                "EEEE, d MMMM", Locale.forLanguageTag("pl-PL")));
+            if (!date.isEmpty())
+                date = date.substring(0, 1).toUpperCase(Locale.forLanguageTag("pl-PL"))
+                    + date.substring(1);
+            TextView greeting = text("Dzień dobry!", 27, true);
+            greeting.setPadding(0, dp(16), 0, 0);
+            body.addView(greeting);
+            TextView day = text(date + "  •  "
+                + prefs.getString("household", "Moje gospodarstwo"), 13, false);
+            day.setTextColor(subdued);
+            body.addView(day);
+
+            LinearLayout status = new LinearLayout(this);
+            status.setOrientation(LinearLayout.HORIZONTAL);
+            status.setPadding(0, dp(7), 0, dp(5));
+            LinearLayout.LayoutParams statParams =
+                new LinearLayout.LayoutParams(0, dp(62), 1f);
+            TextView open = text("Do zrobienia\n" + db.openTasks(), 13, true);
+            open.setGravity(Gravity.CENTER);
+            open.setBackground(skin.panel(this, surface, 20));
+            open.setOnClickListener(v -> { tasksFilter = "today"; go("tasks"); });
+            touchFeedback(open);
+            status.addView(open, statParams);
+            TextView late = text("Zaległe\n" + overdue, 13, true);
+            late.setGravity(Gravity.CENTER);
+            late.setTextColor(overdue > 0 ? accent : ink);
+            late.setBackground(skin.panel(this, surface, 20));
+            late.setOnClickListener(v -> { tasksFilter = "overdue"; go("tasks"); });
+            touchFeedback(late);
+            LinearLayout.LayoutParams lateParams =
+                new LinearLayout.LayoutParams(0, dp(62), 1f);
+            lateParams.setMargins(dp(8), 0, 0, 0);
+            status.addView(late, lateParams);
+            body.addView(status, new LinearLayout.LayoutParams(-1, -2));
+        } else {
+            note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
+            title(prefs.getString("household", "Moje gospodarstwo"));
+
+            LinearLayout summary = card();
+            LinearLayout planHeader = new LinearLayout(this);
+            planHeader.setOrientation(LinearLayout.HORIZONTAL);
+            planHeader.setGravity(Gravity.CENTER_VERTICAL);
+            TextView planTitle = text("Twój domowy plan", 21, true);
+            planHeader.addView(planTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+            HomeIllustration homeMark = new HomeIllustration(this, skin);
+            planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(68), dp(52)));
+            summary.addView(planHeader);
+            summary.addView(text("Do zrobienia: " + db.openTasks()
+                + "     Zaległe: " + overdue, 16, true));
+            TextView reminder = text(overdue == 0
+                ? "✓  Brak zaległych czynności."
+                : "•  Otwórz zaległe i wybierz, co wykonać dziś.", 14, false);
+            reminder.setTextColor(overdue == 0 ? accent : ink);
+            summary.addView(reminder);
+            summary.setOnClickListener(v -> {
+                tasksFilter = overdue == 0 ? "today" : "overdue";
+                go("tasks");
+            });
+            touchFeedback(summary);
+            summary.setContentDescription("Twój domowy plan. Do zrobienia: "
+                + db.openTasks() + ". Zaległe: " + overdue
+                + ". Dotknij, aby przejść do czynności.");
+        }
 
         TextView editHint = text(homeEditMode
             ? "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar"
@@ -1191,7 +1229,7 @@ public final class MainActivity extends Activity {
             render();
         });
         touchFeedback(editHint);
-        body.addView(editHint);
+        if (!skin.showcase() || homeEditMode) body.addView(editHint);
         homeDragHint = editHint;
         homeTileViews.clear();
         homeTileSlots.clear();
@@ -1374,27 +1412,61 @@ public final class MainActivity extends Activity {
             });
         }
 
-        button("＋ Dodaj kafelek", this::showAddTileDialog);
-        if (!hiddenHomeTiles().isEmpty())
-            button("◉ Przywróć ukryte kafelki", this::restoreHiddenHomeTile);
+        if (!skin.showcase() || homeEditMode) {
+            button("＋ Dodaj kafelek", this::showAddTileDialog);
+            if (!hiddenHomeTiles().isEmpty())
+                button("◉ Przywróć ukryte kafelki", this::restoreHiddenHomeTile);
+        }
 
         LinearLayout today = card();
-        today.addView(text("Najbliższe czynności", 19, true));
+        today.addView(text(skin.showcase()
+            ? "Najbliższe zadania" : "Najbliższe czynności", 19, true));
         int displayed = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
                 "SELECT title,due_date FROM tasks WHERE done=0 AND due_date IS NOT NULL "
                 + "ORDER BY due_date ASC,id ASC LIMIT 4", null)) {
             while (c.moveToNext()) {
                 displayed++;
-                today.addView(text("• " + c.getString(1) + " — " + c.getString(0), 14, false));
+                if (skin.showcase()) {
+                    LinearLayout row = new LinearLayout(this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setGravity(Gravity.CENTER_VERTICAL);
+                    row.setPadding(dp(8), dp(6), dp(8), dp(6));
+                    row.setBackground(skin.panel(this, skin.tileTop, 20));
+                    TextView check = text("○", 22, false);
+                    check.setGravity(Gravity.CENTER);
+                    check.setTextColor(accent);
+                    row.addView(check, new LinearLayout.LayoutParams(dp(36), dp(46)));
+                    LinearLayout labels = new LinearLayout(this);
+                    labels.setOrientation(LinearLayout.VERTICAL);
+                    TextView task = text(c.getString(0), 14, true);
+                    task.setPadding(0, 0, 0, 0);
+                    labels.addView(task);
+                    TextView when = text(c.getString(1), 12, false);
+                    when.setTextColor(subdued);
+                    when.setPadding(0, 0, 0, 0);
+                    labels.addView(when);
+                    row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+                    TextView arrow = text("›", 24, false);
+                    arrow.setGravity(Gravity.CENTER);
+                    row.addView(arrow, new LinearLayout.LayoutParams(dp(30), dp(46)));
+                    row.setOnClickListener(v -> go("tasks"));
+                    touchFeedback(row);
+                    LinearLayout.LayoutParams taskParams =
+                        new LinearLayout.LayoutParams(-1, -2);
+                    taskParams.setMargins(0, dp(4), 0, dp(4));
+                    today.addView(row, taskParams);
+                } else {
+                    today.addView(text("• " + c.getString(1) + " — "
+                        + c.getString(0), 14, false));
+                }
             }
         }
         if (displayed == 0)
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
-        // All module navigation belongs in user-configurable tiles above.
-        // Keep this card informative; no second fixed menu below the tile grid.
-        note("Działa offline. Skaner EDHOME obsługuje QR, NFC i kody produktów; "
-            + "przypomnienia włączysz w Ustawieniach.");
+        if (!skin.showcase())
+            note("Działa offline. Skaner EDHOME obsługuje QR, NFC i kody produktów; "
+                + "przypomnienia włączysz w Ustawieniach.");
     }
 
     private void ensureFloorPlanShellTileSeeded() {
