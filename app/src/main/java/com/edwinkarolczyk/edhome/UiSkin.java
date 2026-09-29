@@ -4,15 +4,21 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 
-/** Pure presentation settings: the four EDHOME skins share the same screens and data. */
+/** Pure presentation settings: every EDHOME skin shares the same screens and data. */
 final class UiSkin {
+    static final String MODERN_LIGHT = "Nowoczesny jasny";
+    static final String ELEGANT_DARK = "Elegancki ciemny";
+    static final String FOREST = "Leśny / naturalny";
     static final String NEON = "Neonowy";
     static final String NATURE = "Naturalny";
     static final String PASTEL = "Pastelowy";
     static final String GLASS = "Szklany";
     static final String WMM = "WMM";
     static final String TRAINER = "Trener 2";
-    static final String[] THEMES = {NEON, NATURE, PASTEL, GLASS, WMM, TRAINER};
+    static final String[] THEMES = {
+        MODERN_LIGHT, ELEGANT_DARK, FOREST,
+        NEON, NATURE, PASTEL, GLASS, WMM, TRAINER
+    };
 
     final String name;
     final int background, surface, foreground, secondary, accent, accentInk;
@@ -46,6 +52,21 @@ final class UiSkin {
     }
 
     static UiSkin forName(String requested) {
+        if (MODERN_LIGHT.equals(requested)) {
+            return new UiSkin(MODERN_LIGHT, "#F4F7FB", "#FFFFFF", "#0B1830",
+                "#667085", "#4A90FF", "#10213A", "#FFFFFF", "#EEF4FF",
+                "#D8E2F1", "#EAF2FF", "#FFFFFF", true);
+        }
+        if (ELEGANT_DARK.equals(requested)) {
+            return new UiSkin(ELEGANT_DARK, "#07111D", "#0D1B2A", "#F7FAFF",
+                "#A6B7C9", "#2EA8FF", "#071522", "#101F31", "#091521",
+                "#23364D", "#132A40", "#FFFFFF", false);
+        }
+        if (FOREST.equals(requested)) {
+            return new UiSkin(FOREST, "#0D1B14", "#193024", "#F7F4EA",
+                "#CAD6C7", "#62C85A", "#10210F", "#27412D", "#17291D",
+                "#4B624D", "#314A35", "#F7F4EA", false);
+        }
         // Old installations and JSON backups retain their saved theme.
         if (NATURE.equals(requested) || "Leśny".equals(requested)) {
             return new UiSkin(NATURE, "#11241D", "#203A30", "#F6F5E9",
@@ -77,6 +98,36 @@ final class UiSkin {
         return new UiSkin(NEON, "#111C2A", "#24374B", "#F4F9FF",
             "#AAC5D8", "#8DE8CE", "#12312D", "#2B4259", "#203247",
             "#425E79", "#1B2D40", "#112A2B", false);
+    }
+
+    boolean showcase() {
+        return MODERN_LIGHT.equals(name) || ELEGANT_DARK.equals(name)
+            || FOREST.equals(name);
+    }
+
+    boolean forest() { return FOREST.equals(name); }
+
+    GradientDrawable page(Context context) {
+        String top;
+        String bottom;
+        if (MODERN_LIGHT.equals(name)) {
+            top = "#FAFCFF";
+            bottom = "#EDF4FF";
+        } else if (FOREST.equals(name)) {
+            top = "#102519";
+            bottom = "#07120D";
+        } else if (ELEGANT_DARK.equals(name)) {
+            top = "#07111D";
+            bottom = "#030A12";
+        } else {
+            top = String.format("#%08X", background);
+            bottom = top;
+        }
+        GradientDrawable drawable = new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.parseColor(top), Color.parseColor(bottom)});
+        drawable.setCornerRadius(0f);
+        return drawable;
     }
 
     static int dp(Context context, float size) {
