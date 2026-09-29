@@ -175,6 +175,7 @@ public final class MainActivity extends Activity {
     private boolean homeDragDropped;
     private boolean homeDragFinishQueued;
     private TextView homeDragHint;
+    private int homeShowcasePage;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -204,6 +205,21 @@ public final class MainActivity extends Activity {
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars =
+                    insets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(0, top, 0, bottom);
+            return insets;
+        });
         setContentView(root);
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
@@ -653,7 +669,13 @@ public final class MainActivity extends Activity {
         view.setTextSize(size);
         view.setTextColor(ink);
         view.setPadding(0, dp(5), 0, dp(6));
-        if (bold) view.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+        if (skin != null && skin.showcase()) {
+            view.setTypeface(Typeface.create(
+                bold ? "sans-serif-medium" : "sans-serif",
+                bold ? Typeface.BOLD : Typeface.NORMAL));
+        } else if (bold) {
+            view.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+        }
         return view;
     }
 
@@ -949,35 +971,38 @@ public final class MainActivity extends Activity {
         if (skin.showcase()) {
             LinearLayout brand = new LinearLayout(this);
             brand.setOrientation(LinearLayout.VERTICAL);
-            TextView appTitle = text("⌂  edhome", 22, true);
+            TextView appTitle = text("⌂  edhome", 21, true);
             appTitle.setPadding(0, 0, 0, 0);
             brand.addView(appTitle);
-            TextView idea = text("Idea by Edwin", 11, false);
+            TextView idea = text("Idea by Edwin", 10, false);
             idea.setTextColor(subdued);
-            idea.setPadding(dp(28), 0, 0, 0);
+            idea.setPadding(dp(29), 0, 0, 0);
             brand.addView(idea);
             row.addView(brand, new LinearLayout.LayoutParams(0, -2, 1f));
 
-            TextView search = text("⌕", 23, true);
+            TextView search = text("⌕", 22, true);
             search.setGravity(Gravity.CENTER);
-            search.setBackground(skin.panel(this, surface, 20));
+            search.setPadding(0, 0, 0, 0);
+            search.setBackground(skin.panel(this, surface, 19));
             search.setOnClickListener(v -> showShowcaseJump());
             touchFeedback(search);
-            LinearLayout.LayoutParams icon = new LinearLayout.LayoutParams(dp(42), dp(42));
-            icon.setMargins(0, 0, dp(7), 0);
-            row.addView(search, icon);
+            LinearLayout.LayoutParams searchParams =
+                new LinearLayout.LayoutParams(dp(38), dp(38));
+            searchParams.setMargins(0, 0, dp(7), 0);
+            row.addView(search, searchParams);
 
             int alerts = db == null ? 0 : db.overdueTasks();
-            TextView bell = text(alerts > 0 ? "♢ " + Math.min(alerts, 99) : "♢", 16, true);
+            TextView bell = text(alerts > 0 ? "♢" + Math.min(alerts, 9) : "♢", 16, true);
             bell.setGravity(Gravity.CENTER);
-            bell.setBackground(skin.panel(this, surface, 20));
+            bell.setPadding(0, 0, 0, 0);
+            bell.setBackground(skin.panel(this, surface, 19));
             bell.setOnClickListener(v -> {
                 tasksFilter = alerts > 0 ? "overdue" : "today";
                 go("tasks");
             });
             touchFeedback(bell);
             LinearLayout.LayoutParams bellParams =
-                new LinearLayout.LayoutParams(dp(48), dp(42));
+                new LinearLayout.LayoutParams(dp(38), dp(38));
             bellParams.setMargins(0, 0, dp(7), 0);
             row.addView(bell, bellParams);
         } else {
@@ -988,11 +1013,9 @@ public final class MainActivity extends Activity {
         }
 
         if (BetaUpdater.isBeta()) {
-            TextView badge = text("", skin.showcase() ? 11 : 13, true);
+            TextView badge = text("", skin.showcase() ? 13 : 13, true);
             badge.setGravity(Gravity.CENTER);
-            badge.setMinWidth(dp(skin.showcase() ? 50 : 92));
-            badge.setPadding(dp(8), dp(6), dp(8), dp(6));
-            badge.setBackground(skin.panel(this, surface, 22));
+            badge.setPadding(0, 0, 0, 0);
             badge.setClickable(true);
             badge.setFocusable(true);
             badge.setOnClickListener(v -> showDesktopConnectionStatus());
@@ -1005,18 +1028,26 @@ public final class MainActivity extends Activity {
                     boolean online = LanSyncServer.hasRecentClient();
                     boolean syncing = online && LanSyncServer.isSyncing();
                     if (skin.showcase()) {
-                        badge.setText(syncing ? (pulse ? "PC →" : "← PC")
-                            : (online ? "PC ✓" : "PC ×"));
+                        GradientDrawable avatar = new GradientDrawable();
+                        avatar.setShape(GradientDrawable.OVAL);
+                        avatar.setColor(surface);
+                        avatar.setStroke(dp(2), online
+                            ? desktopConnectionGreen() : desktopConnectionRed());
+                        badge.setBackground(avatar);
+                        badge.setText(syncing
+                            ? (pulse ? "E›" : "‹E") : "E");
                         pulse = syncing && !pulse;
                     } else if (syncing) {
+                        badge.setBackground(skin.panel(MainActivity.this, surface, 22));
                         badge.setText(pulse ? "●  →   PC" : "●    ← PC");
                         pulse = !pulse;
                     } else {
+                        badge.setBackground(skin.panel(MainActivity.this, surface, 22));
                         badge.setText("●  ⇄ PC");
                         pulse = false;
                     }
-                    badge.setTextColor(online
-                        ? desktopConnectionGreen() : desktopConnectionRed());
+                    badge.setTextColor(skin.showcase() ? ink : (online
+                        ? desktopConnectionGreen() : desktopConnectionRed()));
                     badge.setContentDescription(syncing
                         ? "EDHOME Desktop synchronizuje dane."
                         : (online
@@ -1025,10 +1056,16 @@ public final class MainActivity extends Activity {
                     badge.postDelayed(this, syncing ? 320L : 1200L);
                 }
             };
-            row.addView(badge, new LinearLayout.LayoutParams(-2, dp(skin.showcase() ? 42 : 40)));
+            LinearLayout.LayoutParams badgeParams = skin.showcase()
+                ? new LinearLayout.LayoutParams(dp(40), dp(40))
+                : new LinearLayout.LayoutParams(-2, dp(40));
+            row.addView(badge, badgeParams);
             badge.post(refresh);
         }
-        body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams headerParams =
+            new LinearLayout.LayoutParams(-1, -2);
+        headerParams.setMargins(0, dp(3), 0, dp(5));
+        body.addView(row, headerParams);
     }
 
     private void showShowcaseJump() {
@@ -1050,11 +1087,11 @@ public final class MainActivity extends Activity {
 
     private TextView showcaseNavItem(String symbol, String label,
             boolean selected, Runnable callback) {
-        TextView item = text(symbol + "\n" + label, 11, true);
+        TextView item = text(symbol + "\n" + label, 10, true);
         item.setGravity(Gravity.CENTER);
-        item.setMinHeight(dp(62));
+        item.setPadding(0, 0, 0, 0);
+        item.setMinHeight(dp(54));
         item.setTextColor(selected ? accent : subdued);
-        if (selected) item.setBackground(skin.panel(this, skin.iconBacking, 18));
         item.setOnClickListener(v -> callback.run());
         item.setClickable(true);
         item.setFocusable(true);
@@ -1066,32 +1103,36 @@ public final class MainActivity extends Activity {
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setGravity(Gravity.CENTER_VERTICAL);
-        nav.setPadding(dp(7), dp(5), dp(7), dp(5));
+        nav.setPadding(dp(6), dp(5), dp(6), dp(5));
         nav.setBackground(skin.panel(this, surface, 0));
-        nav.setElevation(dp(12));
+        nav.setElevation(dp(10));
 
         nav.addView(showcaseNavItem("⌂", "Start", "home".equals(screen),
-            () -> go("home")), new LinearLayout.LayoutParams(0, dp(66), 1f));
+            () -> go("home")), new LinearLayout.LayoutParams(0, dp(58), 1f));
         nav.addView(showcaseNavItem("✓", "Zadania", "tasks".equals(screen),
-            () -> go("tasks")), new LinearLayout.LayoutParams(0, dp(66), 1f));
+            () -> go("tasks")), new LinearLayout.LayoutParams(0, dp(58), 1f));
 
+        LinearLayout addCell = new LinearLayout(this);
+        addCell.setGravity(Gravity.CENTER);
         TextView add = showcaseNavItem("+", "Dodaj", false, this::showShowcaseAdd);
-        add.setTextSize(13);
+        add.setTextSize(11);
         add.setTextColor(skin.buttonForeground);
-        add.setBackground(skin.pill(this, accent));
-        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(0, dp(66), 1f);
-        addParams.setMargins(dp(5), 0, dp(5), 0);
-        nav.addView(add, addParams);
+        GradientDrawable addBackground = new GradientDrawable();
+        addBackground.setShape(GradientDrawable.OVAL);
+        addBackground.setColor(accent);
+        addBackground.setStroke(dp(1), skin.outline);
+        add.setBackground(addBackground);
+        addCell.addView(add, new LinearLayout.LayoutParams(dp(58), dp(58)));
+        nav.addView(addCell, new LinearLayout.LayoutParams(0, dp(60), 1f));
 
-        boolean notices = "calendar".equals(screen);
-        nav.addView(showcaseNavItem("♢", "Powiad.", notices, () -> {
+        nav.addView(showcaseNavItem("♢", "Powiad.", false, () -> {
             tasksFilter = db.overdueTasks() > 0 ? "overdue" : "today";
             go("tasks");
-        }), new LinearLayout.LayoutParams(0, dp(66), 1f));
+        }), new LinearLayout.LayoutParams(0, dp(58), 1f));
         nav.addView(showcaseNavItem("☰", "Więcej", "settings".equals(screen),
-            this::showShowcaseMore), new LinearLayout.LayoutParams(0, dp(66), 1f));
+            this::showShowcaseMore), new LinearLayout.LayoutParams(0, dp(58), 1f));
 
-        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(76)));
+        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(70)));
     }
 
     private void showShowcaseAdd() {
@@ -1141,45 +1182,107 @@ public final class MainActivity extends Activity {
         button("← Panel główny", () -> go("home"));
     }
 
+    private String showcaseHomeLabel(String target) {
+        switch (target) {
+            case "paycheck": case "paycheck_private": return "PayCheck";
+            case "tasks": return "Zadania";
+            case "calendar": return "Kalendarz";
+            case "pantry": return "Spiżarnia";
+            case "shopping": return "Lista zakupów";
+            case "places": return "Miejsca";
+            case "storage": return "Magazyn domowy";
+            case "vehicles": return "Pojazdy";
+            case "waste": return "Odpady";
+            default: return HomeTileCatalog.label(target);
+        }
+    }
+
+    private java.util.List<String> showcaseHomeOrder() {
+        java.util.List<String> current = homeTileOrder();
+        if (!prefs.getBoolean("showcase_project_layout", true))
+            return current;
+        java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        String[] preferredTargets = {
+            "paycheck", "tasks", "calendar",
+            "pantry", "shopping", "places",
+            "storage", "vehicles", "waste"
+        };
+        for (String target : preferredTargets) {
+            for (String tileId : current) {
+                if (!result.contains(tileId)
+                        && target.equals(homeTileTarget(tileId))) {
+                    result.add(tileId);
+                    break;
+                }
+            }
+        }
+        for (String tileId : current)
+            if (!result.contains(tileId)) result.add(tileId);
+        return result;
+    }
+
+    private void addShowcasePageDots(int pageCount) {
+        if (pageCount <= 1) return;
+        LinearLayout dots = new LinearLayout(this);
+        dots.setOrientation(LinearLayout.HORIZONTAL);
+        dots.setGravity(Gravity.CENTER);
+        dots.setPadding(0, dp(2), 0, dp(7));
+        for (int page = 0; page < pageCount; page++) {
+            final int selectedPage = page;
+            TextView dot = text(page == homeShowcasePage ? "●" : "●", 12, true);
+            dot.setGravity(Gravity.CENTER);
+            dot.setPadding(0, 0, 0, 0);
+            dot.setAlpha(page == homeShowcasePage ? 1f : 0.28f);
+            dot.setTextColor(accent);
+            dot.setOnClickListener(v -> {
+                homeShowcasePage = selectedPage;
+                render();
+            });
+            dot.setContentDescription("Strona kafelków " + (page + 1)
+                + " z " + pageCount);
+            dots.addView(dot, new LinearLayout.LayoutParams(dp(22), dp(26)));
+        }
+        body.addView(dots, new LinearLayout.LayoutParams(-1, dp(35)));
+    }
+
     private void home() {
         appTitleWithConnection();
         int overdue = db.overdueTasks();
         if (skin.showcase()) {
             String date = LocalDate.now().format(DateTimeFormatter.ofPattern(
-                "EEEE, d MMMM", Locale.forLanguageTag("pl-PL")));
+                "EEEE, d MMMM yyyy", Locale.forLanguageTag("pl-PL")));
             if (!date.isEmpty())
                 date = date.substring(0, 1).toUpperCase(Locale.forLanguageTag("pl-PL"))
                     + date.substring(1);
-            TextView greeting = text("Dzień dobry!", 27, true);
-            greeting.setPadding(0, dp(16), 0, 0);
-            body.addView(greeting);
-            TextView day = text(date + "  •  "
-                + prefs.getString("household", "Moje gospodarstwo"), 13, false);
-            day.setTextColor(subdued);
-            body.addView(day);
 
-            LinearLayout status = new LinearLayout(this);
-            status.setOrientation(LinearLayout.HORIZONTAL);
-            status.setPadding(0, dp(7), 0, dp(5));
-            LinearLayout.LayoutParams statParams =
-                new LinearLayout.LayoutParams(0, dp(62), 1f);
-            TextView open = text("Do zrobienia\n" + db.openTasks(), 13, true);
-            open.setGravity(Gravity.CENTER);
-            open.setBackground(skin.panel(this, surface, 20));
-            open.setOnClickListener(v -> { tasksFilter = "today"; go("tasks"); });
-            touchFeedback(open);
-            status.addView(open, statParams);
-            TextView late = text("Zaległe\n" + overdue, 13, true);
-            late.setGravity(Gravity.CENTER);
-            late.setTextColor(overdue > 0 ? accent : ink);
-            late.setBackground(skin.panel(this, surface, 20));
-            late.setOnClickListener(v -> { tasksFilter = "overdue"; go("tasks"); });
-            touchFeedback(late);
-            LinearLayout.LayoutParams lateParams =
-                new LinearLayout.LayoutParams(0, dp(62), 1f);
-            lateParams.setMargins(dp(8), 0, 0, 0);
-            status.addView(late, lateParams);
-            body.addView(status, new LinearLayout.LayoutParams(-1, -2));
+            LinearLayout hero = new LinearLayout(this);
+            hero.setOrientation(LinearLayout.HORIZONTAL);
+            hero.setGravity(Gravity.CENTER_VERTICAL);
+            hero.setPadding(0, dp(9), 0, dp(7));
+
+            LinearLayout greetingBlock = new LinearLayout(this);
+            greetingBlock.setOrientation(LinearLayout.VERTICAL);
+            TextView greeting = text("Dzień dobry!", 24, true);
+            greeting.setPadding(0, 0, 0, dp(1));
+            greetingBlock.addView(greeting);
+            TextView day = text(date, 12, false);
+            day.setTextColor(subdued);
+            day.setPadding(0, 0, 0, 0);
+            greetingBlock.addView(day);
+            hero.addView(greetingBlock, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            TextView status = text("✓  " + db.openTasks()
+                + "\nZaległe: " + overdue, 12, true);
+            status.setGravity(Gravity.CENTER);
+            status.setPadding(dp(8), dp(5), dp(8), dp(5));
+            status.setBackground(skin.panel(this, surface, 18));
+            status.setOnClickListener(v -> {
+                tasksFilter = overdue > 0 ? "overdue" : "today";
+                go("tasks");
+            });
+            touchFeedback(status);
+            hero.addView(status, new LinearLayout.LayoutParams(dp(92), dp(58)));
+            body.addView(hero, new LinearLayout.LayoutParams(-1, dp(78)));
         } else {
             note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
             title(prefs.getString("household", "Moje gospodarstwo"));
@@ -1261,13 +1364,30 @@ public final class MainActivity extends Activity {
             }
             return true;
         });
-        for (String tileId : homeTileOrder()) {
+        java.util.List<String> renderedHomeTiles =
+            skin.showcase() && !homeEditMode
+                ? showcaseHomeOrder() : homeTileOrder();
+        int showcasePageCount = 1;
+        if (skin.showcase() && !homeEditMode) {
+            showcasePageCount = Math.max(1,
+                (renderedHomeTiles.size() + 8) / 9);
+            if (homeShowcasePage < 0 || homeShowcasePage >= showcasePageCount)
+                homeShowcasePage = 0;
+            int from = Math.min(renderedHomeTiles.size(), homeShowcasePage * 9);
+            int to = Math.min(renderedHomeTiles.size(), from + 9);
+            renderedHomeTiles = new java.util.ArrayList<>(
+                renderedHomeTiles.subList(from, to));
+        }
+        for (String tileId : renderedHomeTiles) {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
             homeTileViews.put(tileId, tile);
             TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
-            caption.setText(homeTileLabel(tileId));
-            tile.setContentDescription(homeTileLabel(tileId)
+            String visibleLabel = skin.showcase() && !homeEditMode
+                ? showcaseHomeLabel(homeTileTarget(tileId))
+                : homeTileLabel(tileId);
+            caption.setText(visibleLabel);
+            tile.setContentDescription(visibleLabel)
                 + ". Dotknij, aby otworzyć. Krócej przytrzymaj dla menu; "
                 + "dłużej dla przeciągania. Czasy: Ustawienia.");
             // Accessibility long-click still opens the actions menu.
@@ -1412,6 +1532,8 @@ public final class MainActivity extends Activity {
             });
         }
 
+        if (skin.showcase() && !homeEditMode)
+            addShowcasePageDots(showcasePageCount);
         if (!skin.showcase() || homeEditMode) {
             button("＋ Dodaj kafelek", this::showAddTileDialog);
             if (!hiddenHomeTiles().isEmpty())
@@ -1662,6 +1784,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean beginHomeDrag(View tile, String id) {
+        if (skin.showcase() && !homeEditMode) return false;
         if (!homeTileOrder().contains(id)
                 || homeTileGrid == null || homeDragSource != null) return false;
         homeDragOrder = homeTileOrder();
@@ -9605,6 +9728,18 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("THEME_CHANGED");
             render();
         });
+        if (skin.showcase()) {
+            settingsYesNo(appearance,
+                "Układ Start 3 × 3 zgodny z projektem",
+                "showcase_project_layout", true, () -> {
+                    homeShowcasePage = 0;
+                });
+            appearance.addView(text(
+                "Włączone: pierwsza strona zachowuje kolejność projektu 1:1; "
+                    + "pozostałe kafelki są na kolejnych stronach. "
+                    + "Wyłączenie wraca do własnej kolejności bez usuwania ustawień.",
+                12, false));
+        }
         appearance.addView(text(IconPack3D.installed(this)
             ?"Paczka 100 ikon AI 3D jest zainstalowana."
             :"Paczka ikon AI 3D nie jest jeszcze zainstalowana.",13,false));
@@ -9861,7 +9996,8 @@ public final class MainActivity extends Activity {
         int viewport = getResources().getDisplayMetrics().widthPixels;
         float density = getResources().getDisplayMetrics().density;
         int columns = isHome
-            ? HomeTileLayout.homeColumns(Math.round(viewport / density))
+            ? (skin.showcase() && !homeEditMode
+                ? 3 : HomeTileLayout.homeColumns(Math.round(viewport / density)))
             : HomeTileLayout.columns(Math.round(viewport / density));
         int span = isHome && "double".equals(
             prefs.getString("tile_width_" + id, "small"))
@@ -9884,7 +10020,9 @@ public final class MainActivity extends Activity {
 
         // Page has 16dp on each side; width determines columns, not height.
         int contentWidth = Math.max(dp(1), viewport - dp(32));
-        int tileGapDp = isHome ? HomeTileLayout.HOME_GAP_DP : 9;
+        int tileGapDp = isHome
+            ? (skin.showcase() && !homeEditMode ? 7 : HomeTileLayout.HOME_GAP_DP)
+            : 9;
         int side = Math.max(dp(1),
             (contentWidth - dp(tileGapDp) * (columns - 1)) / columns);
         LinearLayout tile = new LinearLayout(this);
@@ -9894,7 +10032,11 @@ public final class MainActivity extends Activity {
 
         boolean customTint = false;
         int tileTint = accent;
-        if (isHome) {
+        String tileTarget = isHome ? homeTileTarget(id) : null;
+        if (isHome && skin.showcase() && !homeEditMode) {
+            tileTint = skin.showcaseTileTint(tileTarget);
+            customTint = true;
+        } else if (isHome) {
             String selected = prefs.getString("tile_tint_" + id, "default");
             customTint = !"default".equals(selected);
             if (customTint) tileTint = skin.tileTint(selected);
@@ -9911,7 +10053,9 @@ public final class MainActivity extends Activity {
         // remaining square visual area; double-wide tiles get a taller icon
         // without stretching its 3D artwork horizontally.
         int tileHeight = isHome
-            ? side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP) : side;
+            ? (skin.showcase() && !homeEditMode
+                ? side : side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP))
+            : side;
         LinearLayout.LayoutParams params =
             new LinearLayout.LayoutParams(
                 side * span + dp(tileGapDp) * (span - 1), tileHeight);
@@ -9919,7 +10063,9 @@ public final class MainActivity extends Activity {
             params.setMargins(dp(tileGapDp), 0, 0, 0);
         row.addView(tile, params);
 
-        if (isHome) {
+        boolean showTileHandle = isHome
+            && (!skin.showcase() || homeEditMode);
+        if (showTileHandle) {
             TextView handle = text("⋮⋮", 17, true);
             handle.setTextColor(highlighted ? skin.tileText(tileTint) : subdued);
             handle.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
@@ -9965,15 +10111,18 @@ public final class MainActivity extends Activity {
         }
 
         int iconWidth = side * span + dp(tileGapDp) * (span - 1) - dp(10);
-        int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
+        int handleHeight = showTileHandle ? dp(19) : 0;
+        int iconHeight = tileHeight - handleHeight - dp(28) - dp(10);
         int displayedIconSize = isHome
-            ? Math.max(dp(24), Math.min(iconWidth, iconHeight))
+            ? (skin.showcase() && !homeEditMode
+                ? Math.max(dp(42), Math.min((int) (side * 0.53f), iconHeight))
+                : Math.max(dp(24), Math.min(iconWidth, iconHeight)))
             : dp(46);
         LinearLayout.LayoutParams iconParams =
             new LinearLayout.LayoutParams(displayedIconSize, displayedIconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
-            String target = homeTileTarget(id);
+            String target = tileTarget;
             String iconId = prefs.getString("tile_icon_" + id,
                 defaultTileIcon(target));
             if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId)
@@ -9989,14 +10138,16 @@ public final class MainActivity extends Activity {
             pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
             tile.addView(pictogram, iconParams);
         }
-        TextView captionView = text(caption, 12, true);
+        TextView captionView = text(caption,
+            isHome && skin.showcase() && !homeEditMode ? 11 : 12, true);
         captionView.setTextColor(highlighted
             ? skin.tileText(tileTint) : ink);
         captionView.setGravity(Gravity.CENTER);
         captionView.setMaxLines(2);
         captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         tile.addView(captionView,
-            new LinearLayout.LayoutParams(-1, dp(31)));
+            new LinearLayout.LayoutParams(-1,
+                dp(isHome && skin.showcase() && !homeEditMode ? 28 : 31)));
         return tile;
     }
 
