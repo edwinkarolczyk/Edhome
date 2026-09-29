@@ -421,14 +421,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.61-signed-apk
+          name: EDHOME-0.6.0.66-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.64 — Ustawienia przebudowane na czytelne, zwijane sekcje z wyborami Tak/Nie i listami. Cała konfiguracja NFC jest teraz w jednym miejscu: stan telefonu, liczba tagów, globalny nasłuch, domyślna akcja po skanie, reguły dla Rzeczy/Pudełek/Miejsc/Produktów/Pojazdów, skaner i reset reguł. Magazyn pozwala osobno ukrywać typy oraz przyciski akcji dla Rzeczy, Pudełek i Miejsc. Ukrycie niczego nie usuwa. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.66 — korekta przebudowy interfejsu względem zatwierdzonej makiety: ekran Start ma stałą siatkę 3 × 3, pierwszą stronę PayCheck/Zadania/Kalendarz, Spiżarnia/Lista zakupów/Miejsca, Magazyn domowy/Pojazdy/Odpady, kolejne kafelki trafiają na następne strony z kropkami nawigacji. Zmniejszono kafelki i ikony, poprawiono nagłówek i safe-area, ukryto uchwyty poza trybem edycji, ujednolicono font i dolną nawigację. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
