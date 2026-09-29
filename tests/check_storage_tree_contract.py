@@ -7,7 +7,7 @@ end=s.index("    private void storageEditor(",start)
 ui=s[start:end]
 assert 'title("Podgląd magazynu")' in ui
 assert 'storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body)' in ui
-assert 'storageTreeItem(child,items,drawnItems,depth+1,inner)' in ui
+assert 'storageTreeItem(child,items,drawnItems,childDepth,inner)' in ui
 assert 'String key="storage_tree_place_"+place.id;' in ui
 assert 'String key="storage_tree_box_"+item.id;' in ui
 assert 'prefs.getBoolean(key,false)' in ui
@@ -28,4 +28,21 @@ assert 'showStorageQr(item)' in ui
 assert 'storageEditor(item.kind,item.id)' in ui
 assert 'SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id' in ui
 assert 'box.addView(text(("box".equals(item.kind)?' not in ui
+assert 'STORAGE_SHOW_THINGS_PREF = "storage_show_things"' in s
+assert 'STORAGE_SHOW_BOXES_PREF = "storage_show_boxes"' in s
+assert 'STORAGE_SHOW_PLACES_PREF = "storage_show_places"' in s
+assert 'boolean showThings=storageThingsVisible();' in ui
+assert 'boolean showBoxes=storageBoxesVisible();' in ui
+assert 'boolean showPlaces=storagePlacesVisible();' in ui
+assert 'if(showThings)button("+ Dodaj rzecz"' in ui
+assert 'if(showBoxes)button("+ Dodaj pudełko"' in ui
+assert 'if(showPlaces)button("← Miejsca"' in ui
+assert 'boolean visible=storagePlacesVisible();' in ui
+assert 'boolean visible=isBox?storageBoxesVisible():storageThingsVisible();' in ui
+assert 'childDepth=depth+1;' in ui
+assert 'ukrywanie niczego nie usuwa' in ui
+assert 'storageTemporaryKind=kind;' in s
+assert 'Rzeczy (np. narzędzia)' in s
+assert '"Pudełka",STORAGE_SHOW_BOXES_PREF' in s
+assert '"Miejsca",STORAGE_SHOW_PLACES_PREF' in s
 print("Storage tree: persistent branch state, hierarchy, CRUD/QR actions and no flat duplicate list PASS")
