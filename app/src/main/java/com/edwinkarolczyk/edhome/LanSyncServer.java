@@ -210,6 +210,7 @@ final class LanSyncServer {
 
             String supplied = "";
             String baseSha = "";
+            String diagnosticsId = "";
             int contentLength = 0;
             int headerBytes = request.length();
             while (true) {
@@ -230,6 +231,7 @@ final class LanSyncServer {
                 String value = line.substring(colon + 1).trim();
                 if ("x-edhome-token".equals(name)) supplied = value;
                 else if ("x-edhome-base-sha256".equals(name)) baseSha = value;
+                else if ("x-edhome-diagnostics-id".equals(name)) diagnosticsId = value;
                 else if ("content-length".equals(name)) {
                     try { contentLength = Integer.parseInt(value); }
                     catch (NumberFormatException ignored) { contentLength = -1; }
@@ -271,6 +273,31 @@ final class LanSyncServer {
             if ("GET".equals(method) && "/state".equals(path)) {
                 long revision = revisionProvider == null ? -1L : revisionProvider.revision();
                 reply(peer, 200, "{\"ok\":true,\"revision\":" + revision + "}");
+                return;
+            }
+
+            if ("GET".equals(method) && "/diagnostics".equals(path)) {
+                String diagnostics = DiagnosticLog.readFullText();
+                String id = DiagnosticLog.transferId();
+                if (diagnostics.isBlank() || id.isBlank()) {
+                    replyNoContent(peer);
+                    return;
+                }
+                replyText(peer, 200, diagnostics, id);
+                return;
+            }
+
+            if ("POST".equals(method) && "/diagnostics/ack".equals(path)) {
+                if (diagnosticsId.isBlank()) {
+                    reply(peer, 400, "{\"error\":\"DIAGNOSTICS_ID_REQUIRED\"}");
+                    return;
+                }
+                boolean cleared = DiagnosticLog.clearIfTransferred(diagnosticsId);
+                if (!cleared) {
+                    reply(peer, 409, "{\"error\":\"DIAGNOSTICS_CHANGED\"}");
+                    return;
+                }
+                reply(peer, 200, "{\"ok\":true,\"cleared\":true}");
                 return;
             }
 
@@ -399,6 +426,33 @@ final class LanSyncServer {
 
     private static void reply(Socket socket, int status, String body) throws Exception {
         reply(socket, status, body, null);
+    }
+
+    private static void replyNoContent(Socket socket) throws Exception {
+        BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
+            socket.getOutputStream(), StandardCharsets.US_ASCII));
+        out.write("HTTP/1.1 204 No Content\r\n");
+        out.write("Content-Length: 0\r\n");
+        out.write("Cache-Control: no-store\r\n");
+        out.write("Connection: close\r\n\r\n");
+        out.flush();
+    }
+
+    private static void replyText(Socket socket, int status, String body,
+            String diagnosticsId) throws Exception {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
+            socket.getOutputStream(), StandardCharsets.US_ASCII));
+        out.write("HTTP/1.1 " + status + " " + reason(status) + "\r\n");
+        out.write("Content-Type: text/plain; charset=utf-8\r\n");
+        out.write("Content-Length: " + bytes.length + "\r\n");
+        if (diagnosticsId != null && diagnosticsId.matches("[0-9a-f]{64}"))
+            out.write("X-EDHOME-DIAGNOSTICS-ID: " + diagnosticsId + "\r\n");
+        out.write("Cache-Control: no-store\r\n");
+        out.write("Connection: close\r\n\r\n");
+        out.flush();
+        socket.getOutputStream().write(bytes);
+        socket.getOutputStream().flush();
     }
 
     private static void reply(Socket socket, int status, String body,
