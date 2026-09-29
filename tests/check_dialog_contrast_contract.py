@@ -41,14 +41,15 @@ for marker in (
 
 assert "return DialogContrast.spinnerAdapter(this, labels);" in main
 assert "DialogContrast.apply(form, lightDialogAccent());" in main
-assert "lightDialogForm(actions);" in area(
-    "private void showScannedTargetActions(", "private void storage()")
 assert "return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items)" in main
 assert "((TextView) view).setTextColor(ink);" in main  # dark screen stays unchanged
 assert "UiSkin.TRAINER.equals(skin.name)" in main
 
 def area(begin, end):
     return main.split(begin, 1)[1].split(end, 1)[0]
+
+assert "lightDialogForm(actions);" in area(
+    "private void showScannedTargetActions(", "private void storage()")
 
 checks = (
     ("private void editVehicleTyres(", "private void changeVehicleTyres("),
