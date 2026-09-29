@@ -10112,8 +10112,9 @@ public final class MainActivity extends Activity {
         }
 
         int iconWidth = side * span + dp(tileGapDp) * (span - 1) - dp(10);
-        int handleHeight = showTileHandle ? dp(19) : 0;
-        int iconHeight = tileHeight - handleHeight - dp(28) - dp(10);
+        int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
+        if (isHome && skin.showcase() && !homeEditMode)
+            iconHeight = tileHeight - dp(28) - dp(10);
         int displayedIconSize = isHome
             ? (skin.showcase() && !homeEditMode
                 ? Math.max(dp(42), Math.min((int) (side * 0.53f), iconHeight))
