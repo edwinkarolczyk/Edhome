@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 130,
-  "versionName": "0.6.0.65",
-  "changelog": "EDHOME 0.6.0.64 — Ustawienia przebudowane na czytelne, zwijane sekcje z wyborami Tak/Nie i listami. Cała konfiguracja NFC jest teraz w jednym miejscu: stan telefonu, liczba tagów, globalny nasłuch, domyślna akcja po skanie, reguły dla Rzeczy/Pudełek/Miejsc/Produktów/Pojazdów, skaner i reset reguł. Magazyn pozwala osobno ukrywać typy oraz przyciski akcji dla Rzeczy, Pudełek i Miejsc. Ukrycie niczego nie usuwa. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.65/edhome-beta.apk",
-  "sha256": "0fcbd559d00fc5658f0d84e0e2799db4054d627c062ca7924a0821865ccc8c37"
+  "versionCode": 131,
+  "versionName": "0.6.0.66",
+  "changelog": "EDHOME 0.6.0.66 — korekta przebudowy interfejsu względem zatwierdzonej makiety: ekran Start ma stałą siatkę 3 × 3, pierwszą stronę PayCheck/Zadania/Kalendarz, Spiżarnia/Lista zakupów/Miejsca, Magazyn domowy/Pojazdy/Odpady, kolejne kafelki trafiają na następne strony z kropkami nawigacji. Zmniejszono kafelki i ikony, poprawiono nagłówek i safe-area, ukryto uchwyty poza trybem edycji, ujednolicono font i dolną nawigację. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.66/edhome-beta.apk",
+  "sha256": "43ff5e6dbd5d45567317b5c8890bc3d8dc41f5593409802d07b314d12f8b0649"
 }
