@@ -421,14 +421,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.66-signed-apk
+          name: EDHOME-0.6.0.68-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.67 — Magazyn dostał Galerię rzeczy: dwukolumnową siatkę miniaturek wszystkich Rzeczy z nazwą i lokalizacją. Rzecz bez zdjęcia ma czytelny placeholder, dotknięcie kafelka otwiera jej kartę, a galerię można wyłączyć w Ustawienia → Magazyn. Do roadmapy rozwoju po 1.0 dopisano lokalne rozpoznawanie własnych Rzeczy po zdjęciu; QR/NFC pozostają metodami jednoznacznymi. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.68 — ekran Start pozostaje siatką 3 × 3. Gdy jest więcej niż 9 kafelków, kolejne zestawy są dostępne jako strony przewijane palcem w lewo/prawo. Kropki pod siatką pokazują liczbę stron, a aktywna strona jest wyraźnie zaznaczona. W trybie edycji można przeciągać kafelki w obrębie strony oraz przenosić je na poprzednią lub następną stronę. Układ jest zapisywany. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

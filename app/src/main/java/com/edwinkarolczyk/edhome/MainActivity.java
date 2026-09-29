@@ -176,6 +176,9 @@ public final class MainActivity extends Activity {
     private boolean homeDragFinishQueued;
     private TextView homeDragHint;
     private int homeShowcasePage;
+    private int homeShowcaseSlideDirection;
+    private float homeShowcaseSwipeDownX, homeShowcaseSwipeDownY;
+    private boolean homeShowcaseSwipeTracking;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -624,6 +627,53 @@ public final class MainActivity extends Activity {
                 current=c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
             }
         }
+    }
+
+    private int showcaseHomePageCount() {
+        if (!skin.showcase()) return 1;
+        return Math.max(1, (showcaseHomeOrder().size() + 8) / 9);
+    }
+
+    private boolean changeShowcasePage(int delta) {
+        if (!skin.showcase() || delta == 0 || homeDragSource != null) return false;
+        int count = showcaseHomePageCount();
+        int next = Math.max(0, Math.min(count - 1, homeShowcasePage + delta));
+        if (next == homeShowcasePage) return false;
+        homeShowcasePage = next;
+        homeShowcaseSlideDirection = delta;
+        render();
+        return true;
+    }
+
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (skin != null && skin.showcase() && "home".equals(screen)
+                && homeDragSource == null && event.getPointerCount() == 1) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    homeShowcaseSwipeDownX = event.getRawX();
+                    homeShowcaseSwipeDownY = event.getRawY();
+                    homeShowcaseSwipeTracking = true;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (homeShowcaseSwipeTracking) {
+                        float dx = event.getRawX() - homeShowcaseSwipeDownX;
+                        float dy = event.getRawY() - homeShowcaseSwipeDownY;
+                        homeShowcaseSwipeTracking = false;
+                        if (Math.abs(dx) >= dp(56)
+                                && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                            if (changeShowcasePage(dx < 0 ? 1 : -1))
+                                return true;
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    homeShowcaseSwipeTracking = false;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override public void onBackPressed() {
@@ -1229,20 +1279,58 @@ public final class MainActivity extends Activity {
         dots.setPadding(0, dp(2), 0, dp(7));
         for (int page = 0; page < pageCount; page++) {
             final int selectedPage = page;
-            TextView dot = text(page == homeShowcasePage ? "●" : "●", 12, true);
+            boolean activePage = page == homeShowcasePage;
+            TextView dot = text(activePage ? "●" : "○",
+                activePage ? 14 : 12, true);
             dot.setGravity(Gravity.CENTER);
             dot.setPadding(0, 0, 0, 0);
-            dot.setAlpha(page == homeShowcasePage ? 1f : 0.28f);
-            dot.setTextColor(accent);
+            dot.setAlpha(activePage ? 1f : 0.58f);
+            dot.setTextColor(activePage ? accent : subdued);
             dot.setOnClickListener(v -> {
-                homeShowcasePage = selectedPage;
-                render();
+                int delta = selectedPage - homeShowcasePage;
+                if (delta != 0) changeShowcasePage(delta);
             });
             dot.setContentDescription("Strona kafelków " + (page + 1)
                 + " z " + pageCount);
             dots.addView(dot, new LinearLayout.LayoutParams(dp(22), dp(26)));
         }
         body.addView(dots, new LinearLayout.LayoutParams(-1, dp(35)));
+    }
+
+    private void adoptShowcaseOrderForEditing() {
+        if (!skin.showcase()
+                || !prefs.getBoolean("showcase_project_layout", true)) return;
+        java.util.List<String> arranged = showcaseHomeOrder();
+        java.util.List<String> full = allHomeTiles();
+        full.removeAll(arranged);
+        java.util.List<String> nextFull = new java.util.ArrayList<>(arranged);
+        nextFull.addAll(full);
+        prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(nextFull))
+            .putBoolean("showcase_project_layout", false)
+            .apply();
+        DiagnosticLog.event("HOME_SHOWCASE_ORDER_ADOPTED");
+    }
+
+    private boolean moveHomeTileToAdjacentPage(String id, int delta) {
+        if (!skin.showcase() || delta == 0) return false;
+        adoptShowcaseOrderForEditing();
+        java.util.List<String> order = homeTileOrder();
+        int source = order.indexOf(id);
+        if (source < 0) return false;
+        int pageCount = Math.max(1, (order.size() + 8) / 9);
+        int sourcePage = source / 9;
+        int targetPage = sourcePage + delta;
+        if (targetPage < 0 || targetPage >= pageCount) return false;
+        int target;
+        if (delta < 0) {
+            target = Math.min(order.size() - 1, targetPage * 9 + 8);
+        } else {
+            target = Math.min(order.size() - 1, targetPage * 9);
+        }
+        homeShowcasePage = targetPage;
+        homeShowcaseSlideDirection = delta;
+        return moveHomeTileAtIndex(id, target);
     }
 
     private void home() {
@@ -1314,8 +1402,10 @@ public final class MainActivity extends Activity {
         }
 
         TextView editHint = text(homeEditMode
-            ? "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar"
-            : "✥  Krócej: menu • dłużej: przeciągnij • 2 palce: rozmiar", 13, false);
+            ? (skin.showcase()
+                ? "✥  TRYB UKŁADU • przeciągnij kafelek • przesuń ekran w bok • ⋮⋮: zmień stronę"
+                : "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar")
+            : "✥  Krócej: menu • dłużej: przeciągnij • przesuń ekran w bok", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
         editHint.setMinHeight(dp(48));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
@@ -1329,6 +1419,7 @@ public final class MainActivity extends Activity {
         editHint.setOnClickListener(v -> {
             if (homeDragSource != null) return;
             homeEditMode = !homeEditMode;
+            if (homeEditMode) adoptShowcaseOrderForEditing();
             render();
         });
         touchFeedback(editHint);
@@ -1365,10 +1456,9 @@ public final class MainActivity extends Activity {
             return true;
         });
         java.util.List<String> renderedHomeTiles =
-            skin.showcase() && !homeEditMode
-                ? showcaseHomeOrder() : homeTileOrder();
+            skin.showcase() ? showcaseHomeOrder() : homeTileOrder();
         int showcasePageCount = 1;
-        if (skin.showcase() && !homeEditMode) {
+        if (skin.showcase()) {
             showcasePageCount = Math.max(1,
                 (renderedHomeTiles.size() + 8) / 9);
             if (homeShowcasePage < 0 || homeShowcasePage >= showcasePageCount)
@@ -1532,8 +1622,17 @@ public final class MainActivity extends Activity {
             });
         }
 
-        if (skin.showcase() && !homeEditMode)
+        if (skin.showcase()) {
+            if (homeShowcaseSlideDirection != 0) {
+                int direction = homeShowcaseSlideDirection;
+                homeShowcaseSlideDirection = 0;
+                tiles.setTranslationX(dp(42) * direction);
+                tiles.setAlpha(0.80f);
+                tiles.animate().translationX(0f).alpha(1f)
+                    .setDuration(150L).start();
+            }
             addShowcasePageDots(showcasePageCount);
+        }
         if (!skin.showcase() || homeEditMode) {
             button("＋ Dodaj kafelek", this::showAddTileDialog);
             if (!hiddenHomeTiles().isEmpty())
@@ -1789,16 +1888,17 @@ public final class MainActivity extends Activity {
                 || homeTileGrid == null || homeDragSource != null) return false;
         homeDragOrder = homeTileOrder();
         homeTileSlots.clear();
-        for (String item : homeDragOrder) {
+        for (String item : homeTileViews.keySet()) {
             View child = homeTileViews.get(item);
             if (child == null || !(child.getParent() instanceof View))
-                return false;
+                continue;
             View row = (View) child.getParent();
             homeTileSlots.put(item, new int[]{
                 child.getLeft() + row.getLeft(),
                 child.getTop() + row.getTop()
             });
         }
+        if (homeTileSlots.isEmpty()) return false;
         homeDragSource = id;
         homeDragTargetIndex = homeDragOrder.indexOf(id);
         homeDragDropped = false;
@@ -1828,28 +1928,23 @@ public final class MainActivity extends Activity {
 
     private void previewHomeDragAt(LinearLayout grid, float x, float y) {
         if (homeDragSource == null || homeDragOrder == null
-                || homeTileSlots.size() != homeDragOrder.size()) return;
+                || homeTileSlots.isEmpty()) return;
         int nearest = -1;
         double best = Double.MAX_VALUE;
-        for (int i = 0; i < homeDragOrder.size(); i++) {
-            String id = homeDragOrder.get(i);
+        for (String id : homeTileViews.keySet()) {
             int[] slot = homeTileSlots.get(id);
             View tile = homeTileViews.get(id);
-            if (slot == null || tile == null) {
-                DiagnosticLog.event("HOME_TILE_DRAG_INVALID",
-                    "reason=missing_slot count=" + homeDragOrder.size());
-                resetHomeDragPreview();
-                return;
-            }
+            int globalIndex = homeDragOrder.indexOf(id);
+            if (slot == null || tile == null || globalIndex < 0) continue;
             double dx = x - (slot[0] + tile.getWidth() / 2.0);
             double dy = y - (slot[1] + tile.getHeight() / 2.0);
             double distance = dx * dx + dy * dy;
             if (distance < best) {
                 best = distance;
-                nearest = i;
+                nearest = globalIndex;
             }
         }
-        previewHomeTilePlacement(nearest);
+        if (nearest >= 0) previewHomeTilePlacement(nearest);
     }
 
     /** Preview and final save use the exact same insertion index. */
@@ -1864,9 +1959,6 @@ public final class MainActivity extends Activity {
             resetHomeDragPreview();
             return;
         }
-        if (slot == homeDragTargetIndex && draggedTile.getAlpha() < 1f) return;
-        // Preview and saved order MUST use the same dynamic catalog. The
-        // legacy nine-tile rule crashes as soon as more shortcuts are present.
         final java.util.List<String> next;
         try {
             next = HomeTileCatalog.moved(homeDragOrder, homeDragSource, slot);
@@ -1877,32 +1969,40 @@ public final class MainActivity extends Activity {
             resetHomeDragPreview();
             return;
         }
-        for (int i = 0; i < next.size(); i++) {
-            String id = next.get(i);
+
+        for (View tile : homeTileViews.values()) {
+            tile.animate().cancel();
+            tile.setTranslationX(0f);
+            tile.setTranslationY(0f);
+            tile.setAlpha(1f);
+            tile.setScaleX(1f);
+            tile.setScaleY(1f);
+        }
+
+        java.util.List<String> visible =
+            new java.util.ArrayList<>(homeTileViews.keySet());
+        int pageStart = skin.showcase() ? homeShowcasePage * 9 : 0;
+        for (int local = 0; local < visible.size(); local++) {
+            int global = pageStart + local;
+            if (global >= next.size()) break;
+            String id = next.get(global);
             View tile = homeTileViews.get(id);
             int[] old = homeTileSlots.get(id);
-            int[] target = homeTileSlots.get(homeDragOrder.get(i));
+            int[] target = homeTileSlots.get(visible.get(local));
             if (tile == null || old == null || target == null) continue;
-            tile.animate().cancel();
-            if (id.equals(homeDragSource)) {
-                tile.setAlpha(0.34f); // Visible placeholder: NEVER hide a tile.
-                tile.setScaleX(1.04f);
-                tile.setScaleY(1.04f);
-            } else {
-                tile.setAlpha(1f);
-                tile.setScaleX(1f);
-                tile.setScaleY(1f);
-            }
             tile.animate()
                 .translationX(target[0] - old[0])
                 .translationY(target[1] - old[1])
                 .setDuration(140)
                 .start();
         }
+        draggedTile.setAlpha(0.34f);
+        draggedTile.setScaleX(1.04f);
+        draggedTile.setScaleY(1.04f);
         homeDragTargetIndex = slot;
         if (homeDragHint != null) {
-            homeDragHint.setText("✥  Upuść tutaj: pozycja "
-                + (slot + 1) + " z " + homeDragOrder.size()
+            homeDragHint.setText("✥  Upuść: strona "
+                + (slot / 9 + 1) + " • pozycja " + (slot % 9 + 1)
                 + " • " + homeTileLabel(homeDragSource));
             homeDragHint.setTextColor(accent);
         }
@@ -1960,7 +2060,9 @@ public final class MainActivity extends Activity {
         homeTileSlots.clear();
         if (homeDragHint != null) {
             homeDragHint.setText(homeEditMode
-                ? "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮"
+                ? (skin.showcase()
+                    ? "✥  TRYB UKŁADU • przeciągnij • przesuń ekran w bok • ⋮⋮: zmień stronę"
+                    : "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮")
                 : "✥  Krócej: menu • dłużej: przeciągnij • dotknij: układaj");
             homeDragHint.setTextColor(subdued);
         }
@@ -2008,11 +2110,38 @@ public final class MainActivity extends Activity {
         move.setOnClickListener(v -> {
             popup.dismiss();
             homeEditMode = true;
+            adoptShowcaseOrderForEditing();
             render();
             android.widget.Toast.makeText(this,
                 "Przeciągnij kafelek za uchwyt ⋮⋮ lub przytrzymaj kafelek.",
                 android.widget.Toast.LENGTH_LONG).show();
         });
+        if (skin.showcase() && homeEditMode) {
+            java.util.List<String> pageOrder = homeTileOrder();
+            int index = pageOrder.indexOf(id);
+            int page = index < 0 ? 0 : index / 9;
+            int pages = Math.max(1, (pageOrder.size() + 8) / 9);
+            if (page > 0) {
+                TextView previousPage = text("←  Przenieś na poprzednią stronę", 15, true);
+                previousPage.setPadding(dp(14), dp(12), dp(14), dp(12));
+                previousPage.setBackground(skin.panel(this, skin.tileTop, 18));
+                menu.addView(previousPage);
+                previousPage.setOnClickListener(v -> {
+                    popup.dismiss();
+                    moveHomeTileToAdjacentPage(id, -1);
+                });
+            }
+            if (page + 1 < pages) {
+                TextView nextPage = text("→  Przenieś na następną stronę", 15, true);
+                nextPage.setPadding(dp(14), dp(12), dp(14), dp(12));
+                nextPage.setBackground(skin.panel(this, skin.tileTop, 18));
+                menu.addView(nextPage);
+                nextPage.setOnClickListener(v -> {
+                    popup.dismiss();
+                    moveHomeTileToAdjacentPage(id, 1);
+                });
+            }
+        }
         TextView hide = text("◉  Ukryj kafelek", 16, true);
         hide.setPadding(dp(14), dp(13), dp(14), dp(13));
         hide.setBackground(skin.panel(this, skin.tileTop, 18));
@@ -2376,8 +2505,11 @@ public final class MainActivity extends Activity {
         full.removeAll(next);
         java.util.List<String> nextFull = new java.util.ArrayList<>(next);
         nextFull.addAll(full);
-        boolean saved = prefs.edit().putString(HomeTileCatalog.ORDER_KEY,
-            HomeTileCatalog.encode(nextFull)).commit();
+        SharedPreferences.Editor orderEdit = prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(nextFull));
+        if (skin.showcase())
+            orderEdit.putBoolean("showcase_project_layout", false);
+        boolean saved = orderEdit.commit();
         if (!saved) {
             DiagnosticLog.event("HOME_TILE_DRAG_SAVE_FAILED");
             render();
@@ -10043,8 +10175,9 @@ public final class MainActivity extends Activity {
                 + "\nversionCode: " + BuildConfig.VERSION_CODE));
         updateTile(tiles, "◷", "Co\nnowego", false, () ->
             alert("EDHOME " + BuildConfig.VERSION_NAME
-                + "\nUkład kafelków 3 × 3, przewijanie pionowe. "
-                + "Kolejne wydania zachowują zgodność podpisu APK."));
+                + "\nUkład Start 3 × 3. Gdy jest więcej niż 9 kafelków, "
+                + "przesuwaj strony palcem w lewo lub prawo. "
+                + "Aktywna strona jest zaznaczona kropką."));
         updateTile(tiles, "⌂", "Panel\ngłówny", false, () -> go("home"));
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
@@ -10072,11 +10205,11 @@ public final class MainActivity extends Activity {
         int viewport = getResources().getDisplayMetrics().widthPixels;
         float density = getResources().getDisplayMetrics().density;
         int columns = isHome
-            ? (skin.showcase() && !homeEditMode
+            ? (skin.showcase()
                 ? 3 : HomeTileLayout.homeColumns(Math.round(viewport / density)))
             : HomeTileLayout.columns(Math.round(viewport / density));
         int span = isHome
-            && !(skin.showcase() && !homeEditMode)
+            && !skin.showcase()
             && "double".equals(prefs.getString("tile_width_" + id, "small"))
             ? Math.min(2, columns) : 1;
         LinearLayout row = grid.getChildCount() == 0
@@ -10098,7 +10231,7 @@ public final class MainActivity extends Activity {
         // Page has 16dp on each side; width determines columns, not height.
         int contentWidth = Math.max(dp(1), viewport - dp(32));
         int tileGapDp = isHome
-            ? (skin.showcase() && !homeEditMode ? 7 : HomeTileLayout.HOME_GAP_DP)
+            ? (skin.showcase() ? 7 : HomeTileLayout.HOME_GAP_DP)
             : 9;
         int side = Math.max(dp(1),
             (contentWidth - dp(tileGapDp) * (columns - 1)) / columns);
@@ -10110,7 +10243,7 @@ public final class MainActivity extends Activity {
         boolean customTint = false;
         int tileTint = accent;
         String tileTarget = isHome ? homeTileTarget(id) : null;
-        if (isHome && skin.showcase() && !homeEditMode) {
+        if (isHome && skin.showcase()) {
             tileTint = skin.showcaseTileTint(tileTarget);
             customTint = true;
         } else if (isHome) {
@@ -10130,7 +10263,7 @@ public final class MainActivity extends Activity {
         // remaining square visual area; double-wide tiles get a taller icon
         // without stretching its 3D artwork horizontally.
         int tileHeight = isHome
-            ? (skin.showcase() && !homeEditMode
+            ? (skin.showcase()
                 ? side : side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP))
             : side;
         LinearLayout.LayoutParams params =
@@ -10189,10 +10322,10 @@ public final class MainActivity extends Activity {
 
         int iconWidth = side * span + dp(tileGapDp) * (span - 1) - dp(10);
         int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
-        if (isHome && skin.showcase() && !homeEditMode)
-            iconHeight = tileHeight - dp(28) - dp(10);
+        if (isHome && skin.showcase())
+            iconHeight = tileHeight - dp(showTileHandle ? 19 : 0) - dp(28) - dp(10);
         int displayedIconSize = isHome
-            ? (skin.showcase() && !homeEditMode
+            ? (skin.showcase()
                 ? Math.max(dp(42), Math.min((int) (side * 0.53f), iconHeight))
                 : Math.max(dp(24), Math.min(iconWidth, iconHeight)))
             : dp(46);
@@ -10225,7 +10358,7 @@ public final class MainActivity extends Activity {
         captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         tile.addView(captionView,
             new LinearLayout.LayoutParams(-1,
-                dp(isHome && skin.showcase() && !homeEditMode ? 28 : 31)));
+                dp(isHome && skin.showcase() ? 28 : 31)));
         return tile;
     }
 
