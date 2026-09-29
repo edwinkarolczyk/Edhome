@@ -34,6 +34,20 @@ for token in (
 ):
     assert token in main, token
 
+# The central Scanner explicitly rearms the same ReaderMode used by object
+# assignment. It must not cover the reader with a modal "scanner active" prompt.
+for token in (
+    'private void armScannerNfc()',
+    'disableNfcReaderMode();',
+    'if(enableNfcReaderMode())',
+    'if ("scanner".equals(destination)) armScannerNfc();',
+    'scannerNfcStatus="NFC aktywne — przyłóż naklejkę albo brelok."',
+    'scannerNfcStatus="✓ Odczytano NFC • "+NfcLinkStore.shortUid(uid)',
+    'nfcState.addView(text(scannerNfcStatus, 15, true));',
+):
+    assert token in main, "Central NFC scanner rearm/status missing: "+token
+assert 'alert("Skaner NFC jest aktywny.' not in main
+
 # A known NFC tag now enters the central Scanner routing. It may show actions
 # or open immediately according to the saved per-object/type/global rule.
 assert 'handleKnownNfcScan(current);' in main
