@@ -22,7 +22,7 @@ for token in (
     'showTileActions(tile, tileId);',
     'beginHomeDrag(tile, tileId);',
     'HOME_TILE_GESTURE_TIMING_SAVED',
-    'HomeTileLayout.validPair(menuMs, moveMs)',
+    'HomeTileLayout.validPair(menuMs,moveMs)',
     'prefs.edit().putInt(HomeTileLayout.SHORT_KEY,menuMs)',
     '.putInt(HomeTileLayout.DRAG_KEY,moveMs).apply()',
     'Czas przytrzymania kafelków',
