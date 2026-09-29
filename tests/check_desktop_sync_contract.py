@@ -206,3 +206,13 @@ for marker in (
 ):
     assert marker in desktop, "Missing resilient local cache save contract: " + marker
 print("desktop resilient local cache save contract OK")
+
+
+# New Desktop-created records must be cached only after they are inserted
+# into the backing table. Otherwise a failed phone sync can lose the record
+# on Desktop restart even though the UI claimed a local save.
+add_idx = desktop.index('table(tableName).add(row);')
+persist_idx = desktop.index('markDirty();', add_idx)
+assert persist_idx > add_idx, "New records are not persisted after table insertion"
+assert persist_idx - add_idx < 500, "Persistence must happen immediately after insertion"
+print("desktop new-record local persistence contract OK")
