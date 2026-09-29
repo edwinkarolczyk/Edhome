@@ -428,7 +428,7 @@ jobs:
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.66 — korekta przebudowy interfejsu względem zatwierdzonej makiety: ekran Start ma stałą siatkę 3 × 3, pierwszą stronę PayCheck/Zadania/Kalendarz, Spiżarnia/Lista zakupów/Miejsca, Magazyn domowy/Pojazdy/Odpady, kolejne kafelki trafiają na następne strony z kropkami nawigacji. Zmniejszono kafelki i ikony, poprawiono nagłówek i safe-area, ukryto uchwyty poza trybem edycji, ujednolicono font i dolną nawigację. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.67 — Magazyn dostał Galerię rzeczy: dwukolumnową siatkę miniaturek wszystkich Rzeczy z nazwą i lokalizacją. Rzecz bez zdjęcia ma czytelny placeholder, dotknięcie kafelka otwiera jej kartę, a galerię można wyłączyć w Ustawienia → Magazyn. Do roadmapy rozwoju po 1.0 dopisano lokalne rozpoznawanie własnych Rzeczy po zdjęciu; QR/NFC pozostają metodami jednoznacznymi. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
