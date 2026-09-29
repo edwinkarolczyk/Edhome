@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 131,
-  "versionName": "0.6.0.66",
-  "changelog": "EDHOME 0.6.0.66 — korekta przebudowy interfejsu względem zatwierdzonej makiety: ekran Start ma stałą siatkę 3 × 3, pierwszą stronę PayCheck/Zadania/Kalendarz, Spiżarnia/Lista zakupów/Miejsca, Magazyn domowy/Pojazdy/Odpady, kolejne kafelki trafiają na następne strony z kropkami nawigacji. Zmniejszono kafelki i ikony, poprawiono nagłówek i safe-area, ukryto uchwyty poza trybem edycji, ujednolicono font i dolną nawigację. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.66/edhome-beta.apk",
-  "sha256": "43ff5e6dbd5d45567317b5c8890bc3d8dc41f5593409802d07b314d12f8b0649"
+  "versionCode": 132,
+  "versionName": "0.6.0.67",
+  "changelog": "EDHOME 0.6.0.67 — Magazyn dostał Galerię rzeczy: dwukolumnową siatkę miniaturek wszystkich Rzeczy z nazwą i lokalizacją. Rzecz bez zdjęcia ma czytelny placeholder, dotknięcie kafelka otwiera jej kartę, a galerię można wyłączyć w Ustawienia → Magazyn. Do roadmapy rozwoju po 1.0 dopisano lokalne rozpoznawanie własnych Rzeczy po zdjęciu; QR/NFC pozostają metodami jednoznacznymi. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.67/edhome-beta.apk",
+  "sha256": "6cf882977b7f67201580b59083f7c6d8c430694a7e871c5865e5c7236705432c"
 }
