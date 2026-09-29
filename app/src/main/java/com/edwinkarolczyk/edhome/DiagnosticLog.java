@@ -8,6 +8,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -160,6 +161,51 @@ public final class DiagnosticLog {
             out.append(new String(bytes.toByteArray(), StandardCharsets.UTF_8));
         } catch (Exception ignored) {
             out.append("\n[Unable to read one diagnostic segment]\n");
+        }
+    }
+
+    /** Stable content identifier used by Desktop's download-then-ack protocol. */
+    public static String transferId() {
+        if (!enabled()) return "";
+        synchronized (LOCK) {
+            String content = readFullText();
+            if (content.isBlank()) return "";
+            return sha256(content);
+        }
+    }
+
+    /**
+     * Delete retained phone diagnostics only when Desktop confirms exactly the
+     * same payload it downloaded. New lines written meanwhile are never lost.
+     */
+    public static boolean clearIfTransferred(String expectedId) {
+        if (!enabled() || expectedId == null || expectedId.isBlank()) return false;
+        synchronized (LOCK) {
+            String content = readFullText();
+            if (content.isBlank() || !expectedId.equals(sha256(content))) return false;
+            boolean ok = true;
+            if (previous != null && previous.exists() && !previous.delete()) ok = false;
+            if (current != null && current.exists() && !current.delete()) {
+                try (FileOutputStream reset = new FileOutputStream(current, false)) {
+                    reset.getFD().sync();
+                } catch (Exception error) {
+                    ok = false;
+                }
+            }
+            return ok;
+        }
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder out = new StringBuilder(64);
+            for (byte b : digest)
+                out.append(String.format(Locale.ROOT, "%02x", b & 255));
+            return out.toString();
+        } catch (Exception unavailable) {
+            return "";
         }
     }
 
