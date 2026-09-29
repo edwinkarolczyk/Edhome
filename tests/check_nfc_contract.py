@@ -55,8 +55,15 @@ assert 'pendingNfcTarget!=null' in main
 assert 'if ("scanner".equals(destination)) armScannerNfc();' in main
 assert 'else refreshNfcReaderMode();' in main
 assert 'disableNfcReaderMode();\n        if(!enableNfcReaderMode())' in main
-assert 'Nasłuch w całej aplikacji: WŁĄCZONY' in main
-assert 'Nasłuch w całej aplikacji: WYŁĄCZONY' in main
+assert 'settingsAccordion("nfc","NFC"' in main
+assert 'settingsYesNo(nfc,"Nasłuch NFC w całej aplikacji"' in main
+assert 'SCAN_DEFAULT_NFC = "scan_default_nfc_global"' in main
+assert 'settingsNfcAction(nfc,"Domyślne działanie po skanie NFC"' in main
+assert 'settingsNfcAction(nfcTypes,"Rzeczy / narzędzia",scanTypeKey("nfc","thing"),true)' in main
+assert 'settingsNfcAction(nfcTypes,"Pudełka",scanTypeKey("nfc","box"),true)' in main
+assert 'settingsNfcAction(nfcTypes,"Miejsca",scanTypeKey("nfc","place"),true)' in main
+assert 'String nfcGlobal = prefs.getString(SCAN_DEFAULT_NFC, "");' in main
+assert 'private void resetNfcScanRules()' in main
 
 # A known NFC tag now enters the central Scanner routing. It may show actions
 # or open immediately according to the saved per-object/type/global rule.
