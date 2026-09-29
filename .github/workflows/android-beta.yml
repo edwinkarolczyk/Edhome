@@ -428,7 +428,7 @@ jobs:
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.63 — poprawiony kontrast okna po skanie NFC/QR we wszystkich motywach. W Ustawieniach dodano widoczność typów Magazynu: Rzeczy (np. narzędzia), Pudełka i Miejsca — ukrycie nie kasuje danych ani QR/NFC. Dodano też wybór: nasłuch NFC w całej aplikacji albo tylko w Skanerze/przy przypisywaniu. Skan ukrytego obiektu nadal może go tymczasowo otworzyć. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.64 — Ustawienia przebudowane na czytelne, zwijane sekcje z wyborami Tak/Nie i listami. Cała konfiguracja NFC jest teraz w jednym miejscu: stan telefonu, liczba tagów, globalny nasłuch, domyślna akcja po skanie, reguły dla Rzeczy/Pudełek/Miejsc/Produktów/Pojazdów, skaner i reset reguł. Magazyn pozwala osobno ukrywać typy oraz przyciski akcji dla Rzeczy, Pudełek i Miejsc. Ukrycie niczego nie usuwa. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
