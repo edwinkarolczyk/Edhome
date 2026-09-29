@@ -190,3 +190,8 @@ for marker in ('edhome-desktop.log', 'edhome-desktop.previous.log',
 assert 'Files.writeString(target, result.text, StandardCharsets.UTF_8)' in desktop
 assert '.ackDiagnostics(result.id)' in desktop
 print("desktop diagnostics transfer + local log contract OK")
+
+# Desktop diagnostics must preserve the real async failure behind SwingWorker/ExecutionException.
+assert 'rootCause(problem)' in desktop_log
+assert 'root=' in desktop_log and 'message=' in desktop_log
+print("desktop diagnostics root-cause contract OK")
