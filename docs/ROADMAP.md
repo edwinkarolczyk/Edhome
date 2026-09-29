@@ -246,6 +246,12 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 
 **Zakres 1.0 należy formalnie zamknąć przed RC.** Numer 1.0 nie oznacza, że wszystkie opcjonalne integracje/sterowanie są obowiązkowo gotowe; niesprawdzone funkcje oznaczyć jako przyszłe 1.x, nie obiecywać ich. Dodatki i poprawki po wydaniu używają kolejnych wersji, a nie zmieniają historii wydania 1.0.0. Nie przypisywać sztywnych dat ani pozorowanego procentu zaawansowania.
 
+## Rozwój po 1.0 — 1.x
+
+- **Rozpoznawanie własnych Rzeczy po zdjęciu:** użytkownik zapisuje kilka zdjęć wzorcowych konkretnego przedmiotu, a EDHOME lokalnie porównuje nowe zdjęcie z biblioteką Rzeczy i pokazuje najbardziej podobne wyniki wraz z poziomem pewności. Rozpoznanie ma być sugestią, nie automatyczną decyzją.
+- **Offline-first:** docelowo model on-device (np. TFLite / embedding obrazu), bez obowiązkowego wysyłania prywatnych zdjęć do chmury i bez stałego kosztu API.
+- **Kontekst lokalizacji:** jeżeli użytkownik jest w konkretnym Miejscu/Pudełku, wyniki z tej lokalizacji mogą być preferowane, ale bez ukrywania innych pasujących Rzeczy.
+- **Bezpieczne rozróżnianie:** przy podobnych lub identycznych przedmiotach EDHOME ma pokazać kilka kandydatów zamiast zgadywać. QR/NFC pozostają jednoznaczną metodą identyfikacji.
 
 ## Stan wykonania serii 0.5 — aktualizacja po wydaniu beta.5 (22.09.2026)
 
