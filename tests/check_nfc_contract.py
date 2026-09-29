@@ -75,7 +75,7 @@ assert 'showScannedTargetActions("nfc", link.kind, link.targetId, name)' in main
 for token in (
     'nfcTargetButton(box,"place",entry.id,entry.name)',
     'nfcTargetButton(details,item.kind,item.id,item.name)',
-    'nfcTargetButton(box,"pantry",id,name)',
+    'showNfcTargetMenu(null, "pantry", id, name)',
     'nfcTargetButton(box,"vehicle",id,item.name)',
 ):
     assert token in main, token

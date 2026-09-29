@@ -126,8 +126,10 @@ public final class MainActivity extends Activity {
     private String calendarDay = LocalDate.now().toString();
     private String calendarView = "month";
     private String tasksFilter = "all";
+    private int tasksPage;
     private long selectedMemberId;
     private String pantrySearch = "";
+    private int pantryPage;
     private String pantryCategoryFilter = "";
     private static final String SCAN_MODE_PREF = "pantry_scan_mode";
     private final PantryBatchSession pantryBatch = new PantryBatchSession();
@@ -629,13 +631,48 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private int homeTileSpanForPage(String id) {
+        if (skin.showcase()) return 1;
+        return "double".equals(prefs.getString("tile_width_" + id, "small"))
+            ? 2 : 1;
+    }
+
+    private java.util.List<java.util.List<String>> homePages(
+            java.util.List<String> order) {
+        java.util.ArrayList<java.util.List<String>> pages =
+            new java.util.ArrayList<>();
+        java.util.ArrayList<String> page = new java.util.ArrayList<>();
+        int used = 0;
+        int rowUsed = 0;
+        for (String id : order) {
+            int span = Math.max(1, Math.min(2, homeTileSpanForPage(id)));
+            if (rowUsed > 0 && rowUsed + span > 3) {
+                used += 3 - rowUsed;
+                rowUsed = 0;
+            }
+            if (!page.isEmpty() && used + span > 9) {
+                pages.add(page);
+                page = new java.util.ArrayList<>();
+                used = 0;
+                rowUsed = 0;
+            }
+            page.add(id);
+            used += span;
+            rowUsed += span;
+            if (rowUsed >= 3) rowUsed = 0;
+        }
+        if (!page.isEmpty() || pages.isEmpty()) pages.add(page);
+        return pages;
+    }
+
     private int showcaseHomePageCount() {
-        if (!skin.showcase()) return 1;
-        return Math.max(1, (showcaseHomeOrder().size() + 8) / 9);
+        java.util.List<String> order =
+            skin.showcase() ? showcaseHomeOrder() : homeTileOrder();
+        return homePages(order).size();
     }
 
     private boolean changeShowcasePage(int delta) {
-        if (!skin.showcase() || delta == 0 || homeDragSource != null) return false;
+        if (delta == 0 || homeDragSource != null) return false;
         int count = showcaseHomePageCount();
         int next = Math.max(0, Math.min(count - 1, homeShowcasePage + delta));
         if (next == homeShowcasePage) return false;
@@ -646,7 +683,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
-        if (skin != null && skin.showcase() && "home".equals(screen)
+        if (skin != null && "home".equals(screen)
                 && homeDragSource == null && event.getPointerCount() == 1) {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -718,7 +755,7 @@ public final class MainActivity extends Activity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(ink);
-        view.setPadding(0, dp(5), 0, dp(6));
+        view.setPadding(0, dp(2), 0, dp(2));
         if (skin != null && skin.showcase()) {
             view.setTypeface(Typeface.create(
                 bold ? "sans-serif-medium" : "sans-serif",
@@ -740,11 +777,11 @@ public final class MainActivity extends Activity {
     private LinearLayout card() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(17), dp(18), dp(17));
-        box.setBackground(skin.panel(this, surface, 28));
-        box.setElevation(dp(3));
+        box.setPadding(dp(11), dp(8), dp(11), dp(8));
+        box.setBackground(skin.panel(this, surface, 22));
+        box.setElevation(dp(2));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(7), 0, dp(7));
+        params.setMargins(0, dp(3), 0, dp(3));
         body.addView(box, params);
         return box;
     }
@@ -752,16 +789,16 @@ public final class MainActivity extends Activity {
     private Button button(String value, Runnable callback) {
         Button b = new Button(this);
         b.setText(value);
-        b.setTextSize(16);
+        b.setTextSize(14);
         b.setAllCaps(false);
         b.setTextColor(skin.accentInk);
         b.setBackground(skin.pill(this, accent));
-        b.setElevation(dp(2));
+        b.setElevation(dp(1));
         touchFeedback(b);
-        b.setMinHeight(dp(56));
+        b.setMinHeight(dp(44));
         b.setOnClickListener(v -> callback.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(4), 0, dp(4));
+        params.setMargins(0, dp(2), 0, dp(2));
         body.addView(b, params);
         return b;
     }
@@ -850,8 +887,8 @@ public final class MainActivity extends Activity {
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         int pageSide = skin.showcase() ? 12 : 16;
-        body.setPadding(dp(pageSide), dp(skin.showcase() ? 8 : 14),
-            dp(pageSide), dp(skin.showcase() ? 22 : 48));
+        body.setPadding(dp(pageSide), dp(skin.showcase() ? 7 : 8),
+            dp(pageSide), dp(12));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         LinearLayout.LayoutParams scrollParams = skin.showcase()
             ? new LinearLayout.LayoutParams(-1, 0, 1f)
@@ -1058,7 +1095,7 @@ public final class MainActivity extends Activity {
         } else {
             TextView appTitle = text("EDHOME  •  "
                 + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
-                25, true);
+                21, true);
             row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         }
 
@@ -1107,14 +1144,14 @@ public final class MainActivity extends Activity {
                 }
             };
             LinearLayout.LayoutParams badgeParams = skin.showcase()
-                ? new LinearLayout.LayoutParams(dp(40), dp(40))
-                : new LinearLayout.LayoutParams(-2, dp(40));
+                ? new LinearLayout.LayoutParams(dp(38), dp(38))
+                : new LinearLayout.LayoutParams(-2, dp(34));
             row.addView(badge, badgeParams);
             badge.post(refresh);
         }
         LinearLayout.LayoutParams headerParams =
             new LinearLayout.LayoutParams(-1, -2);
-        headerParams.setMargins(0, dp(3), 0, dp(5));
+        headerParams.setMargins(0, dp(1), 0, dp(1));
         body.addView(row, headerParams);
     }
 
@@ -1228,8 +1265,48 @@ public final class MainActivity extends Activity {
 
     private void header(String subtitle) {
         appTitleWithConnection();
-        note(subtitle);
-        button("← Panel główny", () -> go("home"));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        TextView label = text(subtitle, 13, true);
+        label.setTextColor(subdued);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setPadding(0, 0, dp(6), 0);
+        bar.addView(label, new LinearLayout.LayoutParams(0, dp(36), 1f));
+        TextView back = text("← Start", 12, true);
+        back.setGravity(Gravity.CENTER);
+        back.setPadding(dp(7), 0, dp(7), 0);
+        back.setBackground(skin.panel(this, surface, 17));
+        back.setOnClickListener(v -> go("home"));
+        back.setClickable(true);
+        back.setFocusable(true);
+        touchFeedback(back);
+        bar.addView(back, new LinearLayout.LayoutParams(dp(76), dp(34)));
+        body.addView(bar, new LinearLayout.LayoutParams(-1, dp(38)));
+    }
+
+    private LinearLayout compactActionRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        body.addView(row, new LinearLayout.LayoutParams(-1, dp(42)));
+        return row;
+    }
+
+    private void compactAction(LinearLayout row, String label, Runnable action) {
+        TextView item = text(label, 12, true);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(4), 0, dp(4), 0);
+        item.setMaxLines(1);
+        item.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        item.setBackground(skin.panel(this, skin.tileTop, 17));
+        item.setOnClickListener(v -> action.run());
+        item.setClickable(true);
+        item.setFocusable(true);
+        touchFeedback(item);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        lp.setMargins(dp(2), dp(2), dp(2), dp(2));
+        row.addView(item, lp);
     }
 
     private String showcaseHomeLabel(String target) {
@@ -1276,7 +1353,7 @@ public final class MainActivity extends Activity {
         LinearLayout dots = new LinearLayout(this);
         dots.setOrientation(LinearLayout.HORIZONTAL);
         dots.setGravity(Gravity.CENTER);
-        dots.setPadding(0, dp(2), 0, dp(7));
+        dots.setPadding(0, 0, 0, dp(1));
         for (int page = 0; page < pageCount; page++) {
             final int selectedPage = page;
             boolean activePage = page == homeShowcasePage;
@@ -1292,9 +1369,9 @@ public final class MainActivity extends Activity {
             });
             dot.setContentDescription("Strona kafelków " + (page + 1)
                 + " z " + pageCount);
-            dots.addView(dot, new LinearLayout.LayoutParams(dp(22), dp(26)));
+            dots.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(20)));
         }
-        body.addView(dots, new LinearLayout.LayoutParams(-1, dp(35)));
+        body.addView(dots, new LinearLayout.LayoutParams(-1, dp(24)));
     }
 
     private void adoptShowcaseOrderForEditing() {
@@ -1372,33 +1449,31 @@ public final class MainActivity extends Activity {
             hero.addView(status, new LinearLayout.LayoutParams(dp(92), dp(58)));
             body.addView(hero, new LinearLayout.LayoutParams(-1, dp(78)));
         } else {
-            note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
-            title(prefs.getString("household", "Moje gospodarstwo"));
-
             LinearLayout summary = card();
-            LinearLayout planHeader = new LinearLayout(this);
-            planHeader.setOrientation(LinearLayout.HORIZONTAL);
-            planHeader.setGravity(Gravity.CENTER_VERTICAL);
-            TextView planTitle = text("Twój domowy plan", 21, true);
-            planHeader.addView(planTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+            summary.setOrientation(LinearLayout.HORIZONTAL);
+            summary.setGravity(Gravity.CENTER_VERTICAL);
+            summary.setPadding(dp(10), dp(5), dp(8), dp(5));
+
+            LinearLayout plan = new LinearLayout(this);
+            plan.setOrientation(LinearLayout.VERTICAL);
+            TextView household = text(
+                prefs.getString("household", "Moje gospodarstwo"), 14, true);
+            household.setPadding(0, 0, 0, 0);
+            plan.addView(household);
+            TextView counts = text("Do zrobienia: " + db.openTasks()
+                + "  •  Zaległe: " + overdue, 11, false);
+            counts.setTextColor(subdued);
+            counts.setPadding(0, 0, 0, 0);
+            plan.addView(counts);
+            summary.addView(plan, new LinearLayout.LayoutParams(0, dp(38), 1f));
             HomeIllustration homeMark = new HomeIllustration(this, skin);
-            planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(68), dp(52)));
-            summary.addView(planHeader);
-            summary.addView(text("Do zrobienia: " + db.openTasks()
-                + "     Zaległe: " + overdue, 16, true));
-            TextView reminder = text(overdue == 0
-                ? "✓  Brak zaległych czynności."
-                : "•  Otwórz zaległe i wybierz, co wykonać dziś.", 14, false);
-            reminder.setTextColor(overdue == 0 ? accent : ink);
-            summary.addView(reminder);
+            summary.addView(homeMark, new LinearLayout.LayoutParams(dp(38), dp(32)));
             summary.setOnClickListener(v -> {
                 tasksFilter = overdue == 0 ? "today" : "overdue";
+                tasksPage = 0;
                 go("tasks");
             });
             touchFeedback(summary);
-            summary.setContentDescription("Twój domowy plan. Do zrobienia: "
-                + db.openTasks() + ". Zaległe: " + overdue
-                + ". Dotknij, aby przejść do czynności.");
         }
 
         TextView editHint = text(homeEditMode
@@ -1407,9 +1482,9 @@ public final class MainActivity extends Activity {
                 : "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar")
             : "✥  Krócej: menu • dłużej: przeciągnij • przesuń ekran w bok", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
-        editHint.setMinHeight(dp(48));
+        editHint.setMinHeight(dp(34));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
-        editHint.setPadding(dp(12), dp(8), dp(12), dp(8));
+        editHint.setPadding(dp(8), dp(3), dp(8), dp(3));
         editHint.setBackground(skin.panel(this, skin.tileTop, 22));
         editHint.setClickable(true);
         editHint.setFocusable(true);
@@ -1423,7 +1498,7 @@ public final class MainActivity extends Activity {
             render();
         });
         touchFeedback(editHint);
-        if (!skin.showcase() || homeEditMode) body.addView(editHint);
+        if (homeEditMode) body.addView(editHint);
         homeDragHint = editHint;
         homeTileViews.clear();
         homeTileSlots.clear();
@@ -1432,10 +1507,13 @@ public final class MainActivity extends Activity {
         homeDragTargetIndex = -1;
         homeDragDropped = false;
         homeDragFinishQueued = false;
-        if (homeEditMode) button("✓  Zakończ układanie", () -> {
-            homeEditMode = false;
-            render();
-        });
+        if (homeEditMode) {
+            LinearLayout editControls = compactActionRow();
+            compactAction(editControls, "✓ Zakończ układ", () -> {
+                homeEditMode = false;
+                render();
+            });
+        }
         LinearLayout tiles = tileGrid();
         homeTileGrid = tiles;
         tiles.setOnDragListener((v, event) -> {
@@ -1455,19 +1533,14 @@ public final class MainActivity extends Activity {
             }
             return true;
         });
-        java.util.List<String> renderedHomeTiles =
+        java.util.List<String> homeOrder =
             skin.showcase() ? showcaseHomeOrder() : homeTileOrder();
-        int showcasePageCount = 1;
-        if (skin.showcase()) {
-            showcasePageCount = Math.max(1,
-                (renderedHomeTiles.size() + 8) / 9);
-            if (homeShowcasePage < 0 || homeShowcasePage >= showcasePageCount)
-                homeShowcasePage = 0;
-            int from = Math.min(renderedHomeTiles.size(), homeShowcasePage * 9);
-            int to = Math.min(renderedHomeTiles.size(), from + 9);
-            renderedHomeTiles = new java.util.ArrayList<>(
-                renderedHomeTiles.subList(from, to));
-        }
+        java.util.List<java.util.List<String>> pagedHomeTiles = homePages(homeOrder);
+        int showcasePageCount = pagedHomeTiles.size();
+        if (homeShowcasePage < 0 || homeShowcasePage >= showcasePageCount)
+            homeShowcasePage = 0;
+        java.util.List<String> renderedHomeTiles = new java.util.ArrayList<>(
+            pagedHomeTiles.get(homeShowcasePage));
         for (String tileId : renderedHomeTiles) {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
@@ -1622,30 +1695,36 @@ public final class MainActivity extends Activity {
             });
         }
 
-        if (skin.showcase()) {
-            if (homeShowcaseSlideDirection != 0) {
-                int direction = homeShowcaseSlideDirection;
-                homeShowcaseSlideDirection = 0;
-                tiles.setTranslationX(dp(42) * direction);
-                tiles.setAlpha(0.80f);
-                tiles.animate().translationX(0f).alpha(1f)
-                    .setDuration(150L).start();
-            }
-            addShowcasePageDots(showcasePageCount);
+        if (homeShowcaseSlideDirection != 0) {
+            int direction = homeShowcaseSlideDirection;
+            homeShowcaseSlideDirection = 0;
+            tiles.setTranslationX(dp(42) * direction);
+            tiles.setAlpha(0.80f);
+            tiles.animate().translationX(0f).alpha(1f)
+                .setDuration(150L).start();
         }
+        addShowcasePageDots(showcasePageCount);
         if (!skin.showcase() || homeEditMode) {
-            button("＋ Dodaj kafelek", this::showAddTileDialog);
+            LinearLayout homeControls = compactActionRow();
+            compactAction(homeControls, "＋ Kafelek", this::showAddTileDialog);
+            if (!homeEditMode)
+                compactAction(homeControls, "✥ Układ", () -> {
+                    homeEditMode = true;
+                    adoptShowcaseOrderForEditing();
+                    render();
+                });
             if (!hiddenHomeTiles().isEmpty())
-                button("◉ Przywróć ukryte kafelki", this::restoreHiddenHomeTile);
+                compactAction(homeControls, "◉ Ukryte", this::restoreHiddenHomeTile);
         }
 
         LinearLayout today = card();
+        today.setPadding(dp(9), dp(5), dp(9), dp(5));
         today.addView(text(skin.showcase()
-            ? "Najbliższe zadania" : "Najbliższe czynności", 19, true));
+            ? "Najbliższe zadanie" : "Najbliższa czynność", 13, true));
         int displayed = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
                 "SELECT title,due_date FROM tasks WHERE done=0 AND due_date IS NOT NULL "
-                + "ORDER BY due_date ASC,id ASC LIMIT 4", null)) {
+                + "ORDER BY due_date ASC,id ASC LIMIT 1", null)) {
             while (c.moveToNext()) {
                 displayed++;
                 if (skin.showcase()) {
@@ -2941,22 +3020,27 @@ public final class MainActivity extends Activity {
 
     private void tasks() {
         header("Czynności • plan i wykonania");
-        note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
-        button("⌂ Miejsca", () -> go("places"));
-        button("◷ Minutniki urządzeń", () -> go("timers"));
-        button("♻ Odpady i wystawianie", () -> go("waste"));
-        button("♙ Domownicy / wykonawcy", () -> go("members"));
-        button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
-        button("▦ Kalendarz czynności", () -> go("calendar"));
+
+        LinearLayout row1 = compactActionRow();
+        compactAction(row1, "⌂ Miejsca", () -> go("places"));
+        compactAction(row1, "◷ Minutniki", () -> go("timers"));
+        LinearLayout row2 = compactActionRow();
+        compactAction(row2, "♻ Odpady", () -> go("waste"));
+        compactAction(row2, "♙ Domownicy", () -> go("members"));
+        LinearLayout row3 = compactActionRow();
+        compactAction(row3, "+ Nowa czynność",
+            () -> editTask(null, "", "", "once", 1));
+        compactAction(row3, "▦ Kalendarz", () -> go("calendar"));
+
         note("Zaległe: " + db.overdueTasks()
-            + " • Wykonanie cyklicznej wyznacza kolejny termin.");
+            + " • wykonanie cyklicznej wyznacza kolejny termin.");
+
         HorizontalScrollView filters = new HorizontalScrollView(this);
         filters.setHorizontalScrollBarEnabled(false);
         LinearLayout filterRow = new LinearLayout(this);
         filterRow.setOrientation(LinearLayout.HORIZONTAL);
-        filterRow.setPadding(0, dp(5), 0, dp(8));
         filters.addView(filterRow);
-        body.addView(filters);
+        body.addView(filters, new LinearLayout.LayoutParams(-1, dp(40)));
         for (String[] filter : new String[][] {
             {"all", "Wszystkie"}, {"today", "Dzisiaj"},
             {"overdue", "Zaległe"}, {"upcoming", "Nadchodzące"},
@@ -2964,18 +3048,25 @@ public final class MainActivity extends Activity {
             Button chip = new Button(this);
             chip.setAllCaps(false);
             chip.setText(filter[1]);
+            chip.setTextSize(11);
+            chip.setMinHeight(0);
+            chip.setMinimumHeight(0);
             chip.setTextColor(filter[0].equals(tasksFilter)
                 ? skin.accentInk : ink);
             chip.setBackground(rounded(filter[0].equals(tasksFilter) ? accent : surface));
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48));
-            cp.setMargins(0, 0, dp(8), 0);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(36));
+            cp.setMargins(0, 0, dp(5), 0);
             filterRow.addView(chip, cp);
             chip.setOnClickListener(v -> {
                 tasksFilter = filter[0];
+                tasksPage = 0;
                 render();
             });
         }
-        button("Historia wszystkich wykonań", () -> go("task_history"));
+
+        LinearLayout history = compactActionRow();
+        compactAction(history, "↺ Historia wykonań", () -> go("task_history"));
+
         String today = LocalDate.now().toString();
         String condition;
         String[] args = null;
@@ -2986,18 +3077,40 @@ public final class MainActivity extends Activity {
             case "done": condition = "done=1"; break;
             default: condition = "1=1";
         }
+
+        int total = 0;
+        try (Cursor count = db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM tasks WHERE " + condition, args)) {
+            if (count.moveToFirst()) total = count.getInt(0);
+        }
+        int pages = Math.max(1, (total + 2) / 3);
+        tasksPage = Math.max(0, Math.min(tasksPage, pages - 1));
+
+        int shown = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,title,done,due_date,repeat_rule,repeat_every FROM tasks "
                 + "WHERE " + condition + " ORDER BY done ASC,"
                 + "CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
-                + "due_date ASC,id DESC", args)) {
-            if (cursor.getCount() == 0)
-                note("Brak czynności w tym widoku. Wybierz inny filtr lub dodaj nową.");
+                + "due_date ASC,id DESC LIMIT 3 OFFSET " + (tasksPage * 3), args)) {
             while (cursor.moveToNext()) {
+                shown++;
                 drawTask(cursor.getLong(0), cursor.getString(1), cursor.getInt(2) == 1,
                     cursor.isNull(3) ? "" : cursor.getString(3), cursor.getString(4),
                     cursor.getInt(5));
             }
+        }
+        if (shown == 0)
+            note("Brak czynności w tym widoku. Wybierz filtr lub dodaj nową.");
+
+        if (pages > 1) {
+            LinearLayout pager = compactActionRow();
+            compactAction(pager, "‹", () -> {
+                if (tasksPage > 0) { tasksPage--; render(); }
+            });
+            compactAction(pager, (tasksPage + 1) + " / " + pages, () -> { });
+            compactAction(pager, "›", () -> {
+                if (tasksPage + 1 < pages) { tasksPage++; render(); }
+            });
         }
     }
 
@@ -3005,17 +3118,17 @@ public final class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
-        b.setTextSize(14);
+        b.setTextSize(13);
         boolean onHome = "home".equals(screen);
         b.setTextColor(onHome ? skin.buttonForeground : ink);
         b.setBackground(skin.pill(this, onHome
             ? (skin.light ? 0xFFEFF8F2 : 0xFFEAF5F5) : skin.tileTop));
-        b.setElevation(dp(2));
-        b.setMinHeight(dp(52));
+        b.setElevation(dp(1));
+        b.setMinHeight(dp(40));
         touchFeedback(b);
         b.setOnClickListener(v -> action.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(5), 0, dp(5));
+        params.setMargins(0, dp(2), 0, dp(2));
         container.addView(b, params);
     }
 
@@ -3100,8 +3213,8 @@ public final class MainActivity extends Activity {
         TextView action = text(label, 13, true);
         action.setGravity(Gravity.CENTER);
         action.setBackground(rounded(surface == bg ? accent : bg));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        lp.setMargins(dp(2), dp(5), dp(2), 0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(36), 1);
+        lp.setMargins(dp(2), dp(2), dp(2), 0);
         row.addView(action, lp);
         action.setOnClickListener(v -> run.run());
     }
@@ -8274,56 +8387,30 @@ public final class MainActivity extends Activity {
 
     private void pantry() {
         header("Spiżarnia • lokalne zapasy");
-        button("☷ Lista zakupów", () -> go("shopping"));
-        button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
-        button("☷ Kategoria: " + (pantryCategoryFilter.isEmpty()
-                ? "Wszystkie" : PantryCategories.label(pantryCategoryFilter)), () -> {
-            int chosen = java.util.Arrays.asList(PantryCategories.FILTER_IDS)
-                .indexOf(pantryCategoryFilter);
-            new AlertDialog.Builder(this).setTitle("Filtr kategorii")
-                .setSingleChoiceItems(PantryCategories.FILTER_LABELS,
-                    Math.max(0, chosen), (dialog, index) -> {
-                        pantryCategoryFilter = PantryCategories.FILTER_IDS[index];
-                        dialog.dismiss();
-                        render();
-                    }).setNegativeButton("Anuluj", null).show();
-        });
-        button("📷 Skanuj i dodaj +1", () -> {
+
+        LinearLayout row1 = compactActionRow();
+        compactAction(row1, "☷ Zakupy", () -> go("shopping"));
+        compactAction(row1, "+ Produkt", () -> pantryProductDialog(null, ""));
+
+        LinearLayout row2 = compactActionRow();
+        compactAction(row2, "📷 Dodaj +1", () -> {
             finishPantryBatch();
             openPantryCamera(false);
         });
-        button("📷 Skanuj i wyciągnij −1", () -> {
+        compactAction(row2, "📷 Wyjmij −1", () -> {
             finishPantryBatch();
             launchTakeScanner(false);
         });
-        if (!pantryBatch.active()) {
-            button("📷 Skanuj serię — dodawaj +1", () -> startPantryBatch("ADD"));
-            button("📷 Skanuj serię — wyciągaj −1", () -> startPantryBatch("TAKE"));
-        } else {
-            button("⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
-                this::finishPantryBatch);
-        }
-        button("⌨ Wpisz kod ręcznie", this::manualPantryBarcode);
-        button("Historia skanów", this::showPantryScanHistory);
-        button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
-        button(pantrySearch.isEmpty() ? "⌕ Szukaj produktu" :
-            "⌕ Szukaj: " + pantrySearch, () -> {
-            EditText search = new EditText(this);
-            search.setSingleLine(true);
-            search.setText(pantrySearch);
-            search.setHint("Nazwa produktu");
-            new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
-                .setView(search).setNegativeButton("Anuluj", null)
-                .setNeutralButton("Wyczyść", (d, w) -> {
-                    pantrySearch = "";
-                    render();
-                })
-                .setPositiveButton("Szukaj", (d, w) -> {
-                    pantrySearch = search.getText().toString().trim();
-                    render();
-                }).show();
-        });
+
+        LinearLayout row3 = compactActionRow();
+        compactAction(row3, "☷ Kategoria", this::showPantryCategoryDialog);
+        compactAction(row3, pantrySearch.isEmpty() ? "⌕ Szukaj" : "⌕ Filtr",
+            this::showPantrySearchDialog);
+        compactAction(row3, "⋯ Więcej", this::showPantryMoreMenu);
+
         int matched = 0;
+        int shown = 0;
+        final int pageSize = 2;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,name,qty,category FROM pantry ORDER BY name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
@@ -8334,69 +8421,211 @@ public final class MainActivity extends Activity {
                         && !pantryCategoryFilter.equals(category)) continue;
                 if (!pantrySearch.isEmpty() && !name.toLowerCase(Locale.ROOT)
                     .contains(pantrySearch.toLowerCase(Locale.ROOT))) continue;
-                matched++;
+
+                int index = matched++;
+                if (index < pantryPage * pageSize
+                        || index >= (pantryPage + 1) * pageSize) continue;
+                shown++;
+
                 int qty = cursor.getInt(2);
-                LinearLayout box = card();
                 PantryBarcodeStore.Details details = PantryBarcodeStore.details(
                     db.getReadableDatabase(), id);
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+
+                LinearLayout box = card();
+                box.setPadding(dp(10), dp(7), dp(10), dp(7));
+                LinearLayout head = new LinearLayout(this);
+                head.setOrientation(LinearLayout.HORIZONTAL);
+                head.setGravity(Gravity.CENTER_VERTICAL);
+
                 if (details != null && !details.imageUrl.isEmpty()) {
                     Bitmap thumbnail = PantryProductLookup.cached(this, details.imageUrl);
                     if (thumbnail != null) {
                         ImageView photo = new ImageView(this);
-                        int px = (int) (getResources().getDisplayMetrics().density * 88);
-                        photo.setLayoutParams(new LinearLayout.LayoutParams(px, px));
                         photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
                         photo.setImageBitmap(thumbnail);
-                        box.addView(photo);
-                    } else {
-                        taskAction(box, "⬇ Pobierz zdjęcie produktu",
-                            () -> refreshPantryPhoto(details.imageUrl));
+                        LinearLayout.LayoutParams pp =
+                            new LinearLayout.LayoutParams(dp(50), dp(50));
+                        pp.setMargins(0, 0, dp(8), 0);
+                        head.addView(photo, pp);
                     }
                 }
-                PantryPackageStore.Pack pack = PantryPackageStore.find(
-                    db.getReadableDatabase(), id);
-                box.addView(text(name + " • " + qty + " opak.", 18, true));
-                box.addView(text(PantryPackageRules.summary(
-                    qty, pack.unit, pack.sizeMilli), 14, false));
-                box.addView(text(PantryCategories.label(category), 13, false));
-                nfcTargetButton(box,"pantry",id,name);
-                if (details != null && !details.brand.isEmpty())
-                    box.addView(text("Marka: " + details.brand, 13, false));
-                try (Cursor prices = PantryPriceHistoryStore.forProduct(
-                        db.getReadableDatabase(), id)) {
-                    if (prices.moveToFirst()) {
-                        box.addView(text("Ostatnia cena zakupu: "
-                            + MoneyRules.format(prices.getLong(0)) + " / "
-                            + prices.getString(1)
-                            + (prices.getString(2).isEmpty() ? ""
-                                : " • " + prices.getString(2)), 14, false));
-                        smallButton(box, "Historia cen", () ->
-                            showPantryPriceHistory(id, name));
-                    }
-                }
+
+                LinearLayout info = new LinearLayout(this);
+                info.setOrientation(LinearLayout.VERTICAL);
+                TextView product = text(name + " • " + qty + " opak.", 15, true);
+                product.setPadding(0, 0, 0, 0);
+                info.addView(product);
+                String amount = pack == null ? qty + " opak."
+                    : PantryPackageRules.summary(qty, pack.unit, pack.sizeMilli);
+                TextView amountText = text(amount, 12, false);
+                amountText.setTextColor(subdued);
+                amountText.setPadding(0, 0, 0, 0);
+                info.addView(amountText);
+                TextView categoryText = text(PantryCategories.label(category), 11, false);
+                categoryText.setTextColor(subdued);
+                categoryText.setPadding(0, 0, 0, 0);
+                info.addView(categoryText);
+                head.addView(info, new LinearLayout.LayoutParams(0, -2, 1f));
+                box.addView(head);
+
                 LinearLayout quick = new LinearLayout(this);
                 quick.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(quick);
-                taskAction(quick, "＋ 1", () -> {
+                taskAction(quick, "＋1", () -> {
                     db.changeStock(id, 1);
                     DiagnosticLog.event("PANTRY_INCREMENT");
                     render();
                 });
-                taskAction(quick, "－ 1", () -> {
+                taskAction(quick, "－1", () -> {
                     db.changeStock(id, -1);
                     DiagnosticLog.event("PANTRY_DECREMENT");
                     render();
                 });
-                taskAction(quick, "Ustaw ilość", () -> {
+                taskAction(quick, "⋯ Więcej",
+                    () -> showPantryProductMenu(id, name, qty, category));
+            }
+        }
+
+        int pages = Math.max(1, (matched + pageSize - 1) / pageSize);
+        if (matched > 0 && pantryPage >= pages) {
+            pantryPage = pages - 1;
+            render();
+            return;
+        }
+        if (matched == 0)
+            note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
+                ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
+                : "Brak produktów dla filtra.");
+        else
+            note("Produkty: " + matched + " • strona " + (pantryPage + 1)
+                + " / " + pages);
+
+        if (pages > 1) {
+            LinearLayout pager = compactActionRow();
+            compactAction(pager, "‹", () -> {
+                if (pantryPage > 0) { pantryPage--; render(); }
+            });
+            compactAction(pager, (pantryPage + 1) + " / " + pages, () -> { });
+            compactAction(pager, "›", () -> {
+                if (pantryPage + 1 < pages) { pantryPage++; render(); }
+            });
+        }
+    }
+
+    private void showPantryCategoryDialog() {
+        int chosen = java.util.Arrays.asList(PantryCategories.FILTER_IDS)
+            .indexOf(pantryCategoryFilter);
+        new AlertDialog.Builder(this).setTitle("Filtr kategorii")
+            .setSingleChoiceItems(PantryCategories.FILTER_LABELS,
+                Math.max(0, chosen), (dialog, index) -> {
+                    pantryCategoryFilter = PantryCategories.FILTER_IDS[index];
+                    pantryPage = 0;
+                    dialog.dismiss();
+                    render();
+                }).setNegativeButton("Anuluj", null).show();
+    }
+
+    private void showPantrySearchDialog() {
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setText(pantrySearch);
+        search.setHint("Nazwa produktu");
+        new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
+            .setView(search)
+            .setNegativeButton("Anuluj", null)
+            .setNeutralButton("Wyczyść", (d, w) -> {
+                pantrySearch = "";
+                pantryPage = 0;
+                render();
+            })
+            .setPositiveButton("Szukaj", (d, w) -> {
+                pantrySearch = search.getText().toString().trim();
+                pantryPage = 0;
+                render();
+            }).show();
+    }
+
+    private void showPantryMoreMenu() {
+        final String[] labels = pantryBatch.active()
+            ? new String[]{"⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
+                "⌨ Wpisz kod ręcznie", "Historia skanów",
+                "◫ Rozpocznij / wznów remanent"}
+            : new String[]{"📷 Skanuj serię — dodawaj +1",
+                "📷 Skanuj serię — wyciągaj −1",
+                "⌨ Wpisz kod ręcznie", "Historia skanów",
+                "◫ Rozpocznij / wznów remanent"};
+        new AlertDialog.Builder(this)
+            .setTitle("Spiżarnia • więcej")
+            .setItems(labels, (dialog, which) -> {
+                if (pantryBatch.active()) {
+                    if (which == 0) finishPantryBatch();
+                    else if (which == 1) manualPantryBarcode();
+                    else if (which == 2) showPantryScanHistory();
+                    else go("audit");
+                } else {
+                    if (which == 0) startPantryBatch("ADD");
+                    else if (which == 1) startPantryBatch("TAKE");
+                    else if (which == 2) manualPantryBarcode();
+                    else if (which == 3) showPantryScanHistory();
+                    else go("audit");
+                }
+            })
+            .setNegativeButton("Zamknij", null)
+            .show();
+    }
+
+    private void showPantryProductMenu(long id, String name, int qty,
+            String category) {
+        PantryBarcodeStore.Details details = PantryBarcodeStore.details(
+            db.getReadableDatabase(), id);
+        PantryPackageStore.Pack pack = PantryPackageStore.find(
+            db.getReadableDatabase(), id);
+        String amount = pack == null ? qty + " opak."
+            : PantryPackageRules.summary(qty, pack.unit, pack.sizeMilli);
+
+        String lastPrice = "Brak zapisanej ceny.";
+        try (Cursor prices = PantryPriceHistoryStore.forProduct(
+                db.getReadableDatabase(), id)) {
+            if (prices.moveToFirst())
+                lastPrice = "Ostatnia cena: " + MoneyRules.format(prices.getLong(0))
+                    + " / " + prices.getString(1)
+                    + (prices.getString(2).isEmpty() ? ""
+                        : " • " + prices.getString(2));
+        }
+        String meta = amount + "\n" + PantryCategories.label(category)
+            + (details != null && !details.brand.isEmpty()
+                ? "\nMarka: " + details.brand : "")
+            + "\n" + lastPrice;
+
+        java.util.ArrayList<String> actions = new java.util.ArrayList<>();
+        actions.add("Ustaw ilość");
+        actions.add("NFC");
+        actions.add("Historia cen");
+        actions.add("Edytuj produkt");
+        actions.add("Usuń produkt");
+        if (details != null && !details.imageUrl.isEmpty())
+            actions.add("Odśwież zdjęcie");
+
+        new AlertDialog.Builder(this)
+            .setTitle(name + " • " + qty + " opak.")
+            .setMessage(meta)
+            .setItems(actions.toArray(new String[0]), (dialog, which) -> {
+                String action = actions.get(which);
+                if ("Ustaw ilość".equals(action)) {
                     EditText count = new EditText(this);
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
-                    new AlertDialog.Builder(this).setTitle(name + " • liczba opakowań")
-                        .setView(count).setNegativeButton("Anuluj", null)
+                    new AlertDialog.Builder(this)
+                        .setTitle(name + " • liczba opakowań")
+                        .setView(count)
+                        .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Zapisz", (d, w) -> {
                             try {
-                                int value = Integer.parseInt(count.getText().toString().trim());
+                                int value = Integer.parseInt(
+                                    count.getText().toString().trim());
                                 if (value < 0 || value > 100000000) {
                                     alert("Podaj ilość od 0 do 100 000 000.");
                                     return;
@@ -8408,18 +8637,19 @@ public final class MainActivity extends Activity {
                                 alert("Podaj liczbę całkowitą.");
                             }
                         }).show();
-                });
-                LinearLayout management = new LinearLayout(this);
-                management.setOrientation(LinearLayout.HORIZONTAL);
-                box.addView(management);
-                taskAction(management, "Edytuj", () -> pantryProductDialog(id, name));
-                taskAction(management, "Usuń", () -> {
+                } else if ("NFC".equals(action)) {
+                    showNfcTargetMenu(null, "pantry", id, name);
+                } else if ("Historia cen".equals(action)) {
+                    showPantryPriceHistory(id, name);
+                } else if ("Edytuj produkt".equals(action)) {
+                    pantryProductDialog(id, name);
+                } else if ("Usuń produkt".equals(action)) {
                     if (db.openAuditId() != 0) {
-                        alert("Najpierw zakończ lub anuluj remanent. "
-                            + "W jego trakcie nie można usuwać produktów.");
+                        alert("Najpierw zakończ lub anuluj remanent.");
                         return;
                     }
-                    new AlertDialog.Builder(this).setTitle("Usunąć produkt?")
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć produkt?")
                         .setMessage(name + " • " + qty + " opak.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Usuń", (d, w) -> {
@@ -8427,18 +8657,13 @@ public final class MainActivity extends Activity {
                             DiagnosticLog.event("PANTRY_PRODUCT_DELETED");
                             render();
                         }).show();
-                });
-            }
-        }
-        if (matched == 0) note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
-            ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
-            : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
-        note("Stan zapisujemy w pełnych opakowaniach; np. 3 × 0,5 l = 1,5 l. "
-            + "Wyjmowanie −1: aparat pozostaje otwarty, odliczanie domyślnie 5 s; "
-            + "inny kod zastępuje poprzedni bez jego odjęcia. "
-            + "To samo opakowanie ponownie wymaga świadomego wyboru.");
+                } else if (details != null && !details.imageUrl.isEmpty()) {
+                    refreshPantryPhoto(details.imageUrl);
+                }
+            })
+            .setNegativeButton("Zamknij", null)
+            .show();
     }
-
 
     private void startPantryBatch(String mode) {
         if (pantryBatch.active()) return;
@@ -10208,6 +10433,7 @@ public final class MainActivity extends Activity {
             ? (skin.showcase()
                 ? 3 : HomeTileLayout.homeColumns(Math.round(viewport / density)))
             : HomeTileLayout.columns(Math.round(viewport / density));
+        if (isHome) columns = 3;
         int span = isHome
             && !skin.showcase()
             && "double".equals(prefs.getString("tile_width_" + id, "small"))
@@ -10262,9 +10488,11 @@ public final class MainActivity extends Activity {
         // Reserve space for the caption and drag handle. The icon fills the
         // remaining square visual area; double-wide tiles get a taller icon
         // without stretching its 3D artwork horizontally.
+        int legacyHomeHeight = side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP);
         int tileHeight = isHome
             ? (skin.showcase()
-                ? side : side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP))
+                ? Math.min(side, dp(92))
+                : Math.min(legacyHomeHeight, dp(homeEditMode ? 92 : 82)))
             : side;
         LinearLayout.LayoutParams params =
             new LinearLayout.LayoutParams(
@@ -10322,6 +10550,8 @@ public final class MainActivity extends Activity {
 
         int iconWidth = side * span + dp(tileGapDp) * (span - 1) - dp(10);
         int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
+        if (isHome && !skin.showcase() && !showTileHandle)
+            iconHeight = tileHeight - dp(31) - dp(7);
         if (isHome && skin.showcase())
             iconHeight = tileHeight - dp(showTileHandle ? 19 : 0) - dp(28) - dp(10);
         int displayedIconSize = isHome

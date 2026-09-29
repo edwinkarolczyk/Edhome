@@ -7,9 +7,9 @@ state = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBatchSession.jav
 store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text(encoding="utf-8")
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 checks = [
-    'button("📷 Skanuj serię — dodawaj +1"',
-    'button("📷 Skanuj serię — wyciągaj −1"',
-    'this::finishPantryBatch',
+    '"📷 Skanuj serię — dodawaj +1"',
+    '"📷 Skanuj serię — wyciągaj −1"',
+    'finishPantryBatch();',
     'pantryBatch.start(mode)',
     'pantryBatch.launchCamera()',
     'pantryBatch.receiveScan(scan.getContents())',
