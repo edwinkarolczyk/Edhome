@@ -144,14 +144,79 @@ final class UiSkin {
     }
 
     GradientDrawable tile(Context context, boolean primary, int tint) {
+        int[] colors;
+        int stroke;
+        if (showcase() && primary) {
+            if (MODERN_LIGHT.equals(name)) {
+                colors = new int[]{blend(tint, Color.WHITE, 0.18f), tint};
+                stroke = blend(tint, Color.BLACK, 0.16f);
+            } else {
+                colors = new int[]{blend(tint, background, 0.72f),
+                    blend(tint, background, 0.86f)};
+                stroke = blend(tint, Color.WHITE, 0.12f);
+            }
+        } else {
+            colors = primary ? new int[]{tint, tint}
+                : new int[]{tileTop, tileBottom};
+            stroke = primary
+                ? (light ? Color.parseColor("#71CDA3") : accent) : outline;
+        }
         GradientDrawable drawable = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            primary ? new int[]{tint, tint}
-                : new int[]{tileTop, tileBottom});
-        drawable.setCornerRadius(dp(context, 28));
-        drawable.setStroke(dp(context, primary ? 2 : 1),
-            primary ? (light ? Color.parseColor("#71CDA3") : accent) : outline);
+            GradientDrawable.Orientation.TL_BR, colors);
+        drawable.setCornerRadius(dp(context, showcase() ? 19 : 28));
+        drawable.setStroke(dp(context, 1), stroke);
         return drawable;
+    }
+
+    private static int blend(int a, int b, float towardB) {
+        float t = Math.max(0f, Math.min(1f, towardB));
+        int red = Math.round(Color.red(a) * (1f - t) + Color.red(b) * t);
+        int green = Math.round(Color.green(a) * (1f - t) + Color.green(b) * t);
+        int blue = Math.round(Color.blue(a) * (1f - t) + Color.blue(b) * t);
+        return Color.rgb(red, green, blue);
+    }
+
+    int showcaseTileTint(String target) {
+        if (MODERN_LIGHT.equals(name)) {
+            if ("paycheck".equals(target) || "paycheck_private".equals(target))
+                return Color.parseColor("#D8E9FF");
+            if ("tasks".equals(target)) return Color.parseColor("#DFF6E7");
+            if ("calendar".equals(target)) return Color.parseColor("#FBE0F0");
+            if ("pantry".equals(target)) return Color.parseColor("#FFF0DA");
+            if ("shopping".equals(target)) return Color.parseColor("#DDF2FF");
+            if ("places".equals(target)) return Color.parseColor("#F7E7D8");
+            if ("storage".equals(target)) return Color.parseColor("#F3E3F7");
+            if ("vehicles".equals(target)) return Color.parseColor("#DCEEFF");
+            if ("waste".equals(target)) return Color.parseColor("#DFF4EA");
+            return Color.parseColor("#E9EEF7");
+        }
+        if (ELEGANT_DARK.equals(name)) {
+            if ("paycheck".equals(target) || "paycheck_private".equals(target))
+                return Color.parseColor("#4D63FF");
+            if ("tasks".equals(target)) return Color.parseColor("#23C483");
+            if ("calendar".equals(target)) return Color.parseColor("#B94BFF");
+            if ("pantry".equals(target)) return Color.parseColor("#FF7A25");
+            if ("shopping".equals(target)) return Color.parseColor("#FF3D78");
+            if ("places".equals(target)) return Color.parseColor("#22D3EE");
+            if ("storage".equals(target)) return Color.parseColor("#E3A62F");
+            if ("vehicles".equals(target)) return Color.parseColor("#2FA5FF");
+            if ("waste".equals(target)) return Color.parseColor("#3BCB6D");
+            return Color.parseColor("#4A6B8C");
+        }
+        if (FOREST.equals(name)) {
+            if ("paycheck".equals(target) || "paycheck_private".equals(target))
+                return Color.parseColor("#9A6847");
+            if ("tasks".equals(target)) return Color.parseColor("#4F7C48");
+            if ("calendar".equals(target)) return Color.parseColor("#9A6847");
+            if ("pantry".equals(target)) return Color.parseColor("#557A42");
+            if ("shopping".equals(target)) return Color.parseColor("#4F7185");
+            if ("places".equals(target)) return Color.parseColor("#4F6740");
+            if ("storage".equals(target)) return Color.parseColor("#8C6545");
+            if ("vehicles".equals(target)) return Color.parseColor("#63714B");
+            if ("waste".equals(target)) return Color.parseColor("#4E754E");
+            return Color.parseColor("#49604D");
+        }
+        return accent;
     }
 
     GradientDrawable pill(Context context, int tint) {
@@ -174,6 +239,7 @@ final class UiSkin {
     }
 
     int tileText(int tint) {
+        if (showcase()) return light ? Color.parseColor("#10213A") : foreground;
         if (!light && tint != accent) return Color.WHITE;
         return accentInk;
     }
