@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 133,
-  "versionName": "0.6.0.68",
-  "changelog": "EDHOME 0.6.0.68 — ekran Start pozostaje siatką 3 × 3. Gdy jest więcej niż 9 kafelków, kolejne zestawy są dostępne jako strony przewijane palcem w lewo/prawo. Kropki pod siatką pokazują liczbę stron, a aktywna strona jest wyraźnie zaznaczona. W trybie edycji można przeciągać kafelki w obrębie strony oraz przenosić je na poprzednią lub następną stronę. Układ jest zapisywany. Wszystkie dane i funkcje 0.6 pozostają bez zmian. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.68/edhome-beta.apk",
-  "sha256": "6c05c6b1bb8fe24e53e7720e3d1aba0fcce61d5daf8ca655503e2a8354b0c522"
+  "versionCode": 134,
+  "versionName": "0.6.0.69",
+  "changelog": "EDHOME 0.6.0.69 — diagnostykę Androida można pobrać bezpośrednio z EDHOME Desktop. Gdy telefon nie ma nowych logów, Desktop nic nie pobiera. Po zapisaniu TXT na PC Desktop wysyła potwierdzenie i telefon usuwa wyłącznie dokładnie pobraną wersję logu; w razie błędu lub nowych wpisów nic nie jest kasowane. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.69/edhome-beta.apk",
+  "sha256": "a010c24e6ade26b7f7c584a0cc5dbcb8d7bb9a3257e5bdcb89d018b56b34e997"
 }
