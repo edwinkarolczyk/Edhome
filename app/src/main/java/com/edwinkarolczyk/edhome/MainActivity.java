@@ -762,7 +762,8 @@ public final class MainActivity extends Activity {
         else if (privateAuthDialog == null)
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         root.removeAllViews();
-        root.setBackgroundColor(bg);
+        if (skin.showcase()) root.setBackground(skin.page(this));
+        else root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
         int systemBarFlags = skin.light
@@ -776,9 +777,14 @@ public final class MainActivity extends Activity {
         scroll.setClipToPadding(false);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16), dp(14), dp(16), dp(48));
+        int pageSide = skin.showcase() ? 12 : 16;
+        body.setPadding(dp(pageSide), dp(skin.showcase() ? 8 : 14),
+            dp(pageSide), dp(skin.showcase() ? 22 : 48));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams scrollParams = skin.showcase()
+            ? new LinearLayout.LayoutParams(-1, 0, 1f)
+            : new LinearLayout.LayoutParams(-1, -1);
+        root.addView(scroll, scrollParams);
 
         if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();
         else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();
@@ -809,6 +815,7 @@ public final class MainActivity extends Activity {
                 default: home();
             }
         }
+        if (skin.showcase() && unlocked) addShowcaseBottomNavigation();
         renderedScreen=screen;
         // post-layout restore; direct scrollTo before layout is silently lost.
         scroll.post(()->{
@@ -939,16 +946,52 @@ public final class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView appTitle = text("EDHOME  •  "
-            + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
-            25, true);
-        row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        if (skin.showcase()) {
+            LinearLayout brand = new LinearLayout(this);
+            brand.setOrientation(LinearLayout.VERTICAL);
+            TextView appTitle = text("⌂  edhome", 22, true);
+            appTitle.setPadding(0, 0, 0, 0);
+            brand.addView(appTitle);
+            TextView idea = text("Idea by Edwin", 11, false);
+            idea.setTextColor(subdued);
+            idea.setPadding(dp(28), 0, 0, 0);
+            brand.addView(idea);
+            row.addView(brand, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            TextView search = text("⌕", 23, true);
+            search.setGravity(Gravity.CENTER);
+            search.setBackground(skin.panel(this, surface, 20));
+            search.setOnClickListener(v -> showShowcaseJump());
+            touchFeedback(search);
+            LinearLayout.LayoutParams icon = new LinearLayout.LayoutParams(dp(42), dp(42));
+            icon.setMargins(0, 0, dp(7), 0);
+            row.addView(search, icon);
+
+            int alerts = db == null ? 0 : db.overdueTasks();
+            TextView bell = text(alerts > 0 ? "♢ " + Math.min(alerts, 99) : "♢", 16, true);
+            bell.setGravity(Gravity.CENTER);
+            bell.setBackground(skin.panel(this, surface, 20));
+            bell.setOnClickListener(v -> {
+                tasksFilter = alerts > 0 ? "overdue" : "today";
+                go("tasks");
+            });
+            touchFeedback(bell);
+            LinearLayout.LayoutParams bellParams =
+                new LinearLayout.LayoutParams(dp(48), dp(42));
+            bellParams.setMargins(0, 0, dp(7), 0);
+            row.addView(bell, bellParams);
+        } else {
+            TextView appTitle = text("EDHOME  •  "
+                + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
+                25, true);
+            row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        }
 
         if (BetaUpdater.isBeta()) {
-            TextView badge = text("", 13, true);
+            TextView badge = text("", skin.showcase() ? 11 : 13, true);
             badge.setGravity(Gravity.CENTER);
-            badge.setMinWidth(dp(92));
-            badge.setPadding(dp(10), dp(6), dp(10), dp(6));
+            badge.setMinWidth(dp(skin.showcase() ? 50 : 92));
+            badge.setPadding(dp(8), dp(6), dp(8), dp(6));
             badge.setBackground(skin.panel(this, surface, 22));
             badge.setClickable(true);
             badge.setFocusable(true);
@@ -961,7 +1004,11 @@ public final class MainActivity extends Activity {
                     if (!badge.isAttachedToWindow()) return;
                     boolean online = LanSyncServer.hasRecentClient();
                     boolean syncing = online && LanSyncServer.isSyncing();
-                    if (syncing) {
+                    if (skin.showcase()) {
+                        badge.setText(syncing ? (pulse ? "PC →" : "← PC")
+                            : (online ? "PC ✓" : "PC ×"));
+                        pulse = syncing && !pulse;
+                    } else if (syncing) {
                         badge.setText(pulse ? "●  →   PC" : "●    ← PC");
                         pulse = !pulse;
                     } else {
@@ -978,10 +1025,114 @@ public final class MainActivity extends Activity {
                     badge.postDelayed(this, syncing ? 320L : 1200L);
                 }
             };
-            row.addView(badge, new LinearLayout.LayoutParams(-2, -2));
+            row.addView(badge, new LinearLayout.LayoutParams(-2, dp(skin.showcase() ? 42 : 40)));
             badge.post(refresh);
         }
         body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void showShowcaseJump() {
+        final String[] labels = {
+            "Czynności", "Kalendarz", "Spiżarnia", "Lista zakupów",
+            "Miejsca", "Magazyn domowy", "Pojazdy", "PayCheck",
+            "Skaner", "Ustawienia"
+        };
+        final String[] targets = {
+            "tasks", "calendar", "pantry", "shopping", "places",
+            "storage", "vehicles", "paycheck", "scanner", "settings"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Przejdź do")
+            .setItems(labels, (dialog, which) -> go(targets[which]))
+            .setNegativeButton("Anuluj", null)
+            .show();
+    }
+
+    private TextView showcaseNavItem(String symbol, String label,
+            boolean selected, Runnable callback) {
+        TextView item = text(symbol + "\n" + label, 11, true);
+        item.setGravity(Gravity.CENTER);
+        item.setMinHeight(dp(62));
+        item.setTextColor(selected ? accent : subdued);
+        if (selected) item.setBackground(skin.panel(this, skin.iconBacking, 18));
+        item.setOnClickListener(v -> callback.run());
+        item.setClickable(true);
+        item.setFocusable(true);
+        touchFeedback(item);
+        return item;
+    }
+
+    private void addShowcaseBottomNavigation() {
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setPadding(dp(7), dp(5), dp(7), dp(5));
+        nav.setBackground(skin.panel(this, surface, 0));
+        nav.setElevation(dp(12));
+
+        nav.addView(showcaseNavItem("⌂", "Start", "home".equals(screen),
+            () -> go("home")), new LinearLayout.LayoutParams(0, dp(66), 1f));
+        nav.addView(showcaseNavItem("✓", "Zadania", "tasks".equals(screen),
+            () -> go("tasks")), new LinearLayout.LayoutParams(0, dp(66), 1f));
+
+        TextView add = showcaseNavItem("+", "Dodaj", false, this::showShowcaseAdd);
+        add.setTextSize(13);
+        add.setTextColor(skin.buttonForeground);
+        add.setBackground(skin.pill(this, accent));
+        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(0, dp(66), 1f);
+        addParams.setMargins(dp(5), 0, dp(5), 0);
+        nav.addView(add, addParams);
+
+        boolean notices = "calendar".equals(screen);
+        nav.addView(showcaseNavItem("♢", "Powiad.", notices, () -> {
+            tasksFilter = db.overdueTasks() > 0 ? "overdue" : "today";
+            go("tasks");
+        }), new LinearLayout.LayoutParams(0, dp(66), 1f));
+        nav.addView(showcaseNavItem("☰", "Więcej", "settings".equals(screen),
+            this::showShowcaseMore), new LinearLayout.LayoutParams(0, dp(66), 1f));
+
+        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(76)));
+    }
+
+    private void showShowcaseAdd() {
+        final String[] labels = {
+            "Dodaj kafelek na Start", "Dodaj czynność", "Dodaj zakup",
+            "Dodaj rzecz / pudełko", "Dodaj wydatek"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Dodaj")
+            .setItems(labels, (dialog, which) -> {
+                if (which == 0) {
+                    if ("home".equals(screen)) showAddTileDialog();
+                    else {
+                        go("home");
+                        root.postDelayed(this::showAddTileDialog, 140L);
+                    }
+                } else if (which == 1) go("tasks");
+                else if (which == 2) go("shopping");
+                else if (which == 3) go("storage");
+                else go("paycheck");
+            })
+            .setNegativeButton("Anuluj", null)
+            .show();
+    }
+
+    private void showShowcaseMore() {
+        final String[] labels = BetaUpdater.isBeta()
+            ? new String[]{"Skaner", "Aktualizacje", "Kopia danych",
+                "Ustawienia", "Diagnostyka"}
+            : new String[]{"Skaner", "Aktualizacje", "Kopia danych", "Ustawienia"};
+        new AlertDialog.Builder(this)
+            .setTitle("Więcej")
+            .setItems(labels, (dialog, which) -> {
+                if (which == 0) go("scanner");
+                else if (which == 1) go("updates");
+                else if (which == 2) go("backup");
+                else if (which == 3) go("settings");
+                else go("diagnostics");
+            })
+            .setNegativeButton("Anuluj", null)
+            .show();
     }
 
     private void header(String subtitle) {
@@ -2744,9 +2895,12 @@ public final class MainActivity extends Activity {
     /** Contrasting colors for white native dialogs, independent of the six screen themes. */
     private int lightDialogAccent() {
         if (UiSkin.TRAINER.equals(skin.name)) return 0xFFC62828;
-        if (UiSkin.NATURE.equals(skin.name) || UiSkin.PASTEL.equals(skin.name))
+        if (UiSkin.FOREST.equals(skin.name)
+                || UiSkin.NATURE.equals(skin.name) || UiSkin.PASTEL.equals(skin.name))
             return 0xFF246B45;
-        if (UiSkin.GLASS.equals(skin.name)) return 0xFF176B83;
+        if (UiSkin.MODERN_LIGHT.equals(skin.name)) return 0xFF246FE5;
+        if (UiSkin.ELEGANT_DARK.equals(skin.name)
+                || UiSkin.GLASS.equals(skin.name)) return 0xFF176B83;
         return 0xFF08796E;
     }
 
