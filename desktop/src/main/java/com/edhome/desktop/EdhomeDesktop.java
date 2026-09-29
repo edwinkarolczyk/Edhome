@@ -17,6 +17,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.AbstractTableModel;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.datatransfer.StringSelection;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.BufferedWriter;
@@ -68,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.68";
+    private static final String DESKTOP_VERSION = "0.6.0.69";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -126,6 +127,8 @@ public final class EdhomeDesktop extends JFrame {
             }
         }
 
+        DesktopDiagnosticLog.init(DESKTOP_VERSION);
+
         if (!acquireSingleInstanceLock()) {
             SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
                 null,
@@ -144,6 +147,7 @@ public final class EdhomeDesktop extends JFrame {
             try {
                 new EdhomeDesktop();
             } catch (Throwable error) {
+                DesktopDiagnosticLog.error("APP_START", error);
                 releaseSingleInstanceLock();
                 JOptionPane.showMessageDialog(null,
                     "Nie udało się uruchomić EDHOME Desktop:\n"
@@ -197,6 +201,7 @@ public final class EdhomeDesktop extends JFrame {
 
     private EdhomeDesktop() {
         super("EDHOME Desktop Beta " + DESKTOP_VERSION);
+        DesktopDiagnosticLog.event("WINDOW_CREATED");
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(1050, 680));
         Rectangle usableScreen = GraphicsEnvironment.getLocalGraphicsEnvironment()
@@ -3136,6 +3141,9 @@ public final class EdhomeDesktop extends JFrame {
         JButton qrPair = new JButton("Pokaż QR do połączenia");
         JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
         JButton diagnose = new JButton("Diagnostyka połączenia PC ↔ telefon");
+        JButton phoneLogs = new JButton("Pobierz nowe logi z telefonu");
+        JButton copyDesktopLogs = new JButton("Kopiuj diagnostykę EDHOME Desktop");
+        JButton saveDesktopLogs = new JButton("Zapisz diagnostykę Desktop TXT");
         JButton importFile = new JButton("Wczytaj backup JSON");
         JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
         JCheckBox autostart = new JCheckBox("Uruchamiaj EDHOME Desktop razem z Windows");
@@ -3172,11 +3180,14 @@ public final class EdhomeDesktop extends JFrame {
         g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
         g.gridx=1; form.add(importFile,g);
         g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(diagnose,g);
-        g.gridy=6; form.add(updateDesktop,g);
-        g.gridy=7; form.add(autostart,g);
-        g.gridy=8; form.add(startMinimized,g);
-        g.gridy=9; form.add(autoConnect,g);
-        g.gridy=10; form.add(autoWrite,g);
+        g.gridy=6; form.add(phoneLogs,g);
+        g.gridy=7; form.add(copyDesktopLogs,g);
+        g.gridy=8; form.add(saveDesktopLogs,g);
+        g.gridy=9; form.add(updateDesktop,g);
+        g.gridy=10; form.add(autostart,g);
+        g.gridy=11; form.add(startMinimized,g);
+        g.gridy=12; form.add(autoConnect,g);
+        g.gridy=13; form.add(autoWrite,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -3192,6 +3203,11 @@ public final class EdhomeDesktop extends JFrame {
         diagnose.addActionListener(e ->
             diagnosePhoneConnection(ip.getText().trim(),
                 token.getText().trim(), diagnose));
+        phoneLogs.addActionListener(e ->
+            downloadPhoneDiagnostics(ip.getText().trim(),
+                token.getText().trim(), phoneLogs));
+        copyDesktopLogs.addActionListener(e -> copyDesktopDiagnostics());
+        saveDesktopLogs.addActionListener(e -> saveDesktopDiagnostics());
         importFile.addActionListener(e -> importBackup());
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         autostart.addActionListener(e -> {
@@ -3239,6 +3255,124 @@ public final class EdhomeDesktop extends JFrame {
         notes.setBorder(new EmptyBorder(20, 4, 4, 4));
         page.add(notes, BorderLayout.CENTER);
         return page;
+    }
+
+    private String desktopDiagnosticsText() {
+        String host = PREFS.get("phoneIp", "").trim();
+        return "EDHOME Desktop " + DESKTOP_VERSION + "\n"
+            + "System: " + System.getProperty("os.name") + " "
+                + System.getProperty("os.version") + "\n"
+            + "Java: " + System.getProperty("java.version") + "\n"
+            + "Stan telefonu: " + (connected ? "ONLINE" : "OFFLINE") + "\n"
+            + "Adres telefonu: " + (host.isBlank() ? "brak" : host) + "\n"
+            + "Katalog logów: " + DesktopDiagnosticLog.logDirectory() + "\n\n"
+            + "--- LOG EDHOME DESKTOP ---\n"
+            + DesktopDiagnosticLog.readFullText();
+    }
+
+    private void copyDesktopDiagnostics() {
+        String report = desktopDiagnosticsText();
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
+            new StringSelection(report), null);
+        DesktopDiagnosticLog.event("DIAGNOSTICS_COPIED");
+        JOptionPane.showMessageDialog(this,
+            "Skopiowano diagnostykę EDHOME Desktop do schowka.");
+    }
+
+    private void saveDesktopDiagnostics() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Zapisz diagnostykę EDHOME Desktop");
+        chooser.setSelectedFile(new java.io.File("EDHOME-Desktop-diagnostyka.txt"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        try {
+            Files.writeString(chooser.getSelectedFile().toPath(),
+                desktopDiagnosticsText(), StandardCharsets.UTF_8);
+            DesktopDiagnosticLog.event("DIAGNOSTICS_TXT_SAVED");
+            JOptionPane.showMessageDialog(this,
+                "Zapisano diagnostykę Desktop:\n"
+                    + chooser.getSelectedFile().toPath().toAbsolutePath());
+        } catch (Exception error) {
+            DesktopDiagnosticLog.error("DIAGNOSTICS_TXT_SAVE", error);
+            JOptionPane.showMessageDialog(this,
+                "Nie zapisano diagnostyki:\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void downloadPhoneDiagnostics(String rawHost, String secret,
+            JButton trigger) {
+        if (rawHost == null || rawHost.isBlank()
+                || secret == null || secret.isBlank()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw połącz Desktop z telefonem i zapisz kod parowania.");
+            return;
+        }
+        trigger.setEnabled(false);
+        new SwingWorker<PhoneDiagnosticsResult,Void>() {
+            @Override protected PhoneDiagnosticsResult doInBackground() throws Exception {
+                return new LanClient(rawHost, PORT, secret).diagnostics();
+            }
+
+            @Override protected void done() {
+                trigger.setEnabled(true);
+                try {
+                    PhoneDiagnosticsResult result = get();
+                    if (result == null) {
+                        DesktopDiagnosticLog.event("PHONE_DIAGNOSTICS_EMPTY");
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            "Brak nowych logów diagnostycznych na telefonie.");
+                        return;
+                    }
+
+                    JFileChooser chooser = new JFileChooser();
+                    chooser.setDialogTitle("Zapisz diagnostykę EDHOME Android");
+                    chooser.setSelectedFile(new java.io.File(
+                        "EDHOME-Android-diagnostyka.txt"));
+                    if (chooser.showSaveDialog(EdhomeDesktop.this)
+                            != JFileChooser.APPROVE_OPTION) return;
+
+                    Path target = chooser.getSelectedFile().toPath();
+                    Files.writeString(target, result.text, StandardCharsets.UTF_8);
+                    DesktopDiagnosticLog.event("PHONE_DIAGNOSTICS_SAVED",
+                        "bytes=" + result.text.getBytes(StandardCharsets.UTF_8).length);
+
+                    trigger.setEnabled(false);
+                    new SwingWorker<Boolean,Void>() {
+                        @Override protected Boolean doInBackground() throws Exception {
+                            return new LanClient(rawHost, PORT, secret)
+                                .ackDiagnostics(result.id);
+                        }
+                        @Override protected void done() {
+                            trigger.setEnabled(true);
+                            try {
+                                boolean cleared = get();
+                                DesktopDiagnosticLog.event(
+                                    cleared ? "PHONE_DIAGNOSTICS_CLEARED"
+                                        : "PHONE_DIAGNOSTICS_NOT_CLEARED");
+                                JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                                    cleared
+                                        ? "Zapisano logi telefonu i usunięto pobraną kopię z aplikacji.\n"
+                                            + target.toAbsolutePath()
+                                        : "Log zapisano na PC, ale telefon nie potwierdził usunięcia. "
+                                            + "Logi na telefonie pozostają bezpieczne.");
+                            } catch (Exception error) {
+                                DesktopDiagnosticLog.error(
+                                    "PHONE_DIAGNOSTICS_ACK", error);
+                                JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                                    "Log zapisano na PC, ale nie usunięto go z telefonu:\n"
+                                        + rootMessage(error),
+                                    "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
+                            }
+                        }
+                    }.execute();
+                } catch (Exception error) {
+                    DesktopDiagnosticLog.error("PHONE_DIAGNOSTICS_DOWNLOAD", error);
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie pobrano logów telefonu:\n" + rootMessage(error),
+                        "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     private void diagnosePhoneConnection(String rawHost, String secret,
@@ -3378,6 +3512,7 @@ public final class EdhomeDesktop extends JFrame {
                     connected = true;
                     syncConflictPaused = false;
                     dirty = false;
+                    DesktopDiagnosticLog.event("SYNC_PULL_OK");
                     validate(snapshot);
                     saveCache(snapshot);
                     connection.setText("ONLINE • Android "
@@ -3386,6 +3521,7 @@ public final class EdhomeDesktop extends JFrame {
                     showSection(current);
                     updateTrayTooltip();
                 } catch (Exception ex) {
+                    DesktopDiagnosticLog.error("SYNC_PULL", ex);
                     connected = false;
                     connection.setText("OFFLINE • ponawiam w tle");
                     connection.setForeground(new Color(230, 175, 95));
@@ -5871,6 +6007,8 @@ public final class EdhomeDesktop extends JFrame {
                         scheduleAutoSave();
                     }
 
+                    DesktopDiagnosticLog.event("SYNC_PUSH_OK",
+                        "patch=" + result.patchUsed + " operations=" + result.operations);
                     connection.setText(result.patchUsed
                         ? "ONLINE • zsynchronizowano " + result.operations
                             + (result.operations == 1 ? " zmianę" : " zmiany")
@@ -5878,6 +6016,7 @@ public final class EdhomeDesktop extends JFrame {
                     if (!automatic) showSection(current);
                     updateTrayTooltip();
                 } catch (Exception ex) {
+                    DesktopDiagnosticLog.error("SYNC_PUSH", ex);
                     String message = rootMessage(ex);
                     boolean conflict = message.contains("Konflikt")
                         || message.contains("nowsze dane");
@@ -6604,6 +6743,15 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    private static final class PhoneDiagnosticsResult {
+        final String id;
+        final String text;
+        PhoneDiagnosticsResult(String id, String text) {
+            this.id = id;
+            this.text = text;
+        }
+    }
+
     private static final class LanClient {
         private final String host;
         private final int port;
@@ -6615,6 +6763,48 @@ public final class EdhomeDesktop extends JFrame {
             this.host = normalizeHost(host);
             this.port = port;
             this.token = token;
+        }
+
+        PhoneDiagnosticsResult diagnostics() throws Exception {
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/diagnostics"))
+                .timeout(Duration.ofSeconds(8))
+                .header("X-EDHOME-TOKEN", token)
+                .header("Accept", "text/plain")
+                .GET().build();
+            HttpResponse<String> response = http.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 204) return null;
+            if (response.statusCode() == 404)
+                throw new IOException("Telefon wymaga aktualizacji EDHOME do wersji z pobieraniem diagnostyki.");
+            if (response.statusCode() == 401)
+                throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon odpowiedział HTTP "
+                    + response.statusCode() + ".");
+            String id = response.headers()
+                .firstValue("X-EDHOME-DIAGNOSTICS-ID").orElse("");
+            if (!id.matches("[0-9a-f]{64}") || response.body().isBlank())
+                throw new IOException("Telefon zwrócił niepełny pakiet diagnostyczny.");
+            return new PhoneDiagnosticsResult(id, response.body());
+        }
+
+        boolean ackDiagnostics(String diagnosticsId) throws Exception {
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/diagnostics/ack"))
+                .timeout(Duration.ofSeconds(5))
+                .header("X-EDHOME-TOKEN", token)
+                .header("X-EDHOME-DIAGNOSTICS-ID", diagnosticsId)
+                .POST(HttpRequest.BodyPublishers.noBody()).build();
+            HttpResponse<String> response = http.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 409) return false;
+            if (response.statusCode() == 401)
+                throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon nie potwierdził usunięcia logów: HTTP "
+                    + response.statusCode() + ".");
+            return true;
         }
 
         SnapshotResult snapshot() throws Exception {
