@@ -76,8 +76,8 @@ assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >
 assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
 settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
 assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
-assert 'themeChoice.setSelection(Math.max(0, currentTheme));' in settings
-assert 'smallButton(appearance, "Zastosuj styl"' in settings
-assert 'themeDescription.setText(descriptions[position]);' in settings
+assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
+assert 'smallButton(appearance,"Zastosuj motyw"' in settings
+assert 'settingsAccordion("appearance","Wygląd i kafelki"' in settings
 assert 'for (int i = 0; i < UiSkin.THEMES.length; i++)' not in settings
 print("6 themes via compact dropdown, unlimited configurable tiles, drag, backup and SQLite v22: PASS")
