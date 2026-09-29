@@ -95,6 +95,7 @@ public final class MainActivity extends Activity {
     private NfcAdapter nfcAdapter;
     private PendingNfcTarget pendingNfcTarget;
     private AlertDialog nfcAssignmentDialog;
+    private String scannerNfcStatus = "NFC gotowe";
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -337,8 +338,8 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void enableNfcReaderMode() {
-        if(nfcAdapter==null || !nfcAdapter.isEnabled())return;
+    private boolean enableNfcReaderMode() {
+        if(nfcAdapter==null || !nfcAdapter.isEnabled())return false;
         int flags=NfcAdapter.FLAG_READER_NFC_A
             |NfcAdapter.FLAG_READER_NFC_B
             |NfcAdapter.FLAG_READER_NFC_F
@@ -347,8 +348,10 @@ public final class MainActivity extends Activity {
             |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
         try {
             nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,null);
+            return true;
         } catch(Exception error) {
             DiagnosticLog.error("NFC_READER_ENABLE",error);
+            return false;
         }
     }
 
@@ -358,6 +361,26 @@ public final class MainActivity extends Activity {
         catch(Exception ignored) { }
     }
 
+    private void armScannerNfc() {
+        if(nfcAdapter==null) {
+            scannerNfcStatus="NFC niedostępne na tym telefonie.";
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            scannerNfcStatus="NFC wyłączone — włącz NFC w telefonie.";
+            return;
+        }
+        // Force a fresh reader session. This also recovers when ReaderMode was
+        // disabled by an earlier Activity pause/resume or a system dialog.
+        disableNfcReaderMode();
+        if(enableNfcReaderMode()) {
+            scannerNfcStatus="NFC aktywne — przyłóż naklejkę albo brelok.";
+            DiagnosticLog.event("NFC_SCANNER_ARMED");
+        } else {
+            scannerNfcStatus="Nie udało się uruchomić odczytu NFC. Spróbuj ponownie.";
+        }
+    }
+
     private void onNfcTagDiscovered(Tag tag) {
         final String uid;
         try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
@@ -365,7 +388,14 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> alert(error.getMessage()));
             return;
         }
-        runOnUiThread(() -> handleNfcUid(uid));
+        runOnUiThread(() -> {
+            if("scanner".equals(screen)) {
+                scannerNfcStatus="✓ Odczytano NFC • "+NfcLinkStore.shortUid(uid);
+                DiagnosticLog.event("NFC_SCANNER_TAG_READ");
+                render();
+            }
+            handleNfcUid(uid);
+        });
     }
 
     private void handleNfcIntent(Intent intent) {
@@ -687,6 +717,7 @@ public final class MainActivity extends Activity {
             PlayUpdateBridge.checkOnce(this);
         }
         DiagnosticLog.event("SCREEN", "id=" + destination);
+        if ("scanner".equals(destination)) armScannerNfc();
         render();
     }
 
@@ -4511,16 +4542,13 @@ public final class MainActivity extends Activity {
         });
 
         button("NFC • Przyłóż tag do telefonu", () -> {
-            if (nfcAdapter == null) {
-                alert("Ten telefon nie ma sprzętowego NFC.");
-                return;
-            }
-            if (!nfcAdapter.isEnabled()) {
-                alert("NFC jest wyłączone. Włącz NFC i wróć do Skanera EDHOME.");
-                return;
-            }
-            alert("Skaner NFC jest aktywny. Przyłóż naklejkę albo brelok do telefonu.");
+            armScannerNfc();
+            render();
         });
+        LinearLayout nfcState = card();
+        nfcState.addView(text(scannerNfcStatus, 15, true));
+        if (nfcAdapter != null && !nfcAdapter.isEnabled())
+            nfcState.addView(text("Włącz NFC w ustawieniach telefonu i wróć tutaj.", 13, false));
 
         LinearLayout rules = card();
         rules.addView(text("Jak działają reguły", 18, true));
@@ -4569,15 +4597,26 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj", null).show();
     }
 
+    private String scanKindPluralLabel(String kind) {
+        switch(kind) {
+            case "thing": return "rzeczy";
+            case "box": return "pudełka";
+            case "place": return "miejsca";
+            case "pantry": return "produkty";
+            case "vehicle": return "pojazdy";
+            default: return NfcLinkStore.kindLabel(kind).toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
     private void showScanDefaultDialog(String source, String kind, long id,
             String name) {
-        String label = NfcLinkStore.kindLabel(kind);
+        String pluralLabel = scanKindPluralLabel(kind);
         String sourceLabel = "nfc".equals(source) ? "NFC" : "QR";
         String[] options = {
             "Ten obiekt: pokaż działania",
             "Ten obiekt: otwórz automatycznie",
-            "Wszystkie " + label + " przez " + sourceLabel + ": pokaż działania",
-            "Wszystkie " + label + " przez " + sourceLabel + ": otwórz automatycznie",
+            "Wszystkie " + pluralLabel + " przez " + sourceLabel + ": pokaż działania",
+            "Wszystkie " + pluralLabel + " przez " + sourceLabel + ": otwórz automatycznie",
             "Ten obiekt: dziedzicz regułę typu / ogólną"
         };
         new AlertDialog.Builder(this)
