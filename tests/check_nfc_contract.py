@@ -48,6 +48,16 @@ for token in (
     assert token in main, "Central NFC scanner rearm/status missing: "+token
 assert 'alert("Skaner NFC jest aktywny.' not in main
 
+assert 'NFC_GLOBAL_LISTEN_PREF = "nfc_global_listen"' in main
+assert 'private void refreshNfcReaderMode()' in main
+assert 'prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true)' in main
+assert 'pendingNfcTarget!=null' in main
+assert 'if ("scanner".equals(destination)) armScannerNfc();' in main
+assert 'else refreshNfcReaderMode();' in main
+assert 'disableNfcReaderMode();\n        if(!enableNfcReaderMode())' in main
+assert 'Nasłuch w całej aplikacji: WŁĄCZONY' in main
+assert 'Nasłuch w całej aplikacji: WYŁĄCZONY' in main
+
 # A known NFC tag now enters the central Scanner routing. It may show actions
 # or open immediately according to the saved per-object/type/global rule.
 assert 'handleKnownNfcScan(current);' in main
