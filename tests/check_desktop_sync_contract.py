@@ -216,3 +216,19 @@ persist_idx = desktop.index('markDirty();', add_idx)
 assert persist_idx > add_idx, "New records are not persisted after table insertion"
 assert persist_idx - add_idx < 500, "Persistence must happen immediately after insertion"
 print("desktop new-record local persistence contract OK")
+
+
+# Desktop settings: one click must export Desktop + Android diagnostics directly to Windows Desktop.
+for marker in (
+    'Pobierz logi telefonu + Desktop na Pulpit',
+    'saveAllDiagnosticsToDesktop(',
+    'diagnosticsDesktopFolder()',
+    'EDHOME-Desktop-diagnostyka-',
+    'EDHOME-Android-diagnostyka-',
+    'PHONE_DIAGNOSTICS_CLEARED'
+):
+    assert marker in desktop, "Missing one-click diagnostics export contract: " + marker
+assert 'downloadAllLogs.addActionListener' in desktop
+assert 'Files.writeString(desktopTarget, desktopDiagnosticsText()' in desktop
+assert 'Files.writeString(phoneTarget, phone.text' in desktop
+print("desktop one-click diagnostics export contract OK")
