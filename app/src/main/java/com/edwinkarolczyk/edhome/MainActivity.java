@@ -4539,10 +4539,12 @@ public final class MainActivity extends Activity {
 
 
     private static final String SCAN_DEFAULT_GLOBAL = "scan_default_global";
+    private static final String SCAN_DEFAULT_NFC = "scan_default_nfc_global";
     private static final String NFC_GLOBAL_LISTEN_PREF = "nfc_global_listen";
     private static final String STORAGE_SHOW_THINGS_PREF = "storage_show_things";
     private static final String STORAGE_SHOW_BOXES_PREF = "storage_show_boxes";
     private static final String STORAGE_SHOW_PLACES_PREF = "storage_show_places";
+    private static final String STORAGE_ACTION_PREFIX = "storage_action_";
 
     private boolean storageThingsVisible() {
         return "thing".equals(storageTemporaryKind)
@@ -4557,6 +4559,10 @@ public final class MainActivity extends Activity {
     private boolean storagePlacesVisible() {
         return "place".equals(storageTemporaryKind)
             || prefs.getBoolean(STORAGE_SHOW_PLACES_PREF,true);
+    }
+
+    private boolean storageActionVisible(String kind,String action) {
+        return prefs.getBoolean(STORAGE_ACTION_PREFIX+kind+"_"+action,true);
     }
 
     private void scannerHub() {
@@ -4619,6 +4625,11 @@ public final class MainActivity extends Activity {
         if ("show".equals(specific) || "open".equals(specific)) return specific;
         String byType = prefs.getString(scanTypeKey(source, kind), "");
         if ("show".equals(byType) || "open".equals(byType)) return byType;
+        if ("nfc".equals(source)) {
+            String nfcGlobal = prefs.getString(SCAN_DEFAULT_NFC, "");
+            if ("show".equals(nfcGlobal) || "open".equals(nfcGlobal))
+                return nfcGlobal;
+        }
         String global = prefs.getString(SCAN_DEFAULT_GLOBAL, "show");
         return "open".equals(global) ? "open" : "show";
     }
@@ -5060,10 +5071,11 @@ public final class MainActivity extends Activity {
             boolean collapsed=prefs.getBoolean(key,false);
             children=storageTreeHeading("⌂ "+place.name,
                 depth,key,collapsed,target);
-            if (BetaUpdater.isBeta())
+            if (BetaUpdater.isBeta() && storageActionVisible("place","qr"))
                 smallButton(children,"QR i etykieta miejsca",
                     () -> showPlaceQr(place));
-            nfcTargetButton(children,"place",place.id,place.name);
+            if(storageActionVisible("place","nfc"))
+                nfcTargetButton(children,"place",place.id,place.name);
             childDepth=depth+1;
         }
         for(PlaceEntry child:places)
@@ -5103,26 +5115,30 @@ public final class MainActivity extends Activity {
                     dp(82),dp(82)));
             }
             if(!isBox)details.addView(text("◉ "+item.name,16,true));
-            smallButton(details,thumbnail==null?"Dodaj zdjęcie • miniatura":
-                "Zmień zdjęcie • miniatura",()->selectStorageThumbnail(item.id));
-            if(thumbnail!=null)
-                smallButton(details,"Usuń zdjęcie",()->{
-                    prefs.edit().remove(StorageThumbs.key(item.id)).apply();
-                    render();
-                });
+            if(storageActionVisible(item.kind,"photo")) {
+                smallButton(details,thumbnail==null?"Dodaj zdjęcie • miniatura":
+                    "Zmień zdjęcie • miniatura",()->selectStorageThumbnail(item.id));
+                if(thumbnail!=null)
+                    smallButton(details,"Usuń zdjęcie",()->{
+                        prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                        render();
+                    });
+            }
             details.addView(text(StorageStore.location(db.getReadableDatabase(),item),
                 12,false));
             if(item.lentTo!=null)
                 details.addView(text("Wypożyczono: "+item.lentTo,13,false));
-            smallButton(details,"Pokaż QR",()->showStorageQr(item));
-            nfcTargetButton(details,item.kind,item.id,item.name);
-            if (BetaUpdater.isBeta())
+            if(storageActionVisible(item.kind,"qr"))
+                smallButton(details,"Pokaż QR",()->showStorageQr(item));
+            if(storageActionVisible(item.kind,"nfc"))
+                nfcTargetButton(details,item.kind,item.id,item.name);
+            if (BetaUpdater.isBeta() && storageActionVisible(item.kind,"print"))
                 smallButton(details,"Drukuj etykietę / PDF / Udostępnij",
                     () -> selectQrLabelFormat(java.util.Collections.singletonList(
                         qrLabel(item))));
-            if(item.lentTo==null)
+            if(item.lentTo==null && storageActionVisible(item.kind,"move"))
                 smallButton(details,"Przenieś",()->storageEditor(item.kind,item.id));
-            if(!isBox) {
+            if(!isBox && storageActionVisible(item.kind,"lend")) {
                 if(item.lentTo==null)
                     smallButton(details,"Wypożycz",()->askStorageLend(item));
                 else smallButton(details,"Zwrot",()->{
@@ -5132,18 +5148,19 @@ public final class MainActivity extends Activity {
                     }catch(Exception error){alert(error.getMessage());}
                 });
             }
-            smallButton(details,"Usuń",()->new AlertDialog.Builder(this)
-                .setTitle(isBox?"Usunąć pudełko?":"Usunąć rzecz?")
-                .setMessage(item.name+" — QR zostanie unieważniony i nie będzie "
-                    +"przydzielony nowemu obiektowi. Historia pozostanie.")
-                .setNegativeButton("Anuluj",null)
-                .setPositiveButton("Usuń",(dialog,which)->{
-                    try{
-                        StorageStore.remove(db.getWritableDatabase(),item.id);
-                        prefs.edit().remove(StorageThumbs.key(item.id)).apply();
-                        DiagnosticLog.event("STORAGE_REMOVED");render();
-                    }catch(Exception error){alert(error.getMessage());}
-                }).show());
+            if(storageActionVisible(item.kind,"delete"))
+                smallButton(details,"Usuń",()->new AlertDialog.Builder(this)
+                    .setTitle(isBox?"Usunąć pudełko?":"Usunąć rzecz?")
+                    .setMessage(item.name+" — QR zostanie unieważniony i nie będzie "
+                        +"przydzielony nowemu obiektowi. Historia pozostanie.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń",(dialog,which)->{
+                        try{
+                            StorageStore.remove(db.getWritableDatabase(),item.id);
+                            prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                            DiagnosticLog.event("STORAGE_REMOVED");render();
+                        }catch(Exception error){alert(error.getMessage());}
+                    }).show());
         }
         if(isBox)
             for(StorageStore.Item child:items)
@@ -9104,289 +9121,375 @@ public final class MainActivity extends Activity {
             + " znaków logów diagnostycznych. Wklej je do czatu.");
     }
 
-    private void storageVisibilitySetting(LinearLayout container,
-            String label,String key) {
-        boolean visible=prefs.getBoolean(key,true);
-        smallButton(container,label+": "+(visible?"WIDOCZNE":"UKRYTE"),()->{
-            prefs.edit().putBoolean(key,!visible).apply();
-            DiagnosticLog.event("STORAGE_VISIBILITY_CHANGED",
-                "key="+key+" visible="+(!visible));
-            render();
+    private LinearLayout settingsAccordion(String key,String title,String summary,
+            boolean openByDefault) {
+        LinearLayout shell=card();
+        boolean open=prefs.getBoolean("settings_open_"+key,openByDefault);
+        TextView heading=text((open?"▾ ":"▸ ")+title,19,true);
+        heading.setMinHeight(dp(46));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        shell.addView(heading);
+        TextView description=text(summary,13,false);
+        description.setTextColor(subdued);
+        shell.addView(description);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(0,dp(6),0,0);
+        content.setVisibility(open?View.VISIBLE:View.GONE);
+        shell.addView(content,new LinearLayout.LayoutParams(-1,-2));
+        Runnable toggle=()->{
+            boolean nowOpen=content.getVisibility()!=View.VISIBLE;
+            content.setVisibility(nowOpen?View.VISIBLE:View.GONE);
+            heading.setText((nowOpen?"▾ ":"▸ ")+title);
+            prefs.edit().putBoolean("settings_open_"+key,nowOpen).apply();
+        };
+        heading.setOnClickListener(v->toggle.run());
+        description.setOnClickListener(v->toggle.run());
+        shell.setContentDescription(title+(open?" • Zwiń":" • Rozwiń"));
+        return content;
+    }
+
+    private LinearLayout settingsNestedAccordion(LinearLayout parent,String key,
+            String title,boolean openByDefault) {
+        boolean open=prefs.getBoolean("settings_nested_"+key,openByDefault);
+        TextView heading=text((open?"▾ ":"▸ ")+title,16,true);
+        heading.setMinHeight(dp(42));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        parent.addView(heading);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(8),0,0,dp(4));
+        content.setVisibility(open?View.VISIBLE:View.GONE);
+        parent.addView(content,new LinearLayout.LayoutParams(-1,-2));
+        heading.setOnClickListener(v->{
+            boolean nowOpen=content.getVisibility()!=View.VISIBLE;
+            content.setVisibility(nowOpen?View.VISIBLE:View.GONE);
+            heading.setText((nowOpen?"▾ ":"▸ ")+title);
+            prefs.edit().putBoolean("settings_nested_"+key,nowOpen).apply();
         });
+        return content;
+    }
+
+    private void settingsYesNo(LinearLayout container,String label,String prefKey,
+            boolean defaultValue,Runnable afterChange) {
+        container.addView(text(label,14,true));
+        Spinner choice=new Spinner(this);
+        choice.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList("Tak","Nie")));
+        boolean current=prefs.getBoolean(prefKey,defaultValue);
+        choice.setSelection(current?0:1);
+        choice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                boolean selected=position==0;
+                if(selected==prefs.getBoolean(prefKey,defaultValue))return;
+                prefs.edit().putBoolean(prefKey,selected).apply();
+                if(afterChange!=null)afterChange.run();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        container.addView(choice,new LinearLayout.LayoutParams(-1,dp(52)));
+    }
+
+    private void settingsStorageAction(LinearLayout container,String kind,
+            String action,String label) {
+        settingsYesNo(container,label,STORAGE_ACTION_PREFIX+kind+"_"+action,true,null);
+    }
+
+    private void settingsNfcAction(LinearLayout container,String label,String prefKey,
+            boolean allowInherit) {
+        java.util.List<String> labels=allowInherit
+            ? java.util.Arrays.asList("Dziedzicz ustawienie ogólne","Pokaż działania",
+                "Otwórz automatycznie")
+            : java.util.Arrays.asList("Pokaż działania","Otwórz automatycznie");
+        String current=prefs.getString(prefKey,allowInherit?"":"show");
+        int selected="open".equals(current)?(allowInherit?2:1)
+            :"show".equals(current)?(allowInherit?1:0):0;
+        container.addView(text(label,14,true));
+        Spinner choice=new Spinner(this);
+        choice.setAdapter(themeSpinnerAdapter(labels));
+        choice.setSelection(selected);
+        choice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                String value;
+                if(allowInherit)
+                    value=position==0?"":position==2?"open":"show";
+                else value=position==1?"open":"show";
+                String saved=prefs.getString(prefKey,allowInherit?"":"show");
+                if(value.equals(saved))return;
+                SharedPreferences.Editor edit=prefs.edit();
+                if(value.isEmpty())edit.remove(prefKey); else edit.putString(prefKey,value);
+                edit.apply();
+                DiagnosticLog.event("NFC_SCAN_RULE_SETTINGS_CHANGED",
+                    "key="+prefKey+" value="+(value.isEmpty()?"inherit":value));
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        container.addView(choice,new LinearLayout.LayoutParams(-1,dp(52)));
+    }
+
+    private int nfcAssignedCount() {
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM nfc_links",null)) {
+            return c.moveToFirst()?c.getInt(0):0;
+        } catch(Exception ignored) { return 0; }
+    }
+
+    private void resetNfcScanRules() {
+        new AlertDialog.Builder(this)
+            .setTitle("Przywrócić reguły NFC?")
+            .setMessage("Usunę tylko ustawienia zachowania po skanie NFC. "
+                +"Przypisane tagi i UID pozostaną bez zmian.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Przywróć",(dialog,which)->{
+                SharedPreferences.Editor edit=prefs.edit();
+                for(String key:prefs.getAll().keySet())
+                    if(key.startsWith("scan_default_nfc_"))edit.remove(key);
+                edit.apply();
+                DiagnosticLog.event("NFC_SCAN_RULES_RESET");
+                render();
+            }).show();
     }
 
     private void settings() {
         header("Ustawienia");
-        note("Aktywny styl: " + skin.name + " • zmiana wyglądu nie zmienia danych.");
-        if (BetaUpdater.isBeta()) {
-            LinearLayout desktop = card();
-            desktop.addView(text("EDHOME Desktop • Wi‑Fi", 19, true));
-            String ip = LanSyncServer.localAddress();
-            String token = prefs.getString(LanSyncServer.TOKEN_PREF, "");
-            String endpoint = ip == null ? "Brak adresu Wi‑Fi/LAN"
-                : ip + ":" + LanSyncServer.PORT;
-            desktop.addView(text(
-                "Najprościej: na PC wybierz „Pokaż QR do połączenia”, a tutaj "
-                + "naciśnij „Skanuj QR z ekranu PC”. Telefon i komputer muszą być "
-                + "w tej samej sieci Wi‑Fi/LAN. Adres i kod poniżej zostają jako "
-                + "awaryjne połączenie ręczne.",
-                14, false));
-            desktop.addView(text("Adres: " + endpoint
-                + "\nKod parowania: " + token
-                + "\nTryb: odczyt i zapis • serwer działa w tle"
-                + "\nSerwer LAN: " + (LanSyncService.endpointRunning()
-                    ? "DZIAŁA" : "NIE DZIAŁA / URUCHAMIA SIĘ")
-                + "\nStan PC: " + (LanSyncServer.isSyncing()
-                    ? "SYNCHRONIZACJA"
-                    : (LanSyncServer.hasRecentClient()
-                        ? "POŁĄCZONY" : "NIEPOŁĄCZONY"))
-                + "\nOstatnia próba PC: " + desktopLastAttempt(), 14, true));
-            smallButton(desktop, "Napraw / uruchom połączenie PC", () -> {
-                LanSyncService.ensureStarted(this);
-                alert("Ponownie uruchamiam serwer LAN EDHOME. "
-                    + "Po kilku sekundach spróbuj połączyć Desktop jeszcze raz.");
-                if (root != null) root.postDelayed(() -> render(), 1800L);
-            });
-            smallButton(desktop, "Diagnostyka połączenia z PC",
-                this::testPhoneLanServer);
-            smallButton(desktop, "Kopiuj diagnostykę telefonu",
-                () -> runPhoneLanDiagnostics(true));
-            smallButton(desktop, "Skanuj QR z ekranu PC", this::scanDesktopPairQr);
-            smallButton(desktop, "Kopiuj adres i kod", () -> {
-                ClipboardManager clipboard = (ClipboardManager)
-                    getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText(
-                    "EDHOME Desktop", endpoint + "\n" + token));
-                alert("Skopiowano dane połączenia EDHOME Desktop.");
-            });
-        }
-        LinearLayout icons3d = card();
-        icons3d.addView(text("Ikony kafelków • EDHOME AI 3D", 19, true));
-        icons3d.addView(text(IconPack3D.installed(this)
-            ? "Paczka 100 ikon 3D jest dostępna na urządzeniu. "
-                + "Indywidualne ikony zmienisz przez przytrzymanie kafelka."
-            : "Ikony AI 3D trafiają do aplikacji razem z aktualizacją APK. "
-                + "Nie trzeba niczego importować.", 14, false));
-        smallButton(icons3d, "Opcjonalnie: importuj paczkę ikon ZIP",
-            this::importAi3dIconPack);
-        if (IconPack3D.installed(this)) {
-            boolean active3d = "ai3d".equals(
-                prefs.getString("icon_style", "standard"));
-            smallButton(icons3d, active3d
-                ? "Przełącz wszystkie domyślne na standardowe"
-                : "Przełącz wszystkie domyślne na AI 3D", () -> {
-                String next = active3d ? "standard" : "ai3d";
-                if (prefs.edit().putString("icon_style", next)
-                        .putBoolean("icon_style_explicit", true).commit())
-                    render();
-                else alert("Nie zapisano stylu ikon.");
-            });
-        }
-        LinearLayout gestures = card();
-        gestures.addView(text("Kafelki • czas przytrzymania", 19, true));
-        gestures.addView(text("Puść po krótszym przytrzymaniu dla menu. "
-            + "Trzymaj dłużej, by przeciągnąć. Uchwyt ⋮⋮ działa bez czekania.",
-            14, false));
-        Spinner shortHold = new Spinner(this);
-        shortHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
-            "0,30 s", "0,45 s", "0,60 s", "0,80 s")));
-        int shortChoice = prefs.getInt(HomeTileLayout.SHORT_KEY,
-            HomeTileLayout.DEFAULT_SHORT_MS);
-        for (int i = 0; i < HomeTileLayout.SHORT_OPTIONS.length; i++)
-            if (HomeTileLayout.SHORT_OPTIONS[i] == shortChoice)
-                shortHold.setSelection(i);
-        gestures.addView(text("Krótsze przytrzymanie → menu po puszczeniu",
-            14, false));
-        gestures.addView(shortHold);
-        Spinner dragHold = new Spinner(this);
-        dragHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
-            "0,90 s", "1,10 s", "1,40 s", "1,80 s")));
-        int dragChoice = prefs.getInt(HomeTileLayout.DRAG_KEY,
-            HomeTileLayout.DEFAULT_DRAG_MS);
-        for (int i = 0; i < HomeTileLayout.DRAG_OPTIONS.length; i++)
-            if (HomeTileLayout.DRAG_OPTIONS[i] == dragChoice)
-                dragHold.setSelection(i);
-        gestures.addView(text("Dłuższe przytrzymanie → przeciąganie",
-            14, false));
-        gestures.addView(dragHold);
-        smallButton(gestures, "Zapisz czasy gestów", () -> {
-            int menuMs = HomeTileLayout.SHORT_OPTIONS[
-                shortHold.getSelectedItemPosition()];
-            int moveMs = HomeTileLayout.DRAG_OPTIONS[
-                dragHold.getSelectedItemPosition()];
-            if (!HomeTileLayout.validPair(menuMs, moveMs)) {
-                alert("Przeciąganie musi zaczynać się co najmniej "
-                    + "0,20 s po progu menu.");
-                return;
-            }
-            if (!prefs.edit().putInt(HomeTileLayout.SHORT_KEY, menuMs)
-                    .putInt(HomeTileLayout.DRAG_KEY, moveMs).commit()) {
-                alert("Nie udało się zapisać czasów gestów.");
-                return;
-            }
-            DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
-            render();
+        note("Sekcje są zwijane. Zmiany widoku nie usuwają danych.");
+
+        LinearLayout general=settingsAccordion("general","Ogólne",
+            "Nazwa gospodarstwa i podstawowe ustawienia.",false);
+        EditText household=new EditText(this);
+        household.setSingleLine(true);
+        household.setHint("Nazwa gospodarstwa");
+        household.setTextColor(ink);
+        household.setHintTextColor(subdued);
+        household.setText(prefs.getString("household","Moje gospodarstwo"));
+        general.addView(household,new LinearLayout.LayoutParams(-1,dp(54)));
+        smallButton(general,"Zapisz nazwę",()->{
+            String value=household.getText().toString().trim();
+            if(value.isEmpty()){household.setError("Podaj nazwę.");return;}
+            prefs.edit().putString("household",value).apply();
+            DiagnosticLog.event("HOUSEHOLD_RENAMED");
+            alert("Zapisano nazwę gospodarstwa.");
         });
-        // One compact selector; card() attaches itself to body exactly once.
-        LinearLayout appearance = card();
-        appearance.addView(text("Wygląd • motyw aplikacji", 19, true));
-        Spinner themeChoice = new Spinner(this);
-        themeChoice.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList(UiSkin.THEMES)));
-        int currentTheme = java.util.Arrays.asList(UiSkin.THEMES)
-            .indexOf(skin.name);
-        themeChoice.setSelection(Math.max(0, currentTheme));
-        appearance.addView(themeChoice);
-        String[] descriptions = {
-            "Ciemny granat • mięta • wyraźne kafle",
-            "Leśna zieleń • ciepłe, naturalne akcenty",
-            "Jasny krem • łagodne kolory • wysoki kontrast",
-            "Głęboki błękit • szklane karty • subtelny połysk",
-            "WMM • warsztatowy grafit • turkusowe akcenty",
-            "Trener 2 • głęboka czerń • czerwone akcenty"
-        };
-        TextView themeDescription = text(
-            descriptions[Math.max(0, currentTheme)], 13, false);
-        appearance.addView(themeDescription);
-        themeChoice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view,
-                    int position, long id) {
-                themeDescription.setText(descriptions[position]);
+
+        LinearLayout nfc=settingsAccordion("nfc","NFC",
+            "Cała obsługa NFC: nasłuch, zachowanie po skanie i reguły typów.",true);
+        String hardware=nfcAdapter==null?"Brak modułu NFC"
+            :nfcAdapter.isEnabled()?"NFC w telefonie: WŁĄCZONE":"NFC w telefonie: WYŁĄCZONE";
+        nfc.addView(text(hardware+" • przypisane tagi: "+nfcAssignedCount(),14,true));
+        settingsYesNo(nfc,"Nasłuch NFC w całej aplikacji",
+            NFC_GLOBAL_LISTEN_PREF,true,this::refreshNfcReaderMode);
+        settingsNfcAction(nfc,"Domyślne działanie po skanie NFC",
+            SCAN_DEFAULT_NFC,false);
+        LinearLayout nfcTypes=settingsNestedAccordion(nfc,"nfc_types",
+            "Reguły według typu obiektu",false);
+        settingsNfcAction(nfcTypes,"Rzeczy / narzędzia",scanTypeKey("nfc","thing"),true);
+        settingsNfcAction(nfcTypes,"Pudełka",scanTypeKey("nfc","box"),true);
+        settingsNfcAction(nfcTypes,"Miejsca",scanTypeKey("nfc","place"),true);
+        settingsNfcAction(nfcTypes,"Produkty spiżarni",scanTypeKey("nfc","pantry"),true);
+        settingsNfcAction(nfcTypes,"Pojazdy",scanTypeKey("nfc","vehicle"),true);
+        smallButton(nfc,"Otwórz Skaner EDHOME",()->go("scanner"));
+        smallButton(nfc,nfcAdapter!=null&&nfcAdapter.isEnabled()
+            ?"Ustawienia NFC telefonu":"Włącz NFC w telefonie",()->{
+            try{startActivity(new Intent(Settings.ACTION_NFC_SETTINGS));}
+            catch(Exception unavailable){
+                startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) { }
         });
-        smallButton(appearance, "Zastosuj styl", () -> {
-            int choice = themeChoice.getSelectedItemPosition();
-            if (choice < 0 || choice >= UiSkin.THEMES.length) return;
-            String selectedTheme = UiSkin.THEMES[choice];
-            if (skin.name.equals(selectedTheme)) return;
-            if (!prefs.edit().putString("theme", selectedTheme).commit()) {
-                alert("Nie udało się zapisać motywu.");
-                return;
-            }
+        smallButton(nfc,"Przywróć domyślne reguły NFC",this::resetNfcScanRules);
+        nfc.addView(text("Przypisanie, zmiana i odpięcie taga są dostępne na karcie "
+            +"Rzeczy, Pudełka, Miejsca, Produktu lub Pojazdu. EDHOME zapisuje UID "
+            +"i nie nadpisuje pamięci taga. Operacje zmieniające dane nadal wymagają "
+            +"potwierdzenia.",12,false));
+
+        LinearLayout storageSettings=settingsAccordion("storage","Magazyn",
+            "Co widać w Magazynie i które przyciski mają być pokazywane.",false);
+        LinearLayout types=settingsNestedAccordion(storageSettings,"storage_types",
+            "Widoczne typy",true);
+        settingsYesNo(types,"Rzeczy / narzędzia",STORAGE_SHOW_THINGS_PREF,true,null);
+        settingsYesNo(types,"Pudełka",STORAGE_SHOW_BOXES_PREF,true,null);
+        settingsYesNo(types,"Miejsca",STORAGE_SHOW_PLACES_PREF,true,null);
+        types.addView(text("Ukrycie typu zmienia tylko widok. Dane, QR i NFC "
+            +"pozostają. Skan ukrytego obiektu nadal może go tymczasowo pokazać.",
+            12,false));
+
+        LinearLayout thingActions=settingsNestedAccordion(storageSettings,
+            "thing_actions","Rzeczy / narzędzia • widoczne akcje",false);
+        settingsStorageAction(thingActions,"thing","photo","Zdjęcie / miniatura");
+        settingsStorageAction(thingActions,"thing","qr","Pokaż QR");
+        settingsStorageAction(thingActions,"thing","nfc","NFC");
+        settingsStorageAction(thingActions,"thing","print","Drukuj etykietę / PDF");
+        settingsStorageAction(thingActions,"thing","move","Przenieś / edytuj");
+        settingsStorageAction(thingActions,"thing","lend","Wypożycz / zwrot");
+        settingsStorageAction(thingActions,"thing","delete","Usuń");
+
+        LinearLayout boxActions=settingsNestedAccordion(storageSettings,
+            "box_actions","Pudełka • widoczne akcje",false);
+        settingsStorageAction(boxActions,"box","photo","Zdjęcie / miniatura");
+        settingsStorageAction(boxActions,"box","qr","Pokaż QR");
+        settingsStorageAction(boxActions,"box","nfc","NFC");
+        settingsStorageAction(boxActions,"box","print","Drukuj etykietę / PDF");
+        settingsStorageAction(boxActions,"box","move","Przenieś / edytuj");
+        settingsStorageAction(boxActions,"box","delete","Usuń");
+
+        LinearLayout placeActions=settingsNestedAccordion(storageSettings,
+            "place_actions","Miejsca • widoczne akcje",false);
+        settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca");
+        settingsStorageAction(placeActions,"place","nfc","NFC");
+
+        LinearLayout scannerSettings=settingsAccordion("scanner","Skaner QR / produkty",
+            "Zachowanie wspólnego skanera i czas wyjmowania ze Spiżarni.",false);
+        scannerSettings.addView(text("Po skanie QR/kodu bez osobnej reguły: "
+            +scanActionLabel(prefs.getString(SCAN_DEFAULT_GLOBAL,"show")),14,false));
+        smallButton(scannerSettings,"Zmień ustawienie ogólne skanera",
+            this::showGlobalScanDefaultDialog);
+        Spinner takeDelay=new Spinner(this);
+        takeDelay.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "3 sekundy","5 sekund","8 sekund","10 sekund")));
+        int savedDelay=prefs.getInt(PantryTakeCountdown.DELAY_PREF,
+            PantryTakeCountdown.DEFAULT_SECONDS);
+        int delayChoice=1;
+        for(int i=0;i<PantryTakeCountdown.DELAY_OPTIONS.length;i++)
+            if(PantryTakeCountdown.DELAY_OPTIONS[i]==savedDelay)delayChoice=i;
+        takeDelay.setSelection(delayChoice);
+        scannerSettings.addView(text("Czas wyjmowania produktu",14,true));
+        scannerSettings.addView(takeDelay,new LinearLayout.LayoutParams(-1,dp(52)));
+        smallButton(scannerSettings,"Zapisz czas wyjmowania",()->{
+            int choice=takeDelay.getSelectedItemPosition();
+            if(choice<0||choice>=PantryTakeCountdown.DELAY_OPTIONS.length)return;
+            prefs.edit().putInt(PantryTakeCountdown.DELAY_PREF,
+                PantryTakeCountdown.DELAY_OPTIONS[choice]).apply();
+            DiagnosticLog.event("PANTRY_TAKE_DELAY_SAVED");
+        });
+
+        LinearLayout appearance=settingsAccordion("appearance","Wygląd i kafelki",
+            "Motyw, ikony oraz gesty na panelu głównym.",false);
+        Spinner themeChoice=new Spinner(this);
+        themeChoice.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(UiSkin.THEMES)));
+        int currentTheme=java.util.Arrays.asList(UiSkin.THEMES).indexOf(skin.name);
+        themeChoice.setSelection(Math.max(0,currentTheme));
+        appearance.addView(text("Motyw aplikacji",14,true));
+        appearance.addView(themeChoice,new LinearLayout.LayoutParams(-1,dp(52)));
+        smallButton(appearance,"Zastosuj motyw",()->{
+            int choice=themeChoice.getSelectedItemPosition();
+            if(choice<0||choice>=UiSkin.THEMES.length)return;
+            String selectedTheme=UiSkin.THEMES[choice];
+            if(skin.name.equals(selectedTheme))return;
+            prefs.edit().putString("theme",selectedTheme).apply();
             DiagnosticLog.event("THEME_CHANGED");
             render();
         });
-
-        LinearLayout storageVisibility = card();
-        storageVisibility.addView(text("Magazyn • widoczne typy", 19, true));
-        storageVisibility.addView(text(
-            "Wybierz, co ma być pokazywane w Magazynie. To tylko widok — "
-            +"ukrycie nie usuwa danych, QR ani przypisania NFC.", 14, false));
-        storageVisibilitySetting(storageVisibility,
-            "Rzeczy (np. narzędzia)",STORAGE_SHOW_THINGS_PREF);
-        storageVisibilitySetting(storageVisibility,
-            "Pudełka",STORAGE_SHOW_BOXES_PREF);
-        storageVisibilitySetting(storageVisibility,
-            "Miejsca",STORAGE_SHOW_PLACES_PREF);
-
-        LinearLayout nfcSettings = card();
-        nfcSettings.addView(text("NFC • nasłuch", 19, true));
-        boolean globalNfc=prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
-        nfcSettings.addView(text(globalNfc
-            ?"Tag NFC działa na każdym ekranie EDHOME."
-            :"Tag NFC jest odczytywany tylko w Skanerze EDHOME lub podczas przypisywania.",
-            14,false));
-        smallButton(nfcSettings,globalNfc
-            ?"Nasłuch w całej aplikacji: WŁĄCZONY"
-            :"Nasłuch w całej aplikacji: WYŁĄCZONY",()->{
-            boolean enabled=!prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
-            prefs.edit().putBoolean(NFC_GLOBAL_LISTEN_PREF,enabled).apply();
-            DiagnosticLog.event("NFC_GLOBAL_LISTEN_CHANGED",
-                "enabled="+enabled);
-            refreshNfcReaderMode();
-            render();
-        });
-
-        LinearLayout takeSettings = card();
-        takeSettings.addView(text("Skaner • czas wyjmowania", 19, true));
-        takeSettings.addView(text("Aparat pozostaje otwarty. Inny kod anuluje "
-            + "poprzednie odliczanie, a wyjście z aparatu nie odejmuje produktu.",
-            14, false));
-        Spinner takeDelay = new Spinner(this);
-        takeDelay.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
-            "3 sekundy", "5 sekund", "8 sekund", "10 sekund")));
-        int savedDelay = prefs.getInt(PantryTakeCountdown.DELAY_PREF,
-            PantryTakeCountdown.DEFAULT_SECONDS);
-        int delayChoice = 1;
-        for (int i = 0; i < PantryTakeCountdown.DELAY_OPTIONS.length; i++)
-            if (PantryTakeCountdown.DELAY_OPTIONS[i] == savedDelay)
-                delayChoice = i;
-        takeDelay.setSelection(delayChoice);
-        takeSettings.addView(takeDelay);
-        smallButton(takeSettings, "Zapisz czas wyjmowania", () -> {
-            int choice = takeDelay.getSelectedItemPosition();
-            if (choice < 0 || choice >= PantryTakeCountdown.DELAY_OPTIONS.length)
-                return;
-            if (!prefs.edit().putInt(PantryTakeCountdown.DELAY_PREF,
-                    PantryTakeCountdown.DELAY_OPTIONS[choice]).commit()) {
-                alert("Nie udało się zapisać czasu wyjmowania.");
+        appearance.addView(text(IconPack3D.installed(this)
+            ?"Paczka 100 ikon AI 3D jest zainstalowana."
+            :"Paczka ikon AI 3D nie jest jeszcze zainstalowana.",13,false));
+        smallButton(appearance,"Opcjonalnie: importuj paczkę ikon ZIP",
+            this::importAi3dIconPack);
+        if(IconPack3D.installed(this)){
+            boolean active3d="ai3d".equals(prefs.getString("icon_style","standard"));
+            smallButton(appearance,active3d
+                ?"Ikony domyślne: AI 3D → zmień na standardowe"
+                :"Ikony domyślne: standardowe → zmień na AI 3D",()->{
+                String next=active3d?"standard":"ai3d";
+                prefs.edit().putString("icon_style",next)
+                    .putBoolean("icon_style_explicit",true).apply();
+                render();
+            });
+        }
+        LinearLayout gestures=settingsNestedAccordion(appearance,"tile_gestures",
+            "Czas przytrzymania kafelków",false);
+        Spinner shortHold=new Spinner(this);
+        shortHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "0,30 s","0,45 s","0,60 s","0,80 s")));
+        int shortChoice=prefs.getInt(HomeTileLayout.SHORT_KEY,
+            HomeTileLayout.DEFAULT_SHORT_MS);
+        for(int i=0;i<HomeTileLayout.SHORT_OPTIONS.length;i++)
+            if(HomeTileLayout.SHORT_OPTIONS[i]==shortChoice)shortHold.setSelection(i);
+        gestures.addView(text("Menu po przytrzymaniu",13,true));
+        gestures.addView(shortHold,new LinearLayout.LayoutParams(-1,dp(52)));
+        Spinner dragHold=new Spinner(this);
+        dragHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "0,90 s","1,10 s","1,40 s","1,80 s")));
+        int dragChoice=prefs.getInt(HomeTileLayout.DRAG_KEY,
+            HomeTileLayout.DEFAULT_DRAG_MS);
+        for(int i=0;i<HomeTileLayout.DRAG_OPTIONS.length;i++)
+            if(HomeTileLayout.DRAG_OPTIONS[i]==dragChoice)dragHold.setSelection(i);
+        gestures.addView(text("Przeciąganie kafelka",13,true));
+        gestures.addView(dragHold,new LinearLayout.LayoutParams(-1,dp(52)));
+        smallButton(gestures,"Zapisz czasy gestów",()->{
+            int menuMs=HomeTileLayout.SHORT_OPTIONS[shortHold.getSelectedItemPosition()];
+            int moveMs=HomeTileLayout.DRAG_OPTIONS[dragHold.getSelectedItemPosition()];
+            if(!HomeTileLayout.validPair(menuMs,moveMs)){
+                alert("Przeciąganie musi zaczynać się co najmniej 0,20 s po progu menu.");
                 return;
             }
-            DiagnosticLog.event("PANTRY_TAKE_DELAY_SAVED");
-            render();
+            prefs.edit().putInt(HomeTileLayout.SHORT_KEY,menuMs)
+                .putInt(HomeTileLayout.DRAG_KEY,moveMs).apply();
+            DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
         });
-        note("Nazwa gospodarstwa");
-        EditText name = field("Nazwa gospodarstwa", false);
-        name.setText(prefs.getString("household", "Moje gospodarstwo"));
-        button("Zapisz nazwę", () -> {
-            String value = name.getText().toString().trim();
-            if (value.isEmpty()) { alert("Podaj nazwę."); return; }
-            prefs.edit().putString("household", value).apply();
-            DiagnosticLog.event("HOUSEHOLD_RENAMED");
-            render();
-        });
-        boolean reminders = prefs.getBoolean("reminders_enabled", false);
-        button(reminders ? "Przypomnienia: WŁĄCZONE" : "Przypomnienia: WYŁĄCZONE", () -> {
-            boolean enabled = !prefs.getBoolean("reminders_enabled", false);
-            prefs.edit().putBoolean("reminders_enabled", enabled).apply();
-            if (enabled && Build.VERSION.SDK_INT >= 33
-                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                        != android.content.pm.PackageManager.PERMISSION_GRANTED)
+
+        LinearLayout notifications=settingsAccordion("notifications","Powiadomienia",
+            "Przypomnienia i cisza nocna.",false);
+        settingsYesNo(notifications,"Przypomnienia", "reminders_enabled",false,()->{
+            boolean enabled=prefs.getBoolean("reminders_enabled",false);
+            if(enabled&&Build.VERSION.SDK_INT>=33
+                    &&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        !=android.content.pm.PackageManager.PERMISSION_GRANTED)
                 requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
                     7130);
             ReminderReceiver.schedule(this);
-            render();
         });
-        LinearLayout quiet = card();
-        quiet.addView(text("Cisza powiadomień", 19, true));
-        quiet.addView(text("Aktualnie: " + quietHoursStart() + "–"
-            + quietHoursEnd(), 15, true));
-        quiet.addView(text("Dotyczy przypomnień czynności, pojazdów i minutników. "
-            + "Okno musi przechodzić przez północ, np. 22:00–07:00.",
-            13, false));
-        smallButton(quiet, "Zmień godziny ciszy", this::editQuietHours);
-        smallButton(quiet, "Przywróć 22:00–07:00", () -> {
-            prefs.edit()
-                .putString("quiet_hours_start", QuietHoursRules.DEFAULT_START)
-                .putString("quiet_hours_end", QuietHoursRules.DEFAULT_END)
-                .apply();
+        notifications.addView(text("Cisza: "+quietHoursStart()+"–"+quietHoursEnd(),
+            14,true));
+        smallButton(notifications,"Zmień godziny ciszy",this::editQuietHours);
+        smallButton(notifications,"Przywróć 22:00–07:00",()->{
+            prefs.edit().putString("quiet_hours_start",QuietHoursRules.DEFAULT_START)
+                .putString("quiet_hours_end",QuietHoursRules.DEFAULT_END).apply();
             ReminderReceiver.schedule(this);
             DeviceTimerReceiver.scheduleAll(this);
             DiagnosticLog.event("QUIET_HOURS_RESET");
             render();
         });
-        note("Standardowo przypomnienia przychodzą około 09:00. "
-            + "Dla poszczególnych czynności ustawisz godzinę i wyprzedzenie "
-            + "w ich edycji. Aktualna cisza: " + quietHoursStart() + "–"
-            + quietHoursEnd() + ". Android może opóźnić alarm przez "
-            + "oszczędzanie baterii. Tytuły czynności nie pojawiają się "
-            + "na ekranie blokady.");
-        if (DiagnosticLog.enabled()) {
-            LinearLayout diagnostics = card();
-            diagnostics.addView(text("Diagnostyka i logi", 19, true));
-            diagnostics.addView(text(
-                "Szybkie narzędzia do sprawdzenia telefonu i skopiowania logów bez eksportowania pliku.",
-                14, false));
-            smallButton(diagnostics, "Kopiuj logi diagnostyczne",
-                this::copyDiagnosticLogsFromSettings);
-            smallButton(diagnostics, "Kopiuj diagnostykę telefonu",
-                () -> runPhoneLanDiagnostics(true));
-            smallButton(diagnostics, "Otwórz pełną diagnostykę BETA",
-                () -> go("diagnostics"));
+
+        if(BetaUpdater.isBeta()){
+            LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
+                "Parowanie, stan połączenia i diagnostyka LAN.",false);
+            String ip=LanSyncServer.localAddress();
+            String token=prefs.getString(LanSyncServer.TOKEN_PREF,"");
+            String endpoint=ip==null?"Brak adresu Wi‑Fi/LAN":ip+":"+LanSyncServer.PORT;
+            desktop.addView(text("Adres: "+endpoint
+                +"\nKod parowania: "+token
+                +"\nSerwer LAN: "+(LanSyncService.endpointRunning()?"DZIAŁA":"NIE DZIAŁA")
+                +"\nPC: "+(LanSyncServer.isSyncing()?"SYNCHRONIZACJA":
+                    LanSyncServer.hasRecentClient()?"POŁĄCZONY":"NIEPOŁĄCZONY"),
+                13,false));
+            smallButton(desktop,"Skanuj QR z ekranu PC",this::scanDesktopPairQr);
+            smallButton(desktop,"Napraw / uruchom połączenie PC",()->{
+                LanSyncService.ensureStarted(this);
+                if(root!=null)root.postDelayed(()->render(),1800L);
+            });
+            smallButton(desktop,"Diagnostyka połączenia z PC",this::testPhoneLanServer);
+            smallButton(desktop,"Kopiuj adres i kod",()->{
+                ClipboardManager clipboard=(ClipboardManager)
+                    getSystemService(Context.CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                    "EDHOME Desktop",endpoint+"\n"+token));
+                alert("Skopiowano dane połączenia EDHOME Desktop.");
+            });
         }
-        button("Kopia danych / przenoszenie", () -> go("backup"));
-        note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
+
+        LinearLayout data=settingsAccordion("data","Dane i diagnostyka",
+            "Kopie danych, logi i narzędzia serwisowe.",false);
+        smallButton(data,"Kopia danych / przenoszenie",()->go("backup"));
+        if(DiagnosticLog.enabled()){
+            smallButton(data,"Kopiuj logi diagnostyczne",
+                this::copyDiagnosticLogsFromSettings);
+            smallButton(data,"Kopiuj diagnostykę telefonu",
+                ()->runPhoneLanDiagnostics(true));
+            smallButton(data,"Otwórz pełną diagnostykę BETA",
+                ()->go("diagnostics"));
+        }
+        data.addView(text("Dane pozostają lokalne. Ustawienia widoczności "
+            +"nie usuwają obiektów ani ich powiązań.",12,false));
     }
 
 
