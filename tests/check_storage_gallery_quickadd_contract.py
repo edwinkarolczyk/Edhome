@@ -9,7 +9,7 @@ store = Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageStore.java").re
 )
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 
-assert int(re.search(r"\\bversionCode\\s+(\\d+)", gradle).group(1)) >= 143
+assert int(re.search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 143
 assert '⚡ Szybko dodaj rzecz' in main
 assert 'private void quickAddStorageThing()' in main
 assert 'NFC • Przypisz tag rzeczy' in main
