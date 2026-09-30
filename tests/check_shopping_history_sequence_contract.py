@@ -3,7 +3,8 @@
 from pathlib import Path
 import sqlite3, re, json
 src=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text()
-text=src.split("database.beginTransaction();",1)[1]
+text=src.split("database.beginTransaction();",1)[1].split(
+    "private static void reserveQrIdentitySequences",1)[0]
 parts=re.findall(r'database\.execSQL\((.*?sqlite_sequence.*?)\);',text,re.S)
 assert len(parts)==2
 sql=["".join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"',part))
