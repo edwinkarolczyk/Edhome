@@ -79,8 +79,6 @@ final class GardenStore {
             + "actual_plant TEXT NOT NULL DEFAULT '', "
             + "planned_harvest TEXT NOT NULL DEFAULT '', "
             + "actual_harvest TEXT NOT NULL DEFAULT '', "
-            + "season_year INTEGER NOT NULL DEFAULT 0 CHECK(season_year BETWEEN 0 AND 9999), "
-            + "finished_at TEXT NOT NULL DEFAULT '', "
             + "notes TEXT NOT NULL DEFAULT '', "
             + "created_at INTEGER NOT NULL, "
             + "CHECK((catalog_id>0 AND custom_plant_id=0) "
@@ -98,27 +96,6 @@ final class GardenStore {
         db.execSQL("CREATE INDEX IF NOT EXISTS garden_task_links_planting_idx "
             + "ON garden_task_links(planting_id,stage,task_id)");
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS garden_events ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            + "planting_id INTEGER NOT NULL, "
-            + "event_kind TEXT NOT NULL CHECK(event_kind IN "
-            + "('sow','plant','harvest','finish','cancel','note')), "
-            + "event_date TEXT NOT NULL, "
-            + "note TEXT NOT NULL DEFAULT '', "
-            + "created_at INTEGER NOT NULL)");
-        db.execSQL("CREATE INDEX IF NOT EXISTS garden_events_planting_idx "
-            + "ON garden_events(planting_id,event_date,id)");
-
-        db.execSQL("CREATE TABLE IF NOT EXISTS garden_harvests ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            + "planting_id INTEGER NOT NULL, "
-            + "harvested_on TEXT NOT NULL, "
-            + "quantity_milli INTEGER NOT NULL CHECK(quantity_milli>0), "
-            + "unit TEXT NOT NULL CHECK(unit IN ('kg','g','szt.','l','ml')), "
-            + "note TEXT NOT NULL DEFAULT '', "
-            + "created_at INTEGER NOT NULL)");
-        db.execSQL("CREATE INDEX IF NOT EXISTS garden_harvests_planting_idx "
-            + "ON garden_harvests(planting_id,harvested_on,id)");
     }
 
     static void upgrade38(SQLiteDatabase db) {
