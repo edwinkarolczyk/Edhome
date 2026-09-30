@@ -62,11 +62,11 @@ assert 'settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca")
 assert 'STORAGE_GALLERY_PREF = "storage_gallery_enabled"' in s
 assert 'private void storageThingsGallery(java.util.List<StorageStore.Item> items)' in s
 assert 'if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))' in ui
-assert 'title("Galeria rzeczy")' in ui
-assert 'Brak zdjęcia' in ui
+assert 'title("Rzeczy")' in ui
+assert 'missing.setContentDescription("Brak zdjęcia");' in ui
 assert 'StorageThumbs.read(prefs,item.id)' in ui
-assert 'tile.setOnClickListener(v->showStorageLocator(item));' in ui
-assert 'tile.setOnLongClickListener(v->{' in ui
+assert 'tile.setOnClickListener(v->showStorageThingDetails(item.id));' in ui
+assert 'private void showStorageThingDetails(long itemId)' in ui
 assert 'storageEditor(item.kind,item.id);' in ui
 assert 'settingsYesNo(storageSettings,"Galeria miniaturek rzeczy"' in s
 print("Storage tree: persistent branch state, hierarchy, CRUD/QR actions and no flat duplicate list PASS")

@@ -102,6 +102,10 @@ public final class MainActivity extends Activity {
     private String storageGallerySearch = "";
     private Long pendingStorageDestinationItemId;
     private AlertDialog storageDestinationNfcDialog;
+    private String pendingStorageDropKind;
+    private Long pendingStorageDropId;
+    private String pendingStorageDropName;
+    private AlertDialog storageDropDialog;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -400,6 +404,7 @@ public final class MainActivity extends Activity {
         if(nfcAdapter==null)return;
         boolean shouldListen=pendingNfcTarget!=null
             || pendingStorageDestinationItemId!=null
+            || pendingStorageDropKind!=null
             || "scanner".equals(screen)
             || prefs==null
             || prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
@@ -463,6 +468,10 @@ public final class MainActivity extends Activity {
         try {
             NfcLinkStore.Link current=NfcLinkStore.findByUid(
                 db.getReadableDatabase(),uid);
+            if(pendingStorageDropKind!=null && pendingStorageDropId!=null) {
+                handleStorageDropSourceNfc(current,uid);
+                return;
+            }
             if(pendingStorageDestinationItemId!=null) {
                 handleStorageDestinationNfc(current,uid);
                 return;
@@ -6086,6 +6095,10 @@ public final class MainActivity extends Activity {
         if (code.isEmpty()) return;
         StorageQr.Target storageTarget = StorageQr.decode(code);
         if (storageTarget != null) {
+            if (pendingStorageDropKind != null && pendingStorageDropId != null) {
+                handleStorageDropSource(storageTarget.kind, storageTarget.id, "qr");
+                return;
+            }
             if (pendingStorageDestinationItemId != null) {
                 handleStorageDestinationQr(storageTarget);
                 return;
@@ -6188,6 +6201,11 @@ public final class MainActivity extends Activity {
                         qrLabel(item));
             }
         }
+        if ("scanner".equals(screen)
+                && ("box".equals(kind) || "place".equals(kind))) {
+            showScannedTargetActions(source, kind, id, name);
+            return;
+        }
         if ("open".equals(resolveScanAction(source, kind, id)))
             openScannedTarget(kind, id, name);
         else
@@ -6228,6 +6246,17 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             openScannedTarget(kind, id, name);
         });
+
+        if ("box".equals(kind))
+            smallButton(actions, "📥 Włóż rzecz tutaj • skanuj QR / NFC", () -> {
+                dialog.dismiss();
+                beginStorageDropTarget("box", id, name);
+            });
+        else if ("place".equals(kind))
+            smallButton(actions, "📍 Zostaw tutaj rzecz lub pudełko • skanuj QR / NFC", () -> {
+                dialog.dismiss();
+                beginStorageDropTarget("place", id, name);
+            });
 
         if ("thing".equals(kind) || "box".equals(kind)) {
             StorageStore.Item item = StorageStore.find(db.getReadableDatabase(), id);
@@ -6347,6 +6376,7 @@ public final class MainActivity extends Activity {
         }
         if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))
             storageThingsGallery(items);
+        if("thing".equals(storageTemporaryKind)) return;
         title("Podgląd magazynu");
         note("Widok: "
             +(showPlaces?"miejsca ":"")
@@ -6451,9 +6481,9 @@ public final class MainActivity extends Activity {
             if(!"box".equals(item.kind))things.add(item);
         if(things.isEmpty())return;
 
-        title("Galeria rzeczy");
-        note("Szukaj jak w galerii. Wynik pokazuje miniaturę i dokładną ścieżkę "
-            +"Miejsce → Pudełko → Rzecz.");
+        title("Rzeczy");
+        note("Tylko miniatury. Dotknij zdjęcia, aby zobaczyć nazwę, "
+            +"położenie i wszystkie działania.");
         EditText search=new EditText(this);
         search.setSingleLine(true);
         search.setHint("Szukaj rzeczy lub miejsca…");
@@ -6505,11 +6535,11 @@ public final class MainActivity extends Activity {
             grid.addView(empty,new LinearLayout.LayoutParams(-1,-2));
             return;
         }
-        for(int i=0;i<filtered.size();i+=2) {
+        for(int i=0;i<filtered.size();i+=3) {
             LinearLayout row=new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             grid.addView(row,new LinearLayout.LayoutParams(-1,-2));
-            for(int slot=0;slot<2;slot++) {
+            for(int slot=0;slot<3;slot++) {
                 int index=i+slot;
                 if(index>=filtered.size()) {
                     View spacer=new View(this);
@@ -6522,9 +6552,9 @@ public final class MainActivity extends Activity {
                 StorageStore.Item item=filtered.get(index);
                 LinearLayout tile=new LinearLayout(this);
                 tile.setOrientation(LinearLayout.VERTICAL);
-                tile.setPadding(dp(10),dp(10),dp(10),dp(10));
-                tile.setBackground(skin.panel(this,surface,22));
-                tile.setElevation(dp(2));
+                tile.setPadding(dp(3),dp(3),dp(3),dp(3));
+                tile.setBackground(skin.panel(this,surface,18));
+                tile.setElevation(dp(1));
                 tile.setClickable(true);
                 tile.setFocusable(true);
                 touchFeedback(tile);
@@ -6534,29 +6564,18 @@ public final class MainActivity extends Activity {
                     ImageView image=new ImageView(this);
                     image.setImageBitmap(thumbnail);
                     image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    tile.addView(image,new LinearLayout.LayoutParams(-1,dp(118)));
+                    tile.addView(image,new LinearLayout.LayoutParams(-1,dp(108)));
                 } else {
-                    TextView missing=text("◉\nBrak zdjęcia",14,true);
+                    TextView missing=text("◉",24,true);
                     missing.setGravity(Gravity.CENTER);
                     missing.setTextColor(subdued);
-                    tile.addView(missing,new LinearLayout.LayoutParams(-1,dp(118)));
+                    missing.setContentDescription("Brak zdjęcia");
+                    tile.addView(missing,new LinearLayout.LayoutParams(-1,dp(108)));
                 }
 
-                TextView name=text(item.name,15,true);
-                name.setMaxLines(2);
-                tile.addView(name);
-                String location=StorageStore.location(db.getReadableDatabase(),item);
-                TextView where=text(location.replace(" / "," → "),11,false);
-                where.setTextColor(subdued);
-                where.setMaxLines(3);
-                tile.addView(where);
-                smallButton(tile,"📍 Gdzie to jest?",()->showStorageLocator(item));
-                tile.setContentDescription("Rzecz: "+item.name+" • pokaż lokalizację");
-                tile.setOnClickListener(v->showStorageLocator(item));
-                tile.setOnLongClickListener(v->{
-                    storageEditor(item.kind,item.id);
-                    return true;
-                });
+                tile.setContentDescription("Rzecz: "+item.name
+                    +". Dotknij, aby otworzyć szczegóły.");
+                tile.setOnClickListener(v->showStorageThingDetails(item.id));
 
                 LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(
                     0,-2,1f);
@@ -6564,6 +6583,70 @@ public final class MainActivity extends Activity {
                 row.addView(tile,cell);
             }
         }
+    }
+
+    private void showStorageThingDetails(long itemId) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(item==null || !"thing".equals(item.kind)) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        LinearLayout details=new LinearLayout(this);
+        details.setOrientation(LinearLayout.VERTICAL);
+        details.setPadding(dp(16),dp(10),dp(16),dp(10));
+
+        Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+        if(thumbnail!=null) {
+            ImageView image=new ImageView(this);
+            image.setImageBitmap(thumbnail);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            details.addView(image,new LinearLayout.LayoutParams(-1,dp(220)));
+        }
+        details.addView(text(item.name,20,true));
+        TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
+            .replace(" / "," → "),13,false);
+        where.setTextColor(subdued);
+        details.addView(where);
+        NfcLinkStore.Link nfc=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),item.kind,item.id);
+        if(nfc!=null) {
+            TextView tag=text("NFC: "+NfcLinkStore.shortUid(nfc.uid),12,false);
+            tag.setTextColor(subdued);
+            details.addView(tag);
+        }
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Rzecz")
+            .setView(details)
+            .setNegativeButton("Zamknij",null)
+            .create();
+        smallButton(details,"📍 Gdzie to jest?",()->{
+            dialog.dismiss();
+            showStorageLocator(item);
+        });
+        smallButton(details,"📦 Przenieś • QR / NFC / ręcznie",()->{
+            dialog.dismiss();
+            showStorageMoveOptions(item);
+        });
+        smallButton(details,"📷 Dodaj / zmień zdjęcie",()->{
+            dialog.dismiss();
+            selectStorageThumbnail(item.id);
+        });
+        smallButton(details,"NFC • Zarządzaj tagiem",()->{
+            dialog.dismiss();
+            showNfcTargetMenu(null,item.kind,item.id,item.name);
+        });
+        smallButton(details,"QR / etykieta",()->{
+            dialog.dismiss();
+            showStorageQr(item);
+        });
+        smallButton(details,"Edytuj położenie ręcznie",()->{
+            dialog.dismiss();
+            storageEditor(item.kind,item.id);
+        });
+        lightDialogForm(details);
+        dialog.show();
+        DiagnosticLog.event("STORAGE_THING_DETAILS_OPENED","id="+item.id);
     }
 
     private void showStorageLocator(StorageStore.Item item) {
@@ -6874,6 +6957,127 @@ public final class MainActivity extends Activity {
             showStorageMoveOptions(item);
         });
         dialog.show();
+    }
+
+    private void beginStorageDropTarget(String targetKind,long targetId,
+            String targetName) {
+        if(!"box".equals(targetKind) && !"place".equals(targetKind)) {
+            alert("Najpierw zeskanuj pudełko albo miejsce.");
+            return;
+        }
+        if(NfcLinkStore.targetName(db.getReadableDatabase(),targetKind,targetId)
+                .isEmpty()) {
+            alert("Cel już nie istnieje.");
+            return;
+        }
+        clearStorageDropTarget();
+        pendingStorageDestinationItemId=null;
+        if(storageDestinationNfcDialog!=null) {
+            storageDestinationNfcDialog.dismiss();
+            storageDestinationNfcDialog=null;
+        }
+        pendingStorageDropKind=targetKind;
+        pendingStorageDropId=targetId;
+        pendingStorageDropName=targetName;
+
+        boolean nfcReady=nfcAdapter!=null && nfcAdapter.isEnabled();
+        if(nfcReady) {
+            disableNfcReaderMode();
+            nfcReady=enableNfcReaderMode();
+        }
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        String what="box".equals(targetKind)?"rzecz":"rzecz albo pudełko";
+        actions.addView(text("Cel: "+targetName,18,true));
+        actions.addView(text("Teraz zeskanuj "+what+". Możesz użyć QR"
+            +(nfcReady?" albo po prostu przyłożyć NFC.":"."),
+            13,false));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("box".equals(targetKind)
+                ?"📥 Włóż do pudełka":"📍 Zostaw w miejscu")
+            .setView(actions)
+            .setNegativeButton("Anuluj",(d,w)->clearStorageDropTarget())
+            .create();
+        storageDropDialog=dialog;
+        smallButton(actions,"▣ Skanuj QR "+what,()->launchStorageDropSourceQr());
+        if(!nfcReady) {
+            TextView state=text(nfcAdapter==null
+                ?"NFC niedostępne na tym telefonie."
+                :"NFC jest wyłączone — QR nadal działa.",12,false);
+            state.setTextColor(subdued);
+            actions.addView(state);
+        } else {
+            TextView state=text("NFC aktywne — przyłóż tag "+what+".",12,true);
+            state.setTextColor(accent);
+            actions.addView(state);
+        }
+        dialog.setOnCancelListener(d->clearStorageDropTarget());
+        dialog.show();
+        DiagnosticLog.event("STORAGE_DROP_TARGET_WAITING",
+            "target="+targetKind+":"+targetId);
+    }
+
+    private void launchStorageDropSourceQr() {
+        if(pendingStorageDropKind==null || pendingStorageDropId==null)return;
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active())
+            return;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj "
+                +("box".equals(pendingStorageDropKind)
+                    ?"rzecz do pudełka":"rzecz albo pudełko do miejsca"));
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_DROP_SOURCE_QR_WAITING");
+        } catch(Exception problem) {
+            centralScannerCameraPending=false;
+            DiagnosticLog.error("STORAGE_DROP_SOURCE_QR_LAUNCH",problem);
+            alert("Nie można uruchomić skanera QR.");
+        }
+    }
+
+    private void handleStorageDropSourceNfc(NfcLinkStore.Link current,String uid) {
+        if(current==null) {
+            alert("Ten tag NFC nie jest przypisany do rzeczy ani pudełka.");
+            return;
+        }
+        handleStorageDropSource(current.kind,current.targetId,"nfc");
+    }
+
+    private void handleStorageDropSource(String sourceKind,long sourceId,String source) {
+        String targetKind=pendingStorageDropKind;
+        Long targetId=pendingStorageDropId;
+        if(targetKind==null || targetId==null)return;
+
+        if("box".equals(targetKind) && !"thing".equals(sourceKind)) {
+            alert("Do pudełka możesz włożyć rzecz. Zeskanuj QR albo NFC rzeczy.");
+            return;
+        }
+        if("place".equals(targetKind)
+                && !"thing".equals(sourceKind) && !"box".equals(sourceKind)) {
+            alert("W miejscu możesz zostawić rzecz albo pudełko.");
+            return;
+        }
+        if(!applyStorageDestination(sourceId,targetKind,targetId,source))return;
+
+        DiagnosticLog.event("STORAGE_DROP_COMPLETED",
+            "source="+sourceKind+":"+sourceId+" target="+targetKind+":"+targetId);
+        clearStorageDropTarget();
+    }
+
+    private void clearStorageDropTarget() {
+        pendingStorageDropKind=null;
+        pendingStorageDropId=null;
+        pendingStorageDropName=null;
+        AlertDialog dialog=storageDropDialog;
+        storageDropDialog=null;
+        if(dialog!=null && dialog.isShowing())dialog.dismiss();
+        refreshNfcReaderMode();
     }
 
     private void showStorageMoveOptions(StorageStore.Item item) {

@@ -27,8 +27,27 @@ assert 'Rzecz możesz przenieść do pudełka albo miejsca.' in main
 assert 'Galeria rzeczy' in main
 assert 'Szukaj rzeczy lub miejsca…' in main
 assert 'renderStorageGalleryGrid' in main
+assert 'showStorageThingDetails(item.id)' in main
+assert 'private void showStorageThingDetails(long itemId)' in main
+assert 'Tylko miniatury. Dotknij zdjęcia' in main
+assert 'for(int i=0;i<filtered.size();i+=3)' in main
+assert 'for(int slot=0;slot<3;slot++)' in main
+assert 'if("thing".equals(storageTemporaryKind)) return;' in main
 assert '📍 Gdzie to jest?' in main
 assert 'showStorageLocator' in main
+
+# Skaner działa w obie strony: rzecz -> cel oraz cel -> rzecz/pudełko.
+assert 'private String pendingStorageDropKind;' in main
+assert 'beginStorageDropTarget("box", id, name)' in main
+assert 'beginStorageDropTarget("place", id, name)' in main
+assert 'private void handleStorageDropSource(String sourceKind,long sourceId,String source)' in main
+assert 'handleStorageDropSourceNfc(current,uid)' in main
+assert 'handleStorageDropSource(storageTarget.kind, storageTarget.id, "qr")' in main
+assert '📥 Włóż rzecz tutaj • skanuj QR / NFC' in main
+assert '📍 Zostaw tutaj rzecz lub pudełko • skanuj QR / NFC' in main
+assert 'Do pudełka możesz włożyć rzecz.' in main
+assert 'W miejscu możesz zostawić rzecz albo pudełko.' in main
+assert 'STORAGE_DROP_COMPLETED' in main
 
 # Storage hub and direct home shortcuts must stay in sync.
 catalog = Path("app/src/main/java/com/edwinkarolczyk/edhome/HomeTileCatalog.java").read_text(
