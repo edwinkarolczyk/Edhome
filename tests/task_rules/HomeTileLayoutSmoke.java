@@ -21,6 +21,16 @@ public final class HomeTileLayoutSmoke {
         equal(HomeTileLayout.homeColumns(600), 6, "compact large phone/tablet");
         equal(HomeTileLayout.homeColumns(800), 6, "compact tablet");
         equal(HomeTileLayout.homeColumns(1500), 6, "compact readability cap");
+        equal(HomeTileLayout.pageSlots(6), 6, "two home rows");
+        equal(HomeTileLayout.pageSlots(9), 9, "three home rows");
+        equal(HomeTileLayout.pageSlots(12), 12, "four home rows");
+        equal(HomeTileLayout.pageSlots(7), 9, "invalid page slots fall back");
+        if (!HomeTileLayout.validPageSlots(6)
+                || !HomeTileLayout.validPageSlots(9)
+                || !HomeTileLayout.validPageSlots(12)
+                || HomeTileLayout.validPageSlots(3)
+                || HomeTileLayout.validPageSlots(15))
+            throw new AssertionError("home page slot validation");
         if (!HomeTileLayout.validPair(450, 1100)
                 || !HomeTileLayout.validPair(800, 1100)
                 || HomeTileLayout.validPair(800, 900)
@@ -32,6 +42,6 @@ public final class HomeTileLayoutSmoke {
                 || !HomeTileLayout.openMenuOnRelease(1099, 450, 1100)
                 || HomeTileLayout.openMenuOnRelease(1100, 450, 1100))
             throw new AssertionError("short hold must not steal long drag");
-        System.out.println("Home tiles: adaptive columns and two configurable thresholds: PASS");
+        System.out.println("Home tiles: adaptive columns, page slots and configurable thresholds: PASS");
     }
 }
