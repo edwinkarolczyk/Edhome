@@ -4,6 +4,9 @@ package com.edwinkarolczyk.edhome;
 final class HomeTileLayout {
     static final String SHORT_KEY = "home_tile_short_hold_ms";
     static final String DRAG_KEY = "home_tile_drag_hold_ms";
+    static final String PAGE_SLOTS_KEY = "home_tile_page_slots";
+    static final int DEFAULT_PAGE_SLOTS = 9;
+    static final int[] PAGE_SLOT_OPTIONS = {6, 9, 12};
     static final int DEFAULT_SHORT_MS = 450;
     static final int DEFAULT_DRAG_MS = 1100;
     static final int[] SHORT_OPTIONS = {300, 450, 600, 800};
@@ -30,6 +33,16 @@ final class HomeTileLayout {
         int fit = (content + HOME_GAP_DP)
             / (HOME_MIN_TILE_DP + HOME_GAP_DP);
         return Math.max(1, Math.min(6, fit));
+    }
+
+    static boolean validPageSlots(int slots) {
+        for (int allowed : PAGE_SLOT_OPTIONS)
+            if (allowed == slots) return true;
+        return false;
+    }
+
+    static int pageSlots(int requested) {
+        return validPageSlots(requested) ? requested : DEFAULT_PAGE_SLOTS;
     }
 
     static boolean validShort(int milliseconds) {
