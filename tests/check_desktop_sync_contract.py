@@ -261,9 +261,13 @@ assert 'Rzecz możesz włożyć tylko do istniejącego pudełka.' in desktop
 desktop_version_line=next(line for line in desktop.splitlines()
     if 'DESKTOP_VERSION = "' in line)
 desktop_version=desktop_version_line.split('"')[1].split(".")
-assert desktop_version[:3]==["0","7","0"] and int(desktop_version[3]) >= 77
+assert desktop_version[:3]==["0","7","0"] and int(desktop_version[3]) >= 78
 print("desktop storage validation + move history + rollback OK")
 
 assert 'Typ istniejącej rzeczy/pudełka jest stały ze względu na QR i NFC.' in desktop
 assert 'Typ jest stały, ponieważ QR i NFC zapisują typ obiektu.' in desktop
 print("desktop storage QR/NFC kind identity immutable OK")
+
+assert 'if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())' in desktop
+assert 'Najpierw odnotuj zwrot wypożyczonej rzeczy.' in desktop
+print("desktop storage lent-item move guard OK")

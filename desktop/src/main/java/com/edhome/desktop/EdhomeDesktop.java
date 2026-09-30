@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.77";
+    private static final String DESKTOP_VERSION = "0.7.0.78";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -5886,6 +5886,9 @@ public final class EdhomeDesktop extends JFrame {
                 boolean moved=!value(before,"parent_box_id").equals(
                         value(row,"parent_box_id"))
                     ||!value(before,"place_id").equals(value(row,"place_id"));
+                if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())
+                    throw new IllegalArgumentException(
+                        "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
                 if(storageRowLive&&moved)
                     appendDesktopStorageMove(row,before);
             }
