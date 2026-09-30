@@ -86,6 +86,8 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
     private static final int EXPORT_QR_LABELS_PDF = 1222;
     private static final int TAKE_STORAGE_THUMBNAIL = 1223;
+    private static final int IMPORT_GARDEN_CATALOG = 1224;
+    private static final int EXPORT_GARDEN_CATALOG = 1225;
     private static final int STORAGE_CAMERA_PERMISSION = 7134;
     private byte[] pendingQrLabelsPdf;
     private int pendingQrLabelsCount;
@@ -4372,10 +4374,35 @@ public final class MainActivity extends Activity {
     }
 
     private void gardenCatalogInfo() {
-        alert("Katalog referencyjny: "+gardenCount("garden_catalog")+" pozycji\n"
+        String message="Katalog referencyjny: "+gardenCount("garden_catalog")+" pozycji\n"
             +"Moje korekty: "+gardenCount("garden_catalog_overrides")+"\n\n"
-            +"Katalog jest osobną warstwą. Import/eksport CSV/JSON i porównanie zmian "
-            +"dochodzą w kolejnej części 0.7; Twoje nasadzenia pozostają niezależne.");
+            +"Katalog jest osobną warstwą. Import CSV nie usuwa nasadzeń ani Twoich "
+            +"korekt. EDHOME nie pobiera ani nie wskazuje pirackich baz — importujesz "
+            +"plik, do którego masz prawo.";
+        Object[] actions={"Import CSV","Eksport CSV","Zamknij"};
+        int choice=new AlertDialog.Builder(this)
+            .setTitle("Ogród • katalog roślin")
+            .setMessage(message)
+            .setItems(new String[]{"Import CSV","Eksport CSV","Zamknij"},
+                (dialog,which)->{
+                    if(which==0) gardenImportCatalog();
+                    else if(which==1) gardenExportCatalog();
+                }).show()==null ? -1 : -1;
+    }
+
+    private void gardenImportCatalog() {
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("text/*");
+        startActivityForResult(intent,IMPORT_GARDEN_CATALOG);
+    }
+
+    private void gardenExportCatalog() {
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("text/csv")
+            .putExtra(Intent.EXTRA_TITLE,"EDHOME-Ogrod-katalog.csv");
+        startActivityForResult(intent,EXPORT_GARDEN_CATALOG);
     }
 
     /** Dates read directly from vehicles; no duplicate task or expense records. */
@@ -11084,6 +11111,48 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == IMPORT_GARDEN_CATALOG) {
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                try (InputStream in=getContentResolver().openInputStream(data.getData());
+                     ByteArrayOutputStream out=new ByteArrayOutputStream()) {
+                    if(in==null) throw new IllegalStateException("Brak dostępu do pliku.");
+                    byte[] block=new byte[8192];
+                    int n;
+                    while((n=in.read(block))!=-1) {
+                        if(out.size()+n>GardenCatalogCsv.MAX_BYTES)
+                            throw new IllegalArgumentException("Katalog przekracza 2 MB.");
+                        out.write(block,0,n);
+                    }
+                    String csv=new String(out.toByteArray(),StandardCharsets.UTF_8);
+                    int count=GardenStore.importCatalogCsv(db.getWritableDatabase(),csv);
+                    DiagnosticLog.event("GARDEN_CATALOG_IMPORTED","count="+count);
+                    render();
+                    alert("Zaimportowano "+count+" pozycji katalogu. "
+                        +"Twoje korekty i nasadzenia pozostały bez zmian.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("GARDEN_CATALOG_IMPORT",error);
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zaimportować katalogu.":error.getMessage());
+                }
+            }
+            return;
+        }
+        if (request == EXPORT_GARDEN_CATALOG) {
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                try (OutputStream out=getContentResolver().openOutputStream(data.getData(),"wt")) {
+                    if(out==null) throw new IllegalStateException("Brak dostępu do pliku.");
+                    String csv=GardenStore.exportCatalogCsv(db.getReadableDatabase());
+                    out.write(csv.getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    DiagnosticLog.event("GARDEN_CATALOG_EXPORTED");
+                    alert("Zapisano katalog Ogrodu jako CSV.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("GARDEN_CATALOG_EXPORT",error);
+                    alert("Nie udało się zapisać katalogu CSV.");
+                }
+            }
+            return;
+        }
         if (request == EXPORT_QR_LABELS_PDF) {
             byte[] pdf=pendingQrLabelsPdf;
             int count=pendingQrLabelsCount;
