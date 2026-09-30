@@ -22,7 +22,7 @@ for token in (
     'GardenStore.create(database);',
     'DATABASE_MIGRATED_36_TO_37_GARDEN',
     'DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE',
-    'Kalendarz i powiadomienia',
+    'smallButton(box,"Powiadomienia"',
     'GardenStore.syncPlanTasks(db.getWritableDatabase(),plantingId,null,0)',
     'ReminderReceiver.schedule(this);',
     'IMPORT_GARDEN_CATALOG',
