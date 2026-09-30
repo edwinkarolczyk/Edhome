@@ -4200,11 +4200,12 @@ public final class MainActivity extends Activity {
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT p.id,a.name,COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),"
                 +"COALESCE(NULLIF(gc.variety,''),cp.variety,''),p.label,p.status,"
-                +"p.planned_sow,p.planned_plant,p.planned_harvest,p.notes "
+                +"p.planned_sow,p.planned_plant,p.planned_harvest,p.notes,"
+                +"p.actual_sow,p.actual_plant,p.actual_harvest,p.season_year,p.finished_at "
                 +"FROM garden_plantings p JOIN garden_areas a ON a.id=p.area_id "
                 +"LEFT JOIN garden_catalog gc ON gc.id=p.catalog_id "
                 +"LEFT JOIN garden_custom_plants cp ON cp.id=p.custom_plant_id "
-                +"ORDER BY p.id DESC LIMIT 50",null)){
+                +"ORDER BY p.id DESC LIMIT 80",null)){
             while(c.moveToNext()){
                 shown++;
                 long plantingId=c.getLong(0);
@@ -4212,17 +4213,30 @@ public final class MainActivity extends Activity {
                 String variety=c.getString(3), label=c.getString(4);
                 String displayName=c.getString(2)+(variety.isEmpty()?"":" • "+variety)
                     +(label.isEmpty()?"":" • "+label);
+                String status=c.getString(5);
+                int season=c.getInt(13);
                 box.addView(text(displayName,17,true));
-                box.addView(text(c.getString(1)+" • "+c.getString(5),13,false));
-                String dates="";
-                if(!c.getString(6).isEmpty()) dates+="siew "+c.getString(6);
-                if(!c.getString(7).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"sadzenie "+c.getString(7);
-                if(!c.getString(8).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"zbiór "+c.getString(8);
-                if(!dates.isEmpty()) box.addView(text(dates,12,false));
+                box.addView(text(c.getString(1)+" • sezon "+season+" • "+status,13,false));
+                String planned="";
+                if(!c.getString(6).isEmpty()) planned+="siew "+c.getString(6);
+                if(!c.getString(7).isEmpty()) planned+=(planned.isEmpty()?"":" • ")+"sadzenie "+c.getString(7);
+                if(!c.getString(8).isEmpty()) planned+=(planned.isEmpty()?"":" • ")+"zbiór "+c.getString(8);
+                if(!planned.isEmpty()) box.addView(text("Plan: "+planned,12,false));
+                String actual="";
+                if(!c.getString(10).isEmpty()) actual+="siew "+c.getString(10);
+                if(!c.getString(11).isEmpty()) actual+=(actual.isEmpty()?"":" • ")+"sadzenie "+c.getString(11);
+                if(!c.getString(12).isEmpty()) actual+=(actual.isEmpty()?"":" • ")+"pierwszy zbiór "+c.getString(12);
+                if(!c.getString(14).isEmpty()) actual+=(actual.isEmpty()?"":" • ")+"koniec "+c.getString(14);
+                if(!actual.isEmpty()) box.addView(text("Wykonane: "+actual,12,false));
+                String harvests=GardenStore.harvestSummary(db.getReadableDatabase(),plantingId);
+                if(!harvests.isEmpty()) box.addView(text("Zebrano: "+harvests,13,true));
                 if(!c.getString(9).isEmpty()) box.addView(text(c.getString(9),12,false));
                 int linked=GardenStore.linkedTaskCount(db.getReadableDatabase(),plantingId);
                 box.addView(text("Kalendarz: "+linked+" termin(y) połączone z Czynnościami",12,false));
-                smallButton(box,"Kalendarz i powiadomienia",()->
+                LinearLayout row=compactActionRow();
+                compactAction(row,"Cykl / zbiory",()->
+                    gardenCycleDialog(plantingId,displayName,status));
+                compactAction(row,"Powiadomienia",()->
                     gardenScheduleDialog(plantingId,displayName));
             }
         }
@@ -4321,6 +4335,225 @@ public final class MainActivity extends Activity {
                     render();}
                 catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać nasadzenia.":e.getMessage());}
             }).show();
+    }
+
+    private void gardenCycleDialog(long plantingId,String label,String status) {
+        java.util.List<String> actions=new java.util.ArrayList<>();
+        java.util.List<String> codes=new java.util.ArrayList<>();
+        if(!"finished".equals(status)&&!"cancelled".equals(status)) {
+            actions.add("Zapisz faktyczny siew"); codes.add("sow");
+            actions.add("Zapisz faktyczne sadzenie"); codes.add("plant");
+            actions.add("Dodaj zbiór / plon"); codes.add("harvest");
+            actions.add("Zakończ sezon"); codes.add("finish");
+        }
+        if("finished".equals(status)) {
+            actions.add("Rozpocznij kolejny sezon"); codes.add("next");
+        }
+        actions.add("Historia sezonu"); codes.add("history");
+        new AlertDialog.Builder(this)
+            .setTitle("Cykl uprawy • "+label)
+            .setItems(actions.toArray(new String[0]),(dialog,which)->{
+                String code=codes.get(which);
+                if("sow".equals(code)||"plant".equals(code))
+                    gardenStageDialog(plantingId,label,code);
+                else if("harvest".equals(code))
+                    gardenHarvestDialog(plantingId,label);
+                else if("finish".equals(code))
+                    gardenFinishDialog(plantingId,label);
+                else if("next".equals(code))
+                    gardenNextSeasonDialog(plantingId,label);
+                else gardenHistoryDialog(plantingId,label);
+            }).show();
+    }
+
+    private EditText gardenDateInput(LinearLayout form,String label,String initial) {
+        EditText date=new EditText(this);
+        date.setSingleLine(true);
+        date.setFocusable(false);
+        date.setClickable(true);
+        date.setText(initial==null||initial.isEmpty()?LocalDate.now().toString():initial);
+        date.setHint(label);
+        date.setTextColor(ink);
+        date.setHintTextColor(subdued);
+        date.setOnClickListener(v->{
+            LocalDate start;
+            try{start=LocalDate.parse(date.getText().toString());}
+            catch(Exception ignored){start=LocalDate.now();}
+            new DatePickerDialog(this,(view,year,month,day)->
+                date.setText(LocalDate.of(year,month+1,day).toString()),
+                start.getYear(),start.getMonthValue()-1,start.getDayOfMonth()).show();
+        });
+        form.addView(text(label,13,true));
+        form.addView(date);
+        return date;
+    }
+
+    private void gardenStageDialog(long plantingId,String label,String stage) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText date=gardenDateInput(form,
+            "sow".equals(stage)?"Faktyczny siew":"Faktyczne sadzenie",
+            LocalDate.now().toString());
+        EditText note=new EditText(this);
+        note.setHint("Notatka (opcjonalnie)");
+        form.addView(note);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle(("sow".equals(stage)?"Siew • ":"Sadzenie • ")+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try{
+                    GardenStore.markStage(db.getWritableDatabase(),plantingId,stage,
+                        date.getText().toString(),note.getText().toString());
+                    Long taskId=GardenStore.linkedTaskId(db.getReadableDatabase(),
+                        plantingId,stage);
+                    if(taskId!=null) db.completeTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_STAGE_DONE","stage="+stage);
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie zapisano etapu uprawy.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenHarvestDialog(long plantingId,String label) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText date=gardenDateInput(form,"Data zbioru",LocalDate.now().toString());
+        EditText quantity=new EditText(this);
+        quantity.setSingleLine(true);
+        quantity.setHint("Ilość, np. 2,5");
+        quantity.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(text("Ilość",13,true));
+        form.addView(quantity);
+        Spinner unit=new Spinner(this);
+        unit.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList("kg","g","szt.","l","ml")));
+        form.addView(text("Jednostka",13,true));
+        form.addView(unit);
+        EditText note=new EditText(this);
+        note.setHint("Notatka (opcjonalnie)");
+        form.addView(note);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Dodaj zbiór • "+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try{
+                    GardenStore.addHarvest(db.getWritableDatabase(),plantingId,
+                        date.getText().toString(),quantity.getText().toString(),
+                        (String)unit.getSelectedItem(),note.getText().toString());
+                    Long taskId=GardenStore.linkedTaskId(db.getReadableDatabase(),
+                        plantingId,"harvest");
+                    if(taskId!=null) db.completeTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_HARVEST_ADDED");
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie zapisano zbioru.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenFinishDialog(long plantingId,String label) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText date=gardenDateInput(form,"Data zakończenia",LocalDate.now().toString());
+        EditText note=new EditText(this);
+        note.setHint("Podsumowanie sezonu (opcjonalnie)");
+        form.addView(note);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Zakończyć sezon • "+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zakończ",(d,w)->{
+                try{
+                    GardenStore.finishSeason(db.getWritableDatabase(),plantingId,
+                        date.getText().toString(),note.getText().toString());
+                    DiagnosticLog.event("GARDEN_SEASON_FINISHED");
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie zakończono sezonu.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenNextSeasonDialog(long plantingId,String label) {
+        int current=GardenStore.seasonYear(db.getReadableDatabase(),plantingId);
+        int suggested=Math.max(LocalDate.now().getYear(),current)+1;
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText year=new EditText(this);
+        year.setSingleLine(true);
+        year.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        year.setText(Integer.toString(suggested));
+        form.addView(text("Rok kolejnego sezonu",13,true));
+        form.addView(year);
+        form.addView(text("EDHOME skopiuje miejsce, roślinę/odmianę i planowane "
+            +"miesiące, ale nie skopiuje wykonania ani plonów.",12,false));
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Nowy sezon • "+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",(d,w)->{
+                try{
+                    int target=Integer.parseInt(year.getText().toString().trim());
+                    long newId=GardenStore.cloneNextSeason(db.getWritableDatabase(),
+                        plantingId,target);
+                    GardenStore.syncPlanTasks(db.getWritableDatabase(),newId,null,0);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_NEXT_SEASON","year="+target);
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie utworzono kolejnego sezonu.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenHistoryDialog(long plantingId,String label) {
+        StringBuilder history=new StringBuilder();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT event_date,event_kind,note FROM garden_events "
+                +"WHERE planting_id=? ORDER BY event_date,id",
+                new String[]{Long.toString(plantingId)})){
+            while(c.moveToNext()){
+                if(history.length()>0)history.append("\n");
+                history.append(c.getString(0)).append(" • ")
+                    .append(gardenEventLabel(c.getString(1)));
+                if(!c.getString(2).isEmpty()) history.append(" • ").append(c.getString(2));
+            }
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT harvested_on,quantity_milli,unit,note FROM garden_harvests "
+                +"WHERE planting_id=? ORDER BY harvested_on,id",
+                new String[]{Long.toString(plantingId)})){
+            while(c.moveToNext()){
+                history.append("\n").append(c.getString(0)).append(" • plon ")
+                    .append(GardenStore.formatMilli(c.getLong(1))).append(' ')
+                    .append(c.getString(2));
+                if(!c.getString(3).isEmpty()) history.append(" • ").append(c.getString(3));
+            }
+        }
+        alert(history.length()==0
+            ?"Brak zapisanej historii sezonu."
+            :label+"\n\n"+history.toString());
+    }
+
+    private String gardenEventLabel(String kind) {
+        switch(kind){
+            case "sow": return "siew";
+            case "plant": return "sadzenie";
+            case "harvest": return "zbiór";
+            case "finish": return "zakończenie sezonu";
+            case "cancel": return "anulowanie";
+            default: return "notatka";
+        }
     }
 
     private void gardenScheduleDialog(long plantingId,String label) {
@@ -11472,7 +11705,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 37);
+            super(context, "edhome-beta-preview.db", null, 38);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -11518,7 +11751,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 37) {
+            if (oldVersion < 1 || newVersion > 38) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -11717,6 +11950,16 @@ public final class MainActivity extends Activity {
                     throw new IllegalStateException("Nie udało się utworzyć danych Ogrodu.",error);
                 }
                 DiagnosticLog.event("DATABASE_MIGRATED_36_TO_37_GARDEN");
+            }
+            if(oldVersion < 38) {
+                try {
+                    GardenStore.upgrade38(database);
+                    SyncRecordStore.ensureAll(database);
+                } catch(Exception error) {
+                    throw new IllegalStateException(
+                        "Nie udało się rozszerzyć historii sezonów Ogrodu.",error);
+                }
+                DiagnosticLog.event("DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE");
             }
         }
 
