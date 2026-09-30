@@ -8,14 +8,21 @@ store = Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageStore.java").re
 )
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 
-assert 'versionName \'0.7.4.2\'' in gradle
+assert 'versionName \'0.7.4.3\'' in gradle
 assert '⚡ Szybko dodaj rzecz' in main
 assert 'private void quickAddStorageThing()' in main
 assert 'NFC • Przypisz tag rzeczy' in main
-assert 'NFC • Wskaż pudełko lub miejsce' in main
-assert 'pendingStorageDestinationThingId' in main
+assert '📍 Ustaw położenie • NFC / QR / lista' in main
+assert 'pendingStorageDestinationItemId' in main
 assert 'handleStorageDestinationNfc(current,uid)' in main
 assert 'STORAGE_LOCATION_SET_BY_NFC' in main
+assert 'STORAGE_LOCATION_SET_BY_QR' in main
+assert 'private void showStorageMoveOptions(StorageStore.Item item)' in main
+assert 'NFC • Dotknij tagu celu' in main
+assert 'QR • Zeskanuj etykietę celu' in main
+assert 'private void beginStorageDestinationQr(long itemId)' in main
+assert 'Pudełko możesz przenieść tylko do miejsca.' in main
+assert 'Rzecz możesz przenieść do pudełka albo miejsca.' in main
 assert 'Galeria rzeczy' in main
 assert 'Szukaj rzeczy lub miejsca…' in main
 assert 'renderStorageGalleryGrid' in main
@@ -28,4 +35,4 @@ assert 'if(current.placeId!=null)' in store
 assert 'current=find(db,current.boxId);' in store
 assert 'CHECK(parent_box_id IS NULL OR place_id IS NULL)' in store
 
-print("OK: storage gallery + quick add + NFC location contract")
+print("OK: storage gallery + quick add + NFC/QR move contract")
