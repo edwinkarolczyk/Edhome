@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.76";
+    private static final String DESKTOP_VERSION = "0.7.0.77";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -5879,6 +5879,9 @@ public final class EdhomeDesktop extends JFrame {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
                 applyEditor(row, entry.getKey(), entry.getValue());
             if(storageRow) {
+                if(storageRowLive&&!value(before,"kind").equals(value(row,"kind")))
+                    throw new IllegalArgumentException(
+                        "Typ istniejącej rzeczy/pudełka jest stały ze względu na QR i NFC.");
                 validateDesktopStorageRow(row);
                 boolean moved=!value(before,"parent_box_id").equals(
                         value(row,"parent_box_id"))
@@ -6000,6 +6003,16 @@ public final class EdhomeDesktop extends JFrame {
 
     private JComponent editorFor(String key, JsonObject row) {
         String raw = value(row, key);
+        if("kind".equals(key)&&isDesktopStorageRow(row)
+                &&desktopStorageRowIsLive(row)) {
+            Choice locked="box".equals(raw)
+                ?new Choice("box","Pudełko"):new Choice("thing","Rzecz");
+            JComboBox<Choice> combo=new JComboBox<>(new Choice[]{locked});
+            combo.setEnabled(false);
+            combo.setToolTipText(
+                "Typ jest stały, ponieważ QR i NFC zapisują typ obiektu.");
+            return combo;
+        }
         java.util.List<Choice> choices = choicesFor(key, row);
         if (!choices.isEmpty()) {
             JComboBox<Choice> box = new JComboBox<>(

@@ -259,5 +259,9 @@ assert 'event.addProperty("action","moved")' in desktop
 assert 'Pudełko można przypisać tylko do miejsca.' in desktop
 assert 'Rzecz możesz włożyć tylko do istniejącego pudełka.' in desktop
 desktop_version=re.search(r'DESKTOP_VERSION = "0\\.7\\.0\\.(\\d+)"',desktop)
-assert desktop_version and int(desktop_version.group(1)) >= 76
+assert desktop_version and int(desktop_version.group(1)) >= 77
 print("desktop storage validation + move history + rollback OK")
+
+assert 'Typ istniejącej rzeczy/pudełka jest stały ze względu na QR i NFC.' in desktop
+assert 'Typ jest stały, ponieważ QR i NFC zapisują typ obiektu.' in desktop
+print("desktop storage QR/NFC kind identity immutable OK")
