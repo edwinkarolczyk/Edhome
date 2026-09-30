@@ -26,6 +26,15 @@ for token in (
     'prefs.edit().putInt(HomeTileLayout.SHORT_KEY,menuMs)',
     '.putInt(HomeTileLayout.DRAG_KEY,moveMs).apply()',
     'Czas przytrzymania kafelków',
+    'Miejsca na jednej stronie Start',
+    'HomeTileLayout.PAGE_SLOTS_KEY',
+    'HomeTileLayout.PAGE_SLOT_OPTIONS',
+    'homePageCapacity()',
+    'used + span > capacity',
+    'previewHomeDragPageEdge(-1)',
+    'previewHomeDragPageEdge(1)',
+    'HOME_TILE_MOVED_BETWEEN_PAGES',
+    'homePageInsertionSlot(',
 ):
     assert token in main, token
 
@@ -41,6 +50,8 @@ for token in (
     'HomeTileLayout.validPair(shortHoldMs, dragHoldMs)',
     '.putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)',
     '.putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)',
+    'homeTilePageSlots',
+    '.putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)',
 ):
     assert token in backup, token
 # Big native/AI 3D icons are sized from actual tile geometry, not a 46dp
