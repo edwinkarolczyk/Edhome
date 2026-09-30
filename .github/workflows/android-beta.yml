@@ -5,6 +5,7 @@ on:
     branches: [beta]
     paths:
       - "app/**"
+      - "desktop/**"
       - "*.gradle"
       - "gradle.properties"
       - "settings.gradle"
