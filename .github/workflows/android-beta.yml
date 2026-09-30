@@ -338,6 +338,8 @@ jobs:
           python3 tests/check_storage_qr_contract.py
       - name: Storage location and place deletion regression
         run: python3 tests/check_storage_integrity_contract.py
+      - name: Storage Android-Desktop stabilization gate
+        run: python3 tests/check_storage_stabilization_gate.py
       - name: NFC UID binding, Android reader and object lifecycle contract
         run: python3 tests/check_nfc_contract.py
       - name: PayCheck grosze and shared-only ledger contract
