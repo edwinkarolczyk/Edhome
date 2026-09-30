@@ -194,6 +194,7 @@ public final class MainActivity extends Activity {
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
         ensureFloorPlanShellTileSeeded();
         ensureScannerTileSeeded();
+        ensureStorageShortcutTilesSeeded();
         ensureGardenTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
@@ -1876,6 +1877,27 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("SCANNER_TILE_SEEDED");
     }
 
+    private void ensureStorageShortcutTilesSeeded() {
+        if (prefs.getBoolean("storage_shortcuts_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        int insertAt = order.indexOf("storage");
+        insertAt = insertAt < 0 ? order.size() : insertAt + 1;
+        if (!order.contains("storage_things")) {
+            order.add(insertAt, "storage_things");
+            insertAt++;
+        }
+        if (!order.contains("storage_boxes"))
+            order.add(insertAt, "storage_boxes");
+        boolean ok = prefs.edit()
+            .putBoolean("storage_shortcuts_seeded_v1", true)
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .commit();
+        if (ok) DiagnosticLog.event("STORAGE_SHORTCUT_TILES_SEEDED");
+    }
+
     private String homeTileTarget(String id) {
         String target = prefs.getString("tile_target_" + id,
             HomeTileCatalog.defaultTarget(id));
@@ -1905,6 +1927,12 @@ public final class MainActivity extends Activity {
         if ("tasks".equals(target) || "today".equals(target)) {
             tasksFilter = "today".equals(target) ? "today" : "all";
             go("tasks");
+            return;
+        }
+        if ("storage_things".equals(target) || "storage_boxes".equals(target)) {
+            storageTemporaryKind = "storage_things".equals(target)
+                ? "thing" : "box";
+            go("storage");
             return;
         }
         go(target);
@@ -5900,18 +5928,21 @@ public final class MainActivity extends Activity {
     private static final String STORAGE_ACTION_PREFIX = "storage_action_";
 
     private boolean storageThingsVisible() {
-        return "thing".equals(storageTemporaryKind)
-            || prefs.getBoolean(STORAGE_SHOW_THINGS_PREF,true);
+        if (storageTemporaryKind != null)
+            return "thing".equals(storageTemporaryKind);
+        return prefs.getBoolean(STORAGE_SHOW_THINGS_PREF,true);
     }
 
     private boolean storageBoxesVisible() {
-        return "box".equals(storageTemporaryKind)
-            || prefs.getBoolean(STORAGE_SHOW_BOXES_PREF,true);
+        if (storageTemporaryKind != null)
+            return "box".equals(storageTemporaryKind);
+        return prefs.getBoolean(STORAGE_SHOW_BOXES_PREF,true);
     }
 
     private boolean storagePlacesVisible() {
-        return "place".equals(storageTemporaryKind)
-            || prefs.getBoolean(STORAGE_SHOW_PLACES_PREF,true);
+        if (storageTemporaryKind != null)
+            return "place".equals(storageTemporaryKind);
+        return prefs.getBoolean(STORAGE_SHOW_PLACES_PREF,true);
     }
 
     private boolean storageActionVisible(String kind,String action) {
@@ -6284,7 +6315,8 @@ public final class MainActivity extends Activity {
         boolean showThings=storageThingsVisible();
         boolean showBoxes=storageBoxesVisible();
         boolean showPlaces=storagePlacesVisible();
-        header("Rzeczy • pudełka • QR");
+        header("Rzeczy • Pudełka • Miejsca");
+        storageViewSwitcher();
         note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
             + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
         if(showThings) {
@@ -6376,6 +6408,40 @@ public final class MainActivity extends Activity {
                 +"ORDER BY id DESC LIMIT 12",null)){
             while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
                 +" • "+c.getString(2));
+        }
+    }
+
+    private void storageViewSwitcher() {
+        HorizontalScrollView filters = new HorizontalScrollView(this);
+        filters.setHorizontalScrollBarEnabled(false);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        filters.addView(row);
+        body.addView(filters, new LinearLayout.LayoutParams(-1, dp(40)));
+        String selected = storageTemporaryKind == null ? "all" : storageTemporaryKind;
+        for (String[] filter : new String[][] {
+            {"all", "Wszystko"}, {"thing", "Rzeczy"},
+            {"box", "Pudełka"}, {"place", "Miejsca"} }) {
+            Button chip = new Button(this);
+            chip.setAllCaps(false);
+            chip.setText(filter[1]);
+            chip.setTextSize(11);
+            chip.setMinHeight(0);
+            chip.setMinimumHeight(0);
+            boolean active = filter[0].equals(selected);
+            chip.setTextColor(active ? skin.accentInk : ink);
+            chip.setBackground(rounded(active ? accent : surface));
+            LinearLayout.LayoutParams cp =
+                new LinearLayout.LayoutParams(-2, dp(36));
+            cp.setMargins(0, 0, dp(5), 0);
+            row.addView(chip, cp);
+            chip.setOnClickListener(v -> {
+                storageTemporaryKind = "all".equals(filter[0])
+                    ? null : filter[0];
+                DiagnosticLog.event("STORAGE_VIEW_CHANGED",
+                    "kind=" + filter[0]);
+                render();
+            });
         }
     }
 
