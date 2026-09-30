@@ -23,6 +23,10 @@ for token in (
     'Kalendarz i powiadomienia',
     'GardenStore.syncPlanTasks(db.getWritableDatabase(),plantingId,null,0)',
     'ReminderReceiver.schedule(this);',
+    'IMPORT_GARDEN_CATALOG',
+    'EXPORT_GARDEN_CATALOG',
+    'GardenStore.importCatalogCsv',
+    'GardenStore.exportCatalogCsv',
 ):
     assert token in main, token
 
@@ -33,6 +37,8 @@ for token in (
     assert token in tiles, token
 
 assert "source_license TEXT NOT NULL" in store
+assert "static int importCatalogCsv(" in store
+assert "static String exportCatalogCsv(" in store
 assert "garden_catalog_overrides" in store
 assert "planned_sow TEXT NOT NULL" in store
 assert "actual_sow TEXT NOT NULL" in store
