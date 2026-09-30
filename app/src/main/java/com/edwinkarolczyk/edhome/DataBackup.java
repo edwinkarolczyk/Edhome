@@ -1453,6 +1453,7 @@ final class DataBackup {
             NfcLinkStore.assertIntegrity(database);
             SyncRecordStore.restoreMetadata(database,
                 inputVersion >= 36 ? syncRecords : null);
+            reserveQrIdentitySequences(database);
             // Deleted shopping rows intentionally leave receipt/price history.
             // After importing into a fresh database, AUTOINCREMENT would only
             // know IDs still present in shopping_items and could reuse an ID
@@ -1510,6 +1511,20 @@ final class DataBackup {
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
+        }
+    }
+
+    private static void reserveQrIdentitySequences(SQLiteDatabase database) {
+        for (String table : new String[]{"storage_items","places"}) {
+            database.execSQL("INSERT INTO sqlite_sequence(name,seq) "
+                + "SELECT ?,0 WHERE NOT EXISTS "
+                + "(SELECT 1 FROM sqlite_sequence WHERE name=?)",
+                new Object[]{table,table});
+            database.execSQL("UPDATE sqlite_sequence SET seq=MAX(seq,"
+                + "COALESCE((SELECT MAX(CAST(row_key AS INTEGER)) FROM sync_records "
+                + "WHERE table_name=? AND row_key NOT LIKE '%:%'),0)) "
+                + "WHERE name=?",
+                new Object[]{table,table});
         }
     }
 

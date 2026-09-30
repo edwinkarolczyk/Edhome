@@ -231,7 +231,8 @@ final class SyncRecordStore {
         if (baseRevision == 0L) {
             if (!"upsert".equals(action) || meta != null
                     || liveForRow(db, table, rowKey) != null
-                    || rowExists(db, table, rowKey))
+                    || rowExists(db, table, rowKey)
+                    || qrIdentityTable(table) && retiredRowExists(db, table, rowKey))
                 throw new SyncConflict(table, rowKey, syncUuid, 0L,
                     meta == null ? -1L : meta.revision);
             JSONObject row = requiredRow(op, table, rowKey);
@@ -327,6 +328,9 @@ final class SyncRecordStore {
 
         JSONObject row = requiredRow(op, table, rowKey);
         ContentValues values = rowValues(table, row);
+        if (existing == null && qrIdentityTable(table)
+                && retiredRowExists(db, table, rowKey))
+            throw new SyncConflict(table, rowKey, "", -1L, -1L);
         if (existing == null) db.insertOrThrow(table, null, values);
         else {
             Selection selection = selection(table, rowKey);
@@ -514,6 +518,19 @@ final class SyncRecordStore {
 
     private static String canonicalLong(String raw) {
         return new java.math.BigDecimal(raw).longValueExact() + "";
+    }
+
+    private static boolean qrIdentityTable(String table) {
+        return "storage_items".equals(table) || "places".equals(table);
+    }
+
+    private static boolean retiredRowExists(SQLiteDatabase db, String table,
+            String rowKey) {
+        try (Cursor cursor = db.query(TABLE, new String[]{"1"},
+                "table_name=? AND row_key=? AND deleted_at IS NOT NULL",
+                new String[]{table,rowKey}, null, null, null, "1")) {
+            return cursor.moveToFirst();
+        }
     }
 
     private static Meta liveForRow(SQLiteDatabase db, String table, String rowKey) {

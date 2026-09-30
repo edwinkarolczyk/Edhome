@@ -112,3 +112,16 @@ assert 'android:exported="false"' in beta
 assert '"r".equals(mode)' in provider
 assert 'getCacheDir()' in main and 'FLAG_GRANT_READ_URI_PERMISSION' in main
 print("QR place/thing/box, printable formats, PDF export/share and history: PASS")
+
+
+# Stabilizacja 0.7.4.5: QR identity is never recycled by sync or backup restore.
+sync=Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text()
+assert 'private static boolean qrIdentityTable(String table)' in sync
+assert '"storage_items".equals(table) || "places".equals(table)' in sync
+assert 'retiredRowExists(db, table, rowKey)' in sync
+assert 'deleted_at IS NOT NULL' in sync
+assert 'reserveQrIdentitySequences(database);' in backup
+assert 'new String[]{"storage_items","places"}' in backup
+assert 'MAX(CAST(row_key AS INTEGER)) FROM sync_records' in backup
+assert "versionName '0.7.4.5'" in gradle
+print("Storage QR tombstone identity + restore sequence reservation: PASS")
