@@ -1,12 +1,98 @@
+# EDHOME — roadmapa obowiązująca od 30.09.2026
+
+> **Ta sekcja ma pierwszeństwo przed starszymi, datowanymi planami niżej.** Historyczne tabele pozostają w pliku jako ślad decyzji, ale nie wyznaczają już kolejności wydań. Rozwój 0.7–0.9 odbywa się wyłącznie na `beta`; `main` pozostaje chronionym Stable i nie jest zmieniana bez osobnej, wyraźnej akceptacji Edwina.
+
+## Punkt startowy po 0.6
+
+- **Android Beta:** 0.6.0.70 / versionCode 135 / SQLite v36 — CI zakończone sukcesem.
+- **EDHOME Desktop Beta:** 0.6.0.73 — build, kontrakty synchronizacji i smoke test zakończone sukcesem.
+- 0.6 ma zamknięty zakres kodowy potrzebny do dalszego rozwoju. Pozostaje regresja na fizycznych urządzeniach: automatyczna synchronizacja Android ↔ Desktop w obie strony po restarcie, backup → restore, QR/NFC, prawdziwe powiadomienie bankowe oraz import wyciągu.
+- Wcześniej planowana na 0.8 część synchronizacji Android ↔ PC została wykonana wcześniej: lokalny LAN, synchronizacja przyrostowa, konflikty, automatyczne ponowne wykrywanie telefonu i diagnostyka. 0.8 nie będzie powtarzać tego zakresu.
+- Odłożone z wcześniejszych etapów i nadal jawnie niezamknięte: pełny model profilu „Wspólny”/wielu profili prywatnych, partie i daty ważności w Spiżarni, pełne wkłady/raty PayCheck oraz moduł Dom/remonty. Nie udawać ich jako ukończonych; trzymać jako backlog przekrojowy i domykać tylko tam, gdzie są zależnością kolejnych etapów.
+
+## Kolejność do 1.0
+
+| Etap | Główny rezultat | Co nie należy do tego etapu |
+|---|---|---|
+| **0.7.x — Ogród i Uprawy** | Offline-first ogród: obszary/grządki, rośliny i odmiany, konkretne nasadzenia, siew/sadzenie/zbiór, historia, zdjęcia/notatki, podlewanie i inne czynności sezonowe połączone z istniejącymi Czynnościami i Kalendarzem. | SUPLA/PV, automatyka urządzeń, pełny plan domu, rozpoznawanie Rzeczy po zdjęciu. |
+| **0.8.x — Plan domu / posesji** | Rysowanie kondygnacji, pomieszczeń, podwórka, regałów/pudełek i przypisywanie obiektów do miejsca; import JPG oraz DXF/DWG jako szablonu/referencji, bez wymuszania chmury. | Sterowanie SUPLA i energia. |
+| **0.9.0 — SUPLA / Energia** | Najpierw bezpieczny odczyt rzeczywistych urządzeń i pomiarów, potem bilans PV/zużycie/import/eksport/CWU i propozycje priorytetów. Sterowanie tylko po osobnym audycie urządzeń i zabezpieczeń. | Niesprawdzone automatyczne sterowanie nie jest warunkiem 1.0. |
+| **0.9.1 — Stabilizacja produktu** | Widgety, trwałe powiadomienia/minutniki, dostępność, wydajność, migracje, backup/restore, testy telefonu/tabletu/Desktop i regresja synchronizacji. | Nowe duże moduły. |
+| **0.9.2 / RC** | Domknięcie dokumentacji, prywatności, changelogów, podpisu/aktualizacji i pełnych testów przepływów przed Stable. | Rozszerzanie zakresu funkcjonalnego. |
+| **1.0.0 Stable** | Oficjalne EDHOME bez „prototyp”, zatwierdzone funkcje, bezpieczna migracja danych i opis zmian przed aktualizacją. | Merge do `main` bez osobnej zgody Edwina. |
+
+## Plan wykonawczy 0.7.x — Ogród i Uprawy
+
+### 0.7.0 — fundament modułu
+
+- Nowy kafelek **Ogród** w katalogu skrótów telefonu i Desktop.
+- Lokalna baza: **Obszar ogrodu → Grządka/Strefa → Uprawa/Nasadzenie**. Typy mają być elastyczne, np. grządka, tunel, szklarnia, donica, sad, trawnik; użytkownik może używać własnych nazw.
+- Własna kartoteka roślin i odmian działająca całkowicie offline. Wbudowana baza może zostać dodana tylko z legalnie pozyskanego źródła i z udokumentowaną licencją.
+- Każde nasadzenie ma trwałe ID, miejsce, roślinę/odmianę, daty planowane i faktyczne, status oraz notatkę.
+- Migracja SQLite, backup/restore i kontrakt synchronizacji muszą objąć dane ogrodu od pierwszej wersji 0.7.
+
+### 0.7.1 — cykl uprawy
+
+- Rejestr: planowany siew, siew, rozsada, sadzenie, pielęgnacja i zbiór — bez przepisywania tych samych faktów do osobnych tabel modułów.
+- Terminy **planowane** i **faktyczne** są rozdzielone; wykonanie nie nadpisuje historii planu.
+- Karta uprawy pokazuje oś czasu, notatki, zdjęcia, ilość/obszar oraz historię zmian.
+- Możliwość zakończenia sezonu i rozpoczęcia kolejnego bez kasowania poprzednich danych.
+
+### 0.7.2 — Czynności i Kalendarz
+
+- Ogród korzysta z istniejącego silnika **Czynności**, zamiast tworzyć własny system zadań.
+- Szybkie tworzenie czynności: podlewanie, nawożenie, przycinanie, przygotowanie gleby, siew, sadzenie, zbiór oraz własne czynności użytkownika.
+- Reguły jednorazowe, cykliczne i sezonowe; historia wykonania pozostaje wspólna z modułem Czynności.
+- Widok ogrodu pokazuje najbliższe prace, a Kalendarz pokazuje te same obiekty i te same stany.
+- Planer może proponować terminy, ale propozycja nigdy nie jest zapisywana jako faktyczne wykonanie bez potwierdzenia użytkownika.
+- Przed domknięciem tego kroku trzeba rozstrzygnąć dwie stare decyzje: zachowanie zaległych instancji czynności cyklicznych oraz zakres wspólnego kalendarza/prywatnej zajętości.
+
+### 0.7.3 — zbiory, zapasy i historia
+
+- Rejestrowanie zbioru: data, ilość, jednostka, notatka i powiązane nasadzenie.
+- Historia plonów sezon po sezonie; proste porównanie planu z wykonaniem bez „AI zgadującego” brakujące dane.
+- Opcjonalne powiązanie nasion, nawozów, narzędzi lub innych zasobów z istniejącym Magazynem. Ogród nie tworzy drugiej kartoteki tej samej Rzeczy.
+- Zdjęcia etapów wzrostu pozostają lokalne i muszą być objęte backupem albo jawnie oznaczone jako nieobjęte kopią.
+- Dane ogrodu mają być dostępne w Desktop po tej samej synchronizacji LAN, bez osobnego ręcznego eksportu jako głównego mechanizmu.
+
+### 0.7.4 — odbiór serii 0.7
+
+Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
+
+1. utworzenie obszaru, grządki, rośliny i nasadzenia offline;
+2. restart aplikacji bez utraty danych;
+3. utworzenie czynności z karty uprawy i zobaczenie tej samej czynności w Kalendarzu;
+4. oznaczenie wykonania bez dublowania historii;
+5. zapis faktycznego zbioru z zachowaniem planowanej daty;
+6. backup → restore danych ogrodu;
+7. automatyczna synchronizacja Android ↔ Desktop w obie strony;
+8. migracja z ostatniej 0.6 bez utraty PayCheck, Pojazdów, Magazynu, NFC/QR ani ustawień panelu.
+
+## Poza zakresem 0.7
+
+- automatyczne rozpoznawanie roślin/chorób ze zdjęcia;
+- obowiązkowa chmura, konto lub internet do podstawowej pracy;
+- prognoza pogody jako źródło prawdy dla wykonania czynności;
+- SUPLA, sterowanie podlewaniem, falownikiem lub innymi urządzeniami;
+- plan kondygnacji i rozbudowany rysunek posesji — to 0.8;
+- rozpoznawanie własnych Rzeczy po zdjęciu — po 1.0.
+
+
+
+---
+
+## Archiwum wcześniejszych ustaleń
+
+> Poniższe sekcje pozostają jako historia projektu. Jeśli są sprzeczne z sekcją „roadmapa obowiązująca od 30.09.2026”, obowiązuje nowsza sekcja powyżej.
 
 ## Obowiązkowa zasada UX EDHOME — ustalenie Edwina 24.09.2026
 
 - **Nie resetować widoku ani nie skakać do góry po akcji.** Odświeżenie w tej samej zakładce zachowuje przewinięcie i rozsądny punkt odniesienia; zwijanie/rozwijanie elementu wykonuje się miejscowo bez przebudowy całego ekranu. Dotyczy wszystkich długich list, formularzy i modułów, także po zamknięciu dialogu. Jedynie jawne przejście na nowy ekran może otworzyć początek nowego widoku. Nie wystarczy pamiętać, który element jest zwinięty, jeśli po każdym kliknięciu znów widać górę strony.
 - **Magazyn to podgląd zależności, a nie wymagany tryb akordeonu.** Użytkownik widzi miejsce → podmiejsce → pudełka i rzeczy z czytelną miniaturką; zwijanie pozostaje opcjonalne, działa w miejscu, nie odbiera szybkich działań QR/przenieś/wypożycz.
-- **Etykiety QR Magazynu — do wdrożenia, nie działa jeszcze druk:** z karty rzeczy/pudełka „Pokaż QR” → „Drukuj etykietę” / „Zapisz PDF” / „Udostępnij”; druk przez system Android i wybór wielkości etykiety (np. 40×30 mm, 50×30 mm), nazwa + QR + skrócona lokalizacja, podgląd i zbiorcza arkuszowa A4 dla wielu obiektów. Najpierw test: wydruk → skan w EDHOME → właściwa karta oraz niezmienny QR po przeniesieniu pudełka; obcy kod i usunięty obiekt obsłużyć czytelnym komunikatem. QR zawiera lokalny identyfikator, nie URL ani dane osobowe; bez synchronizacji działa wyłącznie w bazie na urządzeniu, na którym istnieje obiekt. Nie mylić podglądu QR z gotową funkcją drukowania.
+- **Etykiety QR Magazynu — wdrożone w kodzie 0.6; odbiór fizycznego wydruku/skanu nadal wymagany:** z karty rzeczy/pudełka „Pokaż QR” → „Drukuj etykietę” / „Zapisz PDF” / „Udostępnij”; druk przez system Android i wybór wielkości etykiety (np. 40×30 mm, 50×30 mm), nazwa + QR + skrócona lokalizacja, podgląd i zbiorcza arkuszowa A4 dla wielu obiektów. Najpierw test: wydruk → skan w EDHOME → właściwa karta oraz niezmienny QR po przeniesieniu pudełka; obcy kod i usunięty obiekt obsłużyć czytelnym komunikatem. QR zawiera lokalny identyfikator, nie URL ani dane osobowe; bez synchronizacji działa wyłącznie w bazie na urządzeniu, na którym istnieje obiekt. Nie mylić podglądu QR z gotową funkcją drukowania.
 - **Własne zdjęcia rzeczy i pudełek:** wybór zdjęcia z telefonu, mała miniatura przy nazwie, wymiana i usunięcie; trwałość po aktualizacji i weryfikowany backup/restore albo wyraźne oznaczenie, że zdjęcia nie są jeszcze objęte kopią. Nie wystawiać prywatnych fotografii do publicznego repo ani logów.
 - **Powiadomienia bankowe:** wybór pakietów nie może być pustym dialogiem; należy zbadać ograniczenia Package Visibility Androida i różne nakładki producentów. Pokazywać liczbę znalezionych aplikacji, sensowny wybór/fallback, bez proszenia o dane z banku. Odbiór na telefonie jest konieczny.
-- **Priorytet w serii 0.6.0:** najpierw naprawa pustego selektora banków oraz nieresetującego przewijania, podgląd i miniatury Magazynu, potem regresja i odłożony import bankowy. Załączniki dokumentów pojazdu odłożone. `main` nietknięta; żadnego 0.7.0 przed odbiorem 0.6.0.
+- **Historyczny priorytet serii 0.6.0:** selektor banków, nieresetujące przewijanie, Magazyn/miniatury oraz regresja. Kod 0.6 został później domknięty do 0.6.0.70; końcowa regresja fizyczna pozostaje obowiązkowa, ale nie blokuje już prac 0.7 na `beta`. `main` pozostaje nietknięta.
 
 > **Ustalenie wydawnicze Edwina, 24.09.2026:** wszystkie prace 0.6–0.9 prowadzić wyłącznie na `beta`; nie przenosić wersji pośrednich na `main`. Wersja `1.0.0` jest pierwszym docelowym wydaniem Stable na `main`, ale dopiero po pełnych testach automatycznych, migracji i odtwarzania kopii, podpisanej aktualizacji na fizycznym telefonie oraz końcowym odbiorze. Nie traktować planu jako zgody na przedwczesny merge. Priorytet bieżący: zamknąć 0.6.0 przed pracami nad 0.7.0.
 
