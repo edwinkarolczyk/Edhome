@@ -99,6 +99,9 @@ public final class MainActivity extends Activity {
     private AlertDialog nfcAssignmentDialog;
     private String scannerNfcStatus = "NFC gotowe";
     private String storageTemporaryKind;
+    private String storageGallerySearch = "";
+    private Long pendingStorageDestinationThingId;
+    private AlertDialog storageDestinationNfcDialog;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -390,6 +393,7 @@ public final class MainActivity extends Activity {
     private void refreshNfcReaderMode() {
         if(nfcAdapter==null)return;
         boolean shouldListen=pendingNfcTarget!=null
+            || pendingStorageDestinationThingId!=null
             || "scanner".equals(screen)
             || prefs==null
             || prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
@@ -453,6 +457,10 @@ public final class MainActivity extends Activity {
         try {
             NfcLinkStore.Link current=NfcLinkStore.findByUid(
                 db.getReadableDatabase(),uid);
+            if(pendingStorageDestinationThingId!=null) {
+                handleStorageDestinationNfc(current,uid);
+                return;
+            }
             if(pendingNfcTarget!=null) {
                 PendingNfcTarget target=pendingNfcTarget;
                 if(current!=null && current.kind.equals(target.kind)
@@ -6270,7 +6278,10 @@ public final class MainActivity extends Activity {
         header("Rzeczy • pudełka • QR");
         note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
             + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
-        if(showThings)button("+ Dodaj rzecz", () -> storageEditor("thing", null));
+        if(showThings) {
+            button("⚡ Szybko dodaj rzecz", this::quickAddStorageThing);
+            button("+ Dodaj rzecz", () -> storageEditor("thing", null));
+        }
         if(showBoxes)button("+ Dodaj pudełko", () -> storageEditor("box", null));
         if (BetaUpdater.isBeta()) {
             button("▣ Drukuj wybrane etykiety QR / PDF",
@@ -6366,19 +6377,66 @@ public final class MainActivity extends Activity {
         if(things.isEmpty())return;
 
         title("Galeria rzeczy");
-        note("Szybki podgląd tego, co masz. Dotknij miniatury, aby otworzyć rzecz. "
-            +"Brak zdjęcia nie ukrywa przedmiotu.");
+        note("Szukaj jak w galerii. Wynik pokazuje miniaturę i dokładną ścieżkę "
+            +"Miejsce → Pudełko → Rzecz.");
+        EditText search=new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Szukaj rzeczy lub miejsca…");
+        search.setText(storageGallerySearch);
+        search.setTextColor(ink);
+        search.setHintTextColor(subdued);
+        body.addView(search,new LinearLayout.LayoutParams(-1,-2));
+
         LinearLayout grid=new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+        renderStorageGalleryGrid(grid,things,storageGallerySearch);
 
-        for(int i=0;i<things.size();i+=2) {
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value,int start,
+                    int count,int after) { }
+            @Override public void onTextChanged(CharSequence value,int start,
+                    int before,int count) {
+                storageGallerySearch=value==null?"":value.toString();
+                renderStorageGalleryGrid(grid,things,storageGallerySearch);
+            }
+            @Override public void afterTextChanged(android.text.Editable value) { }
+        });
+        search.setSelection(search.getText().length());
+        DiagnosticLog.event("STORAGE_THINGS_GALLERY_VIEWED",
+            "count="+things.size());
+    }
+
+    private String storageSearchKey(String value) {
+        if(value==null)return "";
+        return java.text.Normalizer.normalize(
+            value.toLowerCase(java.util.Locale.ROOT),
+            java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","").trim();
+    }
+
+    private void renderStorageGalleryGrid(LinearLayout grid,
+            java.util.List<StorageStore.Item> things,String query) {
+        grid.removeAllViews();
+        String wanted=storageSearchKey(query);
+        java.util.List<StorageStore.Item> filtered=new java.util.ArrayList<>();
+        for(StorageStore.Item item:things) {
+            String location=StorageStore.location(db.getReadableDatabase(),item);
+            String haystack=storageSearchKey(item.name+" "+location);
+            if(wanted.isEmpty()||haystack.contains(wanted))filtered.add(item);
+        }
+        if(filtered.isEmpty()) {
+            TextView empty=text("Nie znaleziono rzeczy pasującej do wyszukiwania.",14,false);
+            empty.setTextColor(subdued);
+            grid.addView(empty,new LinearLayout.LayoutParams(-1,-2));
+            return;
+        }
+        for(int i=0;i<filtered.size();i+=2) {
             LinearLayout row=new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             grid.addView(row,new LinearLayout.LayoutParams(-1,-2));
             for(int slot=0;slot<2;slot++) {
                 int index=i+slot;
-                if(index>=things.size()) {
+                if(index>=filtered.size()) {
                     View spacer=new View(this);
                     LinearLayout.LayoutParams empty=new LinearLayout.LayoutParams(
                         0,dp(1),1f);
@@ -6386,7 +6444,7 @@ public final class MainActivity extends Activity {
                     row.addView(spacer,empty);
                     continue;
                 }
-                StorageStore.Item item=things.get(index);
+                StorageStore.Item item=filtered.get(index);
                 LinearLayout tile=new LinearLayout(this);
                 tile.setOrientation(LinearLayout.VERTICAL);
                 tile.setPadding(dp(10),dp(10),dp(10),dp(10));
@@ -6412,13 +6470,18 @@ public final class MainActivity extends Activity {
                 TextView name=text(item.name,15,true);
                 name.setMaxLines(2);
                 tile.addView(name);
-                TextView location=text(
-                    StorageStore.location(db.getReadableDatabase(),item),11,false);
-                location.setTextColor(subdued);
-                location.setMaxLines(2);
-                tile.addView(location);
-                tile.setContentDescription("Rzecz: "+item.name+" • otwórz");
-                tile.setOnClickListener(v->storageEditor(item.kind,item.id));
+                String location=StorageStore.location(db.getReadableDatabase(),item);
+                TextView where=text(location.replace(" / "," → "),11,false);
+                where.setTextColor(subdued);
+                where.setMaxLines(3);
+                tile.addView(where);
+                smallButton(tile,"📍 Gdzie to jest?",()->showStorageLocator(item));
+                tile.setContentDescription("Rzecz: "+item.name+" • pokaż lokalizację");
+                tile.setOnClickListener(v->showStorageLocator(item));
+                tile.setOnLongClickListener(v->{
+                    storageEditor(item.kind,item.id);
+                    return true;
+                });
 
                 LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(
                     0,-2,1f);
@@ -6426,8 +6489,31 @@ public final class MainActivity extends Activity {
                 row.addView(tile,cell);
             }
         }
-        DiagnosticLog.event("STORAGE_THINGS_GALLERY_VIEWED",
-            "count="+things.size());
+    }
+
+    private void showStorageLocator(StorageStore.Item item) {
+        StorageStore.Item current=StorageStore.find(db.getReadableDatabase(),item.id);
+        if(current==null) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        String path=StorageStore.location(db.getReadableDatabase(),current)
+            .replace(" / "," → ");
+        String message="Idź kolejno:\n\n"+path;
+        if(current.lentTo!=null)
+            message+="\n\nRzecz jest wypożyczona: "+current.lentTo;
+        new AlertDialog.Builder(this)
+            .setTitle("📍 "+current.name)
+            .setMessage(message)
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Pokaż w drzewie",(d,w)->{
+                expandStorageNfcPath(current.id);
+                render();
+            })
+            .setPositiveButton("Otwórz rzecz",(d,w)->
+                storageEditor(current.kind,current.id))
+            .show();
+        DiagnosticLog.event("STORAGE_LOCATOR_OPENED","id="+current.id);
     }
 
     /** Reparent a newly built card into its branch while retaining card style. */
@@ -6645,6 +6731,163 @@ public final class MainActivity extends Activity {
             throw new IllegalStateException("Nie zapisano miniatury.");
         DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
         render();
+    }
+
+    private void quickAddStorageThing() {
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Co to jest?");
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        TextView help=text("Po utworzeniu jednym kliknięciem dodasz zdjęcie, "
+            +"tag NFC rzeczy i wskażesz położenie tagiem pudełka lub miejsca.",13,false);
+        help.setTextColor(subdued);
+        layout.addView(help);
+        lightDialogForm(layout);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("⚡ Szybko dodaj rzecz")
+            .setView(layout)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    long id=StorageStore.create(db.getWritableDatabase(),
+                        name.getText().toString(),"thing",null,null);
+                    DiagnosticLog.event("STORAGE_QUICK_CREATED","id="+id);
+                    dialog.dismiss();
+                    render();
+                    root.postDelayed(()->showQuickStorageThing(id),80L);
+                } catch(Exception error) {
+                    name.setError(error.getMessage()==null
+                        ?"Podaj nazwę rzeczy.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void showQuickStorageThing(long id) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null)return;
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        actions.addView(text(item.name,18,true));
+        TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
+            .replace(" / "," → "),13,false);
+        where.setTextColor(subdued);
+        actions.addView(where);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie")
+            .setView(actions)
+            .setNegativeButton("Gotowe",null)
+            .create();
+        smallButton(actions,"📷 Dodaj zdjęcie",()->{
+            dialog.dismiss();
+            selectStorageThumbnail(id);
+        });
+        smallButton(actions,"NFC • Przypisz tag rzeczy",()->{
+            dialog.dismiss();
+            beginNfcAssignment("thing",id,item.name);
+        });
+        smallButton(actions,"NFC • Wskaż pudełko lub miejsce",()->{
+            dialog.dismiss();
+            beginStorageDestinationNfc(id);
+        });
+        smallButton(actions,"Wybierz położenie z listy",()->{
+            dialog.dismiss();
+            storageEditor("thing",id);
+        });
+        dialog.show();
+    }
+
+    private void beginStorageDestinationNfc(long thingId) {
+        StorageStore.Item thing=StorageStore.find(db.getReadableDatabase(),thingId);
+        if(thing==null||!"thing".equals(thing.kind)) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        if(nfcAdapter==null) {
+            alert("Ten telefon nie ma NFC. Wybierz położenie z listy.");
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Włącz NFC")
+                .setMessage("Włącz NFC i wróć do EDHOME.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Ustawienia NFC",(d,w)->{
+                    try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+                    catch(Exception unavailable) {
+                        startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                    }
+                }).show();
+            return;
+        }
+        pendingStorageDestinationThingId=thingId;
+        disableNfcReaderMode();
+        if(!enableNfcReaderMode()) {
+            pendingStorageDestinationThingId=null;
+            refreshNfcReaderMode();
+            alert("Nie udało się uruchomić odczytu NFC.");
+            return;
+        }
+        if(storageDestinationNfcDialog!=null)storageDestinationNfcDialog.dismiss();
+        storageDestinationNfcDialog=new AlertDialog.Builder(this)
+            .setTitle("📍 Położenie • "+thing.name)
+            .setMessage("Przyłóż tag NFC pudełka albo miejsca.\n\n"
+                +"Jeśli pudełko jest już przypisane do miejsca, EDHOME "
+                +"automatycznie odziedziczy całą ścieżkę — bez drugiego pytania.")
+            .setNegativeButton("Anuluj",(d,w)->{
+                pendingStorageDestinationThingId=null;
+                refreshNfcReaderMode();
+            }).create();
+        storageDestinationNfcDialog.setOnCancelListener(d->{
+            pendingStorageDestinationThingId=null;
+            refreshNfcReaderMode();
+        });
+        storageDestinationNfcDialog.show();
+        DiagnosticLog.event("STORAGE_LOCATION_NFC_WAITING","id="+thingId);
+    }
+
+    private void handleStorageDestinationNfc(NfcLinkStore.Link current,String uid) {
+        Long thingId=pendingStorageDestinationThingId;
+        if(thingId==null)return;
+        if(current==null) {
+            alert("Ten tag NFC nie jest jeszcze przypisany do pudełka ani miejsca.");
+            return;
+        }
+        try {
+            if("box".equals(current.kind))
+                StorageStore.move(db.getWritableDatabase(),thingId,current.targetId,null);
+            else if("place".equals(current.kind))
+                StorageStore.move(db.getWritableDatabase(),thingId,null,current.targetId);
+            else {
+                alert("To tag "+NfcLinkStore.kindLabel(current.kind)
+                    +". Przyłóż tag pudełka albo miejsca.");
+                return;
+            }
+            StorageStore.Item moved=StorageStore.find(db.getReadableDatabase(),thingId);
+            pendingStorageDestinationThingId=null;
+            if(storageDestinationNfcDialog!=null) {
+                storageDestinationNfcDialog.dismiss();
+                storageDestinationNfcDialog=null;
+            }
+            refreshNfcReaderMode();
+            DiagnosticLog.event("STORAGE_LOCATION_SET_BY_NFC",
+                "thing="+thingId+" target="+current.kind+":"+current.targetId);
+            render();
+            if(moved!=null)alert("Położenie zapisane:\n"
+                +StorageStore.location(db.getReadableDatabase(),moved)
+                    .replace(" / "," → "));
+        } catch(Exception error) {
+            DiagnosticLog.error("STORAGE_LOCATION_NFC",error);
+            alert(error.getMessage()==null
+                ?"Nie zapisano położenia.":error.getMessage());
+        }
     }
 
     private void storageEditor(String kind, Long itemId) {
