@@ -7,9 +7,9 @@ state = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBatchSession.jav
 store = Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text(encoding="utf-8")
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 checks = [
-    'button("📷 Skanuj serię — dodawaj +1"',
-    'button("📷 Skanuj serię — wyciągaj −1"',
-    'this::finishPantryBatch',
+    '"📷 Skanuj serię — dodawaj +1"',
+    '"📷 Skanuj serię — wyciągaj −1"',
+    'finishPantryBatch();',
     'pantryBatch.start(mode)',
     'pantryBatch.launchCamera()',
     'pantryBatch.receiveScan(scan.getContents())',
@@ -41,5 +41,5 @@ assert 'if (!active || !cameraPending) return false;' in state
 assert 'if (!active || !awaitingConfirmation || barcode == null) return false;' in state
 assert 'operationExists(db, operationId)' in store
 assert 'db.beginTransaction();' in store and 'movement.put("qty", 1);' in store
-assert "versionCode 45" in gradle and "versionNameSuffix '-beta.2'" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 print("Batch scan UI, double-result guard, explicit confirmation, idempotence: PASS")

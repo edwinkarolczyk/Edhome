@@ -17,10 +17,10 @@ for token in (
     'PaycheckStore.add(',
     'new AlertDialog.Builder(this)',
     'Potwierdź transakcję wspólną',
-    'PAYCHECK_SHARED_COMMITTED',
+    'PAYCHECK_SHARED_PENDING',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
-    'super(context, "edhome-beta-preview.db", null, 21)',
+    'super(context, "edhome-beta-preview.db", null, 36)',
 ):
     assert token in main, token
 for token in (
@@ -32,10 +32,15 @@ for token in (
     'if(previous.moveToFirst())return "DUPLICATE";',
     'db.beginTransaction();',
     'db.setTransactionSuccessful();',
+    'static String delete(',
+    'static int deleteMany(',
+    'deleteInside(db,operationId)',
+    'evidence.put("state","open");',
+    'vehicleLink.putNull("paycheck_operation_id");',
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 21;',
+    'DB_VERSION = 36;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
@@ -45,14 +50,21 @@ for token in (
 ):
     assert token in backup,token
 assert 'BigDecimal' in rules and 'RoundingMode.UNNECESSARY' in rules
-assert "versionCode 45" in gradle and "versionNameSuffix '-beta.2'" in gradle
-assert "versionName '0.5.0'" in gradle
+for token in ('"subscriptions"','"utilities"','"fuel"','"health"',
+              '"insurance"','"loans"','"benefits"','"savings"'):
+    assert token in rules, token
+for token in ('Usuń wpis','deleteSharedPaycheckEntry(','PAYCHECK_SHARED_DELETED',
+              'Usuń wiele wpisów PayCheck','deleteSharedPaycheckEntriesBulk',
+              'PAYCHECK_SHARED_BULK_DELETED'):
+    assert token in main, token
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
+assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
 # Receipt and barcode commit must never automatically post to PayCheck.
 receipt=Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text()
 barcode=Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text()
 assert 'PaycheckStore' not in receipt and 'PaycheckStore' not in barcode
 
-expr=store.split('static void create(SQLiteDatabase db)',1)[1].split('static String add(',1)[0]
+expr=store.split('static void create(SQLiteDatabase db)',1)[1].split('static String add(',1)[0].split('db.execSQL("CREATE UNIQUE INDEX',1)[0]
 sql=''.join(json.loads(part) for part in re.findall(r'"(?:\\.|[^"\\])*"',expr))
 db=sqlite3.connect(":memory:")
 db.execute(sql)

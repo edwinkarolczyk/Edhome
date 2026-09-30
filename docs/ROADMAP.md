@@ -1,3 +1,107 @@
+# EDHOME — roadmapa obowiązująca od 30.09.2026
+
+> **Ta sekcja ma pierwszeństwo przed starszymi, datowanymi planami niżej.** Historyczne tabele pozostają w pliku jako ślad decyzji, ale nie wyznaczają już kolejności wydań. Rozwój 0.7–0.9 odbywa się wyłącznie na `beta`; `main` pozostaje chronionym Stable i nie jest zmieniana bez osobnej, wyraźnej akceptacji Edwina.
+
+## Punkt startowy po 0.6
+
+- **Android Beta:** 0.6.0.70 / versionCode 135 / SQLite v36 — CI zakończone sukcesem.
+- **EDHOME Desktop Beta:** 0.6.0.73 — build, kontrakty synchronizacji i smoke test zakończone sukcesem.
+- 0.6 ma zamknięty zakres kodowy potrzebny do dalszego rozwoju. Pozostaje regresja na fizycznych urządzeniach: automatyczna synchronizacja Android ↔ Desktop w obie strony po restarcie, backup → restore, QR/NFC, prawdziwe powiadomienie bankowe oraz import wyciągu.
+- Wcześniej planowana na 0.8 część synchronizacji Android ↔ PC została wykonana wcześniej: lokalny LAN, synchronizacja przyrostowa, konflikty, automatyczne ponowne wykrywanie telefonu i diagnostyka. 0.8 nie będzie powtarzać tego zakresu.
+- Odłożone z wcześniejszych etapów i nadal jawnie niezamknięte: pełny model profilu „Wspólny”/wielu profili prywatnych, partie i daty ważności w Spiżarni, pełne wkłady/raty PayCheck oraz moduł Dom/remonty. Nie udawać ich jako ukończonych; trzymać jako backlog przekrojowy i domykać tylko tam, gdzie są zależnością kolejnych etapów.
+
+## Kolejność do 1.0
+
+| Etap | Główny rezultat | Co nie należy do tego etapu |
+|---|---|---|
+| **0.7.x — Ogród i Uprawy** | Offline-first ogród: obszary/grządki, rośliny i odmiany, konkretne nasadzenia, siew/sadzenie/zbiór, historia, zdjęcia/notatki, podlewanie i inne czynności sezonowe połączone z istniejącymi Czynnościami i Kalendarzem. | SUPLA/PV, automatyka urządzeń, pełny plan domu, rozpoznawanie Rzeczy po zdjęciu. |
+| **0.8.x — Plan domu / posesji** | Rysowanie kondygnacji, pomieszczeń, podwórka, regałów/pudełek i przypisywanie obiektów do miejsca; import JPG oraz DXF/DWG jako szablonu/referencji, bez wymuszania chmury. | Sterowanie SUPLA i energia. |
+| **0.9.0 — SUPLA / Energia** | Najpierw bezpieczny odczyt rzeczywistych urządzeń i pomiarów, potem bilans PV/zużycie/import/eksport/CWU i propozycje priorytetów. Sterowanie tylko po osobnym audycie urządzeń i zabezpieczeń. | Niesprawdzone automatyczne sterowanie nie jest warunkiem 1.0. |
+| **0.9.1 — Stabilizacja produktu** | Widgety, trwałe powiadomienia/minutniki, dostępność, wydajność, migracje, backup/restore, testy telefonu/tabletu/Desktop i regresja synchronizacji. | Nowe duże moduły. |
+| **0.9.2 / RC** | Domknięcie dokumentacji, prywatności, changelogów, podpisu/aktualizacji i pełnych testów przepływów przed Stable. | Rozszerzanie zakresu funkcjonalnego. |
+| **1.0.0 Stable** | Oficjalne EDHOME bez „prototyp”, zatwierdzone funkcje, bezpieczna migracja danych i opis zmian przed aktualizacją. | Merge do `main` bez osobnej zgody Edwina. |
+
+## Plan wykonawczy 0.7.x — Ogród i Uprawy
+
+### 0.7.0 — fundament modułu
+
+- Nowy kafelek **Ogród** w katalogu skrótów telefonu i Desktop.
+- Lokalna baza: **Obszar ogrodu → Grządka/Strefa → Uprawa/Nasadzenie**. Typy mają być elastyczne, np. grządka, tunel, szklarnia, donica, sad, trawnik; użytkownik może używać własnych nazw.
+- Własna kartoteka roślin i odmian działająca całkowicie offline. Wbudowana baza może zostać dodana tylko z legalnie pozyskanego źródła i z udokumentowaną licencją.
+- Każde nasadzenie ma trwałe ID, miejsce, roślinę/odmianę, daty planowane i faktyczne, status oraz notatkę.
+- Migracja SQLite, backup/restore i kontrakt synchronizacji muszą objąć dane ogrodu od pierwszej wersji 0.7.
+
+### 0.7.1 — cykl uprawy
+
+- Rejestr: planowany siew, siew, rozsada, sadzenie, pielęgnacja i zbiór — bez przepisywania tych samych faktów do osobnych tabel modułów.
+- Terminy **planowane** i **faktyczne** są rozdzielone; wykonanie nie nadpisuje historii planu.
+- Karta uprawy pokazuje oś czasu, notatki, zdjęcia, ilość/obszar oraz historię zmian.
+- Możliwość zakończenia sezonu i rozpoczęcia kolejnego bez kasowania poprzednich danych.
+
+### 0.7.2 — Czynności i Kalendarz
+
+- Ogród korzysta z istniejącego silnika **Czynności**, zamiast tworzyć własny system zadań.
+- Szybkie tworzenie czynności: podlewanie, nawożenie, przycinanie, przygotowanie gleby, siew, sadzenie, zbiór oraz własne czynności użytkownika.
+- Reguły jednorazowe, cykliczne i sezonowe; historia wykonania pozostaje wspólna z modułem Czynności.
+- Widok ogrodu pokazuje najbliższe prace, a Kalendarz pokazuje te same obiekty i te same stany.
+- Planer może proponować terminy, ale propozycja nigdy nie jest zapisywana jako faktyczne wykonanie bez potwierdzenia użytkownika.
+- Przed domknięciem tego kroku trzeba rozstrzygnąć dwie stare decyzje: zachowanie zaległych instancji czynności cyklicznych oraz zakres wspólnego kalendarza/prywatnej zajętości.
+
+### 0.7.3 — zbiory, zapasy i historia
+
+- Rejestrowanie zbioru: data, ilość, jednostka, notatka i powiązane nasadzenie.
+- Historia plonów sezon po sezonie; proste porównanie planu z wykonaniem bez „AI zgadującego” brakujące dane.
+- Opcjonalne powiązanie nasion, nawozów, narzędzi lub innych zasobów z istniejącym Magazynem. Ogród nie tworzy drugiej kartoteki tej samej Rzeczy.
+- Zdjęcia etapów wzrostu pozostają lokalne i muszą być objęte backupem albo jawnie oznaczone jako nieobjęte kopią.
+- Dane ogrodu mają być dostępne w Desktop po tej samej synchronizacji LAN, bez osobnego ręcznego eksportu jako głównego mechanizmu.
+
+### 0.7.4 — odbiór serii 0.7
+
+Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
+
+1. utworzenie obszaru, grządki, rośliny i nasadzenia offline;
+2. restart aplikacji bez utraty danych;
+3. utworzenie czynności z karty uprawy i zobaczenie tej samej czynności w Kalendarzu;
+4. oznaczenie wykonania bez dublowania historii;
+5. zapis faktycznego zbioru z zachowaniem planowanej daty;
+6. backup → restore danych ogrodu;
+7. automatyczna synchronizacja Android ↔ Desktop w obie strony;
+8. migracja z ostatniej 0.6 bez utraty PayCheck, Pojazdów, Magazynu, NFC/QR ani ustawień panelu.
+
+## Poza zakresem 0.7
+
+- automatyczne rozpoznawanie roślin/chorób ze zdjęcia;
+- obowiązkowa chmura, konto lub internet do podstawowej pracy;
+- prognoza pogody jako źródło prawdy dla wykonania czynności;
+- SUPLA, sterowanie podlewaniem, falownikiem lub innymi urządzeniami;
+- plan kondygnacji i rozbudowany rysunek posesji — to 0.8;
+- rozpoznawanie własnych Rzeczy po zdjęciu — po 1.0.
+
+
+
+---
+
+## Archiwum wcześniejszych ustaleń
+
+> Poniższe sekcje pozostają jako historia projektu. Jeśli są sprzeczne z sekcją „roadmapa obowiązująca od 30.09.2026”, obowiązuje nowsza sekcja powyżej.
+
+## Obowiązkowa zasada UX EDHOME — ustalenie Edwina 24.09.2026
+
+- **Nie resetować widoku ani nie skakać do góry po akcji.** Odświeżenie w tej samej zakładce zachowuje przewinięcie i rozsądny punkt odniesienia; zwijanie/rozwijanie elementu wykonuje się miejscowo bez przebudowy całego ekranu. Dotyczy wszystkich długich list, formularzy i modułów, także po zamknięciu dialogu. Jedynie jawne przejście na nowy ekran może otworzyć początek nowego widoku. Nie wystarczy pamiętać, który element jest zwinięty, jeśli po każdym kliknięciu znów widać górę strony.
+- **Magazyn to podgląd zależności, a nie wymagany tryb akordeonu.** Użytkownik widzi miejsce → podmiejsce → pudełka i rzeczy z czytelną miniaturką; zwijanie pozostaje opcjonalne, działa w miejscu, nie odbiera szybkich działań QR/przenieś/wypożycz.
+- **Etykiety QR Magazynu — wdrożone w kodzie 0.6; odbiór fizycznego wydruku/skanu nadal wymagany:** z karty rzeczy/pudełka „Pokaż QR” → „Drukuj etykietę” / „Zapisz PDF” / „Udostępnij”; druk przez system Android i wybór wielkości etykiety (np. 40×30 mm, 50×30 mm), nazwa + QR + skrócona lokalizacja, podgląd i zbiorcza arkuszowa A4 dla wielu obiektów. Najpierw test: wydruk → skan w EDHOME → właściwa karta oraz niezmienny QR po przeniesieniu pudełka; obcy kod i usunięty obiekt obsłużyć czytelnym komunikatem. QR zawiera lokalny identyfikator, nie URL ani dane osobowe; bez synchronizacji działa wyłącznie w bazie na urządzeniu, na którym istnieje obiekt. Nie mylić podglądu QR z gotową funkcją drukowania.
+- **Własne zdjęcia rzeczy i pudełek:** wybór zdjęcia z telefonu, mała miniatura przy nazwie, wymiana i usunięcie; trwałość po aktualizacji i weryfikowany backup/restore albo wyraźne oznaczenie, że zdjęcia nie są jeszcze objęte kopią. Nie wystawiać prywatnych fotografii do publicznego repo ani logów.
+- **Powiadomienia bankowe:** wybór pakietów nie może być pustym dialogiem; należy zbadać ograniczenia Package Visibility Androida i różne nakładki producentów. Pokazywać liczbę znalezionych aplikacji, sensowny wybór/fallback, bez proszenia o dane z banku. Odbiór na telefonie jest konieczny.
+- **Historyczny priorytet serii 0.6.0:** selektor banków, nieresetujące przewijanie, Magazyn/miniatury oraz regresja. Kod 0.6 został później domknięty do 0.6.0.70; końcowa regresja fizyczna pozostaje obowiązkowa, ale nie blokuje już prac 0.7 na `beta`. `main` pozostaje nietknięta.
+
+> **Ustalenie wydawnicze Edwina, 24.09.2026:** wszystkie prace 0.6–0.9 prowadzić wyłącznie na `beta`; nie przenosić wersji pośrednich na `main`. Wersja `1.0.0` jest pierwszym docelowym wydaniem Stable na `main`, ale dopiero po pełnych testach automatycznych, migracji i odtwarzania kopii, podpisanej aktualizacji na fizycznym telefonie oraz końcowym odbiorze. Nie traktować planu jako zgody na przedwczesny merge. Priorytet bieżący: zamknąć 0.6.0 przed pracami nad 0.7.0.
+
+> **Bieżący stan 0.6.0, 25.09.2026:** kandydat Beta **0.6.0.30 / versionCode 95 / SQLite v33**. Kod obejmuje nieresetujące przewijanie, podgląd Magazynu z miniaturami i QR/PDF/drukiem, pojazdy oraz PayCheck z oczekującymi wpisami, prywatnym sejfem, diagnostyką i automatycznym ponownym wiązaniem Notification Listener. Import lokalny obsługuje CSV, tekstowy eksport mBanku, XLSX z tekstowymi wierszami i tekstowy PDF VeloBanku; skanowane obrazy PDF nie są OCR-owane. Powiadomienie bankowe może utworzyć szkic wspólny/prywatny, ale **nie zmienia salda bez potwierdzenia**. Dodano ochronę przed ponownym powiadomieniem oraz ostrzeżenie przed możliwym duplikatem względem wyciągu. **0.6.0 nadal nie jest zamknięta bez fizycznego testu telefonu, kopii/restore, prawdziwego powiadomienia bankowego, QR i importu oraz jawnego odbioru Edwina.** Nie rozpoczynać 0.7.0 i nie dotykać `main` przed tym odbiorem.
+
+> **Druga tura odpowiedzi Edwina, 22.09.2026:** [obowiązujący audyt 20 pytań](DECYZJE_2026-09-22_FORMULARZ_20.md) zawiera zatwierdzone decyzje 4/5/12/13/14/15/17/20. **Tylko 6/8/16 wciąż pozostają otwarte** w tym formularzu. Tablet jest przypisany na stałe do domownika „Wspólny” (prywatny profil na telefonie), widoczność czynności z nadrzędnego miejsca ustawiana **per czynność**, wiele otwartych opakowań/partii z datami ważności; miejsce zakupów opcjonalne do przyjęcia; cena to **za jedną sztukę/opakowanie**; konflikt remanentu blokuje **wszystkie korekty**; wkłady do wspólnego PayCheck ręczne i jawne per osoba, bez prywatnych ksiąg; PV dynamiczne z ręcznym nadpisaniem, fizyczne sterowanie dopiero po audycie. To decyzje projektowe, nie funkcje wdrożone w APK.
+
+> **Ostatnia potwierdzona publikacja przed pracami nad adaptacją panelu: `0.5.0-beta.5` / versionCode 48 / SQLite v22.** Wydania `.4` i `.5` oraz CI są potwierdzone; pozostałe wiersze planu poniżej to propozycje, nie funkcje już w APK. Zobacz [odbiór serii 0.5.0](BETA_0_5_0.md).
+
 > **Stan nowszy od historycznego nagłówka niżej:** wydania 0.4.0-beta.11/12/13 obejmują przyjęcia zakupów, pudełka, QR i ochronę miejsc. Pierwszy PayCheck tylko dla wspólnego budżetu zaczyna się w 0.5.0-beta.1 (SQLite v20); prywatne dane nie są dostępne w Becie bez ochrony. Datowane fragmenty niżej są historią planu, nie bieżącą wersją APK.
 
 # EDHOME — roadmapa (propozycja)
@@ -182,3 +286,73 @@ Wdrożenie PC nie należy do podpisanego APK 0.3.7 i nie wymusza modyfikacji `ma
 | **Trwałość, tryby, bezpieczeństwo** | Konfiguracja w bazie i JSON, migracja bez resetu, odrębny układ telefonu i współdzielonego tabletu, ponowna kontrola uprawnień docelowego ekranu. | Restart/import zachowuje cały układ; brak możliwości otwarcia prywatnego PayCheck z tabletu przez zmianę celu; Diagnostyka tylko Beta. |
 
 **3×3 to przykład widocznego fragmentu siatki na telefonie, nie ograniczenie danych ani stała lista systemowych modułów.** Szczegóły: [specyfikacja §26](SPECYFIKACJA_CALOSC.md#26-panel-główny--w-pełni-edytowalne-kafelki-bez-limitu-dziewięciu-doprecyzowanie-edwina-22092026). W tym czacie **tylko dokumentacja na `beta`**, bez zmian kodu, APK i `main`.
+
+
+## Historyczna propozycja od 0.5.0-beta.3 do 1.0.0 — datowany plan przed wydaniem .4 i .5
+
+**UWAGA: tabela powstała przy `.3`.** Wydania `.4` (pełny panel kafelków i szyfrowana kopia PayCheck) oraz `.5` (historia cen) są już opublikowane, **nie zgadzają się z pierwotną kolejnością numerów tej tabeli**. Za obecny punkt odniesienia przyjmij sekcję „Stan wykonania serii 0.5” poniżej. Pozostałe numery to pomysły na inkrementy, a nie daty ani potwierdzone wydania. Kolejne numery można skorygować po teście i zmianie rozmiaru pracy. Żaden numer nie oznacza automatycznej promocji na `main`. W tym czacie zmieniana jest wyłącznie dokumentacja `beta`.
+
+### Najbliższa seria 0.5.0 — równoległe domknięcie panelu i bezpiecznego PayCheck
+
+| Proponowane wydanie | Zmiana produktu | Minimalny test przed następną wersją |
+|---|---|---|
+| **0.5.0-beta.4** | **Katalog wszystkich celów kafelków**, również Minutniki, Zakupy, PayCheck (wspólny i prywatny tylko po uprawnieniach), Odpady, Wszystkie Czynności i Diagnostyka Beta; dodawanie bez limitu dziewięciu, brak stałego drugiego menu jako jedynej drogi do funkcji. | Dodaj minimum 15 skrótów, przewiń, otwórz każdy cel; nie ukrywaj funkcji podczas migracji panelu. |
+| **0.5.0-beta.5** | Pełna edycja **każdego** skrótu: cel, nazwa, ikona, kolor, rozmiar, pozycja, widoczność; przytrzymanie i przeciąganie całego kafelka; duplikaty skrótu z osobną konfiguracją. | Zmiana celu działa także dla pierwotnych dziewięciu; usunięcie skrótu nie usuwa danych; przewijanie i klawiatura bez zacięć. |
+| **0.5.0-beta.6** | Utrwalenie konfiguracji panelu w bazie, backupie i migracjach; osobne układy telefonu i trybu tabletu; uprawnienia sprawdzane **również po kliknięciu skrótu**. | Restart/import zachowuje 15+ kafelków; z tabletu nie można otworzyć prywatnego sejfu przez podmianę celu. |
+| **0.5.0-beta.7** | Bezpieczny, zaszyfrowany **eksport/odtwarzanie prywatnego sejfu** i test ścieżki odzyskania; nie łączyć zwykłego JSON ze szczegółami prywatnych transakcji. | Odtworzenie na osobnej testowej instalacji, błędne hasło i utracony backup nie ujawniają danych; nie kasować jedynej kopii danych. |
+| **0.5.0-beta.8 i następne drobne bety** | Profil domownika, rozdział prywatnych/wspólnych uprawnień i dalsza historia wspólnego budżetu; jednocześnie stabilizacja katalogu kafelków, backupów, aktualizacji i regresja na telefonie/tablecie. | Uprawnienia działają w ekranie, eksporcie i synchronizowanym zakresie; CI + test użytkownika, bez duplikatów wpłat/operacji. |
+
+**Zasada:** UI nie czeka do 0.9, a PayCheck nie jest porzucany. Jeśli .4–.8 ujawnią błędy, poprawić je w następnej becie przed rozszerzeniem funkcji. Nie oznaczać kolejnych numerów jako wydanych na podstawie tej tabeli.
+
+### Po serii panelu i PayCheck — proponowane inkrementy
+
+| Proponowana wersja / rodzina | Zakres i zależności | Odbiór |
+|---|---|---|
+| **0.5.1** | Dalszy PayCheck: osobiste profile, wspólny budżet z wkładami osób, cele/raty, kategorie, terminy i związki z kalendarzem; pełna kontrola dostępu. | Wspólne kwoty nie ujawniają prywatnej historii; odkładanie na cel nie księguje wydatku. |
+| **0.5.2** | Spiżarnia ↔ zakupy: opcjonalna cena przy „Kupione”, historia cen produktu, sklep/data/ilość; wszystkie **ceny produktów** dozwolone na tablecie, bez rachunków/metody płatności. Stabilizacja skanera, przyjęć, pudełek/QR i remanentu. | Brak ceny ≠ 0 zł; skaner nie wymusza ceny; „Kupione” i „przyjęte” nie są tą samą operacją. |
+| **0.5.3** | Paragon z wieloma pozycjami ↔ jedna płatność PayCheck; uzgadnianie zakupów, rabatów, zwrotów, ruchów magazynowych i kosztów. | Brak podwójnego wydatku przy skanie, wyjęciu, przyjęciu i korekcie remanentu. |
+| **0.5.4** | Powiadomienia bankowe po uprawnieniu i potwierdzeniu, import wyciągów, deduplikacja płatności ręcznej/powiadomienia/wyciągu, reguły kategorii. | Nie przesyłać prywatnych powiadomień na tablet; ta sama transakcja księgowana raz; testy na faktycznych, bezpiecznie zanonimizowanych formatach. |
+| **0.5.5** | Raporty finansowe oraz spiżarni; ceny za porównywalne kg/l; **dopiero później szacunkowa wycena całego zapasu** po wyborze jawnej metody i obsługi brakujących cen. | Wycena zapasu nie jest saldem banku ani nowym wydatkiem; brak pozornej dokładności. |
+| **0.6.0** | Pojazdy: dokumenty, OC, przeglądy, oleje, serwis, opony letnie/zimowe i ich magazyn; powiązanie kosztów/terminów z PayCheck i kalendarzem. | Jedna wymiana kół aktualizuje pojazd, magazyn i historię bez duplikatów. |
+| **0.6.1** | Dom, instalacje, urządzenia, gwarancje, remonty, materiały, etapy i budżety. | Jedna czynność i wydatek powiązane z miejscem i projektem, bez drugiej kopii danych. |
+| **0.6.2** | Przeglądy sezonowe, odpady, konserwacje i dopracowanie planera/kalendarza między modułami. | Realia grafiku, powtórzeń i historii wykonania; zaległości nadal widoczne do potwierdzenia. |
+| **0.7.0** | Ogród: lokalna baza roślin po weryfikacji licencji, konkretne uprawy, siew/sadzenie/zbiór, zadania sezonowe. | Terminy proponowane ≠ faktyczne; działa offline. |
+| **0.7.1** | SUPLA: bezpieczne połączenie, lista uprawnionych rzeczywistych urządzeń/kanałów i **odczyt** ze źródłem oraz świeżością danych. | Brak tokenów w logach; brak udawanych danych i sterowania. |
+| **0.7.2** | Energia/PV/CWU/bufor: bilans i historia, kW kontra kWh, propozycje priorytetów i symulacje; integracja wydatków bez podwójnego księgowania faktur. | Dane oznaczone czasem i jakością; brak pomiaru nie jest zerem. |
+| **0.7.3 — warunkowo** | Dopuszczone sterowanie/automatyka tylko po audycie konkretnego osprzętu, pomiarów i bezpieczeństwa; może zostać przesunięte poza 1.0, jeśli warunki nie są spełnione. | Awaria sieci, spadek PV, ograniczenia mocy/temperatury i ręczne przejęcie sterowania nie tworzą ryzyka. |
+| **0.8.0** | EDHOME Hub — lokalne API i kontrakt zdarzeń, role, kolejka zmian; telefon nadal offline; **D-Link DNS-320L rozważany na kopie, API na osobnym aktualizowanym hoście**. | Dwa urządzenia działają bez Huba, API nie jest publicznie wystawione. |
+| **0.8.1** | Wi-Fi telefon ↔ tablet ↔ Hub, identyfikacja urządzeń/osób, selektywna synchronizacja wspólnych danych. | Brak prywatnego PayCheck na tablecie; bez duplikatów zmian. |
+| **0.8.2** | Konflikty: remanent, zakup/cena, skan, pudełka, kalendarz; ponowne próby i zgodność schematów/protokołu. | Konflikt pokazuje co sprawdzić ponownie, nie nadpisuje cichcem nowszych danych. |
+| **0.8.3** | Panel PC (przeglądarka, opcjonalny EXE później), te same role, ID i API; nie współdzielić bezpośrednio bazy SQLite. | Telefon, tablet i PC widzą ten sam uprawniony stan po synchronizacji. |
+| **0.8.4** | NAS/backup: ręczny JSON, automatyczne kopie lokalne i na DNS-320L po audycie firmware/protokołów, osobna dodatkowa kopia i test odtworzenia. | Utrata Huba/NAS lub migracja nie usuwa jedynej kopii danych. |
+| **0.9.0** | Widgety, powiadomienia i trwałe minutniki, tryb tabletu, finalne motywy, dostępność, klawiatura/przewijanie i optymalizacja. | Regresja na rzeczywistym telefonie i tablecie. |
+| **0.9.1** | Bezpieczeństwo i odzyskiwanie: migracje wszystkich schematów, prywatne sejfy, podpis APK, aktualizacje, logi bez sekretów, utrata sieci. | Test upgrade i restore ze starszych wspieranych bet; brak wycieków. |
+| **0.9.2 / RC** | Domknięcie dokumentacji, pełne testy przepływów między modułami, polityka prywatności i przygotowanie Google Play. | Brak błędów blokujących, powtarzalny podpis, komplet testów. |
+| **1.0.0 Stable** | Oficjalne EDHOME bez „prototyp”; zatwierdzony zakres, opis zmian przed aktualizacją, stabilny kanał i migracja danych. | **Osobna wyraźna zgoda Edwina na każdą zmianę/merge do chronionego `main`**; brak automatycznego scalenia z `beta`. |
+
+**Zakres 1.0 należy formalnie zamknąć przed RC.** Numer 1.0 nie oznacza, że wszystkie opcjonalne integracje/sterowanie są obowiązkowo gotowe; niesprawdzone funkcje oznaczyć jako przyszłe 1.x, nie obiecywać ich. Dodatki i poprawki po wydaniu używają kolejnych wersji, a nie zmieniają historii wydania 1.0.0. Nie przypisywać sztywnych dat ani pozorowanego procentu zaawansowania.
+
+## Rozwój po 1.0 — 1.x
+
+- **Rozpoznawanie własnych Rzeczy po zdjęciu:** użytkownik zapisuje kilka zdjęć wzorcowych konkretnego przedmiotu, a EDHOME lokalnie porównuje nowe zdjęcie z biblioteką Rzeczy i pokazuje najbardziej podobne wyniki wraz z poziomem pewności. Rozpoznanie ma być sugestią, nie automatyczną decyzją.
+- **Offline-first:** docelowo model on-device (np. TFLite / embedding obrazu), bez obowiązkowego wysyłania prywatnych zdjęć do chmury i bez stałego kosztu API.
+- **Kontekst lokalizacji:** jeżeli użytkownik jest w konkretnym Miejscu/Pudełku, wyniki z tej lokalizacji mogą być preferowane, ale bez ukrywania innych pasujących Rzeczy.
+- **Bezpieczne rozróżnianie:** przy podobnych lub identycznych przedmiotach EDHOME ma pokazać kilka kandydatów zamiast zgadywać. QR/NFC pozostają jednoznaczną metodą identyfikacji.
+
+## Stan wykonania serii 0.5 — aktualizacja po wydaniu beta.5 (22.09.2026)
+
+| Wydanie | Status potwierdzony | Zakres |
+|---|---|---|
+| `0.5.0-beta.1`–`.3` | Opublikowane wcześniej | Wspólny PayCheck, wspólne cele finansowe; prywatny sejf z oddzielnym hasłem i szyfrowanymi lokalnymi wpisami. |
+| [`0.5.0-beta.4`](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.4) | **Opublikowane, CI zakończone sukcesem** | Kafelki bez limitu 9: dodawanie, cele, nazwa, ikona, kolor, mały/podwójny rozmiar, przeciąganie, ukryj/przywróć, backup układu; osobna zaszyfrowana kopia prywatnego PayCheck i import bez dublowania UUID. |
+| [`0.5.0-beta.5`](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.5.0-beta.5) | **Opublikowane, CI zakończone sukcesem** | Cena opcjonalna przy „Kupione”, sklep, historia rzeczywistych cen dopięta do spiżarni po przyjęciu; bez księgowania PayCheck. SQLite v21→v22 i JSON ze zwalidowaną tabelą historii cen. Manifest poprawiony o rzeczywisty changelog beta.5. |
+
+**Ważne: seria 0.5 NIE jest jeszcze zakończona funkcjonalnie**, mimo że kolejne APK mają numer 0.5.0. Dalsze podwersje trzeba nadać dopiero przed konkretnym wdrożeniem; nie nazywać automatycznie „beta.6 = backup”, bo backup zaszyfrowany był już w beta.4. Odbiór na fizycznym telefonie nie jest zastąpiony przez test CI.
+
+**W realizacji na beta: adaptacyjne kolumny i regulowany dwustopniowy gest; brak zmian main bez każdorazowej zgody.**
+
+**Do zamknięcia 0.5.x (kolejne wersje, zakres i numeracja do potwierdzenia po testach):** (1) rzeczywiste testy telefonu: 15+ kafelków, przeciąganie, backup i import, starsza kopia v21→v22, szyfrowany sejf z testowym eksportem/importem bez utraty danych; (2) pełne role i profile oddzielające prywatne dane na współdzielonym tablecie; (3) jeden paragon z pozycjami ↔ jedna potwierdzona płatność PayCheck, bez dublowania skanu/przyjęcia; (4) korekty historii cen, jednostki i rozmiary opakowań; (5) cele i raty osobiste/wspólne oraz wyciągi i propozycje bankowych transakcji po audycie prywatności i danych; (6) regresja CI i poprawny changelog każdego następnego wydania. Dopiero po odbiorze uznać serię 0.5 za domkniętą, bez wymuszania przejścia do 0.6.
+
+**Aktualny porządek po doprecyzowaniu (decyzje vs wykonanie):** (1) odbiór na urządzeniu wydanej beta.5 / SQLite v22 i kopii, bez ponownego planowania już wydanej historii cen; (2) adaptacyjny panel, regulowane progi gestów i inicjalne skopiowanie układu telefonu dla **stałego profilu „Wspólny” na tablecie**, potem niezależne układy i ochrona administracji/prywatności; (3) wyciąganie −1 po domyślnych, edytowalnych 5 s, inny kod anuluje niezapisane odliczanie; (4) miejsce per zakup wybierane/potwierdzane dopiero przy przyjęciu, cena **jednostkowa** i poprawne wyliczenie wartości w zależności od ilości, bez automatycznego księgowania; (5) partia/opakowanie: wiele otwartych, różne rozmiary, daty ważności, przypomnienia; (6) remanent: jeśli choć jedna pozycja ma konflikt, wstrzymać wszystkie korekty do ponownego sprawdzenia zmienionych, zachowując resztę wyników; (7) wspólny PayCheck: ręcznie potwierdzone wkłady osób i suma, osobno od prywatnych ksiąg; wiele prywatnych profili z odrębnymi kluczami, bankowe propozycje z wyciągów/powiadomień bez dublowania; (8) PV: rzeczywista telemetria, dynamiczny priorytet z ręcznym nadpisaniem; sterowanie dopiero po osobnym audycie sprzętu. **Otwarte 6/8/16** (zaległe cykle, wspólny kalendarz, kolejność QR/magazynu) nie są zadaniami z rozstrzygniętym zachowaniem. Nie przypisywać numerów przyszłych bet przed implementacją, testami i publikacją.
+
+**Ochrona Stable:** praca i dokumentacja na `beta`; każda zmiana lub merge do `main` wymaga osobnej wyraźnej akceptacji Edwina.

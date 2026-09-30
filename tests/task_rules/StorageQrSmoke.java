@@ -13,6 +13,10 @@ public final class StorageQrSmoke {
         check(StorageQr.decode(box).id==42,"box stable id");
         check("box".equals(StorageQr.decode(box).kind),"box type");
         check("thing".equals(StorageQr.decode(thing).kind),"thing type");
+        String place=StorageQr.encode("place",42L);
+        check("place".equals(StorageQr.decode(place).kind),"place type");
+        check(StorageQr.decode(place).id==42,"place stable ID");
+        check(!place.equals(box)&&!place.equals(thing),"no ID collision");
         check(StorageQr.decode("5901234123457")==null,"EAN is not object QR");
         check(StorageQr.decode("EDHOME:STORAGE:2:thing:42")==null,"wrong version");
         check(StorageQr.decode("EDHOME:STORAGE:1:box:0")==null,"zero rejected");

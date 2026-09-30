@@ -49,6 +49,23 @@ final class PaycheckGoalsStore {
         }
     }
 
+    static boolean deleteGoal(SQLiteDatabase db, long goalId) {
+        db.beginTransaction();
+        try {
+            ContentValues clear=new ContentValues();
+            clear.putNull("goal_id");
+            db.update("vehicle_policies",clear,"goal_id=?",
+                new String[]{Long.toString(goalId)});
+            db.delete("paycheck_goal_allocations","goal_id=?",
+                new String[]{Long.toString(goalId)});
+            boolean deleted=db.delete("paycheck_goals",
+                "id=? AND scope='shared'",
+                new String[]{Long.toString(goalId)})==1;
+            db.setTransactionSuccessful();
+            return deleted;
+        } finally {db.endTransaction();}
+    }
+
     static String allocate(SQLiteDatabase db, long goalId, String operationId,
             long grosz) {
         if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}")

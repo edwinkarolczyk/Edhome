@@ -4,15 +4,21 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 
-/** Pure presentation settings: the four EDHOME skins share the same screens and data. */
+/** Pure presentation settings: every EDHOME skin shares the same screens and data. */
 final class UiSkin {
+    static final String MODERN_LIGHT = "Nowoczesny jasny";
+    static final String ELEGANT_DARK = "Elegancki ciemny";
+    static final String FOREST = "Leśny / naturalny";
     static final String NEON = "Neonowy";
     static final String NATURE = "Naturalny";
     static final String PASTEL = "Pastelowy";
     static final String GLASS = "Szklany";
     static final String WMM = "WMM";
     static final String TRAINER = "Trener 2";
-    static final String[] THEMES = {NEON, NATURE, PASTEL, GLASS, WMM, TRAINER};
+    static final String[] THEMES = {
+        MODERN_LIGHT, ELEGANT_DARK, FOREST,
+        NEON, NATURE, PASTEL, GLASS, WMM, TRAINER
+    };
 
     final String name;
     final int background, surface, foreground, secondary, accent, accentInk;
@@ -46,6 +52,21 @@ final class UiSkin {
     }
 
     static UiSkin forName(String requested) {
+        if (MODERN_LIGHT.equals(requested)) {
+            return new UiSkin(MODERN_LIGHT, "#F4F7FB", "#FFFFFF", "#0B1830",
+                "#667085", "#4A90FF", "#10213A", "#FFFFFF", "#EEF4FF",
+                "#D8E2F1", "#EAF2FF", "#FFFFFF", true);
+        }
+        if (ELEGANT_DARK.equals(requested)) {
+            return new UiSkin(ELEGANT_DARK, "#07111D", "#0D1B2A", "#F7FAFF",
+                "#A6B7C9", "#2EA8FF", "#071522", "#101F31", "#091521",
+                "#23364D", "#132A40", "#FFFFFF", false);
+        }
+        if (FOREST.equals(requested)) {
+            return new UiSkin(FOREST, "#0D1B14", "#193024", "#F7F4EA",
+                "#CAD6C7", "#62C85A", "#10210F", "#27412D", "#17291D",
+                "#4B624D", "#314A35", "#F7F4EA", false);
+        }
         // Old installations and JSON backups retain their saved theme.
         if (NATURE.equals(requested) || "Leśny".equals(requested)) {
             return new UiSkin(NATURE, "#11241D", "#203A30", "#F6F5E9",
@@ -79,6 +100,36 @@ final class UiSkin {
             "#425E79", "#1B2D40", "#112A2B", false);
     }
 
+    boolean showcase() {
+        return MODERN_LIGHT.equals(name) || ELEGANT_DARK.equals(name)
+            || FOREST.equals(name);
+    }
+
+    boolean forest() { return FOREST.equals(name); }
+
+    GradientDrawable page(Context context) {
+        String top;
+        String bottom;
+        if (MODERN_LIGHT.equals(name)) {
+            top = "#FAFCFF";
+            bottom = "#EDF4FF";
+        } else if (FOREST.equals(name)) {
+            top = "#102519";
+            bottom = "#07120D";
+        } else if (ELEGANT_DARK.equals(name)) {
+            top = "#07111D";
+            bottom = "#030A12";
+        } else {
+            top = String.format("#%08X", background);
+            bottom = top;
+        }
+        GradientDrawable drawable = new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.parseColor(top), Color.parseColor(bottom)});
+        drawable.setCornerRadius(0f);
+        return drawable;
+    }
+
     static int dp(Context context, float size) {
         return (int) (context.getResources().getDisplayMetrics().density
             * size + 0.5f);
@@ -93,14 +144,79 @@ final class UiSkin {
     }
 
     GradientDrawable tile(Context context, boolean primary, int tint) {
+        int[] colors;
+        int stroke;
+        if (showcase() && primary) {
+            if (MODERN_LIGHT.equals(name)) {
+                colors = new int[]{blend(tint, Color.WHITE, 0.18f), tint};
+                stroke = blend(tint, Color.BLACK, 0.16f);
+            } else {
+                colors = new int[]{blend(tint, background, 0.72f),
+                    blend(tint, background, 0.86f)};
+                stroke = blend(tint, Color.WHITE, 0.12f);
+            }
+        } else {
+            colors = primary ? new int[]{tint, tint}
+                : new int[]{tileTop, tileBottom};
+            stroke = primary
+                ? (light ? Color.parseColor("#71CDA3") : accent) : outline;
+        }
         GradientDrawable drawable = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            primary ? new int[]{tint, tint}
-                : new int[]{tileTop, tileBottom});
-        drawable.setCornerRadius(dp(context, 28));
-        drawable.setStroke(dp(context, primary ? 2 : 1),
-            primary ? (light ? Color.parseColor("#71CDA3") : accent) : outline);
+            GradientDrawable.Orientation.TL_BR, colors);
+        drawable.setCornerRadius(dp(context, showcase() ? 19 : 28));
+        drawable.setStroke(dp(context, 1), stroke);
         return drawable;
+    }
+
+    private static int blend(int a, int b, float towardB) {
+        float t = Math.max(0f, Math.min(1f, towardB));
+        int red = Math.round(Color.red(a) * (1f - t) + Color.red(b) * t);
+        int green = Math.round(Color.green(a) * (1f - t) + Color.green(b) * t);
+        int blue = Math.round(Color.blue(a) * (1f - t) + Color.blue(b) * t);
+        return Color.rgb(red, green, blue);
+    }
+
+    int showcaseTileTint(String target) {
+        if (MODERN_LIGHT.equals(name)) {
+            if ("paycheck".equals(target) || "paycheck_private".equals(target))
+                return Color.parseColor("#D8E9FF");
+            if ("tasks".equals(target)) return Color.parseColor("#DFF6E7");
+            if ("calendar".equals(target)) return Color.parseColor("#FBE0F0");
+            if ("pantry".equals(target)) return Color.parseColor("#FFF0DA");
+            if ("shopping".equals(target)) return Color.parseColor("#DDF2FF");
+            if ("places".equals(target)) return Color.parseColor("#F7E7D8");
+            if ("storage".equals(target)) return Color.parseColor("#F3E3F7");
+            if ("vehicles".equals(target)) return Color.parseColor("#DCEEFF");
+            if ("waste".equals(target)) return Color.parseColor("#DFF4EA");
+            return Color.parseColor("#E9EEF7");
+        }
+        if (ELEGANT_DARK.equals(name)) {
+            if ("paycheck".equals(target) || "paycheck_private".equals(target))
+                return Color.parseColor("#4D63FF");
+            if ("tasks".equals(target)) return Color.parseColor("#23C483");
+            if ("calendar".equals(target)) return Color.parseColor("#B94BFF");
+            if ("pantry".equals(target)) return Color.parseColor("#FF7A25");
+            if ("shopping".equals(target)) return Color.parseColor("#FF3D78");
+            if ("places".equals(target)) return Color.parseColor("#22D3EE");
+            if ("storage".equals(target)) return Color.parseColor("#E3A62F");
+            if ("vehicles".equals(target)) return Color.parseColor("#2FA5FF");
+            if ("waste".equals(target)) return Color.parseColor("#3BCB6D");
+            return Color.parseColor("#4A6B8C");
+        }
+        if (FOREST.equals(name)) {
+            if ("paycheck".equals(target) || "paycheck_private".equals(target))
+                return Color.parseColor("#9A6847");
+            if ("tasks".equals(target)) return Color.parseColor("#4F7C48");
+            if ("calendar".equals(target)) return Color.parseColor("#9A6847");
+            if ("pantry".equals(target)) return Color.parseColor("#557A42");
+            if ("shopping".equals(target)) return Color.parseColor("#4F7185");
+            if ("places".equals(target)) return Color.parseColor("#4F6740");
+            if ("storage".equals(target)) return Color.parseColor("#8C6545");
+            if ("vehicles".equals(target)) return Color.parseColor("#63714B");
+            if ("waste".equals(target)) return Color.parseColor("#4E754E");
+            return Color.parseColor("#49604D");
+        }
+        return accent;
     }
 
     GradientDrawable pill(Context context, int tint) {
@@ -123,6 +239,7 @@ final class UiSkin {
     }
 
     int tileText(int tint) {
+        if (showcase()) return light ? Color.parseColor("#10213A") : foreground;
         if (!light && tint != accent) return Color.WHITE;
         return accentInk;
     }

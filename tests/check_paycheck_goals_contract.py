@@ -17,6 +17,8 @@ for token in (
     'if (already > target || grosz > target - already) return "OVER_TARGET";',
     'db.beginTransaction();',
     'db.setTransactionSuccessful();',
+    'static boolean deleteGoal(',
+    'db.delete("paycheck_goal_allocations","goal_id=?"',
 ):
     assert token in source, "Goal accounting guard absent: "+token
 for token in (
@@ -25,13 +27,15 @@ for token in (
     'PaycheckGoalsStore.addGoal(',
     'PaycheckGoalsStore.allocate(',
     'PAYCHECK_SHARED_GOAL_ALLOCATED',
+    'PAYCHECK_SHARED_GOAL_DELETED',
+    'Usuń cel',
     'Nie zmienia salda wspólnego PayCheck.',
     'DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS',
-    'super(context, "edhome-beta-preview.db", null, 21)',
+    'super(context, "edhome-beta-preview.db", null, 36)',
 ):
     assert token in main, "Goal UI/schema missing: "+token
 for token in (
-    'DB_VERSION = 21;',
+    'DB_VERSION = 36;',
     '"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"',
     '"paycheck_goal_allocations", "id", "operation_id", "goal_id"',
     'inputVersion < 21 && ("paycheck_goals".equals(definition[0])',
@@ -40,7 +44,7 @@ for token in (
     '"target_grosz".equals(column) || "goal_id".equals(column)',
 ):
     assert token in backup, "Backup protection absent: "+token
-assert "versionCode 45" in gradle and "versionNameSuffix '-beta.2'" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 assert "PaycheckGoalsStore" not in (root/"ShoppingReceiptStore.java").read_text()
 assert "PaycheckGoalsStore" not in (root/"PantryBarcodeStore.java").read_text()
 body=source.split("static void create(SQLiteDatabase db)",1)[1].split("static long addGoal(",1)[0]

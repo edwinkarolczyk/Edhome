@@ -1,5 +1,8 @@
 # EDHOME — pełny rejestr ustaleń koncepcyjnych
 
+> **Uzupełnienie decyzji 22.09.2026:** [audyt 20 pytań po dwóch turach](DECYZJE_2026-09-22_FORMULARZ_20.md) ma pierwszeństwo przed starszymi sprzecznymi propozycjami **tylko w kwestiach rozstrzygniętych**. Potwierdzone: stały profil „Wspólny” tabletu; widoczność czynności w podmiejscach per czynność; wiele częściowo otwartych opakowań i dat ważności partii; miejsce docelowe pozycji zakupu najpóźniej przy przyjęciu; cena dotyczy jednej sztuki/opakowania; każdy konflikt remanentu wstrzymuje **całe zatwierdzenie korekt**; wkłady wspólnego PayCheck potwierdzane ręcznie per osoba; PV dynamiczne z ręcznym nadpisaniem po audycie. **Wciąż otwarte: 6/8/16** (zaległe cykle, wspólny kalendarz, priorytet magazynu). Akceptacja zakresu nie jest potwierdzeniem wydania APK.
+
+
 > **Główne źródło ustaleń EDHOME — Idea by Edwin.** Wymagania nie są automatycznie gotowymi funkcjami. Stan implementacji i kolejność dostaw: [ROADMAP.md](ROADMAP.md) oraz [README.md](../README.md). Rzeczywiste repo to `edwinkarolczyk/Edhome` (obecnie **publiczne**), a prace rozwojowe odbywają się wyłącznie na `beta`; `main` bez zmian. Beta 0.3.0 ma **celowo wyłączony PIN wyłącznie w Beta**, opcjonalnego wykonawcę, grafik z wyjątkami, trzy orientacyjne propozycje terminu oraz lokalną listę zakupów; SQLite v8. Stable zachowuje PIN. Priorytet i czas wprowadzono w 0.2.6, wykonawców w 0.2.7, grafik w 0.2.8. Dawne wpisy „Edhime”/„prywatne repo” poniżej są opisem historycznych ustaleń, nie aktualną konfiguracją GitHub. Nie kopiujemy automatycznie kodu innych aplikacji.
 
 ## 1. Wizja

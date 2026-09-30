@@ -22,6 +22,10 @@ public final class MoneyRulesSmoke {
         reject("0");reject("0,00");reject("-1");reject("1,234");
         reject("NaN");reject("9999999999");reject("1e2");
         check(MoneyRules.category("shopping"),"category");
+        check(MoneyRules.category("subscriptions"),"subscription category");
+        check(MoneyRules.category("fuel"),"fuel category");
+        check(MoneyRules.category("insurance"),"insurance category");
+        check(MoneyRules.category("loans"),"loan category");
         check(!MoneyRules.category("private"),"reject unsupported category");
         System.out.println("PayCheck integer-grosz accounting: PASS "+passed);
     }

@@ -7,9 +7,14 @@ import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ComponentName;
+import android.content.pm.ResolveInfo;
+import android.provider.Settings;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
@@ -21,6 +26,8 @@ import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
@@ -38,6 +45,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.Spinner;
 import android.widget.ScrollView;
 import android.widget.HorizontalScrollView;
@@ -64,29 +72,72 @@ import javax.crypto.spec.PBEKeySpec;
 
 /** Small, deliberately local-only EDHOME beta preview. */
 public final class MainActivity extends Activity {
+    private static boolean releaseFeaturesEnabled() { return true; }
     private static final int EXPORT_DIAGNOSTICS = 1210;
     private static final int IMPORT_BETA_APK = 1211;
     private static final int EXPORT_DATA_BACKUP = 1212;
     private static final int IMPORT_DATA_BACKUP = 1213;
+    private static final int EXPORT_PRIVATE_BACKUP = 1214;
+    private static final int IMPORT_PRIVATE_BACKUP = 1215;
+    private static final int TAKE_SCANNER_RESULT = 1216;
+    private static final int IMPORT_STATEMENT_CSV = 1217;
+    private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
+    private static final int PICK_BANK_APP_SYSTEM = 1219;
+    private static final int IMPORT_AI_3D_PACK = 1220;
+    private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
+    private static final int EXPORT_QR_LABELS_PDF = 1222;
+    private static final int TAKE_STORAGE_THUMBNAIL = 1223;
+    private static final int STORAGE_CAMERA_PERMISSION = 7134;
+    private byte[] pendingQrLabelsPdf;
+    private int pendingQrLabelsCount;
+    private String pendingCustomTileId;
+    private long pendingStorageThumbnailId;
+    private String pendingStatementBank;
+    private NfcAdapter nfcAdapter;
+    private PendingNfcTarget pendingNfcTarget;
+    private AlertDialog nfcAssignmentDialog;
+    private String scannerNfcStatus = "NFC gotowe";
+    private String storageTemporaryKind;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
+    private PrivatePaycheckVault.Session privatePaycheckSession;
+    private String pendingPrivateBankHintKey;
+    private String privateBackupForSave;
+    private AlertDialog privateAuthDialog;
+    private AlertDialog privateEntryDialog;
+    private boolean privateNeedsRender;
     private LinearLayout root;
     private LinearLayout body;
     private boolean unlocked;
     private boolean stableUpdateChecked;
+    private boolean desktopDataReceiverRegistered;
+    private final BroadcastReceiver desktopDataChangedReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent == null
+                    || !"com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED"
+                        .equals(intent.getAction())) return;
+            DiagnosticLog.event("DESKTOP_DATA_CHANGED_UI_REFRESH",
+                "screen=" + screen);
+            if (root != null && !isFinishing()) render();
+        }
+    };
     private String screen = "home";
     private String calendarMonth = YearMonth.now().toString();
     private String calendarDay = LocalDate.now().toString();
     private String calendarView = "month";
     private String tasksFilter = "all";
+    private int tasksPage;
     private long selectedMemberId;
     private String pantrySearch = "";
+    private int pantryPage;
     private String pantryCategoryFilter = "";
     private static final String SCAN_MODE_PREF = "pantry_scan_mode";
     private final PantryBatchSession pantryBatch = new PantryBatchSession();
     private boolean pantrySingleCameraPending;
     private boolean storageQrCameraPending;
+    private boolean centralScannerCameraPending;
+    private boolean desktopPairQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -112,6 +163,10 @@ public final class MainActivity extends Activity {
     private UiSkin skin;
     private boolean homeEditMode;
     private ScrollView pageScroll;
+    // Screen-local scroll: same-screen rerenders never jump to the top.
+    private final java.util.Map<String,Integer> screenScrollY =
+        new java.util.HashMap<>();
+    private String renderedScreen = "";
     private final java.util.Map<String, LinearLayout> homeTileViews =
         new java.util.LinkedHashMap<>();
     private final java.util.Map<String, int[]> homeTileSlots =
@@ -120,32 +175,138 @@ public final class MainActivity extends Activity {
     private LinearLayout homeTileGrid;
     private String homeDragSource;
     private int homeDragTargetIndex = -1;
+    private int homeDragTargetPage = -1;
     private boolean homeDragDropped;
     private boolean homeDragFinishQueued;
     private TextView homeDragHint;
+    private int homeShowcasePage;
+    private int homeShowcaseSlideDirection;
+    private float homeShowcaseSwipeDownX, homeShowcaseSwipeDownY;
+    private boolean homeShowcaseSwipeTracking;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
+        ensureFloorPlanShellTileSeeded();
+        ensureScannerTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this);
+        if (releaseFeaturesEnabled() && (BetaUpdater.isBeta() || unlocked)) {
+            LanSyncServer.ensureToken(prefs);
+            LanSyncService.ensureStarted(this);
+        }
         ReminderReceiver.schedule(this);
         DeviceTimerReceiver.scheduleAll(this);
         if (getIntent() != null && getIntent().getBooleanExtra("open_timers", false))
             screen = "timers";
+        if (getIntent() != null && getIntent().getBooleanExtra("open_vehicles", false))
+            screen = "vehicles";
+        if (releaseFeaturesEnabled() && getIntent() != null
+                && getIntent().getBooleanExtra("open_paycheck",false))
+            screen="paycheck";
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars =
+                    insets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(0, top, 0, bottom);
+            return insets;
+        });
         setContentView(root);
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
+        root.post(() -> handleNfcIntent(getIntent()));
+        // The icon pack is part of the signed APK. Unpack in the background
+        // without resetting the home screen, asking for ZIP or changing data.
+        new Thread(() -> {
+            try {
+                boolean newlyInstalled = IconPack3D.installBundled(this);
+                if (newlyInstalled) {
+                    if (!prefs.getBoolean("icon_style_explicit", false))
+                        prefs.edit().putString("icon_style", "ai3d").commit();
+                    DiagnosticLog.event("AI3D_BUNDLED_INSTALLED",
+                        "count=100");
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && ("home".equals(screen)
+                                || "settings".equals(screen))) render();
+                    });
+                }
+            } catch (Exception missingAssets) {
+                DiagnosticLog.event("AI3D_BUNDLED_MISSING");
+            }
+        }, "edhome-bundled-3d-icons").start();
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        if (releaseFeaturesEnabled() && !desktopDataReceiverRegistered) {
+            IntentFilter filter = new IntentFilter(
+                "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                registerReceiver(desktopDataChangedReceiver, filter,
+                    Context.RECEIVER_NOT_EXPORTED);
+            else
+                registerReceiver(desktopDataChangedReceiver, filter);
+            desktopDataReceiverRegistered = true;
+        }
+    }
+
+    @Override protected void onDestroy() {
+        disableNfcReaderMode();
+        if (nfcAssignmentDialog != null) {
+            nfcAssignmentDialog.dismiss();
+            nfcAssignmentDialog = null;
+        }
+        super.onDestroy();
+    }
+
+    @Override public void onPause() {
+        disableNfcReaderMode();
+        // Hide every private view BEFORE dropping FLAG_SECURE or taking a Recents snapshot.
+        if (privateAuthDialog != null) {
+            AlertDialog dialog = privateAuthDialog;
+            privateAuthDialog = null;
+            dialog.dismiss();
+        }
+        if (privateEntryDialog != null) {
+            AlertDialog dialog = privateEntryDialog;
+            privateEntryDialog = null;
+            dialog.dismiss();
+        }
+        if (privatePaycheckSession != null) {
+            privatePaycheckSession.lock();
+            privatePaycheckSession = null;
+        }
+        if ("paycheck_private".equals(screen)) {
+            if (root != null) root.removeAllViews();
+            screen = "paycheck";
+            privateNeedsRender = true;
+        }
+        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        super.onPause();
     }
 
     @Override public void onStop() {
+        if (desktopDataReceiverRegistered) {
+            try { unregisterReceiver(desktopDataChangedReceiver); }
+            catch (IllegalArgumentException ignored) { }
+            desktopDataReceiverRegistered = false;
+        }
         super.onStop();
         if (!BetaUpdater.isBeta()) unlocked = false;
         DiagnosticLog.event(BetaUpdater.isBeta()
@@ -156,9 +317,26 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
+        refreshNfcReaderMode();
+        if (releaseFeaturesEnabled() && (BetaUpdater.isBeta() || unlocked))
+            LanSyncService.ensureStarted(this);
         if (root != null && !unlocked) render();
+        if (privateNeedsRender && root != null) {
+            privateNeedsRender = false;
+            render();
+        }
         if (unlocked && updater != null) updater.start();
-        if (unlocked && root != null && "timers".equals(screen)) render();
+        if (releaseFeaturesEnabled() && bankNotificationPermissionGranted()
+                && BankNotificationHints.enabled(this)
+                && !BankNotificationListener.isConnected()) {
+            try {
+                android.service.notification.NotificationListenerService
+                    .requestRebind(new ComponentName(this,
+                        BankNotificationListener.class));
+            } catch (RuntimeException ignored) { }
+        }
+        if (unlocked && root != null && ("timers".equals(screen)
+                || "paycheck".equals(screen))) render();
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -166,10 +344,409 @@ public final class MainActivity extends Activity {
         setIntent(intent);
         if (intent != null && intent.getBooleanExtra("open_timers", false))
             go("timers");
+        if (intent != null && intent.getBooleanExtra("open_vehicles", false))
+            go("vehicles");
+        if (releaseFeaturesEnabled() && intent != null
+                && intent.getBooleanExtra("open_paycheck",false))
+            go("paycheck");
+        handleNfcIntent(intent);
+    }
+
+    private static final class PendingNfcTarget {
+        final String kind;
+        final long id;
+        final String name;
+        PendingNfcTarget(String kind,long id,String name) {
+            this.kind=kind;
+            this.id=id;
+            this.name=name;
+        }
+    }
+
+    private boolean enableNfcReaderMode() {
+        if(nfcAdapter==null || !nfcAdapter.isEnabled())return false;
+        int flags=NfcAdapter.FLAG_READER_NFC_A
+            |NfcAdapter.FLAG_READER_NFC_B
+            |NfcAdapter.FLAG_READER_NFC_F
+            |NfcAdapter.FLAG_READER_NFC_V
+            |NfcAdapter.FLAG_READER_NFC_BARCODE
+            |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+        try {
+            nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,null);
+            return true;
+        } catch(Exception error) {
+            DiagnosticLog.error("NFC_READER_ENABLE",error);
+            return false;
+        }
+    }
+
+    private void disableNfcReaderMode() {
+        if(nfcAdapter==null)return;
+        try { nfcAdapter.disableReaderMode(this); }
+        catch(Exception ignored) { }
+    }
+
+    private void refreshNfcReaderMode() {
+        if(nfcAdapter==null)return;
+        boolean shouldListen=pendingNfcTarget!=null
+            || "scanner".equals(screen)
+            || prefs==null
+            || prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
+        if(shouldListen)enableNfcReaderMode();
+        else disableNfcReaderMode();
+    }
+
+    private void armScannerNfc() {
+        if(nfcAdapter==null) {
+            scannerNfcStatus="NFC niedostępne na tym telefonie.";
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            scannerNfcStatus="NFC wyłączone — włącz NFC w telefonie.";
+            return;
+        }
+        // Force a fresh reader session. This also recovers when ReaderMode was
+        // disabled by an earlier Activity pause/resume or a system dialog.
+        disableNfcReaderMode();
+        if(enableNfcReaderMode()) {
+            scannerNfcStatus="NFC aktywne — przyłóż naklejkę albo brelok.";
+            DiagnosticLog.event("NFC_SCANNER_ARMED");
+        } else {
+            scannerNfcStatus="Nie udało się uruchomić odczytu NFC. Spróbuj ponownie.";
+        }
+    }
+
+    private void onNfcTagDiscovered(Tag tag) {
+        final String uid;
+        try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
+        catch(Exception error) {
+            runOnUiThread(() -> alert(error.getMessage()));
+            return;
+        }
+        runOnUiThread(() -> {
+            if("scanner".equals(screen)) {
+                scannerNfcStatus="✓ Odczytano NFC • "+NfcLinkStore.shortUid(uid);
+                DiagnosticLog.event("NFC_SCANNER_TAG_READ");
+                render();
+            }
+            handleNfcUid(uid);
+        });
+    }
+
+    private void handleNfcIntent(Intent intent) {
+        if(intent==null)return;
+        String action=intent.getAction();
+        if(!NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
+                && !NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
+                && !NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action))return;
+        Tag tag;
+        if(Build.VERSION.SDK_INT>=33)
+            tag=intent.getParcelableExtra(NfcAdapter.EXTRA_TAG,Tag.class);
+        else
+            tag=(Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+        if(tag!=null)onNfcTagDiscovered(tag);
+    }
+
+    private void handleNfcUid(String uid) {
+        if(!unlocked)return;
+        try {
+            NfcLinkStore.Link current=NfcLinkStore.findByUid(
+                db.getReadableDatabase(),uid);
+            if(pendingNfcTarget!=null) {
+                PendingNfcTarget target=pendingNfcTarget;
+                if(current!=null && current.kind.equals(target.kind)
+                        && current.targetId==target.id) {
+                    finishNfcAssignment(target,uid);
+                    return;
+                }
+                if(current!=null) {
+                    String old=NfcLinkStore.targetName(db.getReadableDatabase(),
+                        current.kind,current.targetId);
+                    new AlertDialog.Builder(this)
+                        .setTitle("Ten tag jest już używany")
+                        .setMessage("NFC "+NfcLinkStore.shortUid(uid)+" jest przypisany do: "
+                            +NfcLinkStore.kindLabel(current.kind)+" • "
+                            +(old.isEmpty()?"#"+current.targetId:old)
+                            +"\n\nPrzenieść tag do: "+target.name+"?")
+                        .setNegativeButton("Nie",null)
+                        .setPositiveButton("Przenieś",(d,w)->
+                            finishNfcAssignment(target,uid))
+                        .show();
+                    return;
+                }
+                finishNfcAssignment(target,uid);
+                return;
+            }
+            if(current==null) {
+                new AlertDialog.Builder(this)
+                    .setTitle("Nieznany tag NFC")
+                    .setMessage("UID: "+NfcLinkStore.shortUid(uid)
+                        +"\n\nAby go przypisać, otwórz Rzecz, Pudełko, Miejsce, "
+                        +"Produkt lub Pojazd i wybierz „Przypisz tag NFC”.")
+                    .setPositiveButton("OK",null).show();
+                DiagnosticLog.event("NFC_UNKNOWN_TAG");
+                return;
+            }
+            handleKnownNfcScan(current);
+        } catch(Exception error) {
+            DiagnosticLog.error("NFC_READ",error);
+            alert("Nie udało się obsłużyć tagu NFC. Dane nie zostały zmienione.");
+        }
+    }
+
+    private void finishNfcAssignment(PendingNfcTarget target,String uid) {
+        try {
+            NfcLinkStore.bind(db.getWritableDatabase(),uid,target.kind,target.id);
+            pendingNfcTarget=null;
+            refreshNfcReaderMode();
+            if(nfcAssignmentDialog!=null) {
+                nfcAssignmentDialog.dismiss();
+                nfcAssignmentDialog=null;
+            }
+            DiagnosticLog.event("NFC_TAG_ASSIGNED");
+            render();
+            alert("NFC przypisany\n"+target.name+"\nUID: "
+                +NfcLinkStore.shortUid(uid));
+        } catch(Exception error) {
+            DiagnosticLog.error("NFC_ASSIGN",error);
+            alert(error.getMessage()==null?"Nie zapisano NFC.":error.getMessage());
+        }
+    }
+
+    private void beginNfcAssignment(String kind,long id,String name) {
+        if(nfcAdapter==null) {
+            alert("Ten telefon nie ma sprzętowego NFC. Powiązanie możesz nadal "
+                +"utworzyć z EDHOME Desktop przez czytnik PC/SC.");
+            return;
+        }
+        if(!NfcLinkStore.targetExists(db.getReadableDatabase(),kind,id)) {
+            alert("Obiekt już nie istnieje.");
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Włącz NFC")
+                .setMessage("NFC jest wyłączone. Włącz je w ustawieniach telefonu "
+                    +"i wróć do EDHOME.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Ustawienia NFC",(d,w)->{
+                    try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+                    catch(Exception unavailable) {
+                        startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                    }
+                }).show();
+            return;
+        }
+        pendingNfcTarget=new PendingNfcTarget(kind,id,name);
+        disableNfcReaderMode();
+        if(!enableNfcReaderMode()) {
+            pendingNfcTarget=null;
+            refreshNfcReaderMode();
+            alert("Nie udało się uruchomić odczytu NFC. Spróbuj ponownie.");
+            return;
+        }
+        if(nfcAssignmentDialog!=null)nfcAssignmentDialog.dismiss();
+        nfcAssignmentDialog=new AlertDialog.Builder(this)
+            .setTitle("Przypisz tag NFC")
+            .setMessage(name+"\n\nPrzyłóż teraz naklejkę NFC albo brelok do telefonu. "
+                +"EDHOME zapisze tylko UID — nie nadpisuje pamięci taga.")
+            .setNegativeButton("Anuluj",(d,w)->{
+                pendingNfcTarget=null;
+                refreshNfcReaderMode();
+            })
+            .create();
+        nfcAssignmentDialog.setOnCancelListener(d->{
+            pendingNfcTarget=null;
+            refreshNfcReaderMode();
+        });
+        nfcAssignmentDialog.show();
+        DiagnosticLog.event("NFC_ASSIGN_WAITING");
+    }
+
+    private void showNfcTargetMenu(LinearLayout owner,String kind,long id,String name) {
+        NfcLinkStore.Link link=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),kind,id);
+        if(link==null) {
+            beginNfcAssignment(kind,id,name);
+            return;
+        }
+        String[] actions={"Zmień tag NFC","Usuń powiązanie NFC","Pokaż UID"};
+        new AlertDialog.Builder(this)
+            .setTitle("NFC • "+name)
+            .setMessage("Przypisany UID: "+NfcLinkStore.shortUid(link.uid))
+            .setItems(actions,(dialog,which)->{
+                if(which==0)beginNfcAssignment(kind,id,name);
+                else if(which==1)new AlertDialog.Builder(this)
+                    .setTitle("Usunąć powiązanie NFC?")
+                    .setMessage(name+"\nTag nie zostanie skasowany ani zapisany — "
+                        +"EDHOME tylko zapomni jego UID.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń powiązanie",(d,w)->{
+                        if(NfcLinkStore.clearTarget(db.getWritableDatabase(),kind,id)) {
+                            DiagnosticLog.event("NFC_TAG_UNLINKED");
+                            render();
+                        }
+                    }).show();
+                else alert("UID NFC: "+link.uid);
+            })
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void nfcTargetButton(LinearLayout owner,String kind,long id,String name) {
+        NfcLinkStore.Link link=null;
+        try { link=NfcLinkStore.findByTarget(db.getReadableDatabase(),kind,id); }
+        catch(Exception ignored) { }
+        String label=link==null
+            ? "NFC • Przypisz tag NFC"
+            : "NFC • "+NfcLinkStore.shortUid(link.uid)+" • Zarządzaj";
+        smallButton(owner,label,()->showNfcTargetMenu(owner,kind,id,name));
+    }
+
+    private void openNfcTarget(NfcLinkStore.Link link) {
+        handleKnownNfcScan(link);
+    }
+
+    private void expandStorageNfcPath(long itemId) {
+        android.content.SharedPreferences.Editor edit=prefs.edit();
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),itemId);
+        java.util.Set<Long> seen=new java.util.HashSet<>();
+        while(item!=null && seen.add(item.id)) {
+            if("box".equals(item.kind))
+                edit.putBoolean("storage_tree_box_"+item.id,false);
+            if(item.placeId!=null)expandStoragePlacePath(edit,item.placeId);
+            item=item.boxId==null?null:
+                StorageStore.find(db.getReadableDatabase(),item.boxId);
+        }
+        edit.apply();
+    }
+
+    private void expandStoragePlacePath(
+            android.content.SharedPreferences.Editor edit,long placeId) {
+        java.util.Set<Long> seen=new java.util.HashSet<>();
+        Long current=placeId;
+        while(current!=null && seen.add(current)) {
+            edit.putBoolean("storage_tree_place_"+current,false);
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT parent_id FROM places WHERE id=?",
+                    new String[]{Long.toString(current)})) {
+                current=c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
+            }
+        }
+    }
+
+    private int homeTileSpanForPage(String id) {
+        if (skin.showcase()) return 1;
+        return "double".equals(prefs.getString("tile_width_" + id, "small"))
+            ? 2 : 1;
+    }
+
+    private int homePageCapacity() {
+        return HomeTileLayout.pageSlots(prefs.getInt(
+            HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS));
+    }
+
+    private java.util.List<java.util.List<String>> homePages(
+            java.util.List<String> order) {
+        java.util.ArrayList<java.util.List<String>> pages =
+            new java.util.ArrayList<>();
+        java.util.ArrayList<String> page = new java.util.ArrayList<>();
+        int capacity = homePageCapacity();
+        int used = 0;
+        int rowUsed = 0;
+        for (String id : order) {
+            int span = Math.max(1, Math.min(2, homeTileSpanForPage(id)));
+            if (rowUsed > 0 && rowUsed + span > 3) {
+                used += 3 - rowUsed;
+                rowUsed = 0;
+            }
+            if (!page.isEmpty() && used + span > capacity) {
+                pages.add(page);
+                page = new java.util.ArrayList<>();
+                used = 0;
+                rowUsed = 0;
+            }
+            page.add(id);
+            used += span;
+            rowUsed += span;
+            if (rowUsed >= 3) rowUsed = 0;
+        }
+        if (!page.isEmpty() || pages.isEmpty()) pages.add(page);
+        return pages;
+    }
+
+    private int homePageOf(java.util.List<java.util.List<String>> pages, String id) {
+        for (int page = 0; page < pages.size(); page++)
+            if (pages.get(page).contains(id)) return page;
+        return -1;
+    }
+
+    private int homePageInsertionSlot(java.util.List<String> order,
+            String source, int targetPage, boolean atStart) {
+        java.util.List<java.util.List<String>> pages = homePages(order);
+        if (targetPage < 0 || targetPage >= pages.size()
+                || pages.get(targetPage).isEmpty()) return -1;
+        String marker = atStart
+            ? pages.get(targetPage).get(0)
+            : pages.get(targetPage).get(pages.get(targetPage).size() - 1);
+        int sourceIndex = order.indexOf(source);
+        int markerIndex = order.indexOf(marker);
+        if (sourceIndex < 0 || markerIndex < 0) return -1;
+        int markerAfterRemoval = markerIndex - (sourceIndex < markerIndex ? 1 : 0);
+        int slot = atStart ? markerAfterRemoval : markerAfterRemoval + 1;
+        return Math.max(0, Math.min(order.size() - 1, slot));
+    }
+
+    private int showcaseHomePageCount() {
+        java.util.List<String> order =
+            skin.showcase() ? showcaseHomeOrder() : homeTileOrder();
+        return homePages(order).size();
+    }
+
+    private boolean changeShowcasePage(int delta) {
+        if (delta == 0 || homeDragSource != null) return false;
+        int count = showcaseHomePageCount();
+        int next = Math.max(0, Math.min(count - 1, homeShowcasePage + delta));
+        if (next == homeShowcasePage) return false;
+        homeShowcasePage = next;
+        homeShowcaseSlideDirection = delta;
+        render();
+        return true;
+    }
+
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (skin != null && "home".equals(screen)
+                && homeDragSource == null && event.getPointerCount() == 1) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    homeShowcaseSwipeDownX = event.getRawX();
+                    homeShowcaseSwipeDownY = event.getRawY();
+                    homeShowcaseSwipeTracking = true;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (homeShowcaseSwipeTracking) {
+                        float dx = event.getRawX() - homeShowcaseSwipeDownX;
+                        float dy = event.getRawY() - homeShowcaseSwipeDownY;
+                        homeShowcaseSwipeTracking = false;
+                        if (Math.abs(dx) >= dp(56)
+                                && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                            if (changeShowcasePage(dx < 0 ? 1 : -1))
+                                return true;
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    homeShowcaseSwipeTracking = false;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override public void onBackPressed() {
-        if (unlocked && "updates_advanced".equals(screen)) go("updates");
+        if (unlocked && "paycheck_private".equals(screen)) go("paycheck");
+        else if (unlocked && "updates_advanced".equals(screen)) go("updates");
         else if (unlocked && "places".equals(screen)) go("home");
         else if (unlocked && "storage".equals(screen)) go("places");
         else if (unlocked && "shopping".equals(screen)) go("pantry");
@@ -209,8 +786,14 @@ public final class MainActivity extends Activity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(ink);
-        view.setPadding(0, dp(5), 0, dp(6));
-        if (bold) view.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+        view.setPadding(0, dp(2), 0, dp(2));
+        if (skin != null && skin.showcase()) {
+            view.setTypeface(Typeface.create(
+                bold ? "sans-serif-medium" : "sans-serif",
+                bold ? Typeface.BOLD : Typeface.NORMAL));
+        } else if (bold) {
+            view.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+        }
         return view;
     }
 
@@ -225,11 +808,11 @@ public final class MainActivity extends Activity {
     private LinearLayout card() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(17), dp(18), dp(17));
-        box.setBackground(skin.panel(this, surface, 28));
-        box.setElevation(dp(3));
+        box.setPadding(dp(11), dp(8), dp(11), dp(8));
+        box.setBackground(skin.panel(this, surface, 22));
+        box.setElevation(dp(2));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(7), 0, dp(7));
+        params.setMargins(0, dp(3), 0, dp(3));
         body.addView(box, params);
         return box;
     }
@@ -237,16 +820,16 @@ public final class MainActivity extends Activity {
     private Button button(String value, Runnable callback) {
         Button b = new Button(this);
         b.setText(value);
-        b.setTextSize(16);
+        b.setTextSize(14);
         b.setAllCaps(false);
         b.setTextColor(skin.accentInk);
         b.setBackground(skin.pill(this, accent));
-        b.setElevation(dp(2));
+        b.setElevation(dp(1));
         touchFeedback(b);
-        b.setMinHeight(dp(56));
+        b.setMinHeight(dp(44));
         b.setOnClickListener(v -> callback.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(4), 0, dp(4));
+        params.setMargins(0, dp(2), 0, dp(2));
         body.addView(b, params);
         return b;
     }
@@ -284,6 +867,14 @@ public final class MainActivity extends Activity {
     }
 
     private void go(String destination) {
+        if (!"paycheck_private".equals(destination)
+                && privatePaycheckSession != null) {
+            privatePaycheckSession.lock();
+            privatePaycheckSession = null;
+        }
+        if (pageScroll != null && screen.equals(renderedScreen))
+            screenScrollY.put(screen,pageScroll.getScrollY());
+        if (!"storage".equals(destination)) storageTemporaryKind=null;
         screen = destination;
         if (!"home".equals(destination)) homeEditMode = false;
         if (unlocked && updater != null) updater.start();
@@ -292,14 +883,27 @@ public final class MainActivity extends Activity {
             PlayUpdateBridge.checkOnce(this);
         }
         DiagnosticLog.event("SCREEN", "id=" + destination);
+        if ("scanner".equals(destination)) armScannerNfc();
+        else refreshNfcReaderMode();
         render();
     }
 
     private void render() {
         if (root == null || prefs == null) return;
+        // Save the old viewport BEFORE removing its views.
+        if(pageScroll!=null && screen.equals(renderedScreen))
+            screenScrollY.put(screen,pageScroll.getScrollY());
+        final int restoreScrollY=screenScrollY.getOrDefault(screen,0);
+        final String restoreScreen=screen;
         palette();
+        if ("paycheck_private".equals(screen) && privatePaycheckSession != null
+                && privatePaycheckSession.active())
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        else if (privateAuthDialog == null)
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         root.removeAllViews();
-        root.setBackgroundColor(bg);
+        if (skin.showcase()) root.setBackground(skin.page(this));
+        else root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
         int systemBarFlags = skin.light
@@ -313,9 +917,14 @@ public final class MainActivity extends Activity {
         scroll.setClipToPadding(false);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16), dp(14), dp(16), dp(48));
+        int pageSide = skin.showcase() ? 12 : 16;
+        body.setPadding(dp(pageSide), dp(skin.showcase() ? 7 : 8),
+            dp(pageSide), dp(12));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams scrollParams = skin.showcase()
+            ? new LinearLayout.LayoutParams(-1, 0, 1f)
+            : new LinearLayout.LayoutParams(-1, -1);
+        root.addView(scroll, scrollParams);
 
         if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();
         else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();
@@ -330,10 +939,13 @@ public final class MainActivity extends Activity {
                 case "pantry": pantry(); break;
                 case "shopping": shopping(); break;
                 case "places": places(); break;
+                case "floorplan": floorPlanShell(); break;
                 case "storage": storage(); break;
+                case "vehicles": vehicles(); break;
                 case "paycheck": paycheck(); break;
+                case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
-                case "scanner": placeholder("Skaner", "Kamera i kody kreskowe/QR nie działają jeszcze w tej becie."); break;
+                case "scanner": scannerHub(); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
                 case "updates": updates(); break;
@@ -343,6 +955,15 @@ public final class MainActivity extends Activity {
                 default: home();
             }
         }
+        if (skin.showcase() && unlocked) addShowcaseBottomNavigation();
+        renderedScreen=screen;
+        // post-layout restore; direct scrollTo before layout is silently lost.
+        scroll.post(()->{
+            if(pageScroll==scroll && restoreScreen.equals(screen)) {
+                int maxY=Math.max(0,body.getHeight()-scroll.getHeight());
+                scroll.scrollTo(0,Math.min(restoreScrollY,maxY));
+            }
+        });
     }
 
     private static byte[] derivedPin(String pin, String salt) throws Exception {
@@ -378,6 +999,10 @@ public final class MainActivity extends Activity {
                     .putString("pin_hash", Base64.encodeToString(hash, Base64.NO_WRAP))
                     .apply();
                 unlocked = true;
+                if (releaseFeaturesEnabled()) {
+                    LanSyncServer.ensureToken(prefs);
+                    LanSyncService.ensureStarted(this);
+                }
                 DiagnosticLog.event("PIN_SETUP_OK");
                 go("home");
             } catch (Exception error) {
@@ -399,6 +1024,10 @@ public final class MainActivity extends Activity {
                     prefs.getString("pin_salt", ""));
                 if (MessageDigest.isEqual(expected, actual)) {
                     unlocked = true;
+                    if (releaseFeaturesEnabled()) {
+                        LanSyncServer.ensureToken(prefs);
+                        LanSyncService.ensureStarted(this);
+                    }
                     DiagnosticLog.event("PIN_UNLOCK_OK");
                     go("home");
                 } else {
@@ -413,50 +1042,482 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private int desktopConnectionGreen() {
+        return skin.light ? Color.rgb(31, 153, 101) : Color.rgb(105, 232, 177);
+    }
+
+    private int desktopConnectionRed() {
+        return skin.light ? Color.rgb(208, 62, 62) : Color.rgb(255, 109, 109);
+    }
+
+    private String desktopLastSyncTime() {
+        long when = LanSyncServer.lastSyncActivityAt();
+        if (when <= 0L) return "jeszcze nie synchronizowano";
+        return Instant.ofEpochMilli(when).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+    }
+
+    private String desktopLastAttempt() {
+        long when = LanSyncServer.lastConnectionAttemptAt();
+        if (when <= 0L) return "brak próby z PC";
+        String time = Instant.ofEpochMilli(when).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String remote = LanSyncServer.lastRemote();
+        String result = LanSyncServer.lastConnectionResult();
+        return time + " • " + result
+            + (remote == null || remote.isEmpty() ? "" : " • " + remote);
+    }
+
+    private void showDesktopConnectionStatus() {
+        boolean online = LanSyncServer.hasRecentClient();
+        boolean syncing = online && LanSyncServer.isSyncing();
+        String state = syncing ? "SYNCHRONIZACJA"
+            : (online ? "POŁĄCZONO" : "NIEPOŁĄCZONE");
+        String message = "Stan: " + state
+            + "\nSerwer LAN telefonu: "
+            + (LanSyncService.endpointRunning() ? "DZIAŁA" : "NIE DZIAŁA / URUCHAMIA SIĘ")
+            + "\nOstatnia próba PC: " + desktopLastAttempt()
+            + "\nOstatnia wymiana danych: " + desktopLastSyncTime()
+            + (online
+                ? "\n\nTelefon i EDHOME Desktop widzą się w sieci lokalnej."
+                : "\n\nEDHOME czeka na komputer w tej samej sieci Wi‑Fi/LAN.");
+        new AlertDialog.Builder(this)
+            .setTitle("EDHOME Desktop")
+            .setMessage(message)
+            .setNegativeButton("Zamknij", null)
+            .setPositiveButton("Ustawienia połączenia", (d, w) -> go("settings"))
+            .show();
+    }
+
+    private void appTitleWithConnection() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        if (skin.showcase()) {
+            LinearLayout brand = new LinearLayout(this);
+            brand.setOrientation(LinearLayout.VERTICAL);
+            TextView appTitle = text("⌂  edhome", 21, true);
+            appTitle.setPadding(0, 0, 0, 0);
+            brand.addView(appTitle);
+            TextView idea = text("Idea by Edwin", 10, false);
+            idea.setTextColor(subdued);
+            idea.setPadding(dp(29), 0, 0, 0);
+            brand.addView(idea);
+            row.addView(brand, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            TextView search = text("⌕", 22, true);
+            search.setGravity(Gravity.CENTER);
+            search.setPadding(0, 0, 0, 0);
+            search.setBackground(skin.panel(this, surface, 19));
+            search.setOnClickListener(v -> showShowcaseJump());
+            touchFeedback(search);
+            LinearLayout.LayoutParams searchParams =
+                new LinearLayout.LayoutParams(dp(38), dp(38));
+            searchParams.setMargins(0, 0, dp(7), 0);
+            row.addView(search, searchParams);
+
+            int alerts = db == null ? 0 : db.overdueTasks();
+            TextView bell = text(alerts > 0 ? "♢" + Math.min(alerts, 9) : "♢", 16, true);
+            bell.setGravity(Gravity.CENTER);
+            bell.setPadding(0, 0, 0, 0);
+            bell.setBackground(skin.panel(this, surface, 19));
+            bell.setOnClickListener(v -> {
+                tasksFilter = alerts > 0 ? "overdue" : "today";
+                go("tasks");
+            });
+            touchFeedback(bell);
+            LinearLayout.LayoutParams bellParams =
+                new LinearLayout.LayoutParams(dp(38), dp(38));
+            bellParams.setMargins(0, 0, dp(7), 0);
+            row.addView(bell, bellParams);
+        } else {
+            TextView appTitle = text(BuildConfig.DIAGNOSTICS_ENABLED
+                ? "EDHOME  •  BETA" : "EDHOME", 21, true);
+            row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        }
+
+        if (releaseFeaturesEnabled()) {
+            TextView badge = text("", skin.showcase() ? 13 : 13, true);
+            badge.setGravity(Gravity.CENTER);
+            badge.setPadding(0, 0, 0, 0);
+            badge.setClickable(true);
+            badge.setFocusable(true);
+            badge.setOnClickListener(v -> showDesktopConnectionStatus());
+            touchFeedback(badge);
+
+            Runnable refresh = new Runnable() {
+                private boolean pulse;
+                @Override public void run() {
+                    if (!badge.isAttachedToWindow()) return;
+                    boolean online = LanSyncServer.hasRecentClient();
+                    boolean syncing = online && LanSyncServer.isSyncing();
+                    if (skin.showcase()) {
+                        GradientDrawable avatar = new GradientDrawable();
+                        avatar.setShape(GradientDrawable.OVAL);
+                        avatar.setColor(surface);
+                        avatar.setStroke(dp(2), online
+                            ? desktopConnectionGreen() : desktopConnectionRed());
+                        badge.setBackground(avatar);
+                        badge.setText(syncing
+                            ? (pulse ? "E›" : "‹E") : "E");
+                        pulse = syncing && !pulse;
+                    } else if (syncing) {
+                        badge.setBackground(skin.panel(MainActivity.this, surface, 22));
+                        badge.setText(pulse ? "●  →   PC" : "●    ← PC");
+                        pulse = !pulse;
+                    } else {
+                        badge.setBackground(skin.panel(MainActivity.this, surface, 22));
+                        badge.setText("●  ⇄ PC");
+                        pulse = false;
+                    }
+                    badge.setTextColor(skin.showcase() ? ink : (online
+                        ? desktopConnectionGreen() : desktopConnectionRed()));
+                    badge.setContentDescription(syncing
+                        ? "EDHOME Desktop synchronizuje dane."
+                        : (online
+                            ? "EDHOME Desktop połączony."
+                            : "EDHOME Desktop niepołączony."));
+                    badge.postDelayed(this, syncing ? 320L : 1200L);
+                }
+            };
+            LinearLayout.LayoutParams badgeParams = skin.showcase()
+                ? new LinearLayout.LayoutParams(dp(38), dp(38))
+                : new LinearLayout.LayoutParams(-2, dp(34));
+            row.addView(badge, badgeParams);
+            badge.post(refresh);
+        }
+        LinearLayout.LayoutParams headerParams =
+            new LinearLayout.LayoutParams(-1, -2);
+        headerParams.setMargins(0, dp(1), 0, dp(1));
+        body.addView(row, headerParams);
+    }
+
+    private void showShowcaseJump() {
+        final String[] labels = {
+            "Czynności", "Kalendarz", "Spiżarnia", "Lista zakupów",
+            "Miejsca", "Magazyn domowy", "Pojazdy", "PayCheck",
+            "Skaner", "Ustawienia"
+        };
+        final String[] targets = {
+            "tasks", "calendar", "pantry", "shopping", "places",
+            "storage", "vehicles", "paycheck", "scanner", "settings"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Przejdź do")
+            .setItems(labels, (dialog, which) -> go(targets[which]))
+            .setNegativeButton("Anuluj", null)
+            .show();
+    }
+
+    private TextView showcaseNavItem(String symbol, String label,
+            boolean selected, Runnable callback) {
+        TextView item = text(symbol + "\n" + label, 10, true);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(0, 0, 0, 0);
+        item.setMinHeight(dp(54));
+        item.setTextColor(selected ? accent : subdued);
+        item.setOnClickListener(v -> callback.run());
+        item.setClickable(true);
+        item.setFocusable(true);
+        touchFeedback(item);
+        return item;
+    }
+
+    private void addShowcaseBottomNavigation() {
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setPadding(dp(6), dp(5), dp(6), dp(5));
+        nav.setBackground(skin.panel(this, surface, 0));
+        nav.setElevation(dp(10));
+
+        nav.addView(showcaseNavItem("⌂", "Start", "home".equals(screen),
+            () -> go("home")), new LinearLayout.LayoutParams(0, dp(58), 1f));
+        nav.addView(showcaseNavItem("✓", "Zadania", "tasks".equals(screen),
+            () -> go("tasks")), new LinearLayout.LayoutParams(0, dp(58), 1f));
+
+        LinearLayout addCell = new LinearLayout(this);
+        addCell.setGravity(Gravity.CENTER);
+        TextView add = showcaseNavItem("+", "Dodaj", false, this::showShowcaseAdd);
+        add.setTextSize(11);
+        add.setTextColor(skin.buttonForeground);
+        GradientDrawable addBackground = new GradientDrawable();
+        addBackground.setShape(GradientDrawable.OVAL);
+        addBackground.setColor(accent);
+        addBackground.setStroke(dp(1), skin.outline);
+        add.setBackground(addBackground);
+        addCell.addView(add, new LinearLayout.LayoutParams(dp(58), dp(58)));
+        nav.addView(addCell, new LinearLayout.LayoutParams(0, dp(60), 1f));
+
+        nav.addView(showcaseNavItem("♢", "Powiad.", false, () -> {
+            tasksFilter = db.overdueTasks() > 0 ? "overdue" : "today";
+            go("tasks");
+        }), new LinearLayout.LayoutParams(0, dp(58), 1f));
+        nav.addView(showcaseNavItem("☰", "Więcej", "settings".equals(screen),
+            this::showShowcaseMore), new LinearLayout.LayoutParams(0, dp(58), 1f));
+
+        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(70)));
+    }
+
+    private void showShowcaseAdd() {
+        final String[] labels = {
+            "Dodaj kafelek na Start", "Dodaj czynność", "Dodaj zakup",
+            "Dodaj rzecz / pudełko", "Dodaj wydatek"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Dodaj")
+            .setItems(labels, (dialog, which) -> {
+                if (which == 0) {
+                    if ("home".equals(screen)) showAddTileDialog();
+                    else {
+                        go("home");
+                        root.postDelayed(this::showAddTileDialog, 140L);
+                    }
+                } else if (which == 1) go("tasks");
+                else if (which == 2) go("shopping");
+                else if (which == 3) go("storage");
+                else go("paycheck");
+            })
+            .setNegativeButton("Anuluj", null)
+            .show();
+    }
+
+    private void showShowcaseMore() {
+        final String[] labels = releaseFeaturesEnabled()
+            ? new String[]{"Skaner", "Aktualizacje", "Kopia danych",
+                "Ustawienia", "Diagnostyka"}
+            : new String[]{"Skaner", "Aktualizacje", "Kopia danych", "Ustawienia"};
+        new AlertDialog.Builder(this)
+            .setTitle("Więcej")
+            .setItems(labels, (dialog, which) -> {
+                if (which == 0) go("scanner");
+                else if (which == 1) go("updates");
+                else if (which == 2) go("backup");
+                else if (which == 3) go("settings");
+                else go("diagnostics");
+            })
+            .setNegativeButton("Anuluj", null)
+            .show();
+    }
+
     private void header(String subtitle) {
-        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
-        note(subtitle);
-        button("← Panel główny", () -> go("home"));
+        appTitleWithConnection();
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        TextView label = text(subtitle, 13, true);
+        label.setTextColor(subdued);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setPadding(0, 0, dp(6), 0);
+        bar.addView(label, new LinearLayout.LayoutParams(0, dp(36), 1f));
+        TextView back = text("← Start", 12, true);
+        back.setGravity(Gravity.CENTER);
+        back.setPadding(dp(7), 0, dp(7), 0);
+        back.setBackground(skin.panel(this, surface, 17));
+        back.setOnClickListener(v -> go("home"));
+        back.setClickable(true);
+        back.setFocusable(true);
+        touchFeedback(back);
+        bar.addView(back, new LinearLayout.LayoutParams(dp(76), dp(34)));
+        body.addView(bar, new LinearLayout.LayoutParams(-1, dp(38)));
+    }
+
+    private LinearLayout compactActionRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        body.addView(row, new LinearLayout.LayoutParams(-1, dp(42)));
+        return row;
+    }
+
+    private void compactAction(LinearLayout row, String label, Runnable action) {
+        TextView item = text(label, 12, true);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(4), 0, dp(4), 0);
+        item.setMaxLines(1);
+        item.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        item.setBackground(skin.panel(this, skin.tileTop, 17));
+        item.setOnClickListener(v -> action.run());
+        item.setClickable(true);
+        item.setFocusable(true);
+        touchFeedback(item);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        lp.setMargins(dp(2), dp(2), dp(2), dp(2));
+        row.addView(item, lp);
+    }
+
+    private String showcaseHomeLabel(String target) {
+        switch (target) {
+            case "paycheck": case "paycheck_private": return "PayCheck";
+            case "tasks": return "Zadania";
+            case "calendar": return "Kalendarz";
+            case "pantry": return "Spiżarnia";
+            case "shopping": return "Lista zakupów";
+            case "places": return "Miejsca";
+            case "storage": return "Magazyn domowy";
+            case "vehicles": return "Pojazdy";
+            case "waste": return "Odpady";
+            default: return HomeTileCatalog.label(target);
+        }
+    }
+
+    private java.util.List<String> showcaseHomeOrder() {
+        java.util.List<String> current = homeTileOrder();
+        if (!prefs.getBoolean("showcase_project_layout", true))
+            return current;
+        java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        String[] preferredTargets = {
+            "paycheck", "tasks", "calendar",
+            "pantry", "shopping", "places",
+            "storage", "vehicles", "waste"
+        };
+        for (String target : preferredTargets) {
+            for (String tileId : current) {
+                if (!result.contains(tileId)
+                        && target.equals(homeTileTarget(tileId))) {
+                    result.add(tileId);
+                    break;
+                }
+            }
+        }
+        for (String tileId : current)
+            if (!result.contains(tileId)) result.add(tileId);
+        return result;
+    }
+
+    private void addShowcasePageDots(int pageCount) {
+        if (pageCount <= 1) return;
+        LinearLayout dots = new LinearLayout(this);
+        dots.setOrientation(LinearLayout.HORIZONTAL);
+        dots.setGravity(Gravity.CENTER);
+        dots.setPadding(0, 0, 0, dp(1));
+        for (int page = 0; page < pageCount; page++) {
+            final int selectedPage = page;
+            boolean activePage = page == homeShowcasePage;
+            TextView dot = text(activePage ? "●" : "○",
+                activePage ? 14 : 12, true);
+            dot.setGravity(Gravity.CENTER);
+            dot.setPadding(0, 0, 0, 0);
+            dot.setAlpha(activePage ? 1f : 0.58f);
+            dot.setTextColor(activePage ? accent : subdued);
+            dot.setOnClickListener(v -> {
+                int delta = selectedPage - homeShowcasePage;
+                if (delta != 0) changeShowcasePage(delta);
+            });
+            dot.setContentDescription("Strona kafelków " + (page + 1)
+                + " z " + pageCount);
+            dots.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        }
+        body.addView(dots, new LinearLayout.LayoutParams(-1, dp(24)));
+    }
+
+    private void adoptShowcaseOrderForEditing() {
+        if (!skin.showcase()
+                || !prefs.getBoolean("showcase_project_layout", true)) return;
+        java.util.List<String> arranged = showcaseHomeOrder();
+        java.util.List<String> full = allHomeTiles();
+        full.removeAll(arranged);
+        java.util.List<String> nextFull = new java.util.ArrayList<>(arranged);
+        nextFull.addAll(full);
+        prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(nextFull))
+            .putBoolean("showcase_project_layout", false)
+            .apply();
+        DiagnosticLog.event("HOME_SHOWCASE_ORDER_ADOPTED");
+    }
+
+    private boolean moveHomeTileToAdjacentPage(String id, int delta) {
+        if (delta == 0) return false;
+        if (skin.showcase()) adoptShowcaseOrderForEditing();
+        java.util.List<String> order = homeTileOrder();
+        java.util.List<java.util.List<String>> pages = homePages(order);
+        int sourcePage = homePageOf(pages, id);
+        if (sourcePage < 0) return false;
+        int targetPage = sourcePage + delta;
+        if (targetPage < 0 || targetPage >= pages.size()) return false;
+        int target = homePageInsertionSlot(order, id, targetPage, delta > 0);
+        if (target < 0) return false;
+        homeShowcasePage = targetPage;
+        homeShowcaseSlideDirection = delta;
+        return moveHomeTileAtIndex(id, target);
     }
 
     private void home() {
-        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
-        note("Idea by Edwin • " + BuildConfig.VERSION_NAME);
-        title(prefs.getString("household", "Moje gospodarstwo"));
-
-        LinearLayout summary = card();
-        LinearLayout planHeader = new LinearLayout(this);
-        planHeader.setOrientation(LinearLayout.HORIZONTAL);
-        planHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView planTitle = text("Twój domowy plan", 21, true);
-        planHeader.addView(planTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-        HomeIllustration homeMark = new HomeIllustration(this, skin);
-        planHeader.addView(homeMark, new LinearLayout.LayoutParams(dp(68), dp(52)));
-        summary.addView(planHeader);
+        appTitleWithConnection();
         int overdue = db.overdueTasks();
-        summary.addView(text("Do zrobienia: " + db.openTasks()
-            + "     Zaległe: " + overdue, 16, true));
-        TextView reminder = text(overdue == 0
-            ? "✓  Brak zaległych czynności."
-            : "•  Otwórz zaległe i wybierz, co wykonać dziś.", 14, false);
-        reminder.setTextColor(overdue == 0 ? accent : ink);
-        summary.addView(reminder);
-        summary.setOnClickListener(v -> {
-            tasksFilter = overdue == 0 ? "today" : "overdue";
-            go("tasks");
-        });
-        touchFeedback(summary);
-        summary.setContentDescription("Twój domowy plan. Do zrobienia: "
-            + db.openTasks() + ". Zaległe: " + overdue
-            + ". Dotknij, aby przejść do czynności.");
+        if (skin.showcase()) {
+            String date = LocalDate.now().format(DateTimeFormatter.ofPattern(
+                "EEEE, d MMMM yyyy", Locale.forLanguageTag("pl-PL")));
+            if (!date.isEmpty())
+                date = date.substring(0, 1).toUpperCase(Locale.forLanguageTag("pl-PL"))
+                    + date.substring(1);
+
+            LinearLayout hero = new LinearLayout(this);
+            hero.setOrientation(LinearLayout.HORIZONTAL);
+            hero.setGravity(Gravity.CENTER_VERTICAL);
+            hero.setPadding(0, dp(9), 0, dp(7));
+
+            LinearLayout greetingBlock = new LinearLayout(this);
+            greetingBlock.setOrientation(LinearLayout.VERTICAL);
+            TextView greeting = text("Dzień dobry!", 24, true);
+            greeting.setPadding(0, 0, 0, dp(1));
+            greetingBlock.addView(greeting);
+            TextView day = text(date, 12, false);
+            day.setTextColor(subdued);
+            day.setPadding(0, 0, 0, 0);
+            greetingBlock.addView(day);
+            hero.addView(greetingBlock, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            TextView status = text("✓  " + db.openTasks()
+                + "\nZaległe: " + overdue, 12, true);
+            status.setGravity(Gravity.CENTER);
+            status.setPadding(dp(8), dp(5), dp(8), dp(5));
+            status.setBackground(skin.panel(this, surface, 18));
+            status.setOnClickListener(v -> {
+                tasksFilter = overdue > 0 ? "overdue" : "today";
+                go("tasks");
+            });
+            touchFeedback(status);
+            hero.addView(status, new LinearLayout.LayoutParams(dp(92), dp(58)));
+            body.addView(hero, new LinearLayout.LayoutParams(-1, dp(78)));
+        } else {
+            LinearLayout summary = card();
+            summary.setOrientation(LinearLayout.HORIZONTAL);
+            summary.setGravity(Gravity.CENTER_VERTICAL);
+            summary.setPadding(dp(10), dp(5), dp(8), dp(5));
+
+            LinearLayout plan = new LinearLayout(this);
+            plan.setOrientation(LinearLayout.VERTICAL);
+            TextView household = text(
+                prefs.getString("household", "Moje gospodarstwo"), 14, true);
+            household.setPadding(0, 0, 0, 0);
+            plan.addView(household);
+            TextView counts = text("Do zrobienia: " + db.openTasks()
+                + "  •  Zaległe: " + overdue, 11, false);
+            counts.setTextColor(subdued);
+            counts.setPadding(0, 0, 0, 0);
+            plan.addView(counts);
+            summary.addView(plan, new LinearLayout.LayoutParams(0, dp(38), 1f));
+            HomeIllustration homeMark = new HomeIllustration(this, skin);
+            summary.addView(homeMark, new LinearLayout.LayoutParams(dp(38), dp(32)));
+            summary.setOnClickListener(v -> {
+                tasksFilter = overdue == 0 ? "today" : "overdue";
+                tasksPage = 0;
+                go("tasks");
+            });
+            touchFeedback(summary);
+        }
 
         TextView editHint = text(homeEditMode
-            ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
-            : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać", 13, false);
+            ? (skin.showcase()
+                ? "✥  TRYB UKŁADU • przeciągnij • krawędź ekranu = zmień stronę • ⋮⋮: menu"
+                : "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar")
+            : "✥  Krócej: menu • dłużej: przeciągnij • przesuń ekran w bok", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
-        editHint.setMinHeight(dp(48));
+        editHint.setMinHeight(dp(34));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
-        editHint.setPadding(dp(12), dp(8), dp(12), dp(8));
+        editHint.setPadding(dp(8), dp(3), dp(8), dp(3));
         editHint.setBackground(skin.panel(this, skin.tileTop, 22));
         editHint.setClickable(true);
         editHint.setFocusable(true);
@@ -466,22 +1527,27 @@ public final class MainActivity extends Activity {
         editHint.setOnClickListener(v -> {
             if (homeDragSource != null) return;
             homeEditMode = !homeEditMode;
+            if (homeEditMode) adoptShowcaseOrderForEditing();
             render();
         });
         touchFeedback(editHint);
-        body.addView(editHint);
+        if (homeEditMode) body.addView(editHint);
         homeDragHint = editHint;
         homeTileViews.clear();
         homeTileSlots.clear();
         homeDragSource = null;
         homeDragOrder = null;
         homeDragTargetIndex = -1;
+        homeDragTargetPage = -1;
         homeDragDropped = false;
         homeDragFinishQueued = false;
-        if (homeEditMode) button("✓  Zakończ układanie", () -> {
-            homeEditMode = false;
-            render();
-        });
+        if (homeEditMode) {
+            LinearLayout editControls = compactActionRow();
+            compactAction(editControls, "✓ Zakończ układ", () -> {
+                homeEditMode = false;
+                render();
+            });
+        }
         LinearLayout tiles = tileGrid();
         homeTileGrid = tiles;
         tiles.setOnDragListener((v, event) -> {
@@ -501,19 +1567,142 @@ public final class MainActivity extends Activity {
             }
             return true;
         });
-        for (String tileId : homeTileOrder()) {
+        java.util.List<String> homeOrder =
+            skin.showcase() ? showcaseHomeOrder() : homeTileOrder();
+        java.util.List<java.util.List<String>> pagedHomeTiles = homePages(homeOrder);
+        int showcasePageCount = pagedHomeTiles.size();
+        if (homeShowcasePage < 0 || homeShowcasePage >= showcasePageCount)
+            homeShowcasePage = 0;
+        java.util.List<String> renderedHomeTiles = new java.util.ArrayList<>(
+            pagedHomeTiles.get(homeShowcasePage));
+        for (String tileId : renderedHomeTiles) {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
             homeTileViews.put(tileId, tile);
             TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
-            caption.setText(homeTileLabel(tileId));
-            tile.setContentDescription(homeTileLabel(tileId)
-                + ". Dotknij, aby otworzyć. Przytrzymaj, aby edytować "
-                + "lub przesuń za uchwyt.");
+            String visibleLabel = skin.showcase() && !homeEditMode
+                ? showcaseHomeLabel(homeTileTarget(tileId))
+                : homeTileLabel(tileId);
+            caption.setText(visibleLabel);
+            tile.setContentDescription(visibleLabel
+                + ". Dotknij, aby otworzyć. Krócej przytrzymaj dla menu; "
+                + "dłużej dla przeciągania. Czasy: Ustawienia.");
+            // Accessibility long-click still opens the actions menu.
             tile.setOnLongClickListener(v -> {
-                if (homeEditMode) return beginHomeDrag(tile, tileId);
                 showTileActions(tile, tileId);
                 return true;
+            });
+            // Open the short-hold menu on RELEASE, so it cannot intercept
+            // the same finger before the longer drag threshold has elapsed.
+            tile.setOnTouchListener(new View.OnTouchListener() {
+                private float startX, startY;
+                private long downAt;
+                private boolean moved, dragging, resizing, resizeChanged;
+                private float resizeScale = 1f;
+                private final android.view.ScaleGestureDetector resizeDetector =
+                    new android.view.ScaleGestureDetector(MainActivity.this,
+                        new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                            @Override public boolean onScale(
+                                    android.view.ScaleGestureDetector detector) {
+                                if (!resizing) return false;
+                                resizeScale *= detector.getScaleFactor();
+                                if (resizeScale > 1.10f || resizeScale < 0.90f)
+                                    resizeChanged = true;
+                                return true;
+                            }
+                        });
+
+                private void finishResize() {
+                    if (!resizing) return;
+                    resizing = false;
+                    tile.removeCallbacks(startDrag);
+                    if (!resizeChanged) return;
+                    boolean currentlyDouble = "double".equals(
+                        prefs.getString("tile_width_" + tileId, "small"));
+                    boolean makeDouble = resizeScale > 1f;
+                    if (makeDouble == currentlyDouble) return;
+                    if (!prefs.edit().putString("tile_width_" + tileId,
+                            makeDouble ? "double" : "small").commit()) {
+                        alert("Nie udało się zapisać rozmiaru kafelka.");
+                        return;
+                    }
+                    DiagnosticLog.event("HOME_TILE_RESIZED",
+                        "id=" + tileId + " width=" + (makeDouble ? "double" : "small"));
+                    tile.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                    render();
+                }
+
+                private final Runnable startDrag = () -> {
+                    if (!moved && !dragging && !resizing && "home".equals(screen))
+                        dragging = beginHomeDrag(tile, tileId);
+                };
+
+                @Override public boolean onTouch(View v, MotionEvent event) {
+                    resizeDetector.onTouchEvent(event);
+                    switch (event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            startX = event.getRawX();
+                            startY = event.getRawY();
+                            downAt = event.getEventTime();
+                            moved = false;
+                            dragging = false;
+                            resizing = false;
+                            resizeChanged = false;
+                            resizeScale = 1f;
+                            tile.postDelayed(startDrag, prefs.getInt(
+                                HomeTileLayout.DRAG_KEY,
+                                HomeTileLayout.DEFAULT_DRAG_MS));
+                            return true;
+                        case MotionEvent.ACTION_POINTER_DOWN:
+                            tile.removeCallbacks(startDrag);
+                            moved = true;
+                            dragging = false;
+                            resizing = event.getPointerCount() >= 2;
+                            resizeChanged = false;
+                            resizeScale = 1f;
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            if (resizing) return true;
+                            if (Math.abs(event.getRawX() - startX)
+                                    > ViewConfiguration.get(MainActivity.this)
+                                        .getScaledTouchSlop()
+                                    || Math.abs(event.getRawY() - startY)
+                                    > ViewConfiguration.get(MainActivity.this)
+                                        .getScaledTouchSlop()) {
+                                moved = true;
+                                tile.removeCallbacks(startDrag);
+                            }
+                            return true;
+                        case MotionEvent.ACTION_POINTER_UP:
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                            tile.removeCallbacks(startDrag);
+                            if (resizing) {
+                                finishResize();
+                                return true;
+                            }
+                            if (!moved && !dragging) {
+                                int shortMs = prefs.getInt(HomeTileLayout.SHORT_KEY,
+                                    HomeTileLayout.DEFAULT_SHORT_MS);
+                                int dragMs = prefs.getInt(HomeTileLayout.DRAG_KEY,
+                                    HomeTileLayout.DEFAULT_DRAG_MS);
+                                long heldMs = event.getEventTime() - downAt;
+                                if (HomeTileLayout.openMenuOnRelease(
+                                        heldMs, shortMs, dragMs)
+                                        || heldMs >= dragMs)
+                                    showTileActions(tile, tileId);
+                                else tile.performClick();
+                            }
+                            return true;
+                        case MotionEvent.ACTION_CANCEL:
+                            tile.removeCallbacks(startDrag);
+                            resizing = false;
+                            resizeChanged = false;
+                            return true;
+                        default:
+                            return false;
+                    }
+                }
             });
             tile.setOnDragListener((v, event) -> {
                 if (event.getAction() == DragEvent.ACTION_DRAG_STARTED)
@@ -540,45 +1729,263 @@ public final class MainActivity extends Activity {
             });
         }
 
+        if (homeShowcaseSlideDirection != 0) {
+            int direction = homeShowcaseSlideDirection;
+            homeShowcaseSlideDirection = 0;
+            tiles.setTranslationX(dp(42) * direction);
+            tiles.setAlpha(0.80f);
+            tiles.animate().translationX(0f).alpha(1f)
+                .setDuration(150L).start();
+        }
+        addShowcasePageDots(showcasePageCount);
+        if (!skin.showcase() || homeEditMode) {
+            LinearLayout homeControls = compactActionRow();
+            compactAction(homeControls, "＋ Kafelek", this::showAddTileDialog);
+            if (!homeEditMode)
+                compactAction(homeControls, "✥ Układ", () -> {
+                    homeEditMode = true;
+                    adoptShowcaseOrderForEditing();
+                    render();
+                });
+            if (!hiddenHomeTiles().isEmpty())
+                compactAction(homeControls, "◉ Ukryte", this::restoreHiddenHomeTile);
+        }
+
         LinearLayout today = card();
-        today.addView(text("Najbliższe czynności", 19, true));
+        today.setPadding(dp(9), dp(5), dp(9), dp(5));
+        today.addView(text(skin.showcase()
+            ? "Najbliższe zadanie" : "Najbliższa czynność", 13, true));
         int displayed = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
                 "SELECT title,due_date FROM tasks WHERE done=0 AND due_date IS NOT NULL "
-                + "ORDER BY due_date ASC,id ASC LIMIT 4", null)) {
+                + "ORDER BY due_date ASC,id ASC LIMIT 1", null)) {
             while (c.moveToNext()) {
                 displayed++;
-                today.addView(text("• " + c.getString(1) + " — " + c.getString(0), 14, false));
+                if (skin.showcase()) {
+                    LinearLayout row = new LinearLayout(this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setGravity(Gravity.CENTER_VERTICAL);
+                    row.setPadding(dp(8), dp(6), dp(8), dp(6));
+                    row.setBackground(skin.panel(this, skin.tileTop, 20));
+                    TextView check = text("○", 22, false);
+                    check.setGravity(Gravity.CENTER);
+                    check.setTextColor(accent);
+                    row.addView(check, new LinearLayout.LayoutParams(dp(36), dp(46)));
+                    LinearLayout labels = new LinearLayout(this);
+                    labels.setOrientation(LinearLayout.VERTICAL);
+                    TextView task = text(c.getString(0), 14, true);
+                    task.setPadding(0, 0, 0, 0);
+                    labels.addView(task);
+                    TextView when = text(c.getString(1), 12, false);
+                    when.setTextColor(subdued);
+                    when.setPadding(0, 0, 0, 0);
+                    labels.addView(when);
+                    row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+                    TextView arrow = text("›", 24, false);
+                    arrow.setGravity(Gravity.CENTER);
+                    row.addView(arrow, new LinearLayout.LayoutParams(dp(30), dp(46)));
+                    row.setOnClickListener(v -> go("tasks"));
+                    touchFeedback(row);
+                    LinearLayout.LayoutParams taskParams =
+                        new LinearLayout.LayoutParams(-1, -2);
+                    taskParams.setMargins(0, dp(4), 0, dp(4));
+                    today.addView(row, taskParams);
+                } else {
+                    today.addView(text("• " + c.getString(1) + " — "
+                        + c.getString(0), 14, false));
+                }
             }
         }
         if (displayed == 0)
             today.addView(text("Brak zaplanowanych terminów.", 14, false));
-        smallButton(today, "Minutniki urządzeń →", () -> go("timers"));
-        smallButton(today, "Lista zakupów →", () -> go("shopping"));
-        smallButton(today, "PayCheck • wspólny budżet →", () -> go("paycheck"));
-        smallButton(today, "Odpady i terminy wystawienia →", () -> go("waste"));
-        smallButton(today, "Zobacz wszystkie czynności →", () -> {
-            tasksFilter = "all";
-            go("tasks");
-        });
-        if (DiagnosticLog.enabled())
-            button("Diagnostyka BETA", () -> go("diagnostics"));
-        note("Działa offline. Przypomnienia włączysz w Ustawieniach; skaner "
-            + "i synchronizacja są w kolejnych etapach.");
+        if (!skin.showcase())
+            note("Działa offline. Skaner EDHOME obsługuje QR, NFC i kody produktów; "
+                + "przypomnienia włączysz w Ustawieniach.");
+    }
+
+    private void ensureFloorPlanShellTileSeeded() {
+        if (prefs.getBoolean("floorplan_shell_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            releaseFeaturesEnabled());
+        boolean present = false;
+        for (String tileId : order) {
+            String target = prefs.getString("tile_target_" + tileId,
+                HomeTileCatalog.defaultTarget(tileId));
+            if ("floorplan".equals(target)) {
+                present = true;
+                break;
+            }
+        }
+        if (!present && !order.contains("floorplan")) order.add("floorplan");
+        SharedPreferences.Editor edit = prefs.edit()
+            .putBoolean("floorplan_shell_seeded_v1", true);
+        if (!present)
+            edit.putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order));
+        if (edit.commit())
+            DiagnosticLog.event("FLOORPLAN_SHELL_TILE_SEEDED");
+    }
+
+    private void ensureScannerTileSeeded() {
+        if (prefs.getBoolean("scanner_tile_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            releaseFeaturesEnabled());
+        boolean present = false;
+        for (String tileId : order) {
+            String target = prefs.getString("tile_target_" + tileId,
+                HomeTileCatalog.defaultTarget(tileId));
+            if ("scanner".equals(target)) {
+                present = true;
+                break;
+            }
+        }
+        if (!present && !order.contains("scanner")) {
+            int storageAt = order.indexOf("storage");
+            if (storageAt < 0) order.add("scanner");
+            else order.add(storageAt, "scanner");
+        }
+        SharedPreferences.Editor edit = prefs.edit()
+            .putBoolean("scanner_tile_seeded_v1", true);
+        if (!present)
+            edit.putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order));
+        if (edit.commit())
+            DiagnosticLog.event("SCANNER_TILE_SEEDED");
+    }
+
+    private String homeTileTarget(String id) {
+        String target = prefs.getString("tile_target_" + id,
+            HomeTileCatalog.defaultTarget(id));
+        return HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
+            ? target : "tasks";
     }
 
     private String defaultHomeTileLabel(String id) {
-        int index = java.util.Arrays.asList(HOME_TILE_IDS).indexOf(id);
-        String[] labels = {"Czynności", "Kalendarz", "Miejsca",
-            "Spiżarnia", "Remanent", "Aktualizacje",
-            "Kopia danych", "Ustawienia", "Na dziś"};
-        if (index < 0) throw new IllegalArgumentException("Unknown tile ID");
-        return labels[index];
+        return HomeTileCatalog.label(homeTileTarget(id));
     }
 
     private String homeTileLabel(String id) {
         String label = prefs.getString("tile_label_" + id, defaultHomeTileLabel(id));
         return label.trim().isEmpty() ? defaultHomeTileLabel(id) : label;
+    }
+
+    private void openHomeTile(String id) {
+        String target = homeTileTarget(id);
+        if ("diagnostics".equals(target) && !DiagnosticLog.enabled()) {
+            alert("Diagnostyka jest dostępna wyłącznie w Beta.");
+            return;
+        }
+        if ("paycheck_private".equals(target)) {
+            openPrivatePaycheck();
+            return;
+        }
+        if ("tasks".equals(target) || "today".equals(target)) {
+            tasksFilter = "today".equals(target) ? "today" : "all";
+            go("tasks");
+            return;
+        }
+        go(target);
+    }
+
+    /** A target may occur at most once across visible AND hidden tiles.
+     * Existing duplicate tiles from older versions are left untouched.
+     */
+    private boolean homeTargetAlreadyAdded(String target,String excludedTileId) {
+        for(String tileId:allHomeTiles()) {
+            if(tileId.equals(excludedTileId))continue;
+            if(homeTileTarget(tileId).equals(target))return true;
+        }
+        return false;
+    }
+
+    private void showAddTileDialog() {
+        java.util.List<String> targets = new java.util.ArrayList<>();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (String target : HomeTileCatalog.TARGETS) {
+            if (!HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
+                    || homeTargetAlreadyAdded(target,null))
+                continue;
+            targets.add(target);
+            names.add(HomeTileCatalog.label(target));
+        }
+        if(targets.isEmpty()) {
+            alert("Wszystkie dostępne moduły mają już kafelki. "
+                + "Jeśli nie widzisz któregoś na pulpicie, użyj „Przywróć ukryte kafelki”.");
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Dodaj kafelek — wybierz cel")
+            .setItems(names.toArray(new String[0]), (dialog, which) -> {
+                String target=targets.get(which);
+                // Recheck after opening the dialog; do not trust stale UI choices.
+                if(homeTargetAlreadyAdded(target,null)) {
+                    alert("Ten moduł ma już kafelek. "
+                        + "Możesz przywrócić ukryty kafelek lub edytować istniejący.");
+                    return;
+                }
+                String id = "tile_" + java.util.UUID.randomUUID().toString()
+                    .replace("-", "");
+                java.util.List<String> order = allHomeTiles();
+                order.add(id);
+                boolean ok = prefs.edit()
+                    .putString("tile_target_" + id, target)
+                    .putString(HomeTileCatalog.ORDER_KEY,
+                        HomeTileCatalog.encode(order)).commit();
+                if (!ok) { alert("Nie można zapisać kafelka."); return; }
+                DiagnosticLog.event("HOME_TILE_ADDED");
+                render();
+                editHomeTile(id);
+            }).setNegativeButton("Anuluj", null).show();
+    }
+
+    private void restoreHiddenHomeTile() {
+        java.util.List<String> hidden = hiddenHomeTiles();
+        String[] names = new String[hidden.size()];
+        for (int i = 0; i < hidden.size(); i++)
+            names[i] = homeTileLabel(hidden.get(i));
+        new AlertDialog.Builder(this).setTitle("Przywróć kafelek")
+            .setItems(names, (dialog, which) -> {
+                hidden.remove(which);
+                if (!prefs.edit().putString("home_tiles_v2_hidden",
+                        HomeTileCatalog.encode(hidden)).commit()) {
+                    alert("Nie udało się przywrócić kafelka.");
+                    return;
+                }
+                DiagnosticLog.event("HOME_TILE_RESTORED");
+                render();
+            }).setNegativeButton("Anuluj", null).show();
+    }
+
+    private void hideHomeTile(String id) {
+        java.util.List<String> order = allHomeTiles();
+        if (!order.contains(id)) return;
+        java.util.List<String> hidden = hiddenHomeTiles();
+        if (!hidden.contains(id)) hidden.add(id);
+        boolean saved = prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .putString("home_tiles_v2_hidden",
+                HomeTileCatalog.encode(hidden)).commit();
+        if (!saved) { alert("Nie można ukryć kafelka."); return; }
+        DiagnosticLog.event("HOME_TILE_HIDDEN");
+        render();
+    }
+
+    private void removeHomeTile(String id) {
+        java.util.List<String> order = allHomeTiles();
+        if (!order.remove(id)) return;
+        java.util.List<String> hidden = hiddenHomeTiles();
+        hidden.remove(id);
+        boolean saved = prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .putString("home_tiles_v2_hidden",
+                HomeTileCatalog.encode(hidden))
+            .remove("tile_target_" + id).remove("tile_label_" + id)
+            .remove("tile_tint_" + id).remove("tile_icon_" + id)
+            .remove("tile_width_" + id).commit();
+        if (!saved) { alert("Nie można usunąć skrótu."); return; }
+        DiagnosticLog.event("HOME_TILE_REMOVED");
+        render();
     }
 
     private boolean isHomeTileDrag(DragEvent event) {
@@ -589,20 +1996,22 @@ public final class MainActivity extends Activity {
     }
 
     private boolean beginHomeDrag(View tile, String id) {
-        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)
+        if (skin.showcase() && !homeEditMode) return false;
+        if (!homeTileOrder().contains(id)
                 || homeTileGrid == null || homeDragSource != null) return false;
         homeDragOrder = homeTileOrder();
         homeTileSlots.clear();
-        for (String item : homeDragOrder) {
+        for (String item : homeTileViews.keySet()) {
             View child = homeTileViews.get(item);
             if (child == null || !(child.getParent() instanceof View))
-                return false;
+                continue;
             View row = (View) child.getParent();
             homeTileSlots.put(item, new int[]{
                 child.getLeft() + row.getLeft(),
                 child.getTop() + row.getTop()
             });
         }
+        if (homeTileSlots.isEmpty()) return false;
         homeDragSource = id;
         homeDragTargetIndex = homeDragOrder.indexOf(id);
         homeDragDropped = false;
@@ -632,59 +2041,136 @@ public final class MainActivity extends Activity {
 
     private void previewHomeDragAt(LinearLayout grid, float x, float y) {
         if (homeDragSource == null || homeDragOrder == null
-                || homeTileSlots.size() != HOME_TILE_IDS.length) return;
+                || homeTileSlots.isEmpty()) return;
+
+        int edge = dp(34);
+        java.util.List<java.util.List<String>> pages = homePages(homeDragOrder);
+        if (grid.getWidth() > edge * 2) {
+            if (x <= edge && homeShowcasePage > 0) {
+                previewHomeDragPageEdge(-1);
+                return;
+            }
+            if (x >= grid.getWidth() - edge
+                    && homeShowcasePage + 1 < pages.size()) {
+                previewHomeDragPageEdge(1);
+                return;
+            }
+        }
+
         int nearest = -1;
         double best = Double.MAX_VALUE;
-        for (int i = 0; i < homeDragOrder.size(); i++) {
-            String id = homeDragOrder.get(i);
+        for (String id : homeTileViews.keySet()) {
             int[] slot = homeTileSlots.get(id);
             View tile = homeTileViews.get(id);
+            int globalIndex = homeDragOrder.indexOf(id);
+            if (slot == null || tile == null || globalIndex < 0) continue;
             double dx = x - (slot[0] + tile.getWidth() / 2.0);
             double dy = y - (slot[1] + tile.getHeight() / 2.0);
             double distance = dx * dx + dy * dy;
             if (distance < best) {
                 best = distance;
-                nearest = i;
+                nearest = globalIndex;
             }
         }
-        previewHomeTilePlacement(nearest);
+        if (nearest >= 0) previewHomeTilePlacement(nearest);
+    }
+
+    private void previewHomeDragPageEdge(int delta) {
+        if (homeDragSource == null || homeDragOrder == null || delta == 0) return;
+        java.util.List<java.util.List<String>> pages = homePages(homeDragOrder);
+        int targetPage = homeShowcasePage + delta;
+        if (targetPage < 0 || targetPage >= pages.size()) return;
+        int target = homePageInsertionSlot(
+            homeDragOrder, homeDragSource, targetPage, delta > 0);
+        if (target < 0) return;
+
+        for (View tile : homeTileViews.values()) {
+            tile.animate().cancel();
+            tile.setTranslationX(0f);
+            tile.setTranslationY(0f);
+            tile.setAlpha(1f);
+            tile.setScaleX(1f);
+            tile.setScaleY(1f);
+        }
+        View draggedTile = homeTileViews.get(homeDragSource);
+        if (draggedTile != null) {
+            draggedTile.setAlpha(0.34f);
+            draggedTile.setScaleX(1.04f);
+            draggedTile.setScaleY(1.04f);
+        }
+        homeDragTargetIndex = target;
+        homeDragTargetPage = targetPage;
+        if (homeDragHint != null) {
+            homeDragHint.setText((delta > 0 ? "→" : "←")
+                + "  Upuść przy krawędzi: przenieś na stronę "
+                + (targetPage + 1) + " • " + homeTileLabel(homeDragSource));
+            homeDragHint.setTextColor(accent);
+        }
     }
 
     /** Preview and final save use the exact same insertion index. */
     private void previewHomeTilePlacement(int slot) {
         if (homeDragSource == null || homeDragOrder == null
-                || slot < 0 || slot >= HOME_TILE_IDS.length
+                || slot < 0 || slot >= homeDragOrder.size()
                 || slot == homeDragTargetIndex && homeDragDropped) return;
-        if (slot == homeDragTargetIndex
-                && homeTileViews.get(homeDragSource).getAlpha() < 1f) return;
-        java.util.List<String> next = HomeTileOrder.moved(
-            homeDragOrder, homeDragSource, slot);
-        for (int i = 0; i < next.size(); i++) {
-            String id = next.get(i);
+        View draggedTile = homeTileViews.get(homeDragSource);
+        if (draggedTile == null) {
+            DiagnosticLog.event("HOME_TILE_DRAG_INVALID",
+                "reason=missing_view count=" + homeDragOrder.size());
+            resetHomeDragPreview();
+            return;
+        }
+        final java.util.List<String> next;
+        try {
+            next = HomeTileCatalog.moved(homeDragOrder, homeDragSource, slot);
+        } catch (IllegalArgumentException error) {
+            DiagnosticLog.event("HOME_TILE_DRAG_INVALID",
+                "reason=invalid_order count=" + homeDragOrder.size()
+                + " slot=" + slot);
+            resetHomeDragPreview();
+            return;
+        }
+
+        for (View tile : homeTileViews.values()) {
+            tile.animate().cancel();
+            tile.setTranslationX(0f);
+            tile.setTranslationY(0f);
+            tile.setAlpha(1f);
+            tile.setScaleX(1f);
+            tile.setScaleY(1f);
+        }
+
+        java.util.List<String> visible =
+            new java.util.ArrayList<>(homeTileViews.keySet());
+        java.util.List<java.util.List<String>> nextPages = homePages(next);
+        java.util.List<String> targetVisible = homeShowcasePage < nextPages.size()
+            ? nextPages.get(homeShowcasePage) : java.util.Collections.emptyList();
+        for (int local = 0; local < visible.size()
+                && local < targetVisible.size(); local++) {
+            String id = targetVisible.get(local);
             View tile = homeTileViews.get(id);
             int[] old = homeTileSlots.get(id);
-            int[] target = homeTileSlots.get(homeDragOrder.get(i));
+            int[] target = homeTileSlots.get(visible.get(local));
             if (tile == null || old == null || target == null) continue;
-            tile.animate().cancel();
-            if (id.equals(homeDragSource)) {
-                tile.setAlpha(0.34f); // Visible placeholder: NEVER hide a tile.
-                tile.setScaleX(1.04f);
-                tile.setScaleY(1.04f);
-            } else {
-                tile.setAlpha(1f);
-                tile.setScaleX(1f);
-                tile.setScaleY(1f);
-            }
             tile.animate()
                 .translationX(target[0] - old[0])
                 .translationY(target[1] - old[1])
                 .setDuration(140)
                 .start();
         }
+        draggedTile.setAlpha(0.34f);
+        draggedTile.setScaleX(1.04f);
+        draggedTile.setScaleY(1.04f);
         homeDragTargetIndex = slot;
+        homeDragTargetPage = -1;
         if (homeDragHint != null) {
-            homeDragHint.setText("✥  Upuść tutaj: pozycja "
-                + (slot + 1) + " z 9 • " + homeTileLabel(homeDragSource));
+            int page = homePageOf(nextPages, homeDragSource);
+            int position = page < 0 ? 0
+                : nextPages.get(page).indexOf(homeDragSource);
+            homeDragHint.setText("✥  Upuść: strona "
+                + (Math.max(0, page) + 1) + " • pozycja "
+                + (Math.max(0, position) + 1)
+                + " • " + homeTileLabel(homeDragSource));
             homeDragHint.setTextColor(accent);
         }
     }
@@ -708,10 +2194,27 @@ public final class MainActivity extends Activity {
         homeTileGrid.post(() -> {
             String source = homeDragSource;
             int slot = homeDragTargetIndex;
+            int targetPage = homeDragTargetPage;
+            int oldPage = homeShowcasePage;
             boolean save = homeDragDropped;
+            java.util.List<String> original = homeDragOrder == null ? null
+                : new java.util.ArrayList<>(homeDragOrder);
             resetHomeDragPreview();
-            if (save && source != null && slot >= 0)
-                moveHomeTileAtIndex(source, slot);
+            if (save && source != null && slot >= 0) {
+                if (original == null || !original.equals(homeTileOrder())) {
+                    DiagnosticLog.event("HOME_TILE_DRAG_STALE");
+                    render(); // Never overwrite an order changed during dragging.
+                } else {
+                    if (targetPage >= 0) {
+                        homeShowcasePage = targetPage;
+                        homeShowcaseSlideDirection =
+                            Integer.compare(targetPage, oldPage);
+                        DiagnosticLog.event("HOME_TILE_MOVED_BETWEEN_PAGES",
+                            "from=" + (oldPage + 1) + " to=" + (targetPage + 1));
+                    }
+                    moveHomeTileAtIndex(source, slot);
+                }
+            }
         });
     }
 
@@ -728,13 +2231,16 @@ public final class MainActivity extends Activity {
         homeDragSource = null;
         homeDragOrder = null;
         homeDragTargetIndex = -1;
+        homeDragTargetPage = -1;
         homeDragDropped = false;
         homeDragFinishQueued = false;
         homeTileSlots.clear();
         if (homeDragHint != null) {
             homeDragHint.setText(homeEditMode
-                ? "✥  TRYB UKŁADU • przytrzymaj kafelek lub przesuń za uchwyt ⋮⋮"
-                : "✥  Przytrzymaj kafelek: Edytuj / Przesuń • dotknij tutaj, aby układać");
+                ? (skin.showcase()
+                    ? "✥  TRYB UKŁADU • przeciągnij do lewej/prawej krawędzi, aby zmienić stronę"
+                    : "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮")
+                : "✥  Krócej: menu • dłużej: przeciągnij • dotknij: układaj");
             homeDragHint.setTextColor(subdued);
         }
     }
@@ -781,23 +2287,158 @@ public final class MainActivity extends Activity {
         move.setOnClickListener(v -> {
             popup.dismiss();
             homeEditMode = true;
+            adoptShowcaseOrderForEditing();
             render();
             android.widget.Toast.makeText(this,
                 "Przeciągnij kafelek za uchwyt ⋮⋮ lub przytrzymaj kafelek.",
                 android.widget.Toast.LENGTH_LONG).show();
         });
+        if (homeEditMode) {
+            java.util.List<String> pageOrder = homeTileOrder();
+            java.util.List<java.util.List<String>> pageGroups = homePages(pageOrder);
+            int page = homePageOf(pageGroups, id);
+            int pages = pageGroups.size();
+            if (page > 0) {
+                TextView previousPage = text("←  Przenieś na poprzednią stronę", 15, true);
+                previousPage.setPadding(dp(14), dp(12), dp(14), dp(12));
+                previousPage.setBackground(skin.panel(this, skin.tileTop, 18));
+                menu.addView(previousPage);
+                previousPage.setOnClickListener(v -> {
+                    popup.dismiss();
+                    moveHomeTileToAdjacentPage(id, -1);
+                });
+            }
+            if (page + 1 < pages) {
+                TextView nextPage = text("→  Przenieś na następną stronę", 15, true);
+                nextPage.setPadding(dp(14), dp(12), dp(14), dp(12));
+                nextPage.setBackground(skin.panel(this, skin.tileTop, 18));
+                menu.addView(nextPage);
+                nextPage.setOnClickListener(v -> {
+                    popup.dismiss();
+                    moveHomeTileToAdjacentPage(id, 1);
+                });
+            }
+        }
+        TextView hide = text("◉  Ukryj kafelek", 16, true);
+        hide.setPadding(dp(14), dp(13), dp(14), dp(13));
+        hide.setBackground(skin.panel(this, skin.tileTop, 18));
+        menu.addView(hide);
+        hide.setOnClickListener(v -> {
+            popup.dismiss();
+            hideHomeTile(id);
+        });
+        TextView remove = text("−  Usuń skrót z panelu", 16, true);
+        remove.setPadding(dp(14), dp(13), dp(14), dp(13));
+        remove.setBackground(skin.panel(this, skin.tileTop, 18));
+        menu.addView(remove);
+        remove.setOnClickListener(v -> {
+            popup.dismiss();
+            new AlertDialog.Builder(this).setTitle("Usunąć kafelek?")
+                .setMessage("Usuniemy tylko skrót, a nie dane ani moduł.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton("Usuń skrót", (d, which) ->
+                    removeHomeTile(id)).show();
+        });
         popup.showAsDropDown(anchor, 0, -dp(14));
         DiagnosticLog.event("HOME_TILE_ACTIONS_OPENED");
     }
 
+    private String defaultTileIcon(String target) {
+        return "ai3d".equals(prefs.getString("icon_style", "standard"))
+            && IconPack3D.installed(this) ? IconPack3D.defaultFor(target)
+            : HomeTileCatalog.icon(target);
+    }
+
+    /** AI PNG/WebP files can contain transparent gutters. Trim those gutters
+     * so FIT_CENTER scales the artwork, not the empty bitmap margins.
+     * Retain a 2-pixel safety edge to avoid clipping soft 3D shadows.
+     */
+    private Bitmap trim3dTransparentMargins(Bitmap image) {
+        if (image == null || !image.hasAlpha()) return image;
+        int width = image.getWidth(), height = image.getHeight();
+        int left = width, top = height, right = -1, bottom = -1;
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                if (Color.alpha(image.getPixel(x, y)) > 5) {
+                    left = Math.min(left, x);
+                    top = Math.min(top, y);
+                    right = Math.max(right, x);
+                    bottom = Math.max(bottom, y);
+                }
+        if (right < left || bottom < top) return image;
+        left = Math.max(0, left - 2);
+        top = Math.max(0, top - 2);
+        right = Math.min(width - 1, right + 2);
+        bottom = Math.min(height - 1, bottom + 2);
+        if (left == 0 && top == 0 && right == width - 1
+                && bottom == height - 1) return image;
+        return Bitmap.createBitmap(image, left, top,
+            right - left + 1, bottom - top + 1);
+    }
+
+    private View tileIconImage(String iconId, int size, boolean highlighted) {
+        if (TileCustomImage.available(this, iconId)) {
+            android.graphics.Bitmap image = TileCustomImage.bitmap(this, iconId);
+            if (image != null) {
+                ImageView graphic = new ImageView(this);
+                graphic.setImageBitmap(image);
+                graphic.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                graphic.setBackground(skin.panel(this, skin.iconBacking, 24));
+                return graphic;
+            }
+        }
+        if (IconPack3D.known(this, iconId)) {
+            android.graphics.Bitmap image = IconPack3D.bitmap(this, iconId);
+            if (image != null) {
+                ImageView graphic = new ImageView(this);
+                graphic.setImageBitmap(trim3dTransparentMargins(image));
+                graphic.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                graphic.setContentDescription("Ikona 3D");
+                return graphic;
+            }
+        }
+        TileIcon graphic = new TileIcon(this, iconId,
+            highlighted && skin.light ? skin.accentInk : accent);
+        graphic.setPadding(dp(Math.max(2, size / 16)),
+            dp(Math.max(2, size / 16)),
+            dp(Math.max(2, size / 16)),
+            dp(Math.max(2, size / 16)));
+        graphic.setBackground(skin.panel(this, skin.iconBacking, 24));
+        return graphic;
+    }
+
+    private void importAi3dIconPack() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("application/zip");
+        picker.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+            "application/zip", "application/x-zip-compressed",
+            "application/octet-stream"});
+        try { startActivityForResult(picker, IMPORT_AI_3D_PACK); }
+        catch (Exception failed) { alert("Nie można otworzyć wyboru paczki ZIP."); }
+    }
+
     private void editHomeTile(String id) {
-        if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)) return;
+        if (!homeTileOrder().contains(id)) return;
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20), dp(16), dp(20), dp(8));
         form.addView(text("Edytuj kafelek", 21, true));
-        form.addView(text("Zmieniasz wyłącznie wygląd. Moduł, dane "
-            + "i działanie pozostają bez zmian.", 13, false));
+        form.addView(text("Możesz zmienić cel tego skrótu bez zmiany danych modułu.", 13, false));
+        form.addView(text("Co otwiera kafelek", 15, true));
+        java.util.List<String> targets = new java.util.ArrayList<>();
+        java.util.List<String> targetLabels = new java.util.ArrayList<>();
+        for (String target : HomeTileCatalog.TARGETS) {
+            if (!HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
+                    || (!target.equals(homeTileTarget(id))
+                        && homeTargetAlreadyAdded(target,id)))continue;
+            targets.add(target);
+            targetLabels.add(HomeTileCatalog.label(target));
+        }
+        Spinner destination = new Spinner(this);
+        destination.setAdapter(themeSpinnerAdapter(targetLabels));
+        destination.setSelection(Math.max(0, targets.indexOf(homeTileTarget(id))));
+        form.addView(destination);
         form.addView(text("Podpis (maks. 24 znaki)", 15, true));
         EditText label = new EditText(this);
         label.setSingleLine(true);
@@ -816,13 +2457,69 @@ public final class MainActivity extends Activity {
             java.util.Arrays.asList(codes).indexOf(selected)));
         form.addView(color);
         form.addView(text("Ikona — wybierz z lokalnej biblioteki", 15, true));
+        java.util.List<String> iconIds = new java.util.ArrayList<>();
+        java.util.List<String> iconNames = new java.util.ArrayList<>();
+        for (int i = 0; i < TileIcon.ICON_IDS.length; i++) {
+            iconIds.add(TileIcon.ICON_IDS[i]);
+            iconNames.add("Standard • " + TileIcon.ICON_NAMES[i]);
+        }
+        for (IconPack3D.Option available : IconPack3D.options(this)) {
+            iconIds.add(available.id);
+            iconNames.add(available.title);
+        }
+        if (TileCustomImage.available(this, TileCustomImage.key(id))) {
+            iconIds.add(TileCustomImage.key(id));
+            iconNames.add("Moja ikona • PNG/WebP");
+        }
+        // Search in the entire local library, keeping stable IDs on save.
+        // Filtering must never rebuild the underlying screen or reset scroll.
+        final java.util.List<String> filteredIconIds =
+            new java.util.ArrayList<>(iconIds);
+        final java.util.List<String> filteredIconNames =
+            new java.util.ArrayList<>(iconNames);
+        EditText iconSearch = new EditText(this);
+        iconSearch.setSingleLine(true);
+        iconSearch.setHint("Szukaj ikony, np. garaż, auto, pralka, finanse");
+        iconSearch.setTextColor(ink);
+        iconSearch.setHintTextColor(subdued);
+        form.addView(iconSearch);
         Spinner icon = new Spinner(this);
-        icon.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList(TileIcon.ICON_NAMES)));
-        String previousIcon = prefs.getString("tile_icon_" + id, id);
-        icon.setSelection(Math.max(0,
-            java.util.Arrays.asList(TileIcon.ICON_IDS).indexOf(previousIcon)));
+        icon.setAdapter(themeSpinnerAdapter(filteredIconNames));
+        String previousIcon = prefs.getString("tile_icon_" + id,
+            defaultTileIcon(homeTileTarget(id)));
+        icon.setSelection(Math.max(0, filteredIconIds.indexOf(previousIcon)));
         form.addView(icon);
+        TextView iconMatches = text("Dostępne ikony: "
+            + filteredIconIds.size(), 13, false);
+        form.addView(iconMatches);
+        Button ownIcon = new Button(this);
+        ownIcon.setText("Dodaj własną ikonę PNG / WebP");
+        ownIcon.setAllCaps(false);
+        form.addView(ownIcon);
+        final AlertDialog[] tileDialog = new AlertDialog[1];
+        ownIcon.setOnClickListener(v -> {
+            pendingCustomTileId = id;
+            if (tileDialog[0] != null) tileDialog[0].dismiss();
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            picker.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"image/png", "image/webp"});
+            try { startActivityForResult(picker, IMPORT_CUSTOM_TILE_ICON); }
+            catch (Exception failure) {
+                pendingCustomTileId = null;
+                alert("Nie można wybrać własnej ikony.");
+            }
+        });
+        form.addView(text("Rozmiar kafelka", 15, true));
+        String[] sizeLabels = {"Mały (1 pole)", "Podwójny (2 pola)"};
+        String[] sizeValues = {"small", "double"};
+        Spinner size = new Spinner(this);
+        size.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(sizeLabels)));
+        size.setSelection("double".equals(
+            prefs.getString("tile_width_" + id, "small")) ? 1 : 0);
+        form.addView(size);
         LinearLayout previewFrame = new LinearLayout(this);
         previewFrame.setGravity(Gravity.CENTER);
         previewFrame.setPadding(0, dp(9), 0, dp(9));
@@ -832,14 +2529,50 @@ public final class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> p,
                     View view, int position, long rowId) {
                 previewFrame.removeAllViews();
-                TileIcon pictogram = new TileIcon(MainActivity.this,
-                    TileIcon.ICON_IDS[position], accent);
-                pictogram.setPadding(dp(8), dp(8), dp(8), dp(8));
-                pictogram.setBackground(skin.panel(MainActivity.this,
-                    skin.iconBacking, 24));
+                if (position < 0 || position >= filteredIconIds.size()) return;
+                View pictogram = tileIconImage(
+                    filteredIconIds.get(position), 88, false);
                 previewFrame.addView(pictogram,
-                    new LinearLayout.LayoutParams(dp(64), dp(64)));
+                    new LinearLayout.LayoutParams(dp(88), dp(88)));
             }
+        });
+        iconSearch.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text,
+                    int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence text,
+                    int start, int before, int count) {
+                String selectedId = icon.getSelectedItemPosition() >= 0
+                    && icon.getSelectedItemPosition() < filteredIconIds.size()
+                    ? filteredIconIds.get(icon.getSelectedItemPosition())
+                    : previousIcon;
+                String query = java.text.Normalizer.normalize(
+                    text.toString().trim().toLowerCase(java.util.Locale.ROOT),
+                    java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
+                filteredIconIds.clear();
+                filteredIconNames.clear();
+                for (int i = 0; i < iconIds.size(); i++) {
+                    String textName = java.text.Normalizer.normalize(
+                        (iconNames.get(i) + " " + iconIds.get(i))
+                            .toLowerCase(java.util.Locale.ROOT),
+                        java.text.Normalizer.Form.NFD)
+                        .replaceAll("\\p{M}+", "");
+                    if (textName.contains(query)) {
+                        filteredIconIds.add(iconIds.get(i));
+                        filteredIconNames.add(iconNames.get(i));
+                    }
+                }
+                icon.setAdapter(themeSpinnerAdapter(filteredIconNames));
+                int selected = filteredIconIds.indexOf(selectedId);
+                if (selected < 0) selected = filteredIconIds.indexOf(previousIcon);
+                if (selected >= 0) icon.setSelection(selected);
+                else if (!filteredIconIds.isEmpty()) icon.setSelection(0);
+                iconMatches.setText(filteredIconIds.isEmpty()
+                    ? "Brak pasujących ikon. Zmień wyszukiwanie."
+                    : "Znaleziono ikon: " + filteredIconIds.size());
+                if (filteredIconIds.isEmpty()) previewFrame.removeAllViews();
+            }
+            @Override public void afterTextChanged(
+                    android.text.Editable text) { }
         });
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setView(form)
@@ -847,6 +2580,7 @@ public final class MainActivity extends Activity {
             .setNeutralButton("Przywróć wygląd", null)
             .setPositiveButton("Zapisz", null)
             .create();
+        tileDialog[0] = dialog;
         dialog.setOnShowListener(ignore -> {
             dialog.getWindow().setBackgroundDrawable(skin.panel(this, surface, 28));
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -857,18 +2591,37 @@ public final class MainActivity extends Activity {
                         label.setError("Wpisz od 1 do 24 znaków.");
                         return;
                     }
-                    SharedPreferences.Editor change = prefs.edit();
-                    if (newLabel.equals(defaultHomeTileLabel(id)))
+                    String target = targets.get(destination.getSelectedItemPosition());
+                    if(!target.equals(homeTileTarget(id))
+                            && homeTargetAlreadyAdded(target,id)) {
+                        alert("Ten moduł jest już przypisany do innego kafelka.");
+                        return;
+                    }
+                    SharedPreferences.Editor change = prefs.edit()
+                        .putString("tile_target_" + id, target);
+                    if (newLabel.equals(HomeTileCatalog.label(target)))
                         change.remove("tile_label_" + id);
                     else change.putString("tile_label_" + id, newLabel);
                     String code = codes[color.getSelectedItemPosition()];
                     if ("default".equals(code)) change.remove("tile_tint_" + id);
                     else change.putString("tile_tint_" + id, code);
-                    String iconId = TileIcon.ICON_IDS[
-                        icon.getSelectedItemPosition()];
-                    if (id.equals(iconId)) change.remove("tile_icon_" + id);
+                    int selectedIconIndex = icon.getSelectedItemPosition();
+                    if (selectedIconIndex < 0
+                            || selectedIconIndex >= filteredIconIds.size()) {
+                        iconSearch.setError("Wyszukaj i wybierz ikonę.");
+                        return;
+                    }
+                    String iconId = filteredIconIds.get(selectedIconIndex);
+                    if (defaultTileIcon(target).equals(iconId))
+                        change.remove("tile_icon_" + id);
                     else change.putString("tile_icon_" + id, iconId);
-                    change.apply();
+                    String tileSize = sizeValues[size.getSelectedItemPosition()];
+                    if ("small".equals(tileSize)) change.remove("tile_width_" + id);
+                    else change.putString("tile_width_" + id, tileSize);
+                    if (!change.commit()) {
+                        alert("Nie udało się zapisać ustawień kafelka.");
+                        return;
+                    }
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_SAVED");
                     dialog.dismiss();
                     render();
@@ -877,7 +2630,8 @@ public final class MainActivity extends Activity {
                 .setOnClickListener(v -> {
                     prefs.edit().remove("tile_label_" + id)
                         .remove("tile_tint_" + id)
-                        .remove("tile_icon_" + id).apply();
+                        .remove("tile_icon_" + id)
+                        .remove("tile_width_" + id).apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_RESET");
                     dialog.dismiss();
                     render();
@@ -886,17 +2640,34 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
-    /** A validated, persisted nine-tile order; duplicates/unknown IDs are repaired. */
+    /** Keep hidden tile identity and appearance; only visible IDs participate in drag. */
+    private java.util.List<String> allHomeTiles() {
+        return HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            releaseFeaturesEnabled());
+    }
+
+    private java.util.List<String> hiddenHomeTiles() {
+        java.util.List<String> hidden = new java.util.ArrayList<>();
+        String saved = prefs.getString("home_tiles_v2_hidden", "");
+        java.util.List<String> known = allHomeTiles();
+        for (String id : saved.split(",", -1))
+            if (known.contains(id) && !hidden.contains(id)) hidden.add(id);
+        return hidden;
+    }
+
     private java.util.List<String> homeTileOrder() {
-        return HomeTileOrder.canonical(
-            prefs.getString("home_tile_order", ""));
+        java.util.List<String> visible = allHomeTiles();
+        visible.removeAll(hiddenHomeTiles());
+        return visible;
     }
 
     private boolean moveHomeTileAtIndex(String source, int slot) {
         java.util.List<String> before = homeTileOrder();
         final java.util.List<String> next;
         try {
-            next = HomeTileOrder.moved(before, source, slot);
+            next = HomeTileCatalog.moved(before, source, slot);
         } catch (IllegalArgumentException problem) {
             DiagnosticLog.event("HOME_TILE_DRAG_INVALID");
             render();
@@ -906,8 +2677,16 @@ public final class MainActivity extends Activity {
             render(); // Also clears all preview transformations.
             return true;
         }
-        boolean saved = prefs.edit().putString("home_tile_order",
-            android.text.TextUtils.join(",", next)).commit();
+        // Retain hidden shortcuts while persisting the visible order.
+        java.util.List<String> full = allHomeTiles();
+        full.removeAll(next);
+        java.util.List<String> nextFull = new java.util.ArrayList<>(next);
+        nextFull.addAll(full);
+        SharedPreferences.Editor orderEdit = prefs.edit()
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(nextFull));
+        if (skin.showcase())
+            orderEdit.putBoolean("showcase_project_layout", false);
+        boolean saved = orderEdit.commit();
         if (!saved) {
             DiagnosticLog.event("HOME_TILE_DRAG_SAVE_FAILED");
             render();
@@ -916,35 +2695,16 @@ public final class MainActivity extends Activity {
         }
         DiagnosticLog.event("HOME_TILES_REORDERED");
         render();
-        android.widget.Toast.makeText(this, "Zapisano układ 9 kafelków",
+        android.widget.Toast.makeText(this, "Zapisano układ kafelków",
             android.widget.Toast.LENGTH_SHORT).show();
         return true;
     }
 
     private LinearLayout homeTile(LinearLayout grid, String id) {
-        switch (id) {
-            case "tasks": return updateTile(grid, "✓", "Czynności", true, () -> {
-                tasksFilter = "all"; go("tasks");
-            });
-            case "calendar": return updateTile(grid, "▦", "Kalendarz", false,
-                () -> go("calendar"));
-            case "places": return updateTile(grid, "⌂", "Miejsca", false,
-                () -> go("places"));
-            case "pantry": return updateTile(grid, "▣", "Spiżarnia", false,
-                () -> go("pantry"));
-            case "audit": return updateTile(grid, "◫", "Remanent", false,
-                () -> go("audit"));
-            case "updates": return updateTile(grid, "↻", "Aktualizacje", false,
-                () -> go("updates"));
-            case "backup": return updateTile(grid, "▤", "Kopia danych", false,
-                () -> go("backup"));
-            case "settings": return updateTile(grid, "⚙", "Ustawienia", false,
-                () -> go("settings"));
-            case "today": return updateTile(grid, "◷", "Na dziś", false, () -> {
-                tasksFilter = "today"; go("tasks");
-            });
-            default: throw new IllegalArgumentException("Unknown home tile");
-        }
+        String target = homeTileTarget(id);
+        return updateTile(grid, id, "•",
+            HomeTileCatalog.label(target), "tasks".equals(target),
+            () -> openHomeTile(id));
     }
 
     private void members() {
@@ -1336,6 +3096,18 @@ public final class MainActivity extends Activity {
                     row.addView(text("acknowledged".equals(status)
                         ? "✓ Potwierdzono" : "■ Zatrzymano", 13, false));
                 }
+                smallButton(row,"Usuń minutnik",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć minutnik?")
+                        .setMessage(name+"\nWpis zniknie także z historii "
+                            +"minutników.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            DeviceTimerReceiver.cancel(this,id);
+                            db.deleteDeviceTimer(id);
+                            DiagnosticLog.event("DEVICE_TIMER_DELETED");
+                            render();
+                        }).show());
             }
         }
         if (active + finished + past == 0)
@@ -1346,22 +3118,27 @@ public final class MainActivity extends Activity {
 
     private void tasks() {
         header("Czynności • plan i wykonania");
-        note("Czynności mogą działać samodzielnie lub być opcjonalnie przypięte do miejsca.");
-        button("⌂ Miejsca", () -> go("places"));
-        button("◷ Minutniki urządzeń", () -> go("timers"));
-        button("♻ Odpady i wystawianie", () -> go("waste"));
-        button("♙ Domownicy / wykonawcy", () -> go("members"));
-        button("+ Nowa czynność", () -> editTask(null, "", "", "once", 1));
-        button("▦ Kalendarz czynności", () -> go("calendar"));
+
+        LinearLayout row1 = compactActionRow();
+        compactAction(row1, "⌂ Miejsca", () -> go("places"));
+        compactAction(row1, "◷ Minutniki", () -> go("timers"));
+        LinearLayout row2 = compactActionRow();
+        compactAction(row2, "♻ Odpady", () -> go("waste"));
+        compactAction(row2, "♙ Domownicy", () -> go("members"));
+        LinearLayout row3 = compactActionRow();
+        compactAction(row3, "+ Nowa czynność",
+            () -> editTask(null, "", "", "once", 1));
+        compactAction(row3, "▦ Kalendarz", () -> go("calendar"));
+
         note("Zaległe: " + db.overdueTasks()
-            + " • Wykonanie cyklicznej wyznacza kolejny termin.");
+            + " • wykonanie cyklicznej wyznacza kolejny termin.");
+
         HorizontalScrollView filters = new HorizontalScrollView(this);
         filters.setHorizontalScrollBarEnabled(false);
         LinearLayout filterRow = new LinearLayout(this);
         filterRow.setOrientation(LinearLayout.HORIZONTAL);
-        filterRow.setPadding(0, dp(5), 0, dp(8));
         filters.addView(filterRow);
-        body.addView(filters);
+        body.addView(filters, new LinearLayout.LayoutParams(-1, dp(40)));
         for (String[] filter : new String[][] {
             {"all", "Wszystkie"}, {"today", "Dzisiaj"},
             {"overdue", "Zaległe"}, {"upcoming", "Nadchodzące"},
@@ -1369,18 +3146,25 @@ public final class MainActivity extends Activity {
             Button chip = new Button(this);
             chip.setAllCaps(false);
             chip.setText(filter[1]);
+            chip.setTextSize(11);
+            chip.setMinHeight(0);
+            chip.setMinimumHeight(0);
             chip.setTextColor(filter[0].equals(tasksFilter)
                 ? skin.accentInk : ink);
             chip.setBackground(rounded(filter[0].equals(tasksFilter) ? accent : surface));
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48));
-            cp.setMargins(0, 0, dp(8), 0);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(36));
+            cp.setMargins(0, 0, dp(5), 0);
             filterRow.addView(chip, cp);
             chip.setOnClickListener(v -> {
                 tasksFilter = filter[0];
+                tasksPage = 0;
                 render();
             });
         }
-        button("Historia wszystkich wykonań", () -> go("task_history"));
+
+        LinearLayout history = compactActionRow();
+        compactAction(history, "↺ Historia wykonań", () -> go("task_history"));
+
         String today = LocalDate.now().toString();
         String condition;
         String[] args = null;
@@ -1391,18 +3175,40 @@ public final class MainActivity extends Activity {
             case "done": condition = "done=1"; break;
             default: condition = "1=1";
         }
+
+        int total = 0;
+        try (Cursor count = db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM tasks WHERE " + condition, args)) {
+            if (count.moveToFirst()) total = count.getInt(0);
+        }
+        int pages = Math.max(1, (total + 2) / 3);
+        tasksPage = Math.max(0, Math.min(tasksPage, pages - 1));
+
+        int shown = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,title,done,due_date,repeat_rule,repeat_every FROM tasks "
                 + "WHERE " + condition + " ORDER BY done ASC,"
                 + "CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
-                + "due_date ASC,id DESC", args)) {
-            if (cursor.getCount() == 0)
-                note("Brak czynności w tym widoku. Wybierz inny filtr lub dodaj nową.");
+                + "due_date ASC,id DESC LIMIT 3 OFFSET " + (tasksPage * 3), args)) {
             while (cursor.moveToNext()) {
+                shown++;
                 drawTask(cursor.getLong(0), cursor.getString(1), cursor.getInt(2) == 1,
                     cursor.isNull(3) ? "" : cursor.getString(3), cursor.getString(4),
                     cursor.getInt(5));
             }
+        }
+        if (shown == 0)
+            note("Brak czynności w tym widoku. Wybierz filtr lub dodaj nową.");
+
+        if (pages > 1) {
+            LinearLayout pager = compactActionRow();
+            compactAction(pager, "‹", () -> {
+                if (tasksPage > 0) { tasksPage--; render(); }
+            });
+            compactAction(pager, (tasksPage + 1) + " / " + pages, () -> { });
+            compactAction(pager, "›", () -> {
+                if (tasksPage + 1 < pages) { tasksPage++; render(); }
+            });
         }
     }
 
@@ -1410,17 +3216,17 @@ public final class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
-        b.setTextSize(14);
+        b.setTextSize(13);
         boolean onHome = "home".equals(screen);
         b.setTextColor(onHome ? skin.buttonForeground : ink);
         b.setBackground(skin.pill(this, onHome
             ? (skin.light ? 0xFFEFF8F2 : 0xFFEAF5F5) : skin.tileTop));
-        b.setElevation(dp(2));
-        b.setMinHeight(dp(52));
+        b.setElevation(dp(1));
+        b.setMinHeight(dp(40));
         touchFeedback(b);
         b.setOnClickListener(v -> action.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(5), 0, dp(5));
+        params.setMargins(0, dp(2), 0, dp(2));
         container.addView(b, params);
     }
 
@@ -1474,6 +3280,7 @@ public final class MainActivity extends Activity {
         });
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setVisibility(View.GONE);
         box.addView(actions);
         taskAction(actions, "Edytuj", () -> editTask(id, name, due, rule, every));
         taskAction(actions, "Historia", () -> showTaskHistory(id, name));
@@ -1487,14 +3294,25 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event("TASK_DELETED");
                     render();
                 }).show());
+        box.setClickable(true);
+        box.setFocusable(true);
+        box.setContentDescription(name + ". Dotknij kartę, aby pokazać opcje.");
+        touchFeedback(box);
+        box.setOnClickListener(v -> {
+            boolean expand = actions.getVisibility() != View.VISIBLE;
+            actions.setVisibility(expand ? View.VISIBLE : View.GONE);
+            box.setContentDescription(name + (expand
+                ? ". Opcje są widoczne. Dotknij kartę, aby je schować."
+                : ". Dotknij kartę, aby pokazać opcje."));
+        });
     }
 
     private void taskAction(LinearLayout row, String label, Runnable run) {
         TextView action = text(label, 13, true);
         action.setGravity(Gravity.CENTER);
         action.setBackground(rounded(surface == bg ? accent : bg));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        lp.setMargins(dp(2), dp(5), dp(2), 0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(36), 1);
+        lp.setMargins(dp(2), dp(2), dp(2), 0);
         row.addView(action, lp);
         action.setOnClickListener(v -> run.run());
     }
@@ -1610,6 +3428,27 @@ public final class MainActivity extends Activity {
                     memberIds, memberNames, chosenMember);
             });
         }
+    }
+
+    /** Contrasting colors for white native dialogs, independent of the six screen themes. */
+    private int lightDialogAccent() {
+        if (UiSkin.TRAINER.equals(skin.name)) return 0xFFC62828;
+        if (UiSkin.FOREST.equals(skin.name)
+                || UiSkin.NATURE.equals(skin.name) || UiSkin.PASTEL.equals(skin.name))
+            return 0xFF246B45;
+        if (UiSkin.MODERN_LIGHT.equals(skin.name)) return 0xFF246FE5;
+        if (UiSkin.ELEGANT_DARK.equals(skin.name)
+                || UiSkin.GLASS.equals(skin.name)) return 0xFF176B83;
+        return 0xFF08796E;
+    }
+
+    private void lightDialogForm(View form) {
+        DialogContrast.apply(form, lightDialogAccent());
+    }
+
+    private ArrayAdapter<String> lightDialogSpinnerAdapter(
+            java.util.List<String> labels) {
+        return DialogContrast.spinnerAdapter(this, labels);
     }
 
     private ArrayAdapter<String> themeSpinnerAdapter(java.util.List<String> items) {
@@ -2027,8 +3866,53 @@ public final class MainActivity extends Activity {
         button("Wróć do czynności", () -> go("tasks"));
     }
 
+    /** Open the actual calendar day, even if the OC/inspection is next year. */
+    private void showVehicleDateInCalendar(String date) {
+        LocalDate day = LocalDate.parse(date);
+        calendarDay = day.toString();
+        calendarMonth = YearMonth.from(day).toString();
+        calendarView = "day";
+        go("calendar");
+    }
+
+    /** Separate from the 30-day agenda: the next OC and inspection dates must
+     * remain discoverable when a policy is valid for another calendar year.
+     */
+    private void upcomingVehicleDeadlines() {
+        LinearLayout deadlines = card();
+        deadlines.addView(text("Terminy pojazdów — także poza bieżącym miesiącem",
+            17, true));
+        String sql = "SELECT deadline,kind,name FROM ("
+            + "SELECT oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+            + "WHERE oc_until!='' UNION ALL "
+            + "SELECT inspection_until,'Przegląd',name FROM vehicles "
+            + "WHERE inspection_until!='') WHERE deadline>=? "
+            + "ORDER BY deadline,name,kind LIMIT 20";
+        int shown = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(sql,
+                new String[]{LocalDate.now().toString()})) {
+            while (c.moveToNext()) {
+                shown++;
+                String date = c.getString(0);
+                String kind = c.getString(1);
+                String name = c.getString(2);
+                smallButton(deadlines, date + " • " + kind + " • " + name
+                    + "  →", () -> showVehicleDateInCalendar(date));
+            }
+        }
+        if (shown == 0) {
+            deadlines.addView(text(
+                "Brak przyszłych terminów OC i przeglądów. "
+                + "Sprawdź daty na kartach pojazdów lub przejdź do wybranego dnia.",
+                14, false));
+        } else {
+            deadlines.addView(text("Dotknij terminu, aby otworzyć jego dzień "
+                + "w kalendarzu. Agenda nadal pokazuje tylko 30 dni.", 13, false));
+        }
+    }
+
     private void calendar() {
-        header("Kalendarz • czynności");
+        header("Kalendarz • czynności i pojazdy");
         YearMonth month = YearMonth.parse(calendarMonth);
         LocalDate selected = LocalDate.parse(calendarDay);
         note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
@@ -2095,6 +3979,14 @@ public final class MainActivity extends Activity {
             calendarMonth = YearMonth.from(LocalDate.now()).toString();
             render();
         });
+        button("Przejdź do daty", () -> {
+            LocalDate initial = LocalDate.parse(calendarDay);
+            new DatePickerDialog(this, (picker, year, monthIndex, dayOfMonth) ->
+                showVehicleDateInCalendar(LocalDate.of(
+                    year, monthIndex + 1, dayOfMonth).toString()),
+                initial.getYear(), initial.getMonthValue() - 1,
+                initial.getDayOfMonth()).show();
+        });
         LinearLayout summary = card();
         summary.addView(text("Wybrano: " + selected.format(
             DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy", new Locale("pl", "PL"))),
@@ -2109,6 +4001,8 @@ public final class MainActivity extends Activity {
             go("tasks");
         });
 
+        upcomingVehicleDeadlines();
+
         Map<String, Integer> counts = new HashMap<>();
         LocalDate countStart = "week".equals(calendarView)
             ? selected.with(java.time.DayOfWeek.MONDAY) : month.atDay(1);
@@ -2119,6 +4013,18 @@ public final class MainActivity extends Activity {
                 + "AND due_date<=? GROUP BY due_date",
                 new String[]{countStart.toString(), countEnd.toString()})) {
             while (c.moveToNext()) counts.put(c.getString(0), c.getInt(1));
+        }
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT deadline,COUNT(*) FROM ("
+                + "SELECT oc_until AS deadline FROM vehicles WHERE oc_until!='' "
+                + "UNION ALL SELECT inspection_until FROM vehicles "
+                + "WHERE inspection_until!='') "
+                + "WHERE deadline>=? AND deadline<=? GROUP BY deadline",
+                new String[]{countStart.toString(), countEnd.toString()})) {
+            while (c.moveToNext()) {
+                String date = c.getString(0);
+                counts.put(date, counts.getOrDefault(date, 0) + c.getInt(1));
+            }
         }
 
         if (!"day".equals(calendarView) && !"agenda".equals(calendarView)) {
@@ -2184,6 +4090,21 @@ public final class MainActivity extends Activity {
                         14, false));
                 }
             }
+            try (Cursor c = db.getReadableDatabase().rawQuery(
+                    "SELECT deadline,kind,name FROM ("
+                    + "SELECT oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+                    + "WHERE oc_until!='' UNION ALL "
+                    + "SELECT inspection_until,'Przegląd',name FROM vehicles "
+                    + "WHERE inspection_until!='') WHERE deadline>=? "
+                    + "AND deadline<=? ORDER BY deadline,name LIMIT 100",
+                    new String[]{selected.toString(),
+                        selected.plusDays(29).toString()})) {
+                while (c.moveToNext()) {
+                    shown++;
+                    agenda.addView(text("• " + c.getString(0) + " — "
+                        + c.getString(1) + ": " + c.getString(2), 14, false));
+                }
+            }
             if (shown == 0) agenda.addView(text("Brak terminów.", 14, false));
         }
         title("Termin: " + selected.toString());
@@ -2198,15 +4119,821 @@ public final class MainActivity extends Activity {
                     c.getString(3), c.getString(4), c.getInt(5));
             }
         }
-        if (found == 0) note("Brak zaplanowanych czynności na ten dzień.");
+        int vehicleDates = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,kind,name FROM ("
+                + "SELECT id,oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+                + "WHERE oc_until!='' UNION ALL "
+                + "SELECT id,inspection_until,'Przegląd',name FROM vehicles "
+                + "WHERE inspection_until!='') WHERE deadline=? ORDER BY name,kind",
+                new String[]{selected.toString()})) {
+            while (c.moveToNext()) {
+                vehicleDates++;
+                LinearLayout event = card();
+                event.addView(text(c.getString(1) + " • " + c.getString(2),
+                    17, true));
+                smallButton(event, "Pokaż pojazdy", () -> go("vehicles"));
+            }
+        }
+        if (found == 0 && vehicleDates == 0)
+            note("Brak zaplanowanych czynności i terminów pojazdów na ten dzień.");
         button("+ Dodaj czynność", () ->
             editTask(null, "", selected.toString(), "once", 1));
         button("Wszystkie czynności", () -> {
             tasksFilter = "all";
             go("tasks");
         });
-        note("Miesiąc, tydzień, dzień i agenda pokazują te same zapisane czynności. "
+        note("Terminy OC i przeglądów pochodzą z kart pojazdów. "
+            + "Nie tworzą drugich czynności ani wydatków. "
             + "Planowanie dostępności domowników będzie rozwijane osobno.");
+    }
+
+
+    /** Dates read directly from vehicles; no duplicate task or expense records. */
+    private void vehicles() {
+        header("Pojazdy • OC, przeglądy i serwis");
+        note("Pojazdy zapisujesz lokalnie. Terminy OC i przeglądu widoczne są "
+            + "również w kalendarzu — bez drugich kopii czynności. "
+            + "Historia serwisu nie księguje automatycznie wydatków PayCheck.");
+        button("+ Dodaj pojazd", () -> editVehicle(null));
+        int shown = 0;
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,registration,mileage,oc_until,inspection_until,notes "
+                + "FROM vehicles ORDER BY name COLLATE NOCASE,id", null)) {
+            while (c.moveToNext()) {
+                shown++;
+                long id = c.getLong(0);
+                VehicleStore.Vehicle item = VehicleStore.find(db.getReadableDatabase(), id);
+                if (item == null) continue;
+                LinearLayout box = card();
+                // View state is per stable vehicle ID, never per list position or name.
+                // It persists through navigation, process restarts and application updates.
+                final String collapseKey = "vehicle_collapsed_" + id;
+                final boolean collapsed = prefs.getBoolean(collapseKey, false);
+                LinearLayout vehicleHeading = new LinearLayout(this);
+                vehicleHeading.setOrientation(LinearLayout.HORIZONTAL);
+                vehicleHeading.setGravity(Gravity.CENTER_VERTICAL);
+                vehicleHeading.setMinimumHeight(dp(48));
+                TextView vehicleTitle = text(item.name, 20, true);
+                vehicleHeading.addView(vehicleTitle,
+                    new LinearLayout.LayoutParams(0, -2, 1f));
+                TextView chevron = text(collapsed ? "▸" : "▾", 24, true);
+                chevron.setContentDescription(collapsed ? "Rozwiń pojazd" : "Zwiń pojazd");
+                vehicleHeading.addView(chevron);
+                vehicleHeading.setContentDescription(item.name + " • "
+                    + (collapsed ? "Rozwiń" : "Zwiń"));
+                vehicleHeading.setClickable(true);
+                vehicleHeading.setFocusable(true);
+                touchFeedback(vehicleHeading);
+                vehicleHeading.setOnClickListener(v -> {
+                    prefs.edit().putBoolean(collapseKey, !collapsed).apply();
+                    render();
+                });
+                box.addView(vehicleHeading);
+                nfcTargetButton(box,"vehicle",id,item.name);
+                if (!item.registration.isEmpty())
+                    box.addView(text("Rejestracja: " + item.registration, 14, false));
+                if (collapsed) continue;
+                box.addView(text("Przebieg: " + item.mileage + " km", 14, false));
+                if (!item.ocUntil.isEmpty())
+                    box.addView(text("OC: " + item.ocUntil + " • "
+                        + vehicleDeadline(item.ocUntil), 15, false));
+                if (!item.inspectionUntil.isEmpty())
+                    box.addView(text("Przegląd: " + item.inspectionUntil + " • "
+                        + vehicleDeadline(item.inspectionUntil), 15, false));
+                if (!item.notes.isEmpty()) box.addView(text(item.notes, 13, false));
+                smallButton(box, "Przypomnienia OC / przeglądu", () ->
+                    editVehicleReminders(item));
+                box.addView(text("Powiadomienie OC: "
+                    + vehicleReminderLabel(item.ocReminderLead)
+                    + " • przegląd: "
+                    + vehicleReminderLabel(item.inspectionReminderLead),
+                    13, false));
+                if (!item.ocUntil.isEmpty())
+                    smallButton(box, "Pokaż OC w kalendarzu", () ->
+                        showVehicleDateInCalendar(item.ocUntil));
+                if (!item.inspectionUntil.isEmpty())
+                    smallButton(box, "Pokaż przegląd w kalendarzu", () ->
+                        showVehicleDateInCalendar(item.inspectionUntil));
+                smallButton(box, "Edytuj pojazd", () -> editVehicle(item));
+                smallButton(box, "+ Zapisz polisę OC", () -> editVehiclePolicy(item));
+                int policyCount = 0;
+                try (Cursor policies = db.getReadableDatabase().rawQuery(
+                        "SELECT provider,policy_number,valid_from,valid_until,"
+                        + "current,notes,goal_id FROM vehicle_policies WHERE vehicle_id=? "
+                        + "ORDER BY current DESC,valid_until DESC,id DESC LIMIT 30",
+                        new String[]{Long.toString(id)})) {
+                    while (policies.moveToNext()) {
+                        if (policyCount++ == 0)
+                            box.addView(text("Polisy OC — bieżąca i historia", 15, true));
+                        box.addView(text((policies.getInt(4) == 1
+                                ? "BIEŻĄCA • " : "Archiwalna • ")
+                            + policies.getString(0) + " • nr " + policies.getString(1)
+                            + "\n" + policies.getString(2) + " → "
+                            + policies.getString(3)
+                            + (policies.getString(5).isEmpty() ? ""
+                                : "\n" + policies.getString(5))
+                            + (policies.isNull(6) ? ""
+                                : "\nCel wspólny PayCheck: "
+                                    + vehiclePolicyGoalLabel(policies.getLong(6))),
+                            13, false));
+                    }
+                }
+                smallButton(box, "+ Dodaj dokument", () -> editVehicleDocument(item));
+                int documentCount = 0;
+                try (Cursor documents = db.getReadableDatabase().rawQuery(
+                        "SELECT kind,title,document_number,issued_on,valid_until,note "
+                        + "FROM vehicle_documents WHERE vehicle_id=? "
+                        + "ORDER BY valid_until DESC,issued_on DESC,id DESC LIMIT 30",
+                        new String[]{Long.toString(id)})) {
+                    while (documents.moveToNext()) {
+                        if (documentCount++ == 0)
+                            box.addView(text("Dokumenty pojazdu", 15, true));
+                        String dates = "";
+                        if (!documents.getString(3).isEmpty())
+                            dates += "\nData: " + documents.getString(3);
+                        if (!documents.getString(4).isEmpty())
+                            dates += "\nWażny do: " + documents.getString(4);
+                        box.addView(text(VehicleDocumentStore.label(documents.getString(0))
+                            + " • " + documents.getString(1)
+                            + (documents.getString(2).isEmpty() ? ""
+                                : " • nr " + documents.getString(2))
+                            + dates
+                            + (documents.getString(5).isEmpty() ? ""
+                                : "\n" + documents.getString(5)), 13, false));
+                    }
+                }
+                smallButton(box, "+ Zapisz koszt pojazdu", () -> editVehicleCost(item));
+                try (Cursor total = db.getReadableDatabase().rawQuery(
+                        "SELECT COALESCE(SUM(amount_grosz),0) FROM vehicle_costs WHERE vehicle_id=?",
+                        new String[]{Long.toString(id)})) {
+                    if (total.moveToFirst() && total.getLong(0)>0)
+                        box.addView(text("Zapisane koszty: "
+                            + MoneyRules.format(total.getLong(0)), 15, true));
+                }
+                try (Cursor costs = db.getReadableDatabase().rawQuery(
+                        "SELECT kind,paid_on,amount_grosz,note,paycheck_operation_id "
+                        + "FROM vehicle_costs WHERE vehicle_id=? "
+                        + "ORDER BY paid_on DESC,id DESC LIMIT 30",
+                        new String[]{Long.toString(id)})) {
+                    while (costs.moveToNext())
+                        box.addView(text(costs.getString(1) + " • "
+                            + VehicleCostStore.label(costs.getString(0)) + " • "
+                            + MoneyRules.format(costs.getLong(2))
+                            + (costs.isNull(4) ? " • poza PayCheck" : " • sprawdź status w PayCheck")
+                            + (costs.getString(3).isEmpty() ? ""
+                                : "\n" + costs.getString(3)), 13, false));
+                }
+                smallButton(box, "+ Zapisz serwis / opony / inne", () -> editVehicleEvent(item));
+                smallButton(box, "+ Dodaj komplet opon", () -> editVehicleTyres(item, null));
+                int tyreCount = 0;
+                try (Cursor tyres = db.getReadableDatabase().rawQuery(
+                        "SELECT id FROM vehicle_tyre_sets WHERE vehicle_id=? "
+                        + "ORDER BY mounted DESC,id", new String[]{Long.toString(id)})) {
+                    while (tyres.moveToNext()) {
+                        VehicleTyreStore.SetInfo set = VehicleTyreStore.find(
+                            db.getReadableDatabase(), tyres.getLong(0));
+                        if (set == null) continue;
+                        if (tyreCount++ == 0)
+                            box.addView(text("Komplety opon", 15, true));
+                        String where = set.mounted ? "NA POJEŹDZIE" :
+                            (set.placeId == null ? "Bez miejsca" :
+                            tyrePlaceName(set.placeId));
+                        box.addView(text(set.label + " • "
+                            + VehicleTyreStore.seasonLabel(set.season)
+                            + " • " + where
+                            + (set.dot.isEmpty() ? "" : " • DOT " + set.dot)
+                            + (set.tread == null ? "" : " • bieżnik "
+                                + (set.tread / 10) + "," + (set.tread % 10) + " mm"),
+                            13, false));
+                        smallButton(box, "Edytuj komplet: " + set.label,
+                            () -> editVehicleTyres(item, set));
+                        smallButton(box, set.mounted ? "Zdejmij: " + set.label
+                                : "Zamontuj: " + set.label,
+                            () -> changeVehicleTyres(item, set.mounted ? 0 : set.id));
+                    }
+                }
+                int events = 0;
+                try (Cursor history = db.getReadableDatabase().rawQuery(
+                        "SELECT kind,event_date,mileage,note FROM vehicle_events "
+                        + "WHERE vehicle_id=? ORDER BY event_date DESC,id DESC LIMIT 20",
+                        new String[]{Long.toString(id)})) {
+                    while (history.moveToNext()) {
+                        if (events++ == 0)
+                            box.addView(text("Historia pojazdu", 15, true));
+                        box.addView(text(history.getString(1) + " • "
+                            + VehicleRules.eventLabel(history.getString(0))
+                            + (history.isNull(2) ? "" : " • " + history.getLong(2) + " km")
+                            + "\n" + history.getString(3), 13, false));
+                    }
+                }
+                smallButton(box,"Usuń pojazd",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć pojazd?")
+                        .setMessage(item.name+"\nHistoria serwisu, opony, "
+                            +"polisy, dokumenty i koszty pojazdu zostaną "
+                            +"usunięte. Wpisy PayCheck pozostaną.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            if(VehicleStore.delete(
+                                    db.getWritableDatabase(),id)) {
+                                prefs.edit().remove(
+                                    "vehicle_collapsed_"+id).apply();
+                                DiagnosticLog.event("VEHICLE_DELETED");
+                                render();
+                            }
+                        }).show());
+            }
+        }
+        if (shown == 0)
+            note("Brak pojazdów. Dodaj pierwszy samochód lub inny pojazd.");
+    }
+
+    private void editVehicleDocument(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        form.addView(text("Dokument • " + vehicle.name, 15, true));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleDocumentStore.LABELS)));
+        form.addView(kind);
+        EditText title = vehicleInput(form, "Nazwa dokumentu", "");
+        EditText number = vehicleInput(form, "Numer dokumentu (opcjonalnie)", "");
+        EditText issued = vehicleCalendarDate(form,
+            "Data dokumentu (opcjonalnie) • kalendarz", "", true);
+        EditText valid = vehicleCalendarDate(form,
+            "Ważny do (opcjonalnie) • kalendarz", "", true);
+        EditText noteField = vehicleInput(form, "Notatka (opcjonalnie)", "");
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Nowy dokument • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz dokument", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String result = VehicleDocumentStore.add(db.getWritableDatabase(),
+                        vehicle.id, operationId,
+                        VehicleDocumentStore.KINDS[kind.getSelectedItemPosition()],
+                        title.getText().toString(), number.getText().toString(),
+                        issued.getText().toString(), valid.getText().toString(),
+                        noteField.getText().toString());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_DOCUMENT_COMMITTED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();
+                        alert("Ten dokument został już zapisany.");
+                        render();
+                    } else {
+                        alert("Pojazd nie istnieje. Dokumentu nie zapisano.");
+                    }
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_DOCUMENT", error);
+                    alert("Nie udało się zapisać dokumentu.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
+    }
+
+    /** An explicit tap is required before creating a shared PayCheck expense. */
+    private void editVehicleCost(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        form.addView(text("Koszt • " + vehicle.name, 15, true));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleCostStore.LABELS)));
+        form.addView(kind);
+        EditText date = vehicleCalendarDate(form, "Data zapłaty • kalendarz",
+            LocalDate.now().toString(), false);
+        EditText amount = vehicleInput(form, "Kwota PLN, np. 650,00", "");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText note = vehicleInput(form, "Opis kosztu (opcjonalnie)", "");
+        CheckBox paycheck = new CheckBox(this);
+        paycheck.setText("Przekaż wydatek do potwierdzenia we wspólnym PayCheck");
+        paycheck.setChecked(false);
+        form.addView(paycheck);
+        form.addView(text("Bez zaznaczenia koszt jest wyłącznie w historii pojazdu. "
+            + "Z zaznaczeniem trafia do kolejki Do potwierdzenia. "
+            + "Saldo zmieni się dopiero po ręcznym potwierdzeniu w PayCheck; "
+            + "bez automatycznych wpłat na cel.", 13, false));
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Zapisz koszt • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String result = VehicleCostStore.record(db.getWritableDatabase(),
+                        vehicle.id, operationId,
+                        VehicleCostStore.KINDS[kind.getSelectedItemPosition()],
+                        date.getText().toString(),
+                        MoneyRules.parse(amount.getText().toString()),
+                        note.getText().toString(), paycheck.isChecked());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_COST_COMMITTED");
+                        dialog.dismiss();render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();alert("Koszt już zapisano. Nie powtórzono płatności.");
+                        render();
+                    } else alert("Pojazd już nie istnieje. Kosztu nie zapisano.");
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_COST", error);
+                    alert("Nie potwierdzono zapisu. Sprawdź historię i PayCheck przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
+    }
+
+    private String tyrePlaceName(long id) {
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT name FROM places WHERE id=?",
+                new String[]{Long.toString(id)})) {
+            return c.moveToFirst() ? c.getString(0) : "Miejsce usunięte";
+        }
+    }
+
+    private Spinner tyrePlaceSpinner(LinearLayout form, Long selected,
+            java.util.List<Long> ids) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        names.add("Bez przypisanego miejsca");
+        ids.add(null);
+        int current = 0;
+        for (PlaceEntry place : readPlaces()) {
+            ids.add(place.id);
+            names.add(place.name + " [#" + place.id + "]");
+            if (selected != null && place.id == selected.longValue())
+                current = ids.size() - 1;
+        }
+        Spinner spinner = new Spinner(this);
+        spinner.setAdapter(lightDialogSpinnerAdapter(names));
+        spinner.setSelection(current);
+        form.addView(spinner);
+        return spinner;
+    }
+
+    private void editVehicleTyres(VehicleStore.Vehicle vehicle,
+            VehicleTyreStore.SetInfo set) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        EditText label = vehicleInput(form, "Komplet, np. zimowe na felgach",
+            set == null ? "" : set.label);
+        Spinner season = new Spinner(this);
+        season.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "Letnie", "Zimowe", "Całoroczne")));
+        season.setSelection(set == null ? 0 :
+            "winter".equals(set.season) ? 1 : "allseason".equals(set.season) ? 2 : 0);
+        form.addView(season);
+        EditText dot = vehicleInput(form, "DOT (np. 3424, opcjonalnie)",
+            set == null ? "" : set.dot);
+        dot.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText tread = vehicleInput(form, "Bieżnik [mm], np. 6,5 (opcjonalnie)",
+            set == null || set.tread == null ? "" :
+                (set.tread / 10) + "," + (set.tread % 10));
+        tread.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(text("Miejsce przechowywania (dla zamontowanych: brak)", 13, false));
+        java.util.List<Long> places = new java.util.ArrayList<>();
+        Spinner storage = tyrePlaceSpinner(form, set == null ? null : set.placeId, places);
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(set == null ? "Dodaj komplet • " + vehicle.name :
+                "Edytuj komplet • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    String[] seasons = {"summer", "winter", "allseason"};
+                    VehicleTyreStore.save(db.getWritableDatabase(),
+                        set == null ? 0 : set.id, vehicle.id,
+                        label.getText().toString(),
+                        seasons[season.getSelectedItemPosition()],
+                        dot.getText().toString(),
+                        VehicleTyreStore.tread(tread.getText().toString()),
+                        places.get(storage.getSelectedItemPosition()));
+                    DiagnosticLog.event("VEHICLE_TYRE_SET_SAVED");
+                    dialog.dismiss();
+                    render();
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_TYRE_SET", error);
+                    alert("Nie udało się zapisać kompletu.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void changeVehicleTyres(VehicleStore.Vehicle vehicle, long targetId) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        EditText date = vehicleCalendarDate(form,
+            "Data zmiany kół • wybierz w kalendarzu",
+            LocalDate.now().toString(), false);
+        EditText mileage = vehicleInput(form, "Przebieg [km] (opcjonalnie)", "");
+        mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(text("Gdzie odłożyć zdjęty komplet?", 13, false));
+        java.util.List<Long> places = new java.util.ArrayList<>();
+        Spinner storage = tyrePlaceSpinner(form, null, places);
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(targetId == 0 ? "Zdejmij komplet • " + vehicle.name :
+                "Zmień koła • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Potwierdź zmianę", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String raw = mileage.getText().toString().trim();
+                    Long distance = raw.isEmpty() ? null : VehicleRules.mileage(raw);
+                    String result = VehicleTyreStore.change(db.getWritableDatabase(),
+                        vehicle.id, targetId,
+                        places.get(storage.getSelectedItemPosition()),
+                        operationId, date.getText().toString(), distance);
+                    dialog.dismiss();
+                    if ("COMMITTED".equals(result))
+                        DiagnosticLog.event("VEHICLE_TYRE_CHANGE_COMMITTED");
+                    else if ("DUPLICATE_IGNORED".equals(result))
+                        alert("Zmiana była już zapisana. Nie powtórzono operacji.");
+                    else alert("Pojazd nie istnieje. Nie wykonano zmiany.");
+                    render();
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_TYRE_CHANGE", error);
+                    alert("Nie potwierdzono zmiany. Sprawdź historię przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing())save.setEnabled(true);
+                }
+            }));
+        dialog.show();
+    }
+
+    /** Read-only date field: tapping it opens the native Android date picker. */
+    private void pickVehiclePolicyDate(EditText input, Runnable afterPick) {
+        LocalDate selected;
+        try {
+            selected = LocalDate.parse(input.getText().toString());
+        } catch (Exception ignored) {
+            selected = LocalDate.now();
+        }
+        new DatePickerDialog(this, (picker, year, month, day) -> {
+            input.setText(LocalDate.of(year, month + 1, day).toString());
+            if (afterPick != null) afterPick.run();
+        }, selected.getYear(), selected.getMonthValue() - 1,
+            selected.getDayOfMonth()).show();
+    }
+
+    /** Read-only goal summary; never posts an allocation or a transaction. */
+    private String vehiclePolicyGoalLabel(long id) {
+        try (Cursor goal = db.getReadableDatabase().rawQuery(
+                "SELECT name,target_grosz FROM paycheck_goals "
+                + "WHERE id=? AND scope='shared'",
+                new String[]{Long.toString(id)})) {
+            if (!goal.moveToFirst()) return "brak celu (sprawdź kopię danych)";
+            long saved = PaycheckGoalsStore.allocated(
+                db.getReadableDatabase(), id);
+            return goal.getString(0) + " • "
+                + MoneyRules.format(saved) + " / "
+                + MoneyRules.format(goal.getLong(1));
+        }
+    }
+
+    /** Policy history never overwrites earlier records and never posts a PayCheck cost. */
+    private void editVehiclePolicy(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText provider = vehicleInput(form,"Ubezpieczyciel, np. PZU","");
+        EditText number = vehicleInput(form,"Numer polisy","");
+        // Both dates use Android's calendar instead of requiring ISO typing.
+        form.addView(text("Początek ochrony OC • dotknij daty",14,false));
+        EditText from = vehicleInput(form,"OC od • wybierz w kalendarzu",
+            LocalDate.now().toString());
+        from.setFocusable(false);
+        from.setClickable(true);
+        form.addView(text("Koniec ochrony OC • dotknij daty, aby zmienić",14,false));
+        EditText until = vehicleInput(form,"OC do • wybierz w kalendarzu",
+            VehiclePolicyDates.yearMinusDay(from.getText().toString()));
+        until.setFocusable(false);
+        until.setClickable(true);
+        CheckBox automaticEnd = new CheckBox(this);
+        automaticEnd.setText("Automatycznie: rok od początku minus 1 dzień");
+        automaticEnd.setChecked(true);
+        form.addView(automaticEnd);
+        from.setOnClickListener(v -> pickVehiclePolicyDate(from, () -> {
+            if (automaticEnd.isChecked())
+                until.setText(VehiclePolicyDates.yearMinusDay(
+                    from.getText().toString()));
+        }));
+        until.setOnClickListener(v -> {
+            automaticEnd.setChecked(false);
+            pickVehiclePolicyDate(until, null);
+        });
+        automaticEnd.setOnCheckedChangeListener((button, checked) -> {
+            if (checked)
+                until.setText(VehiclePolicyDates.yearMinusDay(
+                    from.getText().toString()));
+        });
+        form.addView(text("Powiąż opcjonalnie ze wspólnym celem PayCheck",
+            14, false));
+        java.util.List<Long> goalIds = new java.util.ArrayList<>();
+        java.util.List<String> goalNames = new java.util.ArrayList<>();
+        goalIds.add(null);
+        goalNames.add("Bez powiązania z celem");
+        try (Cursor goals = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,target_grosz FROM paycheck_goals "
+                + "WHERE scope='shared' ORDER BY name COLLATE NOCASE,id", null)) {
+            while (goals.moveToNext()) {
+                goalIds.add(goals.getLong(0));
+                goalNames.add(goals.getString(1) + " • "
+                    + MoneyRules.format(goals.getLong(2)));
+            }
+        }
+        Spinner goal = new Spinner(this);
+        goal.setAdapter(lightDialogSpinnerAdapter(goalNames));
+        form.addView(goal);
+        form.addView(text("To wyłącznie powiązanie: bez automatycznej wpłaty, "
+            + "wydatku i zmian salda. Nowy cel dodasz w PayCheck.", 13, false));
+        CheckBox active = new CheckBox(this);
+        active.setText("Ustaw jako bieżącą polisę i termin OC w kalendarzu");
+        active.setChecked(true);
+        form.addView(active);
+        EditText notes = vehicleInput(form,"Notatka (opcjonalnie)","");
+        form.addView(text("Archiwalną polisę możesz dodać bez zmiany aktualnego "
+            + "terminu OC. Zapis nie dodaje wydatku do PayCheck.",13,false));
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Polisa OC • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz polisę",null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String result = VehiclePolicyStore.add(db.getWritableDatabase(),
+                        vehicle.id,operationId,provider.getText().toString(),
+                        number.getText().toString(),from.getText().toString(),
+                        until.getText().toString(),active.isChecked(),
+                        notes.getText().toString(),
+                        goalIds.get(goal.getSelectedItemPosition()));
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_POLICY_COMMITTED");
+                        VehicleReminderReceiver.schedule(this);
+                        dialog.dismiss();render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();alert("Polisa została już zapisana.");
+                        render();
+                    } else alert("Nie odnaleziono pojazdu. Polisy nie zapisano.");
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_POLICY",error);
+                    alert("Nie potwierdzono zapisu. Sprawdź listę polis przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
+    }
+
+    private String vehicleReminderLabel(Integer lead) {
+        return VehicleReminderRules.LABELS[VehicleReminderRules.index(lead)];
+    }
+
+    /** Per-vehicle opt-in; alarm delivery is inexact and respects quiet hours. */
+    private void editVehicleReminders(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        form.addView(text("OC • " + (vehicle.ocUntil.isEmpty()
+            ? "brak daty" : vehicle.ocUntil), 15, true));
+        Spinner oc = new Spinner(this);
+        oc.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleReminderRules.LABELS)));
+        oc.setSelection(VehicleReminderRules.index(vehicle.ocReminderLead));
+        form.addView(oc);
+        form.addView(text("Przegląd • " + (vehicle.inspectionUntil.isEmpty()
+            ? "brak daty" : vehicle.inspectionUntil), 15, true));
+        Spinner inspection = new Spinner(this);
+        inspection.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(VehicleReminderRules.LABELS)));
+        inspection.setSelection(VehicleReminderRules.index(
+            vehicle.inspectionReminderLead));
+        form.addView(inspection);
+        form.addView(text("Powiadomienie przychodzi około 09:00 w wybranym dniu. "
+            + "Android może je opóźnić; godziny ciszy ustawisz w Ustawieniach. "
+            + "Nie powstaje druga czynność ani wydatek PayCheck.", 13, false));
+        lightDialogForm(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Powiadomienia • " + vehicle.name)
+            .setView(form).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    Integer ocLead = VehicleReminderRules.LEADS[
+                        oc.getSelectedItemPosition()];
+                    Integer inspectionLead = VehicleReminderRules.LEADS[
+                        inspection.getSelectedItemPosition()];
+                    VehicleStore.saveReminderLeads(db.getWritableDatabase(),
+                        vehicle.id, ocLead, inspectionLead);
+                    VehicleReminderReceiver.schedule(this);
+                    dialog.dismiss();
+                    if ((ocLead != null || inspectionLead != null)
+                            && Build.VERSION.SDK_INT >= 33
+                            && checkSelfPermission(
+                                android.Manifest.permission.POST_NOTIFICATIONS)
+                                != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS}, 7130);
+                    DiagnosticLog.event("VEHICLE_REMINDERS_SAVED");
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.error("VEHICLE_REMINDERS_SAVE", error);
+                    alert("Nie zapisano ustawień przypomnień.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private String vehicleDeadline(String iso) {
+        long days = java.time.temporal.ChronoUnit.DAYS.between(
+            LocalDate.now(), LocalDate.parse(iso));
+        if (days < 0) return "po terminie o " + (-days) + " dni";
+        if (days == 0) return "dzisiaj";
+        return "za " + days + " dni";
+    }
+
+    private EditText vehicleInput(LinearLayout form, String hint, String value) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setTextColor(ink);
+        input.setHintTextColor(subdued);
+        input.setHint(hint);
+        input.setText(value);
+        form.addView(input);
+        return input;
+    }
+
+    /** Calendar-backed dates are read-only to avoid malformed ISO strings and keyboard overlap. */
+    private EditText vehicleCalendarDate(LinearLayout form, String hint,
+            String value, boolean optional) {
+        EditText input = vehicleInput(form, hint, value);
+        input.setFocusable(false);
+        input.setClickable(true);
+        input.setOnClickListener(v -> pickVehiclePolicyDate(input, null));
+        if (optional) {
+            TextView clear = text("Wyczyść: " + hint, 13, false);
+            clear.setTextColor(0xFF08796E);
+            clear.setOnClickListener(v -> input.setText(""));
+            form.addView(clear);
+        }
+        return input;
+    }
+
+    private void editVehicle(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        EditText name = vehicleInput(form, "Nazwa, np. Audi A4",
+            vehicle == null ? "" : vehicle.name);
+        EditText plate = vehicleInput(form, "Rejestracja (opcjonalnie)",
+            vehicle == null ? "" : vehicle.registration);
+        EditText mileage = vehicleInput(form, "Aktualny przebieg [km]",
+            vehicle == null ? "0" : Long.toString(vehicle.mileage));
+        mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText oc = vehicleCalendarDate(form, "OC do (opcjonalnie) • wybierz datę",
+            vehicle == null ? "" : vehicle.ocUntil, true);
+        EditText inspection = vehicleCalendarDate(form,
+            "Przegląd do (opcjonalnie) • wybierz datę",
+            vehicle == null ? "" : vehicle.inspectionUntil, true);
+        EditText notes = vehicleInput(form, "Notatka (opcjonalnie)",
+            vehicle == null ? "" : vehicle.notes);
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(vehicle == null ? "Nowy pojazd" : "Edytuj pojazd")
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    long id = VehicleStore.save(db.getWritableDatabase(),
+                        vehicle == null ? 0 : vehicle.id,
+                        name.getText().toString(), plate.getText().toString(),
+                        VehicleRules.mileage(mileage.getText().toString()),
+                        oc.getText().toString(), inspection.getText().toString(),
+                        notes.getText().toString().trim());
+                    DiagnosticLog.event("VEHICLE_SAVED", "id=" + id);
+                    VehicleReminderReceiver.schedule(this);
+                    dialog.dismiss();
+                    render();
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception problem) {
+                    DiagnosticLog.error("VEHICLE_SAVE", problem);
+                    alert("Nie udało się zapisać pojazdu. Sprawdź dane i spróbuj ponownie.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void editVehicleEvent(VehicleStore.Vehicle vehicle) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(10), dp(18), dp(10));
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "Serwis / olej / filtry", "Opony", "Inne")));
+        form.addView(kind);
+        EditText date = vehicleCalendarDate(form,
+            "Data serwisu • wybierz w kalendarzu",
+            LocalDate.now().toString(), false);
+        EditText mileage = vehicleInput(form, "Przebieg [km] (opcjonalnie)", "");
+        mileage.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText description = vehicleInput(form, "Co wykonano? (maks. 500 znaków)", "");
+        String operationId = java.util.UUID.randomUUID().toString();
+        lightDialogForm(form);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Wpis w historii • " + vehicle.name)
+            .setView(scroll).setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz wykonanie", null).create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                save.setEnabled(false);
+                try {
+                    String[] kinds = {"service", "tyres", "other"};
+                    String rawMileage = mileage.getText().toString().trim();
+                    Long distance = rawMileage.isEmpty()
+                        ? null : VehicleRules.mileage(rawMileage);
+                    String result = VehicleStore.addEvent(db.getWritableDatabase(),
+                        vehicle.id, operationId, kinds[kind.getSelectedItemPosition()],
+                        date.getText().toString(), distance,
+                        description.getText().toString());
+                    if ("COMMITTED".equals(result)) {
+                        DiagnosticLog.event("VEHICLE_EVENT_COMMITTED");
+                        dialog.dismiss();
+                        render();
+                    } else if ("DUPLICATE_IGNORED".equals(result)) {
+                        dialog.dismiss();
+                        alert("Ten wpis został już zapisany. Nie dodano go ponownie.");
+                        render();
+                    } else {
+                        alert("Pojazd nie istnieje. Nie zapisano wpisu.");
+                    }
+                } catch (IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch (Exception problem) {
+                    DiagnosticLog.error("VEHICLE_EVENT", problem);
+                    alert("Nie potwierdzono zapisu. Sprawdź historię przed ponowieniem.");
+                } finally {
+                    if (dialog.isShowing()) save.setEnabled(true);
+                }
+            }));
+        dialog.show();
     }
 
     private static final class PlaceEntry {
@@ -2311,6 +5038,10 @@ public final class MainActivity extends Activity {
             placeEditor(null, "", "", entry.id, "places"));
         taskAction(actions, "Edytuj", () -> placeEditor(entry.id,
             entry.name, entry.kind, entry.parent, entry.icon));
+        if (releaseFeaturesEnabled())
+            smallButton(box,"QR i etykieta miejsca",
+                () -> showPlaceQr(entry));
+        nfcTargetButton(box,"place",entry.id,entry.name);
         box.setOnLongClickListener(v -> {
             String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
                 "Usuń"};
@@ -2341,11 +5072,13 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Usunąć miejsce?")
             .setMessage(db.placePath(entry.id)
                 + "\nPrzypisane czynności pozostaną bez miejsca. "
-                + "Historia wykonań zostanie zachowana.")
+                + "QR tego miejsca przestanie działać i nie zostanie "
+                + "przydzielony nowemu miejscu. Historia wykonań zostanie zachowana.")
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
-                    alert("Miejsce ma podmiejsca lub rzeczy/pudełka. Przenieś je najpierw.");
+                    alert("Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon. "
+                        + "Przenieś je najpierw.");
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
@@ -2496,66 +5229,480 @@ public final class MainActivity extends Activity {
     }
 
 
+
+    private static final String SCAN_DEFAULT_GLOBAL = "scan_default_global";
+    private static final String SCAN_DEFAULT_NFC = "scan_default_nfc_global";
+    private static final String NFC_GLOBAL_LISTEN_PREF = "nfc_global_listen";
+    private static final String STORAGE_SHOW_THINGS_PREF = "storage_show_things";
+    private static final String STORAGE_SHOW_BOXES_PREF = "storage_show_boxes";
+    private static final String STORAGE_SHOW_PLACES_PREF = "storage_show_places";
+    private static final String STORAGE_GALLERY_PREF = "storage_gallery_enabled";
+    private static final String STORAGE_ACTION_PREFIX = "storage_action_";
+
+    private boolean storageThingsVisible() {
+        return "thing".equals(storageTemporaryKind)
+            || prefs.getBoolean(STORAGE_SHOW_THINGS_PREF,true);
+    }
+
+    private boolean storageBoxesVisible() {
+        return "box".equals(storageTemporaryKind)
+            || prefs.getBoolean(STORAGE_SHOW_BOXES_PREF,true);
+    }
+
+    private boolean storagePlacesVisible() {
+        return "place".equals(storageTemporaryKind)
+            || prefs.getBoolean(STORAGE_SHOW_PLACES_PREF,true);
+    }
+
+    private boolean storageActionVisible(String kind,String action) {
+        return prefs.getBoolean(STORAGE_ACTION_PREFIX+kind+"_"+action,true);
+    }
+
+    private void scannerHub() {
+        header("Skaner EDHOME");
+        note("Jeden skaner dla QR EDHOME, NFC i kodów produktów. "
+            + "Najpierw rozpoznaję obiekt, potem pokazuję właściwe działania.");
+        LinearLayout state = card();
+        state.addView(text("Po zeskanowaniu domyślnie", 18, true));
+        state.addView(text(scanActionLabel(
+            prefs.getString(SCAN_DEFAULT_GLOBAL, "show")), 15, false));
+        smallButton(state, "Zmień ustawienie ogólne", this::showGlobalScanDefaultDialog);
+
+        button("▣ Skanuj QR / kod kreskowy", () -> {
+            if (centralScannerCameraPending || pantrySingleCameraPending
+                    || pantryBatch.active()) return;
+            centralScannerCameraPending = true;
+            try {
+                IntentIntegrator scanner = new IntentIntegrator(this);
+                scanner.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES);
+                scanner.setPrompt("EDHOME: QR, kod produktu lub etykieta");
+                scanner.setBeepEnabled(false);
+                scanner.setOrientationLocked(false);
+                scanner.initiateScan();
+            } catch (Exception problem) {
+                centralScannerCameraPending = false;
+                DiagnosticLog.error("CENTRAL_SCANNER_LAUNCH", problem);
+                alert("Nie można uruchomić aparatu. Sprawdź uprawnienie kamery.");
+            }
+        });
+
+        button("NFC • Przyłóż tag do telefonu", () -> {
+            armScannerNfc();
+            render();
+        });
+        LinearLayout nfcState = card();
+        nfcState.addView(text(scannerNfcStatus, 15, true));
+        if (nfcAdapter != null && !nfcAdapter.isEnabled())
+            nfcState.addView(text("Włącz NFC w ustawieniach telefonu i wróć tutaj.", 13, false));
+
+        LinearLayout rules = card();
+        rules.addView(text("Jak działają reguły", 18, true));
+        rules.addView(text(
+            "1. Reguła konkretnego obiektu przez QR/NFC\n"
+            + "2. Reguła typu, np. wszystkie Pudełka przez NFC\n"
+            + "3. Ustawienie ogólne\n\n"
+            + "Usuń, −1, rozpinanie NFC i inne operacje zmieniające dane "
+            + "zawsze wymagają osobnego potwierdzenia.", 14, false));
+    }
+
+    private String scanSpecificKey(String source, String kind, long id) {
+        return "scan_default_" + source + "_" + kind + "_" + id;
+    }
+
+    private String scanTypeKey(String source, String kind) {
+        return "scan_default_" + source + "_" + kind;
+    }
+
+    private String resolveScanAction(String source, String kind, long id) {
+        String specific = prefs.getString(scanSpecificKey(source, kind, id), "");
+        if ("show".equals(specific) || "open".equals(specific)) return specific;
+        String byType = prefs.getString(scanTypeKey(source, kind), "");
+        if ("show".equals(byType) || "open".equals(byType)) return byType;
+        if ("nfc".equals(source)) {
+            String nfcGlobal = prefs.getString(SCAN_DEFAULT_NFC, "");
+            if ("show".equals(nfcGlobal) || "open".equals(nfcGlobal))
+                return nfcGlobal;
+        }
+        String global = prefs.getString(SCAN_DEFAULT_GLOBAL, "show");
+        return "open".equals(global) ? "open" : "show";
+    }
+
+    private String scanActionLabel(String action) {
+        return "open".equals(action) ? "Otwórz obiekt automatycznie"
+            : "Pokaż działania";
+    }
+
+    private void showGlobalScanDefaultDialog() {
+        String[] options = {"Pokaż działania", "Otwórz obiekt automatycznie"};
+        new AlertDialog.Builder(this)
+            .setTitle("Po zeskanowaniu • ogólnie")
+            .setSingleChoiceItems(options,
+                "open".equals(prefs.getString(SCAN_DEFAULT_GLOBAL, "show")) ? 1 : 0,
+                (dialog, which) -> {
+                    prefs.edit().putString(SCAN_DEFAULT_GLOBAL,
+                        which == 1 ? "open" : "show").apply();
+                    dialog.dismiss();
+                    render();
+                })
+            .setNegativeButton("Anuluj", null).show();
+    }
+
+    private String scanKindPluralLabel(String kind) {
+        switch(kind) {
+            case "thing": return "rzeczy";
+            case "box": return "pudełka";
+            case "place": return "miejsca";
+            case "pantry": return "produkty";
+            case "vehicle": return "pojazdy";
+            default: return NfcLinkStore.kindLabel(kind).toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    private void showScanDefaultDialog(String source, String kind, long id,
+            String name) {
+        String pluralLabel = scanKindPluralLabel(kind);
+        String sourceLabel = "nfc".equals(source) ? "NFC" : "QR";
+        String[] options = {
+            "Ten obiekt: pokaż działania",
+            "Ten obiekt: otwórz automatycznie",
+            "Wszystkie " + pluralLabel + " przez " + sourceLabel + ": pokaż działania",
+            "Wszystkie " + pluralLabel + " przez " + sourceLabel + ": otwórz automatycznie",
+            "Ten obiekt: dziedzicz regułę typu / ogólną"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Po skanie • " + name)
+            .setItems(options, (dialog, which) -> {
+                SharedPreferences.Editor edit = prefs.edit();
+                if (which == 0)
+                    edit.putString(scanSpecificKey(source, kind, id), "show");
+                else if (which == 1)
+                    edit.putString(scanSpecificKey(source, kind, id), "open");
+                else if (which == 2)
+                    edit.putString(scanTypeKey(source, kind), "show");
+                else if (which == 3)
+                    edit.putString(scanTypeKey(source, kind), "open");
+                else
+                    edit.remove(scanSpecificKey(source, kind, id));
+                edit.apply();
+                DiagnosticLog.event("SCAN_DEFAULT_SAVED",
+                    "source=" + source + " kind=" + kind);
+            })
+            .setNegativeButton("Anuluj", null).show();
+    }
+
+    private void handleCentralScan(String raw) {
+        String code = raw == null ? "" : raw.trim();
+        if (code.isEmpty()) return;
+        StorageQr.Target storageTarget = StorageQr.decode(code);
+        if (storageTarget != null) {
+            handleStorageTargetScan(storageTarget.kind, storageTarget.id, "qr");
+            return;
+        }
+        if (PantryScanRules.validBarcode(code)) {
+            showProductBarcodeActions(code);
+            return;
+        }
+        alert("Kod został odczytany, ale EDHOME nie rozpoznaje jeszcze jego typu.");
+        DiagnosticLog.event("CENTRAL_SCANNER_UNKNOWN");
+    }
+
+    private void showProductBarcodeActions(String barcode) {
+        final PantryBarcodeStore.Item item;
+        try {
+            item = PantryBarcodeStore.find(db.getReadableDatabase(), barcode);
+        } catch (Exception problem) {
+            DiagnosticLog.error("CENTRAL_PRODUCT_READ", problem);
+            alert("Nie udało się odczytać produktu.");
+            return;
+        }
+        if (item == null) {
+            new AlertDialog.Builder(this)
+                .setTitle("Nieznany kod produktu")
+                .setMessage(barcode)
+                .setNegativeButton("Zamknij", null)
+                .setPositiveButton("Dodaj / wyszukaj produkt",
+                    (d,w) -> onPantryBarcode(barcode, "ADD"))
+                .show();
+            return;
+        }
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(16), dp(12), dp(16), dp(10));
+        actions.addView(text(item.name, 18, true));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Produkt • " + barcode)
+            .setView(actions).setNegativeButton("Zamknij", null).create();
+        smallButton(actions, "Otwórz produkt", () -> {
+            dialog.dismiss();
+            pantrySearch = item.name;
+            pantryCategoryFilter = "";
+            go("pantry");
+        });
+        smallButton(actions, "Dodaj +1", () -> {
+            dialog.dismiss();
+            onPantryBarcode(barcode, "ADD");
+        });
+        smallButton(actions, "Wyciągnij −1", () -> {
+            dialog.dismiss();
+            onPantryBarcode(barcode, "TAKE");
+        });
+        dialog.show();
+    }
+
+    private void handleKnownNfcScan(NfcLinkStore.Link link) {
+        String name = NfcLinkStore.targetName(
+            db.getReadableDatabase(), link.kind, link.targetId);
+        if (name.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Stare powiązanie NFC")
+                .setMessage("Obiekt przypisany do tego tagu już nie istnieje. "
+                    + "Usunąć stare powiązanie?")
+                .setNegativeButton("Zostaw", null)
+                .setPositiveButton("Usuń", (d,w) -> {
+                    NfcLinkStore.clearUid(db.getWritableDatabase(), link.uid);
+                    render();
+                }).show();
+            return;
+        }
+        if ("open".equals(resolveScanAction("nfc", link.kind, link.targetId)))
+            openScannedTarget(link.kind, link.targetId, name);
+        else
+            showScannedTargetActions("nfc", link.kind, link.targetId, name);
+        DiagnosticLog.event("NFC_TARGET_SCANNED");
+    }
+
+    private void handleStorageTargetScan(String kind, long id, String source) {
+        String name = NfcLinkStore.targetName(db.getReadableDatabase(), kind, id);
+        if (name.isEmpty()) {
+            alert("Ten kod wskazuje usunięty lub nieobecny obiekt. "
+                + "Nie zostanie przypisany nowemu obiektowi.");
+            return;
+        }
+        if ("qr".equals(source)) {
+            if ("place".equals(kind)) {
+                for (PlaceEntry place : readPlaces())
+                    if (place.id == id) {
+                        StorageQrLabels.log(this, "Skan miejsca", qrLabel(place));
+                        break;
+                    }
+            } else {
+                StorageStore.Item item = StorageStore.find(db.getReadableDatabase(), id);
+                if (item != null)
+                    StorageQrLabels.log(this,
+                        "Skan " + ("box".equals(kind) ? "pudełka" : "rzeczy"),
+                        qrLabel(item));
+            }
+        }
+        if ("open".equals(resolveScanAction(source, kind, id)))
+            openScannedTarget(kind, id, name);
+        else
+            showScannedTargetActions(source, kind, id, name);
+    }
+
+    private void openScannedTarget(String kind, long id, String name) {
+        if ("thing".equals(kind) || "box".equals(kind)) {
+            storageTemporaryKind=kind;
+            expandStorageNfcPath(id);
+            go("storage");
+        } else if ("place".equals(kind)) {
+            go("places");
+        } else if ("pantry".equals(kind)) {
+            pantrySearch = name;
+            pantryCategoryFilter = "";
+            go("pantry");
+        } else if ("vehicle".equals(kind)) {
+            prefs.edit().putBoolean("vehicle_collapsed_" + id, false).apply();
+            go("vehicles");
+        }
+        DiagnosticLog.event("SCANNED_TARGET_OPENED",
+            "kind=" + kind + " id=" + id);
+    }
+
+    private void showScannedTargetActions(String source, String kind, long id,
+            String name) {
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(16), dp(12), dp(16), dp(10));
+        actions.addView(text(("nfc".equals(source) ? "NFC" : "QR")
+            + " • " + NfcLinkStore.kindLabel(kind), 14, false));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(name).setView(actions)
+            .setNegativeButton("Zamknij", null).create();
+
+        smallButton(actions, "Otwórz", () -> {
+            dialog.dismiss();
+            openScannedTarget(kind, id, name);
+        });
+
+        if ("thing".equals(kind) || "box".equals(kind)) {
+            StorageStore.Item item = StorageStore.find(db.getReadableDatabase(), id);
+            if (item != null) {
+                smallButton(actions, "Przenieś / edytuj", () -> {
+                    dialog.dismiss();
+                    storageEditor(item.kind, item.id);
+                });
+                if ("thing".equals(kind) && item.lentTo == null)
+                    smallButton(actions, "Wypożycz", () -> {
+                        dialog.dismiss();
+                        askStorageLend(item);
+                    });
+                else if ("thing".equals(kind) && item.lentTo != null)
+                    smallButton(actions, "Potwierdź zwrot", () -> {
+                        dialog.dismiss();
+                        new AlertDialog.Builder(this)
+                            .setTitle("Potwierdzić zwrot?")
+                            .setMessage(name)
+                            .setNegativeButton("Anuluj", null)
+                            .setPositiveButton("Zwróć", (d,w) -> {
+                                try {
+                                    StorageStore.returned(db.getWritableDatabase(), id);
+                                    render();
+                                } catch (Exception issue) {
+                                    alert(issue.getMessage());
+                                }
+                            }).show();
+                    });
+                smallButton(actions, "QR / etykieta", () -> {
+                    dialog.dismiss();
+                    showStorageQr(item);
+                });
+            }
+        } else if ("place".equals(kind)) {
+            PlaceEntry place = null;
+            for (PlaceEntry candidate : readPlaces())
+                if (candidate.id == id) { place = candidate; break; }
+            final PlaceEntry selected = place;
+            if (selected != null) {
+                smallButton(actions, "Edytuj / przenieś miejsce", () -> {
+                    dialog.dismiss();
+                    placeEditor(selected.id, selected.name, selected.kind,
+                        selected.parent, selected.icon);
+                });
+                smallButton(actions, "QR / etykieta", () -> {
+                    dialog.dismiss();
+                    showPlaceQr(selected);
+                });
+            }
+        } else if ("pantry".equals(kind)) {
+            smallButton(actions, "Dodaj +1", () -> {
+                dialog.dismiss();
+                new AlertDialog.Builder(this)
+                    .setTitle("Dodać +1?")
+                    .setMessage(name)
+                    .setNegativeButton("Anuluj", null)
+                    .setPositiveButton("Dodaj", (d,w) -> {
+                        db.changeStock(id, 1);
+                        DiagnosticLog.event("SCAN_PANTRY_INCREMENT");
+                        render();
+                    }).show();
+            });
+            smallButton(actions, "Wyciągnij −1", () -> {
+                dialog.dismiss();
+                new AlertDialog.Builder(this)
+                    .setTitle("Wyciągnąć −1?")
+                    .setMessage(name)
+                    .setNegativeButton("Anuluj", null)
+                    .setPositiveButton("Wyciągnij", (d,w) -> {
+                        db.changeStock(id, -1);
+                        DiagnosticLog.event("SCAN_PANTRY_DECREMENT");
+                        render();
+                    }).show();
+            });
+        }
+
+        smallButton(actions, "Po zeskanowaniu domyślnie…", () ->
+            showScanDefaultDialog(source, kind, id, name));
+        lightDialogForm(actions);
+        dialog.show();
+    }
+
     private void storage() {
+        boolean showThings=storageThingsVisible();
+        boolean showBoxes=storageBoxesVisible();
+        boolean showPlaces=storagePlacesVisible();
         header("Rzeczy • pudełka • QR");
         note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
             + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
-        button("+ Dodaj rzecz", () -> storageEditor("thing", null));
-        button("+ Dodaj pudełko", () -> storageEditor("box", null));
-        button("▣ Skanuj QR rzeczy lub pudełka", () -> {
-            if (storageQrCameraPending || pantrySingleCameraPending
-                    || pantryBatch.active()) return;
-            storageQrCameraPending = true;
-            IntentIntegrator qr = new IntentIntegrator(this);
-            qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-            qr.setPrompt("EDHOME: QR rzeczy lub pudełka");
-            qr.setBeepEnabled(false);
-            qr.setOrientationLocked(false);
-            qr.initiateScan();
-        });
-        button("← Miejsca", () -> go("places"));
-        int count=0;
+        if(showThings)button("+ Dodaj rzecz", () -> storageEditor("thing", null));
+        if(showBoxes)button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        if (releaseFeaturesEnabled()) {
+            button("▣ Drukuj wybrane etykiety QR / PDF",
+                this::selectBulkQrLabels);
+            button("◷ Historia skanowania i drukowania QR",
+                this::showQrHistory);
+        }
+        button("▣ Skaner EDHOME • QR / NFC / kody", () -> go("scanner"));
+        if(showPlaces)button("← Miejsca", () -> go("places"));
+        // One read-only tree: Miejsce → podmiejsce → pudełko → rzecz.
+        // Collapsing hides descendants without changing database relations.
+        java.util.List<PlaceEntry> places=readPlaces();
+        java.util.List<StorageStore.Item> items=new java.util.ArrayList<>();
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
                 null)) {
-            while(c.moveToNext()) {
-                StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),
-                    c.getLong(0));
-                if(item==null)continue;
-                count++;
-                LinearLayout box=card();
-                box.addView(text(("box".equals(item.kind)?"▣ Pudełko: ":"◉ Rzecz: ")
-                    +item.name,18,true));
-                box.addView(text(StorageStore.location(db.getReadableDatabase(),item),
-                    13,false));
-                if(item.lentTo!=null)
-                    box.addView(text("Wypożyczono: "+item.lentTo,13,false));
-                smallButton(box,"Pokaż QR",()->showStorageQr(item));
-                if(item.lentTo==null)
-                    smallButton(box,"Przenieś",()->storageEditor(item.kind,item.id));
-                if("thing".equals(item.kind)){
-                    if(item.lentTo==null)
-                        smallButton(box,"Wypożycz",()->askStorageLend(item));
-                    else smallButton(box,"Zwrot",()->{
-                        try{
-                            StorageStore.returned(db.getWritableDatabase(),item.id);
-                            DiagnosticLog.event("STORAGE_RETURNED");render();
-                        }catch(Exception e){alert(e.getMessage());}
-                    });
-                }
-                smallButton(box,"Usuń",()->new AlertDialog.Builder(this)
-                    .setTitle("Usunąć rzecz z magazynu?")
-                    .setMessage(item.name+" — QR przestanie działać. Historia pozostanie.")
-                    .setNegativeButton("Anuluj",null)
-                    .setPositiveButton("Usuń",(d,w)->{
-                        try {
-                            StorageStore.remove(db.getWritableDatabase(),item.id);
-                            DiagnosticLog.event("STORAGE_REMOVED");render();
-                        }catch(Exception e){alert(e.getMessage());}
-                    }).show());
+            while(c.moveToNext()){
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item!=null)items.add(item);
             }
         }
-        if(count==0)note("Dodaj pierwszą rzecz albo pudełko; nazwy i miejsca wybierasz sam.");
+        if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))
+            storageThingsGallery(items);
+        title("Podgląd magazynu");
+        note("Widok: "
+            +(showPlaces?"miejsca ":"")
+            +(showBoxes?"pudełka ":"")
+            +(showThings?"rzeczy":"")
+            +". Zmienisz to w Ustawieniach; ukrywanie niczego nie usuwa.");
+        note("Tapnij nagłówek tylko wtedy, gdy chcesz ukryć lub pokazać zawartość. "
+            +"Bez przeładowania ekranu i bez utraty przewinięcia.");
+        java.util.Set<Long> drawnPlaces=new java.util.HashSet<>();
+        java.util.Set<Long> drawnItems=new java.util.HashSet<>();
+        java.util.Set<Long> knownPlaces=new java.util.HashSet<>();
+        java.util.Set<Long> knownBoxes=new java.util.HashSet<>();
+        for(PlaceEntry place:places)knownPlaces.add(place.id);
+        for(StorageStore.Item item:items)
+            if("box".equals(item.kind))knownBoxes.add(item.id);
+        for(PlaceEntry place:places)
+            if(place.parent==null || !knownPlaces.contains(place.parent))
+                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body);
+        // Guard old damaged/cyclic data, without exposing collapsed descendants.
+        for(PlaceEntry place:places)
+            if(!drawnPlaces.contains(place.id)
+                    &&place.parent!=null
+                    &&!knownPlaces.contains(place.parent))
+                storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body);
+        boolean unassigned=false;
+        for(StorageStore.Item item:items)
+            if(item.boxId==null && (item.placeId==null
+                    ||!knownPlaces.contains(item.placeId))) {
+                unassigned=true;break;
+            }
+        if(unassigned) {
+            LinearLayout unassignedChildren=storageTreeHeading(
+                "Bez przypisanego miejsca",0,"storage_tree_unassigned",
+                prefs.getBoolean("storage_tree_unassigned",false),body);
+            for(StorageStore.Item item:items)
+                if(item.boxId==null && (item.placeId==null
+                        ||!knownPlaces.contains(item.placeId)))
+                    storageTreeItem(item,items,drawnItems,1,unassignedChildren);
+        }
+        // Orphaned item children are not silently dropped after an old restore.
+        for(StorageStore.Item item:items)
+            if(item.boxId!=null&&!knownBoxes.contains(item.boxId)
+                    &&!drawnItems.contains(item.id))
+                storageTreeItem(item,items,drawnItems,0,body);
+        boolean visibleData=showPlaces&&!places.isEmpty();
+        if(!visibleData)
+            for(StorageStore.Item item:items)
+                if(("box".equals(item.kind)&&showBoxes)
+                        ||(!"box".equals(item.kind)&&showThings)) {
+                    visibleData=true;break;
+                }
+        if(!visibleData)
+            note(!showPlaces&&!showBoxes&&!showThings
+                ?"Wszystkie typy są ukryte. Włącz je w Ustawieniach."
+                :"Brak elementów dla wybranego widoku magazynu.");
         title("Ostatnie ruchy magazynu");
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT name_snapshot,action,details FROM storage_events "
@@ -2563,6 +5710,294 @@ public final class MainActivity extends Activity {
             while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
                 +" • "+c.getString(2));
         }
+    }
+
+    private void storageThingsGallery(java.util.List<StorageStore.Item> items) {
+        java.util.List<StorageStore.Item> things=new java.util.ArrayList<>();
+        for(StorageStore.Item item:items)
+            if(!"box".equals(item.kind))things.add(item);
+        if(things.isEmpty())return;
+
+        title("Galeria rzeczy");
+        note("Szybki podgląd tego, co masz. Dotknij miniatury, aby otworzyć rzecz. "
+            +"Brak zdjęcia nie ukrywa przedmiotu.");
+        LinearLayout grid=new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+
+        for(int i=0;i<things.size();i+=2) {
+            LinearLayout row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            grid.addView(row,new LinearLayout.LayoutParams(-1,-2));
+            for(int slot=0;slot<2;slot++) {
+                int index=i+slot;
+                if(index>=things.size()) {
+                    View spacer=new View(this);
+                    LinearLayout.LayoutParams empty=new LinearLayout.LayoutParams(
+                        0,dp(1),1f);
+                    empty.setMargins(dp(4),0,dp(4),0);
+                    row.addView(spacer,empty);
+                    continue;
+                }
+                StorageStore.Item item=things.get(index);
+                LinearLayout tile=new LinearLayout(this);
+                tile.setOrientation(LinearLayout.VERTICAL);
+                tile.setPadding(dp(10),dp(10),dp(10),dp(10));
+                tile.setBackground(skin.panel(this,surface,22));
+                tile.setElevation(dp(2));
+                tile.setClickable(true);
+                tile.setFocusable(true);
+                touchFeedback(tile);
+
+                Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+                if(thumbnail!=null) {
+                    ImageView image=new ImageView(this);
+                    image.setImageBitmap(thumbnail);
+                    image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    tile.addView(image,new LinearLayout.LayoutParams(-1,dp(118)));
+                } else {
+                    TextView missing=text("◉\nBrak zdjęcia",14,true);
+                    missing.setGravity(Gravity.CENTER);
+                    missing.setTextColor(subdued);
+                    tile.addView(missing,new LinearLayout.LayoutParams(-1,dp(118)));
+                }
+
+                TextView name=text(item.name,15,true);
+                name.setMaxLines(2);
+                tile.addView(name);
+                TextView location=text(
+                    StorageStore.location(db.getReadableDatabase(),item),11,false);
+                location.setTextColor(subdued);
+                location.setMaxLines(2);
+                tile.addView(location);
+                tile.setContentDescription("Rzecz: "+item.name+" • otwórz");
+                tile.setOnClickListener(v->storageEditor(item.kind,item.id));
+
+                LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(
+                    0,-2,1f);
+                cell.setMargins(dp(4),dp(4),dp(4),dp(4));
+                row.addView(tile,cell);
+            }
+        }
+        DiagnosticLog.event("STORAGE_THINGS_GALLERY_VIEWED",
+            "count="+things.size());
+    }
+
+    /** Reparent a newly built card into its branch while retaining card style. */
+    private void storageTreeAttach(LinearLayout row,LinearLayout target) {
+        if(target==body)return;
+        body.removeView(row);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
+        params.setMargins(0,dp(3),0,dp(3));
+        target.addView(row,params);
+    }
+
+    /** The header and children remain the SAME Android views when toggled.
+     * No render(), scroll reset, focus reset or database write.
+     */
+    private LinearLayout storageTreeHeading(String label,int depth,
+            String prefKey,boolean collapsed,LinearLayout target) {
+        LinearLayout row=card();
+        row.setPadding(dp(12+Math.min(depth,8)*13),dp(4),dp(12),dp(4));
+        TextView heading=text((collapsed?"▸ ":"▾ ")+label,17,true);
+        heading.setMinHeight(dp(44));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(heading);
+        storageTreeAttach(row,target);
+        LinearLayout children=new LinearLayout(this);
+        children.setOrientation(LinearLayout.VERTICAL);
+        children.setVisibility(collapsed?View.GONE:View.VISIBLE);
+        target.addView(children,new LinearLayout.LayoutParams(-1,-2));
+        row.setClickable(true);
+        row.setFocusable(true);
+        touchFeedback(row);
+        row.setContentDescription(label+(collapsed?" • Rozwiń":" • Zwiń"));
+        row.setOnClickListener(v->{
+            boolean nowCollapsed=children.getVisibility()==View.VISIBLE;
+            children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);
+            heading.setText((nowCollapsed?"▸ ":"▾ ")+label);
+            row.setContentDescription(label+(nowCollapsed
+                ?" • Rozwiń":" • Zwiń"));
+            prefs.edit().putBoolean(prefKey,nowCollapsed).apply();
+        });
+        return children;
+    }
+
+    private void storageTreePlace(PlaceEntry place,
+            java.util.List<PlaceEntry> places,
+            java.util.List<StorageStore.Item> items,
+            java.util.Set<Long> drawnPlaces,
+            java.util.Set<Long> drawnItems,int depth,LinearLayout target) {
+        if(depth>64||!drawnPlaces.add(place.id))return;
+        boolean visible=storagePlacesVisible();
+        LinearLayout children=target;
+        int childDepth=depth;
+        if(visible) {
+            String key="storage_tree_place_"+place.id;
+            boolean collapsed=prefs.getBoolean(key,false);
+            children=storageTreeHeading("⌂ "+place.name,
+                depth,key,collapsed,target);
+            if (releaseFeaturesEnabled() && storageActionVisible("place","qr"))
+                smallButton(children,"QR i etykieta miejsca",
+                    () -> showPlaceQr(place));
+            if(storageActionVisible("place","nfc"))
+                nfcTargetButton(children,"place",place.id,place.name);
+            childDepth=depth+1;
+        }
+        for(PlaceEntry child:places)
+            if(child.parent!=null&&child.parent==place.id)
+                storageTreePlace(child,places,items,drawnPlaces,
+                    drawnItems,childDepth,children);
+        for(StorageStore.Item item:items)
+            if(item.boxId==null && item.placeId!=null
+                    &&item.placeId==place.id)
+                storageTreeItem(item,items,drawnItems,childDepth,children);
+    }
+
+    private void storageTreeItem(StorageStore.Item item,
+            java.util.List<StorageStore.Item> items,
+            java.util.Set<Long> drawnItems,int depth,LinearLayout target) {
+        if(depth>64||!drawnItems.add(item.id))return;
+        boolean isBox="box".equals(item.kind);
+        boolean visible=isBox?storageBoxesVisible():storageThingsVisible();
+        LinearLayout inner=target;
+        int childDepth=depth;
+        if(visible) {
+            String key="storage_tree_box_"+item.id;
+            if(isBox) {
+                inner=storageTreeHeading("▣ Pudełko #"+item.id+" • "+item.name,
+                    depth,key,prefs.getBoolean(key,false),target);
+                childDepth=depth+1;
+            }
+            LinearLayout details=card();
+            details.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
+            storageTreeAttach(details,inner);
+            Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+            if(thumbnail!=null) {
+                ImageView preview=new ImageView(this);
+                preview.setImageBitmap(thumbnail);
+                preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                details.addView(preview,new LinearLayout.LayoutParams(
+                    dp(82),dp(82)));
+            }
+            if(!isBox)details.addView(text("◉ "+item.name,16,true));
+            if(storageActionVisible(item.kind,"photo")) {
+                smallButton(details,thumbnail==null?"Dodaj zdjęcie • miniatura":
+                    "Zmień zdjęcie • miniatura",()->selectStorageThumbnail(item.id));
+                if(thumbnail!=null)
+                    smallButton(details,"Usuń zdjęcie",()->{
+                        prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                        render();
+                    });
+            }
+            details.addView(text(StorageStore.location(db.getReadableDatabase(),item),
+                12,false));
+            if(item.lentTo!=null)
+                details.addView(text("Wypożyczono: "+item.lentTo,13,false));
+            if(storageActionVisible(item.kind,"qr"))
+                smallButton(details,"Pokaż QR",()->showStorageQr(item));
+            if(storageActionVisible(item.kind,"nfc"))
+                nfcTargetButton(details,item.kind,item.id,item.name);
+            if (releaseFeaturesEnabled() && storageActionVisible(item.kind,"print"))
+                smallButton(details,"Drukuj etykietę / PDF / Udostępnij",
+                    () -> selectQrLabelFormat(java.util.Collections.singletonList(
+                        qrLabel(item))));
+            if(item.lentTo==null && storageActionVisible(item.kind,"move"))
+                smallButton(details,"Przenieś",()->storageEditor(item.kind,item.id));
+            if(!isBox && storageActionVisible(item.kind,"lend")) {
+                if(item.lentTo==null)
+                    smallButton(details,"Wypożycz",()->askStorageLend(item));
+                else smallButton(details,"Zwrot",()->{
+                    try{
+                        StorageStore.returned(db.getWritableDatabase(),item.id);
+                        DiagnosticLog.event("STORAGE_RETURNED");render();
+                    }catch(Exception error){alert(error.getMessage());}
+                });
+            }
+            if(storageActionVisible(item.kind,"delete"))
+                smallButton(details,"Usuń",()->new AlertDialog.Builder(this)
+                    .setTitle(isBox?"Usunąć pudełko?":"Usunąć rzecz?")
+                    .setMessage(item.name+" — QR zostanie unieważniony i nie będzie "
+                        +"przydzielony nowemu obiektowi. Historia pozostanie.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń",(dialog,which)->{
+                        try{
+                            StorageStore.remove(db.getWritableDatabase(),item.id);
+                            prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                            DiagnosticLog.event("STORAGE_REMOVED");render();
+                        }catch(Exception error){alert(error.getMessage());}
+                    }).show());
+        }
+        if(isBox)
+            for(StorageStore.Item child:items)
+                if(child.boxId!=null && child.boxId==item.id)
+                    storageTreeItem(child,items,drawnItems,childDepth,inner);
+    }
+
+    private void selectStorageThumbnail(long id) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null) {
+            alert("Rzecz już nie istnieje.");return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Miniatura • "+item.name)
+            .setItems(new String[]{"📷 Zrób zdjęcie",
+                "🖼️ Wybierz z galerii / folderu"},(dialog,choice)->{
+                if(choice==0)takeStorageThumbnail(id);
+                else pickStorageThumbnail(id);
+            })
+            .setNegativeButton("Anuluj",null).show();
+    }
+
+    private void pickStorageThumbnail(long id) {
+        pendingStorageThumbnailId=id;
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("image/*");
+        try {startActivityForResult(picker,IMPORT_STORAGE_THUMBNAIL);}
+        catch(Exception error){
+            pendingStorageThumbnailId=0;
+            alert("Nie można otworzyć wyboru zdjęcia.");
+        }
+    }
+
+    private void takeStorageThumbnail(long id) {
+        pendingStorageThumbnailId=id;
+        if(Build.VERSION.SDK_INT>=23
+                &&checkSelfPermission(android.Manifest.permission.CAMERA)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA},
+                STORAGE_CAMERA_PERMISSION);
+            return;
+        }
+        launchStorageThumbnailCamera();
+    }
+
+    private void launchStorageThumbnailCamera() {
+        long id=pendingStorageThumbnailId;
+        if(id<=0||StorageStore.find(db.getReadableDatabase(),id)==null) {
+            pendingStorageThumbnailId=0;
+            alert("Rzecz już nie istnieje.");return;
+        }
+        Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        if(camera.resolveActivity(getPackageManager())==null) {
+            pendingStorageThumbnailId=0;
+            alert("Nie znaleziono aplikacji aparatu.");return;
+        }
+        try {startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);}
+        catch(Exception error) {
+            pendingStorageThumbnailId=0;
+            alert("Nie można uruchomić aparatu.");
+        }
+    }
+
+    private void saveStorageThumbnail(long id,String thumbnail) {
+        if(StorageStore.find(db.getReadableDatabase(),id)==null)
+            throw new IllegalArgumentException("Rzecz już nie istnieje.");
+        if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit())
+            throw new IllegalStateException("Nie zapisano miniatury.");
+        DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
+        render();
     }
 
     private void storageEditor(String kind, Long itemId) {
@@ -2598,7 +6033,7 @@ public final class MainActivity extends Activity {
             }
         }
         Spinner destination=new Spinner(this);
-        destination.setAdapter(themeSpinnerAdapter(labels));
+        destination.setAdapter(lightDialogSpinnerAdapter(labels));
         if(existing!=null)for(int i=0;i<labels.size();i++){
             if(java.util.Objects.equals(boxIds.get(i),existing.boxId)
                     &&java.util.Objects.equals(placeIds.get(i),existing.placeId)){
@@ -2608,19 +6043,37 @@ public final class MainActivity extends Activity {
         layout.addView(text("Położenie (rzeczy w pudełku dziedziczą jego miejsce)",
             14,false));
         layout.addView(destination);
+        lightDialogForm(layout);
         new AlertDialog.Builder(this)
             .setTitle(existing==null?"Dodaj do magazynu":"Przenieś")
             .setView(layout).setNegativeButton("Anuluj",null)
             .setPositiveButton(existing==null?"Dodaj":"Przenieś",(d,w)->{
                 try{
                     int i=destination.getSelectedItemPosition();
-                    if(existing==null)StorageStore.create(db.getWritableDatabase(),
-                        name.getText().toString(),kind,boxIds.get(i),placeIds.get(i));
+                    long createdId=0L;
+                    String createdName=name.getText().toString().trim();
+                    if(existing==null)createdId=StorageStore.create(
+                        db.getWritableDatabase(),createdName,kind,
+                        boxIds.get(i),placeIds.get(i));
                     else StorageStore.move(db.getWritableDatabase(),existing.id,
                         boxIds.get(i),placeIds.get(i));
                     DiagnosticLog.event(existing==null?
                         "STORAGE_CREATED":"STORAGE_MOVED");
                     render();
+                    if(existing==null) {
+                        final long newId=createdId;
+                        final String newName=createdName;
+                        new AlertDialog.Builder(this)
+                            .setTitle("box".equals(kind)
+                                ?"Pudełko dodane":"Rzecz dodana")
+                            .setMessage("QR jest już przypisany automatycznie i "
+                                +"pozostaje unikalny dla tego obiektu.\n\n"
+                                +"Przypisać teraz tag NFC?")
+                            .setNegativeButton("Później",null)
+                            .setPositiveButton("Przypisz NFC",(nd,nw)->
+                                beginNfcAssignment(kind,newId,newName))
+                            .show();
+                    }
                 }catch(Exception problem){alert(problem.getMessage());}
             }).show();
     }
@@ -2628,6 +6081,7 @@ public final class MainActivity extends Activity {
     private void askStorageLend(StorageStore.Item item){
         EditText recipient=new EditText(this);
         recipient.setSingleLine(true);recipient.setHint("Komu wypożyczono?");
+        lightDialogForm(recipient);
         new AlertDialog.Builder(this).setTitle("Wypożycz: "+item.name)
             .setView(recipient).setNegativeButton("Anuluj",null)
             .setPositiveButton("Wypożycz",(d,w)->{
@@ -2637,6 +6091,190 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event("STORAGE_LENT");render();
                 }catch(Exception problem){alert(problem.getMessage());}
             }).show();
+    }
+
+    private StorageQrLabels.Label qrLabel(StorageStore.Item item) {
+        return new StorageQrLabels.Label(item.kind,item.id,item.name,
+            StorageStore.location(db.getReadableDatabase(),item));
+    }
+
+    private StorageQrLabels.Label qrLabel(PlaceEntry place) {
+        return new StorageQrLabels.Label("place",place.id,place.name,
+            db.placePath(place.id));
+    }
+
+    private void showPlaceQr(PlaceEntry place) {
+        String payload=StorageQr.encode("place",place.id);
+        try {
+            com.google.zxing.common.BitMatrix bits =
+                new com.google.zxing.MultiFormatWriter().encode(payload,
+                    com.google.zxing.BarcodeFormat.QR_CODE,384,384);
+            Bitmap bmp=Bitmap.createBitmap(bits.getWidth(),bits.getHeight(),
+                Bitmap.Config.ARGB_8888);
+            for(int y=0;y<bits.getHeight();y++)
+                for(int x=0;x<bits.getWidth();x++)
+                    bmp.setPixel(x,y,bits.get(x,y)?Color.BLACK:Color.WHITE);
+            ImageView preview=new ImageView(this);
+            preview.setImageBitmap(bmp);
+            preview.setAdjustViewBounds(true);
+            new AlertDialog.Builder(this).setTitle("QR miejsca • "+place.name)
+                .setMessage(db.placePath(place.id)
+                    +"\nKod działa offline na tym urządzeniu; lokalizacja "
+                    +"nie zmienia identyfikatora QR.")
+                .setView(preview).setNegativeButton("Zamknij",null)
+                .setPositiveButton("Etykieta / PDF",(d,w)->
+                    selectQrLabelFormat(java.util.Collections.singletonList(
+                        qrLabel(place)))).show();
+        } catch(Exception problem) {
+            DiagnosticLog.error("PLACE_QR_DRAW",problem);
+            alert("Nie można utworzyć kodu QR miejsca.");
+        }
+    }
+
+    private void selectBulkQrLabels() {
+        java.util.List<StorageQrLabels.Label> all=new java.util.ArrayList<>();
+        for(PlaceEntry place:readPlaces())all.add(qrLabel(place));
+        try(Cursor cursor=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
+                null)) {
+            while(cursor.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),cursor.getLong(0));
+                if(item!=null)all.add(qrLabel(item));
+            }
+        }
+        if(all.isEmpty()) { alert("Dodaj najpierw rzeczy, pudełka lub miejsca.");return; }
+        if(all.size()>250) {
+            alert("Druk zbiorczy obsługuje do 250 etykiet na raz. "
+                +"Wybierz mniejszą grupę.");return;
+        }
+        String[] names=new String[all.size()];
+        boolean[] selected=new boolean[all.size()];
+        for(int i=0;i<all.size();i++) {
+            StorageQrLabels.Label label=all.get(i);
+            names[i]=("place".equals(label.kind)?"⌂ Miejsce: "
+                :"box".equals(label.kind)?"▣ Pudełko: ":"◉ Rzecz: ")
+                +label.name+" • "+label.location;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Zaznacz etykiety QR")
+            .setMultiChoiceItems(names,selected,(d,i,checked)->
+                selected[i]=checked)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dalej",(d,w)->{
+                java.util.List<StorageQrLabels.Label> chosen=
+                    new java.util.ArrayList<>();
+                for(int i=0;i<all.size();i++)
+                    if(selected[i])chosen.add(all.get(i));
+                if(chosen.isEmpty()) {
+                    alert("Zaznacz przynajmniej jedną etykietę.");return;
+                }
+                selectQrLabelFormat(chosen);
+            }).show();
+    }
+
+    private void selectQrLabelFormat(
+            java.util.List<StorageQrLabels.Label> selected) {
+        if(!releaseFeaturesEnabled())return;
+        String[] formats=StorageQrLabels.FORMATS.clone();
+        if(selected.size()==1) formats[3]="A4 — wybór zbiorczy";
+        new AlertDialog.Builder(this).setTitle(
+                "Format etykiet • "+selected.size()+" szt.")
+            .setItems(formats,(dialog,format)->{
+                if(format==3&&selected.size()==1) {
+                    selectBulkQrLabels();
+                    return;
+                }
+                // PDF rendering can be expensive for a large A4 batch.
+                new Thread(()->{
+                    byte[] output=null;
+                    String failure=null;
+                    try { output=StorageQrLabels.pdf(selected,format); }
+                    catch(Exception error) { failure=error.getMessage(); }
+                    byte[] pdf=output;
+                    String problem=failure;
+                    runOnUiThread(()->{
+                        if(pdf==null) {
+                            alert("Nie wygenerowano PDF: "+problem);return;
+                        }
+                        chooseQrOutput(pdf,selected.size(),format);
+                    });
+                },"edhome-qr-pdf").start();
+            }).show();
+    }
+
+    private void chooseQrOutput(byte[] pdf,int count,int format) {
+        // An Android AlertDialog cannot reliably show both message AND list
+        // on every device theme; use the title to preserve all three actions.
+        new AlertDialog.Builder(this)
+            .setTitle("Gotowe etykiety QR • "+count+"\n"
+                +StorageQrLabels.FORMATS[format])
+            .setItems(new String[]{"Drukuj przez Androida","Zapisz jako PDF",
+                "Udostępnij PDF"},(dialog,choice)->{
+                if(choice==0) {
+                    try {
+                        StorageQrLabels.print(this,pdf,
+                            StorageQrLabels.pages(count,format),format,
+                            "EDHOME — etykiety QR");
+                        StorageQrLabels.log(this,"Otworzono drukowanie",count);
+                    } catch(Exception error) {
+                        alert("Nie można otworzyć drukowania: "
+                            +error.getMessage());
+                    }
+                } else if(choice==1) {
+                    pendingQrLabelsPdf=pdf;
+                    pendingQrLabelsCount=count;
+                    Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    save.addCategory(Intent.CATEGORY_OPENABLE);
+                    save.setType("application/pdf");
+                    save.putExtra(Intent.EXTRA_TITLE,
+                        "EDHOME-etykiety-QR.pdf");
+                    try { startActivityForResult(save,EXPORT_QR_LABELS_PDF); }
+                    catch(Exception error) {
+                        pendingQrLabelsPdf=null;
+                        alert("Nie można otworzyć zapisu PDF.");
+                    }
+                } else shareQrPdf(pdf,count);
+            }).show();
+    }
+
+    private void shareQrPdf(byte[] pdf,int count) {
+        try {
+            java.io.File folder=new java.io.File(
+                getCacheDir(),"qr-labels");
+            if(!folder.isDirectory()&&!folder.mkdirs())
+                throw new java.io.IOException("Brak katalogu PDF.");
+            String file="edhome-qr-"+java.util.UUID.randomUUID().toString()
+                .replace("-","")+".pdf";
+            java.io.File out=new java.io.File(folder,file);
+            try(java.io.FileOutputStream stream=
+                    new java.io.FileOutputStream(out)) {
+                stream.write(pdf);
+            }
+            Uri uri=Uri.parse("content://"+getPackageName()
+                +".qrpdf/labels/"+file);
+            Intent share=new Intent(Intent.ACTION_SEND);
+            share.setType("application/pdf");
+            share.putExtra(Intent.EXTRA_STREAM,uri);
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            share.setClipData(ClipData.newUri(getContentResolver(),
+                "Etykiety EDHOME",uri));
+            startActivity(Intent.createChooser(share,
+                "Udostępnij etykiety QR"));
+            StorageQrLabels.log(this,"Otworzono udostępnianie PDF",count);
+        } catch(Exception failure) {
+            DiagnosticLog.error("QR_SHARE",failure);
+            alert("Nie można udostępnić PDF.");
+        }
+    }
+
+    private void showQrHistory() {
+        String history=prefs.getString(StorageQrLabels.HISTORY,"");
+        new AlertDialog.Builder(this).setTitle("Historia QR")
+            .setMessage(history.isEmpty()
+                ?"Brak zeskanowanych, drukowanych lub zapisanych etykiet."
+                :history.replace("\n\n","\n"))
+            .setPositiveButton("Zamknij",null).show();
     }
 
     private void showStorageQr(StorageStore.Item item) {
@@ -2653,14 +6291,23 @@ public final class MainActivity extends Activity {
             ImageView picture=new ImageView(this);
             picture.setImageBitmap(bmp);
             picture.setAdjustViewBounds(true);
-            new AlertDialog.Builder(this).setTitle("QR • "+item.name)
+            AlertDialog.Builder preview=new AlertDialog.Builder(this)
+                .setTitle("QR • "+item.name)
                 .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
                     +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
-                .setView(picture).setNegativeButton("Zamknij",null)
-                .setPositiveButton("Kopiuj kod",(d,w)->{
+                .setView(picture).setNegativeButton("Zamknij",null);
+            if(releaseFeaturesEnabled())preview.setNeutralButton(
+                "Kopiuj kod",(d,w)->{
                     ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
                         .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
-                }).show();
+                }).setPositiveButton("Etykieta / PDF",(d,w)->
+                    selectQrLabelFormat(java.util.Collections.singletonList(
+                        qrLabel(item))));
+            else preview.setPositiveButton("Kopiuj kod",(d,w)->{
+                ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
+                    .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
+            });
+            preview.show();
         }catch(Exception error){
             DiagnosticLog.error("STORAGE_QR_DRAW",error);
             alert("Nie udało się wyświetlić QR.");
@@ -2668,29 +6315,23 @@ public final class MainActivity extends Activity {
     }
 
     private void openStorageQr(String value) {
-        StorageQr.Target target=StorageQr.decode(value);
-        if(target==null){alert("To nie jest QR rzeczy/pudełka EDHOME.");return;}
-        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),target.id);
-        if(item==null||!item.kind.equals(target.kind)){
-            alert("Nie znaleziono obiektu o tym QR w lokalnym magazynie.");
+        StorageQr.Target target = StorageQr.decode(value);
+        if (target == null) {
+            alert("To nie jest QR EDHOME.");
             return;
         }
-        new AlertDialog.Builder(this).setTitle(item.name)
-            .setMessage(("box".equals(item.kind)?"Pudełko":"Rzecz")
-                +"\n"+StorageStore.location(db.getReadableDatabase(),item)
-                +(item.lentTo==null?"":"\nWypożyczono: "+item.lentTo))
-            .setNegativeButton("Zamknij",null)
-            .setPositiveButton("Magazyn",(d,w)->go("storage")).show();
+        handleStorageTargetScan(target.kind, target.id, "qr");
     }
 
     private void paycheck() {
         header("PayCheck • wspólny budżet");
-        note("Pierwszy etap: tylko wspólne, ręcznie zatwierdzane transakcje. "
-            + "Prywatne profile pozostają niedostępne, dopóki nie mają "
-            + "własnej ochrony przed dostępem ze wspólnego tabletu.");
+        note("Wspólne finanse pozostają dostępne bez PIN-u Bety. "
+            + "Prywatne finanse mają osobny sejf z hasłem i szyfrowaniem.");
+        button("🔒 Prywatny sejf PayCheck", this::openPrivatePaycheck);
         note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
-            + "Podaj rzeczywistą kwotę dopiero po dokonanej płatności.");
-        title("Saldo wspólne: " + MoneyRules.format(
+            + "Nowe wpisy finansowe czekają na potwierdzenie; "
+            + "saldo liczy tylko potwierdzone operacje.");
+        title("Saldo potwierdzone wspólne: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
         Spinner kind=new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
@@ -2729,7 +6370,7 @@ public final class MainActivity extends Activity {
                             db.getWritableDatabase(),operationId,
                             type,group,grosz,description);
                         if("COMMITTED".equals(outcome)){
-                            DiagnosticLog.event("PAYCHECK_SHARED_COMMITTED");
+                            DiagnosticLog.event("PAYCHECK_SHARED_PENDING");
                             render();
                         }else alert("Ta operacja była już zapisana.");
                     }catch(Exception problem){
@@ -2738,27 +6379,1625 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
+        if (releaseFeaturesEnabled()) {
+            button("Powiadomienia bankowe • wybierz aplikacje",
+                this::configureBankNotifications);
+            note("Nowe powiadomienia automatycznie trafiają do kolejki "
+                +"oczekujących na wybór: wspólny czy prywatny. Dopiero po "
+                +"wyborze miejsca tworzymy wpis w odpowiednim budżecie; "
+                +"saldo pozostaje bez zmian. EDHOME zapisuje tylko kwotę, "
+                +"kierunek, źródło i czas, bez treści i kodów.");
+            showBankNotificationHints();
+        }
+        button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
+        if(releaseFeaturesEnabled()) {
+            int bankOpen=BankEvidenceStore.list(
+                db.getReadableDatabase(),"open").size();
+            int bankMatched=BankEvidenceStore.list(
+                db.getReadableDatabase(),"matched").size();
+            int bankDismissed=BankEvidenceStore.list(
+                db.getReadableDatabase(),"dismissed").size();
+            button("Banki i potwierdzenia • kolejka ("+bankOpen+")",
+                ()->showBankEvidenceQueue(0));
+            note("Kolejka bankowa: "+bankOpen+" otwartych • "
+                +bankMatched+" uzgodnionych • "+bankDismissed+" odrzuconych.");
+            note("Diagnostyka importu: "+bankImportDiagLine());
+        }
+        note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
+            + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
+            + "Plik nie jest automatycznie potwierdzeniem z banku.");
+        button("Usuń wiele wpisów PayCheck",
+            this::deleteSharedPaycheckEntriesBulk);
+        title("Do potwierdzenia • bez wpływu na saldo");
+        try (Cursor pending = db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
+                + "FROM paycheck_transactions WHERE scope='shared' "
+                + "AND status='pending'", null)) {
+            if (pending.moveToFirst())
+                note(pending.getInt(0) + " wpisów • "
+                    + MoneyRules.format(pending.getLong(1))
+                    + " (łączna wartość, przychody i wydatki osobno w historii)");
+        }
         title("Historia wspólna");
         int count=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT kind,category,amount_grosz,note,created_at "
+                "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source,statement_key "
                 +"FROM paycheck_transactions WHERE scope='shared' "
                 +"ORDER BY id DESC LIMIT 40",null)){
             while(c.moveToNext()){
                 count++;
+                String operationId=c.getString(0);
+                boolean income="income".equals(c.getString(1));
+                String status=c.getString(6);
+                String evidence=c.getString(7);
+                boolean withStatement=!c.isNull(8);
                 LinearLayout entry=card();
-                boolean income="income".equals(c.getString(0));
                 entry.addView(text((income?"+ ":"− ")
-                    +MoneyRules.format(c.getLong(2)),18,true));
-                entry.addView(text(MoneyRules.categoryLabel(c.getString(1))
-                    +(c.getString(3).isEmpty()?"":" • "+c.getString(3)),14,false));
-                entry.addView(text(Instant.ofEpochMilli(c.getLong(4))
+                    +MoneyRules.format(c.getLong(3))
+                    +("pending".equals(status)?" • DO POTWIERDZENIA"
+                         :withStatement?" • UZGODNIONE Z IMPORTOWANYM CSV"
+                        :"manual".equals(evidence)?" • POTWIERDZONE RĘCZNIE"
+                        :" • WPIS HISTORYCZNY"),18,true));
+                entry.addView(text(MoneyRules.categoryLabel(c.getString(2))
+                    +(c.getString(4).isEmpty()?"":" • "+c.getString(4)),14,false));
+                if ("legacy".equals(evidence))
+                    entry.addView(text("Brak informacji o źródle potwierdzenia bankowego.",12,false));
+                entry.addView(text(Instant.ofEpochMilli(c.getLong(5))
                     .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
                     12,false));
+                if ("pending".equals(status))
+                    smallButton(entry, "Potwierdź po sprawdzeniu banku / wyciągu",
+                        () -> confirmSharedPaycheckEntry(operationId));
+                smallButton(entry, "Usuń wpis", () ->
+                    deleteSharedPaycheckEntry(operationId));
             }
         }
-        if(count==0)note("Brak transakcji wspólnych. Niczego nie księgujemy automatycznie.");
+        if(count==0)note("Brak transakcji wspólnych.");
         sharedPaycheckGoals();
+    }
+
+    /** Android notification access always requires the user's system-level approval.
+     * Opt-in and exact app selection are separate; other app messages are ignored.
+     */
+    private boolean bankNotificationPermissionGranted() {
+        String value=Settings.Secure.getString(getContentResolver(),
+            "enabled_notification_listeners");
+        if(value==null)return false;
+        for(String raw:value.split(":")) {
+            ComponentName component=ComponentName.unflattenFromString(raw);
+            if(component!=null&&getPackageName().equals(component.getPackageName())
+                    &&BankNotificationListener.class.getName().equals(
+                        component.getClassName()))
+                return true;
+        }
+        return false;
+    }
+
+    private void configureBankNotifications() {
+        if(!releaseFeaturesEnabled())return;
+        Intent launcher=new Intent(Intent.ACTION_MAIN);
+        launcher.addCategory(Intent.CATEGORY_LAUNCHER);
+        java.util.Map<String,String> available=new java.util.TreeMap<>();
+        for(ResolveInfo resolved:getPackageManager()
+                .queryIntentActivities(launcher,0)) {
+            if(resolved.activityInfo==null)continue;
+            String pkg=resolved.activityInfo.packageName;
+            if(pkg.equals(getPackageName()))continue;
+            String label=resolved.loadLabel(getPackageManager()).toString();
+            available.put(pkg,label+" • "+pkg);
+        }
+        // Some Android launchers/skins return no visible activities via the
+        // intent query. Include user-installed applications too.
+        for(android.content.pm.ApplicationInfo app:
+                getPackageManager().getInstalledApplications(0)) {
+            if(app.packageName.equals(getPackageName())
+                    ||(app.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM)!=0)
+                continue;
+            String label=getPackageManager()
+                .getApplicationLabel(app).toString();
+            available.putIfAbsent(app.packageName,
+                label+" • "+app.packageName);
+        }
+        java.util.List<String> packages=new java.util.ArrayList<>(
+            available.keySet());
+        java.util.Set<String> previously=BankNotificationHints.selected(this);
+        packages.sort((left,right)->{
+            boolean leftSelected=previously.contains(left);
+            boolean rightSelected=previously.contains(right);
+            if(leftSelected!=rightSelected)return leftSelected?-1:1;
+            return available.get(left).compareToIgnoreCase(available.get(right));
+        });
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(10),dp(16),dp(10));
+        form.addView(text("Widocznych aplikacji: "+packages.size()
+            +". Zaznacz WYŁĄCZNIE swoje banki. Uprawnienie Androida "
+            +"przyznaje dostęp do wszystkich powiadomień, lecz EDHOME "
+            +"analizuje tylko wskazane pakiety.",14,false));
+        ScrollView listScroll=new ScrollView(this);
+        LinearLayout choices=new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        java.util.Set<String> wanted=new java.util.HashSet<>(previously);
+        for(String pkg:packages) {
+            CheckBox choice=new CheckBox(this);
+            choice.setText(available.get(pkg));
+            choice.setTextColor(DialogContrast.TEXT);
+            choice.setChecked(wanted.contains(pkg));
+            choice.setMinHeight(dp(48));
+            choice.setOnCheckedChangeListener((button,checked)->{
+                if(checked)wanted.add(pkg);
+                else wanted.remove(pkg);
+            });
+            choices.addView(choice);
+        }
+        EditText searchBank=new EditText(this);
+        searchBank.setSingleLine(true);
+        searchBank.setHint("Szukaj banku lub aplikacji na liście");
+        searchBank.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value,
+                int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence value,
+                int start, int before, int count) {
+                String query=value.toString().trim()
+                    .toLowerCase(java.util.Locale.ROOT);
+                for(int i=0;i<packages.size();i++) {
+                    String label=available.get(packages.get(i));
+                    choices.getChildAt(i).setVisibility(
+                        label.toLowerCase(java.util.Locale.ROOT).contains(query)
+                        ?View.VISIBLE:View.GONE);
+                }
+            }
+            @Override public void afterTextChanged(
+                android.text.Editable value) { }
+        });
+        form.addView(searchBank);
+        Button androidPicker=new Button(this);
+        androidPicker.setAllCaps(false);
+        androidPicker.setText("Wybierz bank z systemowej listy aplikacji");
+        androidPicker.setOnClickListener(v->{
+            try {
+                Intent target=new Intent(Intent.ACTION_MAIN);
+                target.addCategory(Intent.CATEGORY_LAUNCHER);
+                Intent pick=new Intent(Intent.ACTION_PICK_ACTIVITY);
+                pick.putExtra(Intent.EXTRA_INTENT,target);
+                pick.putExtra(Intent.EXTRA_TITLE,"Wybierz aplikację bankową");
+                startActivityForResult(pick,PICK_BANK_APP_SYSTEM);
+            }catch(Exception error){
+                alert("Android nie obsługuje systemowej listy aplikacji. "
+                    +"Możesz użyć identyfikatora pakietu poniżej.");
+            }
+        });
+        form.addView(androidPicker);
+        if(packages.isEmpty())
+            choices.addView(text("Android nie udostępnił listy aplikacji. "
+                +"Możesz wkleić identyfikator pakietu banku poniżej; "
+                +"nie wpisuj loginu ani numeru rachunku.",14,false));
+        listScroll.addView(choices);
+        form.addView(listScroll,new LinearLayout.LayoutParams(
+            -1,dp(260)));
+        EditText manual=new EditText(this);
+        manual.setSingleLine(true);
+        manual.setTextColor(DialogContrast.TEXT);
+        manual.setHintTextColor(DialogContrast.HINT);
+        manual.setHint("Pakiet banku, jeśli nie ma go na liście (opcjonalnie)");
+        form.addView(manual);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz aplikacje bankowe")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Wyłącz i wyczyść",(dialog,which)->{
+                BankNotificationHints.configure(this,
+                    java.util.Collections.emptySet(),false);
+                render();
+            })
+            .setPositiveButton("Zapisz wybór",(dialog,which)->{
+                String packageName=manual.getText().toString().trim();
+                if(!packageName.isEmpty()) {
+                    if(!packageName.matches("[A-Za-z_][A-Za-z_0-9]*"
+                            +"(\\.[A-Za-z_][A-Za-z_0-9]*)+")
+                            ||packageName.length()>255) {
+                        alert("Nieprawidłowy identyfikator pakietu Androida. "
+                            +"Nie zapisano tego wpisu.");return;
+                    }
+                    wanted.add(packageName);
+                }
+                BankNotificationHints.configure(this,wanted,
+                    !wanted.isEmpty());
+                // Bank selection may happen after Android connected the listener.
+                // Recheck only notifications still active; dedup prevents repeats.
+                if(!wanted.isEmpty()&&bankNotificationPermissionGranted())
+                    BankNotificationListener.recheckActiveNotifications();
+                if(!wanted.isEmpty()&&bankNotificationPermissionGranted()
+                        &&BankNotificationHints.receiptEnabled(this))
+                    requestBankReceiptNotificationPermission();
+                render();
+                if(wanted.isEmpty())return;
+                if(!bankNotificationPermissionGranted()) {
+                    showBankNotificationPermissionGuide();
+                }
+            }).show();
+    }
+
+    /** On Android 13+ a sideloaded APK may have restricted settings.
+     * Only the user can explicitly allow them; never attempt to bypass Android.
+     */
+    private void showBankNotificationPermissionGuide() {
+        if (bankNotificationPermissionGranted()) {
+            alert("Dostęp do powiadomień jest już włączony.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Dostęp do powiadomień • EDHOME Beta")
+            .setMessage("Jeśli Android pokazuje „Aplikacja nie otrzymała dostępu” "
+                +"lub przełącznik jest wyszarzony, może blokować specjalne "
+                +"uprawnienia aplikacji zainstalowanej z pliku APK.\n\n"
+                +"1. Otwórz Ustawienia aplikacji EDHOME Beta.\n"
+                +"2. Dotknij menu ⋮ u góry i wybierz „Zezwól na ustawienia "
+                +"z ograniczonym dostępem”, jeśli Android pokazuje tę opcję.\n"
+                +"3. Wróć do EDHOME → PayCheck → Dostęp do powiadomień, "
+                +"włącz „Zezwalaj na dostęp do powiadomień” i potwierdź.\n\n"
+                +"Włączaj tę opcję tylko, jeśli ufasz źródłu APK. Android "
+                +"przyznaje uprawnienie do wszystkich powiadomień; EDHOME "
+                +"analizuje tylko wybrane banki i nie traktuje sygnału "
+                +"jako bankowego potwierdzenia transakcji.")
+            .setNegativeButton("Później", null)
+            .setNeutralButton("Dostęp do powiadomień", (dialog, which) -> {
+                try {
+                    startActivity(new Intent(
+                        Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                } catch (Exception error) {
+                    alert("Otwórz Ustawienia Androida → "
+                        +"Dostęp do powiadomień → EDHOME Beta.");
+                }
+            })
+            .setPositiveButton("Ustawienia aplikacji", (dialog, which) -> {
+                try {
+                    startActivity(new Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName())));
+                } catch (Exception error) {
+                    alert("Otwórz Ustawienia Androida → Aplikacje → "
+                        +"EDHOME Beta → menu ⋮.");
+                }
+            }).show();
+    }
+
+    /** POST_NOTIFICATIONS is separate from NotificationListener access. */
+    private void requestBankReceiptNotificationPermission() {
+        if(android.os.Build.VERSION.SDK_INT>=33
+                &&checkSelfPermission(
+                    android.Manifest.permission.POST_NOTIFICATIONS)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{
+                android.Manifest.permission.POST_NOTIFICATIONS},7133);
+    }
+
+    private String bankSignalTime(long millis) {
+        if(millis<=0)return "brak";
+        return new java.text.SimpleDateFormat("dd.MM HH:mm:ss",
+            java.util.Locale.getDefault()).format(new java.util.Date(millis));
+    }
+
+    private void showBankNotificationHints() {
+        boolean optIn=BankNotificationHints.enabled(this);
+        boolean androidEnabled=bankNotificationPermissionGranted();
+        title("Sygnały z aplikacji bankowych");
+        note(!optIn?"Wyłączone. Wybierz banki, aby włączyć."
+            :!androidEnabled?"Wybór zapisany • nadaj zgodę w ustawieniach Androida."
+            :"Włączone • "+BankNotificationHints.selected(this).size()
+                +" wybranych aplikacji. Otwórz PayCheck ponownie po powiadomieniu.");
+        // Distinguish granted access, an actually bound listener, a bank event,
+        // a rejected format and a saved entry. Never show raw bank contents.
+        boolean listenerConnected=BankNotificationListener.isConnected();
+        TextView listenerStatus=text(
+            "Nasłuch Androida: "+(listenerConnected?"● POŁĄCZONY":"● NIEPOŁĄCZONY")
+                +" • dostęp: "+(androidEnabled?"TAK":"NIE"),14,true);
+        listenerStatus.setTextColor(listenerConnected
+            ?0xFF39D98A
+            :0xFFFF4D4D);
+        listenerStatus.setPadding(0,dp(5),0,dp(8));
+        body.addView(listenerStatus);
+        if(optIn) {
+            long seen=BankNotificationHints.lastSeen(this);
+            long saved=BankNotificationHints.lastSaved(this);
+            long rejected=BankNotificationHints.lastUnrecognized(this);
+            note("Ostatnie powiadomienie wybranego banku: "
+                +bankSignalTime(seen));
+            String seenPackage=BankNotificationHints.lastSeenPackage(this);
+            if(!seenPackage.isEmpty()
+                    &&BankNotificationHints.selected(this).contains(seenPackage))
+                note("Źródło odebranego powiadomienia: "+seenPackage);
+            note("Ostatnio zapisany sygnał: "+bankSignalTime(saved));
+            note("Ostatni nierozpoznany komunikat bankowy: "
+                +bankSignalTime(rejected));
+            note("Własne powiadomienie EDHOME: "
+                +(BankReceiptNotifier.allowed(this)?"DOZWOLONE":
+                    "BRAK ZGODY LUB WYŁĄCZONE"));
+            String testResult=BankNotificationHints.listenerTestResult(this);
+            if("waiting".equals(testResult))
+                note("Test nasłuchu: AKTYWNY do "
+                    +bankSignalTime(BankNotificationHints.listenerTestUntil(this)));
+            else if("recognized".equals(testResult))
+                note("Test nasłuchu: ODEBRANO I ROZPOZNANO • "
+                    +bankSignalTime(BankNotificationHints.listenerTestResultAt(this)));
+            else if("unrecognized".equals(testResult))
+                note("Test nasłuchu: ODEBRANO, ALE NIE ROZPOZNANO • "
+                    +bankSignalTime(BankNotificationHints.listenerTestResultAt(this)));
+            else if("expired".equals(testResult))
+                note("Test nasłuchu: WYGASŁ bez odebranego sygnału banku.");
+            button("Testuj nasłuch banku przez 2 minuty",()->{
+                if(!bankNotificationPermissionGranted()) {
+                    showBankNotificationPermissionGuide();
+                    return;
+                }
+                if(!BankNotificationListener.isConnected()
+                        &&android.os.Build.VERSION.SDK_INT>=24)
+                    android.service.notification.NotificationListenerService
+                        .requestRebind(new ComponentName(this,
+                            BankNotificationListener.class));
+                if(!BankReceiptNotifier.allowed(this))
+                    requestBankReceiptNotificationPermission();
+                if(BankNotificationHints.armListenerTest(this)) {
+                    alert("Test aktywny przez 2 minuty. W tym czasie dowolne "
+                        +"powiadomienie z wybranego banku pokaże, czy Android "
+                        +"przekazał je do EDHOME i czy parser je rozpoznał. "
+                        +"EDHOME nie zapisuje treści komunikatu.");
+                    render();
+                } else alert("Najpierw wybierz co najmniej jedną aplikację bankową.");
+            });
+            button("Sprawdź teraz aktywne powiadomienia banków",()->{
+                if(android.os.Build.VERSION.SDK_INT>=24
+                        &&bankNotificationPermissionGranted())
+                    android.service.notification.NotificationListenerService
+                        .requestRebind(new ComponentName(this,
+                            BankNotificationListener.class));
+                BankNotificationListener.recheckActiveNotifications();
+                render();
+            });
+        }
+        if(optIn&&!androidEnabled)
+            button("Jak odblokować dostęp do powiadomień",
+                this::showBankNotificationPermissionGuide);
+        if(optIn) {
+            boolean receipt=BankNotificationHints.receiptEnabled(this);
+            button("Powiadomienie EDHOME po odebraniu: "
+                +(receipt?"WŁ.":"WYŁ."),()->{
+                    BankNotificationHints.setReceiptEnabled(this,!receipt);
+                    if(!receipt)requestBankReceiptNotificationPermission();
+                    render();
+                });
+            note("Po zapisaniu sygnału EDHOME może potwierdzić odbiór "
+                +"osobnym powiadomieniem. Możesz je wyłączyć niezależnie od "
+                +"nasłuchu banków. Nie oznacza to zaksięgowania w banku.");
+            if(receipt&&!BankReceiptNotifier.allowed(this)&&androidEnabled)
+                button("Zezwól na powiadomienia EDHOME",
+                    this::requestBankReceiptNotificationPermission);
+        }
+        if(!optIn||!androidEnabled)return;
+        java.util.List<BankNotificationHints.Entry> signals=
+            BankNotificationHints.list(this);
+        if(signals.isEmpty()){
+            note("Jeszcze nie rozpoznano powiadomień o płatnościach w PLN. "
+                +"Niektóre banki ukrywają kwotę w powiadomieniu.");return;
+        }
+        int visibleBankDrafts=0;
+        for(BankNotificationHints.Entry signal:signals) {
+            if(visibleBankDrafts++>=40) {
+                note("W kolejce pozostało jeszcze "+(signals.size()-40)
+                    +" pozycji. Przypisz widoczne, aby zobaczyć kolejne.");
+                break;
+            }
+            LinearLayout entry=card();
+            String source=signal.source;
+            try {
+                source=getPackageManager().getApplicationLabel(
+                    getPackageManager().getApplicationInfo(
+                        signal.source,0)).toString();
+            }catch(Exception unavailable){/* use package name */}
+            entry.addView(text(source+" • "
+                +("income".equals(signal.kind)?"+ ":"− ")
+                +MoneyRules.format(signal.amount),17,true));
+            entry.addView(text(Instant.ofEpochMilli(signal.received)
+                .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                +" • niezweryfikowana sugestia",13,false));
+            java.util.List<String> ids=new java.util.ArrayList<>();
+            java.util.List<String> labels=new java.util.ArrayList<>();
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT operation_id,note,created_at "
+                    +"FROM paycheck_transactions WHERE scope='shared' "
+                    +"AND status='pending' AND kind=? AND amount_grosz=? "
+                    +"ORDER BY id DESC LIMIT 40",
+                    new String[]{signal.kind,
+                        Long.toString(signal.amount)})) {
+                while(c.moveToNext()) {
+                    ids.add(c.getString(0));
+                    String note=c.getString(1);
+                    labels.add((note.isEmpty()?"Bez opisu":note)
+                        +" • "+Instant.ofEpochMilli(c.getLong(2))
+                            .atZone(ZoneId.systemDefault()).toLocalDate());
+                }
+            }
+            if(ids.isEmpty()) {
+                int possibleStatementMatches=countRecentStatementMatches(signal);
+                entry.addView(text("Automatycznie dodano do kolejki • "
+                    +"wybierz, czy to wydatek wspólny, czy prywatny. "
+                    +"Saldo bez zmian.",13,false));
+                if(possibleStatementMatches>0) {
+                    entry.addView(text("Uwaga: znaleziono "
+                        +possibleStatementMatches
+                        +" uzgodnione z wyciągiem operacje o tej samej kwocie "
+                        +"i kierunku w podobnym terminie. To może być ten sam zakup.",
+                        13,true));
+                    smallButton(entry,
+                        "To już uzgodnione z wyciągiem • zamknij sygnał",()->{
+                            if(!BankNotificationHints.remove(this,signal.key))
+                                alert("Nie zamknięto sygnału. Spróbuj ponownie.");
+                            render();
+                        });
+                }
+                smallButton(entry,"WSPÓLNY • dodaj do oczekujących",
+                    ()->assignBankHintToShared(signal));
+                smallButton(entry,"PRYWATNY • otwórz sejf",
+                    ()->{
+                        pendingPrivateBankHintKey=signal.key;
+                        openPrivatePaycheck();
+                    });
+            }
+            else if(ids.size()==1)
+                smallButton(entry,"Sprawdź i potwierdź pasujący wpis",
+                    ()->confirmSharedPaycheckEntry(ids.get(0),signal.key));
+            else
+                smallButton(entry,"Wybierz spośród "+ids.size()+" wpisów",
+                    ()->new AlertDialog.Builder(this)
+                        .setTitle("Wybierz właściwy wydatek / wpływ")
+                        .setMessage("Ta sama kwota wystąpiła kilka razy. "
+                            +"Powiadomienie nie rozstrzyga, która to płatność.")
+                        .setItems(labels.toArray(new String[0]),
+                            (d,which)->confirmSharedPaycheckEntry(
+                                ids.get(which),signal.key))
+                        .setNegativeButton("Anuluj",null).show());
+            smallButton(entry,"Odrzuć sygnał",()->{
+                if(!BankNotificationHints.remove(this,signal.key))
+                    alert("Nie zapisano odrzucenia. Spróbuj ponownie.");
+                render();
+            });
+        }
+    }
+
+    private int countRecentStatementMatches(BankNotificationHints.Entry signal) {
+        java.time.LocalDate received=Instant.ofEpochMilli(signal.received)
+            .atZone(ZoneId.systemDefault()).toLocalDate();
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT statement_date FROM paycheck_transactions "
+                +"WHERE scope='shared' AND status='confirmed' "
+                +"AND statement_key IS NOT NULL AND kind=? AND amount_grosz=? "
+                +"AND statement_date IS NOT NULL",
+                new String[]{signal.kind,Long.toString(signal.amount)})) {
+            while(c.moveToNext()) {
+                try {
+                    java.time.LocalDate booked=java.time.LocalDate.parse(c.getString(0));
+                    long days=Math.abs(java.time.temporal.ChronoUnit.DAYS
+                        .between(received,booked));
+                    if(days<=2)count++;
+                }catch(Exception invalidDate){ }
+            }
+        }
+        return count;
+    }
+
+    /** Assign an auto-collected draft only after explicit shared/private choice.
+     * Stable operation ID guarantees retry cannot create the same draft twice.
+     */
+    private void assignBankHintToShared(BankNotificationHints.Entry signal) {
+        if(!releaseFeaturesEnabled())return;
+        if(BankNotificationHints.alreadyHandled(this,signal.key)) {
+            BankNotificationHints.remove(this,signal.key);
+            render();
+            return;
+        }
+        int possible=countRecentStatementMatches(signal);
+        if(possible>0) {
+            new AlertDialog.Builder(this)
+                .setTitle("Możliwy duplikat")
+                .setMessage("W podobnym terminie istnieje już "+possible
+                    +" uzgodniona z wyciągiem operacja o tej samej kwocie "
+                    +"i kierunku. Powiadomienie nie zawiera bankowego ID, więc "
+                    +"EDHOME nie może bezpiecznie zdecydować, czy to ta sama "
+                    +"transakcja.")
+                .setNegativeButton("Anuluj",null)
+                .setNeutralButton("To ta sama • zamknij sygnał",(d,w)->{
+                    if(!BankNotificationHints.remove(this,signal.key))
+                        alert("Nie zamknięto sygnału. Spróbuj ponownie.");
+                    render();
+                })
+                .setPositiveButton("To inna • utwórz wpis",(d,w)->
+                    assignBankHintToSharedNow(signal))
+                .show();
+            return;
+        }
+        assignBankHintToSharedNow(signal);
+    }
+
+    private void assignBankHintToSharedNow(BankNotificationHints.Entry signal) {
+        if(BankNotificationHints.alreadyHandled(this,signal.key)) {
+            BankNotificationHints.remove(this,signal.key);
+            render();
+            return;
+        }
+        String operationId=java.util.UUID.nameUUIDFromBytes(
+            ("edhome-bank-hint:"+signal.key).getBytes(StandardCharsets.UTF_8))
+            .toString();
+        try {
+            String result=PaycheckStore.add(db.getWritableDatabase(),
+                operationId,signal.kind,"other",signal.amount,
+                "Powiadomienie z wybranego banku • niezweryfikowane");
+            if("COMMITTED".equals(result)||"DUPLICATE".equals(result)) {
+                if(!BankNotificationHints.remove(this,signal.key))
+                    alert("Wpis zapisany, ale nie zamknięto sygnału. "
+                        +"Ponowny wybór nie stworzy kopii.");
+                render();
+            }
+        }catch(Exception error){
+            DiagnosticLog.event("BANK_DRAFT_SHARED_FAILED");
+            alert("Nie utworzono wspólnego wpisu. Saldo bez zmian.");
+        }
+    }
+
+    private void assignBankHintToPrivate(BankNotificationHints.Entry signal) {
+        if(privatePaycheckSession==null||!privatePaycheckSession.active())
+            return;
+        if(BankNotificationHints.alreadyHandled(this,signal.key)) {
+            if(BankNotificationHints.remove(this,signal.key))
+                pendingPrivateBankHintKey=null;
+            render();
+            return;
+        }
+        String operationId=java.util.UUID.nameUUIDFromBytes(
+            ("edhome-bank-hint:"+signal.key).getBytes(StandardCharsets.UTF_8))
+            .toString();
+        try {
+            String result=PrivatePaycheckVault.addPending(this,
+                privatePaycheckSession,operationId,signal.kind,"other",
+                signal.amount,"Powiadomienie z wybranego banku");
+            if("COMMITTED".equals(result)||"DUPLICATE".equals(result)){
+                if(BankNotificationHints.remove(this,signal.key))
+                    pendingPrivateBankHintKey=null;
+                else alert("Prywatny wpis zapisany. Nie zamknięto sygnału; "
+                    +"powtórzenie nie utworzy kopii.");
+                render();
+            }
+        }catch(Exception error){
+            alert("Nie zapisano prywatnego wpisu. Sejf i saldo bez zmian.");
+        }
+    }
+
+    private void selectStatementCsv() {
+        EditText bank = new EditText(this);
+        bank.setSingleLine(true);
+        bank.setHint("Nazwa banku dla zwykłego CSV (mBank/Velo wykrywane automatycznie)");
+        bank.setText(prefs.getString("paycheck_csv_bank_name",""));
+        new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
+            .setMessage("Do 10 plików naraz. Obsługiwane: zwykły CSV, tekstowy eksport "
+                + "mBanku, XLSX z tekstowym eksportem oraz tekstowy PDF VeloBanku. "
+                + "Nazwę banku wpisz dla zwykłego CSV; mBank i VeloBank są wykrywane "
+                + "automatycznie. PDF będący wyłącznie skanem obrazu nie jest OCR-owany. "
+                + "EDHOME niczego nie wysyła i nie sprawdza autentyczności pliku.")
+            .setView(bank).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Wybierz pliki bankowe",(d,w)->{
+                String label=bank.getText().toString().trim();
+                if(label.length()>80){
+                    alert("Nazwa banku może mieć maksymalnie 80 znaków.");return;
+                }
+                pendingStatementBank=label;
+                if(!label.isEmpty())
+                    prefs.edit().putString("paycheck_csv_bank_name",label).apply();
+                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("*/*");
+                picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+                try{startActivityForResult(picker,IMPORT_STATEMENT_CSV);}
+                catch(Exception error){
+                    pendingStatementBank=null;
+                    DiagnosticLog.event("PAYCHECK_CSV_PICKER_FAILED");
+                    alert("Nie można wskazać pliku CSV.");
+                }
+            }).show();
+    }
+
+    private void bankImportDiag(String state,int files,int rows) {
+        if(!releaseFeaturesEnabled()||prefs==null)return;
+        prefs.edit().putString("bank_import_diag_state",state)
+            .putInt("bank_import_diag_files",Math.max(0,files))
+            .putInt("bank_import_diag_rows",Math.max(0,rows))
+            .putLong("bank_import_diag_at",System.currentTimeMillis()).apply();
+    }
+
+    private String bankImportDiagLine() {
+        if(prefs==null)return "brak";
+        String state=prefs.getString("bank_import_diag_state","");
+        if(state.isEmpty())return "brak";
+        return state+" • "+prefs.getInt("bank_import_diag_files",0)
+            +" plik(ów) • "+prefs.getInt("bank_import_diag_rows",0)
+            +" pozycji • "+bankSignalTime(prefs.getLong("bank_import_diag_at",0));
+    }
+
+    private String decodeBankStatementText(byte[] bytes) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        }catch(java.nio.charset.CharacterCodingException legacy) {
+            return java.nio.charset.Charset.forName("windows-1250")
+                .decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        }
+    }
+
+    private void importStatementCsv(java.util.List<Uri> files, String bank) {
+        if(files==null||bank==null||files.isEmpty())return;
+        if(files.size()>10){alert("Wybierz maksymalnie 10 plików na raz.");return;}
+        String diagStage="START";
+        bankImportDiag(diagStage,files.size(),0);
+        try {
+            java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
+            java.util.List<BankEvidenceStore.Incoming> incoming=
+                new java.util.ArrayList<>();
+            java.util.Set<String> seen=new java.util.HashSet<>();
+            int duplicateRows=0;
+            int mbankFiles=0;
+            int veloPdfFiles=0;
+            int genericFiles=0;
+            for(Uri uri:files) {
+                diagStage="READ";
+                ByteArrayOutputStream output=new ByteArrayOutputStream();
+                try(InputStream stream=getContentResolver().openInputStream(uri)){
+                    if(stream==null)throw new IllegalArgumentException(
+                        "Nie można odczytać wybranego pliku.");
+                    byte[] buffer=new byte[4096];int n;
+                    while((n=stream.read(buffer))!=-1) {
+                        if(output.size()+n>8*1024*1024)
+                            throw new IllegalArgumentException(
+                                "Plik bankowy jest za duży (maks. 8 MB; CSV nadal maks. 256 KB).");
+                        output.write(buffer,0,n);
+                    }
+                }
+                byte[] bytes=output.toByteArray();
+                java.util.List<BankStatementCsv.Entry> parsed;
+                String sourceKind;
+                String sourceLabel;
+                if(BankPdfText.isPdf(bytes)) {
+                    diagStage="PDF_TEXT";
+                    String pdfText=BankPdfText.extract(this,bytes);
+                    if(!BankStatementVeloPdf.recognizes(pdfText))
+                        throw new IllegalArgumentException(
+                            "Tekstowy PDF jest czytelny, ale nie rozpoznano obsługiwanego formatu banku.");
+                    parsed=BankStatementVeloPdf.parse(pdfText);
+                    sourceKind="velo_pdf";
+                    sourceLabel="VeloBank";
+                    veloPdfFiles++;
+                } else {
+                    String text;
+                    if(BankStatementWorkbook.isXlsx(bytes)) {
+                        diagStage="XLSX_TEXT";
+                        text=BankStatementWorkbook.textRows(bytes);
+                    } else {
+                        String utf8=new String(bytes,StandardCharsets.UTF_8);
+                        String cp1250=new String(bytes,
+                            java.nio.charset.Charset.forName("windows-1250"));
+                        if(BankStatementMbank.recognizes(utf8)) text=utf8;
+                        else if(BankStatementMbank.recognizes(cp1250)) text=cp1250;
+                        else text=utf8.indexOf('\uFFFD')>=0?cp1250:utf8;
+                    }
+                    if(BankStatementMbank.recognizes(text)) {
+                        diagStage="MBANK_PARSE";
+                        parsed=BankStatementMbank.parse(text);
+                        sourceKind="mbank";
+                        sourceLabel="mBank";
+                        mbankFiles++;
+                    } else {
+                        diagStage="CSV_PARSE";
+                        parsed=BankStatementCsv.parse(text,bank);
+                        sourceKind="csv";
+                        sourceLabel=bank.trim();
+                        genericFiles++;
+                    }
+                }
+                for(BankStatementCsv.Entry entry:parsed) {
+                    if(!seen.add(entry.evidenceKey)){duplicateRows++;continue;}
+                    if(entries.size()>=BankStatementCsv.MAX_ROWS)
+                        throw new IllegalArgumentException(
+                            "Maksymalnie 250 różnych transakcji w partii.");
+                    entries.add(entry);
+                    incoming.add(new BankEvidenceStore.Incoming(
+                        entry,sourceKind,sourceLabel));
+                }
+            }
+            diagStage="QUEUE_SAVE";
+            BankEvidenceStore.IngestResult queue=BankEvidenceStore.ingest(
+                db.getWritableDatabase(),incoming);
+            bankImportDiag("OK",files.size(),queue.inserted);
+            DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
+            java.util.List<String> detectedSources=new java.util.ArrayList<>();
+            if(mbankFiles>0)detectedSources.add("mBank");
+            if(veloPdfFiles>0)detectedSources.add("VeloBank PDF");
+            if(genericFiles>0)detectedSources.add(
+                bank==null||bank.trim().isEmpty()?"CSV":bank.trim());
+            String detected=android.text.TextUtils.join(" + ",detectedSources);
+            int duplicates=duplicateRows+queue.duplicates;
+            if(duplicates>0)
+                alert("Pominięto "+duplicates+" powtórzonych / wcześniej zapisanych "
+                    +"pozycji. Żaden duplikat nie zmieni salda.");
+            showBankEvidenceQueue(0);
+        }catch(Exception error){
+            bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
+            DiagnosticLog.event("PAYCHECK_BANK_FILES_REJECTED");
+            alert("Nie wczytano plików: "+(error instanceof IllegalArgumentException
+                ?error.getMessage():"błąd odczytu pliku."));
+        }
+    }
+
+    private void showBankEvidenceQueue(int filter) {
+        java.util.List<BankEvidenceStore.Row> all=
+            BankEvidenceStore.list(db.getReadableDatabase(),"open");
+        java.util.List<BankEvidenceStore.Row> visible=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        for(BankEvidenceStore.Row row:all) {
+            int pending=BankEvidenceStore.pendingMatches(
+                db.getReadableDatabase(),row);
+            if(filter==1&&pending!=1 || filter==2&&pending<2
+                    || filter==3&&pending!=0
+                    || filter==4&&!"expense".equals(row.kind)
+                    || filter==5&&!"income".equals(row.kind))
+                continue;
+            visible.add(row);
+            String description=row.description.length()>55
+                ?row.description.substring(0,55)+"…":row.description;
+            labels.add(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)+"\n"
+                +(description.isEmpty()?"Bez opisu":description)+"\n"
+                +(pending==1?"✓ 1 propozycja • sprawdź"
+                    :pending>1?"? "+pending+" możliwych wpisów"
+                    :"— Brak oczekującego wpisu"));
+        }
+        String[] filters={"Wszystkie","1 propozycja","Kilka propozycji",
+            "Bez pasującego wpisu","Wydatki −","Wpływy +"};
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("Banki i potwierdzenia • "+visible.size()
+                +" / "+all.size()+"\nFiltr: "+filters[filter])
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                openBankEvidenceRow(visible.get(index)))
+            .setNeutralButton("Filtry",(d,w)->
+                new AlertDialog.Builder(this)
+                    .setTitle("Filtruj kolejkę bankową")
+                    .setItems(filters,(fd,selected)->
+                        showBankEvidenceQueue(selected))
+                    .setNegativeButton("Anuluj",null).show())
+            .setPositiveButton("Odrzucone",(d,w)->
+                showDismissedBankEvidence())
+            .setNegativeButton("Zamknij",null);
+        if(visible.isEmpty())
+            dialog.setMessage(all.isEmpty()
+                ?"Kolejka jest pusta. Dodaj pliki bankowe lub poczekaj na "
+                    +"powiadomienie banku."
+                :"Brak pozycji dla wybranego filtra.");
+        dialog.show();
+    }
+
+    private void openBankEvidenceRow(BankEvidenceStore.Row row) {
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,note,created_at FROM paycheck_transactions "
+                +"WHERE scope='shared' AND status='pending' AND kind=? "
+                +"AND amount_grosz=? ORDER BY id DESC LIMIT 40",
+                new String[]{row.kind,Long.toString(row.amount)})) {
+            while(c.moveToNext()) {
+                ids.add(c.getString(0));
+                String note=c.getString(1);
+                labels.add((note.isEmpty()?"Bez opisu":note)
+                    +" • "+Instant.ofEpochMilli(c.getLong(2))
+                        .atZone(ZoneId.systemDefault()).toLocalDate());
+            }
+        }
+        if(ids.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle(row.sourceLabel+" • "
+                    +("income".equals(row.kind)?"+ ":"− ")
+                    +MoneyRules.format(row.amount))
+                .setMessage(row.date+"\n"+row.description
+                    +"\n\nBrak oczekującego wpisu PayCheck. "
+                    +"Import nie tworzy automatycznie płatności.")
+                .setNegativeButton("Powrót",null)
+                .setPositiveButton("Odrzuć z kolejki",(d,w)->{
+                    if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
+                            row.evidenceKey))
+                        alert("Nie odrzucono wpisu.");
+                    showBankEvidenceQueue(0);
+                }).show();
+            return;
+        }
+        if(ids.size()==1) {
+            confirmBankEvidenceMatch(row,ids.get(0),labels.get(0));
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(row.sourceLabel+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)
+                +" • wybierz właściwy wpis")
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                confirmBankEvidenceMatch(row,ids.get(index),labels.get(index)))
+            .setNeutralButton("Odrzuć dowód",(d,w)->{
+                if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
+                        row.evidenceKey))
+                    alert("Nie odrzucono wpisu.");
+                showBankEvidenceQueue(0);
+            })
+            .setNegativeButton("Powrót",null).show();
+    }
+
+    private void confirmBankEvidenceMatch(BankEvidenceStore.Row row,
+            String operationId,String candidateLabel) {
+        new AlertDialog.Builder(this)
+            .setTitle("Potwierdź parę")
+            .setMessage(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)+"\n"
+                +row.description+"\n\nWpis PayCheck: "+candidateLabel
+                +"\n\nPlik nie jest uwierzytelnionym połączeniem z bankiem. "
+                +"Saldo zmieni się tylko raz po zatwierdzeniu.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zatwierdź parę",(d,w)->{
+                try {
+                    String result=BankEvidenceStore.match(
+                        db.getWritableDatabase(),row.evidenceKey,operationId);
+                    if("MATCHED".equals(result)
+                            ||"ALREADY_MATCHED".equals(result)) {
+                        DiagnosticLog.event("PAYCHECK_BANK_QUEUE_MATCHED");
+                        render();
+                        showBankEvidenceQueue(0);
+                    } else alert("Nie uzgodniono: wpis nie jest już oczekujący "
+                        +"albo dowód został wykorzystany.");
+                }catch(Exception error) {
+                    DiagnosticLog.event("PAYCHECK_BANK_QUEUE_MATCH_FAILED");
+                    alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
+                }
+            }).show();
+    }
+
+    private void showDismissedBankEvidence() {
+        java.util.List<BankEvidenceStore.Row> rows=
+            BankEvidenceStore.list(db.getReadableDatabase(),"dismissed");
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        for(BankEvidenceStore.Row row:rows)
+            labels.add(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount));
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("Odrzucone dowody bankowe • "+rows.size())
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                BankEvidenceStore.Row row=rows.get(index);
+                new AlertDialog.Builder(this)
+                    .setTitle("Przywrócić do kolejki?")
+                    .setMessage(row.sourceLabel+" • "+row.date+" • "
+                        +MoneyRules.format(row.amount))
+                    .setNegativeButton("Nie",null)
+                    .setPositiveButton("Przywróć",(dd,w)->{
+                        if(!BankEvidenceStore.reopen(db.getWritableDatabase(),
+                                row.evidenceKey))
+                            alert("Nie przywrócono wpisu.");
+                        showBankEvidenceQueue(0);
+                    }).show();
+            })
+            .setNegativeButton("Zamknij",null);
+        if(rows.isEmpty())dialog.setMessage("Brak odrzuconych pozycji.");
+        dialog.show();
+    }
+
+    private void showStatementEntries(
+            java.util.List<BankStatementCsv.Entry> rows, String bank) {
+        showFilteredStatementEntries(rows,bank,0);
+    }
+
+    private void showStatementFilters(
+            java.util.List<BankStatementCsv.Entry> rows,String bank) {
+        final String[] filters={"Wszystkie","1 propozycja","Kilka propozycji",
+            "Bez pasującego wpisu","Wydatki −","Wpływy +"};
+        new AlertDialog.Builder(this).setTitle("Filtruj potwierdzenia")
+            .setItems(filters,(d,filter)->
+                showFilteredStatementEntries(rows,bank,filter))
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showFilteredStatementEntries(
+            java.util.List<BankStatementCsv.Entry> rows,String bank,int filter) {
+        java.util.List<BankStatementCsv.Entry> visible=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        int duplicates=0;
+        SQLiteDatabase read=db.getReadableDatabase();
+        for(BankStatementCsv.Entry entry:rows) {
+            boolean used;
+            try(Cursor c=read.rawQuery(
+                    "SELECT 1 FROM paycheck_transactions WHERE statement_key=?",
+                    new String[]{entry.evidenceKey})) {
+                used=c.moveToFirst();
+            }
+            if(used){duplicates++;continue;}
+            int pending=0;
+            try(Cursor c=read.rawQuery(
+                    "SELECT COUNT(*) FROM paycheck_transactions "
+                    +"WHERE scope='shared' AND status='pending' "
+                    +"AND kind=? AND amount_grosz=?",
+                    new String[]{entry.kind,Long.toString(entry.amountGrosz)})) {
+                if(c.moveToFirst())pending=c.getInt(0);
+            }
+            if(filter==1&&pending!=1 || filter==2&&pending<2
+                    || filter==3&&pending!=0
+                    || filter==4&&!"expense".equals(entry.kind)
+                    || filter==5&&!"income".equals(entry.kind))
+                continue;
+            visible.add(entry);
+            String description=entry.description.length()>55
+                ?entry.description.substring(0,55)+"…" : entry.description;
+            labels.add(entry.date+" • "
+                +("income".equals(entry.kind)?"+ ":"− ")
+                +MoneyRules.format(entry.amountGrosz)+"\n"
+                +description+"\n"
+                +(pending==1?"✓ 1 propozycja • sprawdź i zatwierdź"
+                    :pending>1?"? "+pending+" możliwych wpisów • wybierz"
+                    :"— Brak oczekującego wpisu"));
+        }
+        if(visible.isEmpty()&&filter==0&&duplicates==rows.size()){
+            alert("Wszystkie pozycje już uzgodnione. "
+                +"Nie odjęto ponownie pieniędzy.");render();return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Potwierdzenia • "+bank+" • "+visible.size())
+            .setMessage("Zduplikowane: "+duplicates+". "
+                +"Dopasowania to propozycje, nie automatyczne księgowanie. "
+                +"Saldo zmienia się wyłącznie po Twoim zatwierdzeniu.")
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                matchStatementEntry(visible.get(index),rows,bank))
+            .setNeutralButton("Filtry",(d,w)->showStatementFilters(rows,bank))
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void matchStatementEntry(BankStatementCsv.Entry statement,
+            java.util.List<BankStatementCsv.Entry> rows,String bank){
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,note,created_at FROM paycheck_transactions "
+                + "WHERE scope='shared' AND status='pending' AND kind=? "
+                + "AND amount_grosz=? ORDER BY id DESC LIMIT 40",
+                new String[]{statement.kind,
+                    Long.toString(statement.amountGrosz)})){
+            while(c.moveToNext()){
+                ids.add(c.getString(0));
+                String note=c.getString(1);
+                labels.add((note.isEmpty()?"Bez opisu":note)
+                    +" • "+Instant.ofEpochMilli(c.getLong(2))
+                        .atZone(ZoneId.systemDefault()).toLocalDate());
+            }
+        }
+        if(ids.isEmpty()){
+            alert("Brak oczekującej transakcji o tym samym znaku i kwocie. "
+                + "Import NIE tworzy nowej płatności.");return;
+        }
+        if(ids.size()==1) {
+            confirmStatementMatch(statement,rows,bank,ids.get(0),labels.get(0));
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Wybierz właściwą transakcję")
+            .setMessage(statement.date+" • "
+                +("income".equals(statement.kind)?"+ ":"− ")
+                +MoneyRules.format(statement.amountGrosz)
+                +"\n"+statement.description
+                +"\nKilka identycznych kwot. Nie wybieram za Ciebie.")
+            .setItems(labels.toArray(new String[0]),(d,index)->
+                confirmStatementMatch(statement,rows,bank,
+                    ids.get(index),labels.get(index)))
+            .setNegativeButton("Powrót",null).show();
+    }
+
+    private void confirmStatementMatch(BankStatementCsv.Entry statement,
+            java.util.List<BankStatementCsv.Entry> rows,String bank,
+            String operationId,String candidateLabel) {
+        new AlertDialog.Builder(this).setTitle("Potwierdź dopasowanie")
+            .setMessage(statement.date+" • "
+                +("income".equals(statement.kind)?"+ ":"− ")
+                +MoneyRules.format(statement.amountGrosz)
+                +"\n"+statement.description+"\n\n"
+                +"Wpis PayCheck: "+candidateLabel+"\n\n"
+                +"To propozycja z importowanego pliku, nie "
+                +"uwierzytelnione połączenie z bankiem. "
+                +"Saldo zmieni się tylko raz po zatwierdzeniu.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zatwierdź parę",(dialog,which)->{
+                try {
+                    String outcome=PaycheckStore.matchStatement(
+                        db.getWritableDatabase(),operationId,
+                        statement.kind,statement.amountGrosz,
+                        statement.evidenceKey,statement.date);
+                    if("MATCHED".equals(outcome)){
+                        DiagnosticLog.event("PAYCHECK_CSV_MATCHED");
+                        render();
+                        showStatementEntries(rows,bank);
+                    }else if("ALREADY_MATCHED".equals(outcome))
+                        alert("Ten wpis jest już uzgodniony.");
+                    else alert("Nie uzgodniono: ta transakcja "
+                        +"lub identyfikator CSV były już użyte.");
+                }catch(Exception error){
+                    DiagnosticLog.event("PAYCHECK_CSV_MATCH_FAILED");
+                    alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
+                }
+            }).show();
+    }
+
+    /** A manual attestation, NOT an automated bank statement verification. */
+    private void confirmSharedPaycheckEntry(String operationId) {
+        confirmSharedPaycheckEntry(operationId,null);
+    }
+
+    private void confirmSharedPaycheckEntry(String operationId,String hintKey) {
+        new AlertDialog.Builder(this)
+            .setTitle("Potwierdź operację?")
+            .setMessage("Potwierdź wyłącznie po sprawdzeniu faktycznej transakcji "
+                + "w banku lub na wyciągu. Powiadomienie bankowe nie jest "
+                + "dowodem zaksięgowania. Zatwierdzenie zmieni saldo tylko raz.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Sprawdziłem — potwierdź", (d,w) -> {
+                try {
+                    String result=PaycheckStore.confirm(db.getWritableDatabase(),
+                        operationId);
+                    if ("CONFIRMED".equals(result)) {
+                        if(hintKey!=null)BankNotificationHints.remove(this,hintKey);
+                        DiagnosticLog.event("PAYCHECK_SHARED_CONFIRMED");
+                    }
+                    else alert("Operacja już potwierdzona lub nie istnieje.");
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.error("PAYCHECK_CONFIRM", error);
+                    alert("Nie udało się potwierdzić. Saldo pozostało bez zmian.");
+                }
+            }).show();
+    }
+
+    private void deleteSharedPaycheckEntriesBulk() {
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,kind,category,amount_grosz,note,status "
+                +"FROM paycheck_transactions WHERE scope='shared' "
+                +"ORDER BY id DESC LIMIT 200",null)) {
+            while(c.moveToNext()) {
+                ids.add(c.getString(0));
+                labels.add(("income".equals(c.getString(1))?"+ ":"− ")
+                    +MoneyRules.format(c.getLong(3))+" • "
+                    +MoneyRules.categoryLabel(c.getString(2))
+                    +(c.getString(4).isEmpty()?"":" • "+c.getString(4))
+                    +("pending".equals(c.getString(5))
+                        ?" • DO POTWIERDZENIA":""));
+            }
+        }
+        if(ids.isEmpty()) {
+            alert("Brak wpisów PayCheck do usunięcia.");
+            return;
+        }
+
+        boolean[] checked=new boolean[ids.size()];
+        new AlertDialog.Builder(this)
+            .setTitle("Usuń wiele wpisów PayCheck")
+            .setMultiChoiceItems(labels.toArray(new String[0]),checked,
+                (dialog,which,isChecked)->checked[which]=isChecked)
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Wszystkie",(dialog,which)->{
+                java.util.Arrays.fill(checked,true);
+                confirmBulkPaycheckDelete(ids,checked);
+            })
+            .setPositiveButton("Dalej",(dialog,which)->
+                confirmBulkPaycheckDelete(ids,checked))
+            .show();
+    }
+
+    private void confirmBulkPaycheckDelete(
+            java.util.List<String> ids, boolean[] checked) {
+        java.util.List<String> selected=new java.util.ArrayList<>();
+        for(int i=0;i<checked.length && i<ids.size();i++)
+            if(checked[i])selected.add(ids.get(i));
+        if(selected.isEmpty()) {
+            alert("Nie zaznaczono żadnego wpisu.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Usunąć zaznaczone?")
+            .setMessage("Wpisów: "+selected.size()
+                +"\nPotwierdzone pozycje zmienią saldo. "
+                +"Dowody bankowe wrócą do kolejki „do sprawdzenia”.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń zaznaczone",(dialog,which)->{
+                try {
+                    int removed=PaycheckStore.deleteMany(
+                        db.getWritableDatabase(),selected);
+                    DiagnosticLog.event("PAYCHECK_SHARED_BULK_DELETED");
+                    render();
+                    alert("Usunięto wpisów PayCheck: "+removed+".");
+                } catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_BULK_DELETE",error);
+                    alert("Nie udało się usunąć zaznaczonych wpisów.");
+                }
+            }).show();
+    }
+
+    private void deleteSharedPaycheckEntry(String operationId) {
+        new AlertDialog.Builder(this)
+            .setTitle("Usunąć wpis PayCheck?")
+            .setMessage("Usunięcie potwierdzonego wpisu przeliczy saldo. "
+                +"Jeżeli wpis był uzgodniony z wyciągiem, dowód bankowy wróci "
+                +"do kolejki „do sprawdzenia”. Powiązany koszt pojazdu pozostanie "
+                +"w historii pojazdu jako koszt poza PayCheck.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń",(dialog,which)->{
+                try {
+                    String result=PaycheckStore.delete(
+                        db.getWritableDatabase(),operationId);
+                    if("DELETED".equals(result)) {
+                        DiagnosticLog.event("PAYCHECK_SHARED_DELETED");
+                        render();
+                    } else alert("Wpis już nie istnieje.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_DELETE",error);
+                    alert("Nie udało się usunąć wpisu. Dane bez zmian.");
+                }
+            }).show();
+    }
+
+    private void openPrivatePaycheck() {
+        if (privatePaycheckSession != null && privatePaycheckSession.active()) {
+            go("paycheck_private");
+            return;
+        }
+        final boolean first = !PrivatePaycheckVault.configured(this);
+        if (!first && PrivatePaycheckVault.cooldownMillis(this) > 0) {
+            alert("Sejf czasowo zablokowany po błędnych hasłach. "
+                + "Spróbuj za kilka minut.");
+            return;
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(14), dp(18), dp(14));
+        form.addView(text(first
+            ? "Utwórz osobne hasło sejfu: 5–64 znaki. "
+                + "Nie jest to PIN aplikacji. Bez hasła nie odzyskasz danych. "
+                + "Sejf nie wchodzi do zwykłej kopii JSON. "
+                + "Krótkie hasło (5 znaków) słabiej chroni dane; "
+                + "zalecane jest dłuższe hasło."
+            : "Wpisz hasło prywatnego sejfu. "
+                + "Wspólny PayCheck pozostaje bez zmian.", 14, false));
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setHint("Hasło prywatnego sejfu");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        form.addView(password);
+        EditText confirmation = null;
+        if (first) {
+            confirmation = new EditText(this);
+            confirmation.setSingleLine(true);
+            confirmation.setHint("Powtórz hasło");
+            confirmation.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            confirmation.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+            confirmation.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+            form.addView(confirmation);
+        }
+        final EditText again = confirmation;
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(first ? "Utwórz prywatny sejf" : "Otwórz prywatny sejf")
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton(first ? "Utwórz" : "Otwórz", null)
+            .create();
+        privateAuthDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (privateAuthDialog == dialog) privateAuthDialog = null;
+            if (!"paycheck_private".equals(screen))
+                getWindow().clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        });
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                char[] secret = password.getText().toString().toCharArray();
+                char[] confirm = again == null ? null
+                    : again.getText().toString().toCharArray();
+                try {
+                    if (first && (!PrivatePaycheckCrypto.validPassword(secret)
+                            || !java.util.Arrays.equals(secret, confirm))) {
+                        password.setError("Hasła muszą być identyczne "
+                            + "i mieć 5–64 znaki.");
+                        return;
+                    }
+                    if (!first && PrivatePaycheckVault.cooldownMillis(this) > 0) {
+                        password.setError("Poczekaj kilka minut.");
+                        return;
+                    }
+                    PrivatePaycheckVault.Session session = first
+                        ? PrivatePaycheckVault.configure(this, secret)
+                        : PrivatePaycheckVault.unlock(this, secret);
+                    PrivatePaycheckVault.clearFailures(this);
+                    privatePaycheckSession = session;
+                    password.getText().clear();
+                    if (again != null) again.getText().clear();
+                    dialog.dismiss();
+                    go("paycheck_private");
+                } catch (Exception denied) {
+                    if (!first) PrivatePaycheckVault.recordFailure(this);
+                    password.setError(first
+                        ? "Nie utworzono sejfu. Spróbuj ponownie."
+                        : "Nieprawidłowe hasło lub uszkodzony sejf.");
+                } finally {
+                    java.util.Arrays.fill(secret, '\0');
+                    if (confirm != null) java.util.Arrays.fill(confirm, '\0');
+                }
+            }));
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show();
+        if (dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    private void privatePaycheck() {
+        if (privatePaycheckSession == null || !privatePaycheckSession.active()) {
+            go("paycheck");
+            return;
+        }
+        header("🔒 PayCheck • prywatny sejf");
+        note("Tylko ten telefon, osobne hasło i zaszyfrowane wpisy. "
+            + "Sejf zamyka się po opuszczeniu aplikacji. Prywatne dane nie "
+            + "trafiają do wspólnej historii, diagnostyki ani kopii JSON.");
+        note("Prywatny sejf nie wchodzi do zwykłej kopii JSON EDHOME. "
+            + "Osobna zaszyfrowana kopia wymaga hasła kopii (12–64 znaki). "
+            + "Bez hasła kopii nie odzyskasz jej zawartości.");
+        button("🔐 Eksportuj zaszyfrowaną kopię prywatną",
+            this::exportPrivatePaycheckDialog);
+        button("↥ Importuj zaszyfrowaną kopię prywatną",
+            this::selectPrivatePaycheckBackup);
+        button("🔒 Zablokuj i wróć do wspólnego", () -> go("paycheck"));
+        final java.util.List<PrivatePaycheckVault.Entry> entries;
+        try {
+            entries = PrivatePaycheckVault.entries(this, privatePaycheckSession);
+        } catch (Exception damaged) {
+            go("paycheck");
+            alert("Nie można otworzyć prywatnych danych. "
+                + "Sprawdź hasło lub integralność sejfu.");
+            return;
+        }
+        long balance = 0;
+        try {
+            for (PrivatePaycheckVault.Entry entry : entries)
+                if(!"pending".equals(entry.status))
+                    balance = Math.addExact(balance,
+                        "income".equals(entry.kind)
+                            ? entry.amountGrosz : -entry.amountGrosz);
+        } catch (ArithmeticException overflow) {
+            go("paycheck");
+            alert("Saldo sejfu przekracza dopuszczalny zakres.");
+            return;
+        }
+        title("Saldo prywatne: " + MoneyRules.format(balance));
+        if(pendingPrivateBankHintKey!=null) {
+            for(BankNotificationHints.Entry hint:BankNotificationHints.list(this))
+                if(hint.key.equals(pendingPrivateBankHintKey)) {
+                    final BankNotificationHints.Entry chosen=hint;
+                    title("Nowy sygnał • do prywatnego sejfu");
+                    note(MoneyRules.format(chosen.amount)
+                        +" • wpis oczekujący, bez wpływu na saldo");
+                    button("Zapisz jako PRYWATNY do potwierdzenia",
+                        ()->assignBankHintToPrivate(chosen));
+                    button("Wróć bez przypisania",()->{
+                        pendingPrivateBankHintKey=null;
+                        go("paycheck");
+                    });
+                    break;
+                }
+        }
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList("Wydatek −", "Przychód +")));
+        body.addView(kind);
+        Spinner category = new Spinner(this);
+        category.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        body.addView(category);
+        EditText amount = field("Kwota prywatna w PLN, np. 12,50", false);
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText noteField = field("Opis prywatny (opcjonalnie)", false);
+        button("Dodaj prywatną transakcję", () -> {
+            if (privatePaycheckSession == null
+                    || !privatePaycheckSession.active()) return;
+            final long grosz;
+            try {
+                grosz = MoneyRules.parse(amount.getText().toString());
+            } catch (IllegalArgumentException error) {
+                amount.setError(error.getMessage());
+                return;
+            }
+            String description = noteField.getText().toString().trim();
+            if (description.length() > 160) {
+                noteField.setError("Opis ma maks. 160 znaków.");
+                return;
+            }
+            String type = kind.getSelectedItemPosition() == 1
+                ? "income" : "expense";
+            String group = MoneyRules.CATEGORIES[
+                category.getSelectedItemPosition()];
+            String operationId = java.util.UUID.randomUUID().toString();
+            AlertDialog confirmationDialog = new AlertDialog.Builder(this)
+                .setTitle("Potwierdź prywatną transakcję")
+                .setMessage(("income".equals(type) ? "Przychód: " : "Wydatek: ")
+                    + MoneyRules.format(grosz) + "\n"
+                    + MoneyRules.categoryLabel(group)
+                    + "\\nBez wpisu do wspólnego PayCheck.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton("Zapisz w sejfie", (d,w) -> {
+                    if (privatePaycheckSession == null
+                            || !privatePaycheckSession.active()) return;
+                    try {
+                        String status = PrivatePaycheckVault.add(
+                            this, privatePaycheckSession, operationId,
+                            type, group, grosz, description);
+                        if ("COMMITTED".equals(status)) render();
+                        else alert("Ta prywatna operacja była już zapisana.");
+                    } catch (Exception error) {
+                        alert("Nie zapisano prywatnej transakcji.");
+                    }
+                }).create();
+            privateEntryDialog = confirmationDialog;
+            confirmationDialog.setOnDismissListener(d -> {
+                if (privateEntryDialog == confirmationDialog)
+                    privateEntryDialog = null;
+            });
+            confirmationDialog.show();
+            if (confirmationDialog.getWindow() != null)
+                confirmationDialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        });
+        if(!entries.isEmpty())
+            button("Usuń wiele prywatnych wpisów", () ->
+                deletePrivatePaycheckEntries(entries));
+        title("Historia prywatna • " + entries.size());
+        int shown = 0;
+        for (PrivatePaycheckVault.Entry entry : entries) {
+            if (shown++ >= 40) break;
+            LinearLayout row = card();
+            boolean income = "income".equals(entry.kind);
+            row.addView(text((income ? "+ " : "− ")
+                + MoneyRules.format(entry.amountGrosz)
+                +("pending".equals(entry.status)?" • DO POTWIERDZENIA":""),
+                18,true));
+            if("pending".equals(entry.status))
+                smallButton(row,"Sprawdziłem w banku • potwierdź",
+                    ()->new AlertDialog.Builder(this)
+                        .setTitle("Potwierdź prywatny wpis?")
+                        .setMessage("Potwierdź po sprawdzeniu operacji w banku. "
+                            +"Samo powiadomienie nie dowodzi księgowania.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Potwierdź",(d,w)->{
+                            try {
+                                if(privatePaycheckSession!=null
+                                        &&privatePaycheckSession.active()
+                                        &&PrivatePaycheckVault.confirmPending(
+                                            this,privatePaycheckSession,
+                                            entry.operationId))render();
+                            }catch(Exception error){
+                                alert("Nie potwierdzono prywatnego wpisu.");
+                            }
+                        }).show());
+            row.addView(text(MoneyRules.categoryLabel(entry.category)
+                + (entry.note.isEmpty() ? "" : " • " + entry.note), 14, false));
+            row.addView(text(Instant.ofEpochMilli(entry.createdAt)
+                .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
+                12, false));
+        }
+        if (entries.isEmpty())
+            note("Brak prywatnych wpisów. Wspólny budżet pozostaje osobny.");
+    }
+
+
+    private void deletePrivatePaycheckEntries(
+            java.util.List<PrivatePaycheckVault.Entry> entries) {
+        if(privatePaycheckSession==null
+                || !privatePaycheckSession.active())return;
+        String[] labels=new String[entries.size()];
+        boolean[] checked=new boolean[entries.size()];
+        for(int i=0;i<entries.size();i++) {
+            PrivatePaycheckVault.Entry entry=entries.get(i);
+            labels[i]=("income".equals(entry.kind)?"+ ":"− ")
+                +MoneyRules.format(entry.amountGrosz)+" • "
+                +MoneyRules.categoryLabel(entry.category)
+                +(entry.note.isEmpty()?"":" • "+entry.note);
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Usuń prywatne wpisy")
+            .setMultiChoiceItems(labels,checked,
+                (dialog,which,isChecked)->checked[which]=isChecked)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń zaznaczone",(dialog,which)->{
+                java.util.List<String> ids=new java.util.ArrayList<>();
+                for(int i=0;i<checked.length;i++)
+                    if(checked[i])ids.add(entries.get(i).operationId);
+                if(ids.isEmpty()) {
+                    alert("Nie zaznaczono żadnego wpisu.");
+                    return;
+                }
+                try {
+                    int removed=PrivatePaycheckVault.deleteMany(
+                        this,privatePaycheckSession,ids);
+                    DiagnosticLog.event(
+                        "PAYCHECK_PRIVATE_BULK_DELETED");
+                    render();
+                    alert("Usunięto prywatnych wpisów: "+removed+".");
+                } catch(Exception error) {
+                    alert("Nie udało się usunąć prywatnych wpisów.");
+                }
+            }).show();
+    }
+
+    private EditText securePrivatePassword(String hint) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        return input;
+    }
+
+    private void exportPrivatePaycheckDialog() {
+        if (privatePaycheckSession == null || !privatePaycheckSession.active()) {
+            alert("Odblokuj najpierw prywatny sejf."); return;
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text("Utwórz OSOBNE hasło kopii 12–64 znaki. "
+            + "Nie jest to PIN ani hasło do sejfu. Zachowaj je — bez niego nie odtworzysz pliku.",
+            14, false));
+        EditText pass = securePrivatePassword("Hasło kopii");
+        EditText again = securePrivatePassword("Powtórz hasło kopii");
+        form.addView(pass);
+        form.addView(again);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Szyfrowana kopia PayCheck").setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zaszyfruj i zapisz", null).create();
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null)
+                dialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                char[] password = pass.getText().toString().toCharArray();
+                char[] repeat = again.getText().toString().toCharArray();
+                try {
+                    if (!PrivatePaycheckCrypto.validBackupPassword(password)
+                            || !java.util.Arrays.equals(password, repeat)) {
+                        pass.setError("Hasło kopii musi mieć 12–64 znaki i zgadzać się z powtórzeniem.");
+                        return;
+                    }
+                    if (privatePaycheckSession == null
+                            || !privatePaycheckSession.active()) {
+                        alert("Sejf zablokowany — otwórz go ponownie."); return;
+                    }
+                    privateBackupForSave = PrivatePaycheckPortable.exportEncrypted(
+                        this, privatePaycheckSession, password);
+                    pass.getText().clear();
+                    again.getText().clear();
+                    dialog.dismiss();
+                    Intent picker = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    picker.addCategory(Intent.CATEGORY_OPENABLE);
+                    picker.setType("application/json");
+                    picker.putExtra(Intent.EXTRA_TITLE,
+                        "edhome-paycheck-prywatny-zaszyfrowany.json");
+                    startActivityForResult(picker, EXPORT_PRIVATE_BACKUP);
+                } catch (Exception error) {
+                    privateBackupForSave = null;
+                    DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORT_FAILED");
+                    alert("Nie udało się przygotować zaszyfrowanej kopii. Dane sejfu pozostają bez zmian.");
+                } finally {
+                    java.util.Arrays.fill(password, (char) 0);
+                    java.util.Arrays.fill(repeat, (char) 0);
+                }
+            });
+        });
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show();
+    }
+
+    private void selectPrivatePaycheckBackup() {
+        if (!PrivatePaycheckVault.configured(this)) {
+            alert("Najpierw utwórz prywatny sejf i hasło. "
+                + "Potem zaimportujesz do niego zaszyfrowaną kopię.");
+            return;
+        }
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("application/json");
+        startActivityForResult(picker, IMPORT_PRIVATE_BACKUP);
+    }
+
+    private void privateBackupImportDialog(final String archive) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        form.addView(text("Import nie zastępuje istniejących transakcji. "
+            + "Identyczne operacje zostaną pominięte, konflikt przerwie CAŁY import.",
+            14, false));
+        EditText vaultPassword = securePrivatePassword("Hasło obecnego sejfu");
+        EditText archivePassword = securePrivatePassword("Hasło kopii");
+        form.addView(vaultPassword);
+        form.addView(archivePassword);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Przywróć prywatny PayCheck").setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Sprawdź i importuj", null).create();
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null)
+                dialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                char[] vaultPass = vaultPassword.getText().toString().toCharArray();
+                char[] backupPass = archivePassword.getText().toString().toCharArray();
+                PrivatePaycheckVault.Session session = null;
+                try {
+                    if (PrivatePaycheckVault.cooldownMillis(this) > 0) {
+                        alert("Sejf czasowo zablokowany. Spróbuj później."); return;
+                    }
+                    try {
+                        session = PrivatePaycheckVault.unlock(this, vaultPass);
+                        PrivatePaycheckVault.clearFailures(this);
+                    } catch (Exception wrongPassword) {
+                        PrivatePaycheckVault.recordFailure(this);
+                        vaultPassword.setError("Nieprawidłowe hasło sejfu.");
+                        return;
+                    }
+                    if (!PrivatePaycheckCrypto.validBackupPassword(backupPass)) {
+                        archivePassword.setError("Podaj hasło kopii (12–64 znaki).");
+                        return;
+                    }
+                    int imported = PrivatePaycheckPortable.importEncrypted(
+                        this, session, archive, backupPass);
+                    vaultPassword.getText().clear();
+                    archivePassword.getText().clear();
+                    dialog.dismiss();
+                    DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORTED");
+                    alert("Import zakończony. Nowe prywatne transakcje: " + imported
+                        + ". Pozostałe operacje nie zostały nadpisane.");
+                } catch (Exception error) {
+                    DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORT_REJECTED");
+                    archivePassword.setError("Nieprawidłowe hasło kopii, uszkodzony plik "
+                        + "lub konflikt transakcji. Niczego nie nadpisano.");
+                } finally {
+                    if (session != null) session.lock();
+                    java.util.Arrays.fill(vaultPass, (char) 0);
+                    java.util.Arrays.fill(backupPass, (char) 0);
+                }
+            });
+        });
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.setOnDismissListener(d -> {
+            if (!"paycheck_private".equals(screen))
+                getWindow().clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        });
+        dialog.show();
     }
 
     private void sharedPaycheckGoals() {
@@ -2783,10 +8022,35 @@ public final class MainActivity extends Activity {
                     + " / " + MoneyRules.format(target), 16, false));
                 entry.addView(text("Do celu: "
                     + MoneyRules.format(Math.max(0, target - saved)), 14, false));
+                try (Cursor policies = db.getReadableDatabase().rawQuery(
+                        "SELECT v.name,p.valid_until FROM vehicle_policies p "
+                        + "JOIN vehicles v ON v.id=p.vehicle_id "
+                        + "WHERE p.goal_id=? AND p.current=1 "
+                        + "ORDER BY p.valid_until,p.id",
+                        new String[]{Long.toString(id)})) {
+                    while (policies.moveToNext()) {
+                        entry.addView(text("OC • " + policies.getString(0)
+                            + " • termin " + policies.getString(1), 14, false));
+                    }
+                }
                 if (saved < target) {
                     smallButton(entry, "+ Odłóż na cel", () ->
                         allocateSharedPaycheckGoal(id, name, target, saved));
                 } else entry.addView(text("✓ Cel osiągnięty", 14, true));
+                smallButton(entry,"Usuń cel",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć cel?")
+                        .setMessage(name+"\nPrzypisane kwoty celu "
+                            +"zostaną usunięte. Nie usuwa to transakcji "
+                            +"PayCheck.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(d,w)->{
+                            PaycheckGoalsStore.deleteGoal(
+                                db.getWritableDatabase(),id);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_GOAL_DELETED");
+                            render();
+                        }).show());
             }
         }
         if (goals == 0) note("Nie masz jeszcze wspólnych celów finansowych.");
@@ -2880,7 +8144,8 @@ public final class MainActivity extends Activity {
         header("Lista zakupów • offline");
         note("Kupione ≠ przyjęte. Samo zaznaczenie nie zmienia stanu; "
             + "dopiero osobny przycisk Przyjmij dopisuje wybrane opakowania "
-            + "do wskazanego produktu w spiżarni. Bez automatycznej ceny.");
+            + "do wskazanego produktu w spiżarni. Cena zakupu jest opcjonalna; "
+            + "nie księgujemy jej automatycznie w PayCheck.");
         button("← Spiżarnia", () -> go("pantry"));
         EditText item = field("Co kupić?", false);
         EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
@@ -2891,6 +8156,18 @@ public final class MainActivity extends Activity {
         unit.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList(ShoppingRules.UNITS)));
         body.addView(unit);
+        java.util.List<Long> destinationIds = new java.util.ArrayList<>();
+        java.util.List<String> destinationNames = new java.util.ArrayList<>();
+        destinationIds.add(null);
+        destinationNames.add("Wybiorę miejsce przy przyjęciu");
+        for (PlaceEntry place : readPlaces()) {
+            destinationIds.add(place.id);
+            destinationNames.add(db.placePath(place.id));
+        }
+        note("Miejsce docelowe • opcjonalne");
+        Spinner destination = new Spinner(this);
+        destination.setAdapter(themeSpinnerAdapter(destinationNames));
+        body.addView(destination);
         button("+ Dodaj do listy", () -> {
             try {
                 String name = ShoppingRules.validatedName(
@@ -2898,7 +8175,8 @@ public final class MainActivity extends Activity {
                 Long amount = ShoppingRules.parseQuantity(
                     quantity.getText().toString());
                 if (!db.addShoppingItem(name, amount,
-                        ShoppingRules.UNITS[unit.getSelectedItemPosition()])) {
+                        ShoppingRules.UNITS[unit.getSelectedItemPosition()],
+                        destinationIds.get(destination.getSelectedItemPosition()))) {
                     item.setError("Produkt jest już na liście.");
                     return;
                 }
@@ -2910,7 +8188,7 @@ public final class MainActivity extends Activity {
         });
         int count = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT id,name,qty_milli,unit,checked FROM shopping_items "
+                "SELECT id,name,qty_milli,unit,checked,place_id FROM shopping_items "
                 + "ORDER BY checked ASC,name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
                 count++;
@@ -2918,26 +8196,68 @@ public final class MainActivity extends Activity {
                 final String name = cursor.getString(1);
                 final Long amount = cursor.isNull(2)
                     ? null : cursor.getLong(2);
+                final String purchaseUnit = cursor.getString(3);
                 final boolean done = cursor.getInt(4) == 1;
+                final Long intendedPlace = cursor.isNull(5)
+                    ? null : cursor.getLong(5);
                 final boolean received = ShoppingReceiptStore.received(
                     db.getReadableDatabase(), shoppingId);
                 LinearLayout box = card();
                 CheckBox check = new CheckBox(this);
                 check.setText(name + " • " + ShoppingRules.formatQuantity(amount)
-                    + (amount == null ? "" : " " + cursor.getString(3)));
+                    + (amount == null ? "" : " " + purchaseUnit));
                 check.setTextColor(done ? subdued : ink);
                 check.setTextSize(17);
                 check.setButtonTintList(ColorStateList.valueOf(accent));
                 check.setChecked(done);
                 box.addView(check);
-                if (received) {
-                    box.addView(text("✓ Przyjęte do spiżarni — zapisano historię",
+                if (!received && intendedPlace != null) {
+                    String path = db.placePath(intendedPlace);
+                    box.addView(text("Do miejsca: " + (path.isEmpty()
+                        ? "miejsce usunięte — wybierz przy przyjęciu" : path),
                         13, false));
+                }
+                try (Cursor price = PantryPriceHistoryStore.forShoppingItem(
+                        db.getReadableDatabase(), shoppingId)) {
+                    if (price.moveToFirst()) {
+                        Long total = ShoppingCostRules.totalGrosz(amount,
+                            price.getLong(0));
+                        box.addView(text("Cena 1 " + purchaseUnit + ": "
+                            + MoneyRules.format(price.getLong(0))
+                            + " • łącznie: " + (total == null
+                                ? "nieznane (brak ilości)"
+                                : MoneyRules.format(total))
+                            + (price.getString(2).isEmpty() ? ""
+                                : " • " + price.getString(2)),
+                            13, false));
+                    }
+                }
+                if (received) {
+                    try (Cursor receipt = db.getReadableDatabase().rawQuery(
+                            "SELECT place_name_snapshot FROM shopping_receipts "
+                            + "WHERE shopping_id=?",
+                            new String[]{Long.toString(shoppingId)})) {
+                        String place = receipt.moveToFirst()
+                            ? receipt.getString(0) : "";
+                        box.addView(text("✓ Przyjęte do spiżarni"
+                            + (place.isEmpty() ? " • bez miejsca"
+                                : " • " + place), 13, false));
+                    }
                 } else if (done) {
                     smallButton(box, "Przyjmij do spiżarni", () ->
                         chooseShoppingReceipt(shoppingId, name));
                 }
                 check.setOnCheckedChangeListener((view, isChecked) -> {
+                    if (received) {
+                        render();
+                        alert("Ta pozycja była już przyjęta. Aby kupić ją ponownie, "
+                            + "usuń ją z listy i dodaj nową.");
+                        return;
+                    }
+                    if (isChecked && !done) {
+                        shoppingBoughtDialog(shoppingId, name, purchaseUnit);
+                        return;
+                    }
                     db.setShoppingChecked(shoppingId, isChecked);
                     DiagnosticLog.event("SHOPPING_ITEM_CHECKED");
                     render();
@@ -2955,6 +8275,109 @@ public final class MainActivity extends Activity {
             }
         }
         if (count == 0) note("Lista jest pusta. Dodaj pierwszy produkt.");
+    }
+
+
+    private void shoppingBoughtDialog(long shoppingId, String productName,
+            String purchaseUnit) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+        final Long boughtQuantity;
+        try (Cursor previous = db.getReadableDatabase().rawQuery(
+                "SELECT qty_milli FROM shopping_items WHERE id=?",
+                new String[]{Long.toString(shoppingId)})) {
+            boughtQuantity = previous.moveToFirst() && !previous.isNull(0)
+                ? previous.getLong(0) : null;
+        }
+        form.addView(text("Oznaczasz „Kupione”: " + productName
+            + ". Cena jest za 1 " + purchaseUnit + ", a ilość to "
+            + (boughtQuantity == null ? "nieokreślona"
+                : ShoppingRules.formatQuantity(boughtQuantity))
+            + " " + purchaseUnit + ". Cena jest DOBROWOLNA. "
+            + "Nie dodajemy tu zapasu ani wydatku PayCheck.", 14, false));
+        EditText price = new EditText(this);
+        price.setSingleLine(true);
+        price.setHint("Cena za 1 " + purchaseUnit + ", np. 6,49");
+        price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(price);
+        TextView costPreview = text("Łącznie: podaj cenę, aby obliczyć.",
+            14, false);
+        form.addView(costPreview);
+        price.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st,
+                    int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int st,
+                    int before, int count) {
+                try {
+                    long unitPrice = MoneyRules.parse(s.toString());
+                    Long total = ShoppingCostRules.totalGrosz(
+                        boughtQuantity, unitPrice);
+                    costPreview.setText("Łącznie: " + (total == null
+                        ? "nieznane — uzupełnij ilość na liście"
+                        : MoneyRules.format(total)));
+                } catch (IllegalArgumentException problem) {
+                    costPreview.setText("Łącznie: podaj prawidłową cenę.");
+                }
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        });
+        EditText shop = new EditText(this);
+        shop.setSingleLine(true);
+        shop.setHint("Sklep (opcjonalnie)");
+        form.addView(shop);
+        lightDialogForm(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Zakup • cena opcjonalna").setView(form)
+            .setNegativeButton("Anuluj", (d,w) -> render())
+            .setNeutralButton("Kupione bez ceny", null)
+            .setPositiveButton("Kupione i zapisz cenę", null)
+            .create();
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                try {
+                    String status = PantryPriceHistoryStore.markBought(
+                        db.getWritableDatabase(), shoppingId, null, "");
+                    if (!"COMMITTED".equals(status)) {
+                        alert("Pozycja już kupiona albo została usunięta."); return;
+                    }
+                    DiagnosticLog.event("SHOPPING_BOUGHT_WITHOUT_PRICE");
+                    dialog.dismiss();
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.event("SHOPPING_BOUGHT_FAILED");
+                    alert("Nie zapisano zakupu. Spróbuj ponownie.");
+                }
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                final long grosz;
+                try {
+                    grosz = MoneyRules.parse(price.getText().toString());
+                } catch (IllegalArgumentException invalid) {
+                    price.setError("Podaj cenę większą od 0 w zł, np. 6,49.");
+                    return;
+                }
+                if (shop.getText().toString().trim().length() > 80) {
+                    shop.setError("Maksymalnie 80 znaków."); return;
+                }
+                try {
+                    String status = PantryPriceHistoryStore.markBought(
+                        db.getWritableDatabase(), shoppingId, grosz,
+                        shop.getText().toString());
+                    if (!"COMMITTED".equals(status)) {
+                        alert("Pozycja już kupiona albo została usunięta."); return;
+                    }
+                    DiagnosticLog.event("SHOPPING_BOUGHT_PRICE_RECORDED");
+                    dialog.dismiss();
+                    render();
+                } catch (Exception error) {
+                    DiagnosticLog.event("SHOPPING_BOUGHT_PRICE_FAILED");
+                    alert("Nie zapisano zakupu ani ceny. Stan pozostał bez zmian.");
+                }
+            });
+        });
+        dialog.show();
     }
 
     private void chooseShoppingReceipt(long shoppingId, String shoppingName) {
@@ -2997,6 +8420,30 @@ public final class MainActivity extends Activity {
             + "\nSamo „kupione” nie dodaje zapasu. Potwierdź liczbę "
             + "pełnych opakowań.", 15, false));
         form.addView(count);
+        java.util.List<Long> placeIds = new java.util.ArrayList<>();
+        java.util.List<String> placeNames = new java.util.ArrayList<>();
+        placeIds.add(null);
+        placeNames.add("Bez miejsca / wybiorę później");
+        for (PlaceEntry place : readPlaces()) {
+            placeIds.add(place.id);
+            placeNames.add(db.placePath(place.id));
+        }
+        Long preselectedPlace = null;
+        try (Cursor row = db.getReadableDatabase().rawQuery(
+                "SELECT place_id FROM shopping_items WHERE id=?",
+                new String[]{Long.toString(shoppingId)})) {
+            if (row.moveToFirst() && !row.isNull(0))
+                preselectedPlace = row.getLong(0);
+        }
+        form.addView(text("Miejsce docelowe tej pozycji — potwierdź lub zmień",
+            14, false));
+        Spinner placeChoice = new Spinner(this);
+        placeChoice.setAdapter(themeSpinnerAdapter(placeNames));
+        if (preselectedPlace != null) {
+            int placeIndex = placeIds.indexOf(preselectedPlace);
+            if (placeIndex > 0) placeChoice.setSelection(placeIndex);
+        }
+        form.addView(placeChoice);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Potwierdź przyjęcie")
             .setView(form)
@@ -3007,7 +8454,8 @@ public final class MainActivity extends Activity {
                 try {
                     int packages = Integer.parseInt(count.getText().toString().trim());
                     String outcome = ShoppingReceiptStore.accept(
-                        db.getWritableDatabase(), shoppingId, pantryId, packages);
+                        db.getWritableDatabase(), shoppingId, pantryId, packages,
+                        placeIds.get(placeChoice.getSelectedItemPosition()));
                     if ("COMMITTED".equals(outcome)) {
                         DiagnosticLog.event("SHOPPING_RECEIPT_COMMITTED");
                         dialog.dismiss();
@@ -3019,7 +8467,10 @@ public final class MainActivity extends Activity {
                     } else alert("Nie przyjęto: "
                         + ("NOT_PURCHASED".equals(outcome) ? "pozycja nie jest kupiona."
                         : "MISSING_PRODUCT".equals(outcome)
-                            ? "produkt już nie istnieje." : "przekroczony limit."));
+                            ? "produkt już nie istnieje."
+                        : "MISSING_PLACE".equals(outcome)
+                            ? "miejsce już nie istnieje."
+                            : "przekroczony limit."));
                 } catch (NumberFormatException invalid) {
                     count.setError("Podaj całkowitą liczbę opakowań.");
                 } catch (IllegalArgumentException invalid) {
@@ -3034,56 +8485,30 @@ public final class MainActivity extends Activity {
 
     private void pantry() {
         header("Spiżarnia • lokalne zapasy");
-        button("☷ Lista zakupów", () -> go("shopping"));
-        button("+ Dodaj produkt", () -> pantryProductDialog(null, ""));
-        button("☷ Kategoria: " + (pantryCategoryFilter.isEmpty()
-                ? "Wszystkie" : PantryCategories.label(pantryCategoryFilter)), () -> {
-            int chosen = java.util.Arrays.asList(PantryCategories.FILTER_IDS)
-                .indexOf(pantryCategoryFilter);
-            new AlertDialog.Builder(this).setTitle("Filtr kategorii")
-                .setSingleChoiceItems(PantryCategories.FILTER_LABELS,
-                    Math.max(0, chosen), (dialog, index) -> {
-                        pantryCategoryFilter = PantryCategories.FILTER_IDS[index];
-                        dialog.dismiss();
-                        render();
-                    }).setNegativeButton("Anuluj", null).show();
-        });
-        button("📷 Skanuj i dodaj +1", () -> {
+
+        LinearLayout row1 = compactActionRow();
+        compactAction(row1, "☷ Zakupy", () -> go("shopping"));
+        compactAction(row1, "+ Produkt", () -> pantryProductDialog(null, ""));
+
+        LinearLayout row2 = compactActionRow();
+        compactAction(row2, "📷 Dodaj +1", () -> {
             finishPantryBatch();
             openPantryCamera(false);
         });
-        button("📷 Skanuj i wyciągnij −1", () -> {
+        compactAction(row2, "📷 Wyjmij −1", () -> {
             finishPantryBatch();
-            openPantryCamera(true);
+            launchTakeScanner(false);
         });
-        if (!pantryBatch.active()) {
-            button("📷 Skanuj serię — dodawaj +1", () -> startPantryBatch("ADD"));
-            button("📷 Skanuj serię — wyciągaj −1", () -> startPantryBatch("TAKE"));
-        } else {
-            button("⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
-                this::finishPantryBatch);
-        }
-        button("⌨ Wpisz kod ręcznie", this::manualPantryBarcode);
-        button("Historia skanów", this::showPantryScanHistory);
-        button("◫ Rozpocznij / wznów remanent", () -> go("audit"));
-        button(pantrySearch.isEmpty() ? "⌕ Szukaj produktu" :
-            "⌕ Szukaj: " + pantrySearch, () -> {
-            EditText search = new EditText(this);
-            search.setSingleLine(true);
-            search.setText(pantrySearch);
-            search.setHint("Nazwa produktu");
-            new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
-                .setView(search).setNegativeButton("Anuluj", null)
-                .setNeutralButton("Wyczyść", (d, w) -> {
-                    pantrySearch = "";
-                    render();
-                })
-                .setPositiveButton("Szukaj", (d, w) -> {
-                    pantrySearch = search.getText().toString().trim();
-                    render();
-                }).show();
-        });
+
+        LinearLayout row3 = compactActionRow();
+        compactAction(row3, "☷ Kategoria", this::showPantryCategoryDialog);
+        compactAction(row3, pantrySearch.isEmpty() ? "⌕ Szukaj" : "⌕ Filtr",
+            this::showPantrySearchDialog);
+        compactAction(row3, "⋯ Więcej", this::showPantryMoreMenu);
+
         int matched = 0;
+        int shown = 0;
+        final int pageSize = 2;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,name,qty,category FROM pantry ORDER BY name COLLATE NOCASE", null)) {
             while (cursor.moveToNext()) {
@@ -3094,56 +8519,211 @@ public final class MainActivity extends Activity {
                         && !pantryCategoryFilter.equals(category)) continue;
                 if (!pantrySearch.isEmpty() && !name.toLowerCase(Locale.ROOT)
                     .contains(pantrySearch.toLowerCase(Locale.ROOT))) continue;
-                matched++;
+
+                int index = matched++;
+                if (index < pantryPage * pageSize
+                        || index >= (pantryPage + 1) * pageSize) continue;
+                shown++;
+
                 int qty = cursor.getInt(2);
-                LinearLayout box = card();
                 PantryBarcodeStore.Details details = PantryBarcodeStore.details(
                     db.getReadableDatabase(), id);
+                PantryPackageStore.Pack pack = PantryPackageStore.find(
+                    db.getReadableDatabase(), id);
+
+                LinearLayout box = card();
+                box.setPadding(dp(10), dp(7), dp(10), dp(7));
+                LinearLayout head = new LinearLayout(this);
+                head.setOrientation(LinearLayout.HORIZONTAL);
+                head.setGravity(Gravity.CENTER_VERTICAL);
+
                 if (details != null && !details.imageUrl.isEmpty()) {
                     Bitmap thumbnail = PantryProductLookup.cached(this, details.imageUrl);
                     if (thumbnail != null) {
                         ImageView photo = new ImageView(this);
-                        int px = (int) (getResources().getDisplayMetrics().density * 88);
-                        photo.setLayoutParams(new LinearLayout.LayoutParams(px, px));
                         photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
                         photo.setImageBitmap(thumbnail);
-                        box.addView(photo);
-                    } else {
-                        taskAction(box, "⬇ Pobierz zdjęcie produktu",
-                            () -> refreshPantryPhoto(details.imageUrl));
+                        LinearLayout.LayoutParams pp =
+                            new LinearLayout.LayoutParams(dp(50), dp(50));
+                        pp.setMargins(0, 0, dp(8), 0);
+                        head.addView(photo, pp);
                     }
                 }
-                PantryPackageStore.Pack pack = PantryPackageStore.find(
-                    db.getReadableDatabase(), id);
-                box.addView(text(name + " • " + qty + " opak.", 18, true));
-                box.addView(text(PantryPackageRules.summary(
-                    qty, pack.unit, pack.sizeMilli), 14, false));
-                box.addView(text(PantryCategories.label(category), 13, false));
-                if (details != null && !details.brand.isEmpty())
-                    box.addView(text("Marka: " + details.brand, 13, false));
+
+                LinearLayout info = new LinearLayout(this);
+                info.setOrientation(LinearLayout.VERTICAL);
+                TextView product = text(name + " • " + qty + " opak.", 15, true);
+                product.setPadding(0, 0, 0, 0);
+                info.addView(product);
+                String amount = pack == null ? qty + " opak."
+                    : PantryPackageRules.summary(qty, pack.unit, pack.sizeMilli);
+                TextView amountText = text(amount, 12, false);
+                amountText.setTextColor(subdued);
+                amountText.setPadding(0, 0, 0, 0);
+                info.addView(amountText);
+                TextView categoryText = text(PantryCategories.label(category), 11, false);
+                categoryText.setTextColor(subdued);
+                categoryText.setPadding(0, 0, 0, 0);
+                info.addView(categoryText);
+                head.addView(info, new LinearLayout.LayoutParams(0, -2, 1f));
+                box.addView(head);
+
                 LinearLayout quick = new LinearLayout(this);
                 quick.setOrientation(LinearLayout.HORIZONTAL);
                 box.addView(quick);
-                taskAction(quick, "＋ 1", () -> {
+                taskAction(quick, "＋1", () -> {
                     db.changeStock(id, 1);
                     DiagnosticLog.event("PANTRY_INCREMENT");
                     render();
                 });
-                taskAction(quick, "－ 1", () -> {
+                taskAction(quick, "－1", () -> {
                     db.changeStock(id, -1);
                     DiagnosticLog.event("PANTRY_DECREMENT");
                     render();
                 });
-                taskAction(quick, "Ustaw ilość", () -> {
+                taskAction(quick, "⋯ Więcej",
+                    () -> showPantryProductMenu(id, name, qty, category));
+            }
+        }
+
+        int pages = Math.max(1, (matched + pageSize - 1) / pageSize);
+        if (matched > 0 && pantryPage >= pages) {
+            pantryPage = pages - 1;
+            render();
+            return;
+        }
+        if (matched == 0)
+            note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
+                ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
+                : "Brak produktów dla filtra.");
+        else
+            note("Produkty: " + matched + " • strona " + (pantryPage + 1)
+                + " / " + pages);
+
+        if (pages > 1) {
+            LinearLayout pager = compactActionRow();
+            compactAction(pager, "‹", () -> {
+                if (pantryPage > 0) { pantryPage--; render(); }
+            });
+            compactAction(pager, (pantryPage + 1) + " / " + pages, () -> { });
+            compactAction(pager, "›", () -> {
+                if (pantryPage + 1 < pages) { pantryPage++; render(); }
+            });
+        }
+    }
+
+    private void showPantryCategoryDialog() {
+        int chosen = java.util.Arrays.asList(PantryCategories.FILTER_IDS)
+            .indexOf(pantryCategoryFilter);
+        new AlertDialog.Builder(this).setTitle("Filtr kategorii")
+            .setSingleChoiceItems(PantryCategories.FILTER_LABELS,
+                Math.max(0, chosen), (dialog, index) -> {
+                    pantryCategoryFilter = PantryCategories.FILTER_IDS[index];
+                    pantryPage = 0;
+                    dialog.dismiss();
+                    render();
+                }).setNegativeButton("Anuluj", null).show();
+    }
+
+    private void showPantrySearchDialog() {
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setText(pantrySearch);
+        search.setHint("Nazwa produktu");
+        new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
+            .setView(search)
+            .setNegativeButton("Anuluj", null)
+            .setNeutralButton("Wyczyść", (d, w) -> {
+                pantrySearch = "";
+                pantryPage = 0;
+                render();
+            })
+            .setPositiveButton("Szukaj", (d, w) -> {
+                pantrySearch = search.getText().toString().trim();
+                pantryPage = 0;
+                render();
+            }).show();
+    }
+
+    private void showPantryMoreMenu() {
+        final String[] labels = pantryBatch.active()
+            ? new String[]{"⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
+                "⌨ Wpisz kod ręcznie", "Historia skanów",
+                "◫ Rozpocznij / wznów remanent"}
+            : new String[]{"📷 Skanuj serię — dodawaj +1",
+                "📷 Skanuj serię — wyciągaj −1",
+                "⌨ Wpisz kod ręcznie", "Historia skanów",
+                "◫ Rozpocznij / wznów remanent"};
+        new AlertDialog.Builder(this)
+            .setTitle("Spiżarnia • więcej")
+            .setItems(labels, (dialog, which) -> {
+                if (pantryBatch.active()) {
+                    if (which == 0) finishPantryBatch();
+                    else if (which == 1) manualPantryBarcode();
+                    else if (which == 2) showPantryScanHistory();
+                    else go("audit");
+                } else {
+                    if (which == 0) startPantryBatch("ADD");
+                    else if (which == 1) startPantryBatch("TAKE");
+                    else if (which == 2) manualPantryBarcode();
+                    else if (which == 3) showPantryScanHistory();
+                    else go("audit");
+                }
+            })
+            .setNegativeButton("Zamknij", null)
+            .show();
+    }
+
+    private void showPantryProductMenu(long id, String name, int qty,
+            String category) {
+        PantryBarcodeStore.Details details = PantryBarcodeStore.details(
+            db.getReadableDatabase(), id);
+        PantryPackageStore.Pack pack = PantryPackageStore.find(
+            db.getReadableDatabase(), id);
+        String amount = pack == null ? qty + " opak."
+            : PantryPackageRules.summary(qty, pack.unit, pack.sizeMilli);
+
+        String lastPrice = "Brak zapisanej ceny.";
+        try (Cursor prices = PantryPriceHistoryStore.forProduct(
+                db.getReadableDatabase(), id)) {
+            if (prices.moveToFirst())
+                lastPrice = "Ostatnia cena: " + MoneyRules.format(prices.getLong(0))
+                    + " / " + prices.getString(1)
+                    + (prices.getString(2).isEmpty() ? ""
+                        : " • " + prices.getString(2));
+        }
+        String meta = amount + "\n" + PantryCategories.label(category)
+            + (details != null && !details.brand.isEmpty()
+                ? "\nMarka: " + details.brand : "")
+            + "\n" + lastPrice;
+
+        java.util.ArrayList<String> actions = new java.util.ArrayList<>();
+        actions.add("Ustaw ilość");
+        actions.add("NFC");
+        actions.add("Historia cen");
+        actions.add("Edytuj produkt");
+        actions.add("Usuń produkt");
+        if (details != null && !details.imageUrl.isEmpty())
+            actions.add("Odśwież zdjęcie");
+
+        new AlertDialog.Builder(this)
+            .setTitle(name + " • " + qty + " opak.")
+            .setMessage(meta)
+            .setItems(actions.toArray(new String[0]), (dialog, which) -> {
+                String action = actions.get(which);
+                if ("Ustaw ilość".equals(action)) {
                     EditText count = new EditText(this);
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
-                    new AlertDialog.Builder(this).setTitle(name + " • liczba opakowań")
-                        .setView(count).setNegativeButton("Anuluj", null)
+                    new AlertDialog.Builder(this)
+                        .setTitle(name + " • liczba opakowań")
+                        .setView(count)
+                        .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Zapisz", (d, w) -> {
                             try {
-                                int value = Integer.parseInt(count.getText().toString().trim());
+                                int value = Integer.parseInt(
+                                    count.getText().toString().trim());
                                 if (value < 0 || value > 100000000) {
                                     alert("Podaj ilość od 0 do 100 000 000.");
                                     return;
@@ -3155,18 +8735,19 @@ public final class MainActivity extends Activity {
                                 alert("Podaj liczbę całkowitą.");
                             }
                         }).show();
-                });
-                LinearLayout management = new LinearLayout(this);
-                management.setOrientation(LinearLayout.HORIZONTAL);
-                box.addView(management);
-                taskAction(management, "Edytuj", () -> pantryProductDialog(id, name));
-                taskAction(management, "Usuń", () -> {
+                } else if ("NFC".equals(action)) {
+                    showNfcTargetMenu(null, "pantry", id, name);
+                } else if ("Historia cen".equals(action)) {
+                    showPantryPriceHistory(id, name);
+                } else if ("Edytuj produkt".equals(action)) {
+                    pantryProductDialog(id, name);
+                } else if ("Usuń produkt".equals(action)) {
                     if (db.openAuditId() != 0) {
-                        alert("Najpierw zakończ lub anuluj remanent. "
-                            + "W jego trakcie nie można usuwać produktów.");
+                        alert("Najpierw zakończ lub anuluj remanent.");
                         return;
                     }
-                    new AlertDialog.Builder(this).setTitle("Usunąć produkt?")
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć produkt?")
                         .setMessage(name + " • " + qty + " opak.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Usuń", (d, w) -> {
@@ -3174,20 +8755,20 @@ public final class MainActivity extends Activity {
                             DiagnosticLog.event("PANTRY_PRODUCT_DELETED");
                             render();
                         }).show();
-                });
-            }
-        }
-        if (matched == 0) note(pantrySearch.isEmpty() && pantryCategoryFilter.isEmpty()
-            ? "Spiżarnia jest pusta. Dodaj pierwszy produkt."
-            : "Brak produktów dla wyszukiwania lub kategorii. Wyczyść filtr.");
-        note("Stan zapisujemy w pełnych opakowaniach; np. 3 × 0,5 l = 1,5 l. "
-            + "W serii aparat wraca po każdym zatwierdzonym skanie; "
-            + "ten sam kod wymaga dodatkowego potwierdzenia.");
+                } else if (details != null && !details.imageUrl.isEmpty()) {
+                    refreshPantryPhoto(details.imageUrl);
+                }
+            })
+            .setNegativeButton("Zamknij", null)
+            .show();
     }
-
 
     private void startPantryBatch(String mode) {
         if (pantryBatch.active()) return;
+        if ("TAKE".equals(mode)) {
+            launchTakeScanner(true);
+            return;
+        }
         pantryBatch.start(mode);
         DiagnosticLog.event("PANTRY_BATCH_STARTED");
         render();
@@ -3217,21 +8798,58 @@ public final class MainActivity extends Activity {
         });
     }
 
-    /** Start an offline barcode scan; never mutate stock in the camera callback. */
+    private void launchTakeScanner(boolean series) {
+        // The old IntentIntegrator closes its camera after each code. TAKE needs
+        // continuous decoding so a new code can cancel an uncommitted countdown.
+        try {
+            Intent scanner = new Intent(this, PantryTakeCaptureActivity.class);
+            scanner.putExtra(PantryTakeCaptureActivity.EXTRA_BATCH, series);
+            startActivityForResult(scanner, TAKE_SCANNER_RESULT);
+        } catch (Exception problem) {
+            DiagnosticLog.error("PANTRY_TAKE_LAUNCH", problem);
+            alert("Nie można uruchomić skanera wyjmowania. "
+                + "Wpisz kod ręcznie; stan spiżarni nie został zmieniony.");
+        }
+    }
+
+    /** Start an offline ADD camera scan; TAKE uses the continuous camera. */
     private void openPantryCamera(boolean take) {
+        if (take) {
+            launchTakeScanner(pantryBatch.active());
+            return;
+        }
         if (pantryBatch.active()) {
             if (!pantryBatch.launchCamera()) return;
         } else {
             if (pantrySingleCameraPending) return;
             pantrySingleCameraPending = true;
         }
-        prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
-        IntentIntegrator scanner = new IntentIntegrator(this);
-        scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
-        scanner.setPrompt(take ? "EDHOME: wyciągnij ze spiżarni" : "EDHOME: dodaj do spiżarni");
-        scanner.setBeepEnabled(false);
-        scanner.setOrientationLocked(false);
-        scanner.initiateScan();
+        try {
+            prefs.edit().putString(SCAN_MODE_PREF, take ? "TAKE" : "ADD").apply();
+            IntentIntegrator scanner = new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES);
+            scanner.setPrompt(take ? "EDHOME: wyciągnij ze spiżarni"
+                : "EDHOME: dodaj do spiżarni");
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+        } catch (Exception problem) {
+            // launchCamera() has already claimed the pending result. Release it
+            // if Android cannot start CaptureActivity; do not retry invisibly.
+            abortPantryScan("PANTRY_CAMERA_LAUNCH", problem,
+                "Nie można uruchomić aparatu. Sprawdź uprawnienie kamery "
+                + "albo wpisz kod ręcznie. Stan spiżarni nie został zmieniony.");
+        }
+    }
+
+    /** Abort a failed scanner path without claiming an inventory operation. */
+    private void abortPantryScan(String event, Exception problem, String message) {
+        pantrySingleCameraPending = false;
+        if (pantryBatch.active()) pantryBatch.stop();
+        if (problem == null) DiagnosticLog.event(event);
+        else DiagnosticLog.error(event, problem);
+        if ("pantry".equals(screen)) render();
+        alert(message);
     }
 
     private void manualPantryBarcode() {
@@ -3272,8 +8890,15 @@ public final class MainActivity extends Activity {
                 .setOnCancelListener(d -> finishPantryBatch()).show();
             return;
         }
-        PantryBarcodeStore.Item item = PantryBarcodeStore.find(
-            db.getReadableDatabase(), barcode);
+        final PantryBarcodeStore.Item item;
+        try {
+            item = PantryBarcodeStore.find(db.getReadableDatabase(), barcode);
+        } catch (Exception problem) {
+            abortPantryScan("PANTRY_SCAN_READ", problem,
+                "Nie udało się odczytać produktu. Niczego nie dodano ani "
+                    + "nie wyjęto. Spróbuj ponownie albo wyeksportuj diagnostykę.");
+            return;
+        }
         String operationId = java.util.UUID.randomUUID().toString();
         if (item == null && "TAKE".equals(mode)) {
             finishPantryBatch();
@@ -3294,8 +8919,15 @@ public final class MainActivity extends Activity {
                 .setOnCancelListener(d -> finishPantryBatch()).show();
             return;
         }
-        PantryPackageStore.Pack pack = PantryPackageStore.find(
-            db.getReadableDatabase(), item.id);
+        final PantryPackageStore.Pack pack;
+        try {
+            pack = PantryPackageStore.find(db.getReadableDatabase(), item.id);
+        } catch (Exception problem) {
+            abortPantryScan("PANTRY_PACKAGE_READ", problem,
+                "Nie udało się odczytać opakowania. Stan spiżarni nie został "
+                    + "zmieniony. Spróbuj ponownie albo wyeksportuj diagnostykę.");
+            return;
+        }
         String question = "TAKE".equals(mode) ? "Wyciągnąć 1 opak.?" : "Dodać 1 opak.?";
         new AlertDialog.Builder(this).setTitle(item.name)
             .setMessage("Kod: " + barcode + "\nObecny stan: "
@@ -3633,6 +9265,7 @@ public final class MainActivity extends Activity {
         packSize.setHint("np. 0,5");
         form.addView(packUnit);
         form.addView(packSize);
+        lightDialogForm(form);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
@@ -3711,8 +9344,19 @@ public final class MainActivity extends Activity {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
                 barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId);
-            DiagnosticLog.event("COMMITTED".equals(result) ?
-                "PANTRY_SCAN_COMMITTED" : "PANTRY_SCAN_DUPLICATE_IGNORED");
+            if ("DUPLICATE_IGNORED".equals(result)) {
+                abortPantryScan("PANTRY_SCAN_DUPLICATE_IGNORED", null,
+                    "Ta operacja skanowania była już zapisana. Nie zmieniono "
+                        + "stanu ponownie.");
+                return;
+            }
+            if (!"COMMITTED".equals(result)) {
+                abortPantryScan("PANTRY_SCAN_UNEXPECTED_RESULT", null,
+                    "Nie potwierdzono zapisu skanu. Sprawdź stan i historię "
+                        + "przed kolejną próbą.");
+                return;
+            }
+            DiagnosticLog.event("PANTRY_SCAN_COMMITTED");
             if (newCategory != null && "COMMITTED".equals(result)) {
                 try {
                     PantryBarcodeStore.Item product = PantryBarcodeStore.find(
@@ -3736,10 +9380,11 @@ public final class MainActivity extends Activity {
                 } else finishPantryBatch();
             } else render();
         } catch (Exception problem) {
-            finishPantryBatch();
-            DiagnosticLog.error("PANTRY_SCAN_COMMIT", problem);
-            alert(problem.getMessage() == null ? "Nie udało się zapisać skanu."
-                : problem.getMessage());
+            String explanation = problem instanceof IllegalArgumentException
+                && problem.getMessage() != null ? problem.getMessage()
+                : "Nie udało się zapisać skanu. Sprawdź stan i historię "
+                    + "przed ponowną próbą; nie zakładamy, że operacja się udała.";
+            abortPantryScan("PANTRY_SCAN_COMMIT", problem, explanation);
         }
     }
 
@@ -3762,10 +9407,8 @@ public final class MainActivity extends Activity {
 
     private Spinner pantryCategorySpinner(String category) {
         Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_item, PantryCategories.LABELS);
-        adapter.setDropDownViewResource(
-            android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> adapter = lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(PantryCategories.LABELS));
         spinner.setAdapter(adapter);
         int initial = java.util.Arrays.asList(PantryCategories.IDS)
             .indexOf(category);
@@ -3775,15 +9418,46 @@ public final class MainActivity extends Activity {
 
     private Spinner pantryPackageUnitSpinner(String initialUnit) {
         Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_item, PantryPackageRules.UNITS);
-        adapter.setDropDownViewResource(
-            android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> adapter = lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(PantryPackageRules.UNITS));
         spinner.setAdapter(adapter);
         int chosen = java.util.Arrays.asList(PantryPackageRules.UNITS)
             .indexOf(initialUnit);
         spinner.setSelection(Math.max(0, chosen));
         return spinner;
+    }
+
+
+    private void showPantryPriceHistory(long pantryId, String productName) {
+        LinearLayout entries = new LinearLayout(this);
+        entries.setOrientation(LinearLayout.VERTICAL);
+        entries.setPadding(dp(16), dp(12), dp(16), dp(12));
+        entries.addView(text("Historia rzeczywistych zakupów; nie jest to "
+            + "wycena całego zapasu ani saldo PayCheck.", 14, false));
+        int count = 0;
+        try (Cursor c = PantryPriceHistoryStore.forProduct(
+                db.getReadableDatabase(), pantryId)) {
+            while (c.moveToNext()) {
+                count++;
+                String date = Instant.ofEpochMilli(c.getLong(3))
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString();
+                Long boughtQty = c.isNull(5) ? null : c.getLong(5);
+                Long total = ShoppingCostRules.totalGrosz(boughtQty, c.getLong(0));
+                entries.addView(text(date + " • " + MoneyRules.format(c.getLong(0))
+                    + " / 1 " + c.getString(1)
+                    + " • ilość: " + (boughtQty == null ? "nieokreślona"
+                        : ShoppingRules.formatQuantity(boughtQty))
+                    + " • razem: " + (total == null ? "nieznane"
+                        : MoneyRules.format(total))
+                    + (c.getString(2).isEmpty() ? ""
+                        : " • " + c.getString(2)), 15, false));
+            }
+        }
+        if (count == 0) entries.addView(text("Nie ma zapisanych cen.", 14, false));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(entries);
+        new AlertDialog.Builder(this).setTitle("Historia cen: " + productName)
+            .setView(scroll).setPositiveButton("Zamknij", null).show();
     }
 
     private void pantryProductDialog(Long id, String existingName) {
@@ -3814,6 +9488,7 @@ public final class MainActivity extends Activity {
         packSize.setHint("np. 0,5");
         form.addView(packUnit);
         form.addView(packSize);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(id == null ? "Dodaj do spiżarni" : "Edytuj produkt")
             .setView(form).setNegativeButton("Anuluj", null)
@@ -3967,6 +9642,34 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void floorPlanShell() {
+        header("Plan domu / posesji");
+
+        LinearLayout intro = card();
+        intro.addView(text("Nowa funkcja — wydmuszka", 20, true));
+        intro.addView(text(
+            "Moduł został dodany do EDHOME, ale edytor planu nie jest jeszcze aktywny. "
+                + "Na tym etapie niczego tu nie zapisujesz ani nie rysujesz.",
+            15, false));
+
+        LinearLayout scope = card();
+        scope.addView(text("Docelowy zakres", 18, true));
+        scope.addView(text("• rysowanie pomieszczeń prostokątem oraz ścian nieregularnych", 14, false));
+        scope.addView(text("• poziomy: piwnica, parter, piętro i kolejne warstwy", 14, false));
+        scope.addView(text("• niższa kondygnacja wyszarzona jako podkład podczas rysowania wyższej", 14, false));
+        scope.addView(text("• wspólny punkt 0,0 i siatka pomocnicza", 14, false));
+        scope.addView(text("• drzwi, schody, opisy i blokowanie gotowych elementów", 14, false));
+        scope.addView(text("• import JPG oraz DXF jako szablonu; DWG po weryfikacji obsługi", 14, false));
+        scope.addView(text("• wybór rozmiaru obszaru posesji/podwórka i kilka budynków", 14, false));
+        scope.addView(text("• przypięcie pomieszczenia do istniejącego Miejsca lub utworzenie nowego", 14, false));
+        scope.addView(text("• wyposażenie wewnątrz: regał → pudełko → rzecz/narzędzie", 14, false));
+        scope.addView(text("• później ta sama mapa jako nakładka urządzeń SUPLA", 14, false));
+
+        note("To jest tylko punkt wejścia do przyszłego edytora. "
+            + "Układ pomieszczeń nie jest jeszcze zapisywany z telefonu.");
+        DiagnosticLog.event("FLOORPLAN_SHELL_VIEW");
+    }
+
     private void placeholder(String name, String why) {
         header(name);
         LinearLayout box = card();
@@ -4055,82 +9758,658 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void scanDesktopPairQr() {
+        if (desktopPairQrCameraPending || storageQrCameraPending
+                || pantrySingleCameraPending || pantryBatch.active()) return;
+        desktopPairQrCameraPending = true;
+        try {
+            IntentIntegrator qr = new IntentIntegrator(this);
+            qr.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            qr.setPrompt("EDHOME Desktop: zeskanuj QR z ekranu komputera");
+            qr.setBeepEnabled(false);
+            qr.setOrientationLocked(false);
+            qr.initiateScan();
+        } catch (Exception problem) {
+            desktopPairQrCameraPending = false;
+            DiagnosticLog.error("DESKTOP_QR_SCAN_LAUNCH", problem);
+            alert("Nie można uruchomić skanera QR. Sprawdź uprawnienie aparatu.");
+        }
+    }
+
+    private void pairDesktopFromQr(String raw) {
+        if (raw == null || raw.length() > 512) {
+            alert("To nie jest kod połączenia EDHOME Desktop.");
+            return;
+        }
+        try {
+            Uri uri = Uri.parse(raw);
+            if (!"edhome".equalsIgnoreCase(uri.getScheme())
+                    || !"desktop-pair".equalsIgnoreCase(uri.getHost())
+                    || !"1".equals(uri.getQueryParameter("v")))
+                throw new IllegalArgumentException("Nieprawidłowy QR EDHOME Desktop.");
+
+            String host = uri.getQueryParameter("host");
+            String portText = uri.getQueryParameter("port");
+            String nonce = uri.getQueryParameter("nonce");
+            int port = Integer.parseInt(portText == null ? "" : portText);
+            if (port != 45824)
+                throw new IllegalArgumentException("Nieprawidłowy port parowania.");
+            if (nonce == null || !nonce.matches("[A-Za-z0-9_-]{16,64}"))
+                throw new IllegalArgumentException("Nieprawidłowy kod parowania QR.");
+            if (!isPrivateLanIpv4(host))
+                throw new IllegalArgumentException(
+                    "QR nie wskazuje komputera w lokalnej sieci Wi‑Fi/LAN.");
+
+            final String target = host;
+            final String pairNonce = nonce;
+            new Thread(() -> {
+                String failure = null;
+                try {
+                    String token = prefs.getString(LanSyncServer.TOKEN_PREF, "");
+                    if (token == null || !token.matches("[A-Za-z0-9_-]{10,128}"))
+                        throw new IllegalStateException("Brak kodu telefonu.");
+                    String body = "token=" + token + "\nversion="
+                        + BuildConfig.VERSION_NAME + "\n";
+                    byte[] bytes = body.getBytes(StandardCharsets.US_ASCII);
+                    java.net.HttpURLConnection connection =
+                        (java.net.HttpURLConnection) new java.net.URL(
+                            "http://" + target + ":45824/pair").openConnection();
+                    try {
+                        connection.setConnectTimeout(4000);
+                        connection.setReadTimeout(6000);
+                        connection.setRequestMethod("POST");
+                        connection.setDoOutput(true);
+                        connection.setUseCaches(false);
+                        connection.setRequestProperty("Content-Type",
+                            "text/plain; charset=us-ascii");
+                        connection.setRequestProperty("X-EDHOME-NONCE", pairNonce);
+                        connection.setFixedLengthStreamingMode(bytes.length);
+                        try (OutputStream out = connection.getOutputStream()) {
+                            out.write(bytes);
+                            out.flush();
+                        }
+                        int code = connection.getResponseCode();
+                        if (code != 200)
+                            throw new java.io.IOException("PC odpowiedział HTTP " + code + ".");
+                    } finally {
+                        connection.disconnect();
+                    }
+                } catch (Exception error) {
+                    failure = error.getMessage();
+                    if (failure == null || failure.trim().isEmpty())
+                        failure = error.getClass().getSimpleName();
+                    DiagnosticLog.error("DESKTOP_QR_PAIR", error);
+                }
+                final String problem = failure;
+                runOnUiThread(() -> {
+                    if (problem == null) {
+                        DiagnosticLog.event("DESKTOP_QR_PAIRED");
+                        alert("Połączono z EDHOME Desktop. Komputer pobiera dane z telefonu.");
+                    } else {
+                        alert("Nie udało się połączyć z Desktopem: " + problem
+                            + "\nSprawdź, czy telefon i PC są w tej samej sieci.");
+                    }
+                });
+            }, "edhome-desktop-qr-pair").start();
+        } catch (IllegalArgumentException problem) {
+            DiagnosticLog.event("DESKTOP_QR_REJECTED");
+            alert(problem.getMessage());
+        }
+    }
+
+    private static boolean isPrivateLanIpv4(String host) {
+        if (host == null || !host.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}"))
+            return false;
+        try {
+            java.net.InetAddress address = java.net.InetAddress.getByName(host);
+            return address instanceof java.net.Inet4Address
+                && address.isSiteLocalAddress() && !address.isLoopbackAddress();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean lanTcpSelfTest(String host) {
+        if (host == null || host.isBlank()) return false;
+        try (java.net.Socket socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress(
+                host, LanSyncServer.PORT), 1800);
+            return socket.isConnected();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private String buildPhoneLanDiagnosticsReport() {
+        String ip = LanSyncServer.localAddress();
+        boolean endpoint = LanSyncService.endpointRunning();
+        boolean loopback = lanTcpSelfTest("127.0.0.1");
+        boolean wifi = ip != null && lanTcpSelfTest(ip);
+        String remote = LanSyncServer.lastRemote();
+        String attemptResult = LanSyncServer.lastConnectionResult();
+
+        StringBuilder result = new StringBuilder()
+            .append("EDHOME Android ").append(BuildConfig.VERSION_NAME)
+            .append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
+            .append("Android SDK: ").append(Build.VERSION.SDK_INT).append("\n")
+            .append("Urządzenie: ").append(Build.MANUFACTURER)
+            .append(" ").append(Build.MODEL).append("\n")
+            .append("Adres telefonu: ")
+            .append(ip == null ? "BRAK" : ip)
+            .append(":").append(LanSyncServer.PORT).append("\n")
+            .append("Serwer LAN: ").append(endpoint ? "DZIAŁA" : "NIE DZIAŁA")
+            .append("\n127.0.0.1:").append(LanSyncServer.PORT)
+            .append(": ").append(loopback ? "OK" : "BŁĄD")
+            .append("\nWi‑Fi IPv4: ")
+            .append(ip == null ? "BRAK ADRESU"
+                : ip + ":" + LanSyncServer.PORT + " — " + (wifi ? "OK" : "BŁĄD"))
+            .append("\nSelf-test telefonu: nie jest liczony jako połączenie PC")
+            .append("\nStan PC: ")
+            .append(LanSyncServer.isSyncing() ? "SYNCHRONIZACJA"
+                : (LanSyncServer.hasRecentClient() ? "POŁĄCZONY" : "NIEPOŁĄCZONY"))
+            .append("\nOstatnia próba PC: ").append(desktopLastAttempt())
+            .append("\nOstatni adres PC: ")
+            .append(remote == null || remote.isBlank() ? "brak" : remote)
+            .append("\nOstatni wynik: ")
+            .append(attemptResult == null || attemptResult.isBlank()
+                ? "brak" : attemptResult)
+            .append("\n\n");
+
+        if (loopback && wifi) {
+            result.append("Wniosek telefonu: serwer EDHOME wystawia port poprawnie. ")
+                .append("Jeżeli Desktop nadal nie pobiera danych mimo TCP OK, ")
+                .append("trzeba sprawdzić warstwę HTTP/autoryzacji/snapshotu, nie samą sieć.");
+        } else if (loopback) {
+            result.append("Wniosek telefonu: serwer działa lokalnie, ale własny adres Wi‑Fi ")
+                .append("nie przyjmuje połączenia. Problem jest po stronie interfejsu/bindu Androida.");
+        } else {
+            result.append("Wniosek telefonu: serwer EDHOME nie przyjmuje nawet połączenia lokalnego. ")
+                .append("Problem jest po stronie usługi LAN telefonu.");
+        }
+
+        DiagnosticLog.event("PHONE_LAN_DIAGNOSTICS",
+            "endpoint=" + endpoint
+            + " loopback=" + loopback
+            + " wifi=" + wifi
+            + " recentPc=" + LanSyncServer.hasRecentClient());
+        return result.toString();
+    }
+
+    private void runPhoneLanDiagnostics(boolean copyToClipboard) {
+        LanSyncService.ensureStarted(this);
+        new Thread(() -> {
+            try {
+                Thread.sleep(500L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            final String report = buildPhoneLanDiagnosticsReport();
+            runOnUiThread(() -> {
+                if (copyToClipboard) {
+                    ClipboardManager clipboard = (ClipboardManager)
+                        getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText(
+                            "EDHOME diagnostyka telefonu", report));
+                        DiagnosticLog.event("PHONE_LAN_DIAGNOSTICS_COPIED");
+                        alert("Skopiowano diagnostykę telefonu. Wklej ją do czatu.");
+                    } else {
+                        alert("Schowek jest niedostępny.");
+                    }
+                    return;
+                }
+                TextView reportView = text(report, 13, false);
+                reportView.setTextIsSelectable(true);
+                ScrollView scroll = new ScrollView(this);
+                scroll.addView(reportView);
+                new AlertDialog.Builder(this)
+                    .setTitle("Diagnostyka połączenia z PC")
+                    .setView(scroll)
+                    .setPositiveButton("OK", null)
+                    .setNeutralButton("Kopiuj", (dialog, which) -> {
+                        ClipboardManager clipboard = (ClipboardManager)
+                            getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (clipboard != null) {
+                            clipboard.setPrimaryClip(ClipData.newPlainText(
+                                "EDHOME diagnostyka telefonu", report));
+                            DiagnosticLog.event("PHONE_LAN_DIAGNOSTICS_COPIED");
+                        }
+                    })
+                    .show();
+            });
+        }, "edhome-phone-diagnostics").start();
+    }
+
+    private void testPhoneLanServer() {
+        runPhoneLanDiagnostics(false);
+    }
+
+    private void copyDiagnosticLogsFromSettings() {
+        DiagnosticLog.event("SETTINGS_DIAGNOSTIC_LOGS_COPIED");
+        String report = DiagnosticLog.readForChat(20000);
+        ClipboardManager clipboard = (ClipboardManager)
+            getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            alert("Schowek jest niedostępny.");
+            return;
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText(
+            "EDHOME beta diagnostics", report));
+        alert("Skopiowano " + report.length()
+            + " znaków logów diagnostycznych. Wklej je do czatu.");
+    }
+
+    private LinearLayout settingsAccordion(String key,String title,String summary,
+            boolean openByDefault) {
+        LinearLayout shell=card();
+        boolean open=prefs.getBoolean("settings_open_"+key,openByDefault);
+        TextView heading=text((open?"▾ ":"▸ ")+title,19,true);
+        heading.setMinHeight(dp(46));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        shell.addView(heading);
+        TextView description=text(summary,13,false);
+        description.setTextColor(subdued);
+        shell.addView(description);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(0,dp(6),0,0);
+        content.setVisibility(open?View.VISIBLE:View.GONE);
+        shell.addView(content,new LinearLayout.LayoutParams(-1,-2));
+        Runnable toggle=()->{
+            boolean nowOpen=content.getVisibility()!=View.VISIBLE;
+            content.setVisibility(nowOpen?View.VISIBLE:View.GONE);
+            heading.setText((nowOpen?"▾ ":"▸ ")+title);
+            prefs.edit().putBoolean("settings_open_"+key,nowOpen).apply();
+        };
+        heading.setOnClickListener(v->toggle.run());
+        description.setOnClickListener(v->toggle.run());
+        shell.setContentDescription(title+(open?" • Zwiń":" • Rozwiń"));
+        return content;
+    }
+
+    private LinearLayout settingsNestedAccordion(LinearLayout parent,String key,
+            String title,boolean openByDefault) {
+        boolean open=prefs.getBoolean("settings_nested_"+key,openByDefault);
+        TextView heading=text((open?"▾ ":"▸ ")+title,16,true);
+        heading.setMinHeight(dp(42));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        parent.addView(heading);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(8),0,0,dp(4));
+        content.setVisibility(open?View.VISIBLE:View.GONE);
+        parent.addView(content,new LinearLayout.LayoutParams(-1,-2));
+        heading.setOnClickListener(v->{
+            boolean nowOpen=content.getVisibility()!=View.VISIBLE;
+            content.setVisibility(nowOpen?View.VISIBLE:View.GONE);
+            heading.setText((nowOpen?"▾ ":"▸ ")+title);
+            prefs.edit().putBoolean("settings_nested_"+key,nowOpen).apply();
+        });
+        return content;
+    }
+
+    private void settingsYesNo(LinearLayout container,String label,String prefKey,
+            boolean defaultValue,Runnable afterChange) {
+        container.addView(text(label,14,true));
+        Spinner choice=new Spinner(this);
+        choice.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList("Tak","Nie")));
+        boolean current=prefs.getBoolean(prefKey,defaultValue);
+        choice.setSelection(current?0:1);
+        choice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                boolean selected=position==0;
+                if(selected==prefs.getBoolean(prefKey,defaultValue))return;
+                prefs.edit().putBoolean(prefKey,selected).apply();
+                if(afterChange!=null)afterChange.run();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        container.addView(choice,new LinearLayout.LayoutParams(-1,dp(52)));
+    }
+
+    private void settingsStorageAction(LinearLayout container,String kind,
+            String action,String label) {
+        settingsYesNo(container,label,STORAGE_ACTION_PREFIX+kind+"_"+action,true,null);
+    }
+
+    private void settingsNfcAction(LinearLayout container,String label,String prefKey,
+            boolean allowInherit) {
+        java.util.List<String> labels=allowInherit
+            ? java.util.Arrays.asList("Dziedzicz ustawienie ogólne","Pokaż działania",
+                "Otwórz automatycznie")
+            : java.util.Arrays.asList("Pokaż działania","Otwórz automatycznie");
+        String current=prefs.getString(prefKey,allowInherit?"":"show");
+        int selected="open".equals(current)?(allowInherit?2:1)
+            :"show".equals(current)?(allowInherit?1:0):0;
+        container.addView(text(label,14,true));
+        Spinner choice=new Spinner(this);
+        choice.setAdapter(themeSpinnerAdapter(labels));
+        choice.setSelection(selected);
+        choice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                String value;
+                if(allowInherit)
+                    value=position==0?"":position==2?"open":"show";
+                else value=position==1?"open":"show";
+                String saved=prefs.getString(prefKey,allowInherit?"":"show");
+                if(value.equals(saved))return;
+                SharedPreferences.Editor edit=prefs.edit();
+                if(value.isEmpty())edit.remove(prefKey); else edit.putString(prefKey,value);
+                edit.apply();
+                DiagnosticLog.event("NFC_SCAN_RULE_SETTINGS_CHANGED",
+                    "key="+prefKey+" value="+(value.isEmpty()?"inherit":value));
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        container.addView(choice,new LinearLayout.LayoutParams(-1,dp(52)));
+    }
+
+    private int nfcAssignedCount() {
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM nfc_links",null)) {
+            return c.moveToFirst()?c.getInt(0):0;
+        } catch(Exception ignored) { return 0; }
+    }
+
+    private void resetNfcScanRules() {
+        new AlertDialog.Builder(this)
+            .setTitle("Przywrócić reguły NFC?")
+            .setMessage("Usunę tylko ustawienia zachowania po skanie NFC. "
+                +"Przypisane tagi i UID pozostaną bez zmian.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Przywróć",(dialog,which)->{
+                SharedPreferences.Editor edit=prefs.edit();
+                for(String key:prefs.getAll().keySet())
+                    if(key.startsWith("scan_default_nfc_"))edit.remove(key);
+                edit.apply();
+                DiagnosticLog.event("NFC_SCAN_RULES_RESET");
+                render();
+            }).show();
+    }
+
     private void settings() {
         header("Ustawienia");
-        note("Aktywny styl: " + skin.name
-            + " • sześć wariantów tej samej aplikacji bez zmiany danych.");
-        note("Wybierz styl i sprawdź go od razu. Zmiana działa dla "
-            + "całej aplikacji i pozostaje po ponownym uruchomieniu.");
-        String[] descriptions = {
-            "Ciemny granat • mięta • wyraźne kafle",
-            "Leśna zieleń • ciepłe, naturalne akcenty",
-            "Jasny krem • łagodne kolory • wysoki kontrast",
-            "Głęboki błękit • szklane karty • subtelny połysk",
-            "WMM • warsztatowy grafit • turkusowe akcenty",
-            "Trener 2 • głęboka czerń • czerwone akcenty"
-        };
-        for (int i = 0; i < UiSkin.THEMES.length; i++) {
-            String theme = UiSkin.THEMES[i];
-            String description = descriptions[i];
-            LinearLayout example = card();
-            example.addView(text((skin.name.equals(theme) ? "✓  " : "")
-                + theme, 18, true));
-            example.addView(text(description, 13, false));
-            smallButton(example, "Wybierz motyw " + theme, () -> {
-                prefs.edit().putString("theme", theme).apply();
-                DiagnosticLog.event("THEME_CHANGED");
+        note("Sekcje są zwijane. Zmiany widoku nie usuwają danych.");
+
+        LinearLayout general=settingsAccordion("general","Ogólne",
+            "Nazwa gospodarstwa i podstawowe ustawienia.",false);
+        EditText household=new EditText(this);
+        household.setSingleLine(true);
+        household.setHint("Nazwa gospodarstwa");
+        household.setTextColor(ink);
+        household.setHintTextColor(subdued);
+        household.setText(prefs.getString("household","Moje gospodarstwo"));
+        general.addView(household,new LinearLayout.LayoutParams(-1,dp(54)));
+        smallButton(general,"Zapisz nazwę",()->{
+            String value=household.getText().toString().trim();
+            if(value.isEmpty()){household.setError("Podaj nazwę.");return;}
+            prefs.edit().putString("household",value).apply();
+            DiagnosticLog.event("HOUSEHOLD_RENAMED");
+            alert("Zapisano nazwę gospodarstwa.");
+        });
+
+        LinearLayout nfc=settingsAccordion("nfc","NFC",
+            "Cała obsługa NFC: nasłuch, zachowanie po skanie i reguły typów.",true);
+        String hardware=nfcAdapter==null?"Brak modułu NFC"
+            :nfcAdapter.isEnabled()?"NFC w telefonie: WŁĄCZONE":"NFC w telefonie: WYŁĄCZONE";
+        nfc.addView(text(hardware+" • przypisane tagi: "+nfcAssignedCount(),14,true));
+        settingsYesNo(nfc,"Nasłuch NFC w całej aplikacji",
+            NFC_GLOBAL_LISTEN_PREF,true,this::refreshNfcReaderMode);
+        settingsNfcAction(nfc,"Domyślne działanie po skanie NFC",
+            SCAN_DEFAULT_NFC,false);
+        LinearLayout nfcTypes=settingsNestedAccordion(nfc,"nfc_types",
+            "Reguły według typu obiektu",false);
+        settingsNfcAction(nfcTypes,"Rzeczy / narzędzia",scanTypeKey("nfc","thing"),true);
+        settingsNfcAction(nfcTypes,"Pudełka",scanTypeKey("nfc","box"),true);
+        settingsNfcAction(nfcTypes,"Miejsca",scanTypeKey("nfc","place"),true);
+        settingsNfcAction(nfcTypes,"Produkty spiżarni",scanTypeKey("nfc","pantry"),true);
+        settingsNfcAction(nfcTypes,"Pojazdy",scanTypeKey("nfc","vehicle"),true);
+        smallButton(nfc,"Otwórz Skaner EDHOME",()->go("scanner"));
+        smallButton(nfc,nfcAdapter!=null&&nfcAdapter.isEnabled()
+            ?"Ustawienia NFC telefonu":"Włącz NFC w telefonie",()->{
+            try{startActivity(new Intent(Settings.ACTION_NFC_SETTINGS));}
+            catch(Exception unavailable){
+                startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+            }
+        });
+        smallButton(nfc,"Przywróć domyślne reguły NFC",this::resetNfcScanRules);
+        nfc.addView(text("Przypisanie, zmiana i odpięcie taga są dostępne na karcie "
+            +"Rzeczy, Pudełka, Miejsca, Produktu lub Pojazdu. EDHOME zapisuje UID "
+            +"i nie nadpisuje pamięci taga. Operacje zmieniające dane nadal wymagają "
+            +"potwierdzenia.",12,false));
+
+        LinearLayout storageSettings=settingsAccordion("storage","Magazyn",
+            "Co widać w Magazynie i które przyciski mają być pokazywane.",false);
+        settingsYesNo(storageSettings,"Galeria miniaturek rzeczy",
+            STORAGE_GALLERY_PREF,true,null);
+        LinearLayout types=settingsNestedAccordion(storageSettings,"storage_types",
+            "Widoczne typy",true);
+        settingsYesNo(types,"Rzeczy / narzędzia",STORAGE_SHOW_THINGS_PREF,true,null);
+        settingsYesNo(types,"Pudełka",STORAGE_SHOW_BOXES_PREF,true,null);
+        settingsYesNo(types,"Miejsca",STORAGE_SHOW_PLACES_PREF,true,null);
+        types.addView(text("Ukrycie typu zmienia tylko widok. Dane, QR i NFC "
+            +"pozostają. Skan ukrytego obiektu nadal może go tymczasowo pokazać.",
+            12,false));
+
+        LinearLayout thingActions=settingsNestedAccordion(storageSettings,
+            "thing_actions","Rzeczy / narzędzia • widoczne akcje",false);
+        settingsStorageAction(thingActions,"thing","photo","Zdjęcie / miniatura");
+        settingsStorageAction(thingActions,"thing","qr","Pokaż QR");
+        settingsStorageAction(thingActions,"thing","nfc","NFC");
+        settingsStorageAction(thingActions,"thing","print","Drukuj etykietę / PDF");
+        settingsStorageAction(thingActions,"thing","move","Przenieś / edytuj");
+        settingsStorageAction(thingActions,"thing","lend","Wypożycz / zwrot");
+        settingsStorageAction(thingActions,"thing","delete","Usuń");
+
+        LinearLayout boxActions=settingsNestedAccordion(storageSettings,
+            "box_actions","Pudełka • widoczne akcje",false);
+        settingsStorageAction(boxActions,"box","photo","Zdjęcie / miniatura");
+        settingsStorageAction(boxActions,"box","qr","Pokaż QR");
+        settingsStorageAction(boxActions,"box","nfc","NFC");
+        settingsStorageAction(boxActions,"box","print","Drukuj etykietę / PDF");
+        settingsStorageAction(boxActions,"box","move","Przenieś / edytuj");
+        settingsStorageAction(boxActions,"box","delete","Usuń");
+
+        LinearLayout placeActions=settingsNestedAccordion(storageSettings,
+            "place_actions","Miejsca • widoczne akcje",false);
+        settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca");
+        settingsStorageAction(placeActions,"place","nfc","NFC");
+
+        LinearLayout scannerSettings=settingsAccordion("scanner","Skaner QR / produkty",
+            "Zachowanie wspólnego skanera i czas wyjmowania ze Spiżarni.",false);
+        scannerSettings.addView(text("Po skanie QR/kodu bez osobnej reguły: "
+            +scanActionLabel(prefs.getString(SCAN_DEFAULT_GLOBAL,"show")),14,false));
+        smallButton(scannerSettings,"Zmień ustawienie ogólne skanera",
+            this::showGlobalScanDefaultDialog);
+        Spinner takeDelay=new Spinner(this);
+        takeDelay.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "3 sekundy","5 sekund","8 sekund","10 sekund")));
+        int savedDelay=prefs.getInt(PantryTakeCountdown.DELAY_PREF,
+            PantryTakeCountdown.DEFAULT_SECONDS);
+        int delayChoice=1;
+        for(int i=0;i<PantryTakeCountdown.DELAY_OPTIONS.length;i++)
+            if(PantryTakeCountdown.DELAY_OPTIONS[i]==savedDelay)delayChoice=i;
+        takeDelay.setSelection(delayChoice);
+        scannerSettings.addView(text("Czas wyjmowania produktu",14,true));
+        scannerSettings.addView(takeDelay,new LinearLayout.LayoutParams(-1,dp(52)));
+        smallButton(scannerSettings,"Zapisz czas wyjmowania",()->{
+            int choice=takeDelay.getSelectedItemPosition();
+            if(choice<0||choice>=PantryTakeCountdown.DELAY_OPTIONS.length)return;
+            prefs.edit().putInt(PantryTakeCountdown.DELAY_PREF,
+                PantryTakeCountdown.DELAY_OPTIONS[choice]).apply();
+            DiagnosticLog.event("PANTRY_TAKE_DELAY_SAVED");
+        });
+
+        LinearLayout appearance=settingsAccordion("appearance","Wygląd i kafelki",
+            "Motyw, ikony oraz gesty na panelu głównym.",false);
+        Spinner themeChoice=new Spinner(this);
+        themeChoice.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(UiSkin.THEMES)));
+        int currentTheme=java.util.Arrays.asList(UiSkin.THEMES).indexOf(skin.name);
+        themeChoice.setSelection(Math.max(0,currentTheme));
+        appearance.addView(text("Motyw aplikacji",14,true));
+        appearance.addView(themeChoice,new LinearLayout.LayoutParams(-1,dp(52)));
+        smallButton(appearance,"Zastosuj motyw",()->{
+            int choice=themeChoice.getSelectedItemPosition();
+            if(choice<0||choice>=UiSkin.THEMES.length)return;
+            String selectedTheme=UiSkin.THEMES[choice];
+            if(skin.name.equals(selectedTheme))return;
+            prefs.edit().putString("theme",selectedTheme).apply();
+            DiagnosticLog.event("THEME_CHANGED");
+            render();
+        });
+        Spinner homePageSlots=new Spinner(this);
+        java.util.List<String> homePageSlotLabels=java.util.Arrays.asList(
+            "6 miejsc • 2 × 3",
+            "9 miejsc • 3 × 3",
+            "12 miejsc • 4 × 3");
+        homePageSlots.setAdapter(themeSpinnerAdapter(homePageSlotLabels));
+        int currentPageSlots=homePageCapacity();
+        int pageSlotSelection=1;
+        for(int i=0;i<HomeTileLayout.PAGE_SLOT_OPTIONS.length;i++)
+            if(HomeTileLayout.PAGE_SLOT_OPTIONS[i]==currentPageSlots)
+                pageSlotSelection=i;
+        homePageSlots.setSelection(pageSlotSelection);
+        appearance.addView(text("Miejsca na jednej stronie Start",14,true));
+        appearance.addView(homePageSlots,new LinearLayout.LayoutParams(-1,dp(52)));
+        appearance.addView(text(
+            "3 kolumny pozostają stałe. Szeroki kafelek zajmuje 2 miejsca. "
+                +"Po zmianie liczby miejsc kolejność kafelków zostaje zachowana.",
+            12,false));
+        smallButton(appearance,"Zapisz liczbę miejsc na stronie",()->{
+            int choice=homePageSlots.getSelectedItemPosition();
+            if(choice<0||choice>=HomeTileLayout.PAGE_SLOT_OPTIONS.length)return;
+            int slots=HomeTileLayout.PAGE_SLOT_OPTIONS[choice];
+            if(!HomeTileLayout.validPageSlots(slots))return;
+            prefs.edit().putInt(HomeTileLayout.PAGE_SLOTS_KEY,slots).apply();
+            homeShowcasePage=0;
+            DiagnosticLog.event("HOME_PAGE_CAPACITY_SAVED","slots="+slots);
+            render();
+        });
+        if (skin.showcase()) {
+            settingsYesNo(appearance,
+                "Układ Start 3 × 3 zgodny z projektem",
+                "showcase_project_layout", true, () -> {
+                    homeShowcasePage = 0;
+                });
+            appearance.addView(text(
+                "Włączone: pierwsza strona zachowuje kolejność projektu 1:1; "
+                    + "pozostałe kafelki są na kolejnych stronach. "
+                    + "Wyłączenie wraca do własnej kolejności bez usuwania ustawień.",
+                12, false));
+        }
+        appearance.addView(text(IconPack3D.installed(this)
+            ?"Paczka 100 ikon AI 3D jest zainstalowana."
+            :"Paczka ikon AI 3D nie jest jeszcze zainstalowana.",13,false));
+        smallButton(appearance,"Opcjonalnie: importuj paczkę ikon ZIP",
+            this::importAi3dIconPack);
+        if(IconPack3D.installed(this)){
+            boolean active3d="ai3d".equals(prefs.getString("icon_style","standard"));
+            smallButton(appearance,active3d
+                ?"Ikony domyślne: AI 3D → zmień na standardowe"
+                :"Ikony domyślne: standardowe → zmień na AI 3D",()->{
+                String next=active3d?"standard":"ai3d";
+                prefs.edit().putString("icon_style",next)
+                    .putBoolean("icon_style_explicit",true).apply();
                 render();
             });
         }
-        note("Nazwa gospodarstwa");
-        EditText name = field("Nazwa gospodarstwa", false);
-        name.setText(prefs.getString("household", "Moje gospodarstwo"));
-        button("Zapisz nazwę", () -> {
-            String value = name.getText().toString().trim();
-            if (value.isEmpty()) { alert("Podaj nazwę."); return; }
-            prefs.edit().putString("household", value).apply();
-            DiagnosticLog.event("HOUSEHOLD_RENAMED");
-            render();
+        LinearLayout gestures=settingsNestedAccordion(appearance,"tile_gestures",
+            "Czas przytrzymania kafelków",false);
+        Spinner shortHold=new Spinner(this);
+        shortHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "0,30 s","0,45 s","0,60 s","0,80 s")));
+        int shortChoice=prefs.getInt(HomeTileLayout.SHORT_KEY,
+            HomeTileLayout.DEFAULT_SHORT_MS);
+        for(int i=0;i<HomeTileLayout.SHORT_OPTIONS.length;i++)
+            if(HomeTileLayout.SHORT_OPTIONS[i]==shortChoice)shortHold.setSelection(i);
+        gestures.addView(text("Menu po przytrzymaniu",13,true));
+        gestures.addView(shortHold,new LinearLayout.LayoutParams(-1,dp(52)));
+        Spinner dragHold=new Spinner(this);
+        dragHold.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "0,90 s","1,10 s","1,40 s","1,80 s")));
+        int dragChoice=prefs.getInt(HomeTileLayout.DRAG_KEY,
+            HomeTileLayout.DEFAULT_DRAG_MS);
+        for(int i=0;i<HomeTileLayout.DRAG_OPTIONS.length;i++)
+            if(HomeTileLayout.DRAG_OPTIONS[i]==dragChoice)dragHold.setSelection(i);
+        gestures.addView(text("Przeciąganie kafelka",13,true));
+        gestures.addView(dragHold,new LinearLayout.LayoutParams(-1,dp(52)));
+        smallButton(gestures,"Zapisz czasy gestów",()->{
+            int menuMs=HomeTileLayout.SHORT_OPTIONS[shortHold.getSelectedItemPosition()];
+            int moveMs=HomeTileLayout.DRAG_OPTIONS[dragHold.getSelectedItemPosition()];
+            if(!HomeTileLayout.validPair(menuMs,moveMs)){
+                alert("Przeciąganie musi zaczynać się co najmniej 0,20 s po progu menu.");
+                return;
+            }
+            prefs.edit().putInt(HomeTileLayout.SHORT_KEY,menuMs)
+                .putInt(HomeTileLayout.DRAG_KEY,moveMs).apply();
+            DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
         });
-        boolean reminders = prefs.getBoolean("reminders_enabled", false);
-        button(reminders ? "Przypomnienia: WŁĄCZONE" : "Przypomnienia: WYŁĄCZONE", () -> {
-            boolean enabled = !prefs.getBoolean("reminders_enabled", false);
-            prefs.edit().putBoolean("reminders_enabled", enabled).apply();
-            if (enabled && Build.VERSION.SDK_INT >= 33
-                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                        != android.content.pm.PackageManager.PERMISSION_GRANTED)
+
+        LinearLayout notifications=settingsAccordion("notifications","Powiadomienia",
+            "Przypomnienia i cisza nocna.",false);
+        settingsYesNo(notifications,"Przypomnienia", "reminders_enabled",false,()->{
+            boolean enabled=prefs.getBoolean("reminders_enabled",false);
+            if(enabled&&Build.VERSION.SDK_INT>=33
+                    &&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        !=android.content.pm.PackageManager.PERMISSION_GRANTED)
                 requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
                     7130);
             ReminderReceiver.schedule(this);
-            render();
         });
-        LinearLayout quiet = card();
-        quiet.addView(text("Cisza powiadomień", 19, true));
-        quiet.addView(text("Aktualnie: " + quietHoursStart() + "–"
-            + quietHoursEnd(), 15, true));
-        quiet.addView(text("Dotyczy przypomnień czynności i minutników. "
-            + "Okno musi przechodzić przez północ, np. 22:00–07:00.",
-            13, false));
-        smallButton(quiet, "Zmień godziny ciszy", this::editQuietHours);
-        smallButton(quiet, "Przywróć 22:00–07:00", () -> {
-            prefs.edit()
-                .putString("quiet_hours_start", QuietHoursRules.DEFAULT_START)
-                .putString("quiet_hours_end", QuietHoursRules.DEFAULT_END)
-                .apply();
+        notifications.addView(text("Cisza: "+quietHoursStart()+"–"+quietHoursEnd(),
+            14,true));
+        smallButton(notifications,"Zmień godziny ciszy",this::editQuietHours);
+        smallButton(notifications,"Przywróć 22:00–07:00",()->{
+            prefs.edit().putString("quiet_hours_start",QuietHoursRules.DEFAULT_START)
+                .putString("quiet_hours_end",QuietHoursRules.DEFAULT_END).apply();
             ReminderReceiver.schedule(this);
             DeviceTimerReceiver.scheduleAll(this);
             DiagnosticLog.event("QUIET_HOURS_RESET");
             render();
         });
-        note("Standardowo przypomnienia przychodzą około 09:00. "
-            + "Dla poszczególnych czynności ustawisz godzinę i wyprzedzenie "
-            + "w ich edycji. Aktualna cisza: " + quietHoursStart() + "–"
-            + quietHoursEnd() + ". Android może opóźnić alarm przez "
-            + "oszczędzanie baterii. Tytuły czynności nie pojawiają się "
-            + "na ekranie blokady.");
-        if (DiagnosticLog.enabled()) button("Diagnostyka BETA", () -> go("diagnostics"));
-        button("Kopia danych / przenoszenie", () -> go("backup"));
-        note("Dane pozostają lokalne. Przed zmianą instalacji zapisz kopię poza aplikacją.");
+
+        if(releaseFeaturesEnabled()){
+            LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
+                "Parowanie, stan połączenia i diagnostyka LAN.",false);
+            String ip=LanSyncServer.localAddress();
+            String token=prefs.getString(LanSyncServer.TOKEN_PREF,"");
+            String endpoint=ip==null?"Brak adresu Wi‑Fi/LAN":ip+":"+LanSyncServer.PORT;
+            desktop.addView(text("Adres: "+endpoint
+                +"\nKod parowania: "+token
+                +"\nSerwer LAN: "+(LanSyncService.endpointRunning()?"DZIAŁA":"NIE DZIAŁA")
+                +"\nPC: "+(LanSyncServer.isSyncing()?"SYNCHRONIZACJA":
+                    LanSyncServer.hasRecentClient()?"POŁĄCZONY":"NIEPOŁĄCZONY"),
+                13,false));
+            smallButton(desktop,"Skanuj QR z ekranu PC",this::scanDesktopPairQr);
+            smallButton(desktop,"Napraw / uruchom połączenie PC",()->{
+                LanSyncService.ensureStarted(this);
+                if(root!=null)root.postDelayed(()->render(),1800L);
+            });
+            smallButton(desktop,"Diagnostyka połączenia z PC",this::testPhoneLanServer);
+            smallButton(desktop,"Kopiuj adres i kod",()->{
+                ClipboardManager clipboard=(ClipboardManager)
+                    getSystemService(Context.CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                    "EDHOME Desktop",endpoint+"\n"+token));
+                alert("Skopiowano dane połączenia EDHOME Desktop.");
+            });
+        }
+
+        LinearLayout data=settingsAccordion("data","Dane i diagnostyka",
+            "Kopie danych, logi i narzędzia serwisowe.",false);
+        smallButton(data,"Kopia danych / przenoszenie",()->go("backup"));
+        if(DiagnosticLog.enabled()){
+            smallButton(data,"Kopiuj logi diagnostyczne",
+                this::copyDiagnosticLogsFromSettings);
+            smallButton(data,"Kopiuj diagnostykę telefonu",
+                ()->runPhoneLanDiagnostics(true));
+            smallButton(data,"Otwórz pełną diagnostykę BETA",
+                ()->go("diagnostics"));
+        }
+        data.addView(text("Dane pozostają lokalne. Ustawienia widoczności "
+            +"nie usuwają obiektów ani ich powiązań.",12,false));
     }
 
 
@@ -4139,6 +10418,7 @@ public final class MainActivity extends Activity {
         note("Eksport zawiera czynności, miejsca i ich przypisania, spiżarnię, historię, bieżący remanent oraz ustawienia gospodarstwa.");
         note("Nie zawiera PIN-u, dziennika diagnostycznego ani adresu aktualizacji. Plik JSON nie jest szyfrowany: przechowuj go prywatnie.");
         note("Kopia umożliwia przeniesienie danych do nowej instalacji, ale nie omija wymogu tego samego podpisu APK przy zwykłej aktualizacji Androida.");
+        note("Prywatny sejf PayCheck nie jest częścią tej kopii. Wykonaj osobny, zaszyfrowany eksport po odblokowaniu sejfu.");
         button("Eksportuj kopię danych (.json)", () -> {
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
@@ -4246,8 +10526,12 @@ public final class MainActivity extends Activity {
                 + "\nversionCode: " + BuildConfig.VERSION_CODE));
         updateTile(tiles, "◷", "Co\nnowego", false, () ->
             alert("EDHOME " + BuildConfig.VERSION_NAME
-                + "\nUkład kafelków 3 × 3, przewijanie pionowe. "
-                + "Kolejne wydania zachowują zgodność podpisu APK."));
+                + "\nNajważniejsze zmiany względem Stable 0.5.0:"
+                + "\n• PayCheck: banki, import i kolejka potwierdzeń."
+                + "\n• Pojazdy: OC, przeglądy, opony, koszty i dokumenty."
+                + "\n• Synchronizacja LAN z EDHOME Desktop."
+                + "\n• NFC, QR/PDF i miniatury magazynu."
+                + "\n• Panel Start: strony 6/9/12 miejsc i przenoszenie kafelków."));
         updateTile(tiles, "⌂", "Panel\ngłówny", false, () -> go("home"));
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
@@ -4263,37 +10547,61 @@ public final class MainActivity extends Activity {
         return grid;
     }
 
-    private LinearLayout updateTile(LinearLayout grid, String symbol, String caption,
-            boolean primary, Runnable callback) {
-        LinearLayout row;
-        if (grid.getChildCount() == 0
-                || ((LinearLayout) grid.getChildAt(grid.getChildCount() - 1))
-                    .getChildCount() == 3) {
+    /** Non-home action tiles keep the legacy five-argument signature. */
+    private LinearLayout updateTile(LinearLayout grid, String symbol,
+            String caption, boolean primary, Runnable callback) {
+        return updateTile(grid, "", symbol, caption, primary, callback);
+    }
+
+    private LinearLayout updateTile(LinearLayout grid, String id, String symbol,
+            String caption, boolean primary, Runnable callback) {
+        boolean isHome = "home".equals(screen);
+        int viewport = getResources().getDisplayMetrics().widthPixels;
+        float density = getResources().getDisplayMetrics().density;
+        int columns = isHome
+            ? (skin.showcase()
+                ? 3 : HomeTileLayout.homeColumns(Math.round(viewport / density)))
+            : HomeTileLayout.columns(Math.round(viewport / density));
+        if (isHome) columns = 3;
+        int span = isHome
+            && !skin.showcase()
+            && "double".equals(prefs.getString("tile_width_" + id, "small"))
+            ? Math.min(2, columns) : 1;
+        LinearLayout row = grid.getChildCount() == 0
+            ? null : (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
+        int used = row == null || !(row.getTag() instanceof Integer)
+            ? 0 : (Integer) row.getTag();
+        if (row == null || used + span > columns) {
             row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setTag(0);
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-            rowParams.setMargins(0, 0, 0, dp(9));
+            rowParams.setMargins(0, 0, 0,
+                dp(isHome ? HomeTileLayout.HOME_GAP_DP : 9));
             grid.addView(row, rowParams);
-        } else {
-            row = (LinearLayout) grid.getChildAt(grid.getChildCount() - 1);
+            used = 0;
         }
+        row.setTag(used + span);
 
-        int width = getResources().getDisplayMetrics().widthPixels;
-        int height = getResources().getDisplayMetrics().heightPixels;
-        // Page margin 16dp each; two gaps 9dp. Keep three visible columns.
-        int widthSide = (width - dp(50)) / 3;
-        int heightSide = (height - dp(340)) / 3;
-        int side = Math.max(dp(78), Math.min(widthSide, heightSide));
+        // Page has 16dp on each side; width determines columns, not height.
+        int contentWidth = Math.max(dp(1), viewport - dp(32));
+        int tileGapDp = isHome
+            ? (skin.showcase() ? 7 : HomeTileLayout.HOME_GAP_DP)
+            : 9;
+        int side = Math.max(dp(1),
+            (contentWidth - dp(tileGapDp) * (columns - 1)) / columns);
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
         tile.setPadding(dp(4), dp(3), dp(4), dp(5));
 
-        boolean isHome = "home".equals(screen);
         boolean customTint = false;
         int tileTint = accent;
-        if (isHome) {
-            String id = captionToHomeTileId(caption);
+        String tileTarget = isHome ? homeTileTarget(id) : null;
+        if (isHome && skin.showcase()) {
+            tileTint = skin.showcaseTileTint(tileTarget);
+            customTint = true;
+        } else if (isHome) {
             String selected = prefs.getString("tile_tint_" + id, "default");
             customTint = !"default".equals(selected);
             if (customTint) tileTint = skin.tileTint(selected);
@@ -4306,11 +10614,25 @@ public final class MainActivity extends Activity {
         tile.setClickable(true);
         tile.setFocusable(true);
         tile.setContentDescription(caption.replace("\n", " "));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(side, side);
-        if (row.getChildCount() > 0) params.setMargins(dp(9), 0, 0, 0);
+        // Reserve space for the caption and drag handle. The icon fills the
+        // remaining square visual area; double-wide tiles get a taller icon
+        // without stretching its 3D artwork horizontally.
+        int legacyHomeHeight = side + dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP);
+        int tileHeight = isHome
+            ? (skin.showcase()
+                ? Math.min(side, dp(92))
+                : Math.min(legacyHomeHeight, dp(homeEditMode ? 92 : 82)))
+            : side;
+        LinearLayout.LayoutParams params =
+            new LinearLayout.LayoutParams(
+                side * span + dp(tileGapDp) * (span - 1), tileHeight);
+        if (row.getChildCount() > 0)
+            params.setMargins(dp(tileGapDp), 0, 0, 0);
         row.addView(tile, params);
 
-        if (isHome) {
+        boolean showTileHandle = isHome
+            && (!skin.showcase() || homeEditMode);
+        if (showTileHandle) {
             TextView handle = text("⋮⋮", 17, true);
             handle.setTextColor(highlighted ? skin.tileText(tileTint) : subdued);
             handle.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
@@ -4318,8 +10640,9 @@ public final class MainActivity extends Activity {
             handle.setContentDescription("Edytuj lub przeciągnij " + caption);
             tile.addView(handle, new LinearLayout.LayoutParams(-1, dp(19)));
             handle.setOnClickListener(v -> {
-                Object id = tile.getTag();
-                if (id instanceof String) showTileActions(tile, (String) id);
+                Object tileTag = tile.getTag();
+                if (tileTag instanceof String)
+                    showTileActions(tile, (String) tileTag);
             });
             handle.setOnTouchListener(new View.OnTouchListener() {
                 private float startX, startY;
@@ -4338,9 +10661,9 @@ public final class MainActivity extends Activity {
                                     || Math.abs(event.getRawY() - startY)
                                     > ViewConfiguration.get(MainActivity.this)
                                         .getScaledTouchSlop())) {
-                                Object id = tile.getTag();
-                                if (id instanceof String)
-                                    dragging = beginHomeDrag(tile, (String) id);
+                                Object tileTag = tile.getTag();
+                                if (tileTag instanceof String)
+                                    dragging = beginHomeDrag(tile, (String) tileTag);
                             }
                             return true;
                         case MotionEvent.ACTION_UP:
@@ -4354,18 +10677,29 @@ public final class MainActivity extends Activity {
             });
         }
 
+        int iconWidth = side * span + dp(tileGapDp) * (span - 1) - dp(10);
+        int iconHeight = tileHeight - dp(19) - dp(31) - dp(14);
+        if (isHome && !skin.showcase() && !showTileHandle)
+            iconHeight = tileHeight - dp(31) - dp(7);
+        if (isHome && skin.showcase())
+            iconHeight = tileHeight - dp(showTileHandle ? 19 : 0) - dp(28) - dp(10);
+        int displayedIconSize = isHome
+            ? (skin.showcase()
+                ? Math.max(dp(42), Math.min((int) (side * 0.53f), iconHeight))
+                : Math.max(dp(24), Math.min(iconWidth, iconHeight)))
+            : dp(46);
         LinearLayout.LayoutParams iconParams =
-            new LinearLayout.LayoutParams(dp(46), dp(46));
+            new LinearLayout.LayoutParams(displayedIconSize, displayedIconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
-            String moduleId = captionToHomeTileId(caption);
-            String iconId = prefs.getString("tile_icon_" + moduleId, moduleId);
-            if (!TileIcon.known(iconId)) iconId = moduleId;
-            TileIcon pictogram = new TileIcon(this, iconId,
-                highlighted && skin.light ? skin.accentInk : accent);
-            pictogram.setPadding(dp(5), dp(5), dp(5), dp(5));
-            pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
-            tile.addView(pictogram, iconParams);
+            String target = tileTarget;
+            String iconId = prefs.getString("tile_icon_" + id,
+                defaultTileIcon(target));
+            if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId)
+                    && !TileCustomImage.available(this, iconId))
+                iconId = defaultTileIcon(target);
+            tile.addView(tileIconImage(iconId,
+                Math.round(displayedIconSize / density), highlighted), iconParams);
         } else {
             TextView pictogram = text(symbol, 29, true);
             pictogram.setTextColor(highlighted && skin.light
@@ -4374,31 +10708,19 @@ public final class MainActivity extends Activity {
             pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
             tile.addView(pictogram, iconParams);
         }
-        TextView captionView = text(caption, 12, true);
+        TextView captionView = text(caption,
+            isHome && skin.showcase() && !homeEditMode ? 11 : 12, true);
         captionView.setTextColor(highlighted
             ? skin.tileText(tileTint) : ink);
         captionView.setGravity(Gravity.CENTER);
         captionView.setMaxLines(2);
         captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         tile.addView(captionView,
-            new LinearLayout.LayoutParams(-1, dp(31)));
+            new LinearLayout.LayoutParams(-1,
+                dp(isHome && skin.showcase() ? 28 : 31)));
         return tile;
     }
 
-    private String captionToHomeTileId(String caption) {
-        switch (caption) {
-            case "Czynności": return "tasks";
-            case "Kalendarz": return "calendar";
-            case "Miejsca": return "places";
-            case "Spiżarnia": return "pantry";
-            case "Remanent": return "audit";
-            case "Aktualizacje": return "updates";
-            case "Kopia danych": return "backup";
-            case "Ustawienia": return "settings";
-            case "Na dziś": return "today";
-            default: return "";
-        }
-    }
 
     private void updatesAdvanced() {
         title("Aktualizacje • opcje zaawansowane");
@@ -4451,18 +10773,36 @@ public final class MainActivity extends Activity {
     private void diagnostics() {
         if (!DiagnosticLog.enabled()) { go("home"); return; }
         header("Diagnostyka • tylko BETA");
-        note("Zapis automatyczny w prywatnym pliku aplikacji. Maks. 1 MB + poprzedni segment.");
+        note("Pliki w aplikacji: do 1 MB każdy (bieżący i poprzedni segment). "
+            + "Wklejanie do czatu ma oddzielny limit znaków; pełny eksport .txt go nie ma.");
         note("Nie zapisujemy PIN-u, nazw produktów, treści finansów ani powiadomień. Log Androida całego telefonu nie jest zbierany.");
-        button("Kopiuj log do schowka", () -> {
-            DiagnosticLog.event("DIAGNOSTICS_COPIED");
-            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        button("Diagnostyka telefonu / połączenia z PC",
+            this::testPhoneLanServer);
+        button("Kopiuj diagnostykę telefonu",
+            () -> runPhoneLanDiagnostics(true));
+        button("Kopiuj logi diagnostyczne • 20 000 znaków",
+            this::copyDiagnosticLogsFromSettings);
+        note("Ile znaków skopiować do czatu?");
+        final int[] chatLimits = {5000, 12000, 20000};
+        Spinner chatSize = new Spinner(this);
+        chatSize.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "5 000 znaków", "12 000 znaków (domyślnie)", "20 000 znaków")));
+        chatSize.setSelection(1);
+        body.addView(chatSize);
+        button("Kopiuj ostatnie logi do czatu", () -> {
+            int limit = chatLimits[chatSize.getSelectedItemPosition()];
+            DiagnosticLog.event("DIAGNOSTICS_CHAT_COPIED", "limit=" + limit);
+            ClipboardManager clipboard = (ClipboardManager)
+                getSystemService(Context.CLIPBOARD_SERVICE);
             if (clipboard != null) {
-                clipboard.setPrimaryClip(ClipData.newPlainText("EDHOME beta diagnostics",
-                    DiagnosticLog.readText()));
-                alert("Log skopiowany. Możesz wkleić go do czatu.");
+                String report = DiagnosticLog.readForChat(limit);
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                    "EDHOME beta diagnostics (chat)", report));
+                alert("Skopiowano " + report.length() + " znaków (limit "
+                    + limit + "). Wklej do czatu. Pełną historię wyeksportuj jako .txt.");
             } else alert("Schowek jest niedostępny.");
         });
-        button("Eksportuj plik .txt", () -> {
+        button("Eksportuj pełne logi (.txt)", () -> {
             DiagnosticLog.event("DIAGNOSTICS_EXPORT_REQUESTED");
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -4476,16 +10816,144 @@ public final class MainActivity extends Activity {
             }
         });
         String log = DiagnosticLog.readText();
-        note("Podgląd: " + log.length() + " znaków");
+        note("Podgląd ostatnich wpisów: " + log.length()
+            + " znaków; eksport .txt obejmuje oba pełne segmenty.");
         TextView preview = text(log.substring(Math.max(0, log.length() - 5000)), 11, false);
         preview.setTextIsSelectable(true);
         card().addView(preview);
     }
 
+    /** Verify exactly the bytes written by the document provider; never log backup data. */
+    private boolean verifyDataBackupDocument(Uri uri, byte[] expected)
+            throws Exception {
+        byte[] expectedHash = MessageDigest.getInstance("SHA-256").digest(expected);
+        MessageDigest actualHash = MessageDigest.getInstance("SHA-256");
+        long actualLength = 0;
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in == null) throw new IllegalStateException("BACKUP_READBACK_UNAVAILABLE");
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = in.read(buffer)) != -1) {
+                actualLength += count;
+                if (actualLength > expected.length) return false;
+                actualHash.update(buffer, 0, count);
+            }
+        }
+        return actualLength == expected.length
+            && MessageDigest.isEqual(expectedHash, actualHash.digest());
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,
+            String[] permissions,int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode!=STORAGE_CAMERA_PERMISSION)return;
+        boolean granted=grantResults.length>0
+            &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if(granted)launchStorageThumbnailCamera();
+        else {
+            pendingStorageThumbnailId=0;
+            alert("Aby zrobić miniaturę aparatem, zezwól EDHOME na użycie aparatu.");
+        }
+    }
+
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == EXPORT_QR_LABELS_PDF) {
+            byte[] pdf=pendingQrLabelsPdf;
+            int count=pendingQrLabelsCount;
+            pendingQrLabelsPdf=null;
+            pendingQrLabelsCount=0;
+            if (result==RESULT_OK && pdf!=null
+                    && data!=null && data.getData()!=null) {
+                try (OutputStream output=getContentResolver().openOutputStream(
+                        data.getData(),"w")) {
+                    if(output==null)throw new java.io.IOException(
+                        "Nie można otworzyć dokumentu.");
+                    output.write(pdf);
+                    output.flush();
+                    StorageQrLabels.log(this,"Zapis PDF",count);
+                    alert("Zapisano etykiety QR do PDF.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("QR_PDF_EXPORT",error);
+                    alert("Nie zapisano PDF.");
+                }
+            }
+            return;
+        }
+        if (request == IMPORT_CUSTOM_TILE_ICON) {
+            final String tileId = pendingCustomTileId;
+            pendingCustomTileId = null;
+            if (result == RESULT_OK && tileId != null
+                    && data != null && data.getData() != null) {
+                final Uri chosen = data.getData();
+                new Thread(() -> {
+                    String failure = null;
+                    try { TileCustomImage.importImage(this, tileId, chosen); }
+                    catch (Exception problem) { failure = problem.getMessage(); }
+                    final String error = failure;
+                    runOnUiThread(() -> {
+                        if (error != null) {
+                            alert("Nie zapisano własnej ikony: " + error);
+                            return;
+                        }
+                        if (prefs.edit().putString("tile_icon_" + tileId,
+                                TileCustomImage.key(tileId)).commit()) {
+                            DiagnosticLog.event("HOME_CUSTOM_ICON_IMPORTED");
+                            render();
+                            alert("Zapisano własną ikonę kafelka.");
+                        } else alert("Nie zapisano wyboru ikony.");
+                    });
+                }, "edhome-custom-icon-import").start();
+            }
+            return;
+        }
+        if (request == IMPORT_AI_3D_PACK) {
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                final Uri chosen = data.getData();
+                new Thread(() -> {
+                    int count = 0;
+                    String error = null;
+                    try { count = IconPack3D.importArchive(this, chosen); }
+                    catch (Exception invalid) { error = invalid.getMessage(); }
+                    final int imported = count;
+                    final String problem = error;
+                    runOnUiThread(() -> {
+                        if (imported == 100) {
+                            prefs.edit().putString("icon_style", "ai3d")
+                                .putBoolean("icon_style_explicit", true).commit();
+                            DiagnosticLog.event("AI3D_ICON_PACK_IMPORTED",
+                                "count=" + imported);
+                            render();
+                            alert("Zaimportowano 100 ikon AI 3D. "
+                                + "Dotychczasowe ustawienia kafelków zostały zachowane.");
+                        } else alert("Nie udało się zaimportować ikon: "
+                            + (problem == null ? "Nieprawidłowy ZIP." : problem));
+                    });
+                }, "edhome-ai3d-import").start();
+            }
+            return;
+        }
+        if (request == TAKE_SCANNER_RESULT) {
+            if ("pantry".equals(screen)) render();
+            if (result == RESULT_OK && data != null)
+                DiagnosticLog.event("PANTRY_TAKE_SESSION_RETURNED",
+                    "committed=" + Math.max(0, data.getIntExtra(
+                        PantryTakeCaptureActivity.EXTRA_COMMITTED, 0)));
+            return;
+        }
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
+            if (centralScannerCameraPending) {
+                centralScannerCameraPending = false;
+                if (scan.getContents() != null)
+                    handleCentralScan(scan.getContents());
+                return;
+            }
+            if (desktopPairQrCameraPending) {
+                desktopPairQrCameraPending = false;
+                if (scan.getContents() != null) pairDesktopFromQr(scan.getContents());
+                return;
+            }
             if (storageQrCameraPending) {
                 storageQrCameraPending = false;
                 if (scan.getContents() != null) openStorageQr(scan.getContents());
@@ -4505,25 +10973,133 @@ public final class MainActivity extends Activity {
             } else DiagnosticLog.event("PANTRY_UNEXPECTED_CAMERA_RESULT_IGNORED");
             return;
         }
+        if (request == PICK_BANK_APP_SYSTEM) {
+            if(result==RESULT_OK&&data!=null&&data.getComponent()!=null) {
+                String pkg=data.getComponent().getPackageName();
+                java.util.Set<String> chosen=BankNotificationHints.selected(this);
+                chosen.add(pkg);
+                BankNotificationHints.configure(this,chosen,true);
+                render();
+                if(!bankNotificationPermissionGranted())
+                    showBankNotificationPermissionGuide();
+                else alert("Wybrano aplikację: "+pkg+".");
+            }else if(result==RESULT_OK)
+                alert("Android nie podał pakietu wybranej aplikacji.");
+            return;
+        }
+        if (request == TAKE_STORAGE_THUMBNAIL) {
+            long id=pendingStorageThumbnailId;
+            pendingStorageThumbnailId=0;
+            if(result==RESULT_OK&&id>0) {
+                try {
+                    Object raw=data==null||data.getExtras()==null?null:
+                        data.getExtras().get("data");
+                    if(!(raw instanceof Bitmap))
+                        throw new IllegalArgumentException(
+                            "Aparat nie zwrócił zdjęcia.");
+                    saveStorageThumbnail(id,StorageThumbs.compress((Bitmap)raw));
+                }catch(Exception error) {
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
+                    alert(error instanceof IllegalArgumentException
+                        ?error.getMessage():"Nie udało się zapisać miniatury.");
+                }
+            }
+            return;
+        }
+        if (request == IMPORT_STORAGE_THUMBNAIL) {
+            long id=pendingStorageThumbnailId;
+            pendingStorageThumbnailId=0;
+            if(result==RESULT_OK&&id>0&&data!=null&&data.getData()!=null) {
+                try {
+                    saveStorageThumbnail(id,StorageThumbs.compress(
+                        getContentResolver(),data.getData()));
+                }catch(Exception error) {
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
+                    alert(error instanceof IllegalArgumentException
+                        ?error.getMessage():"Nie udało się zapisać miniatury.");
+                }
+            }
+            return;
+        }
+        if (request == IMPORT_STATEMENT_CSV) {
+            String bank=pendingStatementBank;
+            pendingStatementBank=null;
+            if(result==RESULT_OK&&data!=null&&bank!=null) {
+                java.util.List<Uri> files=new java.util.ArrayList<>();
+                if(data.getClipData()!=null) {
+                    for(int i=0;i<data.getClipData().getItemCount();i++)
+                        files.add(data.getClipData().getItemAt(i).getUri());
+                } else if(data.getData()!=null) files.add(data.getData());
+                if(!files.isEmpty()) importStatementCsv(files,bank);
+            }
+            return;
+        }
         if (request == IMPORT_BETA_APK) {
             if (result == RESULT_OK && data != null && data.getData() != null)
                 updater.importSelected(data.getData());
+            return;
+        }
+        if (request == EXPORT_PRIVATE_BACKUP) {
+            String encrypted = privateBackupForSave;
+            privateBackupForSave = null;
+            if (result != RESULT_OK || data == null || data.getData() == null
+                    || encrypted == null) return;
+            try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                if (out == null) throw new IllegalStateException("Brak dostępu do pliku.");
+                out.write(encrypted.getBytes(StandardCharsets.UTF_8));
+                out.flush();
+                DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORTED");
+                alert("Zapisano ZASZYFROWANĄ kopię prywatną. "
+                    + "Zachowaj hasło kopii i sprawdź, czy plik istnieje.");
+            } catch (Exception error) {
+                DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_EXPORT_FAILED");
+                alert("Nie zapisano kopii prywatnej. Nie odinstalowuj aplikacji.");
+            }
+            return;
+        }
+        if (request == IMPORT_PRIVATE_BACKUP) {
+            if (result != RESULT_OK || data == null || data.getData() == null) return;
+            try (InputStream in = getContentResolver().openInputStream(data.getData());
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                if (in == null) throw new IllegalStateException("Brak dostępu do pliku.");
+                byte[] block = new byte[8192];
+                int n;
+                while ((n = in.read(block)) != -1) {
+                    if (out.size() + n > PrivatePaycheckPortable.MAX_BYTES)
+                        throw new IllegalArgumentException("Plik zbyt duży.");
+                    out.write(block, 0, n);
+                }
+                privateBackupImportDialog(new String(
+                    out.toByteArray(), StandardCharsets.UTF_8));
+            } catch (Exception error) {
+                DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_READ_FAILED");
+                alert("Nie można odczytać zaszyfrowanej kopii prywatnej.");
+            }
             return;
         }
         if (request == EXPORT_DATA_BACKUP) {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
             try {
                 String json = DataBackup.exportJson(db.getReadableDatabase(), prefs);
-                try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+                try (OutputStream out = getContentResolver().openOutputStream(
+                        data.getData(), "wt")) {
                     if (out == null) throw new IllegalStateException("Brak dostępu do pliku.");
-                    out.write(json.getBytes(StandardCharsets.UTF_8));
+                    out.write(bytes);
                     out.flush();
                 }
-                DiagnosticLog.event("DATA_BACKUP_EXPORTED");
-                alert("Zapisano kopię. Sprawdź, czy plik .json jest widoczny w wybranym miejscu, zanim usuniesz aplikację.");
+                // A successful write alone does not prove that the document
+                // provider saved the COMPLETE file. Read it back first.
+                if (!verifyDataBackupDocument(data.getData(), bytes)) {
+                    DiagnosticLog.event("DATA_BACKUP_VERIFY_FAILED");
+                    throw new IllegalStateException("BACKUP_READBACK_MISMATCH");
+                }
+                DiagnosticLog.event("DATA_BACKUP_EXPORTED",
+                    "bytes=" + bytes.length + " verified=true");
+                alert("Zapisano i sprawdzono kopię danych. Zachowaj ją poza telefonem. Prywatny sejf PayCheck wymaga osobnej zaszyfrowanej kopii.");
             } catch (Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_EXPORT", error);
-                alert("Eksport kopii nie powiódł się. Nie usuwaj aplikacji.");
+                alert("Nie udało się zapisać i zweryfikować pełnej kopii. Wybrany plik może być niekompletny — nie używaj go do przywracania i nie usuwaj aplikacji.");
             }
             return;
         }
@@ -4558,6 +11134,7 @@ public final class MainActivity extends Activity {
                                 if (key.startsWith("reminder_fired_")
                                         || key.startsWith("reminder_custom_day_")
                                         || "reminder_legacy_day".equals(key)
+                                        || key.startsWith("vehicle_reminder_fired_")
                                         || key.startsWith("timer_notified_"))
                                     reminderReset.remove(key);
                             }
@@ -4590,7 +11167,7 @@ public final class MainActivity extends Activity {
         Uri destination = data.getData();
         try (OutputStream stream = getContentResolver().openOutputStream(destination)) {
             if (stream == null) throw new IllegalStateException("No output stream");
-            stream.write(DiagnosticLog.readText().getBytes(StandardCharsets.UTF_8));
+            stream.write(DiagnosticLog.readFullText().getBytes(StandardCharsets.UTF_8));
             DiagnosticLog.event("DIAGNOSTICS_EXPORTED");
             alert("Zapisano plik diagnostyczny.");
         } catch (Exception error) {
@@ -4599,9 +11176,9 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private static final class LocalDb extends SQLiteOpenHelper {
+    static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 21);
+            super(context, "edhome-beta-preview.db", null, 36);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -4626,18 +11203,27 @@ public final class MainActivity extends Activity {
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            addNfcLinks(database);
             PaycheckStore.create(database);
+            BankEvidenceStore.create(database);
             PaycheckGoalsStore.create(database);
+            PantryPriceHistoryStore.create(database);
             addDeviceTimers(database);
+            VehicleStore.create(database);
+            VehicleTyreStore.create(database);
+            VehiclePolicyStore.create(database);
+            VehicleCostStore.create(database);
+            VehicleDocumentStore.create(database);
             addTaskRotations(database);
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
             PantryPackageStore.create(database);
+            SyncRecordStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 21) {
+            if (oldVersion < 1 || newVersion > 36) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -4746,6 +11332,99 @@ public final class MainActivity extends Activity {
                 PaycheckGoalsStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS");
             }
+            if (oldVersion < 22) {
+                PantryPriceHistoryStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_21_TO_22_PANTRY_PRICES");
+            }
+            if (oldVersion < 23) {
+                database.execSQL("ALTER TABLE shopping_items ADD COLUMN place_id INTEGER");
+                database.execSQL("ALTER TABLE shopping_receipts ADD COLUMN place_id INTEGER");
+                database.execSQL("ALTER TABLE shopping_receipts "
+                    + "ADD COLUMN place_name_snapshot TEXT NOT NULL DEFAULT ''");
+                DiagnosticLog.event("DATABASE_MIGRATED_22_TO_23_SHOPPING_PLACES");
+            }
+            if (oldVersion < 24) {
+                VehicleStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_23_TO_24_VEHICLES");
+            }
+            if (oldVersion < 25) {
+                VehicleTyreStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_24_TO_25_TYRE_SETS");
+            }
+            if (oldVersion < 26) {
+                VehiclePolicyStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_25_TO_26_VEHICLE_POLICIES");
+            }
+            if (oldVersion >= 26 && oldVersion < 27) {
+                database.execSQL("ALTER TABLE vehicle_policies ADD COLUMN goal_id INTEGER");
+                DiagnosticLog.event("DATABASE_MIGRATED_26_TO_27_POLICY_GOAL_LINK");
+            }
+            if (oldVersion < 28) {
+                database.execSQL("ALTER TABLE vehicles ADD COLUMN oc_reminder_lead INTEGER "
+                    + "CHECK(oc_reminder_lead IN (0,1,7,14,30))");
+                database.execSQL("ALTER TABLE vehicles ADD COLUMN inspection_reminder_lead "
+                    + "INTEGER CHECK(inspection_reminder_lead IN (0,1,7,14,30))");
+                DiagnosticLog.event("DATABASE_MIGRATED_27_TO_28_VEHICLE_REMINDERS");
+            }
+            if (oldVersion < 29) {
+                VehicleCostStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_28_TO_29_VEHICLE_COSTS");
+            }
+            if (oldVersion >= 20 && oldVersion < 30) {
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN status "
+                    + "TEXT NOT NULL DEFAULT 'confirmed' "
+                    + "CHECK(status IN ('pending','confirmed'))");
+                DiagnosticLog.event("DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING");
+            }
+            if (oldVersion < 31) {
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN "
+                    + "confirmation_source TEXT NOT NULL DEFAULT 'legacy' "
+                    + "CHECK(confirmation_source IN ('none','legacy','manual'))");
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN confirmed_at INTEGER");
+                database.execSQL("UPDATE paycheck_transactions SET confirmation_source='none' "
+                    + "WHERE status='pending'");
+                DiagnosticLog.event("DATABASE_MIGRATED_30_TO_31_CONFIRMATION_PROVENANCE");
+            }
+            if(oldVersion < 32) {
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN statement_key TEXT");
+                database.execSQL("ALTER TABLE paycheck_transactions ADD COLUMN statement_date TEXT");
+                database.execSQL("CREATE UNIQUE INDEX paycheck_statement_key_unique "
+                    + "ON paycheck_transactions(statement_key)");
+                DiagnosticLog.event("DATABASE_MIGRATED_31_TO_32_STATEMENT_MATCH");
+            }
+            if(oldVersion < 33) {
+                VehicleDocumentStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_32_TO_33_VEHICLE_DOCUMENTS");
+            }
+            if(oldVersion < 34) {
+                BankEvidenceStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_33_TO_34_BANK_EVIDENCE_QUEUE");
+            }
+            if(oldVersion < 35) {
+                addNfcLinks(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_34_TO_35_NFC_LINKS");
+            }
+            if(oldVersion < 36) {
+                try {
+                    SyncRecordStore.create(database);
+                    SyncRecordStore.ensureAll(database);
+                } catch (Exception error) {
+                    throw new IllegalStateException(
+                        "Nie udało się utworzyć metadanych synchronizacji.", error);
+                }
+                DiagnosticLog.event("DATABASE_MIGRATED_35_TO_36_SYNC_RECORDS");
+            }
+        }
+
+        private static void addNfcLinks(SQLiteDatabase database) {
+            database.execSQL("CREATE TABLE nfc_links ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "uid TEXT NOT NULL COLLATE NOCASE UNIQUE, "
+                + "target_kind TEXT NOT NULL CHECK(target_kind IN "
+                + "('thing','box','place','pantry','vehicle')), "
+                + "target_id INTEGER NOT NULL, created_at INTEGER NOT NULL)");
+            database.execSQL("CREATE INDEX nfc_links_target_idx "
+                + "ON nfc_links(target_kind,target_id)");
         }
 
         private static void addPlaceSiblingIndex(SQLiteDatabase database) {
@@ -4785,7 +11464,7 @@ public final class MainActivity extends Activity {
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL COLLATE NOCASE UNIQUE, "
                 + "qty_milli INTEGER, unit TEXT NOT NULL DEFAULT 'szt.', "
-                + "checked INTEGER NOT NULL DEFAULT 0)");
+                + "checked INTEGER NOT NULL DEFAULT 0, place_id INTEGER)");
         }
 
         private static void addMemberSchedules(SQLiteDatabase database) {
@@ -5495,8 +12174,20 @@ public final class MainActivity extends Activity {
                         new String[]{Long.toString(id)})) {
                     if (occupied.moveToFirst()) return false;
                 }
+                // Vehicle tyres use the same Places, but are not storage_items.
+                // Reject deletion before clearing any other relations or history.
+                try (Cursor tyres = database.rawQuery(
+                        "SELECT 1 FROM vehicle_tyre_sets WHERE place_id=? LIMIT 1",
+                        new String[]{Long.toString(id)})) {
+                    if (tyres.moveToFirst()) return false;
+                }
                 database.execSQL("UPDATE tasks SET place_id=NULL WHERE place_id=?",
                     new Object[]{id});
+                database.execSQL("UPDATE shopping_items SET place_id=NULL WHERE place_id=?",
+                    new Object[]{id});
+                database.execSQL("UPDATE shopping_receipts SET place_id=NULL WHERE place_id=?",
+                    new Object[]{id});
+                NfcLinkStore.clearTarget(database,"place",id);
                 database.delete("places", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
                 return true;
@@ -5550,16 +12241,32 @@ public final class MainActivity extends Activity {
                     : new String[]{Long.toString(id)}) == 1;
         }
 
-        boolean addShoppingItem(String name, Long amount, String unit) {
+        void deleteDeviceTimer(long id) {
+            getWritableDatabase().delete("device_timers","id=?",
+                new String[]{Long.toString(id)});
+        }
+
+        boolean addShoppingItem(String name, Long amount, String unit,
+                Long placeId) {
             String clean = ShoppingRules.validatedName(name);
             if (!ShoppingRules.knownUnit(unit)
                     || amount != null && (amount < 1 || amount > ShoppingRules.MAX_MILLI))
                 throw new IllegalArgumentException("Nieprawidłowa ilość lub jednostka.");
+            if (placeId != null) {
+                try (Cursor place = getReadableDatabase().rawQuery(
+                        "SELECT id FROM places WHERE id=?",
+                        new String[]{Long.toString(placeId)})) {
+                    if (!place.moveToFirst())
+                        throw new IllegalArgumentException("Miejsce już nie istnieje.");
+                }
+            }
             ContentValues values = new ContentValues();
             values.put("name", clean);
             if (amount == null) values.putNull("qty_milli");
             else values.put("qty_milli", amount);
             values.put("unit", unit);
+            if (placeId == null) values.putNull("place_id");
+            else values.put("place_id", placeId);
             return getWritableDatabase().insertWithOnConflict(
                 "shopping_items", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
         }
@@ -5676,6 +12383,7 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(id)});
                 database.delete("pantry_packages", "pantry_id=?",
                     new String[]{Long.toString(id)});
+                NfcLinkStore.clearTarget(database,"pantry",id);
                 database.delete("pantry", "id=?",
                     new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();

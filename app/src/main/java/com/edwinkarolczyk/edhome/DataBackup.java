@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 21;
+    private static final int DB_VERSION = 36;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
@@ -40,15 +40,25 @@ final class DataBackup {
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
         {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty", "category"},
-        {"shopping_items", "id", "name", "qty_milli", "unit", "checked"},
+        {"shopping_items", "id", "name", "qty_milli", "unit", "checked",
+            "place_id"},
         {"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",
-            "packages", "before_qty", "after_qty", "happened_at"},
+            "packages", "before_qty", "after_qty", "happened_at",
+            "place_id", "place_name_snapshot"},
+        {"pantry_purchase_prices", "id", "operation_id", "shopping_id", "pantry_id",
+            "name_snapshot", "unit", "quantity_milli", "unit_price_grosz",
+            "shop", "happened_at"},
         {"storage_items", "id", "name", "kind", "parent_box_id", "place_id",
             "lent_to", "lent_at", "created_at"},
         {"storage_events", "id", "item_id", "name_snapshot", "action",
             "details", "happened_at"},
+        {"nfc_links", "id", "uid", "target_kind", "target_id", "created_at"},
         {"paycheck_transactions", "id", "operation_id", "scope", "kind",
-            "category", "amount_grosz", "note", "created_at"},
+            "category", "amount_grosz", "note", "created_at", "status",
+            "confirmation_source", "confirmed_at", "statement_key", "statement_date"},
+        {"bank_evidence_queue", "id", "evidence_key", "source_kind", "source_label",
+            "kind", "amount_grosz", "booking_date", "description", "imported_at",
+            "state", "matched_operation_id", "matched_at"},
         {"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"},
         {"paycheck_goal_allocations", "id", "operation_id", "goal_id",
             "amount_grosz", "created_at"},
@@ -65,7 +75,21 @@ final class DataBackup {
         {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
             "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
         {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
-        {"pantry_packages", "pantry_id", "unit", "size_milli"}
+        {"pantry_packages", "pantry_id", "unit", "size_milli"},
+        {"vehicles", "id", "name", "registration", "mileage",
+            "oc_until", "inspection_until", "notes",
+            "oc_reminder_lead", "inspection_reminder_lead"},
+        {"vehicle_events", "id", "operation_id", "vehicle_id",
+            "kind", "event_date", "mileage", "note"},
+        {"vehicle_tyre_sets", "id", "vehicle_id", "label", "season",
+            "dot", "tread_tenths", "mounted", "place_id"},
+        {"vehicle_policies", "id", "operation_id", "vehicle_id", "provider",
+            "policy_number", "valid_from", "valid_until", "current", "notes",
+            "goal_id"},
+        {"vehicle_costs", "id", "operation_id", "vehicle_id", "kind",
+            "paid_on", "amount_grosz", "note", "paycheck_operation_id"},
+        {"vehicle_documents", "id", "operation_id", "vehicle_id", "kind",
+            "title", "document_number", "issued_on", "valid_until", "note", "created_at"}
     };
 
     private DataBackup() { }
@@ -82,6 +106,13 @@ final class DataBackup {
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
+        settings.put("homeTileOrderV2", HomeTileCatalog.encode(
+            HomeTileCatalog.canonical(
+                prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+                prefs.getString("home_tile_order", ""),
+                BuildConfig.DIAGNOSTICS_ENABLED)));
+        settings.put("homeTileHiddenV2",
+            prefs.getString("home_tiles_v2_hidden", ""));
         settings.put("timerNotificationsEnabled",
             prefs.getBoolean("timer_notifications_enabled", false));
         settings.put("quietHoursStart", prefs.getString("quiet_hours_start",
@@ -89,7 +120,13 @@ final class DataBackup {
         settings.put("quietHoursEnd", prefs.getString("quiet_hours_end",
             QuietHoursRules.DEFAULT_END));
         JSONObject appearance = new JSONObject();
-        for (String id : HOME_TILE_IDS) {
+        java.util.Set<String> tileIds = new java.util.LinkedHashSet<>(
+            java.util.Arrays.asList(HOME_TILE_IDS));
+        tileIds.addAll(HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BuildConfig.DIAGNOSTICS_ENABLED));
+        for (String id : tileIds) {
             JSONObject tile = new JSONObject();
             if (prefs.contains("tile_label_" + id))
                 tile.put("label", prefs.getString("tile_label_" + id, ""));
@@ -97,9 +134,49 @@ final class DataBackup {
                 tile.put("tint", prefs.getString("tile_tint_" + id, "default"));
             if (prefs.contains("tile_icon_" + id))
                 tile.put("icon", prefs.getString("tile_icon_" + id, id));
+            if (prefs.contains("tile_target_" + id))
+                tile.put("target", prefs.getString("tile_target_" + id, ""));
+            if (prefs.contains("tile_width_" + id))
+                tile.put("width", prefs.getString("tile_width_" + id, "small"));
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
+        settings.put("homeTileShortHoldMs", prefs.getInt(
+            HomeTileLayout.SHORT_KEY, HomeTileLayout.DEFAULT_SHORT_MS));
+        settings.put("homeTileDragHoldMs", prefs.getInt(
+            HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
+        settings.put("homeTilePageSlots", HomeTileLayout.pageSlots(prefs.getInt(
+            HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS)));
+        settings.put("pantryTakeDelaySeconds", prefs.getInt(
+            PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
+        // Include user-selected small storage photos in the portable JSON backup.
+        // Never export the original photo or its external content URI.
+        JSONArray storageThumbs=new JSONArray();
+        Set<Long> validStorageIds=new HashSet<>();
+        try(Cursor storage=database.rawQuery(
+                "SELECT id FROM storage_items",null)) {
+            while(storage.moveToNext())validStorageIds.add(storage.getLong(0));
+        }
+        for(Map.Entry<String,?> value:prefs.getAll().entrySet()) {
+            if(!value.getKey().startsWith(StorageThumbs.PREFIX)
+                    ||!(value.getValue() instanceof String))continue;
+            String suffix=value.getKey().substring(StorageThumbs.PREFIX.length());
+            long id;
+            try{id=Long.parseLong(suffix);}
+            catch(NumberFormatException invalid){continue;}
+            if(!validStorageIds.contains(id))continue;
+            String data=(String)value.getValue();
+            if(data.length()>50000)throw new IllegalStateException(
+                "Nieprawidłowa miniatura magazynu.");
+            JSONObject thumb=new JSONObject();
+            thumb.put("itemId",id);
+            thumb.put("jpegBase64",data);
+            storageThumbs.put(thumb);
+        }
+        settings.put("storageThumbnails",storageThumbs);
+        // Only non-sensitive QR activity metadata; no QR payload or private data.
+        settings.put("storageQrHistory",
+            prefs.getString(StorageQrLabels.HISTORY,""));
         result.put("settings", settings);
 
         JSONObject tables = new JSONObject();
@@ -136,6 +213,7 @@ final class DataBackup {
                 }
                 tables.put(definition[0], rows);
             }
+            result.put("syncRecords", SyncRecordStore.exportMetadata(database));
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
@@ -155,13 +233,75 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
+
+        JSONArray syncRecords = root.optJSONArray("syncRecords");
+        if (inputVersion >= 36 && syncRecords == null)
+            throw new IllegalArgumentException("Brak metadanych synchronizacji w kopii.");
 
         JSONObject settings = root.getJSONObject("settings");
         String household = settings.getString("household");
         String theme = settings.getString("theme");
         String tileOrder = settings.optString("homeTileOrder", "");
+        String tileOrderV2 = settings.has("homeTileOrderV2")
+            ? settings.getString("homeTileOrderV2") : null;
+        String hiddenTilesV2 = settings.optString("homeTileHiddenV2", "");
+        String qrHistory = settings.optString("storageQrHistory","");
+        if (qrHistory.length()>12000 || qrHistory.indexOf('\0')>=0)
+            throw new IllegalArgumentException("Nieprawidłowa historia QR.");
+        java.util.List<String> hiddenIds = new java.util.ArrayList<>();
+        java.util.List<String> restoredTiles = null;
+        if (tileOrderV2 != null) {
+            restoredTiles = new java.util.ArrayList<>();
+            for (String tileId : tileOrderV2.split(",", -1)) {
+                if (tileId.isEmpty() && tileOrderV2.isEmpty()) continue;
+                if (!HomeTileCatalog.validTileId(tileId)
+                        || restoredTiles.contains(tileId))
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowy skrót lub duplikat w kopii.");
+                restoredTiles.add(tileId);
+            }
+        }
+        for (String id : hiddenTilesV2.split(",", -1)) {
+            if (id.isEmpty() && hiddenTilesV2.isEmpty()) continue;
+            if (restoredTiles == null || !restoredTiles.contains(id)
+                    || hiddenIds.contains(id))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa lista ukrytych kafelków.");
+            hiddenIds.add(id);
+        }
+        int shortHoldMs = settings.optInt("homeTileShortHoldMs",
+            HomeTileLayout.DEFAULT_SHORT_MS);
+        int dragHoldMs = settings.optInt("homeTileDragHoldMs",
+            HomeTileLayout.DEFAULT_DRAG_MS);
+        int pageSlots = settings.optInt("homeTilePageSlots",
+            HomeTileLayout.DEFAULT_PAGE_SLOTS);
+        if (settings.has("homeTilePageSlots")
+                && (!(settings.get("homeTilePageSlots") instanceof Number)
+                    || ((Number) settings.get("homeTilePageSlots"))
+                        .doubleValue() != pageSlots)
+                || !HomeTileLayout.validPageSlots(pageSlots))
+            throw new IllegalArgumentException(
+                "Nieprawidłowa liczba miejsc kafelków na stronie.");
+        if ((settings.has("homeTileShortHoldMs")
+                && (!(settings.get("homeTileShortHoldMs") instanceof Number)
+                    || ((Number) settings.get("homeTileShortHoldMs"))
+                        .doubleValue() != shortHoldMs))
+                || (settings.has("homeTileDragHoldMs")
+                    && (!(settings.get("homeTileDragHoldMs") instanceof Number)
+                        || ((Number) settings.get("homeTileDragHoldMs"))
+                            .doubleValue() != dragHoldMs))
+                || !HomeTileLayout.validPair(shortHoldMs, dragHoldMs))
+            throw new IllegalArgumentException("Nieprawidłowe czasy przytrzymania.");
+        int takeDelaySeconds = settings.optInt("pantryTakeDelaySeconds",
+            PantryTakeCountdown.DEFAULT_SECONDS);
+        if (!PantryTakeCountdown.validSeconds(takeDelaySeconds)
+                || (settings.has("pantryTakeDelaySeconds")
+                    && (!(settings.get("pantryTakeDelaySeconds") instanceof Number)
+                        || ((Number) settings.get("pantryTakeDelaySeconds"))
+                            .doubleValue() != takeDelaySeconds)))
+            throw new IllegalArgumentException("Nieprawidłowy czas wyjmowania.");
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -193,11 +333,15 @@ final class DataBackup {
         Map<String, String> labels = new HashMap<>();
         Map<String, String> tints = new HashMap<>();
         Map<String, String> icons = new HashMap<>();
+        Map<String, String> targets = new HashMap<>();
+        Map<String, String> widths = new HashMap<>();
         if (appearance != null) {
             java.util.Iterator<String> keys = appearance.keys();
             while (keys.hasNext()) {
                 String id = keys.next();
-                if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id))
+                if (!java.util.Arrays.asList(HOME_TILE_IDS).contains(id)
+                        && (restoredTiles == null
+                            || !restoredTiles.contains(id)))
                     throw new IllegalArgumentException("Nieznany kafelek w kopii.");
                 JSONObject tile = appearance.getJSONObject(id);
                 if (tile.has("label")) {
@@ -220,7 +364,24 @@ final class DataBackup {
                         throw new IllegalArgumentException("Nieznana ikona kafelka.");
                     icons.put(id, iconId);
                 }
+                if (tile.has("target")) {
+                    String destination = tile.getString("target");
+                    if (!HomeTileCatalog.validTarget(destination, true))
+                        throw new IllegalArgumentException("Nieznany cel kafelka.");
+                    targets.put(id, destination);
+                }
+                if (tile.has("width")) {
+                    String width = tile.getString("width");
+                    if (!"small".equals(width) && !"double".equals(width))
+                        throw new IllegalArgumentException("Nieznany rozmiar kafelka.");
+                    widths.put(id, width);
+                }
             }
+        }
+        if (restoredTiles != null) for (String id : restoredTiles) {
+            if (id.startsWith("tile_") && !targets.containsKey(id))
+                throw new IllegalArgumentException(
+                    "Własny kafelek nie ma celu w kopii.");
         }
 
         JSONObject tables = root.getJSONObject("tables");
@@ -244,6 +405,15 @@ final class DataBackup {
                 || (inputVersion < 20 && "paycheck_transactions".equals(definition[0]))
                 || (inputVersion < 21 && ("paycheck_goals".equals(definition[0])
                     || "paycheck_goal_allocations".equals(definition[0])))
+                || (inputVersion < 22 && "pantry_purchase_prices".equals(definition[0]))
+                || (inputVersion < 24 && ("vehicles".equals(definition[0])
+                    || "vehicle_events".equals(definition[0])))
+                || (inputVersion < 25 && "vehicle_tyre_sets".equals(definition[0]))
+                || (inputVersion < 26 && "vehicle_policies".equals(definition[0]))
+                || (inputVersion < 29 && "vehicle_costs".equals(definition[0]))
+                || (inputVersion < 33 && "vehicle_documents".equals(definition[0]))
+                || (inputVersion < 34 && "bank_evidence_queue".equals(definition[0]))
+                || (inputVersion < 35 && "nfc_links".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -320,6 +490,53 @@ final class DataBackup {
                             values.put(key, "other");
                             continue;
                         }
+                        if (inputVersion < 30
+                                && "paycheck_transactions".equals(definition[0])
+                                && "status".equals(key)) {
+                            values.put(key, "confirmed");
+                            continue;
+                        }
+                        if (inputVersion < 31
+                                && "paycheck_transactions".equals(definition[0])) {
+                            if ("confirmation_source".equals(key)) {
+                                values.put(key, "pending".equals(values.getAsString("status"))
+                                    ? "none" : "legacy");
+                                continue;
+                            }
+                            if ("confirmed_at".equals(key)) {
+                                values.putNull(key);
+                                continue;
+                            }
+                        }
+                        if (inputVersion < 32
+                                && "paycheck_transactions".equals(definition[0])
+                                && ("statement_key".equals(key) || "statement_date".equals(key))) {
+                            values.putNull(key);
+                            continue;
+                        }
+                        if (inputVersion < 27
+                                && "vehicle_policies".equals(definition[0])
+                                && "goal_id".equals(key)) {
+                            values.putNull(key);
+                            continue;
+                        }
+                        if (inputVersion < 28
+                                && "vehicles".equals(definition[0])
+                                && ("oc_reminder_lead".equals(key)
+                                    || "inspection_reminder_lead".equals(key))) {
+                            values.putNull(key);
+                            continue;
+                        }
+                        if (inputVersion < 23
+                                && ("shopping_items".equals(definition[0])
+                                    || "shopping_receipts".equals(definition[0]))) {
+                            if ("place_id".equals(key)) {
+                                values.putNull(key); continue;
+                            }
+                            if ("place_name_snapshot".equals(key)) {
+                                values.put(key, ""); continue;
+                            }
+                        }
                         throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
                     }
                     Object value = item.get(key);
@@ -330,7 +547,33 @@ final class DataBackup {
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)
                              || "assignee_name_snapshot".equals(key)
-                             || "acknowledged_at".equals(key)))
+                             || "acknowledged_at".equals(key)
+                            || "confirmed_at".equals(key)
+                            || ("paycheck_transactions".equals(definition[0])
+                                && ("statement_key".equals(key)
+                                    || "statement_date".equals(key)))
+                            || ("storage_items".equals(definition[0])
+                                && ("lent_to".equals(key)
+                                    || "parent_box_id".equals(key)
+                                    || "lent_at".equals(key)))
+                            || ("pantry_purchase_prices".equals(definition[0])
+                                && ("shopping_id".equals(key)
+                                    || "pantry_id".equals(key)
+                                    || "quantity_milli".equals(key)))
+                            || ("vehicles".equals(definition[0])
+                                && ("oc_reminder_lead".equals(key)
+                                    || "inspection_reminder_lead".equals(key)))
+                            || ("vehicle_events".equals(definition[0])
+                                && "mileage".equals(key))
+                            || ("vehicle_tyre_sets".equals(definition[0])
+                                && "tread_tenths".equals(key))
+                            || ("vehicle_policies".equals(definition[0])
+                                && "goal_id".equals(key))
+                            || ("vehicle_costs".equals(definition[0])
+                                && "paycheck_operation_id".equals(key))
+                            || ("bank_evidence_queue".equals(definition[0])
+                                && ("matched_operation_id".equals(key)
+                                    || "matched_at".equals(key)))))
                             throw new IllegalArgumentException("Brak wymaganej wartości: " + key);
                         values.putNull(key);
                     } else if (value instanceof String) {
@@ -352,6 +595,19 @@ final class DataBackup {
                     if (id == null || id <= 0 || !ids.add(id))
                         throw new IllegalArgumentException(
                             "Nieprawidłowe lub powielone ID.");
+                }
+                if ("nfc_links".equals(definition[0])) {
+                    String uid = values.getAsString("uid");
+                    String kind = values.getAsString("target_kind");
+                    Long target = values.getAsLong("target_id");
+                    Long created = values.getAsLong("created_at");
+                    if (uid == null || !uid.matches("[0-9A-Fa-f]{4,64}")
+                            || !java.util.Arrays.asList("thing", "box", "place",
+                                "pantry", "vehicle").contains(kind)
+                            || target == null || target < 1
+                            || created == null || created < 1)
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowe powiązanie NFC w kopii.");
                 }
                 if ("places".equals(definition[0])) {
                     String name = values.getAsString("name");
@@ -413,6 +669,163 @@ final class DataBackup {
                         throw new IllegalArgumentException(
                             "Nieprawidłowa pozycja listy zakupów.");
                 }
+                if ("vehicles".equals(definition[0])) {
+                    Integer ocLead = values.getAsInteger("oc_reminder_lead");
+                    Integer inspectionLead = values.getAsInteger(
+                        "inspection_reminder_lead");
+                    if (ocLead != null && !VehicleReminderRules.allowed(ocLead)
+                            || inspectionLead != null
+                                && !VehicleReminderRules.allowed(inspectionLead))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowe przypomnienie pojazdu w kopii.");
+                    String title = values.getAsString("name");
+                    String plate = values.getAsString("registration");
+                    String oc = values.getAsString("oc_until");
+                    String inspection = values.getAsString("inspection_until");
+                    String notes = values.getAsString("notes");
+                    Long mileage = values.getAsLong("mileage");
+                    if (mileage == null || mileage > 999999999L || notes == null
+                            || notes.length() > 500
+                            || !VehicleRules.name(title).equals(title)
+                            || !VehicleRules.registration(plate).equals(plate)
+                            || !VehicleRules.optionalDate(oc).equals(oc)
+                            || !VehicleRules.optionalDate(inspection).equals(inspection))
+                        throw new IllegalArgumentException("Nieprawidłowy pojazd w kopii.");
+                }
+                if ("vehicle_tyre_sets".equals(definition[0])) {
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    String name = values.getAsString("label");
+                    String season = values.getAsString("season");
+                    String dot = values.getAsString("dot");
+                    Long tread = values.getAsLong("tread_tenths");
+                    Long mounted = values.getAsLong("mounted");
+                    Long place = values.getAsLong("place_id");
+                    if (vehicle == null || vehicle < 1
+                            || tread != null && (tread < 0 || tread > 200)
+                            || mounted == null || mounted < 0 || mounted > 1
+                            || mounted == 1 && place != null
+                            || place != null && place < 1
+                            || !VehicleTyreStore.label(name).equals(name)
+                            || !VehicleTyreStore.season(season).equals(season)
+                            || !VehicleTyreStore.dot(dot).equals(dot))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy komplet opon w kopii.");
+                }
+                if ("vehicle_policies".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    String company = values.getAsString("provider");
+                    String number = values.getAsString("policy_number");
+                    String from = values.getAsString("valid_from");
+                    String until = values.getAsString("valid_until");
+                    Long current = values.getAsLong("current");
+                    Long goalId = values.getAsLong("goal_id");
+                    String description = values.getAsString("notes");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || current == null || current < 0 || current > 1
+                            || goalId != null && goalId < 1
+                            || !VehiclePolicyStore.provider(company).equals(company)
+                            || !VehiclePolicyStore.number(number).equals(number)
+                            || !VehiclePolicyStore.dates(from,until).equals(until)
+                            || !VehiclePolicyStore.notes(description).equals(description))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowa polisa OC w kopii.");
+                }
+                if ("vehicle_documents".equals(definition[0])) {
+                    String operation=values.getAsString("operation_id");
+                    Long vehicle=values.getAsLong("vehicle_id");
+                    String kind=values.getAsString("kind");
+                    String title=values.getAsString("title");
+                    String number=values.getAsString("document_number");
+                    String issued=values.getAsString("issued_on");
+                    String until=values.getAsString("valid_until");
+                    String note=values.getAsString("note");
+                    Long created=values.getAsLong("created_at");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || !VehicleDocumentStore.validKind(kind)
+                            || title == null || title.trim().isEmpty()
+                            || title.length()>120
+                            || number == null || number.length()>120
+                            || issued == null || until == null
+                            || !VehicleRules.optionalDate(issued).equals(issued)
+                            || !VehicleRules.optionalDate(until).equals(until)
+                            || !issued.isEmpty() && !until.isEmpty()
+                                && java.time.LocalDate.parse(until).isBefore(
+                                    java.time.LocalDate.parse(issued))
+                            || note == null || note.length()>500
+                            || created == null || created < 1)
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy dokument pojazdu w kopii.");
+                }
+                if ("vehicle_costs".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    String kind = values.getAsString("kind");
+                    String date = values.getAsString("paid_on");
+                    Long amount = values.getAsLong("amount_grosz");
+                    String description = values.getAsString("note");
+                    String linked = values.getAsString("paycheck_operation_id");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || !VehicleCostStore.validKind(kind)
+                            || !VehicleRules.optionalDate(date).equals(date)
+                            || date.isEmpty()
+                            || amount == null || amount < 1
+                            || amount > MoneyRules.MAX_GROSZ
+                            || !VehicleCostStore.note(description).equals(description)
+                            || linked != null && !linked.equals(operation))
+                        throw new IllegalArgumentException("Nieprawidłowy koszt pojazdu.");
+                }
+                if ("vehicle_events".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    Long vehicle = values.getAsLong("vehicle_id");
+                    Long mileage = values.getAsLong("mileage");
+                    String date = values.getAsString("event_date");
+                    String description = values.getAsString("note");
+                    if (operation == null || !operation.matches(
+                                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || vehicle == null || vehicle < 1
+                            || mileage != null && mileage > 999999999L
+                            || !VehicleRules.optionalDate(date).equals(date)
+                            || date.isEmpty()
+                            || !VehicleRules.note(description).equals(description))
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowa historia pojazdu w kopii.");
+                    VehicleRules.eventType(values.getAsString("kind"));
+                }
+                if ("pantry_purchase_prices".equals(definition[0])) {
+                    String operation = values.getAsString("operation_id");
+                    String name = values.getAsString("name_snapshot");
+                    String unit = values.getAsString("unit");
+                    Long amount = values.getAsLong("unit_price_grosz");
+                    Long qty = values.getAsLong("quantity_milli");
+                    Long shopping = values.getAsLong("shopping_id");
+                    Long product = values.getAsLong("pantry_id");
+                    String shop = values.getAsString("shop");
+                    Long date = values.getAsLong("happened_at");
+                    if (operation == null
+                            || !operation.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                + "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                            || name == null || name.trim().isEmpty()
+                            || name.length() > 160 || !ShoppingRules.knownUnit(unit)
+                            || amount == null || amount < 1
+                            || amount > MoneyRules.MAX_GROSZ
+                            || qty != null && (qty < 1 || qty > ShoppingRules.MAX_MILLI)
+                            || shopping != null && shopping < 1
+                            || product != null && product < 1
+                            || shop == null || shop.length() > 80
+                            || date == null || date <= 0)
+                        throw new IllegalArgumentException("Nieprawidłowa historia ceny.");
+                }
                 if ("paycheck_goals".equals(definition[0])) {
                     String scope = values.getAsString("scope");
                     String name = values.getAsString("name");
@@ -445,7 +858,30 @@ final class DataBackup {
                     String note = values.getAsString("note");
                     Long amount = values.getAsLong("amount_grosz");
                     Long date = values.getAsLong("created_at");
+                    String status = values.getAsString("status");
+                    String source = values.getAsString("confirmation_source");
+                    Long confirmedAt = values.getAsLong("confirmed_at");
+                    if (!("pending".equals(status) && "none".equals(source)
+                            && confirmedAt == null
+                            || "confirmed".equals(status)
+                                && ("legacy".equals(source) && confirmedAt == null
+                                    || "manual".equals(source)
+                                        && confirmedAt != null && confirmedAt > 0)))
+                        throw new IllegalArgumentException("Nieprawidłowe źródło potwierdzenia.");
+                    String statementKey = values.getAsString("statement_key");
+                    String statementDate = values.getAsString("statement_date");
+                    if ((statementKey == null) != (statementDate == null)
+                            || statementKey != null && (!statementKey.matches("[0-9a-f]{64}")
+                                || !"confirmed".equals(status)
+                                || !"manual".equals(source)))
+                        throw new IllegalArgumentException("Niespójne uzgodnienie bankowe.");
+                    if (statementDate != null) try {
+                        java.time.LocalDate.parse(statementDate);
+                    } catch (java.time.format.DateTimeParseException error) {
+                        throw new IllegalArgumentException("Nieprawidłowa data wyciągu.");
+                    }
                     if (operation == null || !operation.matches("[0-9a-fA-F-]{36}")
+                            || !("pending".equals(status) || "confirmed".equals(status))
                             || !"shared".equals(scope)
                             || !("income".equals(kind) || "expense".equals(kind))
                             || !MoneyRules.category(category)
@@ -496,12 +932,14 @@ final class DataBackup {
                     Long after = values.getAsLong("after_qty");
                     Long stamp = values.getAsLong("happened_at");
                     String name = values.getAsString("name_snapshot");
+                    String placeName = values.getAsString("place_name_snapshot");
                     if (shopping == null || shopping < 1 || pantry == null || pantry < 1
                             || packages == null || packages < 1 || packages > 100000000
                             || before == null || before < 0 || before > 100000000
                             || after == null || after != before + packages
                             || after > 100000000 || stamp == null || stamp <= 0
-                            || name == null || name.trim().isEmpty() || name.length() > 160)
+                            || name == null || name.trim().isEmpty() || name.length() > 160
+                            || placeName == null || placeName.length() > 160)
                         throw new IllegalArgumentException("Nieprawidłowe przyjęcie zakupów.");
                 }
                 if ("pantry".equals(definition[0])) {
@@ -609,10 +1047,65 @@ final class DataBackup {
             parsed.put(definition[0], rows);
         }
 
+        Set<Long> vehicleIds = new HashSet<>();
+        for (ContentValues vehicle : parsed.get("vehicles"))
+            vehicleIds.add(vehicle.getAsLong("id"));
+        Set<String> vehicleOperations = new HashSet<>();
+        for (ContentValues event : parsed.get("vehicle_events")) {
+            if (!vehicleIds.contains(event.getAsLong("vehicle_id"))
+                    || !vehicleOperations.add(event.getAsString("operation_id")))
+                throw new IllegalArgumentException(
+                    "Historia pojazdu bez pojazdu lub zduplikowany wpis.");
+        }
+        Set<String> documentOperations = new HashSet<>();
+        for (ContentValues document : parsed.get("vehicle_documents")) {
+            if (!vehicleIds.contains(document.getAsLong("vehicle_id"))
+                    || !documentOperations.add(document.getAsString("operation_id")))
+                throw new IllegalArgumentException(
+                    "Dokument bez pojazdu lub zduplikowany identyfikator dokumentu.");
+        }
+        Set<Long> mountedVehicles = new HashSet<>();
+        for (ContentValues tyres : parsed.get("vehicle_tyre_sets")) {
+            Long vehicle = tyres.getAsLong("vehicle_id");
+            Long mounted = tyres.getAsLong("mounted");
+            if (!vehicleIds.contains(vehicle)
+                    || mounted == 1 && !mountedVehicles.add(vehicle))
+                throw new IllegalArgumentException(
+                    "Komplet opon bez pojazdu lub dwa zamontowane komplety.");
+        }
+        Set<Long> policyCurrentVehicles = new HashSet<>();
+        Set<String> policyOperations = new HashSet<>();
+        for (ContentValues policy : parsed.get("vehicle_policies")) {
+            Long vehicle = policy.getAsLong("vehicle_id");
+            Long current = policy.getAsLong("current");
+            String operation = policy.getAsString("operation_id");
+            if (!vehicleIds.contains(vehicle)
+                    || !policyOperations.add(operation)
+                    || current == 1 && !policyCurrentVehicles.add(vehicle))
+                throw new IllegalArgumentException(
+                    "Polisa OC bez pojazdu, duplikat lub dwie bieżące polisy.");
+        }
         Map<Long, ContentValues> objects = new HashMap<>();
         Set<Long> validPlaces = new HashSet<>();
         for (ContentValues place : parsed.get("places"))
             validPlaces.add(place.getAsLong("id"));
+        for (ContentValues tyres : parsed.get("vehicle_tyre_sets")) {
+            Long place = tyres.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Komplet opon ma nieistniejące miejsce.");
+        }
+        for (ContentValues item : parsed.get("shopping_items")) {
+            Long place = item.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Zakup ma nieistniejące miejsce.");
+        }
+        for (ContentValues receipt : parsed.get("shopping_receipts")) {
+            Long place = receipt.getAsLong("place_id");
+            if (place != null && !validPlaces.contains(place))
+                throw new IllegalArgumentException("Przyjęcie ma nieistniejące miejsce.");
+            if (place != null && receipt.getAsString("place_name_snapshot").isEmpty())
+                throw new IllegalArgumentException("Przyjęcie nie ma nazwy miejsca.");
+        }
         for (ContentValues object : parsed.get("storage_items"))
             objects.put(object.getAsLong("id"), object);
         for (ContentValues object : parsed.get("storage_items")) {
@@ -633,6 +1126,12 @@ final class DataBackup {
         for (ContentValues goal : parsed.get("paycheck_goals"))
             goalLimits.put(goal.getAsLong("id"),
                 goal.getAsLong("target_grosz"));
+        for (ContentValues policy : parsed.get("vehicle_policies")) {
+            Long goalId = policy.getAsLong("goal_id");
+            if (goalId != null && !goalLimits.containsKey(goalId))
+                throw new IllegalArgumentException(
+                    "Polisa OC wskazuje nieistniejący wspólny cel PayCheck.");
+        }
         Map<Long, Long> goalTotals = new HashMap<>();
         Set<String> goalOperations = new HashSet<>();
         for (ContentValues row : parsed.get("paycheck_goal_allocations")) {
@@ -648,10 +1147,84 @@ final class DataBackup {
                     "Powielona wpłata albo przekroczony lub nieistniejący cel.");
             goalTotals.put(goalId, previous + amount);
         }
+        Set<String> bankStatementOperations = new HashSet<>();
         Set<String> sharedFinanceOperations = new HashSet<>();
         for (ContentValues entry : parsed.get("paycheck_transactions")) {
+            String bankKey=entry.getAsString("statement_key");
+            if (bankKey != null && !bankStatementOperations.add(bankKey))
+                throw new IllegalArgumentException("Powielony identyfikator z wyciągu.");
             if (!sharedFinanceOperations.add(entry.getAsString("operation_id")))
                 throw new IllegalArgumentException("Zduplikowana transakcja PayCheck.");
+        }
+        Map<String, ContentValues> sharedFinance = new HashMap<>();
+        for (ContentValues entry : parsed.get("paycheck_transactions"))
+            sharedFinance.put(entry.getAsString("operation_id"), entry);
+        Set<String> queueEvidenceKeys = new HashSet<>();
+        for (ContentValues row : parsed.get("bank_evidence_queue")) {
+            String evidence=row.getAsString("evidence_key");
+            String sourceKind=row.getAsString("source_kind");
+            String sourceLabel=row.getAsString("source_label");
+            String kind=row.getAsString("kind");
+            String date=row.getAsString("booking_date");
+            String description=row.getAsString("description");
+            String state=row.getAsString("state");
+            String matched=row.getAsString("matched_operation_id");
+            Long matchedAt=row.getAsLong("matched_at");
+            Long importedAt=row.getAsLong("imported_at");
+            Long amount=row.getAsLong("amount_grosz");
+            if(evidence==null||!evidence.matches("[0-9a-f]{64}")
+                    ||!queueEvidenceKeys.add(evidence)
+                    ||!("csv".equals(sourceKind)||"mbank".equals(sourceKind)
+                        ||"velo_pdf".equals(sourceKind))
+                    ||sourceLabel==null||sourceLabel.trim().isEmpty()
+                    ||sourceLabel.length()>80
+                    ||!("income".equals(kind)||"expense".equals(kind))
+                    ||amount==null||amount<1||amount>MoneyRules.MAX_GROSZ
+                    ||description==null||description.length()>300
+                    ||importedAt==null||importedAt<=0
+                    ||!("open".equals(state)||"matched".equals(state)
+                        ||"dismissed".equals(state)))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy wpis kolejki bankowej.");
+            try {
+                java.time.LocalDate parsedDate=java.time.LocalDate.parse(date);
+                if(parsedDate.getYear()<1970||parsedDate.getYear()>2100)
+                    throw new IllegalArgumentException();
+            }catch(Exception invalidDate) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa data kolejki bankowej.");
+            }
+            if("matched".equals(state)) {
+                ContentValues tx=sharedFinance.get(matched);
+                if(matched==null||matchedAt==null||matchedAt<=0||tx==null
+                        ||!evidence.equals(tx.getAsString("statement_key")))
+                    throw new IllegalArgumentException(
+                        "Uzgodniona kolejka bankowa nie pasuje do PayCheck.");
+            } else if(matched!=null||matchedAt!=null
+                    ||bankStatementOperations.contains(evidence))
+                throw new IllegalArgumentException(
+                    "Otwarty/odrzucony wpis kolejki ma użyty dowód.");
+        }
+        Set<String> costOperations = new HashSet<>();
+        Set<String> costFinanceOperations = new HashSet<>();
+        for (ContentValues cost : parsed.get("vehicle_costs")) {
+            String operation = cost.getAsString("operation_id");
+            String linked = cost.getAsString("paycheck_operation_id");
+            if (!vehicleIds.contains(cost.getAsLong("vehicle_id"))
+                    || !costOperations.add(operation))
+                throw new IllegalArgumentException(
+                    "Koszt pojazdu bez pojazdu lub powielony wpis.");
+            if (linked != null) {
+                ContentValues expense = sharedFinance.get(linked);
+                if (!costFinanceOperations.add(linked) || expense == null
+                        || !"shared".equals(expense.getAsString("scope"))
+                        || !"expense".equals(expense.getAsString("kind"))
+                        || !"vehicle".equals(expense.getAsString("category"))
+                        || !expense.getAsLong("amount_grosz").equals(
+                            cost.getAsLong("amount_grosz")))
+                    throw new IllegalArgumentException(
+                        "Koszt ma nieistniejącą lub niezgodną płatność PayCheck.");
+            }
         }
         Set<Long> pantryIds = new HashSet<>();
         for (ContentValues p : parsed.get("pantry"))
@@ -680,6 +1253,11 @@ final class DataBackup {
         for (ContentValues m : parsed.get("pantry_movements"))
             if (!movements.add(m.getAsString("operation_id")))
                 throw new IllegalArgumentException("Powielona operacja skanu.");
+        Set<String> priceOperationIds = new HashSet<>();
+        for (ContentValues price : parsed.get("pantry_purchase_prices")) {
+            if (!priceOperationIds.add(price.getAsString("operation_id")))
+                throw new IllegalArgumentException("Powielony zapis ceny w kopii.");
+        }
         Set<Long> receivedShoppingIds = new HashSet<>();
         for (ContentValues receipt : parsed.get("shopping_receipts")) {
             Long shopping = receipt.getAsLong("shopping_id");
@@ -796,6 +1374,38 @@ final class DataBackup {
             }
         }
 
+        Map<Long,String> restoredStorageThumbs=new HashMap<>();
+        Set<Long> presentStorageIds=new HashSet<>();
+        for(ContentValues item:parsed.get("storage_items"))
+            presentStorageIds.add(item.getAsLong("id"));
+        JSONArray thumbEntries=settings.optJSONArray("storageThumbnails");
+        if(settings.has("storageThumbnails")&&thumbEntries==null)
+            throw new IllegalArgumentException("Nieprawidłowe miniatury magazynu.");
+        if(thumbEntries!=null) {
+            if(thumbEntries.length()>200)
+                throw new IllegalArgumentException("Za dużo miniaturek w kopii.");
+            for(int t=0;t<thumbEntries.length();t++){
+                JSONObject thumb=thumbEntries.getJSONObject(t);
+                long id=thumb.getLong("itemId");
+                String jpeg=thumb.getString("jpegBase64");
+                if(id<=0||!presentStorageIds.contains(id)
+                        ||restoredStorageThumbs.containsKey(id)
+                        ||jpeg.length()>50000)
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowa miniatura rzeczy w kopii.");
+                byte[] bytes;
+                try{bytes=android.util.Base64.decode(jpeg,
+                    android.util.Base64.NO_WRAP);}
+                catch(Exception invalid){throw new IllegalArgumentException(
+                    "Nieprawidłowe kodowanie miniatury.",invalid);}
+                if(bytes.length<4||bytes.length>StorageThumbs.MAX_JPEG_BYTES
+                        ||(bytes[0]&255)!=255||(bytes[1]&255)!=216)
+                    throw new IllegalArgumentException(
+                        "Niedozwolony obraz miniatury w kopii.");
+                restoredStorageThumbs.put(id,jpeg);
+            }
+        }
+
         database.beginTransaction();
         try {
             for (int i = TABLES.length - 1; i >= 0; i--)
@@ -805,30 +1415,84 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            SyncRecordStore.restoreMetadata(database,
+                inputVersion >= 36 ? syncRecords : null);
+            // Deleted shopping rows intentionally leave receipt/price history.
+            // After importing into a fresh database, AUTOINCREMENT would only
+            // know IDs still present in shopping_items and could reuse an ID
+            // referenced by an old receipt (falsely "ALREADY_RECEIVED").
+            // Reserve every historical shopping ID inside this same transaction.
+            database.execSQL("INSERT INTO sqlite_sequence(name,seq) "
+                + "SELECT 'shopping_items',0 WHERE NOT EXISTS "
+                + "(SELECT 1 FROM sqlite_sequence WHERE name='shopping_items')");
+            database.execSQL("UPDATE sqlite_sequence SET seq=MAX(seq,"
+                + "COALESCE((SELECT MAX(shopping_id) FROM shopping_receipts),0),"
+                + "COALESCE((SELECT MAX(shopping_id) FROM pantry_purchase_prices),0)) "
+                + "WHERE name='shopping_items'");
+
+            // Preferences and SQL are separate stores. Save preferences BEFORE
+            // committing SQL, so a failed preference write rolls SQL back.
+            // Never clear the installed PIN, private vault or update channel.
+            // Keep the new installation's PIN and update-source configuration untouched.
+            SharedPreferences.Editor restored = prefs.edit()
+                .putString("household", household)
+                .putString("theme", theme)
+                .putString("home_tile_order", tileOrder)
+                .putString(StorageQrLabels.HISTORY, qrHistory)
+                .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
+                .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
+                .putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)
+                .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
+                .putBoolean("timer_notifications_enabled", timerNotifications)
+                .putString("quiet_hours_start", quietStart)
+                .putString("quiet_hours_end", quietEnd);
+            for (String key : prefs.getAll().keySet()) {
+                if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
+                        || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
+                        || key.startsWith("tile_width_")
+                        || key.startsWith(StorageThumbs.PREFIX))
+                    restored.remove(key);
+            }
+            if (tileOrderV2 == null) restored.remove(HomeTileCatalog.ORDER_KEY);
+            else restored.putString(HomeTileCatalog.ORDER_KEY, tileOrderV2);
+            restored.putString("home_tiles_v2_hidden", hiddenTilesV2);
+            for (String id : labels.keySet())
+                restored.putString("tile_label_" + id, labels.get(id));
+            for (String id : tints.keySet())
+                restored.putString("tile_tint_" + id, tints.get(id));
+            for (String id : icons.keySet())
+                restored.putString("tile_icon_" + id, icons.get(id));
+            for (String id : targets.keySet())
+                restored.putString("tile_target_" + id, targets.get(id));
+            for (String id : widths.keySet())
+                restored.putString("tile_width_" + id, widths.get(id));
+            for(Map.Entry<Long,String> thumb:restoredStorageThumbs.entrySet())
+                restored.putString(StorageThumbs.key(thumb.getKey()),
+                    thumb.getValue());
+            if (!restored.commit())
+                throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
         }
-        // Keep the new installation's PIN and update-source configuration untouched.
-        SharedPreferences.Editor restored = prefs.edit()
-            .putString("household", household)
-            .putString("theme", theme)
-            .putString("home_tile_order", tileOrder)
-            .putBoolean("timer_notifications_enabled", timerNotifications)
-            .putString("quiet_hours_start", quietStart)
-            .putString("quiet_hours_end", quietEnd);
-        for (String id : HOME_TILE_IDS) {
-            restored.remove("tile_label_" + id)
-                .remove("tile_tint_" + id).remove("tile_icon_" + id);
-            if (labels.containsKey(id))
-                restored.putString("tile_label_" + id, labels.get(id));
-            if (tints.containsKey(id))
-                restored.putString("tile_tint_" + id, tints.get(id));
-            if (icons.containsKey(id))
-                restored.putString("tile_icon_" + id, icons.get(id));
+    }
+
+    static String[][] syncDefinitions() {
+        String[][] copy = new String[TABLES.length][];
+        for (int i = 0; i < TABLES.length; i++)
+            copy[i] = TABLES[i].clone();
+        return copy;
+    }
+
+    static String[] syncColumns(String tableName) {
+        if (tableName == null) return null;
+        for (String[] definition : TABLES) {
+            if (!tableName.equals(definition[0])) continue;
+            String[] result = new String[definition.length - 1];
+            System.arraycopy(definition, 1, result, 0, result.length);
+            return result;
         }
-        if (!restored.commit())
-            throw new IllegalStateException("Dane przywrócono, ale zapis ustawień nie powiódł się.");
+        return null;
     }
 
     private static String[] columns(String[] table) {
@@ -843,6 +1507,8 @@ final class DataBackup {
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
             || "reminder_lead_days".equals(column)
+            || "oc_reminder_lead".equals(column)
+            || "inspection_reminder_lead".equals(column)
             || "start_at".equals(column) || "end_at".equals(column)
             || "acknowledged_at".equals(column)
             || "task_id".equals(column)
@@ -855,10 +1521,17 @@ final class DataBackup {
             || "changed_at".equals(column) || "size_milli".equals(column)
             || "shopping_id".equals(column) || "packages".equals(column)
             || "amount_grosz".equals(column)
+            || "quantity_milli".equals(column) || "unit_price_grosz".equals(column)
             || "target_grosz".equals(column) || "goal_id".equals(column)
             || "parent_box_id".equals(column) || "lent_at".equals(column)
-            || "created_at".equals(column) || "item_id".equals(column)
+            || "created_at".equals(column) || "confirmed_at".equals(column)
+            || "imported_at".equals(column) || "matched_at".equals(column)
+            || "item_id".equals(column)
             || "before_qty".equals(column)
-            || "after_qty".equals(column) || "happened_at".equals(column);
+            || "after_qty".equals(column) || "happened_at".equals(column)
+            || "mileage".equals(column) || "vehicle_id".equals(column)
+            || "tread_tenths".equals(column) || "mounted".equals(column)
+            || "target_id".equals(column)
+            || "current".equals(column);
     }
 }

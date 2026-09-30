@@ -12,15 +12,25 @@ assert all('"' + name + '"' in skin for name in
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
-assert 'super(context, "edhome-beta-preview.db", null, 21' in main
-assert 'private static final int DB_VERSION = 21;' in backup
-assert "newVersion > 21" in main
+assert 'super(context, "edhome-beta-preview.db", null, 36' in main
+assert 'private static final int DB_VERSION = 36;' in backup
+assert "newVersion > 36" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
+beta_manifest = Path("app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
+assert "android:name=\".BankNotificationListener\"" in beta_manifest
+assert "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" in beta_manifest
+assert "android.service.notification.NotificationListenerService" in beta_manifest
+assert "android.view.ScaleGestureDetector" in main
+assert "MotionEvent.ACTION_POINTER_DOWN" in main
+assert "HOME_TILE_RESIZED" in main
+assert 'putString("tile_width_" + tileId' in main
+assert "tile.setOnTouchListener(new View.OnTouchListener()" in main
+assert "HomeTileLayout.openMenuOnRelease(" in main
 assert 'text("✎  Edytuj kafelek"' in main
 assert 'text("✥  Przesuń kafelek"' in main
-assert "beginHomeDrag(tile, (String) id)" in main
+assert "beginHomeDrag(tile, (String) tileTag)" in main
 assert "MotionEvent.ACTION_MOVE" in main
 assert "ACTION_DRAG_LOCATION" in main
 assert "scrollHomeDuringDrag(" in main
@@ -28,27 +38,46 @@ assert "previewHomeTilePlacement(nearest)" in main
 assert "translationX(target[0] - old[0])" in main
 assert "translationY(target[1] - old[1])" in main
 assert "homeDragHint.setText(" in main
-assert "HomeTileOrder.moved(" in main and "homeDragOrder, homeDragSource, slot" in main
-assert "HomeTileOrder.moved(before, source, slot)" in main
+assert "HomeTileCatalog.moved(" in main
+assert "homeDragOrder, homeDragSource, slot" in main
+assert "HomeTileCatalog.moved(before, source, slot)" in main
 assert "scheduleHomeDragFinish()" in main
 assert "tile.setAlpha(1f)" in main
 assert "tile.setVisibility(View.VISIBLE)" in main
 assert "homeDragDropped = homeDragTargetIndex >= 0;" in main
 assert "moveHomeTile(sourceId, tileId)" not in main
-assert 'putString("home_tile_order"' in main
+assert "HomeTileCatalog.ORDER_KEY" in main
 assert 'prefs.getString("tile_label_" + id' in main
 assert 'prefs.getString("tile_tint_" + id' in main
+assert 'prefs.getString("tile_target_" + id' in main
+assert 'prefs.getString("tile_width_" + id' in main
+assert 'home_tiles_v2_hidden' in main
+assert 'showAddTileDialog' in main and 'restoreHiddenHomeTile' in main
+assert 'homeTileTarget(id)' in main and 'openHomeTile(id)' in main
+assert 'updateTile(grid, id, "•"' in main
 assert '"homeTileAppearance"' in backup
-assert 'restored.remove("tile_label_" + id)' in backup
-assert '.remove("tile_tint_" + id).remove("tile_icon_" + id)' in backup
-assert 'prefs.getString("tile_icon_" + moduleId, moduleId)' in main
+assert '"homeTileOrderV2"' in backup and '"homeTileHiddenV2"' in backup
+assert 'restored.remove(key)' in backup
+assert 'prefs.getString("tile_icon_" + id,' in main
 assert 'settings.put("homeTileAppearance", appearance)' in backup
 assert 'tile.put("icon", prefs.getString("tile_icon_" + id, id))' in backup
+catalog = Path("app/src/main/java/com/edwinkarolczyk/edhome/HomeTileCatalog.java").read_text(encoding="utf-8")
+for destination in ("timers", "shopping", "paycheck", "paycheck_private",
+                    "waste", "storage", "diagnostics"):
+    assert f'"{destination}"' in catalog
+assert "List<String> STARTER_IDS" in catalog
+assert 'setPositiveButton("Usuń skrót"' in main
 icons = Path("app/src/main/java/com/edwinkarolczyk/edhome/TileIcon.java").read_text(encoding="utf-8")
 assert all('"' + item + '"' in icons for item in ("washer", "dryer", "dishwasher"))
 assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
-assert "versionCode 45" in gradle
-assert "versionName '0.5.0'" in gradle
-print("6 themes, 9 tiles, exact preview/drop, restored visibility, icon library and DB v20: PASS")
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
+assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
+settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
+assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
+assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
+assert 'smallButton(appearance,"Zastosuj motyw"' in settings
+assert 'settingsAccordion("appearance","Wygląd i kafelki"' in settings
+assert 'for (int i = 0; i < UiSkin.THEMES.length; i++)' not in settings
+print("6 themes via compact dropdown, unlimited configurable tiles, drag, backup and SQLite v22: PASS")

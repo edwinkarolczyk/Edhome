@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 45,
-  "versionName": "0.5.0-beta.2",
-  "changelog": "EDHOME Beta 0.5.0-beta.2 — PayCheck: wspólne cele finansowe i odkładanie bez księgowania wydatku; SQLite v21.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.5.0-beta.2/edhome-beta.apk",
-  "sha256": "e9ca9e62f20b6b315baf3e33cc673d90d7f414f201f043c1b6f50c09f3d07ef1"
+  "versionCode": 136,
+  "versionName": "0.6.0.71",
+  "changelog": "EDHOME 0.6.0.71 — panel Start ma regulowaną pojemność 6/9/12 miejsc na stronę przy 3 kolumnach. Szeroki kafelek zajmuje 2 miejsca. W trybie układu kafelek można przeciągnąć do lewej lub prawej krawędzi, aby przenieść go między stronami; działa też menu poprzednia/następna strona. Kolejność i ustawienie liczby miejsc są zachowywane w kopii danych. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.71/edhome-beta.apk",
+  "sha256": "6267e3022213d5b883663aeb6719953d24b669d327096c35aee6959838edb6d1"
 }

@@ -179,6 +179,7 @@ final class StorageStore {
                     throw new IllegalArgumentException("Pudełko nie jest puste.");
             }
             log(db,item,"removed","Usunięto z magazynu");
+            NfcLinkStore.clearTarget(db,item.kind,item.id);
             if(db.delete("storage_items","id=?",
                     new String[]{Long.toString(id)})!=1)
                 throw new IllegalStateException("Nie usunięto.");

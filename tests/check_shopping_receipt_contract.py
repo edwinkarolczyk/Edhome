@@ -11,8 +11,8 @@ gradle = Path("app/build.gradle").read_text()
 for token in (
     'ShoppingReceiptStore.create(database);',
     'DATABASE_MIGRATED_17_TO_18_SHOPPING_RECEIPTS',
-    'super(context, "edhome-beta-preview.db", null, 21)',
-    'oldVersion < 1 || newVersion > 21',
+    'super(context, "edhome-beta-preview.db", null, 36)',
+    'oldVersion < 1 || newVersion > 36',
     'ShoppingReceiptStore.received(',
     'smallButton(box, "Przyjmij do spiżarni"',
     'chooseShoppingReceipt(shoppingId, name)',
@@ -35,14 +35,14 @@ for token in (
 ):
     assert token in store, token
 for token in (
-    'DB_VERSION = 21;',
+    'DB_VERSION = 36;',
     '{"shopping_receipts", "id", "shopping_id", "pantry_id", "name_snapshot",',
     'inputVersion < 18 && "shopping_receipts".equals(definition[0])',
     'Podwójne przyjęcie zakupów w kopii.',
     '"shopping_id".equals(column) || "packages".equals(column)',
 ):
     assert token in backup, token
-assert "versionCode 45" in gradle and "versionNameSuffix '-beta.2'" in gradle
+assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 
 db = sqlite3.connect(":memory:")
 db.executescript("""
