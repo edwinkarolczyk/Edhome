@@ -24,7 +24,7 @@ assert 'QR • Zeskanuj etykietę celu' in main
 assert 'private void beginStorageDestinationQr(long itemId)' in main
 assert 'Pudełko możesz przenieść tylko do miejsca.' in main
 assert 'Rzecz możesz przenieść do pudełka albo miejsca.' in main
-assert 'Galeria rzeczy' in main
+assert 'title("Rzeczy")' in main
 assert 'Szukaj rzeczy lub miejsca…' in main
 assert 'renderStorageGalleryGrid' in main
 assert 'showStorageThingDetails(item.id)' in main
@@ -32,7 +32,8 @@ assert 'private void showStorageThingDetails(long itemId)' in main
 assert 'Tylko miniatury. Dotknij zdjęcia' in main
 assert 'for(int i=0;i<filtered.size();i+=3)' in main
 assert 'for(int slot=0;slot<3;slot++)' in main
-assert 'if("thing".equals(storageTemporaryKind)) return;' in main
+assert 'if("thing".equals(storageTemporaryKind)) {' in main
+assert 'storageThingsGallery(items);\n            return;' in main
 assert '📍 Gdzie to jest?' in main
 assert 'showStorageLocator' in main
 

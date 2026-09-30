@@ -72,3 +72,9 @@ assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >
 assert "versionNameSuffix ''" in gradle
 assert 'DB_VERSION = 38;' in backup
 print("Adaptive home tiles, configurable drag/menu and backup settings: PASS")
+
+
+# Reordering is impossible during ordinary Start-page swipes.
+assert 'if (!homeEditMode) return false;' in main
+assert 'Zwykłe przewijanie nigdy nie może rozpocząć przenoszenia kafelka.' in main
+print("Home swipe cannot move tiles outside explicit layout mode: PASS")

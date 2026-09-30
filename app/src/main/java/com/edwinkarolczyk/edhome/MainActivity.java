@@ -1531,7 +1531,7 @@ public final class MainActivity extends Activity {
             ? (skin.showcase()
                 ? "✥  TRYB UKŁADU • przeciągnij • krawędź ekranu = zmień stronę • ⋮⋮: menu"
                 : "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar")
-            : "✥  Krócej: menu • dłużej: przeciągnij • przesuń ekran w bok", 13, false);
+            : "✥  Przesuń ekran w bok • wybierz „Układ”, aby przenosić kafelki", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
         editHint.setMinHeight(dp(34));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
@@ -2054,7 +2054,9 @@ public final class MainActivity extends Activity {
     }
 
     private boolean beginHomeDrag(View tile, String id) {
-        if (skin.showcase() && !homeEditMode) return false;
+        // Zwykłe przewijanie nigdy nie może rozpocząć przenoszenia kafelka.
+        // Najpierw użytkownik świadomie włącza tryb „Układ”.
+        if (!homeEditMode) return false;
         if (!homeTileOrder().contains(id)
                 || homeTileGrid == null || homeDragSource != null) return false;
         homeDragOrder = homeTileOrder();
@@ -6374,9 +6376,10 @@ public final class MainActivity extends Activity {
                 if(item!=null)items.add(item);
             }
         }
-        if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))
+        if("thing".equals(storageTemporaryKind)) {
             storageThingsGallery(items);
-        if("thing".equals(storageTemporaryKind)) return;
+            return;
+        }
         title("Podgląd magazynu");
         note("Widok: "
             +(showPlaces?"miejsca ":"")
