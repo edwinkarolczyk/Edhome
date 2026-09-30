@@ -196,6 +196,27 @@ public final class MainActivity extends Activity {
     private boolean homeDragDropped;
     private boolean homeDragFinishQueued;
     private TextView homeDragHint;
+    private static final String HOME_INTERFACE_PREF = "home_interface_mode";
+    private static final String HOME_INTERFACE_CURRENT = "current";
+    private static final String HOME_INTERFACE_CONCEPT5 = "concept5";
+    private static final String HOME_INTERFACE_CONCEPT8 = "concept8";
+
+    private String homeInterfaceMode() {
+        String value = prefs == null ? HOME_INTERFACE_CURRENT
+            : prefs.getString(HOME_INTERFACE_PREF, HOME_INTERFACE_CURRENT);
+        if (!HOME_INTERFACE_CONCEPT5.equals(value)
+                && !HOME_INTERFACE_CONCEPT8.equals(value))
+            return HOME_INTERFACE_CURRENT;
+        return value;
+    }
+
+    private boolean alternateHomeInterface() {
+        return !HOME_INTERFACE_CURRENT.equals(homeInterfaceMode());
+    }
+
+    private boolean structuredInterfaceShell() {
+        return skin.showcase() || alternateHomeInterface();
+    }
     private int homeShowcasePage;
     private int homeShowcaseSlideDirection;
     private float homeShowcaseSwipeDownX, homeShowcaseSwipeDownY;
@@ -997,7 +1018,7 @@ public final class MainActivity extends Activity {
         else if (privateAuthDialog == null)
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         root.removeAllViews();
-        if (skin.showcase()) root.setBackground(skin.page(this));
+        if (structuredInterfaceShell()) root.setBackground(skin.page(this));
         else root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
@@ -1012,11 +1033,11 @@ public final class MainActivity extends Activity {
         scroll.setClipToPadding(false);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        int pageSide = skin.showcase() ? 12 : 16;
-        body.setPadding(dp(pageSide), dp(skin.showcase() ? 7 : 8),
+        int pageSide = structuredInterfaceShell() ? 12 : 16;
+        body.setPadding(dp(pageSide), dp(structuredInterfaceShell() ? 7 : 8),
             dp(pageSide), dp(12));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams scrollParams = skin.showcase()
+        LinearLayout.LayoutParams scrollParams = structuredInterfaceShell()
             ? new LinearLayout.LayoutParams(-1, 0, 1f)
             : new LinearLayout.LayoutParams(-1, -1);
         root.addView(scroll, scrollParams);
@@ -1051,7 +1072,10 @@ public final class MainActivity extends Activity {
                 default: home();
             }
         }
-        if (skin.showcase() && unlocked) addShowcaseBottomNavigation();
+        if (unlocked) {
+            if (alternateHomeInterface()) addConceptBottomNavigation();
+            else if (skin.showcase()) addShowcaseBottomNavigation();
+        }
         renderedScreen=screen;
         // post-layout restore; direct scrollTo before layout is silently lost.
         scroll.post(()->{
@@ -1182,7 +1206,7 @@ public final class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        if (skin.showcase()) {
+        if (structuredInterfaceShell()) {
             LinearLayout brand = new LinearLayout(this);
             brand.setOrientation(LinearLayout.VERTICAL);
             TextView appTitle = text("⌂  edhome", 21, true);
@@ -1227,7 +1251,7 @@ public final class MainActivity extends Activity {
         }
 
         if (BetaUpdater.isBeta()) {
-            TextView badge = text("", skin.showcase() ? 13 : 13, true);
+            TextView badge = text("", structuredInterfaceShell() ? 13 : 13, true);
             badge.setGravity(Gravity.CENTER);
             badge.setPadding(0, 0, 0, 0);
             badge.setClickable(true);
@@ -1260,7 +1284,7 @@ public final class MainActivity extends Activity {
                         badge.setText("●  ⇄ PC");
                         pulse = false;
                     }
-                    badge.setTextColor(skin.showcase() ? ink : (online
+                    badge.setTextColor(structuredInterfaceShell() ? ink : (online
                         ? desktopConnectionGreen() : desktopConnectionRed()));
                     badge.setContentDescription(syncing
                         ? "EDHOME Desktop synchronizuje dane."
@@ -1311,6 +1335,291 @@ public final class MainActivity extends Activity {
         item.setFocusable(true);
         touchFeedback(item);
         return item;
+    }
+
+    private void conceptSectionTitle(String label) {
+        TextView heading=text(label,19,true);
+        heading.setPadding(dp(2),dp(10),dp(2),dp(6));
+        body.addView(heading,new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    private int conceptCount(String table) {
+        if (!java.util.Arrays.asList("storage_items","places").contains(table))
+            return 0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM "+table,null)) {
+            return c.moveToFirst()?c.getInt(0):0;
+        } catch(Exception ignored) { return 0; }
+    }
+
+    private TextView conceptCell(String symbol,String title,String subtitle,
+            Runnable action) {
+        TextView item=text(symbol+"\n"+title+"\n"+subtitle,13,true);
+        item.setGravity(Gravity.CENTER);
+        item.setMinHeight(dp(92));
+        item.setPadding(dp(7),dp(9),dp(7),dp(9));
+        item.setBackground(skin.panel(this,surface,22));
+        item.setOnClickListener(v->action.run());
+        item.setClickable(true);
+        item.setFocusable(true);
+        touchFeedback(item);
+        return item;
+    }
+
+    private void conceptActionRow() {
+        conceptSectionTitle("Szybko dodaj");
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        body.addView(row,new LinearLayout.LayoutParams(-1,dp(84)));
+        String[][] actions={
+            {"◇","Rzecz"},{"✓","Zadanie"},{"●","Wydatek"},{"▣","QR / NFC"}
+        };
+        Runnable[] callbacks={
+            this::quickAddStorageThing,
+            ()->editTask(null,"","","once",1),
+            ()->go("paycheck"),
+            ()->go("scanner")
+        };
+        for(int i=0;i<actions.length;i++) {
+            TextView button=text(actions[i][0]+"\n"+actions[i][1],11,true);
+            button.setGravity(Gravity.CENTER);
+            button.setBackground(skin.panel(this,surface,20));
+            final Runnable callback=callbacks[i];
+            button.setOnClickListener(v->callback.run());
+            touchFeedback(button);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(76),1f);
+            lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+            row.addView(button,lp);
+        }
+    }
+
+    private void conceptTodayCard(int limit) {
+        conceptSectionTitle("Dzisiaj");
+        LinearLayout today=card();
+        String date=LocalDate.now().format(DateTimeFormatter.ofPattern(
+            "EEEE, d MMMM",Locale.forLanguageTag("pl-PL")));
+        TextView dateView=text(date,13,false);
+        dateView.setTextColor(subdued);
+        today.addView(dateView);
+        int shown=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT title,COALESCE(remind_time,'') FROM tasks "
+                    +"WHERE done=0 AND due_date=? "
+                    +"ORDER BY CASE priority WHEN 'urgent' THEN 0 "
+                    +"WHEN 'high' THEN 1 ELSE 2 END,id LIMIT ?",
+                new String[]{LocalDate.now().toString(),Integer.toString(limit)})) {
+            while(c.moveToNext()) {
+                String time=c.getString(1);
+                TextView task=text("○  "+(time.isEmpty()?"":time+"  ")+c.getString(0),
+                    14,false);
+                task.setMinHeight(dp(40));
+                task.setGravity(Gravity.CENTER_VERTICAL);
+                task.setOnClickListener(v->{
+                    tasksFilter="today";
+                    tasksPage=0;
+                    go("tasks");
+                });
+                touchFeedback(task);
+                today.addView(task);
+                shown++;
+            }
+        }
+        if(shown==0) {
+            TextView empty=text("Brak zadań z terminem na dziś.",14,false);
+            empty.setTextColor(subdued);
+            today.addView(empty);
+        }
+        smallButton(today,"Zobacz cały dzień",()->{
+            tasksFilter="today";
+            tasksPage=0;
+            go("tasks");
+        });
+    }
+
+    private void conceptModuleList(boolean compact) {
+        conceptSectionTitle("Moduły");
+        String[][] modules={
+            {"⌂","Mój dom","Miejsca i pomieszczenia","places"},
+            {"◇","Magazyn","Rzeczy, pudełka i lokalizacje","storage"},
+            {"✓","Zadania","Czynności i powtarzalne obowiązki","tasks"},
+            {"□","Kalendarz","Terminy i przypomnienia","calendar"},
+            {"●","PayCheck","Finanse domowe","paycheck"},
+            {"▤","Spiżarnia","Produkty i zapasy","pantry"},
+            {"≡","Lista zakupów","Zakupy do zrobienia","shopping"},
+            {"♢","Pojazdy","Serwis i dokumenty","vehicles"},
+            {"♲","Odpady","Harmonogram wywozu","waste"},
+            {"✿","Ogród","Rośliny i prace","garden"},
+            {"▱","Plan domu","Pomieszczenia i układ","floorplan"},
+            {"⚙","Ustawienia","Wygląd, synchronizacja i dane","settings"}
+        };
+        if(!compact) {
+            LinearLayout grid=new LinearLayout(this);
+            grid.setOrientation(LinearLayout.VERTICAL);
+            body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+            for(int i=0;i<modules.length;i+=2) {
+                LinearLayout row=new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                grid.addView(row,new LinearLayout.LayoutParams(-1,dp(98)));
+                for(int j=i;j<Math.min(i+2,modules.length);j++) {
+                    String[] item=modules[j];
+                    TextView cell=conceptCell(item[0],item[1],item[2],
+                        ()->go(item[3]));
+                    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(92),1f);
+                    lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+                    row.addView(cell,lp);
+                }
+            }
+        } else {
+            LinearLayout list=card();
+            for(String[] item:modules) {
+                TextView row=text(item[0]+"   "+item[1]+"\n      "+item[2],14,true);
+                row.setMinHeight(dp(52));
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setOnClickListener(v->go(item[3]));
+                touchFeedback(row);
+                list.addView(row);
+            }
+        }
+    }
+
+    private void homeConcept5() {
+        appTitleWithConnection();
+        String date=LocalDate.now().format(DateTimeFormatter.ofPattern(
+            "EEEE, d MMMM yyyy",Locale.forLanguageTag("pl-PL")));
+        TextView day=text(date,13,false);
+        day.setTextColor(subdued);
+        body.addView(day);
+
+        LinearLayout stats=new LinearLayout(this);
+        stats.setOrientation(LinearLayout.HORIZONTAL);
+        body.addView(stats,new LinearLayout.LayoutParams(-1,dp(92)));
+        int things=conceptCount("storage_items");
+        int places=conceptCount("places");
+        String[][] values={
+            {"✓",Integer.toString(db.openTasks()),"Zadania","tasks"},
+            {"! ",Integer.toString(db.overdueTasks()),"Zaległe","tasks"},
+            {"◇",Integer.toString(things),"Magazyn","storage"},
+            {"⌂",Integer.toString(places),"Miejsca","places"}
+        };
+        for(String[] value:values) {
+            TextView stat=conceptCell(value[0],value[1],value[2],()->go(value[3]));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(86),1f);
+            lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+            stats.addView(stat,lp);
+        }
+
+        conceptTodayCard(4);
+
+        LinearLayout focus=new LinearLayout(this);
+        focus.setOrientation(LinearLayout.HORIZONTAL);
+        body.addView(focus,new LinearLayout.LayoutParams(-1,dp(112)));
+        TextView finances=conceptCell("●","PayCheck","Finanse i potwierdzenia",
+            ()->go("paycheck"));
+        TextView storage=conceptCell("◇","Magazyn",
+            things+" rzeczy / pudełek",()->go("storage"));
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,dp(106),1f);
+        left.setMargins(dp(2),dp(2),dp(2),dp(2));
+        focus.addView(finances,left);
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,dp(106),1f);
+        right.setMargins(dp(2),dp(2),dp(2),dp(2));
+        focus.addView(storage,right);
+
+        conceptActionRow();
+        conceptModuleList(true);
+    }
+
+    private void homeConcept8() {
+        appTitleWithConnection();
+        conceptTodayCard(3);
+        conceptActionRow();
+
+        conceptSectionTitle("Najważniejsze");
+        LinearLayout important=new LinearLayout(this);
+        important.setOrientation(LinearLayout.VERTICAL);
+        body.addView(important,new LinearLayout.LayoutParams(-1,-2));
+        String[][] items={
+            {"◇","Magazyn",conceptCount("storage_items")+" obiektów","storage"},
+            {"□","Kalendarz","Plan dnia i terminy","calendar"},
+            {"●","PayCheck","Finanse domowe","paycheck"},
+            {"♢","Pojazdy","Przeglądy i dokumenty","vehicles"},
+            {"♲","Odpady","Harmonogram odbioru","waste"},
+            {"✓","Zadania",db.openTasks()+" otwartych","tasks"}
+        };
+        for(int i=0;i<items.length;i+=2) {
+            LinearLayout row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            important.addView(row,new LinearLayout.LayoutParams(-1,dp(96)));
+            for(int j=i;j<Math.min(i+2,items.length);j++) {
+                String[] item=items[j];
+                TextView cell=conceptCell(item[0],item[1],item[2],
+                    ()->go(item[3]));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(90),1f);
+                lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+                row.addView(cell,lp);
+            }
+        }
+        conceptModuleList(true);
+    }
+
+    private void showConceptAdd() {
+        final String[] labels={
+            "Szybko dodaj rzecz","Szybko dodaj pudełko","Dodaj zadanie",
+            "Lista zakupów","PayCheck / wydatek","Skan QR / NFC"
+        };
+        new AlertDialog.Builder(this).setTitle("Dodaj")
+            .setItems(labels,(dialog,which)->{
+                if(which==0)quickAddStorageThing();
+                else if(which==1)quickAddStorageBox();
+                else if(which==2)editTask(null,"","","once",1);
+                else if(which==3)go("shopping");
+                else if(which==4)go("paycheck");
+                else go("scanner");
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void addConceptBottomNavigation() {
+        LinearLayout nav=new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setPadding(dp(6),dp(5),dp(6),dp(5));
+        nav.setBackground(skin.panel(this,surface,0));
+        nav.setElevation(dp(10));
+
+        nav.addView(showcaseNavItem("⌂","Start","home".equals(screen),
+            ()->go("home")),new LinearLayout.LayoutParams(0,dp(58),1f));
+
+        if(HOME_INTERFACE_CONCEPT5.equals(homeInterfaceMode()))
+            nav.addView(showcaseNavItem("◇","Magazyn","storage".equals(screen),
+                ()->go("storage")),new LinearLayout.LayoutParams(0,dp(58),1f));
+        else
+            nav.addView(showcaseNavItem("⌂","Mój dom","places".equals(screen),
+                ()->go("places")),new LinearLayout.LayoutParams(0,dp(58),1f));
+
+        LinearLayout addCell=new LinearLayout(this);
+        addCell.setGravity(Gravity.CENTER);
+        TextView add=showcaseNavItem("+","Dodaj",false,this::showConceptAdd);
+        add.setTextColor(skin.buttonForeground);
+        GradientDrawable circle=new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(accent);
+        circle.setStroke(dp(1),skin.outline);
+        add.setBackground(circle);
+        addCell.addView(add,new LinearLayout.LayoutParams(dp(58),dp(58)));
+        nav.addView(addCell,new LinearLayout.LayoutParams(0,dp(60),1f));
+
+        if(HOME_INTERFACE_CONCEPT5.equals(homeInterfaceMode())) {
+            nav.addView(showcaseNavItem("□","Kalendarz","calendar".equals(screen),
+                ()->go("calendar")),new LinearLayout.LayoutParams(0,dp(58),1f));
+            nav.addView(showcaseNavItem("☰","Więcej","settings".equals(screen),
+                this::showShowcaseMore),new LinearLayout.LayoutParams(0,dp(58),1f));
+        } else {
+            nav.addView(showcaseNavItem("●","Finanse","paycheck".equals(screen),
+                ()->go("paycheck")),new LinearLayout.LayoutParams(0,dp(58),1f));
+            nav.addView(showcaseNavItem("□","Kalendarz","calendar".equals(screen),
+                ()->go("calendar")),new LinearLayout.LayoutParams(0,dp(58),1f));
+        }
+        root.addView(nav,new LinearLayout.LayoutParams(-1,dp(70)));
     }
 
     private void addShowcaseBottomNavigation() {
@@ -1533,6 +1842,15 @@ public final class MainActivity extends Activity {
     }
 
     private void home() {
+        String interfaceMode = homeInterfaceMode();
+        if (HOME_INTERFACE_CONCEPT5.equals(interfaceMode)) {
+            homeConcept5();
+            return;
+        }
+        if (HOME_INTERFACE_CONCEPT8.equals(interfaceMode)) {
+            homeConcept8();
+            return;
+        }
         appTitleWithConnection();
         int overdue = db.overdueTasks();
         if (skin.showcase()) {
@@ -12060,7 +12378,34 @@ public final class MainActivity extends Activity {
         });
 
         LinearLayout appearance=settingsAccordion("appearance","Wygląd i kafelki",
-            "Motyw, ikony oraz gesty na panelu głównym.",false);
+            "Motyw, interfejs, ikony oraz gesty na panelu głównym.",false);
+
+        appearance.addView(text("Interfejs EDHOME",14,true));
+        Spinner interfaceChoice=new Spinner(this);
+        java.util.List<String> interfaceLabels=java.util.Arrays.asList(
+            "Obecny interfejs", "Koncepcja 5", "Koncepcja 8");
+        interfaceChoice.setAdapter(themeSpinnerAdapter(interfaceLabels));
+        String currentInterface=homeInterfaceMode();
+        interfaceChoice.setSelection(HOME_INTERFACE_CONCEPT5.equals(currentInterface)
+            ? 1 : HOME_INTERFACE_CONCEPT8.equals(currentInterface) ? 2 : 0);
+        appearance.addView(interfaceChoice,new LinearLayout.LayoutParams(-1,dp(52)));
+        appearance.addView(text(
+            "Koncepcja 5 i Koncepcja 8 są dodatkowymi interfejsami. "
+                +"Nie usuwają obecnego układu, kafelków ani danych. "
+                +"Możesz wrócić do obecnego interfejsu w dowolnym momencie.",
+            12,false));
+        smallButton(appearance,"Zastosuj interfejs",()->{
+            int selectedInterface=interfaceChoice.getSelectedItemPosition();
+            String mode=selectedInterface==1 ? HOME_INTERFACE_CONCEPT5
+                : selectedInterface==2 ? HOME_INTERFACE_CONCEPT8
+                : HOME_INTERFACE_CURRENT;
+            prefs.edit().putString(HOME_INTERFACE_PREF,mode).apply();
+            homeShowcasePage=0;
+            homeEditMode=false;
+            DiagnosticLog.event("HOME_INTERFACE_CHANGED","mode="+mode);
+            render();
+        });
+
         Spinner themeChoice=new Spinner(this);
         themeChoice.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(UiSkin.THEMES)));
         int currentTheme=java.util.Arrays.asList(UiSkin.THEMES).indexOf(skin.name);
