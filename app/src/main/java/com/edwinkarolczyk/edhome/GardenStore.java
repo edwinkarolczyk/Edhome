@@ -220,14 +220,28 @@ final class GardenStore {
             default:
                 throw new IllegalArgumentException("Nieznany etap uprawy.");
         }
+        String cleanDate=eventDate.trim();
+        String cleanNote=optional(note,1200);
+        try(Cursor existing=db.rawQuery(
+                "SELECT "+column+" FROM garden_plantings WHERE id=?",
+                new String[]{Long.toString(plantingId)})) {
+            if(existing.moveToFirst() && cleanDate.equals(existing.getString(0))) {
+                try(Cursor event=db.rawQuery(
+                        "SELECT 1 FROM garden_events WHERE planting_id=? "
+                        +"AND event_kind=? AND event_date=? AND note=? LIMIT 1",
+                        new String[]{Long.toString(plantingId),eventKind,cleanDate,cleanNote})) {
+                    if(event.moveToFirst()) return;
+                }
+            }
+        }
         ContentValues changed=new ContentValues();
-        changed.put(column,eventDate.trim());
+        changed.put(column,cleanDate);
         changed.put("status",status);
         db.beginTransaction();
         try {
             db.update("garden_plantings",changed,"id=?",
                 new String[]{Long.toString(plantingId)});
-            insertEvent(db,plantingId,eventKind,eventDate,note);
+            insertEvent(db,plantingId,eventKind,cleanDate,cleanNote);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -245,15 +259,24 @@ final class GardenStore {
         if(!java.util.Arrays.asList("kg","g","szt.","l","ml").contains(cleanUnit))
             throw new IllegalArgumentException("Nieznana jednostka zbioru.");
         long quantityMilli=parseQuantityMilli(quantity);
+        String cleanDate=harvestedOn.trim();
+        String cleanNote=optional(note,1200);
+        try(Cursor duplicate=db.rawQuery(
+                "SELECT id FROM garden_harvests WHERE planting_id=? AND harvested_on=? "
+                +"AND quantity_milli=? AND unit=? AND note=? LIMIT 1",
+                new String[]{Long.toString(plantingId),cleanDate,
+                    Long.toString(quantityMilli),cleanUnit,cleanNote})) {
+            if(duplicate.moveToFirst()) return duplicate.getLong(0);
+        }
 
         db.beginTransaction();
         try {
             ContentValues harvest=new ContentValues();
             harvest.put("planting_id",plantingId);
-            harvest.put("harvested_on",harvestedOn.trim());
+            harvest.put("harvested_on",cleanDate);
             harvest.put("quantity_milli",quantityMilli);
             harvest.put("unit",cleanUnit);
-            harvest.put("note",optional(note,1200));
+            harvest.put("note",cleanNote);
             harvest.put("created_at",System.currentTimeMillis());
             long id=db.insertOrThrow("garden_harvests",null,harvest);
 
@@ -263,11 +286,11 @@ final class GardenStore {
                     "SELECT actual_harvest FROM garden_plantings WHERE id=?",
                     new String[]{Long.toString(plantingId)})) {
                 if(c.moveToFirst() && c.getString(0).isEmpty())
-                    changed.put("actual_harvest",harvestedOn.trim());
+                    changed.put("actual_harvest",cleanDate);
             }
             db.update("garden_plantings",changed,"id=?",
                 new String[]{Long.toString(plantingId)});
-            insertEvent(db,plantingId,"harvest",harvestedOn,note);
+            insertEvent(db,plantingId,"harvest",cleanDate,cleanNote);
             db.setTransactionSuccessful();
             return id;
         } finally {
@@ -332,6 +355,41 @@ final class GardenStore {
                 new String[]{Long.toString(plantingId)})) {
             return c.moveToFirst()?c.getInt(0):0;
         }
+    }
+
+    static String seasonReport(SQLiteDatabase db) {
+        StringBuilder out=new StringBuilder();
+        try(Cursor c=db.rawQuery(
+                "SELECT p.season_year,"
+                +"COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina') AS plant,"
+                +"COALESCE(NULLIF(gc.variety,''),cp.variety,'') AS variety,"
+                +"h.unit,SUM(h.quantity_milli),COUNT(h.id) "
+                +"FROM garden_harvests h "
+                +"JOIN garden_plantings p ON p.id=h.planting_id "
+                +"LEFT JOIN garden_catalog gc ON gc.id=p.catalog_id "
+                +"LEFT JOIN garden_custom_plants cp ON cp.id=p.custom_plant_id "
+                +"GROUP BY p.season_year,plant,variety,h.unit "
+                +"ORDER BY p.season_year DESC,plant COLLATE NOCASE,variety COLLATE NOCASE,h.unit",
+                null)) {
+            int lastYear=Integer.MIN_VALUE;
+            while(c.moveToNext()) {
+                int year=c.getInt(0);
+                if(year!=lastYear) {
+                    if(out.length()>0) out.append('\n');
+                    out.append("SEZON ").append(year==0?"bez roku":Integer.toString(year))
+                        .append('\n');
+                    lastYear=year;
+                }
+                out.append("• ").append(c.getString(1));
+                if(!c.getString(2).isEmpty()) out.append(" • ").append(c.getString(2));
+                out.append(": ").append(formatMilli(c.getLong(4))).append(' ')
+                    .append(c.getString(3)).append(" (")
+                    .append(c.getInt(5)).append(" zbiorów)").append('\n');
+            }
+        }
+        return out.length()==0
+            ?"Brak zapisanych zbiorów do porównania."
+            :out.toString().trim();
     }
 
     static String harvestSummary(SQLiteDatabase db,long plantingId) {
