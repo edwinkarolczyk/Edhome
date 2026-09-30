@@ -22,9 +22,9 @@ stable_manifest=(root/"app/src/main/AndroidManifest.xml").read_text(encoding="ut
 
 # Release identity and data compatibility.
 version=re.search(r"versionName '([^']+)'",gradle).group(1)
-assert version.startswith("0.6.0.") or version.startswith("0.7.0."), version
-assert "super(context, \"edhome-beta-preview.db\", null, 37)" in main
-assert "private static final int DB_VERSION = 37;" in backup
+assert version.startswith("0.6.0.") or version.startswith("0.7."), version
+assert "super(context, \"edhome-beta-preview.db\", null, 38)" in main
+assert "private static final int DB_VERSION = 38;" in backup
 
 # Shared PayCheck stays pending until a one-time explicit confirmation/match.
 for token in (
