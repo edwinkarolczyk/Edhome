@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 134,
-  "versionName": "0.6.0.69",
-  "changelog": "EDHOME 0.6.0.69 — diagnostykę Androida można pobrać bezpośrednio z EDHOME Desktop. Gdy telefon nie ma nowych logów, Desktop nic nie pobiera. Po zapisaniu TXT na PC Desktop wysyła potwierdzenie i telefon usuwa wyłącznie dokładnie pobraną wersję logu; w razie błędu lub nowych wpisów nic nie jest kasowane. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.69/edhome-beta.apk",
-  "sha256": "a010c24e6ade26b7f7c584a0cc5dbcb8d7bb9a3257e5bdcb89d018b56b34e997"
+  "versionCode": 135,
+  "versionName": "0.6.0.70",
+  "changelog": "EDHOME 0.6.0.70 — kompaktowy interfejs telefonu: Start ma 3 kolumny i 3 rzędy na stronę z przesuwaniem w bok. Czynności i Spiżarnia mają zwarte akcje oraz stronicowanie zamiast długiej listy; szczegóły produktów Spiżarni są pod menu Więcej. Funkcje i dane pozostają zachowane. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.70/edhome-beta.apk",
+  "sha256": "1f37ef37164340e7ab12445145db114a770487feacbd40f96937cdad2aa21e24"
 }
