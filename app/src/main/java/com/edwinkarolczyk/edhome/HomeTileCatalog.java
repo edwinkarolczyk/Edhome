@@ -13,12 +13,12 @@ final class HomeTileCatalog {
     static final List<String> STARTER_IDS = Collections.unmodifiableList(Arrays.asList(
         "tasks", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "today",
-        "timers", "shopping", "paycheck", "waste", "scanner", "storage", "vehicles"
+        "timers", "shopping", "paycheck", "waste", "scanner", "storage", "vehicles", "garden"
     ));
     static final List<String> TARGETS = Collections.unmodifiableList(Arrays.asList(
         "tasks", "today", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "timers", "shopping",
-        "paycheck", "paycheck_private", "waste", "scanner", "storage", "vehicles", "diagnostics"
+        "paycheck", "paycheck_private", "waste", "scanner", "storage", "vehicles", "garden", "diagnostics"
     ));
 
     private HomeTileCatalog() { }
@@ -57,6 +57,7 @@ final class HomeTileCatalog {
             case "scanner": return "Skaner";
             case "storage": return "Magazyn";
             case "vehicles": return "Pojazdy";
+            case "garden": return "Ogród";
             case "diagnostics": return "Diagnostyka";
             default: throw new IllegalArgumentException("Unknown target");
         }
@@ -72,6 +73,7 @@ final class HomeTileCatalog {
             case "storage": return "shelf";
             case "floorplan": return "garage";
             case "vehicles": return "garage";
+            case "garden": return "garden";
             case "diagnostics": return "settings";
             default: return target;
         }

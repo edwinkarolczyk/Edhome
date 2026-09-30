@@ -358,8 +358,10 @@ jobs:
           python3 tests/check_private_backup_contract.py
       - name: Update installer single-flight and polling regression
         run: python3 tests/check_updater_contract.py
-      - name: EDHOME 0.6 code-side release gate
+      - name: EDHOME 0.6 preserved-contract gate
         run: python3 tests/check_0_6_release_gate.py
+      - name: Garden 0.7 foundation contract
+        run: python3 tests/check_garden_contract.py
       - name: Desktop Wi-Fi read-only sync contract
         run: python3 tests/check_desktop_sync_contract.py
       - name: Compile-check Beta and Stable
@@ -422,14 +424,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.71-signed-apk
+          name: EDHOME-0.7.0.1-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.71 — panel Start ma regulowaną pojemność 6/9/12 miejsc na stronę przy 3 kolumnach. Szeroki kafelek zajmuje 2 miejsca. W trybie układu kafelek można przeciągnąć do lewej lub prawej krawędzi, aby przenieść go między stronami; działa też menu poprzednia/następna strona. Kolejność i ustawienie liczby miejsc są zachowywane w kopii danych. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.7.0.1 — start modułu Ogród: offline obszary, własne rośliny i nasadzenia, osobny katalog referencyjny z warstwą korekt, backup i synchronizacja LAN. Powiadomienie EDHOME Desktop nie jest już ponawiane przy niezmienionym stanie. Zachowano regulowane strony Start 6/9/12. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

@@ -189,6 +189,7 @@ public final class MainActivity extends Activity {
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
         ensureFloorPlanShellTileSeeded();
         ensureScannerTileSeeded();
+        ensureGardenTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
@@ -937,6 +938,7 @@ public final class MainActivity extends Activity {
                 case "pantry": pantry(); break;
                 case "shopping": shopping(); break;
                 case "places": places(); break;
+                case "garden": garden(); break;
                 case "floorplan": floorPlanShell(); break;
                 case "storage": storage(); break;
                 case "vehicles": vehicles(); break;
@@ -1816,6 +1818,19 @@ public final class MainActivity extends Activity {
             edit.putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order));
         if (edit.commit())
             DiagnosticLog.event("FLOORPLAN_SHELL_TILE_SEEDED");
+    }
+
+    private void ensureGardenTileSeeded() {
+        if (prefs.getBoolean("garden_tile_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        if (!order.contains("garden")) order.add("garden");
+        SharedPreferences.Editor edit=prefs.edit()
+            .putBoolean("garden_tile_seeded_v1",true)
+            .putString(HomeTileCatalog.ORDER_KEY,HomeTileCatalog.encode(order));
+        if(edit.commit()) DiagnosticLog.event("GARDEN_TILE_SEEDED");
     }
 
     private void ensureScannerTileSeeded() {
@@ -4139,6 +4154,169 @@ public final class MainActivity extends Activity {
             + "Planowanie dostępności domowników będzie rozwijane osobno.");
     }
 
+
+    private void garden() {
+        header("Ogród • uprawy");
+        note("Działa offline. Katalog referencyjny, Twoje korekty i faktyczne "
+            + "nasadzenia są oddzielone, więc późniejsza aktualizacja bazy "
+            + "nie nadpisze Twojej historii.");
+
+        LinearLayout actions=compactActionRow();
+        compactAction(actions,"+ Obszar",this::gardenAreaDialog);
+        compactAction(actions,"+ Roślina",this::gardenPlantDialog);
+        compactAction(actions,"+ Nasadzenie",this::gardenPlantingDialog);
+        LinearLayout links=compactActionRow();
+        compactAction(links,"▦ Kalendarz",()->go("calendar"));
+        compactAction(links,"✓ Czynności",()->{tasksFilter="all";go("tasks");});
+        compactAction(links,"≡ Katalog",this::gardenCatalogInfo);
+
+        LinearLayout summary=card();
+        summary.addView(text("Obszary: "+gardenCount("garden_areas")
+            +"   •   własne rośliny: "+gardenCount("garden_custom_plants")
+            +"   •   katalog: "+gardenCount("garden_catalog"),14,true));
+        summary.addView(text("Nasadzenia: "+gardenCount("garden_plantings")
+            +" • katalog można aktualizować niezależnie od danych użytkownika.",12,false));
+
+        title("Obszary");
+        int areas=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT a.name,a.kind,a.notes,COUNT(p.id) FROM garden_areas a "
+                +"LEFT JOIN garden_plantings p ON p.area_id=a.id "
+                +"GROUP BY a.id,a.name,a.kind,a.notes ORDER BY a.name COLLATE NOCASE",null)){
+            while(c.moveToNext()){
+                areas++;
+                LinearLayout box=card();
+                box.addView(text(c.getString(0)+" • "+c.getString(1),17,true));
+                box.addView(text("Nasadzenia: "+c.getInt(3)
+                    +(c.getString(2).isEmpty()?"":" • "+c.getString(2)),13,false));
+            }
+        }
+        if(areas==0) note("Dodaj pierwszy obszar: grządkę, tunel, donice, sad albo własny typ.");
+
+        title("Nasadzenia");
+        int shown=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT a.name,COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),"
+                +"COALESCE(NULLIF(gc.variety,''),cp.variety,''),p.label,p.status,"
+                +"p.planned_sow,p.planned_plant,p.planned_harvest,p.notes "
+                +"FROM garden_plantings p JOIN garden_areas a ON a.id=p.area_id "
+                +"LEFT JOIN garden_catalog gc ON gc.id=p.catalog_id "
+                +"LEFT JOIN garden_custom_plants cp ON cp.id=p.custom_plant_id "
+                +"ORDER BY p.id DESC LIMIT 50",null)){
+            while(c.moveToNext()){
+                shown++;
+                LinearLayout box=card();
+                String variety=c.getString(2), label=c.getString(3);
+                box.addView(text(c.getString(1)+(variety.isEmpty()?"":" • "+variety)
+                    +(label.isEmpty()?"":" • "+label),17,true));
+                box.addView(text(c.getString(0)+" • "+c.getString(4),13,false));
+                String dates="";
+                if(!c.getString(5).isEmpty()) dates+="siew "+c.getString(5);
+                if(!c.getString(6).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"sadzenie "+c.getString(6);
+                if(!c.getString(7).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"zbiór "+c.getString(7);
+                if(!dates.isEmpty()) box.addView(text(dates,12,false));
+                if(!c.getString(8).isEmpty()) box.addView(text(c.getString(8),12,false));
+            }
+        }
+        if(shown==0) note("Brak nasadzeń.");
+        note("Następny krok 0.7 spina nasadzenia z istniejącymi Czynnościami, "
+            +"Kalendarzem i powiadomieniami — bez tworzenia drugiego systemu przypomnień.");
+    }
+
+    private int gardenCount(String table) {
+        try(Cursor c=db.getReadableDatabase().rawQuery("SELECT COUNT(*) FROM "+table,null)){
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
+
+    private void gardenAreaDialog() {
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        EditText name=new EditText(this); name.setHint("Nazwa, np. Grządka 1"); name.setSingleLine(true);
+        EditText kind=new EditText(this); kind.setHint("Typ: grządka / tunel / donica / sad"); kind.setSingleLine(true);
+        EditText notes=new EditText(this); notes.setHint("Notatka (opcjonalnie)");
+        form.addView(name); form.addView(kind); form.addView(notes); lightDialogForm(form);
+        new AlertDialog.Builder(this).setTitle("Nowy obszar ogrodu").setView(form)
+            .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
+                try{GardenStore.addArea(db.getWritableDatabase(),name.getText().toString(),
+                    kind.getText().toString(),notes.getText().toString());
+                    DiagnosticLog.event("GARDEN_AREA_ADDED"); render();}
+                catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać obszaru.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenPlantDialog() {
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        EditText name=new EditText(this); name.setHint("Nazwa, np. Pomidor"); name.setSingleLine(true);
+        EditText variety=new EditText(this); variety.setHint("Odmiana, np. Malinowy"); variety.setSingleLine(true);
+        EditText latin=new EditText(this); latin.setHint("Nazwa łacińska (opcjonalnie)"); latin.setSingleLine(true);
+        EditText notes=new EditText(this); notes.setHint("Moje uwagi");
+        form.addView(name); form.addView(variety); form.addView(latin); form.addView(notes); lightDialogForm(form);
+        new AlertDialog.Builder(this).setTitle("Moja roślina / odmiana").setView(form)
+            .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
+                try{GardenStore.addCustomPlant(db.getWritableDatabase(),name.getText().toString(),
+                    latin.getText().toString(),variety.getText().toString(),notes.getText().toString());
+                    DiagnosticLog.event("GARDEN_CUSTOM_PLANT_ADDED"); render();}
+                catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać rośliny.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenPlantingDialog() {
+        java.util.List<Long> areaIds=new java.util.ArrayList<>();
+        java.util.List<String> areaNames=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM garden_areas ORDER BY name COLLATE NOCASE",null)){
+            while(c.moveToNext()){areaIds.add(c.getLong(0));areaNames.add(c.getString(1));}
+        }
+        java.util.List<Long> plantIds=new java.util.ArrayList<>();
+        java.util.List<Boolean> catalogFlags=new java.util.ArrayList<>();
+        java.util.List<String> plantNames=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,variety FROM garden_custom_plants ORDER BY name COLLATE NOCASE,variety COLLATE NOCASE",null)){
+            while(c.moveToNext()){plantIds.add(c.getLong(0));catalogFlags.add(false);
+                plantNames.add(c.getString(1)+(c.getString(2).isEmpty()?"":" • "+c.getString(2))+" • moja");}
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,variety FROM garden_catalog ORDER BY name COLLATE NOCASE,variety COLLATE NOCASE",null)){
+            while(c.moveToNext()){plantIds.add(c.getLong(0));catalogFlags.add(true);
+                plantNames.add(c.getString(1)+(c.getString(2).isEmpty()?"":" • "+c.getString(2))+" • katalog");}
+        }
+        if(areaIds.isEmpty()){alert("Najpierw dodaj obszar ogrodu.");return;}
+        if(plantIds.isEmpty()){alert("Najpierw dodaj własną roślinę albo zaimportuj katalog.");return;}
+
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        form.addView(text("Obszar",13,true)); Spinner area=new Spinner(this);
+        area.setAdapter(lightDialogSpinnerAdapter(areaNames)); form.addView(area);
+        form.addView(text("Roślina",13,true)); Spinner plant=new Spinner(this);
+        plant.setAdapter(lightDialogSpinnerAdapter(plantNames)); form.addView(plant);
+        EditText label=new EditText(this); label.setHint("Nazwa nasadzenia (opcjonalnie)");
+        EditText sow=new EditText(this); sow.setHint("Planowany siew RRRR-MM-DD");
+        EditText plantDate=new EditText(this); plantDate.setHint("Planowane sadzenie RRRR-MM-DD");
+        EditText harvest=new EditText(this); harvest.setHint("Planowany zbiór RRRR-MM-DD");
+        EditText notes=new EditText(this); notes.setHint("Notatka");
+        form.addView(label);form.addView(sow);form.addView(plantDate);form.addView(harvest);form.addView(notes);
+        lightDialogForm(form); ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle("Nowe nasadzenie").setView(scroll)
+            .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
+                try{int ai=area.getSelectedItemPosition(),pi=plant.getSelectedItemPosition();
+                    long selected=plantIds.get(pi);
+                    GardenStore.addPlanting(db.getWritableDatabase(),areaIds.get(ai),
+                        catalogFlags.get(pi)?selected:0L,catalogFlags.get(pi)?0L:selected,
+                        label.getText().toString(),sow.getText().toString(),
+                        plantDate.getText().toString(),harvest.getText().toString(),notes.getText().toString());
+                    DiagnosticLog.event("GARDEN_PLANTING_ADDED"); render();}
+                catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać nasadzenia.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenCatalogInfo() {
+        alert("Katalog referencyjny: "+gardenCount("garden_catalog")+" pozycji\n"
+            +"Moje korekty: "+gardenCount("garden_catalog_overrides")+"\n\n"
+            +"Katalog jest osobną warstwą. Import/eksport CSV/JSON i porównanie zmian "
+            +"dochodzą w kolejnej części 0.7; Twoje nasadzenia pozostają niezależne.");
+    }
 
     /** Dates read directly from vehicles; no duplicate task or expense records. */
     private void vehicles() {
@@ -11166,7 +11344,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 36);
+            super(context, "edhome-beta-preview.db", null, 37);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -11206,12 +11384,13 @@ public final class MainActivity extends Activity {
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
             PantryPackageStore.create(database);
+            GardenStore.create(database);
             SyncRecordStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 36) {
+            if (oldVersion < 1 || newVersion > 37) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -11401,6 +11580,15 @@ public final class MainActivity extends Activity {
                         "Nie udało się utworzyć metadanych synchronizacji.", error);
                 }
                 DiagnosticLog.event("DATABASE_MIGRATED_35_TO_36_SYNC_RECORDS");
+            }
+            if(oldVersion < 37) {
+                try {
+                    GardenStore.create(database);
+                    SyncRecordStore.ensureAll(database);
+                } catch(Exception error) {
+                    throw new IllegalStateException("Nie udało się utworzyć danych Ogrodu.",error);
+                }
+                DiagnosticLog.event("DATABASE_MIGRATED_36_TO_37_GARDEN");
             }
         }
 

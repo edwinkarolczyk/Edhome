@@ -9,17 +9,17 @@ import java.util.List;
 public final class HomeTileCatalogSmoke {
     public static void main(String[] args) {
         List<String> initial = HomeTileCatalog.canonical(null, "today,tasks,calendar", true);
-        check(initial.size() == 18, "starter Beta should expose 18 targets");
+        check(initial.size() == 19, "starter Beta should expose 19 targets");
         check(initial.get(0).equals("today"), "legacy tile order must survive");
         check(initial.containsAll(Arrays.asList("timers", "shopping",
-            "paycheck", "waste", "scanner", "storage", "vehicles", "floorplan", "diagnostics")), "missing feature shortcuts");
+            "paycheck", "waste", "scanner", "storage", "vehicles", "floorplan", "garden", "diagnostics")), "missing feature shortcuts");
         String extra = "tile_0123456789abcdef0123456789abcdef";
         List<String> custom = new ArrayList<>(initial);
         custom.add(extra);
         check(HomeTileCatalog.canonical(HomeTileCatalog.encode(custom), "", true)
             .equals(custom), "custom tile did not survive restart");
         List<String> moved = HomeTileCatalog.moved(custom, extra, 1);
-        check(moved.size() == 19 && moved.get(1).equals(extra),
+        check(moved.size() == 20 && moved.get(1).equals(extra),
             "dynamic reorder failed");
         check(new HashSet<>(moved).size() == moved.size(), "duplicate tile");
         check(HomeTileCatalog.canonical("tasks,tasks,invalid," + extra, "", true)
@@ -39,7 +39,7 @@ public final class HomeTileCatalogSmoke {
         } catch (IllegalArgumentException expected) { }
         check(HomeTileCatalog.label("scanner").equals("Skaner"), "scanner label missing");
         check(HomeTileCatalog.STARTER_IDS.indexOf("scanner") < HomeTileCatalog.STARTER_IDS.indexOf("storage"), "scanner must be before storage");
-        System.out.println("Home tile catalog migration, 19 shortcuts, target guard, drag: PASS");
+        System.out.println("Home tile catalog migration, 20 shortcuts, target guard, drag: PASS");
     }
     private static void check(boolean result, String message) {
         if (!result) throw new AssertionError(message);
