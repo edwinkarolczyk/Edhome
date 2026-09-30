@@ -21,6 +21,14 @@
 | **0.9.2 / RC** | Domknięcie dokumentacji, prywatności, changelogów, podpisu/aktualizacji i pełnych testów przepływów przed Stable. | Rozszerzanie zakresu funkcjonalnego. |
 | **1.0.0 Stable** | Oficjalne EDHOME bez „prototyp”, zatwierdzone funkcje, bezpieczna migracja danych i opis zmian przed aktualizacją. | Merge do `main` bez osobnej zgody Edwina. |
 
+## Stan wykonania 0.7 — 30.09.2026
+
+- **0.7.0:** fundament Ogrodu, katalog/import CSV, nasadzenia, backup i LAN — wykonane w kodzie.
+- **0.7.1:** faktyczny siew/sadzenie, zbiory, ilość/jednostka plonu, historia i kolejny sezon — wykonane w kodzie.
+- **0.7.2:** szybkie czynności pielęgnacyjne z regułami cyklicznymi/sezonowymi, wspólnym Kalendarzem i powiadomieniami — wykonane w kodzie.
+- **0.7.3:** historia plonów sezon po sezonie + ochrona przed podwójnym zapisem + podgląd Ogrodu w Desktop — wykonane w kodzie.
+- **0.7.4:** pozostaje odbiór/regresja na fizycznym telefonie i PC, w szczególności backup→restore, automatyczna synchronizacja obu kierunków oraz migracja z ostatniej 0.6.
+
 ## Plan wykonawczy 0.7.x — Ogród i Uprawy
 
 ### 0.7.0 — fundament modułu
