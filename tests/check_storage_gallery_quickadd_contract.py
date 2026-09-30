@@ -103,3 +103,32 @@ for marker in (
     assert marker in main, f"Missing compact global action layout: {marker}"
 
 print("OK: storage scanner operations + idempotent move + compact actions")
+
+# Szybkie dodawanie jest sesją wieloetapową: po zdjęciu/NFC/lokalizacji nie wyrzuca użytkownika.
+for marker in (
+    '⚡ Szybko dodaj pudełko',
+    '⚡ Szybko dodaj miejsce',
+    'private void quickAddStorageBox()',
+    'private void quickAddPlace()',
+    'private void showQuickStorageSetup(String kind,long id)',
+    'quickStorageSetupDialog',
+    'quickStorageSetupStatusText',
+    'Każda czynność zapisuje się od razu; kończysz dopiero przyciskiem Gotowe.',
+    '📷 Dodaj / zmień zdjęcie',
+    'NFC • Przypisz / zmień tag',
+    'QR • Pokaż / etykieta',
+    '📍 Ustaw położenie • NFC / QR / lista',
+    '📍 Ustaw nadrzędne ręcznie',
+    'refreshQuickStorageSetupStatus(target.kind,target.id)',
+    'refreshQuickStorageSetupStatus(moving.kind,itemId)',
+):
+    assert marker in main, f"Missing persistent quick setup: {marker}"
+
+quick_start = main.index('private void showQuickStorageSetup(String kind,long id)')
+quick_end = main.index('private void beginStorageScannerOperation', quick_start)
+quick = main[quick_start:quick_end]
+assert 'dialog.dismiss();\n            selectStorageThumbnail' not in quick
+assert 'dialog.dismiss();\n            beginNfcAssignment' not in quick
+assert 'setNegativeButton("Gotowe",null)' in quick
+
+print("OK: quick add stays open for Thing/Box/Place until explicit Gotowe")

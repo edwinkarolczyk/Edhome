@@ -109,6 +109,10 @@ public final class MainActivity extends Activity {
     private String pendingStorageScannerOperation;
     private String pendingStorageScannerKind;
     private AlertDialog storageScannerOperationDialog;
+    private AlertDialog quickStorageSetupDialog;
+    private TextView quickStorageSetupStatus;
+    private String quickStorageSetupKind;
+    private long quickStorageSetupId;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -537,6 +541,7 @@ public final class MainActivity extends Activity {
             }
             DiagnosticLog.event("NFC_TAG_ASSIGNED");
             render();
+            refreshQuickStorageSetupStatus(target.kind,target.id);
             alert("NFC przypisany\n"+target.name+"\nUID: "
                 +NfcLinkStore.shortUid(uid));
         } catch(Exception error) {
@@ -5725,6 +5730,7 @@ public final class MainActivity extends Activity {
         note("Ty nazywasz lokalizacje. Dom → Kuchnia → Szafka → "
             + "Półka to przykładowa ścieżka, nie narzucona lista. "
             + "Rodzaj jest opcjonalny; miejsce może mieć dowolną liczbę podmiejsc.");
+        button("⚡ Szybko dodaj miejsce", this::quickAddPlace);
         button("+ Dodaj miejsce główne", () ->
             placeEditor(null, "", "", null, "places"));
         java.util.List<PlaceEntry> entries = readPlaces();
@@ -5975,6 +5981,7 @@ public final class MainActivity extends Activity {
                             ? "PLACE_ADDED" : "PLACE_EDITED");
                         dialog.dismiss();
                         render();
+                        if(id!=null)refreshQuickStorageSetupStatus("place",id);
                     } catch (IllegalArgumentException error) {
                         alert(error.getMessage());
                     } catch (Exception error) {
@@ -6454,7 +6461,12 @@ public final class MainActivity extends Activity {
             button("⚡ Szybko dodaj rzecz", this::quickAddStorageThing);
             button("+ Dodaj rzecz", () -> storageEditor("thing", null));
         }
-        if(showBoxes)button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        if(showBoxes) {
+            button("⚡ Szybko dodaj pudełko", this::quickAddStorageBox);
+            button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        }
+        if(showPlaces)
+            button("⚡ Szybko dodaj miejsce", this::quickAddPlace);
         if (BetaUpdater.isBeta()) {
             button("▣ Drukuj wybrane etykiety QR / PDF",
                 this::selectBulkQrLabels);
@@ -6998,23 +7010,38 @@ public final class MainActivity extends Activity {
             throw new IllegalStateException("Nie zapisano miniatury.");
         DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
         render();
+        refreshQuickStorageSetupStatus("thing",id);
+        refreshQuickStorageSetupStatus("box",id);
     }
 
     private void quickAddStorageThing() {
+        quickAddStorageItem("thing");
+    }
+
+    private void quickAddStorageBox() {
+        quickAddStorageItem("box");
+    }
+
+    private void quickAddStorageItem(String kind) {
+        boolean box="box".equals(kind);
         LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18),dp(12),dp(18),dp(12));
         EditText name=new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Co to jest?");
+        name.setHint(box?"Nazwa pudełka":"Co to jest?");
         layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
-        TextView help=text("Po utworzeniu jednym kliknięciem dodasz zdjęcie, "
-            +"tag NFC rzeczy i wskażesz położenie tagiem pudełka lub miejsca.",13,false);
+        TextView help=text(box
+            ?"Po utworzeniu możesz po kolei dodać zdjęcie, NFC, QR i położenie. "
+                +"Każda czynność zapisuje się od razu; kończysz dopiero przyciskiem Gotowe."
+            :"Po utworzeniu możesz po kolei dodać zdjęcie, NFC, QR i położenie. "
+                +"Każda czynność zapisuje się od razu; kończysz dopiero przyciskiem Gotowe.",
+            13,false);
         help.setTextColor(subdued);
         layout.addView(help);
         lightDialogForm(layout);
         AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("⚡ Szybko dodaj rzecz")
+            .setTitle(box?"⚡ Szybko dodaj pudełko":"⚡ Szybko dodaj rzecz")
             .setView(layout)
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Utwórz",null)
@@ -7023,46 +7050,195 @@ public final class MainActivity extends Activity {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
                 try {
                     long id=StorageStore.create(db.getWritableDatabase(),
-                        name.getText().toString(),"thing",null,null);
-                    DiagnosticLog.event("STORAGE_QUICK_CREATED","id="+id);
+                        name.getText().toString(),kind,null,null);
+                    DiagnosticLog.event("STORAGE_QUICK_CREATED",
+                        "kind="+kind+" id="+id);
                     dialog.dismiss();
                     render();
-                    root.postDelayed(()->showQuickStorageThing(id),80L);
+                    root.postDelayed(()->showQuickStorageSetup(kind,id),80L);
                 } catch(Exception error) {
                     name.setError(error.getMessage()==null
-                        ?"Podaj nazwę rzeczy.":error.getMessage());
+                        ?"Podaj nazwę.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void quickAddPlace() {
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa miejsca");
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        TextView help=text("Najpierw tworzę miejsce główne. Potem w tym samym "
+            +"szybkim dodawaniu możesz przypisać NFC, otworzyć QR i ustawić "
+            +"miejsce nadrzędne ręcznie. Kończysz dopiero przyciskiem Gotowe.",
+            13,false);
+        help.setTextColor(subdued);
+        layout.addView(help);
+        lightDialogForm(layout);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("⚡ Szybko dodaj miejsce")
+            .setView(layout)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                String problem=PlaceRules.validateFields(value,"","places");
+                if(problem!=null) {
+                    name.setError(problem);
+                    return;
+                }
+                try {
+                    if(!db.savePlace(null,value,"",null,"places")) {
+                        name.setError("Takie miejsce już istnieje.");
+                        return;
+                    }
+                    long id=0L;
+                    try(Cursor c=db.getReadableDatabase().rawQuery(
+                            "SELECT id FROM places WHERE parent_id IS NULL "
+                                +"AND name=? COLLATE NOCASE ORDER BY id DESC LIMIT 1",
+                            new String[]{value})) {
+                        if(c.moveToFirst())id=c.getLong(0);
+                    }
+                    if(id<=0)throw new IllegalStateException(
+                        "Miejsce zapisano, ale nie udało się otworzyć jego konfiguracji.");
+                    DiagnosticLog.event("PLACE_QUICK_CREATED","id="+id);
+                    dialog.dismiss();
+                    render();
+                    final long createdId=id;
+                    root.postDelayed(()->showQuickStorageSetup("place",createdId),80L);
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie udało się dodać miejsca.":error.getMessage());
                 }
             }));
         dialog.show();
     }
 
     private void showQuickStorageThing(long id) {
+        showQuickStorageSetup("thing",id);
+    }
+
+    private String quickStorageSetupName(String kind,long id) {
+        if("place".equals(kind))
+            return NfcLinkStore.targetName(db.getReadableDatabase(),"place",id);
         StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
-        if(item==null)return;
+        return item==null?"":item.name;
+    }
+
+    private String quickStorageSetupStatusText(String kind,long id) {
+        String name=quickStorageSetupName(kind,id);
+        if(name.isEmpty())return "Obiekt już nie istnieje.";
+        NfcLinkStore.Link nfc=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),kind,id);
+        String nfcState=nfc==null?"NFC: nie przypisano"
+            :"NFC: "+NfcLinkStore.shortUid(nfc.uid);
+        if("place".equals(kind)) {
+            String path=name;
+            for(PlaceEntry place:readPlaces())
+                if(place.id==id) { path=db.placePath(place.id); break; }
+            return "Położenie: "+path+"\n"+nfcState+"\nQR: gotowy automatycznie";
+        }
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null)return "Obiekt już nie istnieje.";
+        boolean photo=prefs.contains(StorageThumbs.key(id));
+        return "Położenie: "
+            +StorageStore.location(db.getReadableDatabase(),item)
+                .replace(" / "," → ")
+            +"\nZdjęcie: "+(photo?"dodane":"brak")
+            +"\n"+nfcState
+            +"\nQR: gotowy automatycznie";
+    }
+
+    private void refreshQuickStorageSetupStatus(String kind,long id) {
+        if(quickStorageSetupDialog==null||!quickStorageSetupDialog.isShowing()
+                ||quickStorageSetupStatus==null
+                ||quickStorageSetupId!=id
+                ||quickStorageSetupKind==null
+                ||!quickStorageSetupKind.equals(kind))return;
+        quickStorageSetupStatus.setText(quickStorageSetupStatusText(kind,id));
+    }
+
+    private void showQuickStorageSetup(String kind,long id) {
+        String name=quickStorageSetupName(kind,id);
+        if(name.isEmpty())return;
+        if(quickStorageSetupDialog!=null&&quickStorageSetupDialog.isShowing())
+            quickStorageSetupDialog.dismiss();
+
+        quickStorageSetupKind=kind;
+        quickStorageSetupId=id;
         LinearLayout actions=new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(18),dp(10),dp(18),dp(10));
-        actions.addView(text(item.name,18,true));
-        TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
-            .replace(" / "," → "),13,false);
-        where.setTextColor(subdued);
-        actions.addView(where);
+        actions.addView(text(name,18,true));
+        quickStorageSetupStatus=text(
+            quickStorageSetupStatusText(kind,id),13,false);
+        quickStorageSetupStatus.setTextColor(subdued);
+        actions.addView(quickStorageSetupStatus);
+
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Szybkie dodawanie")
             .setView(actions)
             .setNegativeButton("Gotowe",null)
             .create();
-        smallButton(actions,"📷 Dodaj zdjęcie",()->{
-            dialog.dismiss();
-            selectStorageThumbnail(id);
-        });
-        smallButton(actions,"NFC • Przypisz tag rzeczy",()->{
-            dialog.dismiss();
-            beginNfcAssignment("thing",id,item.name);
-        });
-        smallButton(actions,"📍 Ustaw położenie • NFC / QR / lista",()->{
-            dialog.dismiss();
-            showStorageMoveOptions(item);
+        quickStorageSetupDialog=dialog;
+
+        if(!"place".equals(kind)) {
+            smallButton(actions,"📷 Dodaj / zmień zdjęcie",()->
+                selectStorageThumbnail(id));
+            smallButton(actions,"📍 Ustaw położenie • NFC / QR / lista",()->{
+                StorageStore.Item current=StorageStore.find(
+                    db.getReadableDatabase(),id);
+                if(current==null)alert("Obiekt już nie istnieje.");
+                else showStorageMoveOptions(current);
+            });
+        } else {
+            smallButton(actions,"📍 Ustaw nadrzędne ręcznie",()->{
+                PlaceEntry selected=null;
+                for(PlaceEntry place:readPlaces())
+                    if(place.id==id) { selected=place; break; }
+                if(selected==null) {
+                    alert("Miejsce już nie istnieje.");
+                    return;
+                }
+                placeEditor(selected.id,selected.name,selected.kind,
+                    selected.parent,selected.icon);
+            });
+        }
+
+        smallButton(actions,"NFC • Przypisz / zmień tag",()->
+            beginNfcAssignment(kind,id,name));
+
+        if("place".equals(kind)) {
+            smallButton(actions,"QR • Pokaż / etykieta",()->{
+                for(PlaceEntry place:readPlaces())
+                    if(place.id==id) {
+                        showPlaceQr(place);
+                        return;
+                    }
+                alert("Miejsce już nie istnieje.");
+            });
+        } else {
+            smallButton(actions,"QR • Pokaż / etykieta",()->{
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),id);
+                if(item==null)alert("Obiekt już nie istnieje.");
+                else showStorageQr(item);
+            });
+        }
+
+        dialog.setOnDismissListener(d->{
+            if(quickStorageSetupDialog==dialog) {
+                quickStorageSetupDialog=null;
+                quickStorageSetupStatus=null;
+                quickStorageSetupKind=null;
+                quickStorageSetupId=0L;
+            }
         });
         dialog.show();
     }
@@ -7565,6 +7741,7 @@ public final class MainActivity extends Activity {
         if(StorageStore.sameDestination(moving,nextBox,nextPlace)) {
             DiagnosticLog.event("STORAGE_LOCATION_NOOP",
                 "item="+itemId+" target="+targetKind+":"+targetId);
+            refreshQuickStorageSetupStatus(moving.kind,itemId);
             alert("Już znajduje się tutaj.");
             return true;
         }
@@ -7578,6 +7755,7 @@ public final class MainActivity extends Activity {
                     ?"STORAGE_LOCATION_SET_BY_NFC":"STORAGE_LOCATION_SET_BY_QR",
                 "item="+itemId+" target="+targetKind+":"+targetId);
             render();
+            refreshQuickStorageSetupStatus(moving.kind,itemId);
             if(moved!=null)alert("Położenie zapisane:\n"
                 +StorageStore.location(db.getReadableDatabase(),moved)
                     .replace(" / "," → "));
@@ -7660,6 +7838,8 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event(existing==null?
                         "STORAGE_CREATED":"STORAGE_MOVED");
                     render();
+                    if(existing!=null)
+                        refreshQuickStorageSetupStatus(existing.kind,existing.id);
                     if(existing==null) {
                         final long newId=createdId;
                         final String newName=createdName;
