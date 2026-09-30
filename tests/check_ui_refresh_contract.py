@@ -73,7 +73,7 @@ assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
-assert __import__("re").search(r"versionName '0\.(?:6|7)\.0\.\d+'", gradle) is not None
+assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+)\.\d+'", gradle) is not None
 settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
 assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
 assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
