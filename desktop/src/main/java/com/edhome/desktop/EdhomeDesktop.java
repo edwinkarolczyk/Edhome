@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.78";
+    private static final String DESKTOP_VERSION = "0.7.0.79";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -3269,137 +3269,73 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JComponent settings() {
-        JPanel page = page("Ustawienia • połączenie z telefonem");
+        // Ustawienia mają być operacyjne, nie serwisowym pulpitem.
+        // Połączenie, diagnostyka i komplet logów są jedynymi akcjami
+        // potrzebnymi użytkownikowi na co dzień.
+        PREFS.putBoolean("autoConnect", true);
+        PREFS.putBoolean("autoWrite", true);
 
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(APP_BG);
-        GridBagConstraints g = new GridBagConstraints();
-        g.insets = new Insets(6, 6, 6, 6);
-        g.fill = GridBagConstraints.HORIZONTAL;
+        JPanel page = page("Ustawienia • telefon i diagnostyka");
 
-        JTextField ip = new JTextField(PREFS.get("phoneIp", ""), 18);
-        JTextField token = new JTextField(PREFS.get("token", ""), 18);
-        JButton qrPair = new JButton("Pokaż QR do połączenia");
-        JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
-        JButton diagnose = new JButton("Diagnostyka połączenia PC ↔ telefon");
-        JButton downloadAllLogs = new JButton("⬇ Pobierz logi telefonu + Desktop na Pulpit");
-        JButton downloadPhoneLogs = new JButton("Pobierz nowe logi z telefonu");
-        JButton copyDesktopLogs = new JButton("Kopiuj diagnostykę EDHOME Desktop");
-        JButton saveDesktopLogs = new JButton("Zapisz diagnostykę Desktop TXT");
-        JButton importFile = new JButton("Wczytaj backup JSON");
-        JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
-        JCheckBox autostart = new JCheckBox("Uruchamiaj EDHOME Desktop razem z Windows");
-        autostart.setOpaque(false);
-        autostart.setForeground(APP_TEXT);
-        autostart.setSelected(isAutostartEnabled());
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBackground(APP_BG);
 
-        JCheckBox startMinimized = new JCheckBox("Po starcie Windows uruchamiaj zminimalizowany do zasobnika");
-        startMinimized.setOpaque(false);
-        startMinimized.setForeground(APP_TEXT);
-        startMinimized.setSelected(PREFS.getBoolean("startMinimized", false));
+        JPanel statusCard = new RoundedPanel(APP_SURFACE, 20);
+        statusCard.setLayout(new BoxLayout(statusCard, BoxLayout.Y_AXIS));
+        statusCard.setBorder(new EmptyBorder(16, 18, 16, 18));
+        JLabel title = new JLabel("Połączenie EDHOME");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+        statusCard.add(title);
+        statusCard.add(Box.createVerticalStrut(6));
 
-        JCheckBox autoConnect = new JCheckBox("Automatycznie pobieraj zmiany z telefonu w tle");
-        autoConnect.setOpaque(false);
-        autoConnect.setForeground(APP_TEXT);
-        autoConnect.setSelected(PREFS.getBoolean("autoConnect", true));
+        String savedHost = PREFS.get("phoneIp", "").trim();
+        String savedToken = PREFS.get("token", "").trim();
+        String stateText;
+        if (savedHost.isBlank() || savedToken.isBlank())
+            stateText = "Nie sparowano telefonu • użyj kodu QR";
+        else if (connected)
+            stateText = "ONLINE • telefon połączony • " + savedHost + ":" + PORT;
+        else
+            stateText = "OFFLINE • sparowano • " + savedHost + ":" + PORT;
+        JLabel pairState = new JLabel(stateText);
+        pairState.setForeground(connected ? APP_ACCENT : APP_MUTED);
+        statusCard.add(pairState);
+        content.add(statusCard);
+        content.add(Box.createVerticalStrut(12));
 
-        JCheckBox autoWrite = new JCheckBox("Automatycznie zapisuj zmiany z PC do telefonu");
-        autoWrite.setOpaque(false);
-        autoWrite.setForeground(APP_TEXT);
-        autoWrite.setSelected(PREFS.getBoolean("autoWrite", true));
-        JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
-            + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
-            + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
-            + "Adres i kod poniżej zostają jako awaryjne połączenie ręczne.</html>");
+        JPanel actions = new JPanel(new GridLayout(3, 1, 0, 8));
+        actions.setBackground(APP_BG);
+        JButton qrPair = actionButton("Połącz telefon przez QR");
+        JButton diagnose = actionButton("Sprawdź połączenie PC ↔ telefon");
+        JButton downloadAllLogs =
+            actionButton("Pobierz logi telefonu + Desktop na Pulpit");
+        actions.add(qrPair);
+        actions.add(diagnose);
+        actions.add(downloadAllLogs);
+        content.add(actions);
+        content.add(Box.createVerticalStrut(12));
+
+        JLabel help = new JLabel(
+            "<html><b>Połączenie:</b> PC i telefon muszą być w tej samej sieci "
+          + "Wi‑Fi/LAN. Kliknij „Połącz telefon przez QR”, a w EDHOME Android "
+          + "zeskanuj kod z ekranu komputera.<br><br>"
+          + "<b>Logi:</b> jednym kliknięciem zapisujesz diagnostykę Desktopu "
+          + "oraz nowe logi telefonu na Pulpicie. Log telefonu jest usuwany "
+          + "z aplikacji dopiero po potwierdzonym zapisie na PC.</html>");
         help.setForeground(APP_MUTED);
+        content.add(help);
 
-        g.gridx=0; g.gridy=0; g.weightx=0; form.add(new JLabel("Adres telefonu:"),g);
-        g.gridx=1; g.weightx=1; form.add(ip,g);
-        g.gridx=0; g.gridy=1; g.weightx=0; form.add(new JLabel("Kod parowania:"),g);
-        g.gridx=1; g.weightx=1; form.add(token,g);
-        g.gridx=0; g.gridy=2; g.gridwidth=2; g.weightx=1; form.add(help,g);
-        g.gridy=3; g.gridwidth=2; form.add(qrPair,g);
-        g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
-        g.gridx=1; form.add(importFile,g);
-        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(diagnose,g);
-        g.gridy=6; form.add(downloadAllLogs,g);
-        g.gridy=7; g.gridwidth=1; g.weightx=.5; form.add(downloadPhoneLogs,g);
-        g.gridx=1; form.add(saveDesktopLogs,g);
-        g.gridx=0; g.gridy=8; g.gridwidth=2; g.weightx=1; form.add(copyDesktopLogs,g);
-        g.gridy=9; form.add(updateDesktop,g);
-        g.gridy=10; form.add(autostart,g);
-        g.gridy=11; form.add(startMinimized,g);
-        g.gridy=12; form.add(autoConnect,g);
-        g.gridy=13; form.add(autoWrite,g);
+        qrPair.addActionListener(e -> showQrPairing(pairState, qrPair));
+        diagnose.addActionListener(e -> diagnosePhoneConnection(
+            PREFS.get("phoneIp", "").trim(),
+            PREFS.get("token", "").trim(), diagnose));
+        downloadAllLogs.addActionListener(e -> saveAllDiagnosticsToDesktop(
+            PREFS.get("phoneIp", "").trim(),
+            PREFS.get("token", "").trim(), downloadAllLogs));
 
-        qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
-        pull.addActionListener(e -> {
-            String host = ip.getText().trim();
-            String secret = token.getText().trim();
-            if (host.isBlank() || secret.isBlank()) {
-                JOptionPane.showMessageDialog(this, "Wpisz adres telefonu i kod parowania.");
-                return;
-            }
-            pullFromPhone(host, secret, pull);
-        });
-
-        diagnose.addActionListener(e ->
-            diagnosePhoneConnection(ip.getText().trim(),
-                token.getText().trim(), diagnose));
-        downloadAllLogs.addActionListener(e ->
-            saveAllDiagnosticsToDesktop(ip.getText().trim(),
-                token.getText().trim(), downloadAllLogs));
-        downloadPhoneLogs.addActionListener(e ->
-            downloadPhoneDiagnostics(ip.getText().trim(),
-                token.getText().trim(), downloadPhoneLogs));
-        copyDesktopLogs.addActionListener(e -> copyDesktopDiagnostics());
-        saveDesktopLogs.addActionListener(e -> saveDesktopDiagnostics());
-        importFile.addActionListener(e -> importBackup());
-        updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
-        autostart.addActionListener(e -> {
-            boolean wanted = autostart.isSelected();
-            try {
-                setAutostartEnabled(wanted);
-                autostart.setSelected(isAutostartEnabled());
-            } catch (Exception error) {
-                autostart.setSelected(!wanted);
-                JOptionPane.showMessageDialog(this,
-                    "Nie udało się zmienić autostartu Windows:\n" + rootMessage(error),
-                    "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-        startMinimized.addActionListener(e ->
-            PREFS.putBoolean("startMinimized", startMinimized.isSelected()));
-        autoConnect.addActionListener(e -> {
-            PREFS.putBoolean("autoConnect", autoConnect.isSelected());
-            if (autoConnect.isSelected()) autoConnectSaved(true);
-        });
-        autoWrite.addActionListener(e -> {
-            PREFS.putBoolean("autoWrite", autoWrite.isSelected());
-            if (autoWrite.isSelected() && dirty) scheduleAutoSave();
-        });
-
-        page.add(form, BorderLayout.NORTH);
-        JTextArea notes = new JTextArea(
-            "Połączenie QR jest jednorazowo potwierdzane losowym kodem i działa tylko w sieci lokalnej.\n"
-          + "Po zeskanowaniu Desktop zapisuje adres telefonu oraz kod lokalnego odczytu i od razu pobiera dane.\n\n"
-          + "Automatyczna wymiana działa w obie strony: telefon → PC jest odświeżany w tle, "
-          + "a zmiany wykonane na PC są automatycznie zapisywane do telefonu po krótkiej chwili.\n"
-          + "Zapis nadal używa kontroli wersji SHA-256 — przy równoczesnej zmianie tych samych danych "
-          + "Desktop nie nadpisze telefonu po cichu.\n\n"
-          + "Kolejny etap:\n"
-          + "• synchronizacja przyrostowa rekordów zamiast pełnego snapshotu,\n"
-          + "• kolejne operacje modułowe poza już dodanym CRUD zadań, zakupów, magazynu i miejsc,\n"
-          + "• pełna zgodność funkcji Android ↔ Desktop.\n"
-          + "Pulpit pokazuje zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
-          + "Autostart Windows, zasobnik i automatyczne ponowne wykrywanie telefonu po zmianie IP (DHCP) pozostają aktywne.");
-        notes.setBackground(APP_BG);
-        notes.setForeground(APP_MUTED);
-        notes.setEditable(false);
-        notes.setLineWrap(true);
-        notes.setWrapStyleWord(true);
-        notes.setBorder(new EmptyBorder(20, 4, 4, 4));
-        page.add(notes, BorderLayout.CENTER);
+        page.add(content, BorderLayout.NORTH);
         return page;
     }
 
@@ -3490,13 +3426,28 @@ public final class EdhomeDesktop extends JFrame {
                 }
 
                 PhoneDiagnosticsResult phone;
+                String phoneHost = rawHost;
                 try {
-                    phone = new LanClient(rawHost, PORT, secret).diagnostics();
-                } catch (Exception error) {
-                    DesktopDiagnosticLog.error("PHONE_DIAGNOSTICS_DOWNLOAD", error);
-                    summary.append("\n\nTelefon: nie pobrano logów — ")
-                        .append(rootMessage(error));
-                    return summary.toString();
+                    phone = new LanClient(phoneHost, PORT, secret).diagnostics();
+                } catch (Exception first) {
+                    String discovered = LanClient.discover(secret, PORT);
+                    if (discovered == null) {
+                        DesktopDiagnosticLog.error("PHONE_DIAGNOSTICS_DOWNLOAD", first);
+                        summary.append("\n\nTelefon: nie pobrano logów — ")
+                            .append(rootMessage(first));
+                        return summary.toString();
+                    }
+                    phoneHost = discovered;
+                    PREFS.put("phoneIp", discovered);
+                    try {
+                        phone = new LanClient(phoneHost, PORT, secret).diagnostics();
+                    } catch (Exception retry) {
+                        DesktopDiagnosticLog.error(
+                            "PHONE_DIAGNOSTICS_DOWNLOAD", retry);
+                        summary.append("\n\nTelefon: nie pobrano logów — ")
+                            .append(rootMessage(retry));
+                        return summary.toString();
+                    }
                 }
 
                 if (phone == null) {
@@ -3522,7 +3473,7 @@ public final class EdhomeDesktop extends JFrame {
                 summary.append("\n").append(phoneTarget.getFileName());
 
                 try {
-                    boolean cleared = new LanClient(rawHost, PORT, secret)
+                    boolean cleared = new LanClient(phoneHost, PORT, secret)
                         .ackDiagnostics(phone.id);
                     DesktopDiagnosticLog.event(
                         cleared ? "PHONE_DIAGNOSTICS_CLEARED"
@@ -3632,9 +3583,10 @@ public final class EdhomeDesktop extends JFrame {
 
     private void diagnosePhoneConnection(String rawHost, String secret,
             JButton trigger) {
-        if (rawHost == null || rawHost.isBlank()) {
+        if (rawHost == null || rawHost.isBlank()
+                || secret == null || secret.isBlank()) {
             JOptionPane.showMessageDialog(this,
-                "Wpisz adres telefonu z EDHOME Android.");
+                "Telefon nie jest jeszcze sparowany. Połącz go najpierw przez QR.");
             return;
         }
         trigger.setEnabled(false);
@@ -3979,27 +3931,34 @@ public final class EdhomeDesktop extends JFrame {
         System.exit(0);
     }
 
-    private void showQrPairing(JTextField ip, JTextField token, JButton pull) {
+    private void showQrPairing(JLabel pairState, JButton trigger) {
         if (qrPairingSession != null) {
             qrPairingSession.close();
             qrPairingSession = null;
         }
         final JDialog[] dialog = new JDialog[1];
         final JLabel status = new JLabel("Czekam na skan z telefonu…");
+        if (trigger != null) trigger.setEnabled(false);
         try {
             QrPairingSession session = QrPairingSession.start(payload ->
                 SwingUtilities.invokeLater(() -> {
-                    ip.setText(payload.phoneIp);
-                    token.setText(payload.token);
                     PREFS.put("phoneIp", payload.phoneIp);
                     PREFS.put("token", payload.token);
+                    PREFS.putBoolean("autoConnect", true);
+                    PREFS.putBoolean("autoWrite", true);
+                    pairState.setText("Połączono z Androidem " + payload.version
+                        + " • " + payload.phoneIp + ":" + PORT);
+                    pairState.setForeground(APP_ACCENT);
                     status.setText("Połączono z Androidem " + payload.version + ".");
+                    DesktopDiagnosticLog.event("QR_PAIRING_OK",
+                        "host=" + payload.phoneIp + " android=" + payload.version);
                     if (dialog[0] != null) dialog[0].dispose();
                     if (qrPairingSession != null) {
                         qrPairingSession.close();
                         qrPairingSession = null;
                     }
-                    pullFromPhone(payload.phoneIp, payload.token, pull);
+                    if (trigger != null) trigger.setEnabled(true);
+                    pullFromPhone(payload.phoneIp, payload.token, null);
                 }));
             qrPairingSession = session;
 
@@ -4009,13 +3968,17 @@ public final class EdhomeDesktop extends JFrame {
 
             JPanel body = new JPanel(new BorderLayout(10, 10));
             body.setBorder(new EmptyBorder(14, 18, 14, 18));
-            JLabel instructions = new JLabel("<html><b>Na telefonie:</b> EDHOME → Ustawienia "
-                + "→ Skanuj QR z ekranu PC.<br>QR wygasa po 3 minutach i działa wyłącznie w LAN.</html>");
+            JLabel instructions = new JLabel(
+                "<html><b>Na telefonie:</b> EDHOME → Ustawienia "
+              + "→ Skanuj QR z ekranu PC.<br>"
+              + "QR wygasa po 3 minutach i działa wyłącznie w sieci lokalnej."
+              + "</html>");
             body.add(instructions, BorderLayout.NORTH);
             body.add(qr, BorderLayout.CENTER);
             body.add(status, BorderLayout.SOUTH);
 
-            JDialog window = new JDialog(this, "EDHOME • połącz telefon przez QR", false);
+            JDialog window = new JDialog(this,
+                "EDHOME • połącz telefon przez QR", false);
             dialog[0] = window;
             window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
             window.setContentPane(body);
@@ -4028,10 +3991,13 @@ public final class EdhomeDesktop extends JFrame {
                         qrPairingSession.close();
                         qrPairingSession = null;
                     }
+                    if (trigger != null) trigger.setEnabled(true);
                 }
             });
             window.setVisible(true);
         } catch (Exception ex) {
+            if (trigger != null) trigger.setEnabled(true);
+            DesktopDiagnosticLog.error("QR_PAIRING_START", ex);
             JOptionPane.showMessageDialog(this,
                 "Nie można przygotować QR do połączenia:\n" + rootMessage(ex)
                     + "\nSprawdź, czy PC jest połączony z tą samą siecią co telefon.",

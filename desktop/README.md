@@ -42,7 +42,9 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.7.0.78
+## Aktualny stan Desktop — 0.7.0.79
+
+Ustawienia Desktop są celowo uproszczone do trzech codziennych operacji: połączenie telefonu przez QR, sprawdzenie połączenia PC ↔ telefon oraz pobranie logów telefonu + Desktop na Pulpit. Dane adresu i token parowania pozostają zapisane wewnętrznie; użytkownik nie musi ich ręcznie edytować. Automatyczna synchronizacja w obie strony pozostaje aktywna.
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,
