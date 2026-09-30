@@ -61,7 +61,8 @@ assert 'settingsStorageAction(boxActions,"box","nfc","NFC")' in s
 assert 'settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca")' in s
 assert 'STORAGE_GALLERY_PREF = "storage_gallery_enabled"' in s
 assert 'private void storageThingsGallery(java.util.List<StorageStore.Item> items)' in s
-assert 'if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))' in ui
+assert 'if("thing".equals(storageTemporaryKind)) {' in ui
+assert 'storageThingsGallery(items);\n            return;' in ui
 assert 'title("Rzeczy")' in ui
 assert 'missing.setContentDescription("Brak zdjęcia");' in ui
 assert 'StorageThumbs.read(prefs,item.id)' in ui
