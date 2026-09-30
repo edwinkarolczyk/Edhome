@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """EDHOME Desktop approved-scope regression contract."""
 from pathlib import Path
+import re
 
 root = Path(__file__).resolve().parents[1]
 desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").read_text(encoding="utf-8")
@@ -15,6 +16,17 @@ budget_doc = (root / "desktop/src/main/java/com/edhome/desktop/DesktopBudgetDocu
 merchant_rules = (root / "desktop/src/main/java/com/edhome/desktop/DesktopMerchantRules.java").read_text(encoding="utf-8")
 gradle = (root / "desktop/build.gradle").read_text(encoding="utf-8")
 readme = (root / "desktop/README.md").read_text(encoding="utf-8")
+workflow = (root / ".github/workflows/desktop-beta.yml").read_text(encoding="utf-8")
+
+# One Desktop version everywhere: runtime, Gradle metadata and Windows package.
+runtime_version = re.search(r'DESKTOP_VERSION = "([^"]+)"', desktop).group(1)
+gradle_version = re.search(r"version = '([^']+)'", gradle).group(1)
+workflow_version = re.search(r'DESKTOP_VERSION: "([^"]+)"', workflow).group(1)
+assert runtime_version == gradle_version == workflow_version, (
+    runtime_version, gradle_version, workflow_version
+)
+assert f"## Aktualny stan Desktop — {runtime_version}" in readme
+print("EDHOME Desktop version metadata: PASS")
 
 # QR printing + exact approved formats + custom labels.
 for marker in (
