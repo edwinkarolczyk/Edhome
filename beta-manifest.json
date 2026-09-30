@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 141,
-  "versionName": "0.7.4.0",
+  "versionCode": 142,
+  "versionName": "0.7.4.1",
   "changelog": "EDHOME 0.7.4.0 — kandydat odbiorczy Ogrodu. Zawiera fundament 0.7.0, cykl i historię 0.7.1, szybkie czynności i wspólny Kalendarz/powiadomienia 0.7.2 oraz historię plonów i podgląd Desktop z 0.7.3. CI sprawdza migrację z 0.6, backup, integrację LAN i brak osobnego systemu przypomnień. Do zamknięcia 0.7 pozostaje test na fizycznym telefonie i PC. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.0/edhome-beta.apk",
-  "sha256": "3ecafe326329d9aea44651e5ce0bfb31ef01cc1a94eaf7c2e1883a83a92bcb88"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.1/edhome-beta.apk",
+  "sha256": "82d6a61ab9af7fc64499c445933d13ae3c34f731359205134a5e59e100871159"
 }
