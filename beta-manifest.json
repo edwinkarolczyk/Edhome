@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 140,
-  "versionName": "0.7.3.0",
-  "changelog": "EDHOME 0.7.3.0 — Ogród: pełny dotychczasowy cykl uprawy, szybkie powtarzalne czynności pielęgnacyjne, wspólny Kalendarz/powiadomienia oraz historia plonów sezon po sezonie. Dodano ochronę przed podwójnym zapisem identycznego etapu i identycznego zbioru. Import/eksport katalogu CSV, SQLite v38, backup i LAN pozostają wspólne. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.3.0/edhome-beta.apk",
-  "sha256": "6f500a478c0c6aa5e763dc4e80489624ff76cfa3596e7b67f4f03af0ad9eaa82"
+  "versionCode": 141,
+  "versionName": "0.7.4.0",
+  "changelog": "EDHOME 0.7.4.0 — kandydat odbiorczy Ogrodu. Zawiera fundament 0.7.0, cykl i historię 0.7.1, szybkie czynności i wspólny Kalendarz/powiadomienia 0.7.2 oraz historię plonów i podgląd Desktop z 0.7.3. CI sprawdza migrację z 0.6, backup, integrację LAN i brak osobnego systemu przypomnień. Do zamknięcia 0.7 pozostaje test na fizycznym telefonie i PC. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.0/edhome-beta.apk",
+  "sha256": "3ecafe326329d9aea44651e5ce0bfb31ef01cc1a94eaf7c2e1883a83a92bcb88"
 }
