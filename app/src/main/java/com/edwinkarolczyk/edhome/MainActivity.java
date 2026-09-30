@@ -4170,6 +4170,7 @@ public final class MainActivity extends Activity {
         LinearLayout links=compactActionRow();
         compactAction(links,"▦ Kalendarz",()->go("calendar"));
         compactAction(links,"✓ Czynności",()->{tasksFilter="all";go("tasks");});
+        compactAction(links,"▥ Plony",this::gardenSeasonReport);
         compactAction(links,"≡ Katalog",this::gardenCatalogInfo);
 
         LinearLayout summary=card();
@@ -4742,6 +4743,26 @@ public final class MainActivity extends Activity {
                         ?"Nie udało się zapisać terminów Ogrodu.":e.getMessage());
                 }
             }).show();
+    }
+
+    private void gardenSeasonReport() {
+        String report=GardenStore.seasonReport(db.getReadableDatabase());
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18),dp(12),dp(18),dp(12));
+        box.addView(text("Porównanie zapisanych plonów sezon po sezonie. "
+            +"EDHOME nie przelicza automatycznie kg na sztuki ani nie zgaduje "
+            +"brakujących danych.",13,false));
+        TextView details=text(report,14,false);
+        details.setTextIsSelectable(true);
+        box.addView(details);
+        scroll.addView(box);
+        new AlertDialog.Builder(this)
+            .setTitle("Ogród • historia plonów")
+            .setView(scroll)
+            .setPositiveButton("Zamknij",null)
+            .show();
     }
 
     private void gardenCatalogInfo() {
