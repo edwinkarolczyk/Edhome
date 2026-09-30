@@ -38,6 +38,8 @@ for token in (
     'gardenHistoryDialog(',
     'gardenActivityDialog(',
     'GardenStore.createActivityTask(',
+    'gardenSeasonReport(',
+    'GardenStore.seasonReport(',
 ):
     assert token in main, token
 
@@ -56,6 +58,7 @@ assert "static long parseQuantityMilli(" in store
 assert "static String harvestSummary(" in store
 assert "static long createActivityTask(" in store
 assert "static int activeActivityTaskCount(" in store
+assert "static String seasonReport(" in store
 assert '"garden:"+plantingId+":"+cleanKind' in store
 assert "static int importCatalogCsv(" in store
 assert "static String exportCatalogCsv(" in store
@@ -72,4 +75,4 @@ assert '{"garden_task_links", "id", "planting_id", "stage", "task_id", "created_
 assert '{"garden_events", "id", "planting_id", "event_kind", "event_date", "note",' in backup
 assert '{"garden_harvests", "id", "planting_id", "harvested_on", "quantity_milli",' in backup
 assert "private static final int DB_VERSION = 38;" in backup
-print("Garden 0.7: catalog + crop cycle + shared recurring care tasks/calendar/reminders PASS")
+print("Garden 0.7: catalog + crop cycle + recurring care tasks + season yield report PASS")
