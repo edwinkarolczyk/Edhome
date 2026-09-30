@@ -37,7 +37,9 @@ assert 'boolean showPlaces=storagePlacesVisible();' in ui
 assert 'if(showThings) {' in ui
 assert 'button("⚡ Szybko dodaj rzecz", this::quickAddStorageThing);' in ui
 assert 'button("+ Dodaj rzecz", () -> storageEditor("thing", null));' in ui
-assert 'if(showBoxes)button("+ Dodaj pudełko"' in ui
+assert 'button("⚡ Szybko dodaj pudełko", this::quickAddStorageBox);' in ui
+assert 'button("+ Dodaj pudełko", () -> storageEditor("box", null));' in ui
+assert 'button("⚡ Szybko dodaj miejsce", this::quickAddPlace);' in ui
 assert 'if(showPlaces)button("← Miejsca"' in ui
 assert 'boolean visible=storagePlacesVisible();' in ui
 assert 'boolean visible=isBox?storageBoxesVisible():storageThingsVisible();' in ui
