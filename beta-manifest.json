@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 137,
-  "versionName": "0.7.0.1",
-  "changelog": "EDHOME 0.7.0.1 — start modułu Ogród: offline obszary, własne rośliny i nasadzenia, osobny katalog referencyjny z warstwą korekt, backup i synchronizacja LAN. Powiadomienie EDHOME Desktop nie jest już ponawiane przy niezmienionym stanie. Zachowano regulowane strony Start 6/9/12. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.0.1/edhome-beta.apk",
-  "sha256": "34f7e520562683dab7bd899baa4785d7bde03c16697fdba9b7ad28b936f6fe52"
+  "versionCode": 139,
+  "versionName": "0.7.2.0",
+  "changelog": "EDHOME 0.7.2.0 — Ogród: cykl uprawy i historia sezonów z 0.7.1 oraz szybkie czynności pielęgnacyjne bezpośrednio z nasadzenia: podlewanie, nawożenie, przycinanie, przygotowanie gleby, ochrona/oprysk i własna czynność. Obsługują terminy, cykle sezonowe i powtarzalne oraz powiadomienia przez wspólny silnik Czynności/Kalendarza. SQLite v38, backup i LAN pozostają wspólne. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.2.0/edhome-beta.apk",
+  "sha256": "fef423ed21ca86001e8f727a120fe93effc2b16e630759d3275cf45893c4874b"
 }
