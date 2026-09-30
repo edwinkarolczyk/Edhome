@@ -145,6 +145,8 @@ final class DataBackup {
             HomeTileLayout.SHORT_KEY, HomeTileLayout.DEFAULT_SHORT_MS));
         settings.put("homeTileDragHoldMs", prefs.getInt(
             HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
+        settings.put("homeTilePageSlots", HomeTileLayout.pageSlots(prefs.getInt(
+            HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS)));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
         // Include user-selected small storage photos in the portable JSON backup.
@@ -273,6 +275,15 @@ final class DataBackup {
             HomeTileLayout.DEFAULT_SHORT_MS);
         int dragHoldMs = settings.optInt("homeTileDragHoldMs",
             HomeTileLayout.DEFAULT_DRAG_MS);
+        int pageSlots = settings.optInt("homeTilePageSlots",
+            HomeTileLayout.DEFAULT_PAGE_SLOTS);
+        if (settings.has("homeTilePageSlots")
+                && (!(settings.get("homeTilePageSlots") instanceof Number)
+                    || ((Number) settings.get("homeTilePageSlots"))
+                        .doubleValue() != pageSlots)
+                || !HomeTileLayout.validPageSlots(pageSlots))
+            throw new IllegalArgumentException(
+                "Nieprawidłowa liczba miejsc kafelków na stronie.");
         if ((settings.has("homeTileShortHoldMs")
                 && (!(settings.get("homeTileShortHoldMs") instanceof Number)
                     || ((Number) settings.get("homeTileShortHoldMs"))
@@ -1430,6 +1441,7 @@ final class DataBackup {
                 .putString(StorageQrLabels.HISTORY, qrHistory)
                 .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
                 .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
+                .putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
