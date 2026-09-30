@@ -113,6 +113,8 @@ public final class MainActivity extends Activity {
     private TextView quickStorageSetupStatus;
     private String quickStorageSetupKind;
     private long quickStorageSetupId;
+    private String suppressedNfcUid;
+    private long suppressedNfcUntilElapsed;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -473,6 +475,10 @@ public final class MainActivity extends Activity {
 
     private void handleNfcUid(String uid) {
         if(!unlocked)return;
+        if(consumeSuppressedNfcRepeat(uid)) {
+            DiagnosticLog.event("NFC_REPEAT_IGNORED");
+            return;
+        }
         try {
             NfcLinkStore.Link current=NfcLinkStore.findByUid(
                 db.getReadableDatabase(),uid);
@@ -530,9 +536,35 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void suppressNfcRepeat(String uid) {
+        if(uid==null||uid.isEmpty())return;
+        suppressedNfcUid=uid;
+        suppressedNfcUntilElapsed=android.os.SystemClock.elapsedRealtime()+1800L;
+    }
+
+    private boolean consumeSuppressedNfcRepeat(String uid) {
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(suppressedNfcUid==null)return false;
+        if(now>=suppressedNfcUntilElapsed) {
+            suppressedNfcUid=null;
+            suppressedNfcUntilElapsed=0L;
+            return false;
+        }
+        return suppressedNfcUid.equals(uid);
+    }
+
+    private boolean isQuickStorageSetupTarget(String kind,long id) {
+        return quickStorageSetupDialog!=null
+            &&quickStorageSetupDialog.isShowing()
+            &&quickStorageSetupKind!=null
+            &&quickStorageSetupKind.equals(kind)
+            &&quickStorageSetupId==id;
+    }
+
     private void finishNfcAssignment(PendingNfcTarget target,String uid) {
         try {
             NfcLinkStore.bind(db.getWritableDatabase(),uid,target.kind,target.id);
+            suppressNfcRepeat(uid);
             pendingNfcTarget=null;
             refreshNfcReaderMode();
             if(nfcAssignmentDialog!=null) {
@@ -542,8 +574,9 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("NFC_TAG_ASSIGNED");
             render();
             refreshQuickStorageSetupStatus(target.kind,target.id);
-            alert("NFC przypisany\n"+target.name+"\nUID: "
-                +NfcLinkStore.shortUid(uid));
+            if(!isQuickStorageSetupTarget(target.kind,target.id))
+                alert("NFC przypisany\n"+target.name+"\nUID: "
+                    +NfcLinkStore.shortUid(uid));
         } catch(Exception error) {
             DiagnosticLog.error("NFC_ASSIGN",error);
             alert(error.getMessage()==null?"Nie zapisano NFC.":error.getMessage());
@@ -7532,6 +7565,7 @@ public final class MainActivity extends Activity {
             alert("Ten tag NFC nie jest przypisany do rzeczy ani pudełka.");
             return;
         }
+        suppressNfcRepeat(uid);
         handleStorageDropSource(current.kind,current.targetId,"nfc");
     }
 
@@ -7698,6 +7732,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if(!applyStorageDestination(itemId,current.kind,current.targetId,"nfc"))return;
+        suppressNfcRepeat(uid);
         pendingStorageDestinationItemId=null;
         if(storageDestinationNfcDialog!=null) {
             storageDestinationNfcDialog.dismiss();
@@ -7742,7 +7777,8 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("STORAGE_LOCATION_NOOP",
                 "item="+itemId+" target="+targetKind+":"+targetId);
             refreshQuickStorageSetupStatus(moving.kind,itemId);
-            alert("Już znajduje się tutaj.");
+            if(!isQuickStorageSetupTarget(moving.kind,itemId))
+                alert("Już znajduje się tutaj.");
             return true;
         }
         try {
@@ -7756,9 +7792,10 @@ public final class MainActivity extends Activity {
                 "item="+itemId+" target="+targetKind+":"+targetId);
             render();
             refreshQuickStorageSetupStatus(moving.kind,itemId);
-            if(moved!=null)alert("Położenie zapisane:\n"
-                +StorageStore.location(db.getReadableDatabase(),moved)
-                    .replace(" / "," → "));
+            if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId))
+                alert("Położenie zapisane:\n"
+                    +StorageStore.location(db.getReadableDatabase(),moved)
+                        .replace(" / "," → "));
             return true;
         } catch(Exception error) {
             DiagnosticLog.error("STORAGE_LOCATION_MOVE",error);

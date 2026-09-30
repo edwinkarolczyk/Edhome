@@ -132,3 +132,20 @@ assert 'dialog.dismiss();\n            beginNfcAssignment' not in quick
 assert 'setNegativeButton("Gotowe",null)' in quick
 
 print("OK: quick add stays open for Thing/Box/Place until explicit Gotowe")
+
+# Ten sam tag pozostający przy telefonie po przypisaniu nie może od razu otworzyć obiektu.
+for marker in (
+    'suppressedNfcUid',
+    'suppressedNfcUntilElapsed',
+    'consumeSuppressedNfcRepeat(uid)',
+    'NFC_REPEAT_IGNORED',
+    'suppressNfcRepeat(uid)',
+    'isQuickStorageSetupTarget',
+):
+    assert marker in main, f"Missing NFC quick-flow debounce: {marker}"
+
+# W szybkim kreatorze sukces NFC/lokalizacji aktualizuje status bez modalnego OK.
+assert 'if(!isQuickStorageSetupTarget(target.kind,target.id))' in main
+assert 'if(!isQuickStorageSetupTarget(moving.kind,itemId))' in main
+assert 'if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId))' in main
+print("OK: quick setup NFC debounce + non-modal progress")
