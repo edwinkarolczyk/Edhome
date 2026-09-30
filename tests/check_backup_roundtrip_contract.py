@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==38
+assert len(manifest)==40
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -95,4 +95,4 @@ assert restore.index("if (!restored.commit())")<restore.index(
 assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
 assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
 assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 38 domain tables including Garden, NFC links and bank evidence queue; numeric/nullability, JSON roundtrip and rollback PASS")
+print("Backup: 40 domain tables including Garden season history/harvests, NFC links and bank evidence queue; numeric/nullability, JSON roundtrip and rollback PASS")
