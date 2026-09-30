@@ -103,7 +103,7 @@ final class DataBackup {
         {"garden_plantings", "id", "area_id", "catalog_id", "custom_plant_id",
             "label", "status", "planned_sow", "actual_sow", "planned_plant",
             "actual_plant", "planned_harvest", "actual_harvest", "notes", "created_at"},
-        {"garden_task_links", "id", "planting_id", "task_id", "created_at"}
+        {"garden_task_links", "id", "planting_id", "stage", "task_id", "created_at"}
     };
 
     private DataBackup() { }
