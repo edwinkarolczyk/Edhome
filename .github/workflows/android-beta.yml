@@ -370,6 +370,8 @@ jobs:
             com.edwinkarolczyk.edhome.GardenCatalogCsvSmoke
       - name: Garden 0.7 foundation contract
         run: python3 tests/check_garden_contract.py
+      - name: Garden 0.7 code-side acceptance gate
+        run: python3 tests/check_garden_release_gate.py
       - name: Desktop Wi-Fi read-only sync contract
         run: python3 tests/check_desktop_sync_contract.py
       - name: Compile-check Beta and Stable
@@ -432,14 +434,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.7.3.0-signed-apk
+          name: EDHOME-0.7.4.0-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.7.3.0 — Ogród: pełny dotychczasowy cykl uprawy, szybkie powtarzalne czynności pielęgnacyjne, wspólny Kalendarz/powiadomienia oraz historia plonów sezon po sezonie. Dodano ochronę przed podwójnym zapisem identycznego etapu i identycznego zbioru. Import/eksport katalogu CSV, SQLite v38, backup i LAN pozostają wspólne. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.7.4.0 — kandydat odbiorczy Ogrodu. Zawiera fundament 0.7.0, cykl i historię 0.7.1, szybkie czynności i wspólny Kalendarz/powiadomienia 0.7.2 oraz historię plonów i podgląd Desktop z 0.7.3. CI sprawdza migrację z 0.6, backup, integrację LAN i brak osobnego systemu przypomnień. Do zamknięcia 0.7 pozostaje test na fizycznym telefonie i PC. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
