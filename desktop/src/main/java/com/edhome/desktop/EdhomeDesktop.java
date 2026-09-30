@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.74";
+    private static final String DESKTOP_VERSION = "0.7.0.75";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -6315,16 +6315,24 @@ public final class EdhomeDesktop extends JFrame {
                     String message = rootMessage(ex);
                     boolean conflict = message.contains("Konflikt")
                         || message.contains("nowsze dane");
-                    boolean firstConflict = conflict && !syncConflictPaused;
-                    if (conflict) syncConflictPaused = true;
+                    boolean rejected = message.contains(
+                        "Telefon odrzucił zmianę rekordową");
+                    boolean pauseRequired=conflict||rejected;
+                    boolean firstPause=pauseRequired&&!syncConflictPaused;
+                    if(pauseRequired)syncConflictPaused=true;
                     connection.setText(conflict
                         ? "KONFLIKT • lokalne zmiany zachowane • auto-sync wstrzymany"
-                        : "ZAPISANO LOKALNIE • synchronizacja oczekuje");
+                        : rejected
+                            ? "BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany"
+                            : "ZAPISANO LOKALNIE • synchronizacja oczekuje");
                     if (automatic) {
-                        if (trayIcon != null && firstConflict)
+                        if (trayIcon != null && firstPause)
                             trayIcon.displayMessage("EDHOME Desktop",
-                                "Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane. "
-                                    + "Automatyczne ponawianie zostało wstrzymane.",
+                                conflict
+                                    ?"Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane. "
+                                        +"Automatyczne ponawianie zostało wstrzymane."
+                                    :"Telefon odrzucił konkretną zmianę danych. "
+                                        +"Lokalna kopia została zachowana; sprawdź diagnostykę.",
                                 TrayIcon.MessageType.WARNING);
                     } else {
                         JOptionPane.showMessageDialog(EdhomeDesktop.this,
@@ -7173,6 +7181,17 @@ public final class EdhomeDesktop extends JFrame {
             }
             if (response.statusCode() == 401)
                 throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() == 400) {
+                String detail="";
+                try {
+                    JsonObject error=JsonParser.parseString(response.body())
+                        .getAsJsonObject();
+                    detail=error.has("message")
+                        ?error.get("message").getAsString().trim():"";
+                } catch(Exception ignored) { }
+                throw new IOException("Telefon odrzucił zmianę rekordową"
+                    +(detail.isBlank() ? ": HTTP 400." : ": "+detail));
+            }
             if (response.statusCode() != 200)
                 throw new IOException("Telefon odrzucił zmianę rekordową: HTTP "
                     + response.statusCode() + ".");

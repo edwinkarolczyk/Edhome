@@ -345,9 +345,11 @@ final class LanSyncServer {
                         DiagnosticLog.event("DESKTOP_SYNC_PATCH_CONFLICT",
                             conflict.table + "#" + conflict.rowKey);
                     } catch (IllegalArgumentException invalid) {
+                        String message=invalid.getMessage()==null
+                            ?"invalid":invalid.getMessage();
+                        DiagnosticLog.event("DESKTOP_SYNC_PATCH_REJECTED", message);
                         reply(peer, 400, "{\"error\":\"BAD_PATCH\",\"message\":\""
-                            + json(invalid.getMessage() == null ? "invalid" : invalid.getMessage())
-                            + "\"}");
+                            + json(message) + "\"}");
                     }
                 }
                 return;

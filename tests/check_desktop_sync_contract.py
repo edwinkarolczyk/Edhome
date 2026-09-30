@@ -238,3 +238,11 @@ assert 'downloadAllLogs.addActionListener' in desktop
 assert 'Files.writeString(desktopTarget, desktopDiagnosticsText()' in desktop
 assert 'Files.writeString(phoneTarget, phone.text' in desktop
 print("desktop one-click diagnostics export contract OK")
+
+# Sync rejection diagnostics: preserve phone validation reason and stop retry loops.
+assert 'DESKTOP_SYNC_PATCH_REJECTED' in server
+assert 'Telefon odrzucił zmianę rekordową"+(detail.isBlank()' in desktop
+assert 'BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany' in desktop
+assert 'boolean rejected = message.contains(' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.75"' in desktop
+print("desktop patch rejection diagnostics + retry pause OK")
