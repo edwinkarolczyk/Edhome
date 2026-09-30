@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 139,
-  "versionName": "0.7.2.0",
-  "changelog": "EDHOME 0.7.2.0 — Ogród: cykl uprawy i historia sezonów z 0.7.1 oraz szybkie czynności pielęgnacyjne bezpośrednio z nasadzenia: podlewanie, nawożenie, przycinanie, przygotowanie gleby, ochrona/oprysk i własna czynność. Obsługują terminy, cykle sezonowe i powtarzalne oraz powiadomienia przez wspólny silnik Czynności/Kalendarza. SQLite v38, backup i LAN pozostają wspólne. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.2.0/edhome-beta.apk",
-  "sha256": "fef423ed21ca86001e8f727a120fe93effc2b16e630759d3275cf45893c4874b"
+  "versionCode": 140,
+  "versionName": "0.7.3.0",
+  "changelog": "EDHOME 0.7.3.0 — Ogród: pełny dotychczasowy cykl uprawy, szybkie powtarzalne czynności pielęgnacyjne, wspólny Kalendarz/powiadomienia oraz historia plonów sezon po sezonie. Dodano ochronę przed podwójnym zapisem identycznego etapu i identycznego zbioru. Import/eksport katalogu CSV, SQLite v38, backup i LAN pozostają wspólne. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.3.0/edhome-beta.apk",
+  "sha256": "6f500a478c0c6aa5e763dc4e80489624ff76cfa3596e7b67f4f03af0ad9eaa82"
 }
