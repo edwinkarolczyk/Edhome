@@ -79,6 +79,8 @@ final class GardenStore {
             + "actual_plant TEXT NOT NULL DEFAULT '', "
             + "planned_harvest TEXT NOT NULL DEFAULT '', "
             + "actual_harvest TEXT NOT NULL DEFAULT '', "
+            + "season_year INTEGER NOT NULL DEFAULT 0 CHECK(season_year BETWEEN 0 AND 9999), "
+            + "finished_at TEXT NOT NULL DEFAULT '', "
             + "notes TEXT NOT NULL DEFAULT '', "
             + "created_at INTEGER NOT NULL, "
             + "CHECK((catalog_id>0 AND custom_plant_id=0) "
@@ -95,6 +97,66 @@ final class GardenStore {
             + "UNIQUE(planting_id,stage), UNIQUE(planting_id,task_id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS garden_task_links_planting_idx "
             + "ON garden_task_links(planting_id,stage,task_id)");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS garden_events ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + "planting_id INTEGER NOT NULL, "
+            + "event_kind TEXT NOT NULL CHECK(event_kind IN "
+            + "('sow','plant','harvest','finish','cancel','note')), "
+            + "event_date TEXT NOT NULL, "
+            + "note TEXT NOT NULL DEFAULT '', "
+            + "created_at INTEGER NOT NULL)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS garden_events_planting_idx "
+            + "ON garden_events(planting_id,event_date,id)");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS garden_harvests ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + "planting_id INTEGER NOT NULL, "
+            + "harvested_on TEXT NOT NULL, "
+            + "quantity_milli INTEGER NOT NULL CHECK(quantity_milli>0), "
+            + "unit TEXT NOT NULL CHECK(unit IN ('kg','g','szt.','l','ml')), "
+            + "note TEXT NOT NULL DEFAULT '', "
+            + "created_at INTEGER NOT NULL)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS garden_harvests_planting_idx "
+            + "ON garden_harvests(planting_id,harvested_on,id)");
+    }
+
+    static void upgrade38(SQLiteDatabase db) {
+        if(!hasColumn(db,"garden_plantings","season_year"))
+            db.execSQL("ALTER TABLE garden_plantings ADD COLUMN season_year "
+                + "INTEGER NOT NULL DEFAULT 0 CHECK(season_year BETWEEN 0 AND 9999)");
+        if(!hasColumn(db,"garden_plantings","finished_at"))
+            db.execSQL("ALTER TABLE garden_plantings ADD COLUMN finished_at "
+                + "TEXT NOT NULL DEFAULT ''");
+        db.execSQL("CREATE TABLE IF NOT EXISTS garden_events ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + "planting_id INTEGER NOT NULL, "
+            + "event_kind TEXT NOT NULL CHECK(event_kind IN "
+            + "('sow','plant','harvest','finish','cancel','note')), "
+            + "event_date TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', "
+            + "created_at INTEGER NOT NULL)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS garden_events_planting_idx "
+            + "ON garden_events(planting_id,event_date,id)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS garden_harvests ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            + "planting_id INTEGER NOT NULL, harvested_on TEXT NOT NULL, "
+            + "quantity_milli INTEGER NOT NULL CHECK(quantity_milli>0), "
+            + "unit TEXT NOT NULL CHECK(unit IN ('kg','g','szt.','l','ml')), "
+            + "note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS garden_harvests_planting_idx "
+            + "ON garden_harvests(planting_id,harvested_on,id)");
+        db.execSQL("UPDATE garden_plantings SET season_year=CASE "
+            + "WHEN season_year=0 AND length(planned_sow)>=4 THEN CAST(substr(planned_sow,1,4) AS INTEGER) "
+            + "WHEN season_year=0 AND length(planned_plant)>=4 THEN CAST(substr(planned_plant,1,4) AS INTEGER) "
+            + "WHEN season_year=0 AND length(planned_harvest)>=4 THEN CAST(substr(planned_harvest,1,4) AS INTEGER) "
+            + "ELSE season_year END");
+    }
+
+    private static boolean hasColumn(SQLiteDatabase db,String table,String column) {
+        try(Cursor c=db.rawQuery("PRAGMA table_info("+table+")",null)) {
+            while(c.moveToNext()) if(column.equals(c.getString(1))) return true;
+        }
+        return false;
     }
 
     static long addArea(SQLiteDatabase db, String name, String kind, String notes) {
@@ -142,6 +204,8 @@ final class GardenStore {
         v.put("actual_plant","");
         v.put("planned_harvest",date(plannedHarvest));
         v.put("actual_harvest","");
+        v.put("season_year",seasonYear(plannedSow,plannedPlant,plannedHarvest));
+        v.put("finished_at","");
         v.put("notes",optional(notes,2000));
         v.put("created_at",System.currentTimeMillis());
         return db.insertOrThrow("garden_plantings",null,v);
@@ -160,6 +224,201 @@ final class GardenStore {
         v.put("updated_at",System.currentTimeMillis());
         db.insertWithOnConflict("garden_catalog_overrides",null,v,
             SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    static void markStage(SQLiteDatabase db,long plantingId,String stage,
+            String eventDate,String note) {
+        validateDate(eventDate);
+        if(eventDate==null||eventDate.trim().isEmpty())
+            throw new IllegalArgumentException("Wybierz datę wykonania.");
+        if(!exists(db,"garden_plantings",plantingId))
+            throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+
+        String column,status,eventKind;
+        switch(stage) {
+            case "sow":
+                column="actual_sow"; status="sown"; eventKind="sow"; break;
+            case "plant":
+                column="actual_plant"; status="planted"; eventKind="plant"; break;
+            default:
+                throw new IllegalArgumentException("Nieznany etap uprawy.");
+        }
+        ContentValues changed=new ContentValues();
+        changed.put(column,eventDate.trim());
+        changed.put("status",status);
+        db.beginTransaction();
+        try {
+            db.update("garden_plantings",changed,"id=?",
+                new String[]{Long.toString(plantingId)});
+            insertEvent(db,plantingId,eventKind,eventDate,note);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    static long addHarvest(SQLiteDatabase db,long plantingId,String harvestedOn,
+            String quantity,String unit,String note) {
+        validateDate(harvestedOn);
+        if(harvestedOn==null||harvestedOn.trim().isEmpty())
+            throw new IllegalArgumentException("Wybierz datę zbioru.");
+        if(!exists(db,"garden_plantings",plantingId))
+            throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+        String cleanUnit=optional(unit,12);
+        if(!java.util.Arrays.asList("kg","g","szt.","l","ml").contains(cleanUnit))
+            throw new IllegalArgumentException("Nieznana jednostka zbioru.");
+        long quantityMilli=parseQuantityMilli(quantity);
+
+        db.beginTransaction();
+        try {
+            ContentValues harvest=new ContentValues();
+            harvest.put("planting_id",plantingId);
+            harvest.put("harvested_on",harvestedOn.trim());
+            harvest.put("quantity_milli",quantityMilli);
+            harvest.put("unit",cleanUnit);
+            harvest.put("note",optional(note,1200));
+            harvest.put("created_at",System.currentTimeMillis());
+            long id=db.insertOrThrow("garden_harvests",null,harvest);
+
+            ContentValues changed=new ContentValues();
+            changed.put("status","harvesting");
+            try(Cursor c=db.rawQuery(
+                    "SELECT actual_harvest FROM garden_plantings WHERE id=?",
+                    new String[]{Long.toString(plantingId)})) {
+                if(c.moveToFirst() && c.getString(0).isEmpty())
+                    changed.put("actual_harvest",harvestedOn.trim());
+            }
+            db.update("garden_plantings",changed,"id=?",
+                new String[]{Long.toString(plantingId)});
+            insertEvent(db,plantingId,"harvest",harvestedOn,note);
+            db.setTransactionSuccessful();
+            return id;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    static void finishSeason(SQLiteDatabase db,long plantingId,String finishedOn,
+            String note) {
+        validateDate(finishedOn);
+        if(finishedOn==null||finishedOn.trim().isEmpty())
+            throw new IllegalArgumentException("Wybierz datę zakończenia sezonu.");
+        if(!exists(db,"garden_plantings",plantingId))
+            throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+        db.beginTransaction();
+        try {
+            ContentValues changed=new ContentValues();
+            changed.put("status","finished");
+            changed.put("finished_at",finishedOn.trim());
+            db.update("garden_plantings",changed,"id=?",
+                new String[]{Long.toString(plantingId)});
+            insertEvent(db,plantingId,"finish",finishedOn,note);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    static long cloneNextSeason(SQLiteDatabase db,long plantingId,int targetYear) {
+        if(targetYear<2000||targetYear>9999)
+            throw new IllegalArgumentException("Nieprawidłowy rok sezonu.");
+        try(Cursor c=db.rawQuery(
+                "SELECT area_id,catalog_id,custom_plant_id,label,planned_sow,"
+                +"planned_plant,planned_harvest,notes FROM garden_plantings WHERE id=?",
+                new String[]{Long.toString(plantingId)})) {
+            if(!c.moveToFirst())
+                throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+            long id=addPlanting(db,c.getLong(0),c.getLong(1),c.getLong(2),
+                c.getString(3),shiftYear(c.getString(4),targetYear),
+                shiftYear(c.getString(5),targetYear),
+                shiftYear(c.getString(6),targetYear),c.getString(7));
+            ContentValues year=new ContentValues();
+            year.put("season_year",targetYear);
+            db.update("garden_plantings",year,"id=?",
+                new String[]{Long.toString(id)});
+            return id;
+        }
+    }
+
+    static Long linkedTaskId(SQLiteDatabase db,long plantingId,String stage) {
+        try(Cursor c=db.rawQuery(
+                "SELECT task_id FROM garden_task_links WHERE planting_id=? "
+                +"AND stage=? LIMIT 1",
+                new String[]{Long.toString(plantingId),stage})) {
+            return c.moveToFirst()?c.getLong(0):null;
+        }
+    }
+
+    static int seasonYear(SQLiteDatabase db,long plantingId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT season_year FROM garden_plantings WHERE id=?",
+                new String[]{Long.toString(plantingId)})) {
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
+
+    static String harvestSummary(SQLiteDatabase db,long plantingId) {
+        StringBuilder out=new StringBuilder();
+        try(Cursor c=db.rawQuery(
+                "SELECT unit,SUM(quantity_milli) FROM garden_harvests "
+                +"WHERE planting_id=? GROUP BY unit ORDER BY unit",
+                new String[]{Long.toString(plantingId)})) {
+            while(c.moveToNext()) {
+                if(out.length()>0) out.append(" • ");
+                out.append(formatMilli(c.getLong(1))).append(' ').append(c.getString(0));
+            }
+        }
+        return out.toString();
+    }
+
+    private static void insertEvent(SQLiteDatabase db,long plantingId,String kind,
+            String date,String note) {
+        ContentValues event=new ContentValues();
+        event.put("planting_id",plantingId);
+        event.put("event_kind",kind);
+        event.put("event_date",date.trim());
+        event.put("note",optional(note,1200));
+        event.put("created_at",System.currentTimeMillis());
+        db.insertOrThrow("garden_events",null,event);
+    }
+
+    static long parseQuantityMilli(String raw) {
+        String x=raw==null?"":raw.trim().replace(',','.');
+        if(x.isEmpty()) throw new IllegalArgumentException("Podaj ilość zbioru.");
+        try {
+            java.math.BigDecimal value=new java.math.BigDecimal(x);
+            if(value.signum()<=0)
+                throw new IllegalArgumentException("Ilość musi być większa od zera.");
+            java.math.BigDecimal milli=value.multiply(new java.math.BigDecimal("1000"))
+                .setScale(0,java.math.RoundingMode.HALF_UP);
+            long result=milli.longValueExact();
+            if(result<=0||result>1_000_000_000_000L)
+                throw new IllegalArgumentException("Ilość jest poza zakresem.");
+            return result;
+        } catch(ArithmeticException|NumberFormatException invalid) {
+            throw new IllegalArgumentException("Nieprawidłowa ilość zbioru.");
+        }
+    }
+
+    static String formatMilli(long milli) {
+        java.math.BigDecimal value=new java.math.BigDecimal(milli)
+            .divide(new java.math.BigDecimal("1000"))
+            .stripTrailingZeros();
+        return value.toPlainString().replace('.',',');
+    }
+
+    private static int seasonYear(String... dates) {
+        for(String date:dates) {
+            if(date!=null && !date.trim().isEmpty() && validIsoDate(date))
+                return LocalDate.parse(date.trim()).getYear();
+        }
+        return LocalDate.now().getYear();
+    }
+
+    private static String shiftYear(String iso,int year) {
+        if(iso==null||iso.trim().isEmpty()) return "";
+        validateDate(iso);
+        return LocalDate.parse(iso.trim()).withYear(year).toString();
     }
 
     /**
