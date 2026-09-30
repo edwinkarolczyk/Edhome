@@ -106,6 +106,9 @@ public final class MainActivity extends Activity {
     private Long pendingStorageDropId;
     private String pendingStorageDropName;
     private AlertDialog storageDropDialog;
+    private String pendingStorageScannerOperation;
+    private String pendingStorageScannerKind;
+    private AlertDialog storageScannerOperationDialog;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -405,6 +408,7 @@ public final class MainActivity extends Activity {
         boolean shouldListen=pendingNfcTarget!=null
             || pendingStorageDestinationItemId!=null
             || pendingStorageDropKind!=null
+            || pendingStorageScannerOperation!=null
             || "scanner".equals(screen)
             || prefs==null
             || prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
@@ -468,6 +472,10 @@ public final class MainActivity extends Activity {
         try {
             NfcLinkStore.Link current=NfcLinkStore.findByUid(
                 db.getReadableDatabase(),uid);
+            if(pendingStorageScannerOperation!=null) {
+                handleStorageScannerSourceNfc(current);
+                return;
+            }
             if(pendingStorageDropKind!=null && pendingStorageDropId!=null) {
                 handleStorageDropSourceNfc(current,uid);
                 return;
@@ -841,20 +849,45 @@ public final class MainActivity extends Activity {
         return box;
     }
 
+    private static final String AUTO_ACTION_ROW_TAG =
+        "edhome:auto-action-row";
+    private static final String AUTO_SMALL_ACTION_ROW_TAG =
+        "edhome:auto-small-action-row";
+
     private Button button(String value, Runnable callback) {
         Button b = new Button(this);
         b.setText(value);
-        b.setTextSize(14);
+        b.setTextSize(13);
         b.setAllCaps(false);
         b.setTextColor(skin.accentInk);
         b.setBackground(skin.pill(this, accent));
         b.setElevation(dp(1));
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
         touchFeedback(b);
-        b.setMinHeight(dp(44));
         b.setOnClickListener(v -> callback.run());
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(2), 0, dp(2));
-        body.addView(b, params);
+
+        boolean compact=value!=null && value.length()<=28;
+        LinearLayout row=null;
+        if(compact && body.getChildCount()>0) {
+            View last=body.getChildAt(body.getChildCount()-1);
+            if(last instanceof LinearLayout
+                    &&AUTO_ACTION_ROW_TAG.equals(last.getTag())
+                    &&((LinearLayout)last).getChildCount()==1)
+                row=(LinearLayout)last;
+        }
+        if(row==null) {
+            row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setTag(AUTO_ACTION_ROW_TAG);
+            body.addView(row,new LinearLayout.LayoutParams(-1,dp(42)));
+        }
+        LinearLayout.LayoutParams params=compact
+            ?new LinearLayout.LayoutParams(0,dp(38),1f)
+            :new LinearLayout.LayoutParams(-1,dp(38));
+        params.setMargins(dp(2),dp(2),dp(2),dp(2));
+        row.addView(b,params);
         return b;
     }
 
@@ -3276,18 +3309,44 @@ public final class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
-        b.setTextSize(13);
+        b.setTextSize(12);
         boolean onHome = "home".equals(screen);
         b.setTextColor(onHome ? skin.buttonForeground : ink);
         b.setBackground(skin.pill(this, onHome
             ? (skin.light ? 0xFFEFF8F2 : 0xFFEAF5F5) : skin.tileTop));
         b.setElevation(dp(1));
-        b.setMinHeight(dp(40));
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
         touchFeedback(b);
         b.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(2), 0, dp(2));
-        container.addView(b, params);
+
+        boolean compact=container.getOrientation()==LinearLayout.VERTICAL
+            &&label!=null && label.length()<=28;
+        if(compact) {
+            LinearLayout row=null;
+            if(container.getChildCount()>0) {
+                View last=container.getChildAt(container.getChildCount()-1);
+                if(last instanceof LinearLayout
+                        &&AUTO_SMALL_ACTION_ROW_TAG.equals(last.getTag())
+                        &&((LinearLayout)last).getChildCount()==1)
+                    row=(LinearLayout)last;
+            }
+            if(row==null) {
+                row=new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setTag(AUTO_SMALL_ACTION_ROW_TAG);
+                container.addView(row,new LinearLayout.LayoutParams(-1,dp(40)));
+            }
+            LinearLayout.LayoutParams params=
+                new LinearLayout.LayoutParams(0,dp(36),1f);
+            params.setMargins(dp(2),dp(2),dp(2),dp(2));
+            row.addView(b,params);
+            return;
+        }
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(38));
+        params.setMargins(0,dp(2),0,dp(2));
+        container.addView(b,params);
     }
 
     private void drawTask(long id, String name, boolean done, String due,
@@ -5964,6 +6023,31 @@ public final class MainActivity extends Activity {
         header("Skaner EDHOME");
         note("Jeden skaner dla QR EDHOME, NFC i kodów produktów. "
             + "Najpierw rozpoznaję obiekt, potem pokazuję właściwe działania.");
+        LinearLayout warehouse = card();
+        warehouse.addView(text("Magazyn • szybkie operacje", 18, true));
+        warehouse.addView(text(
+            "Każda zmiana położenia ma trzy drogi: QR, NFC albo wybór ręczny. "
+            + "Po wskazaniu operacji Skaner wie, jakiego obiektu oczekuje.",
+            13, false));
+        smallButton(warehouse, "Przenieś rzecz", () ->
+            beginStorageScannerOperation("move", "thing"));
+        smallButton(warehouse, "Wyjmij rzecz", () ->
+            beginStorageScannerOperation("take_out", "thing"));
+        smallButton(warehouse, "Przenieś pudełko", () ->
+            beginStorageScannerOperation("move", "box"));
+        smallButton(warehouse, "Rzeczy", () -> {
+            storageTemporaryKind="thing";
+            go("storage");
+        });
+        smallButton(warehouse, "Pudełka", () -> {
+            storageTemporaryKind="box";
+            go("storage");
+        });
+        smallButton(warehouse, "Miejsca", () -> {
+            storageTemporaryKind="place";
+            go("storage");
+        });
+
         LinearLayout state = card();
         state.addView(text("Po zeskanowaniu domyślnie", 18, true));
         state.addView(text(scanActionLabel(
@@ -6097,6 +6181,10 @@ public final class MainActivity extends Activity {
         if (code.isEmpty()) return;
         StorageQr.Target storageTarget = StorageQr.decode(code);
         if (storageTarget != null) {
+            if(pendingStorageScannerOperation!=null) {
+                handleStorageScannerSource(storageTarget.kind,storageTarget.id);
+                return;
+            }
             if (pendingStorageDropKind != null && pendingStorageDropId != null) {
                 handleStorageDropSource(storageTarget.kind, storageTarget.id, "qr");
                 return;
@@ -6106,6 +6194,13 @@ public final class MainActivity extends Activity {
                 return;
             }
             handleStorageTargetScan(storageTarget.kind, storageTarget.id, "qr");
+            return;
+        }
+        if(pendingStorageScannerOperation!=null) {
+            String expected="box".equals(pendingStorageScannerKind)
+                ?"pudełka":"rzeczy";
+            clearStorageScannerOperation();
+            alert("Ta operacja oczekuje QR "+expected+". Spróbuj ponownie.");
             return;
         }
         if (PantryScanRules.validBarcode(code)) {
@@ -6267,6 +6362,11 @@ public final class MainActivity extends Activity {
                     dialog.dismiss();
                     showStorageMoveOptions(item);
                 });
+                if("thing".equals(kind) && item.boxId!=null)
+                    smallButton(actions, "Wyjmij z pudełka", () -> {
+                        dialog.dismiss();
+                        takeStorageThingOut(item);
+                    });
                 if ("thing".equals(kind) && item.lentTo == null)
                     smallButton(actions, "Wypożycz", () -> {
                         dialog.dismiss();
@@ -6631,6 +6731,11 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             showStorageMoveOptions(item);
         });
+        if(item.boxId!=null)
+            smallButton(details,"↥ Wyjmij z pudełka",()->{
+                dialog.dismiss();
+                takeStorageThingOut(item);
+            });
         smallButton(details,"📷 Dodaj / zmień zdjęcie",()->{
             dialog.dismiss();
             selectStorageThumbnail(item.id);
@@ -6962,6 +7067,208 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void beginStorageScannerOperation(String operation,String kind) {
+        String what="box".equals(kind)?"pudełko":"rzecz";
+        String action="take_out".equals(operation)
+            ?"Wyjmij rzecz z pudełka":"Przenieś "+what;
+        String[] methods={"QR • zeskanuj "+what,
+            "NFC • przyłóż tag "+what,
+            "Ręcznie • wybierz z listy"};
+        new AlertDialog.Builder(this)
+            .setTitle(action)
+            .setItems(methods,(dialog,which)->{
+                if(which==0)beginStorageScannerSourceQr(operation,kind);
+                else if(which==1)beginStorageScannerSourceNfc(operation,kind);
+                else showStorageScannerSourcePicker(operation,kind);
+            })
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
+    private void beginStorageScannerSourceQr(String operation,String kind) {
+        clearStorageScannerOperation();
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active())
+            return;
+        pendingStorageScannerOperation=operation;
+        pendingStorageScannerKind=kind;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj QR "
+                +("box".equals(kind)?"pudełka":"rzeczy"));
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_SCANNER_SOURCE_QR_WAITING",
+                "operation="+operation+" kind="+kind);
+        } catch(Exception problem) {
+            centralScannerCameraPending=false;
+            clearStorageScannerOperation();
+            DiagnosticLog.error("STORAGE_SCANNER_SOURCE_QR_LAUNCH",problem);
+            alert("Nie można uruchomić skanera QR.");
+        }
+    }
+
+    private void beginStorageScannerSourceNfc(String operation,String kind) {
+        clearStorageScannerOperation();
+        if(nfcAdapter==null) {
+            alert("Ten telefon nie ma NFC. Użyj QR albo wybierz obiekt ręcznie.");
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            alert("NFC jest wyłączone. Włącz NFC albo użyj QR / wyboru ręcznego.");
+            return;
+        }
+        pendingStorageScannerOperation=operation;
+        pendingStorageScannerKind=kind;
+        disableNfcReaderMode();
+        if(!enableNfcReaderMode()) {
+            clearStorageScannerOperation();
+            alert("Nie udało się uruchomić odczytu NFC.");
+            return;
+        }
+        String what="box".equals(kind)?"pudełko":"rzecz";
+        storageScannerOperationDialog=new AlertDialog.Builder(this)
+            .setTitle("NFC • "+("take_out".equals(operation)
+                ?"Wyjmij rzecz":"Przenieś "+what))
+            .setMessage("Przyłóż tag NFC "+what+".")
+            .setNegativeButton("Anuluj",(d,w)->clearStorageScannerOperation())
+            .create();
+        storageScannerOperationDialog.setOnCancelListener(
+            d->clearStorageScannerOperation());
+        storageScannerOperationDialog.show();
+        DiagnosticLog.event("STORAGE_SCANNER_SOURCE_NFC_WAITING",
+            "operation="+operation+" kind="+kind);
+    }
+
+    private void showStorageScannerSourcePicker(String operation,String kind) {
+        java.util.List<StorageStore.Item> items=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items WHERE kind=? "
+                    +"ORDER BY name COLLATE NOCASE,id",
+                new String[]{kind})) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item==null)continue;
+                if("take_out".equals(operation)&&item.boxId==null)continue;
+                items.add(item);
+                labels.add(item.name+" • "
+                    +StorageStore.location(db.getReadableDatabase(),item)
+                        .replace(" / "," → "));
+            }
+        }
+        if(items.isEmpty()) {
+            alert("take_out".equals(operation)
+                ?"Brak rzeczy znajdujących się w pudełkach."
+                :"Brak obiektów tego typu w magazynie.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz "+("box".equals(kind)?"pudełko":"rzecz"))
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                completeStorageScannerOperation(operation,items.get(which)))
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
+    private void handleStorageScannerSource(String kind,long id) {
+        String operation=pendingStorageScannerOperation;
+        String expected=pendingStorageScannerKind;
+        if(operation==null||expected==null)return;
+        if(!expected.equals(kind)) {
+            clearStorageScannerOperation();
+            alert("Oczekiwano "+("box".equals(expected)?"pudełka":"rzeczy")
+                +", a zeskanowano inny typ.");
+            return;
+        }
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        clearStorageScannerOperation();
+        if(item==null) {
+            alert("Zeskanowany obiekt już nie istnieje.");
+            return;
+        }
+        completeStorageScannerOperation(operation,item);
+    }
+
+    private void handleStorageScannerSourceNfc(NfcLinkStore.Link current) {
+        if(current==null) {
+            alert("Ten tag NFC nie jest przypisany do rzeczy ani pudełka.");
+            return;
+        }
+        String expected=pendingStorageScannerKind;
+        if(expected==null||!expected.equals(current.kind)) {
+            alert("Ta operacja oczekuje tagu "
+                +("box".equals(expected)?"pudełka":"rzeczy")+".");
+            return;
+        }
+        String operation=pendingStorageScannerOperation;
+        StorageStore.Item item=StorageStore.find(
+            db.getReadableDatabase(),current.targetId);
+        clearStorageScannerOperation();
+        if(item==null) {
+            alert("Obiekt przypisany do tagu już nie istnieje.");
+            return;
+        }
+        completeStorageScannerOperation(operation,item);
+    }
+
+    private void clearStorageScannerOperation() {
+        pendingStorageScannerOperation=null;
+        pendingStorageScannerKind=null;
+        AlertDialog dialog=storageScannerOperationDialog;
+        storageScannerOperationDialog=null;
+        if(dialog!=null&&dialog.isShowing())dialog.dismiss();
+        refreshNfcReaderMode();
+    }
+
+    private void completeStorageScannerOperation(String operation,
+            StorageStore.Item item) {
+        if(item==null)return;
+        if("take_out".equals(operation)) {
+            takeStorageThingOut(item);
+            return;
+        }
+        showStorageMoveOptions(item);
+    }
+
+    private void takeStorageThingOut(StorageStore.Item item) {
+        StorageStore.Item current=item==null?null:
+            StorageStore.find(db.getReadableDatabase(),item.id);
+        if(current==null||!"thing".equals(current.kind)) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        if(current.boxId==null) {
+            alert("Ta rzecz nie znajduje się w pudełku.");
+            return;
+        }
+        StorageStore.Item box=StorageStore.find(
+            db.getReadableDatabase(),current.boxId);
+        if(box==null||!"box".equals(box.kind)) {
+            alert("Pudełko tej rzeczy już nie istnieje.");
+            return;
+        }
+        Long place=StorageStore.effectivePlaceId(db.getReadableDatabase(),box);
+        try {
+            StorageStore.move(db.getWritableDatabase(),current.id,null,place);
+            StorageStore.Item moved=StorageStore.find(
+                db.getReadableDatabase(),current.id);
+            DiagnosticLog.event("STORAGE_THING_TAKEN_OUT",
+                "item="+current.id+" box="+box.id);
+            render();
+            if(moved!=null)alert("Wyjęto z pudełka.\nNowe położenie:\n"
+                +StorageStore.location(db.getReadableDatabase(),moved)
+                    .replace(" / "," → "));
+        } catch(Exception error) {
+            DiagnosticLog.error("STORAGE_THING_TAKE_OUT",error);
+            alert(error.getMessage()==null
+                ?"Nie udało się wyjąć rzeczy.":error.getMessage());
+        }
+    }
+
     private void beginStorageDropTarget(String targetKind,long targetId,
             String targetName) {
         if(!"box".equals(targetKind) && !"place".equals(targetKind)) {
@@ -7253,6 +7560,14 @@ public final class MainActivity extends Activity {
             alert("Docelowe miejsce już nie istnieje.");
             return false;
         }
+        Long nextBox="box".equals(targetKind)?targetId:null;
+        Long nextPlace="place".equals(targetKind)?targetId:null;
+        if(StorageStore.sameDestination(moving,nextBox,nextPlace)) {
+            DiagnosticLog.event("STORAGE_LOCATION_NOOP",
+                "item="+itemId+" target="+targetKind+":"+targetId);
+            alert("Już znajduje się tutaj.");
+            return true;
+        }
         try {
             if("box".equals(targetKind))
                 StorageStore.move(db.getWritableDatabase(),itemId,targetId,null);
@@ -7328,11 +7643,20 @@ public final class MainActivity extends Activity {
                     int i=destination.getSelectedItemPosition();
                     long createdId=0L;
                     String createdName=name.getText().toString().trim();
+                    Long selectedBox=boxIds.get(i);
+                    Long selectedPlace=placeIds.get(i);
                     if(existing==null)createdId=StorageStore.create(
                         db.getWritableDatabase(),createdName,kind,
-                        boxIds.get(i),placeIds.get(i));
-                    else StorageStore.move(db.getWritableDatabase(),existing.id,
-                        boxIds.get(i),placeIds.get(i));
+                        selectedBox,selectedPlace);
+                    else {
+                        if(StorageStore.sameDestination(
+                                existing,selectedBox,selectedPlace)) {
+                            alert("Już znajduje się tutaj.");
+                            return;
+                        }
+                        StorageStore.move(db.getWritableDatabase(),existing.id,
+                            selectedBox,selectedPlace);
+                    }
                     DiagnosticLog.event(existing==null?
                         "STORAGE_CREATED":"STORAGE_MOVED");
                     render();
@@ -12260,10 +12584,16 @@ public final class MainActivity extends Activity {
         if (scan != null) {
             if (centralScannerCameraPending) {
                 centralScannerCameraPending = false;
-                if (scan.getContents() != null)
+                if (scan.getContents() != null) {
                     handleCentralScan(scan.getContents());
-                else if(pendingStorageDestinationItemId!=null)
-                    pendingStorageDestinationItemId=null;
+                } else {
+                    if(pendingStorageDestinationItemId!=null)
+                        pendingStorageDestinationItemId=null;
+                    if(pendingStorageDropKind!=null)
+                        clearStorageDropTarget();
+                    if(pendingStorageScannerOperation!=null)
+                        clearStorageScannerOperation();
+                }
                 return;
             }
             if (desktopPairQrCameraPending) {

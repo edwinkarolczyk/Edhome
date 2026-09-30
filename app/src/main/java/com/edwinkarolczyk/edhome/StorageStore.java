@@ -117,6 +117,25 @@ final class StorageStore {
         }finally{db.endTransaction();}
     }
 
+    static boolean sameDestination(Item item,Long box,Long place) {
+        return item!=null
+            &&java.util.Objects.equals(item.boxId,box)
+            &&java.util.Objects.equals(item.placeId,place);
+    }
+
+    static Long effectivePlaceId(SQLiteDatabase db,Item item) {
+        if(item==null)return null;
+        Set<Long> visited=new HashSet<>();
+        Item current=item;
+        for(int depth=0;current!=null&&depth<128;depth++) {
+            if(!visited.add(current.id))return null;
+            if(current.placeId!=null)return current.placeId;
+            if(current.boxId==null)return null;
+            current=find(db,current.boxId);
+        }
+        return null;
+    }
+
     static void move(SQLiteDatabase db,long id,Long box,Long place) {
         db.beginTransaction();
         try {
@@ -126,6 +145,10 @@ final class StorageStore {
                 "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
             validKindDestination(item.kind,box,place);
             validDestination(db,box,place,id);
+            if(sameDestination(item,box,place)) {
+                db.setTransactionSuccessful();
+                return;
+            }
             ContentValues row=new ContentValues();
             if(box==null)row.putNull("parent_box_id");else row.put("parent_box_id",box);
             if(place==null)row.putNull("place_id");else row.put("place_id",place);

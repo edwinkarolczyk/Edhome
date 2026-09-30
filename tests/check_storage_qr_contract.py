@@ -128,3 +128,9 @@ version_name=next(line.split("'")[1] for line in gradle.splitlines()
 version_parts=version_name.split(".")
 assert version_parts[:3]==["0","7","4"] and int(version_parts[3]) >= 5
 print("Storage QR tombstone identity + restore sequence reservation: PASS")
+
+# Idempotencja lokalizacji: ponowne wskazanie tego samego celu nie tworzy historii moved.
+assert 'static boolean sameDestination(Item item,Long box,Long place)' in store
+assert 'if(sameDestination(item,box,place))' in store
+assert 'static Long effectivePlaceId(SQLiteDatabase db,Item item)' in store
+print("Storage same-destination no-op + inherited place helper: PASS")

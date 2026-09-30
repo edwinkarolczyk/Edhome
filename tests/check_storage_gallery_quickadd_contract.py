@@ -73,3 +73,33 @@ assert 'current=find(db,current.boxId);' in store
 assert 'CHECK(parent_box_id IS NULL OR place_id IS NULL)' in store
 
 print("OK: storage gallery + quick add + NFC/QR move contract")
+
+# Stabilizacja skanera magazynu: jawna operacja + QR/NFC/ręcznie + brak ruchu do tego samego celu.
+for marker in (
+    'Magazyn • szybkie operacje',
+    'Przenieś rzecz', 'Wyjmij rzecz', 'Przenieś pudełko',
+    'beginStorageScannerOperation("move", "thing")',
+    'beginStorageScannerOperation("take_out", "thing")',
+    'beginStorageScannerOperation("move", "box")',
+    'QR • zeskanuj ', 'NFC • przyłóż tag ', 'Ręcznie • wybierz z listy',
+    'handleStorageScannerSourceNfc', 'takeStorageThingOut',
+    'StorageStore.sameDestination', 'Już znajduje się tutaj.',
+    'STORAGE_LOCATION_NOOP', 'STORAGE_THING_TAKEN_OUT',
+):
+    assert marker in main, f"Missing stabilized storage scanner flow: {marker}"
+
+# Skróty Rzeczy/Pudełka/Miejsca są dostępne bez wychodzenia ze skanera.
+scanner_start = main.index('private void scannerHub()')
+scanner_end = main.index('private String scanSpecificKey', scanner_start)
+scanner_ui = main[scanner_start:scanner_end]
+for marker in ('"Rzeczy"', '"Pudełka"', '"Miejsca"'):
+    assert marker in scanner_ui
+
+# Krótkie akcje w całym APK łączą się po dwie, długie pozostają pełnej szerokości.
+for marker in (
+    'AUTO_ACTION_ROW_TAG', 'AUTO_SMALL_ACTION_ROW_TAG',
+    'value.length()<=28', 'label.length()<=28',
+):
+    assert marker in main, f"Missing compact global action layout: {marker}"
+
+print("OK: storage scanner operations + idempotent move + compact actions")
