@@ -258,8 +258,10 @@ assert 'appendDesktopStorageMove(row,before);' in desktop
 assert 'event.addProperty("action","moved")' in desktop
 assert 'Pudełko można przypisać tylko do miejsca.' in desktop
 assert 'Rzecz możesz włożyć tylko do istniejącego pudełka.' in desktop
-desktop_version=re.search(r'DESKTOP_VERSION = "0\\.7\\.0\\.(\\d+)"',desktop)
-assert desktop_version and int(desktop_version.group(1)) >= 77
+desktop_version_line=next(line for line in desktop.splitlines()
+    if 'DESKTOP_VERSION = "' in line)
+desktop_version=desktop_version_line.split('"')[1].split(".")
+assert desktop_version[:3]==["0","7","0"] and int(desktop_version[3]) >= 77
 print("desktop storage validation + move history + rollback OK")
 
 assert 'Typ istniejącej rzeczy/pudełka jest stały ze względu na QR i NFC.' in desktop
