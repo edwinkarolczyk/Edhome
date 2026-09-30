@@ -422,14 +422,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.6.0.70-signed-apk
+          name: EDHOME-0.6.0.71-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.6.0.70 — kompaktowy interfejs telefonu: Start ma 3 kolumny i 3 rzędy na stronę z przesuwaniem w bok. Czynności i Spiżarnia mają zwarte akcje oraz stronicowanie zamiast długiej listy; szczegóły produktów Spiżarni są pod menu Więcej. Funkcje i dane pozostają zachowane. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.6.0.71 — panel Start ma regulowaną pojemność 6/9/12 miejsc na stronę przy 3 kolumnach. Szeroki kafelek zajmuje 2 miejsca. W trybie układu kafelek można przeciągnąć do lewej lub prawej krawędzi, aby przenieść go między stronami; działa też menu poprzednia/następna strona. Kolejność i ustawienie liczby miejsc są zachowywane w kopii danych. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
