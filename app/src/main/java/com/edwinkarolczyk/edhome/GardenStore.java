@@ -259,6 +259,62 @@ final class GardenStore {
         }
     }
 
+    static int importCatalogCsv(SQLiteDatabase db,String csv) {
+        java.util.List<GardenCatalogCsv.Entry> entries=GardenCatalogCsv.parse(csv);
+        db.beginTransaction();
+        try {
+            for(GardenCatalogCsv.Entry e:entries) {
+                ContentValues v=new ContentValues();
+                v.put("catalog_key",e.key);
+                v.put("name",e.name);
+                v.put("latin_name",e.latin);
+                v.put("variety",e.variety);
+                v.put("source_label",e.source);
+                v.put("source_url",e.url);
+                v.put("source_license",e.license);
+                v.put("sow_from_month",e.sowFrom);
+                v.put("sow_to_month",e.sowTo);
+                v.put("plant_from_month",e.plantFrom);
+                v.put("plant_to_month",e.plantTo);
+                v.put("harvest_from_month",e.harvestFrom);
+                v.put("harvest_to_month",e.harvestTo);
+                v.put("spacing_cm",e.spacing);
+                v.put("depth_mm",e.depth);
+                v.put("sunlight",e.sunlight);
+                v.put("watering",e.watering);
+                v.put("notes",e.notes);
+                v.put("updated_at",System.currentTimeMillis());
+                db.insertWithOnConflict("garden_catalog",null,v,
+                    SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return entries.size();
+    }
+
+    static String exportCatalogCsv(SQLiteDatabase db) {
+        StringBuilder out=new StringBuilder(GardenCatalogCsv.HEADER).append('\n');
+        try(Cursor c=db.rawQuery(
+                "SELECT catalog_key,name,latin_name,variety,source_label,source_url,"
+                +"source_license,sow_from_month,sow_to_month,plant_from_month,plant_to_month,"
+                +"harvest_from_month,harvest_to_month,spacing_cm,depth_mm,sunlight,watering,notes "
+                +"FROM garden_catalog ORDER BY name COLLATE NOCASE,variety COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                out.append(GardenCatalogCsv.row(
+                    c.getString(0),c.getString(1),c.getString(2),c.getString(3),
+                    c.getString(4),c.getString(5),c.getString(6),
+                    Integer.toString(c.getInt(7)),Integer.toString(c.getInt(8)),
+                    Integer.toString(c.getInt(9)),Integer.toString(c.getInt(10)),
+                    Integer.toString(c.getInt(11)),Integer.toString(c.getInt(12)),
+                    Integer.toString(c.getInt(13)),Integer.toString(c.getInt(14)),
+                    c.getString(15),c.getString(16),c.getString(17))).append('\n');
+            }
+        }
+        return out.toString();
+    }
+
     static boolean validIsoDate(String value) {
         if(value==null||value.trim().isEmpty()) return true;
         try { String x=value.trim(); return LocalDate.parse(x).toString().equals(x); }
