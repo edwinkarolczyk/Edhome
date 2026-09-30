@@ -12,6 +12,7 @@ on:
       - "build.gradle"
       - ".github/workflows/desktop-beta.yml"
       - "tests/check_desktop_approved_scope.py"
+      - "tests/check_desktop_sync_contract.py"
   workflow_dispatch:
 
 jobs:

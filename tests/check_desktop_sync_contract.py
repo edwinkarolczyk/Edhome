@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 root = Path(__file__).resolve().parents[1]
 server = (root / "app/src/main/java/com/edwinkarolczyk/edhome/LanSyncServer.java").read_text(encoding="utf-8")
@@ -246,7 +247,6 @@ assert 'detail=error.has("message")' in desktop
 assert 'Telefon odrzucił zmianę rekordową' in desktop
 assert 'BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany' in desktop
 assert 'boolean rejected = message.contains(' in desktop
-assert 'DESKTOP_VERSION = "0.7.0.75"' in desktop
 print("desktop patch rejection diagnostics + retry pause OK")
 
 # Storage Desktop editor: same domain rules as Android + move history + rollback.
@@ -258,5 +258,6 @@ assert 'appendDesktopStorageMove(row,before);' in desktop
 assert 'event.addProperty("action","moved")' in desktop
 assert 'Pudełko można przypisać tylko do miejsca.' in desktop
 assert 'Rzecz możesz włożyć tylko do istniejącego pudełka.' in desktop
-assert 'DESKTOP_VERSION = "0.7.0.76"' in desktop
+desktop_version=re.search(r'DESKTOP_VERSION = "0\\.7\\.0\\.(\\d+)"',desktop)
+assert desktop_version and int(desktop_version.group(1)) >= 76
 print("desktop storage validation + move history + rollback OK")
