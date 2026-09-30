@@ -20,6 +20,12 @@ assert 'desktop_sync_token' in server
 assert 'isSiteLocalAddress()' in server
 assert 'android ↔ pc' in desktop.lower()
 
+assert '"Ogród"' in desktop
+assert 'return garden();' in desktop
+assert '"garden_plantings"' in desktop
+assert '"garden_harvests"' in desktop
+assert 'gardenHarvestSummary' in desktop
+
 print("desktop sync contract OK")
 
 assert 'PAIR_PORT = 45824' in desktop
