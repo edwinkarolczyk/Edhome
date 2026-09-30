@@ -248,3 +248,15 @@ assert 'BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany' in 
 assert 'boolean rejected = message.contains(' in desktop
 assert 'DESKTOP_VERSION = "0.7.0.75"' in desktop
 print("desktop patch rejection diagnostics + retry pause OK")
+
+# Storage Desktop editor: same domain rules as Android + move history + rollback.
+assert 'validateDesktopStorageRow(row);' in desktop
+assert 'restoreJsonObject(row,before);' in desktop
+assert 'storageParentBoxCombo(row,raw)' in desktop
+assert 'Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.' in desktop
+assert 'appendDesktopStorageMove(row,before);' in desktop
+assert 'event.addProperty("action","moved")' in desktop
+assert 'Pudełko można przypisać tylko do miejsca.' in desktop
+assert 'Rzecz możesz włożyć tylko do istniejącego pudełka.' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.76"' in desktop
+print("desktop storage validation + move history + rollback OK")

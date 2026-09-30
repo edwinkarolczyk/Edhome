@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.75";
+    private static final String DESKTOP_VERSION = "0.7.0.76";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -5839,6 +5839,9 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private boolean editRow(JsonObject row, String[][] columns) {
+        JsonObject before=row.deepCopy();
+        boolean storageRow=isDesktopStorageRow(row);
+        boolean storageRowLive=storageRow&&desktopStorageRowIsLive(row);
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(new EmptyBorder(8, 8, 8, 8));
         GridBagConstraints g = new GridBagConstraints();
@@ -5875,15 +5878,124 @@ public final class EdhomeDesktop extends JFrame {
         try {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
                 applyEditor(row, entry.getKey(), entry.getValue());
+            if(storageRow) {
+                validateDesktopStorageRow(row);
+                boolean moved=!value(before,"parent_box_id").equals(
+                        value(row,"parent_box_id"))
+                    ||!value(before,"place_id").equals(value(row,"place_id"));
+                if(storageRowLive&&moved)
+                    appendDesktopStorageMove(row,before);
+            }
             markDirty();
             showSection(current);
             return true;
         } catch (Exception error) {
+            restoreJsonObject(row,before);
             JOptionPane.showMessageDialog(this,
                 "Nie zapisano zmiany: " + rootMessage(error),
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
             return false;
         }
+    }
+
+    private static void restoreJsonObject(JsonObject target,JsonObject source) {
+        for(String key:new ArrayList<>(target.keySet()))target.remove(key);
+        for(Map.Entry<String,JsonElement> entry:source.entrySet())
+            target.add(entry.getKey(),entry.getValue().deepCopy());
+    }
+
+    private boolean isDesktopStorageRow(JsonObject row) {
+        return row!=null&&row.has("parent_box_id")&&row.has("place_id")
+            &&row.has("created_at")&&row.has("kind");
+    }
+
+    private boolean desktopStorageRowIsLive(JsonObject row) {
+        for(JsonElement element:table("storage_items"))
+            if(element.isJsonObject()&&element.getAsJsonObject()==row)return true;
+        return false;
+    }
+
+    private void validateDesktopStorageRow(JsonObject row) {
+        String kind=value(row,"kind");
+        String parent=value(row,"parent_box_id");
+        String place=value(row,"place_id");
+        String lent=value(row,"lent_to");
+        String lentAt=value(row,"lent_at");
+        if(!"thing".equals(kind)&&!"box".equals(kind))
+            throw new IllegalArgumentException("Wybierz rzecz albo pudełko.");
+        if(!parent.isBlank()&&!place.isBlank())
+            throw new IllegalArgumentException(
+                "Wybierz jedno położenie: pudełko albo miejsce.");
+        if("box".equals(kind)&&!parent.isBlank())
+            throw new IllegalArgumentException(
+                "Pudełko można przypisać tylko do miejsca.");
+        if(!lent.isBlank()&&!"thing".equals(kind))
+            throw new IllegalArgumentException("Tylko rzecz może być wypożyczona.");
+        if(lent.isBlank()!=lentAt.isBlank())
+            throw new IllegalArgumentException(
+                "Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.");
+        if(!parent.isBlank()) {
+            JsonObject box;
+            try{box=scannerRowById("storage_items",Long.parseLong(parent));}
+            catch(Exception invalid){box=null;}
+            if(box==null||!"box".equals(value(box,"kind"))||box==row)
+                throw new IllegalArgumentException(
+                    "Rzecz możesz włożyć tylko do istniejącego pudełka.");
+        }
+        if(!place.isBlank()) {
+            JsonObject destination;
+            try{destination=scannerRowById("places",Long.parseLong(place));}
+            catch(Exception invalid){destination=null;}
+            if(destination==null)
+                throw new IllegalArgumentException(
+                    "Wybrane miejsce już nie istnieje.");
+        }
+    }
+
+    private JComboBox<Choice> storageParentBoxCombo(JsonObject row,String selected) {
+        java.util.List<Choice> options=new ArrayList<>();
+        options.add(new Choice("","—"));
+        if("thing".equals(value(row,"kind"))) {
+            long current=-1;
+            try{current=row.get("id").getAsLong();}catch(Exception ignored){}
+            for(JsonElement element:table("storage_items")) {
+                if(!element.isJsonObject())continue;
+                JsonObject candidate=element.getAsJsonObject();
+                if(!"box".equals(value(candidate,"kind")))continue;
+                long id;
+                try{id=candidate.get("id").getAsLong();}catch(Exception invalid){continue;}
+                if(id==current)continue;
+                options.add(new Choice(Long.toString(id),value(candidate,"name")));
+            }
+        }
+        JComboBox<Choice> combo=new JComboBox<>(options.toArray(new Choice[0]));
+        for(int i=0;i<options.size();i++)
+            if(options.get(i).value.equals(selected))combo.setSelectedIndex(i);
+        return combo;
+    }
+
+    private String desktopStorageLocation(JsonObject row) {
+        String parent=value(row,"parent_box_id");
+        if(!parent.isBlank())
+            return "Pudełko: "+referenceName("storage_items",parent);
+        String place=value(row,"place_id");
+        if(!place.isBlank())return placePath(place);
+        return "Bez miejsca";
+    }
+
+    private void appendDesktopStorageMove(JsonObject row,JsonObject before) {
+        long id=row.get("id").getAsLong();
+        JsonObject event=new JsonObject();
+        event.addProperty("id",nextId("storage_events"));
+        event.addProperty("item_id",id);
+        event.addProperty("name_snapshot",value(row,"name"));
+        event.addProperty("action","moved");
+        String details="EDHOME Desktop: "+desktopStorageLocation(before)
+            +" → "+desktopStorageLocation(row);
+        if(details.length()>300)details=details.substring(0,300);
+        event.addProperty("details",details);
+        event.addProperty("happened_at",System.currentTimeMillis());
+        table("storage_events").add(event);
     }
 
     private JComponent editorFor(String key, JsonObject row) {
@@ -5906,7 +6018,14 @@ public final class EdhomeDesktop extends JFrame {
         if ("place_id".equals(key) || "parent_id".equals(key))
             return referenceCombo("places", raw, true);
         if ("parent_box_id".equals(key))
-            return referenceCombo("storage_items", raw, true);
+            return storageParentBoxCombo(row,raw);
+        if ("lent_to".equals(key)&&isDesktopStorageRow(row)) {
+            JTextField field=new JTextField(raw);
+            field.setEditable(false);
+            field.setToolTipText(
+                "Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.");
+            return field;
+        }
 
         JTextField field = new JTextField();
         if ("amount_grosz".equals(key)) {
