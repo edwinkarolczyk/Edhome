@@ -4196,7 +4196,7 @@ public final class MainActivity extends Activity {
         title("Nasadzenia");
         int shown=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT a.name,COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),"
+                "SELECT p.id,a.name,COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),"
                 +"COALESCE(NULLIF(gc.variety,''),cp.variety,''),p.label,p.status,"
                 +"p.planned_sow,p.planned_plant,p.planned_harvest,p.notes "
                 +"FROM garden_plantings p JOIN garden_areas a ON a.id=p.area_id "
@@ -4205,22 +4205,28 @@ public final class MainActivity extends Activity {
                 +"ORDER BY p.id DESC LIMIT 50",null)){
             while(c.moveToNext()){
                 shown++;
+                long plantingId=c.getLong(0);
                 LinearLayout box=card();
-                String variety=c.getString(2), label=c.getString(3);
-                box.addView(text(c.getString(1)+(variety.isEmpty()?"":" • "+variety)
-                    +(label.isEmpty()?"":" • "+label),17,true));
-                box.addView(text(c.getString(0)+" • "+c.getString(4),13,false));
+                String variety=c.getString(3), label=c.getString(4);
+                String displayName=c.getString(2)+(variety.isEmpty()?"":" • "+variety)
+                    +(label.isEmpty()?"":" • "+label);
+                box.addView(text(displayName,17,true));
+                box.addView(text(c.getString(1)+" • "+c.getString(5),13,false));
                 String dates="";
-                if(!c.getString(5).isEmpty()) dates+="siew "+c.getString(5);
-                if(!c.getString(6).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"sadzenie "+c.getString(6);
-                if(!c.getString(7).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"zbiór "+c.getString(7);
+                if(!c.getString(6).isEmpty()) dates+="siew "+c.getString(6);
+                if(!c.getString(7).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"sadzenie "+c.getString(7);
+                if(!c.getString(8).isEmpty()) dates+=(dates.isEmpty()?"":" • ")+"zbiór "+c.getString(8);
                 if(!dates.isEmpty()) box.addView(text(dates,12,false));
-                if(!c.getString(8).isEmpty()) box.addView(text(c.getString(8),12,false));
+                if(!c.getString(9).isEmpty()) box.addView(text(c.getString(9),12,false));
+                int linked=GardenStore.linkedTaskCount(db.getReadableDatabase(),plantingId);
+                box.addView(text("Kalendarz: "+linked+" termin(y) połączone z Czynnościami",12,false));
+                smallButton(box,"Kalendarz i powiadomienia",()->
+                    gardenScheduleDialog(plantingId,displayName));
             }
         }
         if(shown==0) note("Brak nasadzeń.");
-        note("Następny krok 0.7 spina nasadzenia z istniejącymi Czynnościami, "
-            +"Kalendarzem i powiadomieniami — bez tworzenia drugiego systemu przypomnień.");
+        note("Terminy Ogrodu korzystają z istniejących Czynności, Kalendarza "
+            +"i powiadomień. Nie powstaje drugi system przypomnień.");
     }
 
     private int gardenCount(String table) {
@@ -4302,12 +4308,66 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
                 try{int ai=area.getSelectedItemPosition(),pi=plant.getSelectedItemPosition();
                     long selected=plantIds.get(pi);
-                    GardenStore.addPlanting(db.getWritableDatabase(),areaIds.get(ai),
+                    long plantingId=GardenStore.addPlanting(db.getWritableDatabase(),areaIds.get(ai),
                         catalogFlags.get(pi)?selected:0L,catalogFlags.get(pi)?0L:selected,
                         label.getText().toString(),sow.getText().toString(),
                         plantDate.getText().toString(),harvest.getText().toString(),notes.getText().toString());
-                    DiagnosticLog.event("GARDEN_PLANTING_ADDED"); render();}
+                    // Planowane daty od razu pojawiają się w tym samym Kalendarzu.
+                    GardenStore.syncPlanTasks(db.getWritableDatabase(),plantingId,null,0);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_PLANTING_ADDED");
+                    render();}
                 catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać nasadzenia.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenScheduleDialog(long plantingId,String label) {
+        java.util.List<String> options=java.util.Arrays.asList(
+            "Bez powiadomienia",
+            "09:00 w dniu terminu",
+            "09:00 dzień wcześniej",
+            "09:00 trzy dni wcześniej",
+            "18:00 dzień wcześniej");
+        Spinner reminder=new Spinner(this);
+        reminder.setAdapter(lightDialogSpinnerAdapter(options));
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        form.addView(text("Siew, sadzenie i zbiór są tymi samymi Czynnościami, "
+            +"które widzisz w Kalendarzu.",13,false));
+        form.addView(reminder);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Ogród • "+label)
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try{
+                    String time=null; int lead=0;
+                    switch(reminder.getSelectedItemPosition()){
+                        case 1: time="09:00"; lead=0; break;
+                        case 2: time="09:00"; lead=1; break;
+                        case 3: time="09:00"; lead=3; break;
+                        case 4: time="18:00"; lead=1; break;
+                        default: break;
+                    }
+                    int linked=GardenStore.syncPlanTasks(db.getWritableDatabase(),
+                        plantingId,time,lead);
+                    ReminderReceiver.schedule(this);
+                    if(time!=null && Build.VERSION.SDK_INT>=33
+                            && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            !=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS},7131);
+                    DiagnosticLog.event("GARDEN_TASKS_SYNCED","count="+linked);
+                    render();
+                    alert(linked==0
+                        ?"To nasadzenie nie ma jeszcze planowanych dat."
+                        :"Zapisano "+linked+" termin(y) w Kalendarzu.");
+                } catch(Exception e) {
+                    alert(e.getMessage()==null
+                        ?"Nie udało się zapisać terminów Ogrodu.":e.getMessage());
+                }
             }).show();
     }
 
