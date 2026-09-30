@@ -241,7 +241,9 @@ print("desktop one-click diagnostics export contract OK")
 
 # Sync rejection diagnostics: preserve phone validation reason and stop retry loops.
 assert 'DESKTOP_SYNC_PATCH_REJECTED' in server
-assert 'Telefon odrzucił zmianę rekordową"+(detail.isBlank()' in desktop
+assert 'response.statusCode() == 400' in desktop
+assert 'detail=error.has("message")' in desktop
+assert 'Telefon odrzucił zmianę rekordową' in desktop
 assert 'BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany' in desktop
 assert 'boolean rejected = message.contains(' in desktop
 assert 'DESKTOP_VERSION = "0.7.0.75"' in desktop
