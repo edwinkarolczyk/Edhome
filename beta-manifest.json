@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 136,
-  "versionName": "0.6.0.71",
-  "changelog": "EDHOME 0.6.0.71 — panel Start ma regulowaną pojemność 6/9/12 miejsc na stronę przy 3 kolumnach. Szeroki kafelek zajmuje 2 miejsca. W trybie układu kafelek można przeciągnąć do lewej lub prawej krawędzi, aby przenieść go między stronami; działa też menu poprzednia/następna strona. Kolejność i ustawienie liczby miejsc są zachowywane w kopii danych. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.71/edhome-beta.apk",
-  "sha256": "6267e3022213d5b883663aeb6719953d24b669d327096c35aee6959838edb6d1"
+  "versionCode": 137,
+  "versionName": "0.7.0.1",
+  "changelog": "EDHOME 0.7.0.1 — start modułu Ogród: offline obszary, własne rośliny i nasadzenia, osobny katalog referencyjny z warstwą korekt, backup i synchronizacja LAN. Powiadomienie EDHOME Desktop nie jest już ponawiane przy niezmienionym stanie. Zachowano regulowane strony Start 6/9/12. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.0.1/edhome-beta.apk",
+  "sha256": "34f7e520562683dab7bd899baa4785d7bde03c16697fdba9b7ad28b936f6fe52"
 }
