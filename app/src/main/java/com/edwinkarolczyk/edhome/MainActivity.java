@@ -4233,9 +4233,17 @@ public final class MainActivity extends Activity {
                 if(!c.getString(9).isEmpty()) box.addView(text(c.getString(9),12,false));
                 int linked=GardenStore.linkedTaskCount(db.getReadableDatabase(),plantingId);
                 box.addView(text("Kalendarz: "+linked+" termin(y) połączone z Czynnościami",12,false));
+                int activeGardenTasks=GardenStore.activeActivityTaskCount(
+                    db.getReadableDatabase(),plantingId);
+                String nextGardenTask=GardenStore.nextActivityTask(
+                    db.getReadableDatabase(),plantingId);
+                box.addView(text("Prace ogrodowe: "+activeGardenTasks+" aktywne"
+                    +(nextGardenTask.isEmpty()?"":" • najbliższa: "+nextGardenTask),12,false));
                 LinearLayout row=compactActionRow();
                 compactAction(row,"Cykl / zbiory",()->
                     gardenCycleDialog(plantingId,displayName,status));
+                compactAction(row,"+ Czynność",()->
+                    gardenActivityDialog(plantingId,displayName));
                 compactAction(row,"Powiadomienia",()->
                     gardenScheduleDialog(plantingId,displayName));
             }
@@ -4554,6 +4562,136 @@ public final class MainActivity extends Activity {
             case "cancel": return "anulowanie";
             default: return "notatka";
         }
+    }
+
+    private void gardenActivityDialog(long plantingId,String label) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(8),dp(18),dp(8));
+
+        form.addView(text("Rodzaj czynności",14,true));
+        Spinner kind=new Spinner(this);
+        java.util.List<String> kindLabels=java.util.Arrays.asList(
+            "Podlewanie","Nawożenie","Przycinanie","Przygotowanie gleby",
+            "Ochrona / oprysk","Własna czynność");
+        String[] kindCodes={"water","fertilize","prune","soil","protect","custom"};
+        kind.setAdapter(lightDialogSpinnerAdapter(kindLabels));
+        form.addView(kind);
+
+        EditText custom=new EditText(this);
+        custom.setHint("Nazwa własnej czynności");
+        custom.setSingleLine(true);
+        custom.setVisibility(View.GONE);
+        form.addView(custom);
+        kind.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                custom.setVisibility(position==5?View.VISIBLE:View.GONE);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+
+        form.addView(text("Pierwszy termin",14,true));
+        EditText due=new EditText(this);
+        due.setHint("RRRR-MM-DD");
+        due.setSingleLine(true);
+        due.setFocusable(false);
+        due.setText(LocalDate.now().toString());
+        due.setOnClickListener(v -> {
+            LocalDate initial;
+            try { initial=LocalDate.parse(due.getText().toString()); }
+            catch(Exception ignored){ initial=LocalDate.now(); }
+            new DatePickerDialog(this,(picker,year,month,day)->
+                due.setText(LocalDate.of(year,month+1,day).toString()),
+                initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth()).show();
+        });
+        form.addView(due);
+        smallButton(form,"Wybierz datę",()->due.performClick());
+
+        form.addView(text("Powtarzanie",14,true));
+        Spinner repeat=new Spinner(this);
+        repeat.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(TaskRules.LABELS)));
+        form.addView(repeat);
+        EditText every=new EditText(this);
+        every.setSingleLine(true);
+        every.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        every.setText("1");
+        every.setHint("Co ile");
+        every.setVisibility(View.GONE);
+        form.addView(every);
+        repeat.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                every.setVisibility(TaskRules.custom(TaskRules.RULES[position])
+                    ?View.VISIBLE:View.GONE);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+
+        form.addView(text("Powiadomienie",14,true));
+        Spinner reminder=new Spinner(this);
+        java.util.List<String> reminderLabels=java.util.Arrays.asList(
+            "Bez powiadomienia","09:00 w dniu terminu","09:00 dzień wcześniej",
+            "09:00 trzy dni wcześniej","18:00 dzień wcześniej");
+        reminder.setAdapter(lightDialogSpinnerAdapter(reminderLabels));
+        form.addView(reminder);
+
+        lightDialogForm(form);
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Nowa czynność • "+label)
+            .setView(scroll)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dodaj",null)
+            .create();
+        dialog.setOnShowListener(ignored ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    int repeatPos=repeat.getSelectedItemPosition();
+                    String rule=TaskRules.RULES[repeatPos];
+                    int interval=1;
+                    if(TaskRules.custom(rule)) {
+                        try { interval=Integer.parseInt(every.getText().toString().trim()); }
+                        catch(Exception bad) {
+                            throw new IllegalArgumentException(
+                                "Podaj poprawny odstęp powtarzania.");
+                        }
+                    }
+                    String remindTime=null;
+                    int lead=0;
+                    switch(reminder.getSelectedItemPosition()) {
+                        case 1: remindTime="09:00"; lead=0; break;
+                        case 2: remindTime="09:00"; lead=1; break;
+                        case 3: remindTime="09:00"; lead=3; break;
+                        case 4: remindTime="18:00"; lead=1; break;
+                        default: break;
+                    }
+                    long taskId=GardenStore.createActivityTask(
+                        db.getWritableDatabase(),plantingId,
+                        kindCodes[kind.getSelectedItemPosition()],
+                        custom.getText().toString(),
+                        due.getText().toString().trim(),rule,interval,
+                        remindTime,lead);
+                    ReminderReceiver.schedule(this);
+                    if(remindTime!=null && Build.VERSION.SDK_INT>=33
+                            && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            !=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS},7132);
+                    DiagnosticLog.event("GARDEN_ACTIVITY_TASK_ADDED",
+                        "task="+taskId+" planting="+plantingId);
+                    dialog.dismiss();
+                    render();
+                } catch(IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch(Exception error) {
+                    DiagnosticLog.error("GARDEN_ACTIVITY_TASK_SAVE",error);
+                    alert("Nie udało się dodać czynności ogrodowej.");
+                }
+            }));
+        dialog.show();
     }
 
     private void gardenScheduleDialog(long plantingId,String label) {
