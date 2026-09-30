@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 37;
+    private static final int DB_VERSION = 38;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -102,8 +102,13 @@ final class DataBackup {
             "notes", "created_at"},
         {"garden_plantings", "id", "area_id", "catalog_id", "custom_plant_id",
             "label", "status", "planned_sow", "actual_sow", "planned_plant",
-            "actual_plant", "planned_harvest", "actual_harvest", "notes", "created_at"},
-        {"garden_task_links", "id", "planting_id", "stage", "task_id", "created_at"}
+            "actual_plant", "planned_harvest", "actual_harvest", "season_year",
+            "finished_at", "notes", "created_at"},
+        {"garden_task_links", "id", "planting_id", "stage", "task_id", "created_at"},
+        {"garden_events", "id", "planting_id", "event_kind", "event_date", "note",
+            "created_at"},
+        {"garden_harvests", "id", "planting_id", "harvested_on", "quantity_milli",
+            "unit", "note", "created_at"}
     };
 
     private DataBackup() { }
@@ -247,7 +252,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -429,6 +434,8 @@ final class DataBackup {
                 || (inputVersion < 34 && "bank_evidence_queue".equals(definition[0]))
                 || (inputVersion < 35 && "nfc_links".equals(definition[0]))
                 || (inputVersion < 37 && definition[0].startsWith("garden_"))
+                || (inputVersion < 38 && ("garden_events".equals(definition[0])
+                    || "garden_harvests".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -541,6 +548,17 @@ final class DataBackup {
                                     || "inspection_reminder_lead".equals(key))) {
                             values.putNull(key);
                             continue;
+                        }
+                        if (inputVersion < 38
+                                && "garden_plantings".equals(definition[0])) {
+                            if ("season_year".equals(key)) {
+                                values.put(key, 0);
+                                continue;
+                            }
+                            if ("finished_at".equals(key)) {
+                                values.put(key, "");
+                                continue;
+                            }
                         }
                         if (inputVersion < 23
                                 && ("shopping_items".equals(definition[0])
@@ -1553,6 +1571,7 @@ final class DataBackup {
             || "plant_from_month".equals(column) || "plant_to_month".equals(column)
             || "harvest_from_month".equals(column) || "harvest_to_month".equals(column)
             || "spacing_cm".equals(column) || "depth_mm".equals(column)
+            || "season_year".equals(column) || "quantity_milli".equals(column)
             || "updated_at".equals(column)
             || "current".equals(column);
     }
