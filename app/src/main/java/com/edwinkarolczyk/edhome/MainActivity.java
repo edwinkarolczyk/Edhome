@@ -4379,15 +4379,14 @@ public final class MainActivity extends Activity {
             +"Katalog jest osobną warstwą. Import CSV nie usuwa nasadzeń ani Twoich "
             +"korekt. EDHOME nie pobiera ani nie wskazuje pirackich baz — importujesz "
             +"plik, do którego masz prawo.";
-        Object[] actions={"Import CSV","Eksport CSV","Zamknij"};
-        int choice=new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this)
             .setTitle("Ogród • katalog roślin")
             .setMessage(message)
             .setItems(new String[]{"Import CSV","Eksport CSV","Zamknij"},
                 (dialog,which)->{
                     if(which==0) gardenImportCatalog();
                     else if(which==1) gardenExportCatalog();
-                }).show()==null ? -1 : -1;
+                }).show();
     }
 
     private void gardenImportCatalog() {
