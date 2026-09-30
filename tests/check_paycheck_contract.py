@@ -20,7 +20,7 @@ for token in (
     'PAYCHECK_SHARED_PENDING',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
-    'super(context, "edhome-beta-preview.db", null, 37)',
+    'super(context, "edhome-beta-preview.db", null, 38)',
 ):
     assert token in main, token
 for token in (
@@ -40,7 +40,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 37;',
+    'DB_VERSION = 38;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
