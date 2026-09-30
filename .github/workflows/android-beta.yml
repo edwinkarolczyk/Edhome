@@ -432,14 +432,14 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EDHOME-0.7.1.0-signed-apk
+          name: EDHOME-0.7.2.0-signed-apk
           path: app/build/outputs/apk/beta/release/app-beta-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish signed Beta release and live manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME 0.7.1.0 — Ogród: pełniejszy cykl uprawy z faktycznym siewem i sadzeniem, rejestrem zbiorów, ilością i jednostką plonu, zakończeniem sezonu, historią oraz tworzeniem kolejnego sezonu. Terminy pozostają wspólne z Czynnościami, Kalendarzem i powiadomieniami. SQLite v38 i backup obejmują historię sezonów. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME 0.7.2.0 — Ogród: cykl uprawy i historia sezonów z 0.7.1 oraz szybkie czynności pielęgnacyjne bezpośrednio z nasadzenia: podlewanie, nawożenie, przycinanie, przygotowanie gleby, ochrona/oprysk i własna czynność. Obsługują terminy, cykle sezonowe i powtarzalne oraz powiadomienia przez wspólny silnik Czynności/Kalendarza. SQLite v38, backup i LAN pozostają wspólne. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
