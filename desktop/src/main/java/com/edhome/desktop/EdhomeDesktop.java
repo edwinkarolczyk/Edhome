@@ -3142,7 +3142,9 @@ public final class EdhomeDesktop extends JFrame {
         JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
         JButton diagnose = new JButton("Diagnostyka połączenia PC ↔ telefon");
         JButton downloadAllLogs = new JButton("⬇ Pobierz logi telefonu + Desktop na Pulpit");
+        JButton downloadPhoneLogs = new JButton("Pobierz nowe logi z telefonu");
         JButton copyDesktopLogs = new JButton("Kopiuj diagnostykę EDHOME Desktop");
+        JButton saveDesktopLogs = new JButton("Zapisz diagnostykę Desktop TXT");
         JButton importFile = new JButton("Wczytaj backup JSON");
         JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
         JCheckBox autostart = new JCheckBox("Uruchamiaj EDHOME Desktop razem z Windows");
@@ -3180,12 +3182,14 @@ public final class EdhomeDesktop extends JFrame {
         g.gridx=1; form.add(importFile,g);
         g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(diagnose,g);
         g.gridy=6; form.add(downloadAllLogs,g);
-        g.gridy=7; form.add(copyDesktopLogs,g);
-        g.gridy=8; form.add(updateDesktop,g);
-        g.gridy=9; form.add(autostart,g);
-        g.gridy=10; form.add(startMinimized,g);
-        g.gridy=11; form.add(autoConnect,g);
-        g.gridy=12; form.add(autoWrite,g);
+        g.gridy=7; g.gridwidth=1; g.weightx=.5; form.add(downloadPhoneLogs,g);
+        g.gridx=1; form.add(saveDesktopLogs,g);
+        g.gridx=0; g.gridy=8; g.gridwidth=2; g.weightx=1; form.add(copyDesktopLogs,g);
+        g.gridy=9; form.add(updateDesktop,g);
+        g.gridy=10; form.add(autostart,g);
+        g.gridy=11; form.add(startMinimized,g);
+        g.gridy=12; form.add(autoConnect,g);
+        g.gridy=13; form.add(autoWrite,g);
 
         qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
         pull.addActionListener(e -> {
@@ -3204,7 +3208,11 @@ public final class EdhomeDesktop extends JFrame {
         downloadAllLogs.addActionListener(e ->
             saveAllDiagnosticsToDesktop(ip.getText().trim(),
                 token.getText().trim(), downloadAllLogs));
+        downloadPhoneLogs.addActionListener(e ->
+            downloadPhoneDiagnostics(ip.getText().trim(),
+                token.getText().trim(), downloadPhoneLogs));
         copyDesktopLogs.addActionListener(e -> copyDesktopDiagnostics());
+        saveDesktopLogs.addActionListener(e -> saveDesktopDiagnostics());
         importFile.addActionListener(e -> importBackup());
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         autostart.addActionListener(e -> {
