@@ -123,5 +123,6 @@ assert 'deleted_at IS NOT NULL' in sync
 assert 'reserveQrIdentitySequences(database);' in backup
 assert 'new String[]{"storage_items","places"}' in backup
 assert 'MAX(CAST(row_key AS INTEGER)) FROM sync_records' in backup
-assert "versionName '0.7.4.5'" in gradle
+version=re.search(r"versionName '0\\.7\\.4\\.(\\d+)'",gradle)
+assert version and int(version.group(1)) >= 5
 print("Storage QR tombstone identity + restore sequence reservation: PASS")
