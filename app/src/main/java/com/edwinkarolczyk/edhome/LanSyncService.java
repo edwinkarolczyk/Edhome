@@ -78,6 +78,8 @@ public final class LanSyncService extends Service {
             channel.setDescription(
                 "Utrzymuje lokalne połączenie EDHOME Android ↔ Desktop.");
             channel.setShowBadge(false);
+            channel.setSound(null, null);
+            channel.enableVibration(false);
             manager.createNotificationChannel(channel);
         }
 
@@ -93,7 +95,6 @@ public final class LanSyncService extends Service {
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build();
         startForeground(NOTIFICATION_ID, notification);
@@ -144,7 +145,6 @@ public final class LanSyncService extends Service {
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build();
         manager.notify(NOTIFICATION_ID, notification);
