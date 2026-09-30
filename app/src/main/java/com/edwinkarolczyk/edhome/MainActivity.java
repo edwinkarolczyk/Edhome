@@ -1502,7 +1502,7 @@ public final class MainActivity extends Activity {
 
         TextView editHint = text(homeEditMode
             ? (skin.showcase()
-                ? "✥  TRYB UKŁADU • przeciągnij kafelek • przesuń ekran w bok • ⋮⋮: zmień stronę"
+                ? "✥  TRYB UKŁADU • przeciągnij • krawędź ekranu = zmień stronę • ⋮⋮: menu"
                 : "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar")
             : "✥  Krócej: menu • dłużej: przeciągnij • przesuń ekran w bok", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
@@ -2222,13 +2222,14 @@ public final class MainActivity extends Activity {
         homeDragSource = null;
         homeDragOrder = null;
         homeDragTargetIndex = -1;
+        homeDragTargetPage = -1;
         homeDragDropped = false;
         homeDragFinishQueued = false;
         homeTileSlots.clear();
         if (homeDragHint != null) {
             homeDragHint.setText(homeEditMode
                 ? (skin.showcase()
-                    ? "✥  TRYB UKŁADU • przeciągnij • przesuń ekran w bok • ⋮⋮: zmień stronę"
+                    ? "✥  TRYB UKŁADU • przeciągnij do lewej/prawej krawędzi, aby zmienić stronę"
                     : "✥  TRYB UKŁADU • dłużej przytrzymaj lub przesuń za uchwyt ⋮⋮")
                 : "✥  Krócej: menu • dłużej: przeciągnij • dotknij: układaj");
             homeDragHint.setTextColor(subdued);
@@ -10247,6 +10248,34 @@ public final class MainActivity extends Activity {
             if(skin.name.equals(selectedTheme))return;
             prefs.edit().putString("theme",selectedTheme).apply();
             DiagnosticLog.event("THEME_CHANGED");
+            render();
+        });
+        Spinner homePageSlots=new Spinner(this);
+        java.util.List<String> homePageSlotLabels=java.util.Arrays.asList(
+            "6 miejsc • 2 × 3",
+            "9 miejsc • 3 × 3",
+            "12 miejsc • 4 × 3");
+        homePageSlots.setAdapter(themeSpinnerAdapter(homePageSlotLabels));
+        int currentPageSlots=homePageCapacity();
+        int pageSlotSelection=1;
+        for(int i=0;i<HomeTileLayout.PAGE_SLOT_OPTIONS.length;i++)
+            if(HomeTileLayout.PAGE_SLOT_OPTIONS[i]==currentPageSlots)
+                pageSlotSelection=i;
+        homePageSlots.setSelection(pageSlotSelection);
+        appearance.addView(text("Miejsca na jednej stronie Start",14,true));
+        appearance.addView(homePageSlots,new LinearLayout.LayoutParams(-1,dp(52)));
+        appearance.addView(text(
+            "3 kolumny pozostają stałe. Szeroki kafelek zajmuje 2 miejsca. "
+                +"Po zmianie liczby miejsc kolejność kafelków zostaje zachowana.",
+            12,false));
+        smallButton(appearance,"Zapisz liczbę miejsc na stronie",()->{
+            int choice=homePageSlots.getSelectedItemPosition();
+            if(choice<0||choice>=HomeTileLayout.PAGE_SLOT_OPTIONS.length)return;
+            int slots=HomeTileLayout.PAGE_SLOT_OPTIONS[choice];
+            if(!HomeTileLayout.validPageSlots(slots))return;
+            prefs.edit().putInt(HomeTileLayout.PAGE_SLOTS_KEY,slots).apply();
+            homeShowcasePage=0;
+            DiagnosticLog.event("HOME_PAGE_CAPACITY_SAVED","slots="+slots);
             render();
         });
         if (skin.showcase()) {
