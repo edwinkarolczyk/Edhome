@@ -360,6 +360,14 @@ jobs:
         run: python3 tests/check_updater_contract.py
       - name: EDHOME 0.6 preserved-contract gate
         run: python3 tests/check_0_6_release_gate.py
+      - name: Garden 0.7 catalog CSV regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/garden-catalog"
+          javac -d "$RUNNER_TEMP/garden-catalog" \
+            app/src/main/java/com/edwinkarolczyk/edhome/GardenCatalogCsv.java \
+            tests/task_rules/GardenCatalogCsvSmoke.java
+          java -cp "$RUNNER_TEMP/garden-catalog" \
+            com.edwinkarolczyk.edhome.GardenCatalogCsvSmoke
       - name: Garden 0.7 foundation contract
         run: python3 tests/check_garden_contract.py
       - name: Desktop Wi-Fi read-only sync contract
