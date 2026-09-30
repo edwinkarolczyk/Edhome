@@ -124,6 +124,8 @@ final class DataBackup {
         JSONObject settings = new JSONObject();
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
+        settings.put("homeInterface",
+            prefs.getString("home_interface_mode", "current"));
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
         settings.put("homeTileOrderV2", HomeTileCatalog.encode(
             HomeTileCatalog.canonical(
@@ -262,6 +264,10 @@ final class DataBackup {
         JSONObject settings = root.getJSONObject("settings");
         String household = settings.getString("household");
         String theme = settings.getString("theme");
+        String homeInterface=settings.optString("homeInterface","current");
+        if(!java.util.Arrays.asList("current","concept5","concept8")
+                .contains(homeInterface))
+            throw new IllegalArgumentException("Nieprawidłowy interfejs Start.");
         String tileOrder = settings.optString("homeTileOrder", "");
         String tileOrderV2 = settings.has("homeTileOrderV2")
             ? settings.getString("homeTileOrderV2") : null;
@@ -1474,6 +1480,7 @@ final class DataBackup {
             SharedPreferences.Editor restored = prefs.edit()
                 .putString("household", household)
                 .putString("theme", theme)
+                .putString("home_interface_mode", homeInterface)
                 .putString("home_tile_order", tileOrder)
                 .putString(StorageQrLabels.HISTORY, qrHistory)
                 .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
