@@ -20,6 +20,15 @@ assert 'DATABASE_MIGRATED_36_TO_37_GARDEN' in main
 assert 'DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE' in main
 assert 'private static final int DB_VERSION = 38;' in backup
 
+# Sync backfill must run only after the Garden v38 columns/tables exist.
+# Otherwise an existing v36/v37 install crashes on startup while ensureAll()
+# queries season_year/finished_at before GardenStore.upgrade38() adds them.
+upgrade=main.split("@Override public void onUpgrade",1)[1].split(
+    "private static void addNfcLinks",1)[0]
+assert upgrade.count("SyncRecordStore.ensureAll(database);") == 1
+assert upgrade.index("GardenStore.upgrade38(database);") < upgrade.index(
+    "SyncRecordStore.ensureAll(database);")
+
 # Offline data + portable backup/restore.
 for table in (
     "garden_areas","garden_catalog","garden_catalog_overrides",

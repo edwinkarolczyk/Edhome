@@ -12095,7 +12095,6 @@ public final class MainActivity extends Activity {
             if(oldVersion < 36) {
                 try {
                     SyncRecordStore.create(database);
-                    SyncRecordStore.ensureAll(database);
                 } catch (Exception error) {
                     throw new IllegalStateException(
                         "Nie udało się utworzyć metadanych synchronizacji.", error);
@@ -12105,7 +12104,6 @@ public final class MainActivity extends Activity {
             if(oldVersion < 37) {
                 try {
                     GardenStore.create(database);
-                    SyncRecordStore.ensureAll(database);
                 } catch(Exception error) {
                     throw new IllegalStateException("Nie udało się utworzyć danych Ogrodu.",error);
                 }
@@ -12114,12 +12112,23 @@ public final class MainActivity extends Activity {
             if(oldVersion < 38) {
                 try {
                     GardenStore.upgrade38(database);
-                    SyncRecordStore.ensureAll(database);
                 } catch(Exception error) {
                     throw new IllegalStateException(
                         "Nie udało się rozszerzyć historii sezonów Ogrodu.",error);
                 }
                 DiagnosticLog.event("DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE");
+            }
+            if(newVersion >= 36) {
+                try {
+                    // Synchronizację uzupełniamy dopiero po wszystkich zmianach schematu.
+                    // DataBackup.syncDefinitions() zawsze opisuje najnowszy układ tabel.
+                    SyncRecordStore.create(database);
+                    SyncRecordStore.ensureAll(database);
+                } catch(Exception error) {
+                    throw new IllegalStateException(
+                        "Nie udało się uzupełnić metadanych synchronizacji po migracji bazy.",
+                        error);
+                }
             }
         }
 
