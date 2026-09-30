@@ -26,6 +26,9 @@ public final class LanSyncService extends Service {
     private MainActivity.LocalDb db;
     private LanSyncServer server;
     private SharedPreferences prefs;
+    // Android dostaje wymagane powiadomienie foreground raz. Watchdog nie
+    // odtwarza tej samej treści po każdym cyklu, gdy stan się nie zmienił.
+    private String lastNotificationState = "";
     private Handler watchdogHandler;
     private final Runnable watchdog = new Runnable() {
         @Override public void run() {
@@ -90,9 +93,11 @@ public final class LanSyncService extends Service {
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build();
         startForeground(NOTIFICATION_ID, notification);
+        lastNotificationState = "Serwer LAN uruchamia się • czeka na PC";
 
         String token = LanSyncServer.ensureToken(prefs);
         server = new LanSyncServer(token,
@@ -124,6 +129,9 @@ public final class LanSyncService extends Service {
         else
             state = "Serwer LAN działa • czeka na PC";
 
+        if (state.equals(lastNotificationState)) return;
+        lastNotificationState = state;
+
         Intent open = new Intent(this, MainActivity.class)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -136,6 +144,7 @@ public final class LanSyncService extends Service {
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build();
         manager.notify(NOTIFICATION_ID, notification);
