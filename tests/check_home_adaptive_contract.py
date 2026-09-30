@@ -66,6 +66,25 @@ assert 'Math.min(iconWidth, iconHeight)' in main
 assert 'trim3dTransparentMargins(image)' in main
 assert 'Opcjonalnie: importuj paczkę ikon ZIP' in main
 assert '.putBoolean("icon_style_explicit",true).apply()' in main
+# Optional complete home interfaces: the classic UI remains available.
+for token in (
+    'HOME_INTERFACE_PREF = "home_interface_mode"',
+    'HOME_INTERFACE_CONCEPT5 = "concept5"',
+    'HOME_INTERFACE_CONCEPT8 = "concept8"',
+    '"Obecny interfejs", "Koncepcja 5", "Koncepcja 8"',
+    'homeConcept5();',
+    'homeConcept8();',
+    'addConceptBottomNavigation();',
+    'conceptActionRow();',
+    'conceptModuleList(true);',
+):
+    assert token in main, token
+for token in (
+    'settings.put("homeInterface"',
+    'String homeInterface=settings.optString("homeInterface","current")',
+    '.putString("home_interface_mode", homeInterface)',
+):
+    assert token in backup, token
 assert 'DEFAULT_SHORT_MS = 450' in layout
 assert 'DEFAULT_DRAG_MS = 1100' in layout
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
