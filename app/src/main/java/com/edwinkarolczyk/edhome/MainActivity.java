@@ -174,6 +174,7 @@ public final class MainActivity extends Activity {
     private LinearLayout homeTileGrid;
     private String homeDragSource;
     private int homeDragTargetIndex = -1;
+    private int homeDragTargetPage = -1;
     private boolean homeDragDropped;
     private boolean homeDragFinishQueued;
     private TextView homeDragHint;
@@ -637,11 +638,17 @@ public final class MainActivity extends Activity {
             ? 2 : 1;
     }
 
+    private int homePageCapacity() {
+        return HomeTileLayout.pageSlots(prefs.getInt(
+            HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS));
+    }
+
     private java.util.List<java.util.List<String>> homePages(
             java.util.List<String> order) {
         java.util.ArrayList<java.util.List<String>> pages =
             new java.util.ArrayList<>();
         java.util.ArrayList<String> page = new java.util.ArrayList<>();
+        int capacity = homePageCapacity();
         int used = 0;
         int rowUsed = 0;
         for (String id : order) {
@@ -650,7 +657,7 @@ public final class MainActivity extends Activity {
                 used += 3 - rowUsed;
                 rowUsed = 0;
             }
-            if (!page.isEmpty() && used + span > 9) {
+            if (!page.isEmpty() && used + span > capacity) {
                 pages.add(page);
                 page = new java.util.ArrayList<>();
                 used = 0;
@@ -663,6 +670,28 @@ public final class MainActivity extends Activity {
         }
         if (!page.isEmpty() || pages.isEmpty()) pages.add(page);
         return pages;
+    }
+
+    private int homePageOf(java.util.List<java.util.List<String>> pages, String id) {
+        for (int page = 0; page < pages.size(); page++)
+            if (pages.get(page).contains(id)) return page;
+        return -1;
+    }
+
+    private int homePageInsertionSlot(java.util.List<String> order,
+            String source, int targetPage, boolean atStart) {
+        java.util.List<java.util.List<String>> pages = homePages(order);
+        if (targetPage < 0 || targetPage >= pages.size()
+                || pages.get(targetPage).isEmpty()) return -1;
+        String marker = atStart
+            ? pages.get(targetPage).get(0)
+            : pages.get(targetPage).get(pages.get(targetPage).size() - 1);
+        int sourceIndex = order.indexOf(source);
+        int markerIndex = order.indexOf(marker);
+        if (sourceIndex < 0 || markerIndex < 0) return -1;
+        int markerAfterRemoval = markerIndex - (sourceIndex < markerIndex ? 1 : 0);
+        int slot = atStart ? markerAfterRemoval : markerAfterRemoval + 1;
+        return Math.max(0, Math.min(order.size() - 1, slot));
     }
 
     private int showcaseHomePageCount() {
@@ -1390,21 +1419,16 @@ public final class MainActivity extends Activity {
     }
 
     private boolean moveHomeTileToAdjacentPage(String id, int delta) {
-        if (!skin.showcase() || delta == 0) return false;
-        adoptShowcaseOrderForEditing();
+        if (delta == 0) return false;
+        if (skin.showcase()) adoptShowcaseOrderForEditing();
         java.util.List<String> order = homeTileOrder();
-        int source = order.indexOf(id);
-        if (source < 0) return false;
-        int pageCount = Math.max(1, (order.size() + 8) / 9);
-        int sourcePage = source / 9;
+        java.util.List<java.util.List<String>> pages = homePages(order);
+        int sourcePage = homePageOf(pages, id);
+        if (sourcePage < 0) return false;
         int targetPage = sourcePage + delta;
-        if (targetPage < 0 || targetPage >= pageCount) return false;
-        int target;
-        if (delta < 0) {
-            target = Math.min(order.size() - 1, targetPage * 9 + 8);
-        } else {
-            target = Math.min(order.size() - 1, targetPage * 9);
-        }
+        if (targetPage < 0 || targetPage >= pages.size()) return false;
+        int target = homePageInsertionSlot(order, id, targetPage, delta > 0);
+        if (target < 0) return false;
         homeShowcasePage = targetPage;
         homeShowcaseSlideDirection = delta;
         return moveHomeTileAtIndex(id, target);
