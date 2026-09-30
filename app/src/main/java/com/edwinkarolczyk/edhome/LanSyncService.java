@@ -158,6 +158,11 @@ public final class LanSyncService extends Service {
     }
 
     private void afterDataChange() {
+        int prunedStorageThumbs=StorageThumbs.prune(
+            prefs,db.getWritableDatabase());
+        if(prunedStorageThumbs>0)
+            DiagnosticLog.event("STORAGE_THUMBNAILS_PRUNED_AFTER_SYNC",
+                "count="+prunedStorageThumbs);
         ReminderReceiver.schedule(this);
         DeviceTimerReceiver.scheduleAll(this);
         sendBroadcast(new Intent(

@@ -36,3 +36,11 @@ assert 'Bitmap.CompressFormat.JPEG' in thumb
 assert 'ACTION_OPEN_DOCUMENT' in main and 'picker.setType("image/*")' in main
 assert 'BankNotificationListener' in beta
 print("UX: preserved viewport, inline Magazyn preview, bank selector and photo backup PASS")
+
+assert 'static int prune(SharedPreferences prefs,SQLiteDatabase db)' in thumb
+assert 'SELECT id FROM storage_items' in thumb
+assert 'StorageThumbs.prune(' in main
+service=(src/"LanSyncService.java").read_text(encoding="utf-8")
+assert 'STORAGE_THUMBNAILS_PRUNED_AFTER_SYNC' in service
+assert 'StorageThumbs.prune(' in service
+print("Storage thumbnail orphan cleanup after startup/sync PASS")

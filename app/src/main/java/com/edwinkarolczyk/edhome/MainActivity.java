@@ -200,6 +200,11 @@ public final class MainActivity extends Activity {
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        int prunedStorageThumbs=StorageThumbs.prune(
+            prefs,db.getWritableDatabase());
+        if(prunedStorageThumbs>0)
+            DiagnosticLog.event("STORAGE_THUMBNAILS_PRUNED",
+                "count="+prunedStorageThumbs);
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         if (BetaUpdater.isBeta()) {
             LanSyncServer.ensureToken(prefs);

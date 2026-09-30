@@ -2,12 +2,17 @@ package com.edwinkarolczyk.edhome;
 
 import android.content.ContentResolver;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.util.Base64;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /** User-selected private thumbnail, no original-photo URI dependency.
  * A small JPEG is stored as Base64 in the app's private preferences and JSON backup.
@@ -18,6 +23,28 @@ final class StorageThumbs {
     private StorageThumbs(){}
 
     static String key(long itemId){return PREFIX+itemId;}
+
+    static int prune(SharedPreferences prefs,SQLiteDatabase db) {
+        Set<Long> live=new HashSet<>();
+        try(Cursor cursor=db.rawQuery("SELECT id FROM storage_items",null)) {
+            while(cursor.moveToNext())live.add(cursor.getLong(0));
+        }
+        SharedPreferences.Editor editor=null;
+        int removed=0;
+        for(Map.Entry<String,?> entry:prefs.getAll().entrySet()) {
+            String key=entry.getKey();
+            if(!key.startsWith(PREFIX))continue;
+            long id;
+            try{id=Long.parseLong(key.substring(PREFIX.length()));}
+            catch(Exception invalid){id=-1;}
+            if(id>0&&live.contains(id))continue;
+            if(editor==null)editor=prefs.edit();
+            editor.remove(key);
+            removed++;
+        }
+        if(editor!=null)editor.apply();
+        return removed;
+    }
 
     static Bitmap read(SharedPreferences prefs,long itemId) {
         try {
