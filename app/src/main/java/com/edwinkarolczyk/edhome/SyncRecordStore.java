@@ -171,6 +171,7 @@ final class SyncRecordStore {
                 "Patch musi zawierać 1–" + MAX_PATCH_OPS + " operacji.");
 
         JSONArray results = new JSONArray();
+        boolean storageGraphTouched=false;
         db.beginTransaction();
         try {
             ensureAll(db);
@@ -179,10 +180,18 @@ final class SyncRecordStore {
                 JSONObject op = operations.optJSONObject(i);
                 if (op == null)
                     throw new IllegalArgumentException("Operacja #" + i + " nie jest obiektem.");
+                String table=op.optString("table","");
+                if("storage_items".equals(table)||"nfc_links".equals(table)
+                        ||"places".equals(table))
+                    storageGraphTouched=true;
                 JSONObject result = version == 2
                     ? applyV2(db, op, touched)
                     : applyV1(db, op, touched);
                 results.put(result);
+            }
+            if(storageGraphTouched) {
+                StorageStore.assertIntegrity(db);
+                NfcLinkStore.assertIntegrity(db);
             }
             db.setTransactionSuccessful();
         } catch (SQLiteConstraintException constraint) {

@@ -56,6 +56,14 @@ final class StorageStore {
         return name.trim();
     }
 
+    private static void validKindDestination(String kind, Long box, Long place) {
+        if ("box".equals(kind) && box!=null)
+            throw new IllegalArgumentException(
+                "Pudełko można przypisać tylko do miejsca, nie do innego pudełka.");
+        if ("thing".equals(kind) || "box".equals(kind)) return;
+        throw new IllegalArgumentException("Nieznany typ magazynu.");
+    }
+
     private static void validDestination(SQLiteDatabase db, Long box, Long place,
             Long movedId) {
         if (box!=null && place!=null)
@@ -93,6 +101,7 @@ final class StorageStore {
         name=validName(name);
         if (!"thing".equals(kind) && !"box".equals(kind))
             throw new IllegalArgumentException("Wybierz rzecz lub pudełko.");
+        validKindDestination(kind,box,place);
         db.beginTransaction();
         try {
             validDestination(db,box,place,null);
@@ -115,6 +124,7 @@ final class StorageStore {
             if(item==null)throw new IllegalArgumentException("Rzecz nie istnieje.");
             if(item.lentTo!=null)throw new IllegalArgumentException(
                 "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
+            validKindDestination(item.kind,box,place);
             validDestination(db,box,place,id);
             ContentValues row=new ContentValues();
             if(box==null)row.putNull("parent_box_id");else row.put("parent_box_id",box);
@@ -185,6 +195,46 @@ final class StorageStore {
                 throw new IllegalStateException("Nie usunięto.");
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
+    }
+
+    static void assertIntegrity(SQLiteDatabase db) {
+        try(Cursor c=db.rawQuery(
+                "SELECT id,kind,parent_box_id,place_id,lent_to,lent_at "
+                    +"FROM storage_items ORDER BY id",null)) {
+            while(c.moveToNext()) {
+                long id=c.getLong(0);
+                String kind=c.getString(1);
+                Long box=c.isNull(2)?null:c.getLong(2);
+                Long place=c.isNull(3)?null:c.getLong(3);
+                String lent=c.getString(4);
+                Long lentAt=c.isNull(5)?null:c.getLong(5);
+                if(!"thing".equals(kind)&&!"box".equals(kind))
+                    throw new IllegalArgumentException(
+                        "Magazyn zawiera nieznany typ obiektu.");
+                if(box!=null&&place!=null)
+                    throw new IllegalArgumentException(
+                        "Obiekt magazynu ma dwa położenia jednocześnie.");
+                if("box".equals(kind)&&box!=null)
+                    throw new IllegalArgumentException(
+                        "Pudełko nie może znajdować się w innym pudełku.");
+                if((lent==null)!=(lentAt==null)||lent!=null&&!"thing".equals(kind))
+                    throw new IllegalArgumentException(
+                        "Niespójny stan wypożyczenia w magazynie.");
+                if(box!=null) {
+                    Item parent=find(db,box);
+                    if(parent==null||!"box".equals(parent.kind)||parent.id==id)
+                        throw new IllegalArgumentException(
+                            "Rzecz wskazuje nieistniejące pudełko.");
+                }
+                if(place!=null) try(Cursor p=db.rawQuery(
+                        "SELECT 1 FROM places WHERE id=? LIMIT 1",
+                        new String[]{Long.toString(place)})) {
+                    if(!p.moveToFirst())
+                        throw new IllegalArgumentException(
+                            "Rzecz lub pudełko wskazuje nieistniejące miejsce.");
+                }
+            }
+        }
     }
 
     private static String placePath(SQLiteDatabase db,long placeId) {

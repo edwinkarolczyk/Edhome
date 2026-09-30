@@ -4,7 +4,9 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 /** One physical NFC UID points to exactly one EDHOME object. */
 final class NfcLinkStore {
@@ -129,6 +131,24 @@ final class NfcLinkStore {
     static boolean clearUid(SQLiteDatabase db,String rawUid) {
         return db.delete("nfc_links","uid=? COLLATE NOCASE",
             new String[]{normalize(rawUid)})>0;
+    }
+
+    static void assertIntegrity(SQLiteDatabase db) {
+        Set<String> targets=new HashSet<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT uid,target_kind,target_id FROM nfc_links ORDER BY id",null)) {
+            while(c.moveToNext()) {
+                String uid=normalize(c.getString(0));
+                String kind=validKind(c.getString(1));
+                long targetId=c.getLong(2);
+                if(uid.isEmpty()||!targetExists(db,kind,targetId))
+                    throw new IllegalArgumentException(
+                        "NFC wskazuje nieistniejący obiekt.");
+                if(!targets.add(kind+":"+targetId))
+                    throw new IllegalArgumentException(
+                        "Jeden obiekt ma więcej niż jeden tag NFC.");
+            }
+        }
     }
 
     static String shortUid(String uid) {

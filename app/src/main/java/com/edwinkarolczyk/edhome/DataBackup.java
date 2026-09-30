@@ -935,6 +935,7 @@ final class DataBackup {
                     if (name == null || name.trim().isEmpty() || name.length() > 160
                             || !("box".equals(kind) || "thing".equals(kind))
                             || box != null && place != null
+                            || "box".equals(kind) && box != null
                             || person != null && (person.trim().isEmpty()
                                 || person.length() > 80 || !"thing".equals(kind))
                             || (person == null) != (lentAt == null)
@@ -1448,6 +1449,8 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            StorageStore.assertIntegrity(database);
+            NfcLinkStore.assertIntegrity(database);
             SyncRecordStore.restoreMetadata(database,
                 inputVersion >= 36 ? syncRecords : null);
             // Deleted shopping rows intentionally leave receipt/price history.
