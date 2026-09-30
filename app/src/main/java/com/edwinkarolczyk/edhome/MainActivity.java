@@ -1529,6 +1529,7 @@ public final class MainActivity extends Activity {
         homeDragSource = null;
         homeDragOrder = null;
         homeDragTargetIndex = -1;
+        homeDragTargetPage = -1;
         homeDragDropped = false;
         homeDragFinishQueued = false;
         if (homeEditMode) {
@@ -2032,6 +2033,21 @@ public final class MainActivity extends Activity {
     private void previewHomeDragAt(LinearLayout grid, float x, float y) {
         if (homeDragSource == null || homeDragOrder == null
                 || homeTileSlots.isEmpty()) return;
+
+        int edge = dp(34);
+        java.util.List<java.util.List<String>> pages = homePages(homeDragOrder);
+        if (grid.getWidth() > edge * 2) {
+            if (x <= edge && homeShowcasePage > 0) {
+                previewHomeDragPageEdge(-1);
+                return;
+            }
+            if (x >= grid.getWidth() - edge
+                    && homeShowcasePage + 1 < pages.size()) {
+                previewHomeDragPageEdge(1);
+                return;
+            }
+        }
+
         int nearest = -1;
         double best = Double.MAX_VALUE;
         for (String id : homeTileViews.keySet()) {
@@ -2048,6 +2064,39 @@ public final class MainActivity extends Activity {
             }
         }
         if (nearest >= 0) previewHomeTilePlacement(nearest);
+    }
+
+    private void previewHomeDragPageEdge(int delta) {
+        if (homeDragSource == null || homeDragOrder == null || delta == 0) return;
+        java.util.List<java.util.List<String>> pages = homePages(homeDragOrder);
+        int targetPage = homeShowcasePage + delta;
+        if (targetPage < 0 || targetPage >= pages.size()) return;
+        int target = homePageInsertionSlot(
+            homeDragOrder, homeDragSource, targetPage, delta > 0);
+        if (target < 0) return;
+
+        for (View tile : homeTileViews.values()) {
+            tile.animate().cancel();
+            tile.setTranslationX(0f);
+            tile.setTranslationY(0f);
+            tile.setAlpha(1f);
+            tile.setScaleX(1f);
+            tile.setScaleY(1f);
+        }
+        View draggedTile = homeTileViews.get(homeDragSource);
+        if (draggedTile != null) {
+            draggedTile.setAlpha(0.34f);
+            draggedTile.setScaleX(1.04f);
+            draggedTile.setScaleY(1.04f);
+        }
+        homeDragTargetIndex = target;
+        homeDragTargetPage = targetPage;
+        if (homeDragHint != null) {
+            homeDragHint.setText((delta > 0 ? "→" : "←")
+                + "  Upuść przy krawędzi: przenieś na stronę "
+                + (targetPage + 1) + " • " + homeTileLabel(homeDragSource));
+            homeDragHint.setTextColor(accent);
+        }
     }
 
     /** Preview and final save use the exact same insertion index. */
@@ -2084,11 +2133,12 @@ public final class MainActivity extends Activity {
 
         java.util.List<String> visible =
             new java.util.ArrayList<>(homeTileViews.keySet());
-        int pageStart = skin.showcase() ? homeShowcasePage * 9 : 0;
-        for (int local = 0; local < visible.size(); local++) {
-            int global = pageStart + local;
-            if (global >= next.size()) break;
-            String id = next.get(global);
+        java.util.List<java.util.List<String>> nextPages = homePages(next);
+        java.util.List<String> targetVisible = homeShowcasePage < nextPages.size()
+            ? nextPages.get(homeShowcasePage) : java.util.Collections.emptyList();
+        for (int local = 0; local < visible.size()
+                && local < targetVisible.size(); local++) {
+            String id = targetVisible.get(local);
             View tile = homeTileViews.get(id);
             int[] old = homeTileSlots.get(id);
             int[] target = homeTileSlots.get(visible.get(local));
@@ -2103,9 +2153,14 @@ public final class MainActivity extends Activity {
         draggedTile.setScaleX(1.04f);
         draggedTile.setScaleY(1.04f);
         homeDragTargetIndex = slot;
+        homeDragTargetPage = -1;
         if (homeDragHint != null) {
+            int page = homePageOf(nextPages, homeDragSource);
+            int position = page < 0 ? 0
+                : nextPages.get(page).indexOf(homeDragSource);
             homeDragHint.setText("✥  Upuść: strona "
-                + (slot / 9 + 1) + " • pozycja " + (slot % 9 + 1)
+                + (Math.max(0, page) + 1) + " • pozycja "
+                + (Math.max(0, position) + 1)
                 + " • " + homeTileLabel(homeDragSource));
             homeDragHint.setTextColor(accent);
         }
@@ -2130,6 +2185,8 @@ public final class MainActivity extends Activity {
         homeTileGrid.post(() -> {
             String source = homeDragSource;
             int slot = homeDragTargetIndex;
+            int targetPage = homeDragTargetPage;
+            int oldPage = homeShowcasePage;
             boolean save = homeDragDropped;
             java.util.List<String> original = homeDragOrder == null ? null
                 : new java.util.ArrayList<>(homeDragOrder);
@@ -2139,6 +2196,13 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event("HOME_TILE_DRAG_STALE");
                     render(); // Never overwrite an order changed during dragging.
                 } else {
+                    if (targetPage >= 0) {
+                        homeShowcasePage = targetPage;
+                        homeShowcaseSlideDirection =
+                            Integer.compare(targetPage, oldPage);
+                        DiagnosticLog.event("HOME_TILE_MOVED_BETWEEN_PAGES",
+                            "from=" + (oldPage + 1) + " to=" + (targetPage + 1));
+                    }
                     moveHomeTileAtIndex(source, slot);
                 }
             }
@@ -2219,11 +2283,11 @@ public final class MainActivity extends Activity {
                 "Przeciągnij kafelek za uchwyt ⋮⋮ lub przytrzymaj kafelek.",
                 android.widget.Toast.LENGTH_LONG).show();
         });
-        if (skin.showcase() && homeEditMode) {
+        if (homeEditMode) {
             java.util.List<String> pageOrder = homeTileOrder();
-            int index = pageOrder.indexOf(id);
-            int page = index < 0 ? 0 : index / 9;
-            int pages = Math.max(1, (pageOrder.size() + 8) / 9);
+            java.util.List<java.util.List<String>> pageGroups = homePages(pageOrder);
+            int page = homePageOf(pageGroups, id);
+            int pages = pageGroups.size();
             if (page > 0) {
                 TextView previousPage = text("←  Przenieś na poprzednią stronę", 15, true);
                 previousPage.setPadding(dp(14), dp(12), dp(14), dp(12));
