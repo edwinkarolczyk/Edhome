@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.73";
+    private static final String DESKTOP_VERSION = "0.7.0.74";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -92,7 +92,7 @@ public final class EdhomeDesktop extends JFrame {
     private static final String[] NAV = {
         "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
         "Magazyn", "Pomieszczenia", "Mapa", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
-        "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
+        "Ogród", "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
     };
 
     private final JPanel content = new JPanel(new BorderLayout());
@@ -341,6 +341,7 @@ public final class EdhomeDesktop extends JFrame {
         if ("Pojazdy".equals(name)) return tablePage("Pojazdy", "vehicles",
             cols("Nazwa","name","Rejestracja","registration","Przebieg","mileage",
                  "OC do","oc_until","Przegląd do","inspection_until"));
+        if ("Ogród".equals(name)) return garden();
         if ("Odpady".equals(name)) return waste();
         if ("Timery".equals(name)) return tablePage("Timery urządzeń", "device_timers",
             cols("Urządzenie","device_type","Nazwa","title","Start","start_at","Koniec","end_at"));
@@ -354,6 +355,146 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
         if ("Skaner".equals(name)) return scanner();
         return settings();
+    }
+
+    private JComponent garden() {
+        JPanel page=page("Ogród • uprawy");
+        JPanel root=new JPanel(new BorderLayout(10,10));
+        root.setBackground(APP_BG);
+
+        JPanel metrics=new JPanel(new GridLayout(1,4,10,10));
+        metrics.setBackground(APP_BG);
+        metrics.add(metric("Obszary",count("garden_areas")));
+        metrics.add(metric("Nasadzenia",count("garden_plantings")));
+        metrics.add(metric("Zbiory",count("garden_harvests")));
+        metrics.add(metric("Katalog",count("garden_catalog")));
+        root.add(metrics,BorderLayout.NORTH);
+
+        JPanel list=new JPanel();
+        list.setBackground(APP_BG);
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        JsonArray plantings=table("garden_plantings");
+        if(plantings.size()==0) {
+            JLabel empty=new JLabel("Brak nasadzeń. Dodaj je w EDHOME na telefonie.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18,8,18,8));
+            list.add(empty);
+        } else {
+            for(JsonElement element:plantings) {
+                if(!element.isJsonObject()) continue;
+                JsonObject p=element.getAsJsonObject();
+                long id=longValue(p,"id");
+                String plant=gardenPlantName(p);
+                String area=gardenAreaName(longValue(p,"area_id"));
+                String variety=gardenVariety(p);
+                String status=value(p,"status");
+                String season=value(p,"season_year");
+                String planned=gardenDateLine(p,"planned_sow","planned_plant","planned_harvest");
+                String actual=gardenDateLine(p,"actual_sow","actual_plant","actual_harvest");
+                String harvest=gardenHarvestSummary(id);
+
+                JPanel card=new RoundedPanel(APP_SURFACE,18);
+                card.setLayout(new BorderLayout(10,4));
+                card.setBorder(new EmptyBorder(10,12,10,12));
+                JPanel text=new JPanel();
+                text.setOpaque(false);
+                text.setLayout(new BoxLayout(text,BoxLayout.Y_AXIS));
+                JLabel title=new JLabel(plant+(variety.isBlank()?"":" • "+variety));
+                title.setForeground(APP_TEXT);
+                title.setFont(title.getFont().deriveFont(Font.BOLD,16f));
+                text.add(title);
+                JLabel meta=new JLabel(area+" • sezon "+(season.isBlank()?"—":season)
+                    +" • "+(status.isBlank()?"—":status));
+                meta.setForeground(APP_MUTED);
+                text.add(meta);
+                if(!planned.isBlank()) {
+                    JLabel line=new JLabel("Plan: "+planned);
+                    line.setForeground(APP_TEXT); text.add(line);
+                }
+                if(!actual.isBlank()) {
+                    JLabel line=new JLabel("Wykonane: "+actual);
+                    line.setForeground(APP_TEXT); text.add(line);
+                }
+                if(!harvest.isBlank()) {
+                    JLabel line=new JLabel("Zebrano: "+harvest);
+                    line.setForeground(APP_ACCENT); text.add(line);
+                }
+                card.add(text,BorderLayout.CENTER);
+                list.add(card);
+                list.add(Box.createVerticalStrut(8));
+            }
+        }
+        JScrollPane scroll=new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        root.add(scroll,BorderLayout.CENTER);
+
+        JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,6,0));
+        footer.setBackground(APP_BG);
+        JButton reload=actionButton("↻ Pobierz z telefonu");
+        reload.addActionListener(e->reloadFromPhone(reload));
+        footer.add(reload);
+        root.add(footer,BorderLayout.SOUTH);
+        page.add(root,BorderLayout.CENTER);
+        return page;
+    }
+
+    private String gardenPlantName(JsonObject planting) {
+        long catalogId=longValue(planting,"catalog_id");
+        long customId=longValue(planting,"custom_plant_id");
+        JsonObject row=catalogId>0?scannerRowById("garden_catalog",catalogId):
+            scannerRowById("garden_custom_plants",customId);
+        return row==null?"Roślina":value(row,"name");
+    }
+
+    private String gardenVariety(JsonObject planting) {
+        long catalogId=longValue(planting,"catalog_id");
+        long customId=longValue(planting,"custom_plant_id");
+        JsonObject row=catalogId>0?scannerRowById("garden_catalog",catalogId):
+            scannerRowById("garden_custom_plants",customId);
+        return row==null?"":value(row,"variety");
+    }
+
+    private String gardenAreaName(long areaId) {
+        JsonObject area=scannerRowById("garden_areas",areaId);
+        return area==null?"Nieznany obszar":value(area,"name");
+    }
+
+    private static String gardenDateLine(JsonObject row,String sow,String plant,String harvest) {
+        StringBuilder out=new StringBuilder();
+        String a=value(row,sow), b=value(row,plant), c=value(row,harvest);
+        if(!a.isBlank()) out.append("siew ").append(a);
+        if(!b.isBlank()) {
+            if(out.length()>0) out.append(" • ");
+            out.append("sadzenie ").append(b);
+        }
+        if(!c.isBlank()) {
+            if(out.length()>0) out.append(" • ");
+            out.append("zbiór ").append(c);
+        }
+        return out.toString();
+    }
+
+    private String gardenHarvestSummary(long plantingId) {
+        Map<String,Long> sums=new LinkedHashMap<>();
+        for(JsonElement element:table("garden_harvests")) {
+            if(!element.isJsonObject()) continue;
+            JsonObject row=element.getAsJsonObject();
+            if(longValue(row,"planting_id")!=plantingId) continue;
+            String unit=value(row,"unit");
+            long milli=longValue(row,"quantity_milli");
+            sums.put(unit,sums.getOrDefault(unit,0L)+milli);
+        }
+        StringBuilder out=new StringBuilder();
+        for(Map.Entry<String,Long> entry:sums.entrySet()) {
+            if(out.length()>0) out.append(" • ");
+            java.math.BigDecimal value=new java.math.BigDecimal(entry.getValue())
+                .divide(new java.math.BigDecimal("1000")).stripTrailingZeros();
+            out.append(value.toPlainString().replace('.',','))
+                .append(' ').append(entry.getKey());
+        }
+        return out.toString();
     }
 
     private JComponent floorMap() {
