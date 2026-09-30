@@ -22,7 +22,7 @@ for token in (
     'GardenStore.create(database);',
     'DATABASE_MIGRATED_36_TO_37_GARDEN',
     'DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE',
-    'smallButton(box,"Powiadomienia"',
+    'compactAction(row,"Powiadomienia"',
     'GardenStore.syncPlanTasks(db.getWritableDatabase(),plantingId,null,0)',
     'ReminderReceiver.schedule(this);',
     'IMPORT_GARDEN_CATALOG',
@@ -36,6 +36,8 @@ for token in (
     'gardenCycleDialog(',
     'gardenHarvestDialog(',
     'gardenHistoryDialog(',
+    'gardenActivityDialog(',
+    'GardenStore.createActivityTask(',
 ):
     assert token in main, token
 
@@ -52,6 +54,9 @@ assert "CREATE TABLE IF NOT EXISTS garden_harvests" in store
 assert "quantity_milli INTEGER NOT NULL CHECK(quantity_milli>0)" in store
 assert "static long parseQuantityMilli(" in store
 assert "static String harvestSummary(" in store
+assert "static long createActivityTask(" in store
+assert "static int activeActivityTaskCount(" in store
+assert '"garden:"+plantingId+":"+cleanKind' in store
 assert "static int importCatalogCsv(" in store
 assert "static String exportCatalogCsv(" in store
 assert "garden_catalog_overrides" in store
@@ -67,4 +72,4 @@ assert '{"garden_task_links", "id", "planting_id", "stage", "task_id", "created_
 assert '{"garden_events", "id", "planting_id", "event_kind", "event_date", "note",' in backup
 assert '{"garden_harvests", "id", "planting_id", "harvested_on", "quantity_milli",' in backup
 assert "private static final int DB_VERSION = 38;" in backup
-print("Garden 0.7: catalog + shared calendar/reminders + crop cycle/harvest/season history PASS")
+print("Garden 0.7: catalog + crop cycle + shared recurring care tasks/calendar/reminders PASS")
