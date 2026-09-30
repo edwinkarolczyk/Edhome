@@ -11746,6 +11746,7 @@ public final class MainActivity extends Activity {
             PantryBarcodeStore.createDetails(database);
             PantryPackageStore.create(database);
             GardenStore.create(database);
+            GardenStore.upgrade38(database);
             SyncRecordStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
