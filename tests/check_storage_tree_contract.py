@@ -34,7 +34,9 @@ assert 'STORAGE_SHOW_PLACES_PREF = "storage_show_places"' in s
 assert 'boolean showThings=storageThingsVisible();' in ui
 assert 'boolean showBoxes=storageBoxesVisible();' in ui
 assert 'boolean showPlaces=storagePlacesVisible();' in ui
-assert 'if(showThings)button("+ Dodaj rzecz"' in ui
+assert 'if(showThings) {' in ui
+assert 'button("⚡ Szybko dodaj rzecz", this::quickAddStorageThing);' in ui
+assert 'button("+ Dodaj rzecz", () -> storageEditor("thing", null));' in ui
 assert 'if(showBoxes)button("+ Dodaj pudełko"' in ui
 assert 'if(showPlaces)button("← Miejsca"' in ui
 assert 'boolean visible=storagePlacesVisible();' in ui
@@ -63,6 +65,8 @@ assert 'if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))' in ui
 assert 'title("Galeria rzeczy")' in ui
 assert 'Brak zdjęcia' in ui
 assert 'StorageThumbs.read(prefs,item.id)' in ui
-assert 'tile.setOnClickListener(v->storageEditor(item.kind,item.id));' in ui
+assert 'tile.setOnClickListener(v->showStorageLocator(item));' in ui
+assert 'tile.setOnLongClickListener(v->{' in ui
+assert 'storageEditor(item.kind,item.id);' in ui
 assert 'settingsYesNo(storageSettings,"Galeria miniaturek rzeczy"' in s
 print("Storage tree: persistent branch state, hierarchy, CRUD/QR actions and no flat duplicate list PASS")

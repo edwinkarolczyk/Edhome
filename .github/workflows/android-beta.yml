@@ -325,6 +325,8 @@ jobs:
         run: python3 tests/check_ui_continuity_and_thumbnails.py
       - name: Nested Magazyn tree and saved branch state
         run: python3 tests/check_storage_tree_contract.py
+      - name: Storage gallery, quick add and NFC location contract
+        run: python3 tests/check_storage_gallery_quickadd_contract.py
       - name: Storage object box QR and backup contract
         run: |
           mkdir -p "$RUNNER_TEMP/edhome-storage-qr"
