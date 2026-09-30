@@ -456,7 +456,7 @@ final class GardenStore {
                 task.put("repeat_every",1);
                 task.put("priority","normal");
                 task.put("duration_minutes","harvest".equals(stage[0])?45:30);
-                task.put("task_kind","general");
+                task.put("task_kind","garden:"+plantingId+":stage_"+stage[0]);
                 task.putNull("waste_fraction");
                 if(remindTime==null) {
                     task.putNull("remind_time");
@@ -484,6 +484,92 @@ final class GardenStore {
             db.endTransaction();
         }
         return linked;
+    }
+
+    static long createActivityTask(SQLiteDatabase db,long plantingId,String kind,
+            String customTitle,String dueDate,String rule,int every,String remindTime,
+            int leadDays) {
+        if(!exists(db,"garden_plantings",plantingId))
+            throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+        String cleanKind=kind==null?"":kind.trim();
+        if(!java.util.Arrays.asList("water","fertilize","prune","soil","protect","custom")
+                .contains(cleanKind))
+            throw new IllegalArgumentException("Nieznany rodzaj pracy ogrodowej.");
+        String plantName,areaName;
+        try(Cursor c=db.rawQuery(
+                "SELECT COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),a.name "
+                +"FROM garden_plantings p JOIN garden_areas a ON a.id=p.area_id "
+                +"LEFT JOIN garden_catalog gc ON gc.id=p.catalog_id "
+                +"LEFT JOIN garden_custom_plants cp ON cp.id=p.custom_plant_id "
+                +"WHERE p.id=?",new String[]{Long.toString(plantingId)})) {
+            if(!c.moveToFirst())
+                throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+            plantName=c.getString(0); areaName=c.getString(1);
+        }
+        String activity=activityLabel(cleanKind);
+        if("custom".equals(cleanKind)) {
+            activity=required(customTitle,80,"Podaj nazwę własnej czynności.");
+        }
+        String cleanDate=dueDate==null?"":dueDate.trim();
+        String cleanRule=rule==null?"once":rule.trim();
+        String title="Ogród • "+activity+": "+plantName+" • "+areaName;
+        String error=TaskRules.validate(title,cleanDate,cleanRule,every);
+        if(error!=null) throw new IllegalArgumentException(error);
+        if(remindTime!=null && (!ReminderRules.validTime(remindTime)
+                || !ReminderRules.allowedLead(leadDays) || cleanDate.isEmpty()))
+            throw new IllegalArgumentException("Nieprawidłowe ustawienie powiadomienia.");
+
+        ContentValues task=new ContentValues();
+        task.put("title",title);
+        task.put("done",0);
+        if(cleanDate.isEmpty()) task.putNull("due_date"); else task.put("due_date",cleanDate);
+        task.put("repeat_rule",cleanRule);
+        task.put("repeat_every",every);
+        task.put("priority","normal");
+        task.put("duration_minutes",30);
+        task.put("task_kind","garden:"+plantingId+":"+cleanKind);
+        task.putNull("waste_fraction");
+        if(remindTime==null) {
+            task.putNull("remind_time");
+            task.put("reminder_lead_days",0);
+        } else {
+            task.put("remind_time",remindTime);
+            task.put("reminder_lead_days",leadDays);
+        }
+        return db.insertOrThrow("tasks",null,task);
+    }
+
+    static String activityLabel(String kind) {
+        switch(kind) {
+            case "water": return "Podlewanie";
+            case "fertilize": return "Nawożenie";
+            case "prune": return "Przycinanie";
+            case "soil": return "Przygotowanie gleby";
+            case "protect": return "Ochrona / oprysk";
+            case "custom": return "Własna czynność";
+            default: throw new IllegalArgumentException("Nieznany rodzaj pracy ogrodowej.");
+        }
+    }
+
+    static int activeActivityTaskCount(SQLiteDatabase db,long plantingId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT COUNT(*) FROM tasks WHERE done=0 AND task_kind LIKE ?",
+                new String[]{"garden:"+plantingId+":%"})) {
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
+
+    static String nextActivityTask(SQLiteDatabase db,long plantingId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT title,COALESCE(due_date,'') FROM tasks "
+                +"WHERE done=0 AND task_kind LIKE ? "
+                +"ORDER BY CASE WHEN due_date IS NULL OR due_date='' THEN 1 ELSE 0 END,"
+                +"due_date,id LIMIT 1",
+                new String[]{"garden:"+plantingId+":%"})) {
+            if(!c.moveToFirst()) return "";
+            String due=c.getString(1);
+            return (due.isEmpty()?"bez terminu":due)+" • "+c.getString(0);
+        }
     }
 
     static int linkedTaskCount(SQLiteDatabase db,long plantingId) {
