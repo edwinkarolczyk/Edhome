@@ -89,11 +89,12 @@ final class GardenStore {
         db.execSQL("CREATE TABLE IF NOT EXISTS garden_task_links ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
             + "planting_id INTEGER NOT NULL, "
+            + "stage TEXT NOT NULL CHECK(stage IN ('sow','plant','harvest')), "
             + "task_id INTEGER NOT NULL, "
             + "created_at INTEGER NOT NULL, "
-            + "UNIQUE(planting_id,task_id))");
+            + "UNIQUE(planting_id,stage), UNIQUE(planting_id,task_id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS garden_task_links_planting_idx "
-            + "ON garden_task_links(planting_id,task_id)");
+            + "ON garden_task_links(planting_id,stage,task_id)");
     }
 
     static long addArea(SQLiteDatabase db, String name, String kind, String notes) {
@@ -159,6 +160,103 @@ final class GardenStore {
         v.put("updated_at",System.currentTimeMillis());
         db.insertWithOnConflict("garden_catalog_overrides",null,v,
             SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    /**
+     * Mirror planned garden dates into the existing Tasks engine. This gives
+     * the garden one calendar/notification source instead of a second scheduler.
+     * Re-running is idempotent: linked tasks are updated, not duplicated.
+     */
+    static int syncPlanTasks(SQLiteDatabase db,long plantingId,String remindTime,int leadDays) {
+        if(remindTime!=null && (!ReminderRules.validTime(remindTime)
+                || !ReminderRules.allowedLead(leadDays)))
+            throw new IllegalArgumentException("Nieprawidłowe ustawienie powiadomienia.");
+
+        String plantName,areaName,plannedSow,plannedPlant,plannedHarvest;
+        try(Cursor c=db.rawQuery(
+                "SELECT COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),"
+                + "a.name,p.planned_sow,p.planned_plant,p.planned_harvest "
+                + "FROM garden_plantings p JOIN garden_areas a ON a.id=p.area_id "
+                + "LEFT JOIN garden_catalog gc ON gc.id=p.catalog_id "
+                + "LEFT JOIN garden_custom_plants cp ON cp.id=p.custom_plant_id "
+                + "WHERE p.id=?",
+                new String[]{Long.toString(plantingId)})) {
+            if(!c.moveToFirst()) throw new IllegalArgumentException("Nasadzenie już nie istnieje.");
+            plantName=c.getString(0);
+            areaName=c.getString(1);
+            plannedSow=c.getString(2);
+            plannedPlant=c.getString(3);
+            plannedHarvest=c.getString(4);
+        }
+
+        String[][] stages={
+            {"sow","Siew",plannedSow},
+            {"plant","Sadzenie",plannedPlant},
+            {"harvest","Zbiór",plannedHarvest}
+        };
+        int linked=0;
+        db.beginTransaction();
+        try {
+            for(String[] stage:stages) {
+                String due=stage[2];
+                if(due==null||due.isEmpty()) continue;
+                validateDate(due);
+                String title="Ogród • "+stage[1]+": "+plantName+" • "+areaName;
+
+                Long taskId=null;
+                try(Cursor existing=db.rawQuery(
+                        "SELECT l.task_id FROM garden_task_links l "
+                        + "JOIN tasks t ON t.id=l.task_id "
+                        + "WHERE l.planting_id=? AND l.stage=? LIMIT 1",
+                        new String[]{Long.toString(plantingId),stage[0]})) {
+                    if(existing.moveToFirst()) taskId=existing.getLong(0);
+                }
+
+                ContentValues task=new ContentValues();
+                task.put("title",title);
+                task.put("done",0);
+                task.put("due_date",due);
+                task.put("repeat_rule","once");
+                task.put("repeat_every",1);
+                task.put("priority","normal");
+                task.put("duration_minutes","harvest".equals(stage[0])?45:30);
+                task.put("task_kind","general");
+                task.putNull("waste_fraction");
+                if(remindTime==null) {
+                    task.putNull("remind_time");
+                    task.put("reminder_lead_days",0);
+                } else {
+                    task.put("remind_time",remindTime);
+                    task.put("reminder_lead_days",leadDays);
+                }
+
+                if(taskId==null) {
+                    taskId=db.insertOrThrow("tasks",null,task);
+                    ContentValues link=new ContentValues();
+                    link.put("planting_id",plantingId);
+                    link.put("stage",stage[0]);
+                    link.put("task_id",taskId);
+                    link.put("created_at",System.currentTimeMillis());
+                    db.insertOrThrow("garden_task_links",null,link);
+                } else {
+                    db.update("tasks",task,"id=?",new String[]{Long.toString(taskId)});
+                }
+                linked++;
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return linked;
+    }
+
+    static int linkedTaskCount(SQLiteDatabase db,long plantingId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT COUNT(*) FROM garden_task_links l "
+                + "JOIN tasks t ON t.id=l.task_id WHERE l.planting_id=?",
+                new String[]{Long.toString(plantingId)})) {
+            return c.moveToFirst()?c.getInt(0):0;
+        }
     }
 
     static boolean validIsoDate(String value) {
