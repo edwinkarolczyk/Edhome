@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 135,
-  "versionName": "0.6.0.70",
-  "changelog": "EDHOME 0.6.0.70 — kompaktowy interfejs telefonu: Start ma 3 kolumny i 3 rzędy na stronę z przesuwaniem w bok. Czynności i Spiżarnia mają zwarte akcje oraz stronicowanie zamiast długiej listy; szczegóły produktów Spiżarni są pod menu Więcej. Funkcje i dane pozostają zachowane. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.70/edhome-beta.apk",
-  "sha256": "1f37ef37164340e7ab12445145db114a770487feacbd40f96937cdad2aa21e24"
+  "versionCode": 136,
+  "versionName": "0.6.0.71",
+  "changelog": "EDHOME 0.6.0.71 — panel Start ma regulowaną pojemność 6/9/12 miejsc na stronę przy 3 kolumnach. Szeroki kafelek zajmuje 2 miejsca. W trybie układu kafelek można przeciągnąć do lewej lub prawej krawędzi, aby przenieść go między stronami; działa też menu poprzednia/następna strona. Kolejność i ustawienie liczby miejsc są zachowywane w kopii danych. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.6.0.71/edhome-beta.apk",
+  "sha256": "6267e3022213d5b883663aeb6719953d24b669d327096c35aee6959838edb6d1"
 }
