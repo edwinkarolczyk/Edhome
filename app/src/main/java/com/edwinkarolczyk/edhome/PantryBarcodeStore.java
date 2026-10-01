@@ -23,7 +23,9 @@ final class PantryBarcodeStore {
     static void createTables(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE pantry_barcodes ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            + "pantry_id INTEGER NOT NULL, barcode TEXT NOT NULL UNIQUE)");
+            + "pantry_id INTEGER NOT NULL, barcode TEXT NOT NULL UNIQUE, "
+            + "units_per_scan INTEGER NOT NULL DEFAULT 1 "
+            + "CHECK(units_per_scan BETWEEN 1 AND 10000))");
         db.execSQL("CREATE INDEX pantry_barcodes_pantry_idx "
             + "ON pantry_barcodes(pantry_id)");
         db.execSQL("CREATE TABLE pantry_movements ("
@@ -118,6 +120,24 @@ final class PantryBarcodeStore {
         return resolved;
     }
 
+    static int unitsPerScan(SQLiteDatabase db, String barcode) {
+        try (Cursor c = db.rawQuery(
+                "SELECT units_per_scan FROM pantry_barcodes WHERE barcode=? LIMIT 1",
+                new String[]{barcode})) {
+            return c.moveToFirst() ? Math.max(1, c.getInt(0)) : 1;
+        }
+    }
+
+    static void setUnitsPerScan(SQLiteDatabase db, String barcode, int units) {
+        if (units < 1 || units > 10000)
+            throw new IllegalArgumentException("Ilość w zgrzewce musi wynosić 1–10000.");
+        ContentValues values = new ContentValues();
+        values.put("units_per_scan", units);
+        if (db.update("pantry_barcodes", values, "barcode=?",
+                new String[]{barcode}) != 1)
+            throw new IllegalArgumentException("Kod nie jest przypisany do produktu.");
+    }
+
     private static boolean operationExists(SQLiteDatabase db, String id) {
         try (Cursor cursor = db.rawQuery(
                 "SELECT 1 FROM pantry_movements WHERE operation_id=? LIMIT 1",
@@ -145,8 +165,17 @@ final class PantryBarcodeStore {
     static String commit(SQLiteDatabase db, String barcode, String nameIfNew,
                          String mode, String operationId, String unit, long sizeMilli,
                          long selectedPantryId) {
+        return commit(db, barcode, nameIfNew, mode, operationId, unit, sizeMilli,
+            selectedPantryId, 1, 1);
+    }
+
+    static String commit(SQLiteDatabase db, String barcode, String nameIfNew,
+                         String mode, String operationId, String unit, long sizeMilli,
+                         long selectedPantryId, int quantity, int unitsPerScan) {
         if (selectedPantryId < 0)
             throw new IllegalArgumentException("Nieprawidłowy produkt.");
+        if (quantity < 1 || quantity > 10000 || unitsPerScan < 1 || unitsPerScan > 10000)
+            throw new IllegalArgumentException("Ilość musi wynosić 1–10000.");
         if (!PantryPackageRules.valid(unit, sizeMilli))
             throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
         if (!PantryScanRules.validBarcode(barcode)
@@ -196,28 +225,31 @@ final class PantryBarcodeStore {
                 ContentValues barcodeLink = new ContentValues();
                 barcodeLink.put("pantry_id", pantryId);
                 barcodeLink.put("barcode", barcode);
+                barcodeLink.put("units_per_scan", unitsPerScan);
                 db.insertOrThrow("pantry_barcodes", null, barcodeLink);
                 item = find(db, barcode);
             }
             if (item == null) throw new IllegalStateException("Nie można znaleźć produktu.");
-            if ("TAKE".equals(mode) && item.qty < 1)
+            if ("TAKE".equals(mode) && item.qty < quantity)
                 throw new IllegalArgumentException("Nie można zejść poniżej zera.");
-            if ("ADD".equals(mode) && item.qty >= MAX_QTY)
+            if ("ADD".equals(mode) && (long) item.qty + quantity > MAX_QTY)
                 throw new IllegalArgumentException("Osiągnięto maksymalny stan.");
-            int after = item.qty + ("ADD".equals(mode) ? 1 : -1);
+            int after = item.qty + ("ADD".equals(mode) ? quantity : -quantity);
             ContentValues quantity = new ContentValues();
             quantity.put("qty", after);
             int updated = db.update("pantry", quantity, "id=? AND qty=?",
                 new String[]{Long.toString(item.id), Integer.toString(item.qty)});
             if (updated != 1)
                 throw new IllegalStateException("Stan zmienił się podczas operacji.");
+            if ("TAKE".equals(mode))
+                PantryPackageStore.addPendingDeposit(db, item.id, quantity);
             ContentValues movement = new ContentValues();
             movement.put("operation_id", operationId);
             movement.put("pantry_id", item.id);
             movement.put("barcode", barcode);
             movement.put("name_snapshot", item.name);
             movement.put("kind", mode);
-            movement.put("qty", 1);
+            movement.put("qty", quantity);
             movement.put("before_qty", item.qty);
             movement.put("after_qty", after);
             movement.put("happened_at", System.currentTimeMillis());
