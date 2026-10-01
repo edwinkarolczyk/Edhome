@@ -105,6 +105,7 @@ garden38 = statements(section(garden_store, "static void upgrade38(SQLiteDatabas
                               "private static boolean hasColumn").replace(
                                   "db.execSQL(", "database.execSQL("))
 step38 = garden38.copy()
+step39 = statements(section(upgrade, "if(oldVersion < 39)", "if(newVersion >= 36)"))
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
 step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
@@ -153,7 +154,7 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 38, "Database version and backup format differ"
+assert version == backup_version == 39, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
@@ -239,6 +240,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step36)  # v35 to v36, sync UUID/revision/tombstone sidecar
     execute(db, step37)  # v36 to v37, Garden foundation
     execute(db, step38)  # v37 to v38, crop cycle, harvests and season history
+    execute(db, step39)  # v38 to v39, multipack and deposit metadata
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -323,7 +325,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-for accepted in range(2,38):
+for accepted in range(2,39):
     assert ("inputVersion != "+str(accepted)) in backup
 assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
@@ -384,6 +386,7 @@ execute(existing14, step35)
 execute(existing14, step36)
 execute(existing14, step37)
 execute(existing14, step38)
+execute(existing14, step39)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -412,8 +415,9 @@ execute(existing23, step35)
 execute(existing23, step36)
 execute(existing23, step37)
 execute(existing23, step38)
+execute(existing23, step39)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v37→v38: PASS; Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v38→v39: PASS; pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
