@@ -44,7 +44,7 @@ for token in (
     assert token in store, "Missing storage safety: "+token
 
 for token in (
-    'DB_VERSION = 38;',
+    'DB_VERSION = 39;',
     '{"storage_items", "id", "name", "kind", "parent_box_id", "place_id",',
     '{"storage_events", "id", "item_id", "name_snapshot", "action",',
     'inputVersion < 19 && ("storage_items".equals(definition[0])',
