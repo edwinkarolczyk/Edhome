@@ -105,6 +105,28 @@ final class PantryPackageStore {
         }
     }
 
+    static long stockDepositGrosz(SQLiteDatabase db) {
+        try (Cursor c = db.rawQuery(
+                "SELECT COALESCE(SUM(pp.deposit_grosz*p.qty),0) "
+                    + "FROM pantry_packages pp JOIN pantry p ON p.id=pp.pantry_id "
+                    + "WHERE pp.deposit_grosz>0", null)) {
+            return c.moveToFirst() ? c.getLong(0) : 0L;
+        }
+    }
+
+    static int stockDepositUnits(SQLiteDatabase db) {
+        try (Cursor c = db.rawQuery(
+                "SELECT COALESCE(SUM(p.qty),0) "
+                    + "FROM pantry_packages pp JOIN pantry p ON p.id=pp.pantry_id "
+                    + "WHERE pp.deposit_grosz>0", null)) {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        }
+    }
+
+    static long allDepositGrosz(SQLiteDatabase db) {
+        return Math.addExact(stockDepositGrosz(db), totalDepositGrosz(db));
+    }
+
     static int totalPendingDepositUnits(SQLiteDatabase db) {
         try (Cursor c = db.rawQuery(
                 "SELECT COALESCE(SUM(deposit_pending),0) FROM pantry_packages", null)) {
