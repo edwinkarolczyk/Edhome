@@ -40,7 +40,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 38;',
+    'DB_VERSION = 39;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
