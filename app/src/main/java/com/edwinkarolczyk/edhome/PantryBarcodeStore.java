@@ -235,9 +235,9 @@ final class PantryBarcodeStore {
             if ("ADD".equals(mode) && (long) item.qty + quantity > MAX_QTY)
                 throw new IllegalArgumentException("Osiągnięto maksymalny stan.");
             int after = item.qty + ("ADD".equals(mode) ? quantity : -quantity);
-            ContentValues quantity = new ContentValues();
-            quantity.put("qty", after);
-            int updated = db.update("pantry", quantity, "id=? AND qty=?",
+            ContentValues stock = new ContentValues();
+            stock.put("qty", after);
+            int updated = db.update("pantry", stock, "id=? AND qty=?",
                 new String[]{Long.toString(item.id), Integer.toString(item.qty)});
             if (updated != 1)
                 throw new IllegalStateException("Stan zmienił się podczas operacji.");
