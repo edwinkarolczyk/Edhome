@@ -75,5 +75,5 @@ assert "CHECK(scope='shared')" in shared
 assert 'android:allowBackup="false"' in manifest
 assert "versionNameSuffix ''" in gradle
 assert 'super(context, "edhome-beta-preview.db", null, 38)' in ui
-assert 'DB_VERSION = 38;' in backup
+assert 'DB_VERSION = 39;' in backup
 print("Private vault isolated, encrypted, locked on background and excluded from JSON: PASS")
