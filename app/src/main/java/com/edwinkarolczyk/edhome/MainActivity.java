@@ -872,9 +872,78 @@ public final class MainActivity extends Activity {
             null, skin.panel(this, Color.WHITE, 26)));
     }
 
+    private int semanticTextColor(String kind) {
+        int brightness=(Color.red(surface)*299+Color.green(surface)*587
+            +Color.blue(surface)*114)/1000;
+        boolean light=brightness>155;
+        switch(kind) {
+            case "place":
+                return Color.parseColor(light?"#1565C0":"#64B5F6");
+            case "box":
+                return Color.parseColor(light?"#A65300":"#FFB74D");
+            case "thing":
+                return Color.parseColor(light?"#2E7D32":"#81C784");
+            case "qr":
+                return Color.parseColor(light?"#00838F":"#4DD0E1");
+            case "nfc":
+                return Color.parseColor(light?"#C62828":"#FF6B6B");
+            default:
+                return ink;
+        }
+    }
+
+    private void semanticSpan(android.text.SpannableString styled,String source,
+            String regex,int color) {
+        java.util.regex.Matcher matcher=java.util.regex.Pattern.compile(regex)
+            .matcher(source);
+        while(matcher.find())
+            styled.setSpan(new android.text.style.ForegroundColorSpan(color),
+                matcher.start(),matcher.end(),
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    private CharSequence semanticText(String value) {
+        if(value==null||value.isEmpty())return value==null?"":value;
+        android.text.SpannableString styled=
+            new android.text.SpannableString(value);
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})miejsc(?:e|a|u|em|om|ami|ach)?(?!\\p{L})",
+            semanticTextColor("place"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})pudeł(?:ko|ka|ku|kiem|ek|kom|kami|kach)(?!\\p{L})",
+            semanticTextColor("box"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})rzecz(?:y|ą|ach|ami|om)?(?!\\p{L})",
+            semanticTextColor("thing"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})(?:QR|etykiet\\p{L}*)(?!\\p{L})",
+            semanticTextColor("qr"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})(?:NFC|tag(?:u|iem|i|ów|om|ami|ach)?)(?!\\p{L})",
+            semanticTextColor("nfc"));
+        return styled;
+    }
+
+    private void applySemanticTextTree(View view) {
+        if(view instanceof TextView) {
+            TextView label=(TextView)view;
+            CharSequence current=label.getText();
+            if(current!=null&&current.length()>0)
+                label.setText(semanticText(current.toString()));
+            CharSequence hint=label.getHint();
+            if(hint!=null&&hint.length()>0)
+                label.setHint(semanticText(hint.toString()));
+        }
+        if(view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group=(android.view.ViewGroup)view;
+            for(int i=0;i<group.getChildCount();i++)
+                applySemanticTextTree(group.getChildAt(i));
+        }
+    }
+
     private TextView text(String value, int size, boolean bold) {
         TextView view = new TextView(this);
-        view.setText(value);
+        view.setText(semanticText(value));
         view.setTextSize(size);
         view.setTextColor(ink);
         view.setPadding(0, dp(2), 0, dp(2));
@@ -915,7 +984,7 @@ public final class MainActivity extends Activity {
 
     private Button button(String value, Runnable callback) {
         Button b = new Button(this);
-        b.setText(value);
+        b.setText(semanticText(value));
         b.setTextSize(13);
         b.setAllCaps(false);
         b.setTextColor(skin.accentInk);
@@ -1076,6 +1145,7 @@ public final class MainActivity extends Activity {
             if (alternateHomeInterface()) addConceptBottomNavigation();
             else if (skin.showcase()) addShowcaseBottomNavigation();
         }
+        applySemanticTextTree(root);
         renderedScreen=screen;
         // post-layout restore; direct scrollTo before layout is silently lost.
         scroll.post(()->{
@@ -3663,7 +3733,7 @@ public final class MainActivity extends Activity {
 
     private void smallButton(LinearLayout container, String label, Runnable action) {
         Button b = new Button(this);
-        b.setText(label);
+        b.setText(semanticText(label));
         b.setAllCaps(false);
         b.setTextSize(12);
         boolean onHome = "home".equals(screen);
@@ -6821,9 +6891,10 @@ public final class MainActivity extends Activity {
         if(showPlaces)
             button("⚡ Szybko dodaj miejsce", this::quickAddPlace);
         if (BetaUpdater.isBeta()) {
-            button("▣ Drukuj wybrane etykiety QR / PDF",
+            LinearLayout qrTools=compactActionRow();
+            compactAction(qrTools,"▣ Drukuj wybrane etykiety QR / PDF",
                 this::selectBulkQrLabels);
-            button("◷ Historia skanowania i drukowania QR",
+            compactAction(qrTools,"◷ Historia skanowania i drukowania QR",
                 this::showQrHistory);
         }
         button("▣ Skaner EDHOME • QR / NFC / kody", () -> go("scanner"));
@@ -6900,13 +6971,40 @@ public final class MainActivity extends Activity {
             note(!showPlaces&&!showBoxes&&!showThings
                 ?"Wszystkie typy są ukryte. Włącz je w Ustawieniach."
                 :"Brak elementów dla wybranego widoku magazynu.");
-        title("Ostatnie ruchy magazynu");
+        LinearLayout history=collapsedStorageHistory();
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT name_snapshot,action,details FROM storage_events "
                 +"ORDER BY id DESC LIMIT 12",null)){
-            while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
-                +" • "+c.getString(2));
+            while(c.moveToNext()) {
+                TextView event=text(c.getString(0)+" • "+c.getString(1)
+                    +" • "+c.getString(2),12,false);
+                event.setTextColor(subdued);
+                history.addView(event,new LinearLayout.LayoutParams(-1,-2));
+            }
         }
+    }
+
+    private LinearLayout collapsedStorageHistory() {
+        LinearLayout header=card();
+        header.setPadding(dp(12),dp(5),dp(12),dp(5));
+        TextView label=text("▸ Ostatnie ruchy magazynu",18,true);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(label,new LinearLayout.LayoutParams(-1,dp(40)));
+        LinearLayout entries=new LinearLayout(this);
+        entries.setOrientation(LinearLayout.VERTICAL);
+        entries.setPadding(dp(10),dp(2),dp(10),dp(5));
+        entries.setVisibility(View.GONE);
+        body.addView(entries,new LinearLayout.LayoutParams(-1,-2));
+        header.setClickable(true);
+        header.setFocusable(true);
+        touchFeedback(header);
+        header.setOnClickListener(v->{
+            boolean expand=entries.getVisibility()!=View.VISIBLE;
+            entries.setVisibility(expand?View.VISIBLE:View.GONE);
+            label.setText(semanticText((expand?"▾ ":"▸ ")
+                +"Ostatnie ruchy magazynu"));
+        });
+        return entries;
     }
 
     private void storageViewSwitcher() {
@@ -6922,7 +7020,7 @@ public final class MainActivity extends Activity {
             {"box", "Pudełka"}, {"place", "Miejsca"} }) {
             Button chip = new Button(this);
             chip.setAllCaps(false);
-            chip.setText(filter[1]);
+            chip.setText(semanticText(filter[1]));
             chip.setTextSize(11);
             chip.setMinHeight(0);
             chip.setMinimumHeight(0);
@@ -6944,16 +7042,7 @@ public final class MainActivity extends Activity {
     }
 
     private int storageKindTextColor(String kind) {
-        int brightness=(Color.red(surface)*299+Color.green(surface)*587
-            +Color.blue(surface)*114)/1000;
-        boolean light=brightness>155;
-        if("place".equals(kind))
-            return Color.parseColor(light?"#1565C0":"#64B5F6");
-        if("box".equals(kind))
-            return Color.parseColor(light?"#A65300":"#FFB74D");
-        if("thing".equals(kind))
-            return Color.parseColor(light?"#2E7D32":"#81C784");
-        return ink;
+        return semanticTextColor(kind);
     }
 
     private TextView storageKindText(String kind,String value,int size,

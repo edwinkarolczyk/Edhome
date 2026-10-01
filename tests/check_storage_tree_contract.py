@@ -114,3 +114,39 @@ assert 'TextView heading = storageKindText("place", entry.name, 19, true);' in s
 assert 'actions.addView(storageKindText(kind,' in s
 assert 'actions.addView(storageKindText(kind,name,18,true));' in s
 print("Storage semantic colors + hold-to-peek thumbnail: PASS")
+
+# Globalny system semantycznych kolorów EDHOME: nie tylko Magazyn.
+for marker in (
+    'private int semanticTextColor(String kind)',
+    'private CharSequence semanticText(String value)',
+    'private void applySemanticTextTree(View view)',
+    'applySemanticTextTree(root);',
+    'semanticTextColor("place")',
+    'semanticTextColor("box")',
+    'semanticTextColor("thing")',
+    'semanticTextColor("qr")',
+    'semanticTextColor("nfc")',
+    'view.setText(semanticText(value));',
+    'b.setText(semanticText(value));',
+    'chip.setText(semanticText(filter[1]));',
+):
+    assert marker in s, f"Missing global semantic UI marker: {marker}"
+
+# Narzędzia QR są spięte obok siebie, skaner zostaje osobno.
+storage_start=s.index('    private void storage() {')
+storage_end=s.index('    private void storageEditor(',storage_start)
+storage_ui=s[storage_start:storage_end]
+assert 'LinearLayout qrTools=compactActionRow();' in storage_ui
+assert 'compactAction(qrTools,"▣ Drukuj wybrane etykiety QR / PDF"' in storage_ui
+assert 'compactAction(qrTools,"◷ Historia skanowania i drukowania QR"' in storage_ui
+
+# Historia magazynu po każdym wejściu startuje zwinięta i rozwija się lokalnie.
+for marker in (
+    'private LinearLayout collapsedStorageHistory()',
+    'entries.setVisibility(View.GONE);',
+    'TextView label=text("▸ Ostatnie ruchy magazynu",18,true);',
+    'entries.setVisibility(expand?View.VISIBLE:View.GONE);',
+):
+    assert marker in s, f"Missing collapsed storage history marker: {marker}"
+
+print("Global semantic colors + compact QR actions + collapsed history: PASS")
