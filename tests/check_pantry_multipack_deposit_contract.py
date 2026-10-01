@@ -31,6 +31,8 @@ for token in (
     "deposit_pending INTEGER NOT NULL DEFAULT 0",
     "totalDepositGrosz",
     "returnDeposit",
+    "stockDepositGrosz",
+    "allDepositGrosz",
 ):
     assert token in pack, token
 
@@ -44,7 +46,7 @@ for token in (
     assert token in main, token
 
 assert "pendingUnits = PantryBarcodeStore.unitsPerScan" in take
-assert "selectedPantryId, quantity, unitsPerScan" in scan
+assert "long selectedPantryId, int quantity, int unitsPerScan" in scan
 assert "DB_VERSION = 39;" in backup
 assert '"units_per_scan"' in backup
 assert '"deposit_grosz", "deposit_pending"' in backup
