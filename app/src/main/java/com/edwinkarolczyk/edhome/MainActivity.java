@@ -13387,7 +13387,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 38);
+            super(context, "edhome-beta-preview.db", null, 39);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -13434,7 +13434,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 38) {
+            if (oldVersion < 1 || newVersion > 39) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -13640,6 +13640,18 @@ public final class MainActivity extends Activity {
                         "Nie udało się rozszerzyć historii sezonów Ogrodu.",error);
                 }
                 DiagnosticLog.event("DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE");
+            }
+            if(oldVersion < 39) {
+                database.execSQL("ALTER TABLE pantry_barcodes ADD COLUMN "
+                    + "units_per_scan INTEGER NOT NULL DEFAULT 1 "
+                    + "CHECK(units_per_scan BETWEEN 1 AND 10000)");
+                database.execSQL("ALTER TABLE pantry_packages ADD COLUMN "
+                    + "deposit_grosz INTEGER NOT NULL DEFAULT 0 "
+                    + "CHECK(deposit_grosz BETWEEN 0 AND 100000)");
+                database.execSQL("ALTER TABLE pantry_packages ADD COLUMN "
+                    + "deposit_pending INTEGER NOT NULL DEFAULT 0 "
+                    + "CHECK(deposit_pending BETWEEN 0 AND 100000000)");
+                DiagnosticLog.event("DATABASE_MIGRATED_38_TO_39_PANTRY_PACKAGING");
             }
             if(newVersion >= 36) {
                 try {
