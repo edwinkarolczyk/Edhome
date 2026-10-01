@@ -11,7 +11,7 @@ required = {
     "opt-in database button": '.setPositiveButton("Szukaj produktu"',
     "offline manual fallback": '.setPositiveButton("Wpisz ręcznie"',
     "no inventory mutation on lookup": "checked.product, checked.details);",
-    "confirmation before inventory update": '.setPositiveButton("Dodaj +1", (d,w) -> {',
+    "confirmation before inventory update": '.setPositiveButton("Dodaj / ilość", (d,w) -> onPantryBarcode(',
     "transactional scanner reuse": 'PantryBarcodeStore.commit(db.getWritableDatabase()',
     "metadata insert": "PantryBarcodeStore.saveDetails(",
     "migration 14 to 15": "DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS",
