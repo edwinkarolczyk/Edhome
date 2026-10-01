@@ -25,6 +25,14 @@ final class PantryPackSuggestion {
         return new PantryPackSuggestion(1, "szt.", 1000, "");
     }
 
+    static PantryPackSuggestion verified(int unitsPerScan, String unit,
+            long sizeMilli, String label) {
+        if (unitsPerScan < 1 || unitsPerScan > 10000
+                || !PantryPackageRules.valid(unit, sizeMilli))
+            return none();
+        return new PantryPackSuggestion(unitsPerScan, unit, sizeMilli, label);
+    }
+
     static PantryPackSuggestion parse(String raw) {
         if (raw == null) return none();
         String text = raw.trim().toLowerCase(Locale.ROOT)
