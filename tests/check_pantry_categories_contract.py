@@ -23,7 +23,7 @@ for token in (
 ):
     assert token in main, "Missing main contract: " + token
 for token in (
-    'DB_VERSION = 38;',
+    'DB_VERSION = 39;',
     '{"pantry", "id", "name", "qty", "category"}',
     'inputVersion < 16 && "pantry".equals(definition[0])',
     'values.put(key, "other");',
