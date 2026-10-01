@@ -85,7 +85,7 @@ for token in (
     assert token in main,token
 
 for token in (
-    'super(context, "edhome-beta-preview.db", null, 38)',
+    'super(context, "edhome-beta-preview.db", null, 39)',
     'BankEvidenceStore.create(database);',
     'DATABASE_MIGRATED_33_TO_34_BANK_EVIDENCE_QUEUE',
 ):
