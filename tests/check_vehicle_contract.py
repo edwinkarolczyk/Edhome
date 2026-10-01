@@ -12,7 +12,7 @@ for token in (
     "VehicleStore.create(database);", "VehicleTyreStore.create(database);",
     "DATABASE_MIGRATED_24_TO_25_TYRE_SETS",
     "DATABASE_MIGRATED_23_TO_24_VEHICLES",
-    'super(context, "edhome-beta-preview.db", null, 38)',
+    'super(context, "edhome-beta-preview.db", null, 39)',
     'case "vehicles": vehicles(); break;',
     'header("Kalendarz • czynności i pojazdy")',
     "oc_until AS deadline", "inspection_until",
