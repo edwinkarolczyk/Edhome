@@ -11309,15 +11309,42 @@ public final class MainActivity extends Activity {
             int qty = c.getInt(1);
             PantryPackageStore.Pack pack = PantryPackageStore.find(
                 db.getReadableDatabase(), pantryId);
-            new AlertDialog.Builder(this).setTitle("Przypisz kod i dodaj +1")
-                .setMessage(name + "\n" + PantryPackageRules.summary(
-                    qty, pack.unit, pack.sizeMilli) + "\nNowy kod: " + barcode
-                    + "\n\nPotwierdź, że to dokładnie ten sam produkt i opakowanie.")
-                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
-                .setPositiveButton("Powiąż i dodaj +1", (d,w) ->
-                    commitPantryBarcode(barcode, null, "ADD", operationId, null,
-                        null, pack.unit, pack.sizeMilli, pantryId))
-                .setOnCancelListener(d -> finishPantryBatch()).show();
+            LinearLayout form=new LinearLayout(this);
+            form.setOrientation(LinearLayout.VERTICAL);
+            form.setPadding(dp(18),dp(10),dp(18),dp(8));
+            form.addView(text(name+"\n"+PantryPackageRules.summary(
+                qty,pack.unit,pack.sizeMilli)+"\nNowy kod: "+barcode,14,false));
+            EditText units=new EditText(this);
+            units.setSingleLine(true);
+            units.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            units.setText("1");
+            form.addView(text("Ile sztuk podstawowych oznacza ten kod? "
+                +"Dla zgrzewki wpisz np. 6.",13,true));
+            form.addView(units);
+            lightDialogForm(form);
+            AlertDialog linkDialog=new AlertDialog.Builder(this)
+                .setTitle("Przypisz kod do produktu")
+                .setView(form)
+                .setNegativeButton("Anuluj",(d,w)->finishPantryBatch())
+                .setPositiveButton("Powiąż i dodaj",null)
+                .create();
+            linkDialog.setOnShowListener(ignore->
+                linkDialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                    .setOnClickListener(v->{
+                        int count;
+                        try {
+                            count=Integer.parseInt(units.getText().toString().trim());
+                            if(count<1||count>10000)throw new NumberFormatException();
+                        } catch(NumberFormatException invalid) {
+                            units.setError("Podaj liczbę 1–10000.");
+                            return;
+                        }
+                        linkDialog.dismiss();
+                        commitPantryBarcode(barcode,null,"ADD",operationId,null,
+                            null,pack.unit,pack.sizeMilli,pantryId,count,count);
+                    }));
+            linkDialog.setOnCancelListener(d->finishPantryBatch());
+            linkDialog.show();
         }
     }
 
