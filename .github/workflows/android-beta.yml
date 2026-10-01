@@ -265,10 +265,15 @@ jobs:
           mkdir -p "$RUNNER_TEMP/pantry-packages"
           javac -d "$RUNNER_TEMP/pantry-packages" \
             app/src/main/java/com/edwinkarolczyk/edhome/PantryPackageRules.java \
-            tests/task_rules/PantryPackageRulesSmoke.java
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryPackSuggestion.java \
+            tests/task_rules/PantryPackageRulesSmoke.java \
+            tests/task_rules/PantryPackSuggestionSmoke.java
           java -cp "$RUNNER_TEMP/pantry-packages" \
             com.edwinkarolczyk.edhome.PantryPackageRulesSmoke
+          java -cp "$RUNNER_TEMP/pantry-packages" \
+            com.edwinkarolczyk.edhome.PantryPackSuggestionSmoke
           python3 tests/check_pantry_packages_contract.py
+          python3 tests/check_pantry_multipack_deposit_contract.py
       - name: Scanner failure recovery and duplicate suppression
         run: python3 tests/check_scanner_recovery_contract.py
       - name: Local UPC/EAN TAKE matching, idempotent stock and repeat consent
