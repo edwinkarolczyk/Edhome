@@ -6119,7 +6119,7 @@ public final class MainActivity extends Activity {
         pictogram.setBackground(skin.panel(this, skin.iconBacking, 20));
         row.addView(pictogram,
             new LinearLayout.LayoutParams(dp(47), dp(47)));
-        TextView heading = text(entry.name, 19, true);
+        TextView heading = storageKindText("place", entry.name, 19, true);
         LinearLayout.LayoutParams headingParams =
             new LinearLayout.LayoutParams(0, -2, 1);
         headingParams.setMargins(dp(12), 0, 0, 0);
@@ -6691,8 +6691,9 @@ public final class MainActivity extends Activity {
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(16), dp(12), dp(16), dp(10));
-        actions.addView(text(("nfc".equals(source) ? "NFC" : "QR")
-            + " • " + NfcLinkStore.kindLabel(kind), 14, false));
+        actions.addView(storageKindText(kind,
+            ("nfc".equals(source) ? "NFC" : "QR")
+                + " • " + NfcLinkStore.kindLabel(kind),14,true));
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(name).setView(actions)
             .setNegativeButton("Zamknij", null).create();
@@ -6806,6 +6807,7 @@ public final class MainActivity extends Activity {
         boolean showPlaces=storagePlacesVisible();
         header("Rzeczy • Pudełka • Miejsca");
         storageViewSwitcher();
+        storageKindLegend();
         note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
             + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
         if(showThings) {
@@ -6941,6 +6943,97 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private int storageKindTextColor(String kind) {
+        int brightness=(Color.red(surface)*299+Color.green(surface)*587
+            +Color.blue(surface)*114)/1000;
+        boolean light=brightness>155;
+        if("place".equals(kind))
+            return Color.parseColor(light?"#1565C0":"#64B5F6");
+        if("box".equals(kind))
+            return Color.parseColor(light?"#A65300":"#FFB74D");
+        if("thing".equals(kind))
+            return Color.parseColor(light?"#2E7D32":"#81C784");
+        return ink;
+    }
+
+    private TextView storageKindText(String kind,String value,int size,
+            boolean bold) {
+        TextView view=text(value,size,bold);
+        view.setTextColor(storageKindTextColor(kind));
+        return view;
+    }
+
+    private void storageKindLegend() {
+        LinearLayout legend=new LinearLayout(this);
+        legend.setOrientation(LinearLayout.HORIZONTAL);
+        legend.setGravity(Gravity.CENTER_VERTICAL);
+        String[][] values={{"place","● Miejsce"},{"box","● Pudełko"},
+            {"thing","● Rzecz"}};
+        for(String[] value:values) {
+            TextView label=storageKindText(value[0],value[1],12,true);
+            label.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(28),1f);
+            lp.setMargins(dp(2),0,dp(2),dp(4));
+            legend.addView(label,lp);
+        }
+        body.addView(legend,new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    private void bindStorageThumbnailPeek(View target,Bitmap thumbnail) {
+        if(thumbnail==null)return;
+        final float[] down={0f,0f};
+        final boolean[] peeking={false};
+        final PopupWindow[] popup={null};
+        final Runnable[] showPeek=new Runnable[1];
+        showPeek[0]=()->{
+            if(!target.isPressed())return;
+            ImageView preview=new ImageView(this);
+            preview.setImageBitmap(thumbnail);
+            preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            preview.setPadding(dp(8),dp(8),dp(8),dp(8));
+            preview.setBackgroundColor(Color.argb(242,0,0,0));
+            int width=Math.max(dp(220),
+                getResources().getDisplayMetrics().widthPixels-dp(24));
+            int height=Math.max(dp(260),
+                getResources().getDisplayMetrics().heightPixels-dp(96));
+            PopupWindow shown=new PopupWindow(preview,width,height,false);
+            shown.setTouchable(false);
+            shown.setOutsideTouchable(false);
+            shown.setClippingEnabled(true);
+            shown.setElevation(dp(12));
+            shown.showAtLocation(root,Gravity.CENTER,0,0);
+            popup[0]=shown;
+            peeking[0]=true;
+            target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        };
+        target.setOnTouchListener((v,event)->{
+            int action=event.getActionMasked();
+            if(action==MotionEvent.ACTION_DOWN) {
+                down[0]=event.getX();
+                down[1]=event.getY();
+                peeking[0]=false;
+                v.postDelayed(showPeek[0],400L);
+            } else if(action==MotionEvent.ACTION_MOVE&&!peeking[0]) {
+                float dx=event.getX()-down[0];
+                float dy=event.getY()-down[1];
+                int slop=ViewConfiguration.get(this).getScaledTouchSlop();
+                if(dx*dx+dy*dy>slop*slop)
+                    v.removeCallbacks(showPeek[0]);
+            } else if(action==MotionEvent.ACTION_UP
+                    ||action==MotionEvent.ACTION_CANCEL) {
+                v.removeCallbacks(showPeek[0]);
+                boolean consumed=peeking[0];
+                if(popup[0]!=null) {
+                    popup[0].dismiss();
+                    popup[0]=null;
+                }
+                peeking[0]=false;
+                if(action==MotionEvent.ACTION_UP&&consumed)return true;
+            }
+            return false;
+        });
+    }
+
     private void storageThingsGallery(java.util.List<StorageStore.Item> items) {
         java.util.List<StorageStore.Item> things=new java.util.ArrayList<>();
         for(StorageStore.Item item:items)
@@ -6948,8 +7041,8 @@ public final class MainActivity extends Activity {
         if(things.isEmpty())return;
 
         title("Rzeczy");
-        note("Tylko miniatury. Dotknij zdjęcia, aby zobaczyć nazwę, "
-            +"położenie i wszystkie działania.");
+        note("Tylko miniatury. Dotknij, aby otworzyć rzecz. Przytrzymaj "
+            +"miniaturę około 0,4 s, aby powiększyć ją tylko na czas trzymania.");
         EditText search=new EditText(this);
         search.setSingleLine(true);
         search.setHint("Szukaj rzeczy lub miejsca…");
@@ -7026,6 +7119,7 @@ public final class MainActivity extends Activity {
                 touchFeedback(tile);
 
                 Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+                if(thumbnail!=null)bindStorageThumbnailPeek(tile,thumbnail);
                 if(thumbnail!=null) {
                     ImageView image=new ImageView(this);
                     image.setImageBitmap(thumbnail);
@@ -7068,7 +7162,7 @@ public final class MainActivity extends Activity {
             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
             details.addView(image,new LinearLayout.LayoutParams(-1,dp(220)));
         }
-        details.addView(text(item.name,20,true));
+        details.addView(storageKindText("thing",item.name,20,true));
         TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
             .replace(" / "," → "),13,false);
         where.setTextColor(subdued);
@@ -7162,6 +7256,8 @@ public final class MainActivity extends Activity {
         LinearLayout row=card();
         row.setPadding(dp(12+Math.min(depth,8)*13),dp(4),dp(12),dp(4));
         TextView heading=text((collapsed?"▸ ":"▾ ")+label,17,true);
+        if(label.startsWith("▣ Pudełko"))
+            heading.setTextColor(storageKindTextColor("box"));
         heading.setMinHeight(dp(44));
         heading.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(heading);
@@ -7197,6 +7293,7 @@ public final class MainActivity extends Activity {
         box.addView(row,new LinearLayout.LayoutParams(-1,dp(46)));
 
         TextView heading=text((collapsed?"▸ ":"▾ ")+"⌂ "+place.name,16,true);
+        heading.setTextColor(storageKindTextColor("place"));
         heading.setGravity(Gravity.CENTER_VERTICAL);
         heading.setSingleLine(true);
         heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -7320,6 +7417,7 @@ public final class MainActivity extends Activity {
                 ?"Brak miniatury":"Miniatura")+" • dotknij, aby pokazać akcje");
             touchFeedback(thumbView);
             thumbView.setOnClickListener(v->showStorageThumbnailActions(item.id));
+            if(thumbnail!=null)bindStorageThumbnailPeek(thumbView,thumbnail);
             LinearLayout.LayoutParams tp=
                 new LinearLayout.LayoutParams(dp(82),dp(82));
             tp.setMargins(0,0,dp(8),0);
@@ -7331,7 +7429,8 @@ public final class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(0,-2,1f);
             ip.setMargins(0,0,dp(5),0);
             summary.addView(info,ip);
-            if(!isBox)info.addView(text("◉ "+item.name,16,true));
+            if(!isBox)info.addView(storageKindText(
+                "thing","◉ "+item.name,16,true));
             TextView location=text(
                 StorageStore.location(db.getReadableDatabase(),item),12,false);
             location.setTextColor(subdued);
@@ -7677,7 +7776,7 @@ public final class MainActivity extends Activity {
         LinearLayout actions=new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(18),dp(10),dp(18),dp(10));
-        actions.addView(text(name,18,true));
+        actions.addView(storageKindText(kind,name,18,true));
         quickStorageSetupStatus=text(
             quickStorageSetupStatusText(kind,id),13,false);
         quickStorageSetupStatus.setTextColor(subdued);
@@ -8287,7 +8386,8 @@ public final class MainActivity extends Activity {
         name.setHint("Nazwa rzeczy albo pudełka");
         name.setText(existing==null?"":existing.name);
         if(existing==null)layout.addView(name);
-        else layout.addView(text("Przenieś: "+existing.name,18,true));
+        else layout.addView(storageKindText(existing.kind,
+            "Przenieś: "+existing.name,18,true));
         java.util.List<Long> boxIds=new java.util.ArrayList<>();
         java.util.List<Long> placeIds=new java.util.ArrayList<>();
         java.util.List<String> labels=new java.util.ArrayList<>();

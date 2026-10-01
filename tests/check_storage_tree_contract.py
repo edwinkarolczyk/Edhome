@@ -90,3 +90,27 @@ assert 'private void showStorageThingDetails(long itemId)' in ui
 assert 'storageEditor(item.kind,item.id);' in ui
 assert 'settingsYesNo(storageSettings,"Galeria miniaturek rzeczy"' in s
 print("Storage tree: persistent branch state, hierarchy, CRUD/QR actions and no flat duplicate list PASS")
+
+# Stała semantyka kolorów + szybki podgląd miniatury.
+for marker in (
+    'private int storageKindTextColor(String kind)',
+    '"#1565C0":"#64B5F6"',
+    '"#A65300":"#FFB74D"',
+    '"#2E7D32":"#81C784"',
+    'storageKindLegend();',
+    'heading.setTextColor(storageKindTextColor("place"));',
+    'heading.setTextColor(storageKindTextColor("box"));',
+    'storageKindText(\n                "thing","◉ "+item.name,16,true)',
+    'private void bindStorageThumbnailPeek(View target,Bitmap thumbnail)',
+    'v.postDelayed(showPeek[0],400L);',
+    'shown.setTouchable(false);',
+    'popup[0].dismiss();',
+    'if(action==MotionEvent.ACTION_UP&&consumed)return true;',
+    'if(thumbnail!=null)bindStorageThumbnailPeek(thumbView,thumbnail);',
+):
+    assert marker in s, f"Missing semantic storage color / thumbnail peek: {marker}"
+
+assert 'TextView heading = storageKindText("place", entry.name, 19, true);' in s
+assert 'actions.addView(storageKindText(kind,' in s
+assert 'actions.addView(storageKindText(kind,name,18,true));' in s
+print("Storage semantic colors + hold-to-peek thumbnail: PASS")

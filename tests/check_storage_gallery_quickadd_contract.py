@@ -29,7 +29,9 @@ assert 'Szukaj rzeczy lub miejsca…' in main
 assert 'renderStorageGalleryGrid' in main
 assert 'showStorageThingDetails(item.id)' in main
 assert 'private void showStorageThingDetails(long itemId)' in main
-assert 'Tylko miniatury. Dotknij zdjęcia' in main
+assert 'Przytrzymaj ' in main
+assert 'miniaturę około 0,4 s' in main
+assert 'bindStorageThumbnailPeek(tile,thumbnail)' in main
 assert 'for(int i=0;i<filtered.size();i+=3)' in main
 assert 'for(int slot=0;slot<3;slot++)' in main
 assert 'if("thing".equals(storageTemporaryKind)) {' in main
