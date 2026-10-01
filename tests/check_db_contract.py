@@ -74,8 +74,16 @@ step11 = statements(section(upgrade, "if (oldVersion < 11 && oldVersion >= 4)", 
 step12 = statements(section(upgrade, "if (oldVersion < 12)", "if (oldVersion < 13)"))
 step13 = statements(section(upgrade, "if (oldVersion < 13)", "if (oldVersion < 14)"))
 pantry14 = statements(section(pantry_store, "static void createTables(SQLiteDatabase db)", "static void createDetails(").replace("db.execSQL(", "database.execSQL("))
+pantry14_v38 = [sql.replace(
+    ", units_per_scan INTEGER NOT NULL DEFAULT 1 CHECK(units_per_scan BETWEEN 1 AND 10000)",
+    "") for sql in pantry14]
 pantry15 = statements(section(pantry_store, "static void createDetails(SQLiteDatabase db)", "static final class Details").replace("db.execSQL(", "database.execSQL("))
 pantry17 = statements(section(package_store, "static void create(SQLiteDatabase db)", "static void fillLegacy(").replace("db.execSQL(", "database.execSQL("))
+pantry17_v38 = [sql.replace(
+    ", deposit_grosz INTEGER NOT NULL DEFAULT 0 CHECK(deposit_grosz BETWEEN 0 AND 100000)",
+    "").replace(
+    ", deposit_pending INTEGER NOT NULL DEFAULT 0 CHECK(deposit_pending BETWEEN 0 AND 100000000)",
+    "") for sql in pantry17]
 receipts18 = statements(section(receipt_store, "static void create(SQLiteDatabase db)", "static boolean received(").replace("db.execSQL(", "database.execSQL("))
 storage19 = statements(section(storage_store, "static void createTables(SQLiteDatabase db)", "static final class Item").replace("db.execSQL(", "database.execSQL("))
 paycheck32 = statements(section(paycheck_store, "static void create(SQLiteDatabase db)", "static String add(").replace("db.execSQL(", "database.execSQL("))
@@ -215,10 +223,10 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         for statement in step13:
             if statement.startswith("ALTER TABLE task_history"):
                 db.execute(statement)
-    execute(db, pantry14)  # v13 to v14, also after older migrations
+    execute(db, pantry14_v38)  # v13 to v14 historical schema
     execute(db, pantry15)  # v14 to v15, preserves existing pantry rows
     execute(db, step16)  # v15 to v16, default unknown products to other
-    execute(db, pantry17 + legacy17)  # v16 to v17, one szt. per legacy pack
+    execute(db, pantry17_v38 + legacy17)  # v16 to v17 historical schema
     execute(db, receipts22)  # v17 to v18, receipt ledger without changing stock
     execute(db, storage19)  # v18 to v19, object and box QR, history
     execute(db, paycheck20)  # v19 to v20, shared-only money ledger
@@ -358,13 +366,13 @@ assert 'task_id ASC, position ASC' in backup
 # An already-upgraded v14 installation must preserve barcode links and inventory.
 existing14 = sqlite3.connect(":memory:")
 execute(existing14, legacy_create + audit + history + rotations + places + sibling_index
-        + members + shifts + shopping22 + timers + pantry14)
+        + members + shifts + shopping22 + timers + pantry14_v38)
 existing14.execute("INSERT INTO pantry(id,name,qty) VALUES (2,'Mleko',7)")
 existing14.execute("INSERT INTO pantry_barcodes(pantry_id,barcode) "
                    "VALUES(2,'5901234123457')")
 execute(existing14, pantry15)
 execute(existing14, step16)
-execute(existing14, pantry17 + legacy17)
+execute(existing14, pantry17_v38 + legacy17)
 execute(existing14, receipts22)
 execute(existing14, storage19)
 execute(existing14, paycheck20)
@@ -395,8 +403,8 @@ existing14.close()
 # Existing SQLite v23 with populated objects and shopping history stays intact.
 existing23 = sqlite3.connect(":memory:")
 execute(existing23, create + audit + history + rotations + places
-        + sibling_index + members + shifts + shopping + timers + pantry14
-        + pantry15 + pantry17 + receipts18 + storage19 + paycheck20 + goals21
+        + sibling_index + members + shifts + shopping + timers + pantry14_v38
+        + pantry15 + pantry17_v38 + receipts18 + storage19 + paycheck20 + goals21
         + prices22)
 existing23.execute("INSERT INTO pantry(id,name,qty) VALUES(9,'Ryż',6)")
 existing23.execute("INSERT INTO shopping_items(id,name) VALUES(42,'Ryż')")
