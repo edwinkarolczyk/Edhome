@@ -185,11 +185,15 @@ for marker in ('"/diagnostics"', '"/diagnostics/ack"', '"x-edhome-diagnostics-id
 for marker in ('transferId()', 'clearIfTransferred(String expectedId)',
                'MessageDigest.getInstance("SHA-256")'):
     assert marker in phone_log, "Missing safe diagnostics cleanup: " + marker
-for marker in ('Pobierz nowe logi z telefonu', 'downloadPhoneDiagnostics',
+# Current approved UX: one button saves Desktop diagnostics and only new
+# phone diagnostics to the Windows Desktop. The phone log is acknowledged
+# (and removed on Android) only after the PC file was written successfully.
+for marker in ('Pobierz logi telefonu + Desktop na Pulpit',
+               'saveAllDiagnosticsToDesktop',
+               'downloadPhoneDiagnostics',
                'ackDiagnostics', 'X-EDHOME-DIAGNOSTICS-ID',
                'Brak nowych logów diagnostycznych na telefonie',
-               'Kopiuj diagnostykę EDHOME Desktop',
-               'Zapisz diagnostykę Desktop TXT'):
+               'Log telefonu po udanym zapisie został usunięty z aplikacji.'):
     assert marker in desktop, "Missing Desktop diagnostics UX: " + marker
 for marker in ('edhome-desktop.log', 'edhome-desktop.previous.log',
                'MAX_BYTES', 'readFullText()', 'readForClipboard()'):
