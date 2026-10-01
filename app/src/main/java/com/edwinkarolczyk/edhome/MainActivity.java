@@ -2873,17 +2873,55 @@ public final class MainActivity extends Activity {
     }
 
     private Bitmap homeFullTileBitmap(String iconId) {
+        // Zwykłe ikony AI 3D mają format 192x192 i nigdy nie są tłem.
+        // Pełne tło dostaje wyłącznie grafika faktycznie zaimportowana
+        // jako własny kafelek PNG/WebP.
         if (TileCustomImage.available(this, iconId))
             return TileCustomImage.bitmap(this, iconId);
-        if (IconPack3D.known(this, iconId))
-            return IconPack3D.bitmap(this, iconId);
         return null;
     }
 
     private Drawable homeFullTileBackground(Drawable base, Bitmap image) {
-        BitmapDrawable art=new BitmapDrawable(getResources(), image);
-        art.setGravity(Gravity.FILL);
-        return new LayerDrawable(new Drawable[]{base,art});
+        // CENTER_CROP bez rozciągania proporcji. Tło jest przycinane do
+        // zaokrąglonego kafelka, zamiast deformować grafikę przez Gravity.FILL.
+        return new Drawable() {
+            private final android.graphics.Paint artPaint =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG
+                    |android.graphics.Paint.FILTER_BITMAP_FLAG);
+            @Override public void draw(android.graphics.Canvas canvas) {
+                android.graphics.Rect bounds=getBounds();
+                base.setBounds(bounds);
+                base.draw(canvas);
+                if(image==null||image.getWidth()<1||image.getHeight()<1)return;
+                float scale=Math.max(
+                    bounds.width()/(float)image.getWidth(),
+                    bounds.height()/(float)image.getHeight());
+                float width=image.getWidth()*scale;
+                float height=image.getHeight()*scale;
+                float left=bounds.left+(bounds.width()-width)/2f;
+                float top=bounds.top+(bounds.height()-height)/2f;
+                android.graphics.RectF destination=new android.graphics.RectF(
+                    left,top,left+width,top+height);
+                android.graphics.Path clip=new android.graphics.Path();
+                float radius=dp(24);
+                clip.addRoundRect(new android.graphics.RectF(bounds),
+                    radius,radius,android.graphics.Path.Direction.CW);
+                int save=canvas.save();
+                canvas.clipPath(clip);
+                canvas.drawBitmap(image,null,destination,artPaint);
+                canvas.restoreToCount(save);
+            }
+            @Override public void setAlpha(int alpha) {
+                artPaint.setAlpha(alpha);
+            }
+            @Override public void setColorFilter(
+                    android.graphics.ColorFilter filter) {
+                artPaint.setColorFilter(filter);
+            }
+            @Override public int getOpacity() {
+                return android.graphics.PixelFormat.TRANSLUCENT;
+            }
+        };
     }
 
     private String defaultTileIcon(String target) {
@@ -13148,16 +13186,17 @@ public final class MainActivity extends Activity {
         }
         boolean fullTileArt=homeFullTileArtEnabled();
         smallButton(appearance,fullTileArt
-            ?"Kafelki AI jako pełne tło: WŁ. → wyłącz"
-            :"Kafelki AI jako pełne tło: WYŁ. → włącz",()->{
+            ?"Pełne grafiki kafelków jako tło: WŁ. → wyłącz"
+            :"Pełne grafiki kafelków jako tło: WYŁ. → włącz",()->{
                 prefs.edit().putBoolean("home_tile_full_art",!fullTileArt).apply();
                 DiagnosticLog.event("HOME_TILE_FULL_ART_CHANGED",
                     "enabled="+(!fullTileArt));
                 render();
             });
         appearance.addView(text(
-            "Pełne tło: grafika AI lub własny PNG/WebP zajmuje cały kafelek, "
-                +"a nazwa i uchwyt pozostają na wierzchu.",12,false));
+            "Pełne tło działa tylko dla grafiki PNG/WebP przygotowanej jako "
+                +"cały kafelek. Zwykłe ikony AI 3D pozostają ikonami. "
+                +"Nazwa jest już częścią grafiki, więc EDHOME jej nie dubluje.",12,false));
 
         LinearLayout gestures=settingsNestedAccordion(appearance,"tile_gestures",
             "Czas przytrzymania kafelków",false);
@@ -13567,22 +13606,18 @@ public final class MainActivity extends Activity {
             pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
             tile.addView(pictogram, iconParams);
         }
-        TextView captionView = text(caption,
-            isHome && skin.showcase() && !homeEditMode ? 11
-                : (fullTileArt?13:12), true);
-        captionView.setTextColor(fullTileArt?ink:
-            (highlighted ? skin.tileText(tileTint) : ink));
-        captionView.setGravity(fullTileArt
-            ?(Gravity.LEFT|Gravity.CENTER_VERTICAL):Gravity.CENTER);
-        if(fullTileArt) {
-            captionView.setPadding(dp(8),0,dp(6),0);
-            captionView.setShadowLayer(3f,0f,1f,Color.WHITE);
+        if(!fullTileArt) {
+            TextView captionView = text(caption,
+                isHome && skin.showcase() && !homeEditMode ? 11 : 12, true);
+            captionView.setTextColor(highlighted
+                ? skin.tileText(tileTint) : ink);
+            captionView.setGravity(Gravity.CENTER);
+            captionView.setMaxLines(2);
+            captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tile.addView(captionView,
+                new LinearLayout.LayoutParams(-1,
+                    dp(isHome && skin.showcase() ? 28 : 31)));
         }
-        captionView.setMaxLines(2);
-        captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        tile.addView(captionView,
-            new LinearLayout.LayoutParams(-1,
-                dp(isHome && skin.showcase() ? 28 : 31)));
         return tile;
     }
 

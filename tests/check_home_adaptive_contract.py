@@ -98,21 +98,29 @@ assert 'if (!homeEditMode) return false;' in main
 assert 'Zwykłe przewijanie nigdy nie może rozpocząć przenoszenia kafelka.' in main
 print("Home swipe cannot move tiles outside explicit layout mode: PASS")
 
-# Pełnoekranowe tło kafelka: AI 3D / własny obraz zamiast małej ikonki.
+# Pełnoekranowe tło kafelka: tylko dedykowana grafika PNG/WebP.
 for token in (
     'private boolean homeFullTileArtEnabled()',
     'prefs.getBoolean("home_tile_full_art", true)',
     'private Bitmap homeFullTileBitmap(String iconId)',
     'private Drawable homeFullTileBackground(Drawable base, Bitmap image)',
-    'art.setGravity(Gravity.FILL);',
+    'bounds.width()/(float)image.getWidth()',
+    'bounds.height()/(float)image.getHeight()',
+    'canvas.clipPath(clip);',
+    'canvas.drawBitmap(image,null,destination,artPaint);',
     'fullTileArt=homeFullArtBitmap!=null;',
     '?homeFullTileBackground(tileBase,homeFullArtBitmap):tileBase',
-    'if(fullTileArt) {',
     'tile.addView(spacer,new LinearLayout.LayoutParams(-1,0,1f));',
-    'captionView.setShadowLayer(3f,0f,1f,Color.WHITE);',
-    'Kafelki AI jako pełne tło: WŁ. → wyłącz',
+    'if(!fullTileArt) {',
+    'Pełne grafiki kafelków jako tło: WŁ. → wyłącz',
 ):
     assert token in main, token
+
+# Nigdy nie rozciągamy zwykłej paczki 192x192 AI 3D jako tła.
+fullart=main.split('private Bitmap homeFullTileBitmap(String iconId)',1)[1]
+fullart=fullart.split('private String defaultTileIcon',1)[0]
+assert 'IconPack3D.bitmap' not in fullart
+assert 'Gravity.FILL' not in fullart
 
 custom=(root / "TileCustomImage.java").read_text(encoding="utf-8")
 assert 'private static final int MAX_EDGE = 1600;' in custom
