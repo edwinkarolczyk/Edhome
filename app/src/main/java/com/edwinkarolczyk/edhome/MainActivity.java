@@ -11090,6 +11090,174 @@ public final class MainActivity extends Activity {
     }
 
 
+    private void showPantryQuantityConfirm(String barcode,
+            PantryBarcodeStore.Item item, PantryPackageStore.Pack pack,
+            String mode, String operationId, int defaultUnits) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(12),dp(18),dp(8));
+        form.addView(text("Obecny stan: "
+            +PantryPackageRules.summary(item.qty,pack.unit,pack.sizeMilli),14,false));
+        int suggested=Math.max(1,Math.min(10000,defaultUnits));
+        EditText amount=new EditText(this);
+        amount.setSingleLine(true);
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        amount.setText(Integer.toString(suggested));
+        form.addView(text("Ile sztuk / opakowań podstawowych "
+            +("TAKE".equals(mode)?"wyciągnąć":"dodać")+"?",14,true));
+        form.addView(amount);
+        if(defaultUnits>1)
+            form.addView(text("Ten kod jest zapisany jako opakowanie zbiorcze: "
+                +defaultUnits+" szt. na jeden skan.",12,false));
+        if("TAKE".equals(mode) && pack.depositGrosz>0)
+            form.addView(text("Po wyjęciu doliczę tyle samo pustych opakowań "
+                +"do kaucji • "+MoneyRules.format(pack.depositGrosz)+" / szt.",
+                12,false));
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(item.name)
+            .setView(form)
+            .setNegativeButton("Anuluj",(d,w)->finishPantryBatch())
+            .setNeutralButton("1 szt.",null)
+            .setPositiveButton("TAKE".equals(mode)?"Wyciągnij":"Dodaj",null)
+            .create();
+        dialog.setOnShowListener(ignore->{
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                amount.setText("1");
+                amount.setSelection(amount.getText().length());
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                int quantity;
+                try {
+                    quantity=Integer.parseInt(amount.getText().toString().trim());
+                    if(quantity<1||quantity>10000)throw new NumberFormatException();
+                } catch(NumberFormatException invalid) {
+                    amount.setError("Podaj liczbę 1–10000.");
+                    return;
+                }
+                if("TAKE".equals(mode)&&quantity>item.qty) {
+                    amount.setError("Masz tylko "+item.qty+" opak.");
+                    return;
+                }
+                dialog.dismiss();
+                commitPantryBarcode(barcode,null,mode,operationId,null,null,
+                    pack.unit,pack.sizeMilli,item.id,quantity,defaultUnits);
+            });
+        });
+        dialog.setOnCancelListener(d->finishPantryBatch());
+        dialog.show();
+    }
+
+    private void showPantryDepositSummary() {
+        java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT p.id,p.name,pp.deposit_grosz,pp.deposit_pending "
+                    +"FROM pantry p JOIN pantry_packages pp ON pp.pantry_id=p.id "
+                    +"WHERE pp.deposit_grosz>0 OR pp.deposit_pending>0 "
+                    +"ORDER BY p.name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                ids.add(c.getLong(0));
+                long value=c.getLong(2)*c.getLong(3);
+                labels.add(c.getString(1)+" • "+c.getInt(3)+" opak. • "
+                    +MoneyRules.format(value));
+            }
+        }
+        String total=PantryPackageStore.totalPendingDepositUnits(
+            db.getReadableDatabase())+" opak. • "
+            +MoneyRules.format(PantryPackageStore.totalDepositGrosz(
+                db.getReadableDatabase()));
+        if(ids.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Kaucje")
+                .setMessage("Nie masz jeszcze produktów z ustawioną kaucją. "
+                    +"Otwórz produkt → Kaucja / opakowania zwrotne.")
+                .setPositiveButton("Zamknij",null).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Kaucje • "+total)
+            .setItems(labels.toArray(new String[0]),(d,which)->{
+                long id=ids.get(which);
+                String name=labels.get(which).split(" • ",2)[0];
+                showPantryDepositDialog(id,name);
+            }).setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showPantryDepositDialog(long pantryId,String name) {
+        PantryPackageStore.Pack pack=PantryPackageStore.find(
+            db.getReadableDatabase(),pantryId);
+        String state=pack.depositGrosz<=0
+            ?"Kaucja wyłączona."
+            :"Kaucja: "+MoneyRules.format(pack.depositGrosz)+" / szt.\n"
+                +"Do zwrotu: "+pack.depositPending+" opak. = "
+                +MoneyRules.format(pack.depositGrosz*pack.depositPending);
+        java.util.ArrayList<String> actions=new java.util.ArrayList<>();
+        actions.add("Ustaw stawkę kaucji");
+        if(pack.depositPending>0)actions.add("Oddaj opakowania");
+        if(pack.depositGrosz>0&&pack.depositPending==0)actions.add("Wyłącz kaucję");
+        new AlertDialog.Builder(this).setTitle(name+" • kaucja")
+            .setMessage(state)
+            .setItems(actions.toArray(new String[0]),(dialog,which)->{
+                String action=actions.get(which);
+                if("Ustaw stawkę kaucji".equals(action)) {
+                    EditText money=new EditText(this);
+                    money.setSingleLine(true);
+                    money.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+                        |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+                    money.setHint("np. 0,50");
+                    if(pack.depositGrosz>0)
+                        money.setText(MoneyRules.format(pack.depositGrosz)
+                            .replace(" zł",""));
+                    new AlertDialog.Builder(this)
+                        .setTitle("Kaucja za 1 opakowanie")
+                        .setView(money).setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Zapisz",(d,w)->{
+                            try {
+                                long grosz=MoneyRules.parse(
+                                    money.getText().toString().trim());
+                                if(grosz>100000)
+                                    throw new IllegalArgumentException(
+                                        "Maksymalnie 1000 zł za sztukę.");
+                                PantryPackageStore.setDeposit(
+                                    db.getWritableDatabase(),pantryId,grosz);
+                                DiagnosticLog.event("PANTRY_DEPOSIT_RATE_SAVED");
+                                render();
+                            } catch(IllegalArgumentException invalid) {
+                                alert(invalid.getMessage());
+                            }
+                        }).show();
+                } else if("Oddaj opakowania".equals(action)) {
+                    EditText count=new EditText(this);
+                    count.setSingleLine(true);
+                    count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                    count.setText(Integer.toString(pack.depositPending));
+                    new AlertDialog.Builder(this)
+                        .setTitle("Oddaj opakowania")
+                        .setMessage("Masz do zwrotu: "+pack.depositPending
+                            +" • wartość: "
+                            +MoneyRules.format(pack.depositGrosz*pack.depositPending))
+                        .setView(count).setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Oddane",(d,w)->{
+                            try {
+                                int amount=Integer.parseInt(
+                                    count.getText().toString().trim());
+                                PantryPackageStore.returnDeposit(
+                                    db.getWritableDatabase(),pantryId,amount);
+                                DiagnosticLog.event("PANTRY_DEPOSIT_RETURNED");
+                                render();
+                            } catch(Exception invalid) {
+                                alert(invalid.getMessage()==null
+                                    ?"Podaj poprawną ilość.":invalid.getMessage());
+                            }
+                        }).show();
+                } else {
+                    PantryPackageStore.setDeposit(
+                        db.getWritableDatabase(),pantryId,0L);
+                    DiagnosticLog.event("PANTRY_DEPOSIT_DISABLED");
+                    render();
+                }
+            }).setNegativeButton("Zamknij",null).show();
+    }
+
     /** A second barcode can refer to an item already stored offline. */
     private void choosePantryProductForCode(String barcode, String operationId) {
         java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
@@ -11513,9 +11681,18 @@ public final class MainActivity extends Activity {
     private void commitPantryBarcode(String barcode, String name,
             String mode, String operationId, PantryProductLookup.Product found,
             String newCategory, String unit, long sizeMilli, long selectedPantryId) {
+        commitPantryBarcode(barcode,name,mode,operationId,found,newCategory,
+            unit,sizeMilli,selectedPantryId,1,1);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory, String unit, long sizeMilli, long selectedPantryId,
+            int quantity, int unitsPerScan) {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
-                barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId);
+                barcode, name, mode, operationId, unit, sizeMilli,
+                selectedPantryId, quantity, unitsPerScan);
             if ("DUPLICATE_IGNORED".equals(result)) {
                 abortPantryScan("PANTRY_SCAN_DUPLICATE_IGNORED", null,
                     "Ta operacja skanowania była już zapisana. Nie zmieniono "
@@ -11563,12 +11740,14 @@ public final class MainActivity extends Activity {
     private void showPantryScanHistory() {
         StringBuilder history = new StringBuilder();
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT name_snapshot,kind,before_qty,after_qty "
+                "SELECT name_snapshot,kind,qty,before_qty,after_qty "
                 + "FROM pantry_movements ORDER BY id DESC LIMIT 30", null)) {
             while (cursor.moveToNext()) {
-                history.append("TAKE".equals(cursor.getString(1)) ? "−1 opak. " : "+1 opak. ")
+                int amount=cursor.getInt(2);
+                history.append("TAKE".equals(cursor.getString(1)) ? "−" : "+")
+                    .append(amount).append(" opak. ")
                     .append(cursor.getString(0)).append(" • ")
-                    .append(cursor.getInt(2)).append(" → ").append(cursor.getInt(3))
+                    .append(cursor.getInt(3)).append(" → ").append(cursor.getInt(4))
                     .append(" opak.\n");
             }
         }
@@ -14611,6 +14790,31 @@ public final class MainActivity extends Activity {
             else getWritableDatabase().execSQL(
                 "UPDATE pantry SET qty=qty+1 WHERE id=? AND qty<100000000",
                 new Object[]{id});
+        }
+
+        boolean consumeStock(long id,int amount) {
+            if(amount<1||amount>10000)
+                throw new IllegalArgumentException("Nieprawidłowa ilość.");
+            SQLiteDatabase database=getWritableDatabase();
+            database.beginTransaction();
+            try {
+                int changed;
+                try(Cursor c=database.rawQuery(
+                        "SELECT qty FROM pantry WHERE id=?",
+                        new String[]{Long.toString(id)})) {
+                    if(!c.moveToFirst()||c.getInt(0)<amount)return false;
+                    int before=c.getInt(0);
+                    ContentValues values=new ContentValues();
+                    values.put("qty",before-amount);
+                    changed=database.update("pantry",values,
+                        "id=? AND qty=?",new String[]{
+                            Long.toString(id),Integer.toString(before)});
+                }
+                if(changed!=1)return false;
+                PantryPackageStore.addPendingDeposit(database,id,amount);
+                database.setTransactionSuccessful();
+                return true;
+            } finally { database.endTransaction(); }
         }
 
         void setStock(long id, int qty) {
