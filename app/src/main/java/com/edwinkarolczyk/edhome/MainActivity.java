@@ -10626,11 +10626,11 @@ public final class MainActivity extends Activity {
         compactAction(row1, "+ Produkt", () -> pantryProductDialog(null, ""));
 
         LinearLayout row2 = compactActionRow();
-        compactAction(row2, "📷 Dodaj +1", () -> {
+        compactAction(row2, "📷 Dodaj / zgrzewka", () -> {
             finishPantryBatch();
             openPantryCamera(false);
         });
-        compactAction(row2, "📷 Wyjmij −1", () -> {
+        compactAction(row2, "📷 Wyjmij / ilość", () -> {
             finishPantryBatch();
             launchTakeScanner(false);
         });
@@ -11017,7 +11017,7 @@ public final class MainActivity extends Activity {
             .setView(input).setNegativeButton("Anuluj", null)
             .setNeutralButton("Wyciągnij −1", (d, w) -> onPantryBarcode(
                 input.getText().toString().trim(), "TAKE"))
-            .setPositiveButton("Dodaj +1", (d, w) -> onPantryBarcode(
+            .setPositiveButton("Dodaj / ilość", (d, w) -> onPantryBarcode(
                 input.getText().toString().trim(), "ADD")).show();
     }
 
@@ -11288,7 +11288,8 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("Wybierz swój produkt")
             .setMessage("Powiąż zeskanowany kod z produktem, który masz już w spiżarni. "
-                + "Nazwa i ilość zostaną zachowane; po zatwierdzeniu dodam 1 opakowanie.")
+                + "Nazwa zostanie zachowana; wybierzesz ile sztuk oznacza ten kod, "
+                + "np. 6 dla zgrzewki.")
             .setItems(captions.toArray(new String[0]), (d,which) ->
                 confirmExistingPantryCode(barcode, operationId, ids.get(which)))
             .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
