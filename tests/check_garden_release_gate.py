@@ -15,7 +15,7 @@ version=re.search(r"versionName '([^']+)'",gradle).group(1)
 assert version.startswith("0.7.4."), version
 
 # Foundation + migration from last 0.6 DB.
-assert 'super(context, "edhome-beta-preview.db", null, 38)' in main
+assert 'super(context, "edhome-beta-preview.db", null, 39)' in main
 assert 'DATABASE_MIGRATED_36_TO_37_GARDEN' in main
 assert 'DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE' in main
 assert 'private static final int DB_VERSION = 39;' in backup
