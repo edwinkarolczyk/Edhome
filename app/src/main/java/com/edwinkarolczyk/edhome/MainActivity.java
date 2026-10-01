@@ -1,6 +1,7 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Activity;
+import androidx.core.content.FileProvider;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 import android.app.AlertDialog;
@@ -93,6 +94,8 @@ public final class MainActivity extends Activity {
     private int pendingQrLabelsCount;
     private String pendingCustomTileId;
     private long pendingStorageThumbnailId;
+    private Uri pendingStorageCameraUri;
+    private java.io.File pendingStorageCameraFile;
     private String pendingStatementBank;
     private NfcAdapter nfcAdapter;
     private PendingNfcTarget pendingNfcTarget;
@@ -7686,11 +7689,33 @@ public final class MainActivity extends Activity {
             pendingStorageThumbnailId=0;
             alert("Nie znaleziono aplikacji aparatu.");return;
         }
-        try {startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);}
-        catch(Exception error) {
+        try {
+            java.io.File dir=new java.io.File(getCacheDir(),"storage_camera");
+            if(!dir.exists()&&!dir.mkdirs())
+                throw new IllegalStateException("Nie utworzono katalogu zdjęcia.");
+            java.io.File file=java.io.File.createTempFile(
+                "edhome_"+id+"_","_full.jpg",dir);
+            Uri uri=FileProvider.getUriForFile(this,
+                getPackageName()+".storage.files",file);
+            pendingStorageCameraFile=file;
+            pendingStorageCameraUri=uri;
+            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT,uri);
+            camera.setClipData(ClipData.newRawUri("EDHOME zdjęcie",uri));
+            camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                |Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);
+        } catch(Exception error) {
+            cleanupStorageCameraTemp();
             pendingStorageThumbnailId=0;
-            alert("Nie można uruchomić aparatu.");
+            alert("Nie można uruchomić aparatu z pełną jakością.");
         }
+    }
+
+    private void cleanupStorageCameraTemp() {
+        pendingStorageCameraUri=null;
+        java.io.File file=pendingStorageCameraFile;
+        pendingStorageCameraFile=null;
+        if(file!=null&&file.exists())file.delete();
     }
 
     private void saveStorageThumbnail(long id,String thumbnail) {
@@ -13821,20 +13846,27 @@ public final class MainActivity extends Activity {
         }
         if (request == TAKE_STORAGE_THUMBNAIL) {
             long id=pendingStorageThumbnailId;
+            Uri photo=pendingStorageCameraUri;
+            java.io.File file=pendingStorageCameraFile;
             pendingStorageThumbnailId=0;
-            if(result==RESULT_OK&&id>0) {
-                try {
-                    Object raw=data==null||data.getExtras()==null?null:
-                        data.getExtras().get("data");
-                    if(!(raw instanceof Bitmap))
+            pendingStorageCameraUri=null;
+            pendingStorageCameraFile=null;
+            try {
+                if(result==RESULT_OK&&id>0) {
+                    if(photo==null||file==null||!file.exists()||file.length()<4)
                         throw new IllegalArgumentException(
-                            "Aparat nie zwrócił zdjęcia.");
-                    saveStorageThumbnail(id,StorageThumbs.compress((Bitmap)raw));
-                }catch(Exception error) {
-                    DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
-                    alert(error instanceof IllegalArgumentException
-                        ?error.getMessage():"Nie udało się zapisać miniatury.");
+                            "Aparat nie zapisał pełnego zdjęcia. "
+                            +"Spróbuj ponownie albo wybierz zdjęcie z galerii.");
+                    saveStorageThumbnail(id,StorageThumbs.compress(
+                        getContentResolver(),photo));
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_FULLRES_SAVED");
                 }
+            } catch(Exception error) {
+                DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
+                alert(error instanceof IllegalArgumentException
+                    ?error.getMessage():"Nie udało się zapisać miniatury.");
+            } finally {
+                if(file!=null&&file.exists())file.delete();
             }
             return;
         }

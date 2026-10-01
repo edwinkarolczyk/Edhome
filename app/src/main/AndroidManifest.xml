@@ -12,6 +12,16 @@
         android:theme="@style/Theme.EDHOME"
         android:icon="@drawable/ic_edhome_brand"
         android:roundIcon="@drawable/ic_edhome_brand">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.storage.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/storage_file_paths" />
+        </provider>
+
         <activity android:name=".PantryTakeCaptureActivity"
             android:exported="false" />
 

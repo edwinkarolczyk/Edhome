@@ -188,7 +188,7 @@ final class DataBackup {
             catch(NumberFormatException invalid){continue;}
             if(!validStorageIds.contains(id))continue;
             String data=(String)value.getValue();
-            if(data.length()>50000)throw new IllegalStateException(
+            if(data.length()>StorageThumbs.MAX_BASE64_CHARS)throw new IllegalStateException(
                 "Nieprawidłowa miniatura magazynu.");
             JSONObject thumb=new JSONObject();
             thumb.put("itemId",id);
@@ -1452,7 +1452,7 @@ final class DataBackup {
                 String jpeg=thumb.getString("jpegBase64");
                 if(id<=0||!presentStorageIds.contains(id)
                         ||restoredStorageThumbs.containsKey(id)
-                        ||jpeg.length()>50000)
+                        ||jpeg.length()>StorageThumbs.MAX_BASE64_CHARS)
                     throw new IllegalArgumentException(
                         "Nieprawidłowa miniatura rzeczy w kopii.");
                 byte[] bytes;

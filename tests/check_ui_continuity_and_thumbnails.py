@@ -44,3 +44,21 @@ service=(src/"LanSyncService.java").read_text(encoding="utf-8")
 assert 'STORAGE_THUMBNAILS_PRUNED_AFTER_SYNC' in service
 assert 'StorageThumbs.prune(' in service
 print("Storage thumbnail orphan cleanup after startup/sync PASS")
+
+# Jakość zdjęć magazynu: pełne zdjęcie z aparatu, 1024 px i rozsądny JPEG.
+assert 'static final int MAX_EDGE_PX=1024;' in thumb
+assert 'static final int MAX_JPEG_BYTES=256*1024;' in thumb
+assert 'static final int MAX_BASE64_CHARS=360000;' in thumb
+assert 'for(int quality:new int[]{92,88,84,80,76,72,68})' in thumb
+assert '192.0/Math.max(w,h)' not in thumb
+assert 'FileProvider.getUriForFile' in main
+assert 'android.provider.MediaStore.EXTRA_OUTPUT' in main
+assert 'STORAGE_THUMBNAIL_FULLRES_SAVED' in main
+assert 'data.getExtras().get("data")' not in main[
+    main.index('if (request == TAKE_STORAGE_THUMBNAIL)'):
+    main.index('if (request == IMPORT_STORAGE_THUMBNAIL)')
+]
+manifest=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+assert 'androidx.core.content.FileProvider' in manifest
+assert '@xml/storage_file_paths' in manifest
+print("Storage thumbnails: full-resolution camera capture and 1024px quality PASS")
