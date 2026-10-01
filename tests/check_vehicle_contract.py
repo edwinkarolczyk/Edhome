@@ -34,7 +34,7 @@ for token in (
 assert "PaycheckStore" not in store and "PantryBarcodeStore" not in store
 assert "VehicleRules.optionalDate" in store
 assert '"vehicles"' in catalog and 'case "vehicles": return "Pojazdy";' in catalog
-assert 'private static final int DB_VERSION = 38;' in backup
+assert 'private static final int DB_VERSION = 39;' in backup
 assert '{"vehicles", "id", "name", "registration", "mileage",' in backup
 assert '{"vehicle_events", "id", "operation_id", "vehicle_id",' in backup
 assert 'inputVersion < 24 && ("vehicles".equals(definition[0])' in backup
