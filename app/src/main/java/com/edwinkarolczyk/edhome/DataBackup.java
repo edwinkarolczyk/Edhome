@@ -169,6 +169,8 @@ final class DataBackup {
             HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
         settings.put("homeTilePageSlots", HomeTileLayout.pageSlots(prefs.getInt(
             HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS)));
+        settings.put("homeTileFullArt",
+            prefs.getBoolean("home_tile_full_art", true));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
         // Include user-selected small storage photos in the portable JSON backup.
@@ -303,6 +305,11 @@ final class DataBackup {
             HomeTileLayout.DEFAULT_DRAG_MS);
         int pageSlots = settings.optInt("homeTilePageSlots",
             HomeTileLayout.DEFAULT_PAGE_SLOTS);
+        boolean fullTileArt=settings.optBoolean("homeTileFullArt",true);
+        if(settings.has("homeTileFullArt")
+                &&!(settings.get("homeTileFullArt") instanceof Boolean))
+            throw new IllegalArgumentException(
+                "Nieprawidłowy tryb pełnego tła kafelków.");
         if (settings.has("homeTilePageSlots")
                 && (!(settings.get("homeTilePageSlots") instanceof Number)
                     || ((Number) settings.get("homeTilePageSlots"))
@@ -1508,6 +1515,7 @@ final class DataBackup {
                 .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
                 .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
                 .putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)
+                .putBoolean("home_tile_full_art",fullTileArt)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)

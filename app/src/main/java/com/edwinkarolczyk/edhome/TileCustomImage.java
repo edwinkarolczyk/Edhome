@@ -3,8 +3,6 @@ package com.edwinkarolczyk.edhome;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.net.Uri;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -15,6 +13,7 @@ import java.io.InputStream;
 final class TileCustomImage {
     static final String PREFIX = "custom_";
     private static final long MAX_FILE = 8L * 1024 * 1024;
+    private static final int MAX_EDGE = 1600;
     private TileCustomImage() { }
 
     static String key(String tileId) {
@@ -64,23 +63,20 @@ final class TileCustomImage {
                 || bounds.outWidth > 4096 || bounds.outHeight > 4096)
             throw new IllegalArgumentException("Obraz musi mieć maks. 4096 × 4096.");
         bounds.inJustDecodeBounds = false;
-        bounds.inSampleSize = Math.max(1,
-            Math.max(bounds.outWidth, bounds.outHeight) / 384);
+        bounds.inSampleSize = 1;
+        while(bounds.outWidth/bounds.inSampleSize>MAX_EDGE*2
+                ||bounds.outHeight/bounds.inSampleSize>MAX_EDGE*2)
+            bounds.inSampleSize*=2;
         Bitmap source = BitmapFactory.decodeByteArray(
             original, 0, original.length, bounds);
         if (source == null) throw new IllegalArgumentException("Nieprawidłowy PNG/WebP.");
-        Bitmap scaled = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
+        int sourceWidth=source.getWidth(),sourceHeight=source.getHeight();
+        float scale=Math.min(1f,
+            MAX_EDGE/(float)Math.max(sourceWidth,sourceHeight));
+        Bitmap scaled=scale<1f?Bitmap.createScaledBitmap(source,
+            Math.max(1,Math.round(sourceWidth*scale)),
+            Math.max(1,Math.round(sourceHeight*scale)),true):source;
         try {
-            Canvas canvas = new Canvas(scaled);
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-            float size = Math.min(192f / source.getWidth(),
-                192f / source.getHeight());
-            float width = source.getWidth() * size;
-            float height = source.getHeight() * size;
-            canvas.drawBitmap(source, null,
-                new android.graphics.RectF(
-                    (192 - width) / 2f, (192 - height) / 2f,
-                    (192 + width) / 2f, (192 + height) / 2f), paint);
             File folder = destination.getParentFile();
             if (!folder.exists() && !folder.mkdirs())
                 throw new IllegalStateException("Brak miejsca na ikonę.");
@@ -96,8 +92,8 @@ final class TileCustomImage {
                 throw new IllegalStateException("Nie zastąpiono ikony.");
             }
         } finally {
+            if(scaled!=source)scaled.recycle();
             source.recycle();
-            scaled.recycle();
         }
     }
 }

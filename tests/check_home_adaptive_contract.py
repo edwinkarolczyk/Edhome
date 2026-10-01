@@ -97,3 +97,34 @@ print("Adaptive home tiles, configurable drag/menu and backup settings: PASS")
 assert 'if (!homeEditMode) return false;' in main
 assert 'Zwykłe przewijanie nigdy nie może rozpocząć przenoszenia kafelka.' in main
 print("Home swipe cannot move tiles outside explicit layout mode: PASS")
+
+# Pełnoekranowe tło kafelka: AI 3D / własny obraz zamiast małej ikonki.
+for token in (
+    'private boolean homeFullTileArtEnabled()',
+    'prefs.getBoolean("home_tile_full_art", true)',
+    'private Bitmap homeFullTileBitmap(String iconId)',
+    'private Drawable homeFullTileBackground(Drawable base, Bitmap image)',
+    'art.setGravity(Gravity.FILL);',
+    'fullTileArt=homeFullArtBitmap!=null;',
+    '?homeFullTileBackground(tileBase,homeFullArtBitmap):tileBase',
+    'if(fullTileArt) {',
+    'tile.addView(spacer,new LinearLayout.LayoutParams(-1,0,1f));',
+    'captionView.setShadowLayer(3f,0f,1f,Color.WHITE);',
+    'Kafelki AI jako pełne tło: WŁ. → wyłącz',
+):
+    assert token in main, token
+
+custom=(root / "TileCustomImage.java").read_text(encoding="utf-8")
+assert 'private static final int MAX_EDGE = 1600;' in custom
+assert 'Bitmap.createBitmap(192, 192' not in custom
+assert 'MAX_EDGE/(float)Math.max(sourceWidth,sourceHeight)' in custom
+assert 'if(scaled!=source)scaled.recycle();' in custom
+
+for token in (
+    'settings.put("homeTileFullArt"',
+    'prefs.getBoolean("home_tile_full_art", true)',
+    'boolean fullTileArt=settings.optBoolean("homeTileFullArt",true);',
+    '.putBoolean("home_tile_full_art",fullTileArt)',
+):
+    assert token in backup, token
+print("Full-tile AI/custom artwork background and high-resolution import: PASS")

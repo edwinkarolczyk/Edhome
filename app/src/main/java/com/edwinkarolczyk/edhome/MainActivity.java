@@ -26,6 +26,9 @@ import android.graphics.Bitmap;
 import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
@@ -2863,6 +2866,24 @@ public final class MainActivity extends Activity {
         });
         popup.showAsDropDown(anchor, 0, -dp(14));
         DiagnosticLog.event("HOME_TILE_ACTIONS_OPENED");
+    }
+
+    private boolean homeFullTileArtEnabled() {
+        return prefs.getBoolean("home_tile_full_art", true);
+    }
+
+    private Bitmap homeFullTileBitmap(String iconId) {
+        if (TileCustomImage.available(this, iconId))
+            return TileCustomImage.bitmap(this, iconId);
+        if (IconPack3D.known(this, iconId))
+            return IconPack3D.bitmap(this, iconId);
+        return null;
+    }
+
+    private Drawable homeFullTileBackground(Drawable base, Bitmap image) {
+        BitmapDrawable art=new BitmapDrawable(getResources(), image);
+        art.setGravity(Gravity.FILL);
+        return new LayerDrawable(new Drawable[]{base,art});
     }
 
     private String defaultTileIcon(String target) {
@@ -13125,6 +13146,19 @@ public final class MainActivity extends Activity {
                 render();
             });
         }
+        boolean fullTileArt=homeFullTileArtEnabled();
+        smallButton(appearance,fullTileArt
+            ?"Kafelki AI jako pełne tło: WŁ. → wyłącz"
+            :"Kafelki AI jako pełne tło: WYŁ. → włącz",()->{
+                prefs.edit().putBoolean("home_tile_full_art",!fullTileArt).apply();
+                DiagnosticLog.event("HOME_TILE_FULL_ART_CHANGED",
+                    "enabled="+(!fullTileArt));
+                render();
+            });
+        appearance.addView(text(
+            "Pełne tło: grafika AI lub własny PNG/WebP zajmuje cały kafelek, "
+                +"a nazwa i uchwyt pozostają na wierzchu.",12,false));
+
         LinearLayout gestures=settingsNestedAccordion(appearance,"tile_gestures",
             "Czas przytrzymania kafelków",false);
         Spinner shortHold=new Spinner(this);
@@ -13414,7 +13448,24 @@ public final class MainActivity extends Activity {
             if (customTint) tileTint = skin.tileTint(selected);
         }
         boolean highlighted = primary || customTint;
-        tile.setBackground(skin.tile(this, highlighted, tileTint));
+        String homeIconId=null;
+        Bitmap homeFullArtBitmap=null;
+        boolean fullTileArt=false;
+        if(isHome) {
+            homeIconId=prefs.getString("tile_icon_" + id,
+                defaultTileIcon(tileTarget));
+            if(!TileIcon.known(homeIconId)
+                    && !IconPack3D.known(this,homeIconId)
+                    && !TileCustomImage.available(this,homeIconId))
+                homeIconId=defaultTileIcon(tileTarget);
+            if(homeFullTileArtEnabled()) {
+                homeFullArtBitmap=homeFullTileBitmap(homeIconId);
+                fullTileArt=homeFullArtBitmap!=null;
+            }
+        }
+        Drawable tileBase=skin.tile(this, highlighted, tileTint);
+        tile.setBackground(fullTileArt
+            ?homeFullTileBackground(tileBase,homeFullArtBitmap):tileBase);
         tile.setElevation(dp(highlighted ? 5 : 3));
         tile.setOnClickListener(v -> callback.run());
         touchFeedback(tile);
@@ -13441,7 +13492,9 @@ public final class MainActivity extends Activity {
             && (!skin.showcase() || homeEditMode);
         if (showTileHandle) {
             TextView handle = text("⋮⋮", 17, true);
-            handle.setTextColor(highlighted ? skin.tileText(tileTint) : subdued);
+            handle.setTextColor(fullTileArt?0xDD24373A:
+                (highlighted ? skin.tileText(tileTint) : subdued));
+            if(fullTileArt)handle.setShadowLayer(3f,0f,1f,Color.WHITE);
             handle.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
             handle.setPadding(dp(3), 0, dp(8), 0);
             handle.setContentDescription("Edytuj lub przeciągnij " + caption);
@@ -13499,14 +13552,13 @@ public final class MainActivity extends Activity {
             new LinearLayout.LayoutParams(displayedIconSize, displayedIconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
-            String target = tileTarget;
-            String iconId = prefs.getString("tile_icon_" + id,
-                defaultTileIcon(target));
-            if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId)
-                    && !TileCustomImage.available(this, iconId))
-                iconId = defaultTileIcon(target);
-            tile.addView(tileIconImage(iconId,
-                Math.round(displayedIconSize / density), highlighted), iconParams);
+            if(fullTileArt) {
+                View spacer=new View(this);
+                tile.addView(spacer,new LinearLayout.LayoutParams(-1,0,1f));
+            } else {
+                tile.addView(tileIconImage(homeIconId,
+                    Math.round(displayedIconSize / density), highlighted), iconParams);
+            }
         } else {
             TextView pictogram = text(symbol, 29, true);
             pictogram.setTextColor(highlighted && skin.light
@@ -13516,10 +13568,16 @@ public final class MainActivity extends Activity {
             tile.addView(pictogram, iconParams);
         }
         TextView captionView = text(caption,
-            isHome && skin.showcase() && !homeEditMode ? 11 : 12, true);
-        captionView.setTextColor(highlighted
-            ? skin.tileText(tileTint) : ink);
-        captionView.setGravity(Gravity.CENTER);
+            isHome && skin.showcase() && !homeEditMode ? 11
+                : (fullTileArt?13:12), true);
+        captionView.setTextColor(fullTileArt?ink:
+            (highlighted ? skin.tileText(tileTint) : ink));
+        captionView.setGravity(fullTileArt
+            ?(Gravity.LEFT|Gravity.CENTER_VERTICAL):Gravity.CENTER);
+        if(fullTileArt) {
+            captionView.setPadding(dp(8),0,dp(6),0);
+            captionView.setShadowLayer(3f,0f,1f,Color.WHITE);
+        }
         captionView.setMaxLines(2);
         captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         tile.addView(captionView,
