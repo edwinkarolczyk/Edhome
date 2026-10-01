@@ -10641,6 +10641,22 @@ public final class MainActivity extends Activity {
             this::showPantrySearchDialog);
         compactAction(row3, "⋯ Więcej", this::showPantryMoreMenu);
 
+        int depositUnits = PantryPackageStore.totalPendingDepositUnits(
+            db.getReadableDatabase());
+        long depositValue = PantryPackageStore.totalDepositGrosz(
+            db.getReadableDatabase());
+        if (depositUnits > 0) {
+            LinearLayout depositCard = card();
+            TextView depositTitle = text("♻ Kaucje • " + depositUnits
+                + " opak. • " + MoneyRules.format(depositValue), 15, true);
+            depositCard.addView(depositTitle);
+            depositCard.addView(text(
+                "To puste opakowania oczekujące na zwrot. Zużycie produktu "
+                    + "i oddanie kaucji są liczone osobno.", 12, false));
+            depositCard.setOnClickListener(v -> showPantryDepositSummary());
+            touchFeedback(depositCard);
+        }
+
         int matched = 0;
         int shown = 0;
         final int pageSize = 2;
@@ -10712,9 +10728,10 @@ public final class MainActivity extends Activity {
                     render();
                 });
                 taskAction(quick, "－1", () -> {
-                    db.changeStock(id, -1);
-                    DiagnosticLog.event("PANTRY_DECREMENT");
-                    render();
+                    if (db.consumeStock(id, 1)) {
+                        DiagnosticLog.event("PANTRY_DECREMENT");
+                        render();
+                    }
                 });
                 taskAction(quick, "⋯ Więcej",
                     () -> showPantryProductMenu(id, name, qty, category));
@@ -10785,8 +10802,8 @@ public final class MainActivity extends Activity {
             ? new String[]{"⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
                 "⌨ Wpisz kod ręcznie", "Historia skanów",
                 "◫ Rozpocznij / wznów remanent"}
-            : new String[]{"📷 Skanuj serię — dodawaj +1",
-                "📷 Skanuj serię — wyciągaj −1",
+            : new String[]{"📷 Skanuj serię — dodawaj wg opakowania",
+                "📷 Skanuj serię — wyciągaj wg opakowania",
                 "⌨ Wpisz kod ręcznie", "Historia skanów",
                 "◫ Rozpocznij / wznów remanent"};
         new AlertDialog.Builder(this)
@@ -10836,6 +10853,7 @@ public final class MainActivity extends Activity {
         actions.add("Ustaw ilość");
         actions.add("NFC");
         actions.add("Historia cen");
+        actions.add("Kaucja / opakowania zwrotne");
         actions.add("Edytuj produkt");
         actions.add("Usuń produkt");
         if (details != null && !details.imageUrl.isEmpty())
@@ -10874,6 +10892,8 @@ public final class MainActivity extends Activity {
                     showNfcTargetMenu(null, "pantry", id, name);
                 } else if ("Historia cen".equals(action)) {
                     showPantryPriceHistory(id, name);
+                } else if ("Kaucja / opakowania zwrotne".equals(action)) {
+                    showPantryDepositDialog(id, name);
                 } else if ("Edytuj produkt".equals(action)) {
                     pantryProductDialog(id, name);
                 } else if ("Usuń produkt".equals(action)) {
@@ -11063,15 +11083,10 @@ public final class MainActivity extends Activity {
                     + "zmieniony. Spróbuj ponownie albo wyeksportuj diagnostykę.");
             return;
         }
-        String question = "TAKE".equals(mode) ? "Wyciągnąć 1 opak.?" : "Dodać 1 opak.?";
-        new AlertDialog.Builder(this).setTitle(item.name)
-            .setMessage("Kod: " + barcode + "\nObecny stan: "
-                + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli)
-                + "\n" + question)
-            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
-            .setPositiveButton("TAKE".equals(mode) ? "Wyciągnij −1" : "Dodaj +1",
-                (d,w) -> commitPantryBarcode(barcode, null, mode, operationId))
-            .setOnCancelListener(d -> finishPantryBatch()).show();
+        int defaultUnits = PantryBarcodeStore.unitsPerScan(
+            db.getReadableDatabase(), barcode);
+        showPantryQuantityConfirm(barcode, item, pack, mode, operationId,
+            defaultUnits);
     }
 
 
@@ -11390,16 +11405,29 @@ public final class MainActivity extends Activity {
             found == null ? "other" : PantryCategories.fromSource(found.source));
         form.addView(text("Kategoria produktu", 14, false));
         form.addView(categorySpinner);
-        form.addView(text("Zawartość jednego opakowania", 14, false));
-        final Spinner packUnit = pantryPackageUnitSpinner("szt.");
+        form.addView(text("Zawartość jednej sztuki / opakowania podstawowego",
+            14, false));
+        String suggestedUnit = found == null ? "szt." : found.baseUnit;
+        final Spinner packUnit = pantryPackageUnitSpinner(suggestedUnit);
         final EditText packSize = new EditText(this);
         packSize.setSingleLine(true);
         packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        packSize.setText("1");
-        packSize.setHint("np. 0,5");
+        packSize.setText(found == null ? "1"
+            : PantryPackageRules.format(found.baseSizeMilli));
+        packSize.setHint("np. 1,5 l albo 0,085 kg");
         form.addView(packUnit);
         form.addView(packSize);
+        final EditText scanUnits = new EditText(this);
+        scanUnits.setSingleLine(true);
+        scanUnits.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        scanUnits.setText(Integer.toString(found == null ? 1 : found.unitsPerScan));
+        scanUnits.setHint("np. 6");
+        form.addView(text("Ile sztuk podstawowych dodaje jeden skan", 14, false));
+        form.addView(scanUnits);
+        if (found != null && !found.quantityLabel.isEmpty())
+            form.addView(text("Baza podała: " + found.quantityLabel
+                + " • sprawdź na opakowaniu przed zapisem.", 12, false));
         lightDialogForm(form);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
@@ -11421,9 +11449,18 @@ public final class MainActivity extends Activity {
                     alert(wrong.getMessage());
                     return;
                 }
+                int units;
+                try {
+                    units = Integer.parseInt(scanUnits.getText().toString().trim());
+                    if (units < 1 || units > 10000)
+                        throw new NumberFormatException();
+                } catch (NumberFormatException wrong) {
+                    alert("Ilość w zgrzewce musi wynosić 1–10000.");
+                    return;
+                }
                 commitPantryBarcode(barcode, entered, "ADD", operationId,
                     found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()],
-                    unit, sizeMilli);
+                    unit, sizeMilli, 0L, units, units);
             }).setOnCancelListener(d -> finishPantryBatch()).show();
     }
 
