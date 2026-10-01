@@ -7185,6 +7185,71 @@ public final class MainActivity extends Activity {
         return children;
     }
 
+    private LinearLayout storageTreePlaceHeading(PlaceEntry place,int depth,
+            String prefKey,boolean collapsed,LinearLayout target) {
+        LinearLayout box=card();
+        box.setPadding(dp(10+Math.min(depth,8)*13),dp(3),dp(10),dp(3));
+        storageTreeAttach(box,target);
+
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        box.addView(row,new LinearLayout.LayoutParams(-1,dp(46)));
+
+        TextView heading=text((collapsed?"▸ ":"▾ ")+"⌂ "+place.name,16,true);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heading.setClickable(true);
+        heading.setFocusable(true);
+        touchFeedback(heading);
+        LinearLayout.LayoutParams hp=
+            new LinearLayout.LayoutParams(0,dp(44),1f);
+        hp.setMargins(0,0,dp(4),0);
+        row.addView(heading,hp);
+
+        if(BetaUpdater.isBeta()&&storageActionVisible("place","qr"))
+            storagePlaceHeaderAction(row,"QR / etykieta",
+                ()->showPlaceQr(place));
+        if(storageActionVisible("place","nfc"))
+            storagePlaceHeaderAction(row,"NFC",
+                ()->showNfcTargetMenu(box,"place",place.id,place.name));
+
+        LinearLayout children=new LinearLayout(this);
+        children.setOrientation(LinearLayout.VERTICAL);
+        children.setVisibility(collapsed?View.GONE:View.VISIBLE);
+        target.addView(children,new LinearLayout.LayoutParams(-1,-2));
+
+        heading.setContentDescription(place.name+(collapsed
+            ?" • Rozwiń":" • Zwiń"));
+        heading.setOnClickListener(v->{
+            boolean nowCollapsed=children.getVisibility()==View.VISIBLE;
+            children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);
+            heading.setText((nowCollapsed?"▸ ":"▾ ")+"⌂ "+place.name);
+            heading.setContentDescription(place.name+(nowCollapsed
+                ?" • Rozwiń":" • Zwiń"));
+            prefs.edit().putBoolean(prefKey,nowCollapsed).apply();
+        });
+        return children;
+    }
+
+    private void storagePlaceHeaderAction(LinearLayout row,String label,
+            Runnable action) {
+        TextView button=text(label,11,true);
+        button.setGravity(Gravity.CENTER);
+        button.setMaxLines(2);
+        button.setPadding(dp(6),0,dp(6),0);
+        button.setBackground(skin.panel(this,skin.tileTop,16));
+        button.setClickable(true);
+        button.setFocusable(true);
+        touchFeedback(button);
+        button.setOnClickListener(v->action.run());
+        LinearLayout.LayoutParams lp=
+            new LinearLayout.LayoutParams(dp(78),dp(40));
+        lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+        row.addView(button,lp);
+    }
+
     private void storageTreePlace(PlaceEntry place,
             java.util.List<PlaceEntry> places,
             java.util.List<StorageStore.Item> items,
@@ -7197,13 +7262,7 @@ public final class MainActivity extends Activity {
         if(visible) {
             String key="storage_tree_place_"+place.id;
             boolean collapsed=prefs.getBoolean(key,false);
-            children=storageTreeHeading("⌂ "+place.name,
-                depth,key,collapsed,target);
-            if (BetaUpdater.isBeta() && storageActionVisible("place","qr"))
-                smallButton(children,"QR i etykieta miejsca",
-                    () -> showPlaceQr(place));
-            if(storageActionVisible("place","nfc"))
-                nfcTargetButton(children,"place",place.id,place.name);
+            children=storageTreePlaceHeading(place,depth,key,collapsed,target);
             childDepth=depth+1;
         }
         for(PlaceEntry child:places)
@@ -7231,42 +7290,63 @@ public final class MainActivity extends Activity {
                     depth,key,prefs.getBoolean(key,false),target);
                 childDepth=depth+1;
             }
+
             LinearLayout details=card();
-            details.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
+            details.setPadding(dp(12+Math.min(depth,8)*13),dp(6),dp(12),dp(7));
             storageTreeAttach(details,inner);
+
             Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+            LinearLayout summary=new LinearLayout(this);
+            summary.setOrientation(LinearLayout.HORIZONTAL);
+            summary.setGravity(Gravity.CENTER_VERTICAL);
+            details.addView(summary,new LinearLayout.LayoutParams(-1,-2));
+
+            View thumbView;
             if(thumbnail!=null) {
                 ImageView preview=new ImageView(this);
                 preview.setImageBitmap(thumbnail);
                 preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                details.addView(preview,new LinearLayout.LayoutParams(
-                    dp(82),dp(82)));
+                thumbView=preview;
+            } else {
+                TextView missing=text("▧",30,true);
+                missing.setGravity(Gravity.CENTER);
+                missing.setTextColor(subdued);
+                missing.setBackground(skin.panel(this,skin.tileTop,14));
+                thumbView=missing;
             }
-            if(!isBox)details.addView(text("◉ "+item.name,16,true));
-            if(storageActionVisible(item.kind,"photo")) {
-                smallButton(details,thumbnail==null?"Dodaj zdjęcie • miniatura":
-                    "Zmień zdjęcie • miniatura",()->selectStorageThumbnail(item.id));
-                if(thumbnail!=null)
-                    smallButton(details,"Usuń zdjęcie",()->{
-                        prefs.edit().remove(StorageThumbs.key(item.id)).apply();
-                        render();
-                    });
+            thumbView.setClickable(true);
+            thumbView.setFocusable(true);
+            thumbView.setContentDescription((thumbnail==null
+                ?"Brak miniatury":"Miniatura")+" • dotknij, aby pokazać akcje");
+            touchFeedback(thumbView);
+            thumbView.setOnClickListener(v->showStorageThumbnailActions(item.id));
+            LinearLayout.LayoutParams tp=
+                new LinearLayout.LayoutParams(dp(82),dp(82));
+            tp.setMargins(0,0,dp(8),0);
+            summary.addView(thumbView,tp);
+
+            LinearLayout info=new LinearLayout(this);
+            info.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams ip=
+                new LinearLayout.LayoutParams(0,-2,1f);
+            ip.setMargins(0,0,dp(5),0);
+            summary.addView(info,ip);
+            if(!isBox)info.addView(text("◉ "+item.name,16,true));
+            TextView location=text(
+                StorageStore.location(db.getReadableDatabase(),item),12,false);
+            location.setTextColor(subdued);
+            info.addView(location);
+            if(item.lentTo!=null) {
+                TextView lent=text("Wypożyczono: "+item.lentTo,13,false);
+                lent.setTextColor(subdued);
+                info.addView(lent);
             }
-            details.addView(text(StorageStore.location(db.getReadableDatabase(),item),
-                12,false));
-            if(item.lentTo!=null)
-                details.addView(text("Wypożyczono: "+item.lentTo,13,false));
-            if(storageActionVisible(item.kind,"qr"))
-                smallButton(details,"Pokaż QR",()->showStorageQr(item));
-            if(storageActionVisible(item.kind,"nfc"))
-                nfcTargetButton(details,item.kind,item.id,item.name);
-            if (BetaUpdater.isBeta() && storageActionVisible(item.kind,"print"))
-                smallButton(details,"Drukuj etykietę / PDF / Udostępnij",
-                    () -> selectQrLabelFormat(java.util.Collections.singletonList(
-                        qrLabel(item))));
-            if(item.lentTo==null && storageActionVisible(item.kind,"move"))
-                smallButton(details,"Przenieś • NFC / QR / ręcznie",
-                    ()->showStorageMoveOptions(item));
+
+            if(storageActionVisible(item.kind,"photo"))
+                storageItemHeaderAction(summary,
+                    thumbnail==null?"Dodaj zdjęcie":"Zmień zdjęcie\nminiatura",
+                    ()->selectStorageThumbnail(item.id));
+
             if(!isBox && storageActionVisible(item.kind,"lend")) {
                 if(item.lentTo==null)
                     smallButton(details,"Wypożycz",()->askStorageLend(item));
@@ -7295,6 +7375,77 @@ public final class MainActivity extends Activity {
             for(StorageStore.Item child:items)
                 if(child.boxId!=null && child.boxId==item.id)
                     storageTreeItem(child,items,drawnItems,childDepth,inner);
+    }
+
+    private void storageItemHeaderAction(LinearLayout row,String label,
+            Runnable action) {
+        TextView button=text(label,11,true);
+        button.setGravity(Gravity.CENTER);
+        button.setMaxLines(2);
+        button.setPadding(dp(5),0,dp(5),0);
+        button.setBackground(skin.panel(this,skin.tileTop,16));
+        button.setClickable(true);
+        button.setFocusable(true);
+        touchFeedback(button);
+        button.setOnClickListener(v->action.run());
+        LinearLayout.LayoutParams lp=
+            new LinearLayout.LayoutParams(dp(98),dp(64));
+        lp.setMargins(dp(2),dp(2),0,dp(2));
+        row.addView(button,lp);
+    }
+
+    private void showStorageThumbnailActions(long itemId) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(item==null) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        java.util.ArrayList<Runnable> actions=new java.util.ArrayList<>();
+
+        if(thumbnail!=null&&storageActionVisible(item.kind,"photo")) {
+            labels.add("Usuń zdjęcie");
+            actions.add(()->{
+                prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                DiagnosticLog.event("STORAGE_THUMBNAIL_REMOVED");
+                render();
+            });
+        }
+        if(storageActionVisible(item.kind,"qr")) {
+            labels.add("Pokaż QR");
+            actions.add(()->showStorageQr(item));
+        }
+        if(storageActionVisible(item.kind,"nfc")) {
+            NfcLinkStore.Link link=null;
+            try{
+                link=NfcLinkStore.findByTarget(
+                    db.getReadableDatabase(),item.kind,item.id);
+            }catch(Exception ignored){ }
+            labels.add(link==null
+                ?"NFC • Przypisz tag NFC":"NFC • Zarządzaj tagiem");
+            actions.add(()->showNfcTargetMenu(
+                body,item.kind,item.id,item.name));
+        }
+        if(BetaUpdater.isBeta()&&storageActionVisible(item.kind,"print")) {
+            labels.add("Drukuj etykietę / PDF / Udostępnij");
+            actions.add(()->selectQrLabelFormat(
+                java.util.Collections.singletonList(qrLabel(item))));
+        }
+        if(item.lentTo==null&&storageActionVisible(item.kind,"move")) {
+            labels.add("Przenieś • NFC / QR / ręcznie");
+            actions.add(()->showStorageMoveOptions(item));
+        }
+        if(labels.isEmpty()) {
+            alert("Brak dodatkowych akcji dla tego elementu.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Akcje • "+item.name)
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                actions.get(which).run())
+            .setNegativeButton("Zamknij",null)
+            .show();
     }
 
     private void selectStorageThumbnail(long id) {

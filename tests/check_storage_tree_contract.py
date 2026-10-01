@@ -10,6 +10,9 @@ assert 'storageTreePlace(place,places,items,drawnPlaces,drawnItems,0,body)' in u
 assert 'storageTreeItem(child,items,drawnItems,childDepth,inner)' in ui
 assert 'String key="storage_tree_place_"+place.id;' in ui
 assert 'String key="storage_tree_box_"+item.id;' in ui
+assert 'storageTreePlaceHeading(place,depth,key,collapsed,target)' in ui
+assert 'storagePlaceHeaderAction(row,"QR / etykieta"' in ui
+assert 'storagePlaceHeaderAction(row,"NFC"' in ui
 assert 'prefs.getBoolean(key,false)' in ui
 assert 'prefs.edit().putBoolean(prefKey,nowCollapsed).apply();' in ui
 assert 'row.setOnClickListener(v->' in ui
@@ -58,6 +61,20 @@ assert 'storageActionVisible(item.kind,"print")' in ui
 assert 'storageActionVisible(item.kind,"move")' in ui
 assert 'storageActionVisible(item.kind,"lend")' in ui
 assert 'storageActionVisible(item.kind,"delete")' in ui
+assert 'thumbView.setOnClickListener(v->showStorageThumbnailActions(item.id));' in ui
+assert 'private void showStorageThumbnailActions(long itemId)' in ui
+assert 'labels.add("Usuń zdjęcie");' in ui
+assert 'labels.add("Pokaż QR");' in ui
+assert 'labels.add("Drukuj etykietę / PDF / Udostępnij");' in ui
+assert 'labels.add("Przenieś • NFC / QR / ręcznie");' in ui
+item_start=ui.index('private void storageTreeItem(')
+item_end=ui.index('private void storageItemHeaderAction(',item_start)
+item_ui=ui[item_start:item_end]
+assert 'smallButton(details,"Pokaż QR"' not in item_ui
+assert 'smallButton(details,"Drukuj etykietę / PDF / Udostępnij"' not in item_ui
+assert 'smallButton(details,"Przenieś • NFC / QR / ręcznie"' not in item_ui
+assert 'smallButton(details,"Wypożycz"' in item_ui
+assert 'smallButton(details,"Usuń"' in item_ui
 assert 'settingsStorageAction(thingActions,"thing","photo","Zdjęcie / miniatura")' in s
 assert 'settingsStorageAction(boxActions,"box","nfc","NFC")' in s
 assert 'settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca")' in s
