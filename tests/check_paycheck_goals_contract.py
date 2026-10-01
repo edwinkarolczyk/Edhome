@@ -31,7 +31,7 @@ for token in (
     'Usuń cel',
     'Nie zmienia salda wspólnego PayCheck.',
     'DATABASE_MIGRATED_20_TO_21_PAYCHECK_GOALS',
-    'super(context, "edhome-beta-preview.db", null, 38)',
+    'super(context, "edhome-beta-preview.db", null, 39)',
 ):
     assert token in main, "Goal UI/schema missing: "+token
 for token in (
