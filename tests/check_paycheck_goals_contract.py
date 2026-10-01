@@ -35,7 +35,7 @@ for token in (
 ):
     assert token in main, "Goal UI/schema missing: "+token
 for token in (
-    'DB_VERSION = 38;',
+    'DB_VERSION = 39;',
     '"paycheck_goals", "id", "scope", "name", "target_grosz", "created_at"',
     '"paycheck_goal_allocations", "id", "operation_id", "goal_id"',
     'inputVersion < 21 && ("paycheck_goals".equals(definition[0])',
