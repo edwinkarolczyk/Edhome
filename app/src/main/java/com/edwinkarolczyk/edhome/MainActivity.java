@@ -1917,6 +1917,17 @@ public final class MainActivity extends Activity {
         return moveHomeTileAtIndex(id, target);
     }
 
+    private TextView homeTileCaption(LinearLayout tile) {
+        if(tile==null)return null;
+        for(int i=tile.getChildCount()-1;i>=0;i--) {
+            View child=tile.getChildAt(i);
+            if(child instanceof TextView
+                    && "home_caption".equals(child.getTag()))
+                return (TextView)child;
+        }
+        return null;
+    }
+
     private void home() {
         String interfaceMode = homeInterfaceMode();
         if (HOME_INTERFACE_CONCEPT5.equals(interfaceMode)) {
@@ -2062,11 +2073,11 @@ public final class MainActivity extends Activity {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
             homeTileViews.put(tileId, tile);
-            TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
+            TextView caption = homeTileCaption(tile);
             String visibleLabel = skin.showcase() && !homeEditMode
                 ? showcaseHomeLabel(homeTileTarget(tileId))
                 : homeTileLabel(tileId);
-            caption.setText(visibleLabel);
+            if(caption!=null)caption.setText(visibleLabel);
             tile.setContentDescription(visibleLabel
                 + ". Dotknij, aby otworzyć. Krócej przytrzymaj dla menu; "
                 + "dłużej dla przeciągania. Czasy: Ustawienia.");
@@ -13612,6 +13623,7 @@ public final class MainActivity extends Activity {
             captionView.setTextColor(highlighted
                 ? skin.tileText(tileTint) : ink);
             captionView.setGravity(Gravity.CENTER);
+            captionView.setTag("home_caption");
             captionView.setMaxLines(2);
             captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
             tile.addView(captionView,

@@ -136,3 +136,14 @@ for token in (
 ):
     assert token in backup, token
 print("Full-tile AI/custom artwork background and high-resolution import: PASS")
+
+# Pełne tło nie ma osobnego podpisu, więc home() nie może twardo rzutować
+# ostatniego dziecka kafelka na TextView.
+assert 'private TextView homeTileCaption(LinearLayout tile)' in main
+assert 'child instanceof TextView' in main
+assert '"home_caption".equals(child.getTag())' in main
+assert 'TextView caption = homeTileCaption(tile);' in main
+assert 'if(caption!=null)caption.setText(visibleLabel);' in main
+assert 'captionView.setTag("home_caption");' in main
+assert '(TextView) tile.getChildAt(tile.getChildCount() - 1)' not in main
+print("Home full-art caption lookup is crash-safe: PASS")
