@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 38;
+    private static final int DB_VERSION = 39;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -71,11 +71,12 @@ final class DataBackup {
             "new_qty", "changed_at"},
         {"task_history", "id", "task_id", "title_snapshot", "completed_at",
             "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"},
-        {"pantry_barcodes", "id", "pantry_id", "barcode"},
+        {"pantry_barcodes", "id", "pantry_id", "barcode", "units_per_scan"},
         {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
             "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
         {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
-        {"pantry_packages", "pantry_id", "unit", "size_milli"},
+        {"pantry_packages", "pantry_id", "unit", "size_milli",
+            "deposit_grosz", "deposit_pending"},
         {"vehicles", "id", "name", "registration", "mileage",
             "oc_until", "inspection_until", "notes",
             "oc_reminder_lead", "inspection_reminder_lead"},
@@ -517,6 +518,20 @@ final class DataBackup {
                                 && "category".equals(key)) {
                             values.put(key, "other");
                             continue;
+                        }
+                        if (inputVersion < 39
+                                && "pantry_barcodes".equals(definition[0])
+                                && "units_per_scan".equals(key)) {
+                            values.put(key, 1);
+                            continue;
+                        }
+                        if (inputVersion < 39
+                                && "pantry_packages".equals(definition[0])) {
+                            if ("deposit_grosz".equals(key)
+                                    || "deposit_pending".equals(key)) {
+                                values.put(key, 0);
+                                continue;
+                            }
                         }
                         if (inputVersion < 30
                                 && "paycheck_transactions".equals(definition[0])
@@ -993,13 +1008,20 @@ final class DataBackup {
                 }
                 if ("pantry_packages".equals(definition[0])) {
                     Long amount = values.getAsLong("size_milli");
+                    Long deposit = values.getAsLong("deposit_grosz");
+                    Long pending = values.getAsLong("deposit_pending");
                     if (amount == null || !PantryPackageRules.valid(
-                            values.getAsString("unit"), amount))
+                            values.getAsString("unit"), amount)
+                            || deposit == null || deposit < 0 || deposit > 100000
+                            || pending == null || pending < 0 || pending > 100000000L)
                         throw new IllegalArgumentException("Nieprawidłowe opakowanie w kopii.");
                 }
-                if ("pantry_barcodes".equals(definition[0])
-                        && !PantryScanRules.validBarcode(values.getAsString("barcode")))
-                    throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                if ("pantry_barcodes".equals(definition[0])) {
+                    Long units = values.getAsLong("units_per_scan");
+                    if (!PantryScanRules.validBarcode(values.getAsString("barcode"))
+                            || units == null || units < 1 || units > 10000)
+                        throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                }
                 if ("pantry_product_details".equals(definition[0])) {
                     String brand = values.getAsString("brand");
                     String imageUrl = values.getAsString("image_url");
@@ -1016,11 +1038,11 @@ final class DataBackup {
                     String operation = values.getAsString("operation_id");
                     if (!PantryScanRules.validBarcode(values.getAsString("barcode"))
                             || operation == null || operation.isEmpty()
-                            || amount == null || amount != 1 || before == null
-                            || after == null || before > 100000000L
-                            || after > 100000000L
-                            || !("ADD".equals(kind) ? after == before + 1
-                                : "TAKE".equals(kind) && after + 1 == before))
+                            || amount == null || amount < 1 || amount > 10000
+                            || before == null || after == null
+                            || before > 100000000L || after > 100000000L
+                            || !("ADD".equals(kind) ? after == before + amount
+                                : "TAKE".equals(kind) && after + amount == before))
                         throw new IllegalArgumentException("Nieprawidłowy ruch w kopii.");
                 }
                 if ("audit_sessions".equals(definition[0])) {
@@ -1577,6 +1599,8 @@ final class DataBackup {
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
             || "changed_at".equals(column) || "size_milli".equals(column)
+            || "units_per_scan".equals(column) || "deposit_grosz".equals(column)
+            || "deposit_pending".equals(column)
             || "shopping_id".equals(column) || "packages".equals(column)
             || "amount_grosz".equals(column)
             || "quantity_milli".equals(column) || "unit_price_grosz".equals(column)
