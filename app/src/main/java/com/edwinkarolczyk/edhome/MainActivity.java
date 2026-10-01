@@ -10643,16 +10643,24 @@ public final class MainActivity extends Activity {
 
         int depositUnits = PantryPackageStore.totalPendingDepositUnits(
             db.getReadableDatabase());
+        int depositStockUnits = PantryPackageStore.stockDepositUnits(
+            db.getReadableDatabase());
         long depositValue = PantryPackageStore.totalDepositGrosz(
             db.getReadableDatabase());
-        if (depositUnits > 0) {
+        long depositStockValue = PantryPackageStore.stockDepositGrosz(
+            db.getReadableDatabase());
+        if (depositUnits > 0 || depositStockUnits > 0) {
             LinearLayout depositCard = card();
-            TextView depositTitle = text("♻ Kaucje • " + depositUnits
-                + " opak. • " + MoneyRules.format(depositValue), 15, true);
+            TextView depositTitle = text("♻ Kaucje • łącznie "
+                + MoneyRules.format(PantryPackageStore.allDepositGrosz(
+                    db.getReadableDatabase())), 15, true);
             depositCard.addView(depositTitle);
             depositCard.addView(text(
-                "To puste opakowania oczekujące na zwrot. Zużycie produktu "
-                    + "i oddanie kaucji są liczone osobno.", 12, false));
+                "W zapasie: " + depositStockUnits + " opak. • "
+                    + MoneyRules.format(depositStockValue)
+                    + "\nPuste do zwrotu: " + depositUnits + " opak. • "
+                    + MoneyRules.format(depositValue),
+                12, false));
             depositCard.setOnClickListener(v -> showPantryDepositSummary());
             touchFeedback(depositCard);
         }
@@ -11015,7 +11023,7 @@ public final class MainActivity extends Activity {
         input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
         new AlertDialog.Builder(this).setTitle("Wpisz kod kreskowy")
             .setView(input).setNegativeButton("Anuluj", null)
-            .setNeutralButton("Wyciągnij −1", (d, w) -> onPantryBarcode(
+            .setNeutralButton("Wyciągnij / ilość", (d, w) -> onPantryBarcode(
                 input.getText().toString().trim(), "TAKE"))
             .setPositiveButton("Dodaj / ilość", (d, w) -> onPantryBarcode(
                 input.getText().toString().trim(), "ADD")).show();
@@ -11106,6 +11114,22 @@ public final class MainActivity extends Activity {
         form.addView(text("Ile sztuk / opakowań podstawowych "
             +("TAKE".equals(mode)?"wyciągnąć":"dodać")+"?",14,true));
         form.addView(amount);
+        LinearLayout quickAmounts=new LinearLayout(this);
+        quickAmounts.setOrientation(LinearLayout.HORIZONTAL);
+        for(int preset:new int[]{1,2,6,12}) {
+            Button quick=new Button(this);
+            quick.setAllCaps(false);
+            quick.setText((("TAKE".equals(mode))?"−":"+")+preset);
+            quick.setTextSize(12);
+            final int value=preset;
+            quick.setOnClickListener(v->{
+                amount.setText(Integer.toString(value));
+                amount.setSelection(amount.getText().length());
+            });
+            quickAmounts.addView(quick,
+                new LinearLayout.LayoutParams(0,dp(42),1f));
+        }
+        form.addView(quickAmounts,new LinearLayout.LayoutParams(-1,dp(44)));
         if(defaultUnits>1)
             form.addView(text("Ten kod jest zapisany jako opakowanie zbiorcze: "
                 +defaultUnits+" szt. na jeden skan.",12,false));
@@ -11152,20 +11176,22 @@ public final class MainActivity extends Activity {
         java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
         java.util.ArrayList<String> labels=new java.util.ArrayList<>();
         try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT p.id,p.name,pp.deposit_grosz,pp.deposit_pending "
+                "SELECT p.id,p.name,p.qty,pp.deposit_grosz,pp.deposit_pending "
                     +"FROM pantry p JOIN pantry_packages pp ON pp.pantry_id=p.id "
                     +"WHERE pp.deposit_grosz>0 OR pp.deposit_pending>0 "
                     +"ORDER BY p.name COLLATE NOCASE",null)) {
             while(c.moveToNext()) {
                 ids.add(c.getLong(0));
-                long value=c.getLong(2)*c.getLong(3);
-                labels.add(c.getString(1)+" • "+c.getInt(3)+" opak. • "
-                    +MoneyRules.format(value));
+                long rate=c.getLong(3);
+                int stock=c.getInt(2);
+                int empty=c.getInt(4);
+                long value=rate*((long)stock+empty);
+                labels.add(c.getString(1)+" • zapas "+stock+" • puste "+empty
+                    +" • "+MoneyRules.format(value));
             }
         }
-        String total=PantryPackageStore.totalPendingDepositUnits(
-            db.getReadableDatabase())+" opak. • "
-            +MoneyRules.format(PantryPackageStore.totalDepositGrosz(
+        String total="łącznie "
+            +MoneyRules.format(PantryPackageStore.allDepositGrosz(
                 db.getReadableDatabase()));
         if(ids.isEmpty()) {
             new AlertDialog.Builder(this).setTitle("Kaucje")
@@ -11185,11 +11211,21 @@ public final class MainActivity extends Activity {
     private void showPantryDepositDialog(long pantryId,String name) {
         PantryPackageStore.Pack pack=PantryPackageStore.find(
             db.getReadableDatabase(),pantryId);
+        int stockQty=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT qty FROM pantry WHERE id=?",
+                new String[]{Long.toString(pantryId)})) {
+            if(c.moveToFirst())stockQty=c.getInt(0);
+        }
         String state=pack.depositGrosz<=0
             ?"Kaucja wyłączona."
             :"Kaucja: "+MoneyRules.format(pack.depositGrosz)+" / szt.\n"
-                +"Do zwrotu: "+pack.depositPending+" opak. = "
-                +MoneyRules.format(pack.depositGrosz*pack.depositPending);
+                +"W zapasie: "+stockQty+" opak. = "
+                +MoneyRules.format(pack.depositGrosz*stockQty)+"\n"
+                +"Puste do zwrotu: "+pack.depositPending+" opak. = "
+                +MoneyRules.format(pack.depositGrosz*pack.depositPending)+"\n"
+                +"Łączna wartość kaucji: "
+                +MoneyRules.format(pack.depositGrosz*((long)stockQty+pack.depositPending));
         java.util.ArrayList<String> actions=new java.util.ArrayList<>();
         actions.add("Ustaw stawkę kaucji");
         if(pack.depositPending>0)actions.add("Oddaj opakowania");
@@ -11546,7 +11582,10 @@ public final class MainActivity extends Activity {
             }
             final PantryProductLookup.Product selected =
                 new PantryProductLookup.Product(candidate.name, candidate.source,
-                    candidate.brand, candidate.imageUrl, image);
+                    candidate.brand, candidate.imageUrl, image,
+                    PantryPackSuggestion.verified(candidate.unitsPerScan,
+                        candidate.baseUnit, candidate.baseSizeMilli,
+                        candidate.quantityLabel));
             runOnUiThread(() -> {
                 if (!isFinishing() && !isDestroyed())
                     showNewPantryProductDialog(scannedBarcode, operationId,
@@ -11628,7 +11667,7 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
-            .setPositiveButton("Dodaj +1", (d,w) -> {
+            .setPositiveButton("Dodaj wg ilości", (d,w) -> {
                 String entered = found != null ? found.name
                     : manualName.getText().toString().trim();
                 if (entered.isEmpty() || entered.length() > 160) {
