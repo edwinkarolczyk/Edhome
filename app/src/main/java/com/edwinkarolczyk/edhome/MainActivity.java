@@ -2883,7 +2883,7 @@ public final class MainActivity extends Activity {
 
     private Drawable homeFullTileBackground(Drawable base, Bitmap image) {
         // CENTER_CROP bez rozciągania proporcji. Tło jest przycinane do
-        // zaokrąglonego kafelka, zamiast deformować grafikę przez Gravity.FILL.
+        // zaokrąglonego kafelka, bez deformowania proporcji grafiki.
         return new Drawable() {
             private final android.graphics.Paint artPaint =
                 new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG
