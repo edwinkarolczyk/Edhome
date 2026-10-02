@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 167,
-  "versionName": "0.7.4.26",
-  "changelog": "EDHOME 0.7.4.26 — Beta. Stabilizacja danych, synchronizacji LAN, Magazynu, QR/NFC, backupu i testów regresji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.26/edhome-beta.apk",
-  "sha256": "65c4a15d276a473394fd240f2f0d5697eb934d62c1a30ffdcac31e9641768c9a"
+  "versionCode": 169,
+  "versionName": "0.7.4.28",
+  "changelog": "EDHOME 0.7.4.28 — Beta. Stabilizacja danych, synchronizacji LAN, Magazynu, QR/NFC, backupu i testów regresji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.28/edhome-beta.apk",
+  "sha256": "e7076170ee4b4f8c2a228af49d0a5ce70d5dfdb76e365f7f0d89e7f2d6eb9a91"
 }
