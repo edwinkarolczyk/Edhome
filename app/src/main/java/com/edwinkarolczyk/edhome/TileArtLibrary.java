@@ -25,7 +25,7 @@ final class TileArtLibrary {
     static final int DOUBLE_WIDTH=1728;
     static final int HEIGHT=656;
     private static final String MIGRATED="tile_art_library_migrated_v1";
-    private static final String BUNDLED_INSTALLED="tile_art_bundled_compact_v1";
+    private static final String BUNDLED_INSTALLED="tile_art_bundled_compact_v2";
     private static final String BUNDLED_ASSET="EDHOME_TILE_ART_BUILTIN_COMPACT.zip";
     private static final long MAX_FILE=12L*1024*1024;
 
@@ -93,10 +93,78 @@ final class TileArtLibrary {
         }finally{source.recycle();}
     }
 
+    private static boolean userOwnedFullSize(File image,int span){
+        if(image==null||!image.isFile())return false;
+        BitmapFactory.Options bounds=new BitmapFactory.Options();
+        bounds.inJustDecodeBounds=true;
+        BitmapFactory.decodeFile(image.getAbsolutePath(),bounds);
+        int expectedWidth=span==2?DOUBLE_WIDTH:SINGLE_WIDTH;
+        return bounds.outWidth==expectedWidth&&bounds.outHeight==HEIGHT;
+    }
+
+    /**
+     * Removes the white dead canvas present in some generated 1P images.
+     * Kalendarz/Places-like edge-filling artwork is left untouched.
+     * The result keeps the same lightweight bundled resolution.
+     */
+    private static void normalizeBundledSingle(File image)throws Exception{
+        BitmapFactory.Options options=new BitmapFactory.Options();
+        options.inPreferredConfig=Bitmap.Config.ARGB_8888;
+        Bitmap source=BitmapFactory.decodeFile(image.getAbsolutePath(),options);
+        if(source==null)return;
+        Bitmap cropped=null;
+        Bitmap scaled=null;
+        try{
+            int width=source.getWidth(),height=source.getHeight();
+            int left=width,top=height,right=-1,bottom=-1;
+            for(int y=0;y<height;y++){
+                for(int x=0;x<width;x++){
+                    int pixel=source.getPixel(x,y);
+                    if(Color.red(pixel)<245||Color.green(pixel)<245
+                            ||Color.blue(pixel)<245){
+                        if(x<left)left=x;
+                        if(y<top)top=y;
+                        if(x>right)right=x;
+                        if(y>bottom)bottom=y;
+                    }
+                }
+            }
+            if(right<left||bottom<top)return;
+            int contentWidth=right-left+1;
+            int contentHeight=bottom-top+1;
+            if(contentWidth>=Math.round(width*.90f)
+                    &&contentHeight>=Math.round(height*.90f))return;
+            int pad=4;
+            left=Math.max(0,left-pad);
+            top=Math.max(0,top-pad);
+            right=Math.min(width-1,right+pad);
+            bottom=Math.min(height-1,bottom+pad);
+            cropped=Bitmap.createBitmap(source,left,top,
+                right-left+1,bottom-top+1);
+            scaled=Bitmap.createScaledBitmap(cropped,width,height,true);
+            File normalized=new File(image.getParentFile(),
+                image.getName()+".normalized");
+            try(FileOutputStream out=new FileOutputStream(normalized)){
+                if(!scaled.compress(Bitmap.CompressFormat.WEBP,82,out))
+                    throw new IllegalStateException(
+                        "Nie zapisano znormalizowanej grafiki.");
+            }
+            if(!image.delete()||!normalized.renameTo(image)){
+                normalized.delete();
+                throw new IllegalStateException(
+                    "Nie zastąpiono znormalizowanej grafiki.");
+            }
+        }finally{
+            if(scaled!=null&&scaled!=cropped&&scaled!=source)scaled.recycle();
+            if(cropped!=null&&cropped!=source)cropped.recycle();
+            source.recycle();
+        }
+    }
+
     /**
      * Installs the compact WebP library shipped inside the signed APK.
-     * Existing files are never overwritten, so a user's imported artwork
-     * remains more important than the bundled defaults.
+     * Full-size 840×656 / 1728×656 user artwork is never overwritten.
+     * Bundled low-resolution defaults may be refreshed by a newer APK.
      */
     static int installBundled(Context context,SharedPreferences prefs)throws Exception{
         if(prefs.getBoolean(BUNDLED_INSTALLED,false))return 0;
@@ -142,7 +210,8 @@ final class TileArtLibrary {
                     zip.closeEntry();
                     continue;
                 }
-                if(destination.isFile()&&destination.length()>0){
+                if(destination.isFile()&&destination.length()>0
+                        &&userOwnedFullSize(destination,span)){
                     zip.closeEntry();
                     continue;
                 }
@@ -163,10 +232,11 @@ final class TileArtLibrary {
                     }
                     out.flush();
                 }
+                if(span==1)normalizeBundledSingle(tmp);
                 if(destination.exists()&&!destination.delete()){
                     tmp.delete();
                     throw new IllegalStateException(
-                        "Nie zastąpiono uszkodzonej grafiki.");
+                        "Nie zastąpiono starej grafiki wbudowanej.");
                 }
                 if(!tmp.renameTo(destination)){
                     tmp.delete();
