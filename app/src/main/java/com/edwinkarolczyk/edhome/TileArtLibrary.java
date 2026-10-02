@@ -26,7 +26,7 @@ final class TileArtLibrary {
     static final int DOUBLE_WIDTH=1728;
     static final int HEIGHT=656;
     private static final String MIGRATED="tile_art_library_migrated_v1";
-    private static final String BUNDLED_INSTALLED="tile_art_bundled_compact_v2";
+    private static final String BUNDLED_INSTALLED="tile_art_bundled_compact_v3";
     private static final String BUNDLED_ASSET="EDHOME_TILE_ART_BUILTIN_COMPACT.zip";
     private static final long MAX_FILE=12L*1024*1024;
 
@@ -211,8 +211,14 @@ final class TileArtLibrary {
                     zip.closeEntry();
                     continue;
                 }
+                boolean refreshStyle1V3=STYLE_1.equals(style)
+                    &&java.util.Arrays.asList(
+                        "calendar","timers","places","floorplan","pantry",
+                        "backup","updates","audit","tasks","today")
+                        .contains(target);
                 if(destination.isFile()&&destination.length()>0
-                        &&userOwnedFullSize(destination,span)){
+                        &&userOwnedFullSize(destination,span)
+                        &&!refreshStyle1V3){
                     zip.closeEntry();
                     continue;
                 }
@@ -233,7 +239,7 @@ final class TileArtLibrary {
                     }
                     out.flush();
                 }
-                if(span==1)normalizeBundledSingle(tmp);
+                if(span==1&&!refreshStyle1V3)normalizeBundledSingle(tmp);
                 if(destination.exists()&&!destination.delete()){
                     tmp.delete();
                     throw new IllegalStateException(
