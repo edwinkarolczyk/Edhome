@@ -124,6 +124,11 @@ public final class MainActivity extends Activity {
     private TextView quickStorageSetupStatus;
     private String quickStorageSetupKind;
     private long quickStorageSetupId;
+    private boolean quickThingBatchActive;
+    private long quickThingBatchCurrentId;
+    private int quickThingBatchCounter;
+    private int quickThingBatchAdded;
+    private AlertDialog quickThingBatchDialog;
     private String suppressedNfcUid;
     private long suppressedNfcUntilElapsed;
     private SharedPreferences prefs;
@@ -7976,7 +7981,9 @@ public final class MainActivity extends Activity {
         Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
         if(camera.resolveActivity(getPackageManager())==null) {
             pendingStorageThumbnailId=0;
-            alert("Nie znaleziono aplikacji aparatu.");return;
+            alert("Nie znaleziono aplikacji aparatu.");
+            continueQuickThingBatchAfterPhoto(id);
+            return;
         }
         try {
             java.io.File dir=new java.io.File(getCacheDir(),"storage_camera");
@@ -7997,6 +8004,7 @@ public final class MainActivity extends Activity {
             cleanupStorageCameraTemp();
             pendingStorageThumbnailId=0;
             alert("Nie można uruchomić aparatu z pełną jakością.");
+            continueQuickThingBatchAfterPhoto(id);
         }
     }
 
@@ -8019,7 +8027,216 @@ public final class MainActivity extends Activity {
     }
 
     private void quickAddStorageThing() {
-        quickAddStorageItem("thing");
+        startQuickThingBatch();
+    }
+
+    private boolean isQuickThingBatchTarget(long id) {
+        return quickThingBatchActive && quickThingBatchCurrentId==id && id>0;
+    }
+
+    private void startQuickThingBatch() {
+        if(quickThingBatchActive) {
+            if(quickThingBatchCurrentId>0)
+                quickThingBatchAskDestination(quickThingBatchCurrentId);
+            return;
+        }
+        quickThingBatchActive=true;
+        quickThingBatchCurrentId=0L;
+        quickThingBatchCounter=1;
+        quickThingBatchAdded=0;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_STARTED");
+        quickThingBatchNext();
+    }
+
+    private void quickThingBatchNext() {
+        if(!quickThingBatchActive)return;
+        try {
+            String defaultName="Rzecz "+quickThingBatchCounter;
+            long id=StorageStore.create(db.getWritableDatabase(),
+                defaultName,"thing",null,null);
+            quickThingBatchCurrentId=id;
+            quickThingBatchAdded++;
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_CREATED",
+                "id="+id+" index="+quickThingBatchCounter);
+            render();
+            root.postDelayed(()->{
+                if(isQuickThingBatchTarget(id))takeStorageThumbnail(id);
+            },100L);
+        } catch(Exception error) {
+            quickThingBatchFinish();
+            alert(error.getMessage()==null
+                ?"Nie udało się rozpocząć szybkiego dodawania.":error.getMessage());
+        }
+    }
+
+    private void continueQuickThingBatchAfterPhoto(long id) {
+        if(!isQuickThingBatchTarget(id))return;
+        root.postDelayed(()->{
+            if(isQuickThingBatchTarget(id))quickThingBatchAskName(id);
+        },100L);
+    }
+
+    private void quickThingBatchAskName(long id) {
+        if(!isQuickThingBatchTarget(id))return;
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null) {
+            quickThingBatchFinish();
+            return;
+        }
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(text("Zdjęcie: "
+            +(prefs.contains(StorageThumbs.key(id))?"dodane":"pominięte"),
+            13,false));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Opcjonalnie — domyślnie: "+item.name);
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text("Możesz zostawić pole puste. EDHOME zachowa nazwę "
+            +item.name+".",13,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie • nazwa")
+            .setView(layout)
+            .setCancelable(false)
+            .create();
+        quickThingBatchDialog=dialog;
+
+        smallButton(layout,"Dalej",()->{
+            String value=name.getText().toString().trim();
+            try {
+                if(!value.isEmpty()) {
+                    StorageStore.rename(db.getWritableDatabase(),id,value);
+                    DiagnosticLog.event("STORAGE_QUICK_BATCH_NAMED","id="+id);
+                }
+                dialog.dismiss();
+                quickThingBatchDialog=null;
+                quickThingBatchAskDestination(id);
+            } catch(Exception error) {
+                name.setError(error.getMessage()==null
+                    ?"Nie zapisano nazwy.":error.getMessage());
+            }
+        });
+        smallButton(layout,"Pomiń nazwę • zostaw "+item.name,()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchAskDestination(id);
+        });
+        smallButton(layout,"Zakończ serię",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchFinish();
+        });
+        lightDialogForm(layout);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+    }
+
+    private void quickThingBatchAskDestination(long id) {
+        if(!isQuickThingBatchTarget(id))return;
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null) {
+            quickThingBatchFinish();
+            return;
+        }
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        actions.addView(storageKindText("thing",item.name,18,true));
+        actions.addView(text("Wybierz pudełko albo miejsce. Po zapisie EDHOME "
+            +"od razu przejdzie do zdjęcia następnej rzeczy.",13,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie • położenie")
+            .setView(actions)
+            .setCancelable(false)
+            .create();
+        quickThingBatchDialog=dialog;
+
+        smallButton(actions,"NFC • dotknij pudełka lub miejsca",()->
+            beginStorageDestinationNfc(id));
+        smallButton(actions,"QR • zeskanuj pudełko lub miejsce",()->
+            beginStorageDestinationQr(id));
+        smallButton(actions,"Ręcznie • wybierz z listy",()->
+            showQuickThingBatchManualDestination(id));
+        smallButton(actions,"Pomiń położenie",()->
+            quickThingBatchAdvance(id,"skip"));
+        smallButton(actions,"Zakończ serię",this::quickThingBatchFinish);
+        lightDialogForm(actions);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+    }
+
+    private void showQuickThingBatchManualDestination(long itemId) {
+        if(!isQuickThingBatchTarget(itemId))return;
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<String> kinds=new java.util.ArrayList<>();
+        java.util.List<Long> ids=new java.util.ArrayList<>();
+        for(PlaceEntry place:readPlaces()) {
+            labels.add("Miejsce: "+db.placePath(place.id));
+            kinds.add("place");
+            ids.add(place.id);
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM storage_items WHERE kind='box' "
+                    +"ORDER BY name COLLATE NOCASE,id",null)) {
+            while(c.moveToNext()) {
+                labels.add("Pudełko: "+c.getString(1));
+                kinds.add("box");
+                ids.add(c.getLong(0));
+            }
+        }
+        if(labels.isEmpty()) {
+            alert("Nie ma jeszcze pudełek ani miejsc. Możesz pominąć położenie.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz pudełko lub miejsce")
+            .setItems(labels.toArray(new String[0]),(d,which)->
+                applyStorageDestination(itemId,kinds.get(which),ids.get(which),"manual"))
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
+    private void quickThingBatchAdvance(long id,String source) {
+        if(!isQuickThingBatchTarget(id))return;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+        quickThingBatchDialog=null;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_DONE",
+            "id="+id+" source="+source);
+        quickThingBatchCurrentId=0L;
+        quickThingBatchCounter++;
+        root.postDelayed(this::quickThingBatchNext,180L);
+    }
+
+    private void quickThingBatchFinish() {
+        int added=quickThingBatchAdded;
+        long current=quickThingBatchCurrentId;
+        quickThingBatchActive=false;
+        quickThingBatchCurrentId=0L;
+        quickThingBatchCounter=0;
+        quickThingBatchAdded=0;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+        quickThingBatchDialog=null;
+        if(pendingStorageDestinationItemId!=null
+                &&pendingStorageDestinationItemId==current)
+            pendingStorageDestinationItemId=null;
+        if(storageDestinationNfcDialog!=null&&storageDestinationNfcDialog.isShowing())
+            storageDestinationNfcDialog.dismiss();
+        storageDestinationNfcDialog=null;
+        refreshNfcReaderMode();
+        render();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_FINISHED","count="+added);
+        if(added>0)alert("Szybkie dodawanie zakończone. Dodano rzeczy: "+added+".");
     }
 
     private void quickAddStorageBox() {
@@ -8748,8 +8965,11 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("STORAGE_LOCATION_NOOP",
                 "item="+itemId+" target="+targetKind+":"+targetId);
             refreshQuickStorageSetupStatus(moving.kind,itemId);
-            if(!isQuickStorageSetupTarget(moving.kind,itemId))
+            if(!isQuickStorageSetupTarget(moving.kind,itemId)
+                    &&!isQuickThingBatchTarget(itemId))
                 alert("Już znajduje się tutaj.");
+            if(isQuickThingBatchTarget(itemId))
+                quickThingBatchAdvance(itemId,source);
             return true;
         }
         try {
@@ -8758,15 +8978,22 @@ public final class MainActivity extends Activity {
             else
                 StorageStore.move(db.getWritableDatabase(),itemId,null,targetId);
             StorageStore.Item moved=StorageStore.find(db.getReadableDatabase(),itemId);
-            DiagnosticLog.event("nfc".equals(source)
-                    ?"STORAGE_LOCATION_SET_BY_NFC":"STORAGE_LOCATION_SET_BY_QR",
+            String locationEvent="nfc".equals(source)
+                ?"STORAGE_LOCATION_SET_BY_NFC"
+                :"qr".equals(source)
+                    ?"STORAGE_LOCATION_SET_BY_QR"
+                    :"STORAGE_LOCATION_SET_MANUALLY";
+            DiagnosticLog.event(locationEvent,
                 "item="+itemId+" target="+targetKind+":"+targetId);
             render();
             refreshQuickStorageSetupStatus(moving.kind,itemId);
-            if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId))
+            if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId)
+                    &&!isQuickThingBatchTarget(itemId))
                 alert("Położenie zapisane:\n"
                     +StorageStore.location(db.getReadableDatabase(),moved)
                         .replace(" / "," → "));
+            if(isQuickThingBatchTarget(itemId))
+                quickThingBatchAdvance(itemId,source);
             return true;
         } catch(Exception error) {
             DiagnosticLog.error("STORAGE_LOCATION_MOVE",error);
@@ -13991,8 +14218,11 @@ public final class MainActivity extends Activity {
             &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
         if(granted)launchStorageThumbnailCamera();
         else {
+            long id=pendingStorageThumbnailId;
             pendingStorageThumbnailId=0;
-            alert("Aby zrobić miniaturę aparatem, zezwól EDHOME na użycie aparatu.");
+            alert("Aby zrobić zdjęcie aparatem, zezwól EDHOME na użycie aparatu. "
+                +"Możesz kontynuować bez zdjęcia.");
+            continueQuickThingBatchAfterPhoto(id);
         }
     }
 
@@ -14238,6 +14468,7 @@ public final class MainActivity extends Activity {
             } finally {
                 if(file!=null&&file.exists())file.delete();
             }
+            continueQuickThingBatchAfterPhoto(id);
             return;
         }
         if (request == IMPORT_STORAGE_THUMBNAIL) {

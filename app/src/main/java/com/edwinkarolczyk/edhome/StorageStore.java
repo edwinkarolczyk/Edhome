@@ -117,6 +117,15 @@ final class StorageStore {
         }finally{db.endTransaction();}
     }
 
+    static void rename(SQLiteDatabase db,long id,String name) {
+        String clean=validName(name);
+        ContentValues row=new ContentValues();
+        row.put("name",clean);
+        if(db.update("storage_items",row,"id=?",
+                new String[]{Long.toString(id)})!=1)
+            throw new IllegalArgumentException("Rzecz nie istnieje.");
+    }
+
     static boolean sameDestination(Item item,Long box,Long place) {
         return item!=null
             &&java.util.Objects.equals(item.boxId,box)

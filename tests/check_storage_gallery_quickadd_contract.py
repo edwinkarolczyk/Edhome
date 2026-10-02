@@ -151,3 +151,41 @@ assert 'if(!isQuickStorageSetupTarget(target.kind,target.id))' in main
 assert 'if(!isQuickStorageSetupTarget(moving.kind,itemId))' in main
 assert 'if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId))' in main
 print("OK: quick setup NFC debounce + non-modal progress")
+
+
+# Szybkie dodawanie rzeczy działa jako jawna seria:
+# zdjęcie -> opcjonalna nazwa -> NFC/QR/lista celu -> następna rzecz -> Zakończ.
+for marker in (
+    'private boolean quickThingBatchActive;',
+    'private void startQuickThingBatch()',
+    'private void quickThingBatchNext()',
+    'private void continueQuickThingBatchAfterPhoto(long id)',
+    'private void quickThingBatchAskName(long id)',
+    'Pomiń nazwę • zostaw ',
+    'private void quickThingBatchAskDestination(long id)',
+    'NFC • dotknij pudełka lub miejsca',
+    'QR • zeskanuj pudełko lub miejsce',
+    'Ręcznie • wybierz z listy',
+    'Pomiń położenie',
+    'private void quickThingBatchAdvance(long id,String source)',
+    'private void quickThingBatchFinish()',
+    'quickThingBatchCounter++',
+    'continueQuickThingBatchAfterPhoto(id);',
+):
+    assert marker in main, f"Missing serial quick-thing flow: {marker}"
+
+quick_thing = main[
+    main.index('private void quickAddStorageThing()'):
+    main.index('private void quickAddStorageBox()')
+]
+assert 'startQuickThingBatch();' in quick_thing
+assert 'quickAddStorageItem("thing")' not in quick_thing
+assert 'String defaultName="Rzecz "+quickThingBatchCounter;' in quick_thing
+assert 'takeStorageThumbnail(id);' in quick_thing
+assert 'StorageStore.rename' in quick_thing
+assert 'beginStorageDestinationNfc(id)' in quick_thing
+assert 'beginStorageDestinationQr(id)' in quick_thing
+assert 'quickThingBatchNext' in quick_thing
+assert 'static void rename(SQLiteDatabase db,long id,String name)' in store
+assert 'isQuickThingBatchTarget(itemId)' in main
+print("OK: serial quick Thing flow photo -> optional name -> destination -> repeat until Finish")
