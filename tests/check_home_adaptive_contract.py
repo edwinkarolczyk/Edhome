@@ -167,7 +167,8 @@ for token in (
 for token in (
     'Grafika kafelka — pełne tło',
     'TileArtLibrary.prefKey(id)',
-    'TileArtLibrary.bitmap(this,tileTarget,artStyle,span)',
+    'TileArtLibrary.bitmap(',
+    'this,tileTarget,artStyle,span);',
     'if(homeFullArtBitmap==null)',
     'HOME_TILE_ART_IMPORTED',
     'IMPORT_TILE_ART',
