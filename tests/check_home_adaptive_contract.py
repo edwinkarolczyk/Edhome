@@ -210,3 +210,23 @@ for token in (
 assert 'TileArtLibrary.installBundled(this,prefs)' in main
 assert 'HOME_TILE_ART_BUNDLED_INSTALLED' in main
 print("Bundled compact tile artwork library: PASS")
+
+# Edycja kafelka pokazuje na żywo cały kafelek 1P/2P.
+for token in (
+    'private void refreshHomeTileEditorPreview(LinearLayout frame,',
+    'Podgląd na ekranie Start',
+    'refreshHomeTileEditorPreview(previewFrame,target,',
+    'art.setOnItemSelectedListener(previewSelection);',
+    'size.setOnItemSelectedListener(previewSelection);',
+    'destination.setOnItemSelectedListener(previewSelection);',
+    'color.setOnItemSelectedListener(previewSelection);',
+    'label.addTextChangedListener(new android.text.TextWatcher()',
+    'Brak grafiki "+(span==2?"2P":"1P")',
+):
+    assert token in main, token
+preview=main.split('private void refreshHomeTileEditorPreview',1)[1]
+preview=preview.split('private void editHomeTile',1)[0]
+assert 'TileArtLibrary.bitmap(' in preview
+assert 'homeFullTileBackground(tileBase,fullArtBitmap)' in preview
+assert 'side*span+dp(gap)*(span-1)' in preview
+print("Home tile editor exact 1P/2P live preview: PASS")

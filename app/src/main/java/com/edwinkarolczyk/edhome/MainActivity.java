@@ -3036,6 +3036,89 @@ public final class MainActivity extends Activity {
         catch (Exception failed) { alert("Nie można otworzyć wyboru paczki ZIP."); }
     }
 
+    private void refreshHomeTileEditorPreview(LinearLayout frame,
+            String target,String caption,String iconId,String tintCode,
+            String artStyle,int span) {
+        frame.removeAllViews();
+        if(span!=2)span=1;
+        int viewport=getResources().getDisplayMetrics().widthPixels;
+        float density=getResources().getDisplayMetrics().density;
+        int gap=HomeTileLayout.HOME_GAP_DP;
+        int contentWidth=Math.max(dp(1),viewport-dp(32));
+        int side=Math.max(dp(1),(contentWidth-dp(gap)*2)/3);
+        int tileWidth=side*span+dp(gap)*(span-1);
+        int tileHeight=Math.min(
+            side+dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP),dp(82));
+
+        LinearLayout tile=new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setPadding(dp(4),dp(3),dp(4),dp(5));
+
+        boolean customTint=!"default".equals(tintCode);
+        int tileTint=customTint?skin.tileTint(tintCode):accent;
+        boolean highlighted="tasks".equals(target)||customTint;
+
+        Bitmap fullArtBitmap=null;
+        boolean requestedArt=!TileArtLibrary.NONE.equals(artStyle);
+        if(homeFullTileArtEnabled()){
+            if(requestedArt)
+                fullArtBitmap=TileArtLibrary.bitmap(
+                    this,target,artStyle,span);
+            else
+                fullArtBitmap=homeFullTileBitmap(iconId);
+        }
+        boolean fullTileArt=fullArtBitmap!=null;
+        Drawable tileBase=skin.tile(this,highlighted,tileTint);
+        tile.setBackground(fullTileArt
+            ?homeFullTileBackground(tileBase,fullArtBitmap):tileBase);
+        tile.setElevation(dp(highlighted?5:3));
+
+        TextView handle=text("⋮⋮",17,true);
+        handle.setTextColor(fullTileArt?0xDD24373A:
+            (highlighted?skin.tileText(tileTint):subdued));
+        if(fullTileArt)handle.setShadowLayer(3f,0f,1f,Color.WHITE);
+        handle.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        handle.setPadding(dp(3),0,dp(8),0);
+        tile.addView(handle,new LinearLayout.LayoutParams(-1,dp(19)));
+
+        if(requestedArt&&!fullTileArt){
+            TextView missing=text("Brak grafiki "+(span==2?"2P":"1P")
+                +" w "+TileArtLibrary.styleLabel(artStyle),12,true);
+            missing.setGravity(Gravity.CENTER);
+            missing.setTextColor(ink);
+            tile.addView(missing,new LinearLayout.LayoutParams(-1,0,1f));
+        }else if(fullTileArt){
+            View spacer=new View(this);
+            tile.addView(spacer,new LinearLayout.LayoutParams(-1,0,1f));
+        }else{
+            int iconWidth=tileWidth-dp(10);
+            int iconHeight=tileHeight-dp(19)-dp(31)-dp(14);
+            int displayedIconSize=Math.max(
+                dp(24),Math.min(iconWidth,iconHeight));
+            LinearLayout.LayoutParams iconParams=
+                new LinearLayout.LayoutParams(
+                    displayedIconSize,displayedIconSize);
+            iconParams.gravity=Gravity.CENTER_HORIZONTAL;
+            tile.addView(tileIconImage(iconId,
+                Math.round(displayedIconSize/density),highlighted),iconParams);
+            TextView captionView=text(caption,12,true);
+            captionView.setTextColor(highlighted
+                ?skin.tileText(tileTint):ink);
+            captionView.setGravity(Gravity.CENTER);
+            captionView.setMaxLines(2);
+            captionView.setEllipsize(
+                android.text.TextUtils.TruncateAt.END);
+            tile.addView(captionView,
+                new LinearLayout.LayoutParams(-1,dp(31)));
+        }
+
+        LinearLayout.LayoutParams previewParams=
+            new LinearLayout.LayoutParams(tileWidth,tileHeight);
+        previewParams.gravity=Gravity.CENTER_HORIZONTAL;
+        frame.addView(tile,previewParams);
+    }
+
     private void editHomeTile(String id) {
         if (!homeTileOrder().contains(id)) return;
         LinearLayout form = new LinearLayout(this);
@@ -3146,8 +3229,7 @@ public final class MainActivity extends Activity {
         int initialSpan=size.getSelectedItemPosition()==1?2:1;
         String initialTarget=targets.get(destination.getSelectedItemPosition());
         for(String style:artIds)
-            artNames.add(TileArtLibrary.availabilityLabel(
-                this,initialTarget,style,initialSpan));
+            artNames.add(TileArtLibrary.styleLabel(style));
         Spinner art=new Spinner(this);
         art.setAdapter(themeSpinnerAdapter(artNames));
         String previousArt=prefs.getString(
@@ -3191,22 +3273,49 @@ public final class MainActivity extends Activity {
             }
         });
 
+        form.addView(text("Podgląd na ekranie Start",15,true));
         LinearLayout previewFrame = new LinearLayout(this);
         previewFrame.setGravity(Gravity.CENTER);
-        previewFrame.setPadding(0, dp(9), 0, dp(9));
+        previewFrame.setPadding(0,dp(9),0,dp(9));
         form.addView(previewFrame);
-        icon.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onNothingSelected(android.widget.AdapterView<?> p) { }
-            @Override public void onItemSelected(android.widget.AdapterView<?> p,
-                    View view, int position, long rowId) {
-                previewFrame.removeAllViews();
-                if (position < 0 || position >= filteredIconIds.size()) return;
-                View pictogram = tileIconImage(
-                    filteredIconIds.get(position), 88, false);
-                previewFrame.addView(pictogram,
-                    new LinearLayout.LayoutParams(dp(88), dp(88)));
-            }
-        });
+
+        final Runnable[] previewRefresh=new Runnable[1];
+        previewRefresh[0]=() -> {
+            int targetIndex=destination.getSelectedItemPosition();
+            if(targetIndex<0||targetIndex>=targets.size())return;
+            String target=targets.get(targetIndex);
+            int iconIndex=icon.getSelectedItemPosition();
+            String chosenIcon=iconIndex>=0
+                &&iconIndex<filteredIconIds.size()
+                ?filteredIconIds.get(iconIndex):defaultTileIcon(target);
+            int artIndex=art.getSelectedItemPosition();
+            String chosenArt=artIndex>=0&&artIndex<artIds.size()
+                ?artIds.get(artIndex):TileArtLibrary.NONE;
+            int tintIndex=color.getSelectedItemPosition();
+            String chosenTint=tintIndex>=0&&tintIndex<codes.length
+                ?codes[tintIndex]:"default";
+            int chosenSpan=size.getSelectedItemPosition()==1?2:1;
+            String chosenCaption=label.getText().toString().trim();
+            if(chosenCaption.isEmpty())
+                chosenCaption=HomeTileCatalog.label(target);
+            refreshHomeTileEditorPreview(previewFrame,target,
+                chosenCaption,chosenIcon,chosenTint,chosenArt,chosenSpan);
+        };
+        android.widget.AdapterView.OnItemSelectedListener previewSelection=
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> parent) { }
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> parent,View view,
+                        int position,long rowId) {
+                    if(previewRefresh[0]!=null)previewRefresh[0].run();
+                }
+            };
+        icon.setOnItemSelectedListener(previewSelection);
+        art.setOnItemSelectedListener(previewSelection);
+        size.setOnItemSelectedListener(previewSelection);
+        destination.setOnItemSelectedListener(previewSelection);
+        color.setOnItemSelectedListener(previewSelection);
         iconSearch.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence text,
                     int start, int count, int after) { }
@@ -3245,6 +3354,20 @@ public final class MainActivity extends Activity {
             @Override public void afterTextChanged(
                     android.text.Editable text) { }
         });
+        label.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text,
+                    int start,int count,int after) { }
+            @Override public void onTextChanged(CharSequence text,
+                    int start,int before,int count) {
+                if(previewRefresh[0]!=null)previewRefresh[0].run();
+            }
+            @Override public void afterTextChanged(
+                    android.text.Editable text) { }
+        });
+        previewFrame.post(() -> {
+            if(previewRefresh[0]!=null)previewRefresh[0].run();
+        });
+
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setView(form)
             .setNegativeButton("Anuluj", null)
