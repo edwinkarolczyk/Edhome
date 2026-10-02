@@ -148,8 +148,10 @@ for marker in (
 
 # W szybkim kreatorze sukces NFC/lokalizacji aktualizuje status bez modalnego OK.
 assert 'if(!isQuickStorageSetupTarget(target.kind,target.id))' in main
-assert 'if(!isQuickStorageSetupTarget(moving.kind,itemId))' in main
-assert 'if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId))' in main
+assert 'isQuickStorageSetupTarget(moving.kind,itemId)' in main
+assert 'isQuickThingBatchTarget(itemId)' in main
+assert 'moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId)' in main
+assert '&&!isQuickThingBatchTarget(itemId)' in main
 print("OK: quick setup NFC debounce + non-modal progress")
 
 
