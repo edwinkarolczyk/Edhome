@@ -160,6 +160,9 @@ final class DataBackup {
                 tile.put("target", prefs.getString("tile_target_" + id, ""));
             if (prefs.contains("tile_width_" + id))
                 tile.put("width", prefs.getString("tile_width_" + id, "small"));
+            if (prefs.contains(TileArtLibrary.prefKey(id)))
+                tile.put("art", prefs.getString(
+                    TileArtLibrary.prefKey(id),TileArtLibrary.NONE));
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
@@ -368,6 +371,7 @@ final class DataBackup {
         Map<String, String> icons = new HashMap<>();
         Map<String, String> targets = new HashMap<>();
         Map<String, String> widths = new HashMap<>();
+        Map<String, String> arts = new HashMap<>();
         if (appearance != null) {
             java.util.Iterator<String> keys = appearance.keys();
             while (keys.hasNext()) {
@@ -408,6 +412,14 @@ final class DataBackup {
                     if (!"small".equals(width) && !"double".equals(width))
                         throw new IllegalArgumentException("Nieznany rozmiar kafelka.");
                     widths.put(id, width);
+                }
+                if(tile.has("art")){
+                    String art=tile.getString("art");
+                    if(!TileArtLibrary.knownStyle(art)
+                            ||TileArtLibrary.NONE.equals(art))
+                        throw new IllegalArgumentException(
+                            "Nieznany styl grafiki kafelka.");
+                    arts.put(id,art);
                 }
             }
         }
@@ -1524,6 +1536,7 @@ final class DataBackup {
                 if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
                         || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
                         || key.startsWith("tile_width_")
+                        || key.startsWith(TileArtLibrary.PREF_PREFIX)
                         || key.startsWith(StorageThumbs.PREFIX))
                     restored.remove(key);
             }
@@ -1540,6 +1553,8 @@ final class DataBackup {
                 restored.putString("tile_target_" + id, targets.get(id));
             for (String id : widths.keySet())
                 restored.putString("tile_width_" + id, widths.get(id));
+            for(String id:arts.keySet())
+                restored.putString(TileArtLibrary.prefKey(id),arts.get(id));
             for(Map.Entry<Long,String> thumb:restoredStorageThumbs.entrySet())
                 restored.putString(StorageThumbs.key(thumb.getKey()),
                     thumb.getValue());

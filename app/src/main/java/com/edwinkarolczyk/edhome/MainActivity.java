@@ -92,10 +92,15 @@ public final class MainActivity extends Activity {
     private static final int TAKE_STORAGE_THUMBNAIL = 1223;
     private static final int IMPORT_GARDEN_CATALOG = 1224;
     private static final int EXPORT_GARDEN_CATALOG = 1225;
+    private static final int IMPORT_TILE_ART = 1226;
     private static final int STORAGE_CAMERA_PERMISSION = 7134;
     private byte[] pendingQrLabelsPdf;
     private int pendingQrLabelsCount;
     private String pendingCustomTileId;
+    private String pendingTileArtId;
+    private String pendingTileArtTarget;
+    private String pendingTileArtStyle;
+    private int pendingTileArtSpan;
     private long pendingStorageThumbnailId;
     private Uri pendingStorageCameraUri;
     private java.io.File pendingStorageCameraFile;
@@ -282,6 +287,15 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
         root.post(() -> handleNfcIntent(getIntent()));
+        new Thread(() -> {
+            int migrated=TileArtLibrary.migrateExistingCustomArt(this,prefs);
+            if(migrated>0){
+                DiagnosticLog.event("HOME_TILE_ART_MIGRATED","count="+migrated);
+                runOnUiThread(() -> {
+                    if(!isFinishing()&&"home".equals(screen))render();
+                });
+            }
+        },"edhome-tile-art-migration").start();
         // The icon pack is part of the signed APK. Unpack in the background
         // without resetting the home screen, asking for ZIP or changing data.
         new Thread(() -> {
@@ -2516,7 +2530,8 @@ public final class MainActivity extends Activity {
                 HomeTileCatalog.encode(hidden))
             .remove("tile_target_" + id).remove("tile_label_" + id)
             .remove("tile_tint_" + id).remove("tile_icon_" + id)
-            .remove("tile_width_" + id).commit();
+            .remove("tile_width_" + id)
+            .remove(TileArtLibrary.prefKey(id)).commit();
         if (!saved) { alert("Nie można usunąć skrótu."); return; }
         DiagnosticLog.event("HOME_TILE_REMOVED");
         render();
@@ -3112,6 +3127,59 @@ public final class MainActivity extends Activity {
         size.setSelection("double".equals(
             prefs.getString("tile_width_" + id, "small")) ? 1 : 0);
         form.addView(size);
+
+        form.addView(text("Grafika kafelka — pełne tło",15,true));
+        java.util.List<String> artIds=new java.util.ArrayList<>(
+            TileArtLibrary.styleIds());
+        java.util.List<String> artNames=new java.util.ArrayList<>();
+        int initialSpan=size.getSelectedItemPosition()==1?2:1;
+        String initialTarget=targets.get(destination.getSelectedItemPosition());
+        for(String style:artIds)
+            artNames.add(TileArtLibrary.availabilityLabel(
+                this,initialTarget,style,initialSpan));
+        Spinner art=new Spinner(this);
+        art.setAdapter(themeSpinnerAdapter(artNames));
+        String previousArt=prefs.getString(
+            TileArtLibrary.prefKey(id),TileArtLibrary.NONE);
+        int previousArtIndex=artIds.indexOf(previousArt);
+        art.setSelection(previousArtIndex<0?0:previousArtIndex);
+        form.addView(art);
+        form.addView(text(
+            "1P = 840 × 656 px • 2P = 1728 × 656 px. "
+                +"EDHOME nigdy nie rozciąga 1P do 2P ani odwrotnie.",
+            12,false));
+        Button addArt=new Button(this);
+        addArt.setText("Dodaj / zastąp grafikę w wybranym stylu");
+        addArt.setAllCaps(false);
+        form.addView(addArt);
+        addArt.setOnClickListener(v -> {
+            int pos=art.getSelectedItemPosition();
+            if(pos<=0||pos>=artIds.size()){
+                alert("Najpierw wybierz Styl 1, Styl 2 albo Styl 3.");
+                return;
+            }
+            String target=targets.get(destination.getSelectedItemPosition());
+            int span=size.getSelectedItemPosition()==1?2:1;
+            pendingTileArtId=id;
+            pendingTileArtTarget=target;
+            pendingTileArtStyle=artIds.get(pos);
+            pendingTileArtSpan=span;
+            if(tileDialog[0]!=null)tileDialog[0].dismiss();
+            Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            picker.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"image/png","image/webp","image/jpeg"});
+            try{startActivityForResult(picker,IMPORT_TILE_ART);}
+            catch(Exception failure){
+                pendingTileArtId=null;
+                pendingTileArtTarget=null;
+                pendingTileArtStyle=null;
+                pendingTileArtSpan=0;
+                alert("Nie można wybrać grafiki kafelka.");
+            }
+        });
+
         LinearLayout previewFrame = new LinearLayout(this);
         previewFrame.setGravity(Gravity.CENTER);
         previewFrame.setPadding(0, dp(9), 0, dp(9));
@@ -3210,6 +3278,22 @@ public final class MainActivity extends Activity {
                     String tileSize = sizeValues[size.getSelectedItemPosition()];
                     if ("small".equals(tileSize)) change.remove("tile_width_" + id);
                     else change.putString("tile_width_" + id, tileSize);
+                    int artIndex=art.getSelectedItemPosition();
+                    String artStyle=artIndex>=0&&artIndex<artIds.size()
+                        ?artIds.get(artIndex):TileArtLibrary.NONE;
+                    int artSpan="double".equals(tileSize)?2:1;
+                    if(!TileArtLibrary.NONE.equals(artStyle)
+                            &&!TileArtLibrary.available(
+                                this,target,artStyle,artSpan)){
+                        alert("Brak grafiki "+(artSpan==2?"2P":"1P")
+                            +" dla "+HomeTileCatalog.label(target)+" w "
+                            +TileArtLibrary.styleLabel(artStyle)+". "
+                            +"Dodaj właściwy plik albo wybierz „Brak”.");
+                        return;
+                    }
+                    if(TileArtLibrary.NONE.equals(artStyle))
+                        change.remove(TileArtLibrary.prefKey(id));
+                    else change.putString(TileArtLibrary.prefKey(id),artStyle);
                     if (!change.commit()) {
                         alert("Nie udało się zapisać ustawień kafelka.");
                         return;
@@ -3223,7 +3307,8 @@ public final class MainActivity extends Activity {
                     prefs.edit().remove("tile_label_" + id)
                         .remove("tile_tint_" + id)
                         .remove("tile_icon_" + id)
-                        .remove("tile_width_" + id).apply();
+                        .remove("tile_width_" + id)
+                        .remove(TileArtLibrary.prefKey(id)).apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_RESET");
                     dialog.dismiss();
                     render();
@@ -13509,7 +13594,16 @@ public final class MainActivity extends Activity {
                     && !TileCustomImage.available(this,homeIconId))
                 homeIconId=defaultTileIcon(tileTarget);
             if(homeFullTileArtEnabled()) {
-                homeFullArtBitmap=homeFullTileBitmap(homeIconId);
+                String artStyle=prefs.getString(
+                    TileArtLibrary.prefKey(id),TileArtLibrary.NONE);
+                if(!TileArtLibrary.NONE.equals(artStyle)){
+                    homeFullArtBitmap=TileArtLibrary.bitmap(
+                        this,tileTarget,artStyle,span);
+                    if(homeFullArtBitmap==null)
+                        homeIconId=defaultTileIcon(tileTarget);
+                }else{
+                    homeFullArtBitmap=homeFullTileBitmap(homeIconId);
+                }
                 fullTileArt=homeFullArtBitmap!=null;
             }
         }
@@ -13858,6 +13952,43 @@ public final class MainActivity extends Activity {
                         } else alert("Nie zapisano wyboru ikony.");
                     });
                 }, "edhome-custom-icon-import").start();
+            }
+            return;
+        }
+        if (request == IMPORT_TILE_ART) {
+            final String tileId=pendingTileArtId;
+            final String target=pendingTileArtTarget;
+            final String style=pendingTileArtStyle;
+            final int span=pendingTileArtSpan;
+            pendingTileArtId=null;
+            pendingTileArtTarget=null;
+            pendingTileArtStyle=null;
+            pendingTileArtSpan=0;
+            if(result==RESULT_OK&&tileId!=null&&target!=null&&style!=null
+                    &&span>0&&data!=null&&data.getData()!=null){
+                final Uri chosen=data.getData();
+                new Thread(() -> {
+                    String failure=null;
+                    try{TileArtLibrary.importImage(
+                        this,target,style,span,chosen);}
+                    catch(Exception problem){failure=problem.getMessage();}
+                    final String error=failure;
+                    runOnUiThread(() -> {
+                        if(error!=null){
+                            alert("Nie zapisano grafiki kafelka: "+error);
+                            return;
+                        }
+                        if(prefs.edit().putString(
+                                TileArtLibrary.prefKey(tileId),style).commit()){
+                            DiagnosticLog.event("HOME_TILE_ART_IMPORTED",
+                                "style="+style+" span="+span+" target="+target);
+                            render();
+                            alert("Zapisano "+TileArtLibrary.styleLabel(style)
+                                +" • "+(span==2?"2P":"1P")+" dla "
+                                +HomeTileCatalog.label(target)+".");
+                        }else alert("Nie zapisano wyboru grafiki.");
+                    });
+                },"edhome-tile-art-import").start();
             }
             return;
         }

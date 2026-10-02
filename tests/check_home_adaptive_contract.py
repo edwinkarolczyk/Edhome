@@ -147,3 +147,41 @@ assert 'if(caption!=null)caption.setText(visibleLabel);' in main
 assert 'captionView.setTag("home_caption");' in main
 assert '(TextView) tile.getChildAt(tile.getChildCount() - 1)' not in main
 print("Home full-art caption lookup is crash-safe: PASS")
+
+# Biblioteka pełnych grafik: osobna od ikon, trzy style i ścisłe 1P/2P.
+tileart=(root / "TileArtLibrary.java").read_text(encoding="utf-8")
+for token in (
+    'static final int SINGLE_WIDTH=840;',
+    'static final int DOUBLE_WIDTH=1728;',
+    'static final int HEIGHT=656;',
+    'static final String STYLE_1="style1";',
+    'static final String STYLE_2="style2";',
+    'static final String STYLE_3="style3";',
+    'target+suffix',
+    'span==2?"_2p.webp":"_1p.webp"',
+    'Grafika 2P musi mieć proporcję 1728 × 656.',
+    'Grafika 1P musi mieć proporcję 840 × 656.',
+    'migrateExistingCustomArt',
+):
+    assert token in tileart, token
+for token in (
+    'Grafika kafelka — pełne tło',
+    'TileArtLibrary.prefKey(id)',
+    'TileArtLibrary.bitmap(this,tileTarget,artStyle,span)',
+    'if(homeFullArtBitmap==null)',
+    'HOME_TILE_ART_IMPORTED',
+    'IMPORT_TILE_ART',
+    'EDHOME nigdy nie rozciąga 1P do 2P ani odwrotnie.',
+):
+    assert token in main, token
+assert 'TileArtLibrary.bitmap(this,tileTarget,artStyle,1)' not in main
+assert 'TileArtLibrary.bitmap(this,tileTarget,artStyle,2)' not in main
+for token in (
+    'tile.put("art"',
+    'Map<String, String> arts = new HashMap<>();',
+    'TileArtLibrary.knownStyle(art)',
+    'key.startsWith(TileArtLibrary.PREF_PREFIX)',
+    'restored.putString(TileArtLibrary.prefKey(id),arts.get(id));',
+):
+    assert token in backup, token
+print("Tile artwork library with exact 1P/2P variants and backup preferences: PASS")

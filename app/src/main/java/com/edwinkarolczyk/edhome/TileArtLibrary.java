@@ -1,0 +1,195 @@
+package com.edwinkarolczyk.edhome;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
+
+/** Full-tile artwork library. 1P and 2P are separate files and are never substituted. */
+final class TileArtLibrary {
+    static final String PREF_PREFIX="tile_art_";
+    static final String NONE="none";
+    static final String STYLE_1="style1";
+    static final String STYLE_2="style2";
+    static final String STYLE_3="style3";
+    static final int SINGLE_WIDTH=840;
+    static final int DOUBLE_WIDTH=1728;
+    static final int HEIGHT=656;
+    private static final String MIGRATED="tile_art_library_migrated_v1";
+    private static final long MAX_FILE=12L*1024*1024;
+
+    private TileArtLibrary(){}
+
+    static List<String> styleIds(){
+        return Arrays.asList(NONE,STYLE_1,STYLE_2,STYLE_3);
+    }
+
+    static String styleLabel(String style){
+        if(STYLE_1.equals(style))return "Styl 1";
+        if(STYLE_2.equals(style))return "Styl 2";
+        if(STYLE_3.equals(style))return "Styl 3";
+        return "Brak — zwykła ikona";
+    }
+
+    static boolean knownStyle(String style){
+        return NONE.equals(style)||STYLE_1.equals(style)
+            ||STYLE_2.equals(style)||STYLE_3.equals(style);
+    }
+
+    static String prefKey(String tileId){return PREF_PREFIX+tileId;}
+
+    private static boolean knownTarget(String target){
+        return target!=null&&HomeTileCatalog.TARGETS.contains(target);
+    }
+
+    private static File root(Context context){
+        return new File(context.getFilesDir(),"edhome-tile-art");
+    }
+
+    private static File file(Context context,String target,String style,int span){
+        if(!knownTarget(target)||!knownStyle(style)||NONE.equals(style)
+                ||(span!=1&&span!=2))return null;
+        String suffix=span==2?"_2p.webp":"_1p.webp";
+        return new File(new File(root(context),style),target+suffix);
+    }
+
+    static boolean available(Context context,String target,String style,int span){
+        File f=file(context,target,style,span);
+        return f!=null&&f.isFile()&&f.length()>0;
+    }
+
+    static Bitmap bitmap(Context context,String target,String style,int span){
+        File f=file(context,target,style,span);
+        return f==null||!f.isFile()?null:BitmapFactory.decodeFile(f.getAbsolutePath());
+    }
+
+    static String availabilityLabel(Context context,String target,String style,int span){
+        if(NONE.equals(style))return styleLabel(style);
+        return styleLabel(style)+(available(context,target,style,span)
+            ?" • gotowa "+(span==2?"2P":"1P")
+            :" • brak "+(span==2?"2P":"1P"));
+    }
+
+    static void importImage(Context context,String target,String style,int span,Uri uri)
+            throws Exception{
+        if(!knownTarget(target)||!knownStyle(style)||NONE.equals(style)
+                ||(span!=1&&span!=2))
+            throw new IllegalArgumentException("Nieprawidłowy styl grafiki.");
+        Bitmap source=decode(context,uri);
+        try{
+            validateRatio(source,span);
+            writeNormalized(context,target,style,span,source);
+        }finally{source.recycle();}
+    }
+
+    /** First .23 start: preserve the full artwork already visible on Edwin's phone as Styl 1. */
+    static int migrateExistingCustomArt(Context context,SharedPreferences prefs){
+        if(prefs.getBoolean(MIGRATED,false))return 0;
+        int copied=0;
+        SharedPreferences.Editor edit=prefs.edit();
+        try{
+            List<String> ids=HomeTileCatalog.canonical(
+                prefs.getString(HomeTileCatalog.ORDER_KEY,null),
+                prefs.getString("home_tile_order",""),
+                BuildConfig.DIAGNOSTICS_ENABLED);
+            for(String tileId:ids){
+                String key=TileCustomImage.key(tileId);
+                if(!TileCustomImage.available(context,key))continue;
+                Bitmap image=TileCustomImage.bitmap(context,key);
+                if(image==null)continue;
+                try{
+                    int span=detectSpan(image);
+                    if(span==0)continue; // ordinary square custom icon, not full-tile art
+                    String target=prefs.getString("tile_target_"+tileId,
+                        HomeTileCatalog.defaultTarget(tileId));
+                    if(!knownTarget(target))continue;
+                    File targetFile=file(context,target,STYLE_1,span);
+                    if(targetFile!=null&&!targetFile.isFile()){
+                        writeNormalized(context,target,STYLE_1,span,image);
+                        copied++;
+                    }
+                    if(NONE.equals(prefs.getString(prefKey(tileId),NONE)))
+                        edit.putString(prefKey(tileId),STYLE_1);
+                }catch(Exception ignored){
+                    // Keep the old custom image untouched if it is not valid full-tile art.
+                }finally{image.recycle();}
+            }
+        }finally{
+            edit.putBoolean(MIGRATED,true).apply();
+        }
+        return copied;
+    }
+
+    private static Bitmap decode(Context context,Uri uri)throws Exception{
+        byte[] data;
+        try(InputStream in=context.getContentResolver().openInputStream(uri)){
+            if(in==null)throw new IllegalArgumentException("Nie można otworzyć grafiki.");
+            ByteArrayOutputStream out=new ByteArrayOutputStream();
+            byte[] block=new byte[8192];
+            int n;
+            while((n=in.read(block))!=-1){
+                if(out.size()+(long)n>MAX_FILE)
+                    throw new IllegalArgumentException("Grafika przekracza 12 MB.");
+                out.write(block,0,n);
+            }
+            data=out.toByteArray();
+        }
+        BitmapFactory.Options bounds=new BitmapFactory.Options();
+        bounds.inJustDecodeBounds=true;
+        BitmapFactory.decodeByteArray(data,0,data.length,bounds);
+        if(bounds.outWidth<1||bounds.outHeight<1
+                ||bounds.outWidth>4096||bounds.outHeight>4096)
+            throw new IllegalArgumentException("Grafika może mieć maks. 4096 × 4096.");
+        Bitmap result=BitmapFactory.decodeByteArray(data,0,data.length);
+        if(result==null)throw new IllegalArgumentException("Nieprawidłowy PNG / WebP.");
+        return result;
+    }
+
+    private static int detectSpan(Bitmap image){
+        double ratio=image.getWidth()/(double)image.getHeight();
+        double one=SINGLE_WIDTH/(double)HEIGHT;
+        double two=DOUBLE_WIDTH/(double)HEIGHT;
+        if(Math.abs(ratio-one)<=0.16)return 1;
+        if(Math.abs(ratio-two)<=0.24)return 2;
+        return 0;
+    }
+
+    private static void validateRatio(Bitmap image,int span){
+        int detected=detectSpan(image);
+        if(detected!=span)
+            throw new IllegalArgumentException(span==2
+                ?"Grafika 2P musi mieć proporcję 1728 × 656."
+                :"Grafika 1P musi mieć proporcję 840 × 656.");
+    }
+
+    private static void writeNormalized(Context context,String target,String style,
+            int span,Bitmap source)throws Exception{
+        int width=span==2?DOUBLE_WIDTH:SINGLE_WIDTH;
+        Bitmap normalized=Bitmap.createScaledBitmap(source,width,HEIGHT,true);
+        try{
+            File destination=file(context,target,style,span);
+            if(destination==null)throw new IllegalArgumentException("Nieprawidłowa grafika.");
+            File dir=destination.getParentFile();
+            if(!dir.exists()&&!dir.mkdirs())
+                throw new IllegalStateException("Brak miejsca na bibliotekę grafik.");
+            File tmp=new File(dir,destination.getName()+".tmp");
+            try(FileOutputStream out=new FileOutputStream(tmp)){
+                if(!normalized.compress(Bitmap.CompressFormat.WEBP,92,out))
+                    throw new IllegalStateException("Nie zapisano grafiki.");
+            }
+            if(destination.exists()&&!destination.delete())
+                throw new IllegalStateException("Nie zastąpiono starej grafiki.");
+            if(!tmp.renameTo(destination))
+                throw new IllegalStateException("Nie zapisano grafiki kafelka.");
+        }finally{
+            if(normalized!=source)normalized.recycle();
+        }
+    }
+}
