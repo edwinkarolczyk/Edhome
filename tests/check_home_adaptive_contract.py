@@ -230,3 +230,18 @@ assert 'TileArtLibrary.bitmap(' in preview
 assert 'homeFullTileBackground(tileBase,fullArtBitmap)' in preview
 assert 'side*span+dp(gap)*(span-1)' in preview
 print("Home tile editor exact 1P/2P live preview: PASS")
+
+# Bundled 1P artwork normalization: refresh compact defaults while preserving
+# full-size user artwork imported through the editor.
+tileart=(root / "TileArtLibrary.java").read_text(encoding="utf-8")
+for token in (
+    'BUNDLED_INSTALLED="tile_art_bundled_compact_v2"',
+    'private static boolean userOwnedFullSize(File image,int span)',
+    'bounds.outWidth==expectedWidth&&bounds.outHeight==HEIGHT',
+    'private static void normalizeBundledSingle(File image)',
+    'Color.red(pixel)<245||Color.green(pixel)<245',
+    'contentWidth>=Math.round(width*.90f)',
+    'if(span==1)normalizeBundledSingle(tmp);',
+):
+    assert token in tileart, token
+print("Bundled 1P artwork normalization and user-art preservation: PASS")
