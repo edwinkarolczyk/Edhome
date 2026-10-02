@@ -186,3 +186,27 @@ for token in (
 ):
     assert token in backup, token
 print("Tile artwork library with exact 1P/2P variants and backup preferences: PASS")
+
+# Wbudowane, lekkie grafiki kafelków są w APK jako WebP ZIP.
+import zipfile
+tile_asset=Path("app/src/main/assets/EDHOME_TILE_ART_BUILTIN_COMPACT.zip")
+assert tile_asset.is_file(), tile_asset
+assert tile_asset.stat().st_size < 1_500_000
+with zipfile.ZipFile(tile_asset) as art_zip:
+    names=set(art_zip.namelist())
+style1_1p={name for name in names if name.startswith("style1/") and name.endswith("_1p.webp")}
+style1_2p={name for name in names if name.startswith("style1/") and name.endswith("_2p.webp")}
+assert len(style1_1p)==22, len(style1_1p)
+assert len(style1_2p)==22, len(style1_2p)
+assert "style1/diagnostics_1p.webp" in names
+assert "style1/diagnostics_2p.webp" in names
+for token in (
+    'BUNDLED_ASSET="EDHOME_TILE_ART_BUILTIN_COMPACT.zip"',
+    'static int installBundled(Context context,SharedPreferences prefs)',
+    'context.getAssets().open(BUNDLED_ASSET)',
+    'destination.isFile()&&destination.length()>0',
+):
+    assert token in tileart, token
+assert 'TileArtLibrary.installBundled(this,prefs)' in main
+assert 'HOME_TILE_ART_BUNDLED_INSTALLED' in main
+print("Bundled compact tile artwork library: PASS")

@@ -10,6 +10,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.List;
 
 /** Full-tile artwork library. 1P and 2P are separate files and are never substituted. */
@@ -23,6 +25,8 @@ final class TileArtLibrary {
     static final int DOUBLE_WIDTH=1728;
     static final int HEIGHT=656;
     private static final String MIGRATED="tile_art_library_migrated_v1";
+    private static final String BUNDLED_INSTALLED="tile_art_bundled_compact_v1";
+    private static final String BUNDLED_ASSET="EDHOME_TILE_ART_BUILTIN_COMPACT.zip";
     private static final long MAX_FILE=12L*1024*1024;
 
     private TileArtLibrary(){}
@@ -87,6 +91,94 @@ final class TileArtLibrary {
             validateRatio(source,span);
             writeNormalized(context,target,style,span,source);
         }finally{source.recycle();}
+    }
+
+    /**
+     * Installs the compact WebP library shipped inside the signed APK.
+     * Existing files are never overwritten, so a user's imported artwork
+     * remains more important than the bundled defaults.
+     */
+    static int installBundled(Context context,SharedPreferences prefs)throws Exception{
+        if(prefs.getBoolean(BUNDLED_INSTALLED,false))return 0;
+        int installed=0;
+        byte[] buffer=new byte[8192];
+        try(InputStream asset=context.getAssets().open(BUNDLED_ASSET);
+            ZipInputStream zip=new ZipInputStream(asset)){
+            ZipEntry entry;
+            while((entry=zip.getNextEntry())!=null){
+                if(entry.isDirectory()){
+                    zip.closeEntry();
+                    continue;
+                }
+                String name=entry.getName();
+                if(name.startsWith("/")||name.contains(".."))
+                    throw new IllegalArgumentException("Nieprawidłowa paczka grafik.");
+                String[] parts=name.split("/",-1);
+                if(parts.length!=2){
+                    zip.closeEntry();
+                    continue;
+                }
+                String style=parts[0];
+                if(!STYLE_1.equals(style)&&!STYLE_2.equals(style)
+                        &&!STYLE_3.equals(style)){
+                    zip.closeEntry();
+                    continue;
+                }
+                String filename=parts[1];
+                int span;
+                if(filename.endsWith("_1p.webp"))span=1;
+                else if(filename.endsWith("_2p.webp"))span=2;
+                else{
+                    zip.closeEntry();
+                    continue;
+                }
+                String target=filename.substring(0,filename.length()-8);
+                if(!knownTarget(target)){
+                    zip.closeEntry();
+                    continue;
+                }
+                File destination=file(context,target,style,span);
+                if(destination==null){
+                    zip.closeEntry();
+                    continue;
+                }
+                if(destination.isFile()&&destination.length()>0){
+                    zip.closeEntry();
+                    continue;
+                }
+                File dir=destination.getParentFile();
+                if(!dir.exists()&&!dir.mkdirs())
+                    throw new IllegalStateException(
+                        "Brak miejsca na wbudowane grafiki kafelków.");
+                File tmp=new File(dir,destination.getName()+".bundled.tmp");
+                try(FileOutputStream out=new FileOutputStream(tmp)){
+                    int n;
+                    long total=0;
+                    while((n=zip.read(buffer))!=-1){
+                        total+=n;
+                        if(total>MAX_FILE)
+                            throw new IllegalArgumentException(
+                                "Grafika w paczce przekracza limit.");
+                        out.write(buffer,0,n);
+                    }
+                    out.flush();
+                }
+                if(destination.exists()&&!destination.delete()){
+                    tmp.delete();
+                    throw new IllegalStateException(
+                        "Nie zastąpiono uszkodzonej grafiki.");
+                }
+                if(!tmp.renameTo(destination)){
+                    tmp.delete();
+                    throw new IllegalStateException(
+                        "Nie zapisano wbudowanej grafiki.");
+                }
+                installed++;
+                zip.closeEntry();
+            }
+        }
+        prefs.edit().putBoolean(BUNDLED_INSTALLED,true).apply();
+        return installed;
     }
 
     /** First .23 start: preserve the full artwork already visible on Edwin's phone as Styl 1. */

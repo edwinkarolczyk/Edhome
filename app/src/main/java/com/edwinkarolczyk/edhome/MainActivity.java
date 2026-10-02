@@ -289,13 +289,24 @@ public final class MainActivity extends Activity {
         root.post(() -> handleNfcIntent(getIntent()));
         new Thread(() -> {
             int migrated=TileArtLibrary.migrateExistingCustomArt(this,prefs);
-            if(migrated>0){
+            int bundled=0;
+            try{
+                bundled=TileArtLibrary.installBundled(this,prefs);
+            }catch(Exception failure){
+                DiagnosticLog.error("HOME_TILE_ART_BUNDLED_INSTALL",failure);
+            }
+            if(migrated>0)
                 DiagnosticLog.event("HOME_TILE_ART_MIGRATED","count="+migrated);
+            if(bundled>0)
+                DiagnosticLog.event("HOME_TILE_ART_BUNDLED_INSTALLED",
+                    "count="+bundled);
+            if(migrated>0||bundled>0){
                 runOnUiThread(() -> {
-                    if(!isFinishing()&&"home".equals(screen))render();
+                    if(!isFinishing()&&("home".equals(screen)
+                            ||"settings".equals(screen)))render();
                 });
             }
-        },"edhome-tile-art-migration").start();
+        },"edhome-tile-art-install").start();
         // The icon pack is part of the signed APK. Unpack in the background
         // without resetting the home screen, asking for ZIP or changing data.
         new Thread(() -> {
