@@ -4700,7 +4700,7 @@ public final class MainActivity extends Activity {
                     db.getReadableDatabase(),taskProject);
                 Long member=c.isNull(2)
                     ?(owningProject==null?project.assigneeId:owningProject.assigneeId)
-                    :c.getLong(2);
+                    :Long.valueOf(c.getLong(2));
                 String prefix=projectPath(taskProject)+" → "+taskName;
                 if(member==null) {
                     lines.add("• "+prefix+" — brak wykonawcy");
