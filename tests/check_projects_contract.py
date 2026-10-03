@@ -19,7 +19,7 @@ for marker in (
     "CREATE TABLE IF NOT EXISTS project_task_dependencies",
     "descendantIds",
     "openTaskIdsForPlanning",
-    "Trudność "+score+"/5",
+    'Trudność "+score+"/5',
     "Zależność musi dotyczyć czynności z tego samego projektu głównego.",
     "Ta zależność utworzyłaby pętlę.",
 ):
