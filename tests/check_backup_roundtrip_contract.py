@@ -12,7 +12,7 @@ source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==43
+assert len(manifest)==44
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -63,6 +63,7 @@ VALUES(1,?,'csv','EDHOME TEST','expense',649,'2026-09-25',
 content={}
 for table,columns in manifest.items():
     order=("task_id,position" if table=="task_rotation_members"
+           else "task_id,depends_on_task_id" if table=="project_task_dependencies"
            else "pantry_id" if table=="pantry_packages" else "id")
     found=db.execute('SELECT '+",".join(columns)+' FROM "'+table+'" ORDER BY '+order).fetchall()
     content[table]=[dict(zip(columns,row)) for row in found]
@@ -95,4 +96,4 @@ assert restore.index("if (!restored.commit())")<restore.index(
 assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
 assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
 assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 43 domain tables including Projects, Garden, NFC and bank evidence; numeric/nullability, JSON roundtrip and rollback PASS")
+print("Backup: 44 domain tables including Projects dependencies, Garden, NFC and bank evidence; numeric/nullability, JSON roundtrip and rollback PASS")
