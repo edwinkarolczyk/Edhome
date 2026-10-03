@@ -8966,6 +8966,13 @@ public final class MainActivity extends Activity {
             .show();
     }
 
+    private void quickThingBatchAdvance(long id,String source) {
+        if(!isQuickThingBatchTarget(id))return;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_COMPAT_MOVE",
+            "id="+id+" source="+source);
+        quickThingBatchCurrentId=0L;
+    }
+
     private void quickThingBatchFinish() {
         int added=quickThingBatchAdded;
         quickThingBatchActive=false;
