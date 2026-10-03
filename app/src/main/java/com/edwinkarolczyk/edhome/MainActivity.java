@@ -9433,8 +9433,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if(current==null) {
-            alert("Ten tag NFC nie jest jeszcze przypisany do "
-                +("box".equals(moving.kind)?"miejsca.":"pudełka ani miejsca."));
+            showCreateStorageTargetFromUnknownNfc(itemId,uid);
             return;
         }
         boolean quickBatch=isQuickThingBatchTarget(itemId);
@@ -9448,6 +9447,157 @@ public final class MainActivity extends Activity {
             storageDestinationNfcDialog=null;
         }
         refreshNfcReaderMode();
+    }
+
+    private void showCreateStorageTargetFromUnknownNfc(long itemId,String uid) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null) {
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        disableNfcReaderMode();
+        String title="Nieznany tag NFC";
+        String message="Ten tag nie jest jeszcze przypisany. "
+            +("box".equals(moving.kind)
+                ?"Utworzyć nowe miejsce i od razu przenieść do niego pudełko?"
+                :"Utworzyć nowe pudełko albo miejsce i od razu przypisać do niego tę rzecz?");
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<String> kinds=new java.util.ArrayList<>();
+        if("thing".equals(moving.kind)) {
+            labels.add("＋ Nowe pudełko");
+            kinds.add("box");
+        }
+        labels.add("＋ Nowe miejsce");
+        kinds.add("place");
+        labels.add("Anuluj");
+        kinds.add("cancel");
+
+        new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                String kind=kinds.get(which);
+                if("cancel".equals(kind)) {
+                    refreshNfcReaderMode();
+                    return;
+                }
+                showCreateStorageTargetNameDialog(itemId,uid,kind);
+            })
+            .setOnCancelListener(dialog->refreshNfcReaderMode())
+            .show();
+        DiagnosticLog.event("STORAGE_UNKNOWN_NFC_TARGET",
+            "item="+itemId+" uid="+NfcLinkStore.shortUid(uid));
+    }
+
+    private void showCreateStorageTargetNameDialog(long itemId,String uid,String kind) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null) {
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        boolean box="box".equals(kind);
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint(box?"Nazwa nowego pudełka":"Nazwa nowego miejsca");
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text(box
+            ?"Po zapisaniu EDHOME przypisze ten tag NFC do pudełka i przeniesie do niego bieżącą rzecz."
+            :"Po zapisaniu EDHOME przypisze ten tag NFC do miejsca i przeniesie do niego bieżący obiekt.",
+            13,false));
+        lightDialogForm(layout);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(box?"Nowe pudełko z tego taga":"Nowe miejsce z tego taga")
+            .setView(layout)
+            .setNegativeButton("Wróć",(d,w)->
+                showCreateStorageTargetFromUnknownNfc(itemId,uid))
+            .setPositiveButton("Utwórz i użyj",null)
+            .setCancelable(false)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()) {
+                    name.setError("Podaj nazwę.");
+                    return;
+                }
+                try {
+                    long targetId;
+                    if(box) {
+                        targetId=StorageStore.create(db.getWritableDatabase(),
+                            value,"box",null,null);
+                    } else {
+                        String problem=PlaceRules.validateFields(value,"","places");
+                        if(problem!=null) {
+                            name.setError(problem);
+                            return;
+                        }
+                        if(!db.savePlace(null,value,"",null,"places")) {
+                            name.setError("Takie miejsce już istnieje.");
+                            return;
+                        }
+                        targetId=0L;
+                        try(Cursor c=db.getReadableDatabase().rawQuery(
+                                "SELECT id FROM places WHERE parent_id IS NULL "
+                                    +"AND name=? COLLATE NOCASE ORDER BY id DESC LIMIT 1",
+                                new String[]{value})) {
+                            if(c.moveToFirst())targetId=c.getLong(0);
+                        }
+                        if(targetId<=0)
+                            throw new IllegalStateException(
+                                "Miejsce zapisano, ale nie znaleziono jego identyfikatora.");
+                    }
+
+                    boolean completed=false;
+                    try {
+                        NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,targetId);
+                        suppressNfcRepeat(uid);
+                        if(storageDestinationNfcDialog!=null) {
+                            storageDestinationNfcDialog.dismiss();
+                            storageDestinationNfcDialog=null;
+                        }
+                        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing()) {
+                            quickThingBatchDialog.dismiss();
+                            quickThingBatchDialog=null;
+                        }
+                        dialog.dismiss();
+                        completed=applyStorageDestination(
+                            itemId,kind,targetId,"nfc");
+                        if(!completed)
+                            throw new IllegalStateException(
+                                "Nie udało się ustawić położenia.");
+                        pendingStorageDestinationItemId=null;
+                        DiagnosticLog.event("STORAGE_UNKNOWN_NFC_TARGET_CREATED",
+                            "item="+itemId+" target="+kind+":"+targetId);
+                        refreshNfcReaderMode();
+                    } catch(Exception failure) {
+                        try {
+                            NfcLinkStore.clearTarget(
+                                db.getWritableDatabase(),kind,targetId);
+                            if(box) StorageStore.remove(
+                                db.getWritableDatabase(),targetId);
+                            else db.deletePlace(targetId);
+                        } catch(Exception cleanupError) {
+                            DiagnosticLog.error(
+                                "STORAGE_UNKNOWN_NFC_TARGET_CLEANUP",cleanupError);
+                        }
+                        throw failure;
+                    }
+                } catch(Exception error) {
+                    DiagnosticLog.error("STORAGE_UNKNOWN_NFC_TARGET_CREATE",error);
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć celu.":error.getMessage());
+                    refreshNfcReaderMode();
+                }
+            }));
+        dialog.show();
     }
 
     private boolean applyStorageDestination(long itemId,String targetKind,long targetId,

@@ -17,6 +17,18 @@ assert '📍 Ustaw położenie • NFC / QR / lista' in main
 assert 'pendingStorageDestinationItemId' in main
 assert 'handleStorageDestinationNfc(current,uid)' in main
 assert 'STORAGE_LOCATION_SET_BY_NFC' in main
+for marker in (
+    'private void showCreateStorageTargetFromUnknownNfc(long itemId,String uid)',
+    '＋ Nowe pudełko',
+    '＋ Nowe miejsce',
+    'private void showCreateStorageTargetNameDialog(long itemId,String uid,String kind)',
+    'Nowe pudełko z tego taga',
+    'Nowe miejsce z tego taga',
+    'NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,targetId)',
+    'applyStorageDestination(\n                            itemId,kind,targetId,"nfc")',
+    'STORAGE_UNKNOWN_NFC_TARGET_CREATED',
+):
+    assert marker in main, f"Missing unknown NFC create-target flow: {marker}
 assert 'STORAGE_LOCATION_SET_BY_QR' in main
 assert 'private void showStorageMoveOptions(StorageStore.Item item)' in main
 assert 'NFC • Dotknij tagu celu' in main
