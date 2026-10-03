@@ -42,7 +42,7 @@ final class TimeSuggestions {
     static List<Option> propose(LocalDateTime now, int durationMinutes,
             ShiftSource source) {
         if (now == null || source == null || durationMinutes < 1
-                || durationMinutes > 480)
+                || durationMinutes > 600)
             throw new IllegalArgumentException("Invalid planning inputs");
         ArrayList<Option> options = new ArrayList<>();
         for (int day = 0; day <= 27 && options.size() < 3; day++) {
