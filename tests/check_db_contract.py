@@ -400,7 +400,9 @@ execute(existing14, step36)
 execute(existing14, step37)
 execute(existing14, step38)
 execute(existing14, step39)
-execute(existing14, step40)
+# legacy_create jest generowane z bieżącego CREATE tasks, więc project_id już istnieje.
+# Dodajemy tylko nowe tabele projektowe.
+execute(existing14, project40)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
