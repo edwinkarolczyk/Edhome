@@ -17227,7 +17227,7 @@ public final class MainActivity extends Activity {
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
             if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
-                throw new IllegalArgumentException("Czas musi wynosić 1–480 minut.");
+                throw new IllegalArgumentException("Czas musi wynosić 1–600 minut.");
             ContentValues values = new ContentValues();
             values.put("priority", priority);
             values.put("duration_minutes", durationMinutes);
