@@ -24,20 +24,26 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 39;
+    private static final int DB_VERSION = 40;
     private static final String[] HOME_TILE_IDS = {
-        "tasks", "calendar", "places", "pantry", "audit",
+        "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
     };
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind", "parent_id", "icon"},
         {"household_members", "id", "name"},
+        {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
+            "status", "due_date", "budget_grosz", "created_at"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
-            "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
+            "task_kind", "waste_fraction", "remind_time", "reminder_lead_days",
+            "project_id"},
+        {"project_resources", "id", "project_id", "target_kind", "target_id", "created_at"},
+        {"project_costs", "id", "project_id", "name", "qty_milli", "unit",
+            "unit_price_grosz", "status", "note", "created_at"},
         {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty", "category"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked",
@@ -260,7 +266,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -462,6 +468,9 @@ final class DataBackup {
                 || (inputVersion < 37 && definition[0].startsWith("garden_"))
                 || (inputVersion < 38 && ("garden_events".equals(definition[0])
                     || "garden_harvests".equals(definition[0])))
+                || (inputVersion < 40 && ("projects".equals(definition[0])
+                    || "project_resources".equals(definition[0])
+                    || "project_costs".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -536,6 +545,11 @@ final class DataBackup {
                         if (inputVersion < 16 && "pantry".equals(definition[0])
                                 && "category".equals(key)) {
                             values.put(key, "other");
+                            continue;
+                        }
+                        if(inputVersion < 40 && "tasks".equals(definition[0])
+                                && "project_id".equals(key)) {
+                            values.putNull(key);
                             continue;
                         }
                         if (inputVersion < 39
@@ -617,6 +631,7 @@ final class DataBackup {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
+                            || "project_id".equals(key) || "budget_grosz".equals(key)
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)
                              || "assignee_name_snapshot".equals(key)
@@ -1616,6 +1631,8 @@ final class DataBackup {
             || "acknowledged_at".equals(column)
             || "task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
+            || "project_id".equals(column) || "target_id".equals(column)
+            || "budget_grosz".equals(column) || "unit_price_grosz".equals(column)
             || "member_id".equals(column) || "position".equals(column) || "weekday".equals(column)
             || "started_at".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)

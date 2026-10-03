@@ -172,6 +172,8 @@ public final class MainActivity extends Activity {
     private String calendarView = "month";
     private String tasksFilter = "all";
     private int tasksPage;
+    private long selectedProjectId;
+    private Long taskEditorProjectPreset;
     private long selectedMemberId;
     private String pantrySearch = "";
     private int pantryPage;
@@ -183,7 +185,7 @@ public final class MainActivity extends Activity {
     private boolean centralScannerCameraPending;
     private boolean desktopPairQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
-        "tasks", "calendar", "places", "pantry", "audit",
+        "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
     };
     private static final String[] SHIFT_VALUES = {
@@ -259,6 +261,7 @@ public final class MainActivity extends Activity {
         ensureScannerTileSeeded();
         ensureStorageShortcutTilesSeeded();
         ensureGardenTileSeeded();
+        ensureProjectsTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
@@ -1294,6 +1297,7 @@ public final class MainActivity extends Activity {
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
+                case "projects": projects(); break;
                 case "timers": timers(); break;
                 case "waste": waste(); break;
                 case "members": members(); break;
@@ -2505,6 +2509,23 @@ public final class MainActivity extends Activity {
             .putBoolean("garden_tile_seeded_v1",true)
             .putString(HomeTileCatalog.ORDER_KEY,HomeTileCatalog.encode(order));
         if(edit.commit()) DiagnosticLog.event("GARDEN_TILE_SEEDED");
+    }
+
+    private void ensureProjectsTileSeeded() {
+        if (prefs.getBoolean("projects_tile_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        if (!order.contains("projects")) {
+            int tasksAt=order.indexOf("tasks");
+            order.add(tasksAt<0?0:tasksAt+1,"projects");
+        }
+        boolean ok=prefs.edit()
+            .putBoolean("projects_tile_seeded_v1",true)
+            .putString(HomeTileCatalog.ORDER_KEY,HomeTileCatalog.encode(order))
+            .commit();
+        if(ok)DiagnosticLog.event("PROJECTS_TILE_SEEDED");
     }
 
     private void ensureScannerTileSeeded() {
@@ -4577,6 +4598,29 @@ public final class MainActivity extends Activity {
         form.addView(text("Miejsca dodasz w module Miejsca. "
             + "Czynności bez miejsca działają normalnie.", 12, false));
 
+        form.addView(text("Projekt (opcjonalnie)",15,true));
+        java.util.ArrayList<Long> projectIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> projectNames=new java.util.ArrayList<>();
+        projectIds.add(null);
+        projectNames.add("Bez projektu");
+        try(Cursor projects=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM projects ORDER BY name COLLATE NOCASE,id",null)) {
+            while(projects.moveToNext()) {
+                projectIds.add(projects.getLong(0));
+                projectNames.add(projects.getString(1));
+            }
+        }
+        Spinner chosenProject=new Spinner(this);
+        chosenProject.setAdapter(themeSpinnerAdapter(projectNames));
+        Long initialProject=id==null?taskEditorProjectPreset:db.taskProjectId(id);
+        taskEditorProjectPreset=null;
+        if(initialProject!=null)
+            for(int i=1;i<projectIds.size();i++)
+                if(initialProject.equals(projectIds.get(i))) {
+                    chosenProject.setSelection(i); break;
+                }
+        form.addView(chosenProject);
+
         form.addView(text("Wykonawca (opcjonalnie)", 15, true));
         java.util.ArrayList<Long> memberIds = new java.util.ArrayList<>();
         java.util.ArrayList<String> memberNames = new java.util.ArrayList<>();
@@ -4676,18 +4720,13 @@ public final class MainActivity extends Activity {
                     + "nie wyznaczam fikcyjnych wolnych terminów.", 13, false));
                 return;
             }
-            int minutes;
-            try {
-                minutes = Integer.parseInt(
-                    duration.getText().toString().trim());
-            } catch (NumberFormatException error) {
-                duration.setError("Podaj czas od 1 do 480 minut.");
+            Integer parsedMinutes=TaskRules.minutesFromHours(
+                duration.getText().toString(),MIN_TASK_MINUTES,MAX_TASK_MINUTES);
+            if(parsedMinutes==null) {
+                duration.setError("Podaj czas w godzinach, np. 0,5 / 1 / 1,5 (maks. 8 h).");
                 return;
             }
-            if (minutes < MIN_TASK_MINUTES || minutes > MAX_TASK_MINUTES) {
-                duration.setError("Podaj czas od 1 do 480 minut.");
-                return;
-            }
+            int minutes=parsedMinutes;
             java.util.List<TimeSuggestions.Option> candidates =
                 TimeSuggestions.propose(java.time.LocalDateTime.now(), minutes,
                     day -> db.effectiveShift(chosen, day.toString()));
@@ -4780,7 +4819,8 @@ public final class MainActivity extends Activity {
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
                     selectedPriority, estimatedMinutes,
                     selectedAssignee, customTime, leadDays,
-                    new java.util.ArrayList<>(rotationIds));
+                    new java.util.ArrayList<>(rotationIds),
+                    projectIds.get(chosenProject.getSelectedItemPosition()));
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
@@ -15960,7 +16000,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 39);
+            super(context, "edhome-beta-preview.db", null, 40);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -15972,7 +16012,8 @@ public final class MainActivity extends Activity {
                 + "duration_minutes INTEGER NOT NULL DEFAULT 30, "
                 + "assignee_id INTEGER, "
                 + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
-                + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0)");
+                + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0, "
+                + "project_id INTEGER)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0, "
                 + "category TEXT NOT NULL DEFAULT 'other' CHECK(category IN "
@@ -15985,6 +16026,7 @@ public final class MainActivity extends Activity {
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            ProjectStore.create(database);
             addNfcLinks(database);
             PaycheckStore.create(database);
             BankEvidenceStore.create(database);
@@ -16007,7 +16049,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 39) {
+            if (oldVersion < 1 || newVersion > 40) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -16225,6 +16267,11 @@ public final class MainActivity extends Activity {
                     + "deposit_pending INTEGER NOT NULL DEFAULT 0 "
                     + "CHECK(deposit_pending BETWEEN 0 AND 100000000)");
                 DiagnosticLog.event("DATABASE_MIGRATED_38_TO_39_PANTRY_PACKAGING");
+            }
+            if(oldVersion < 40) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN project_id INTEGER");
+                ProjectStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_39_TO_40_PROJECTS");
             }
             if(newVersion >= 36) {
                 try {
@@ -16471,7 +16518,7 @@ public final class MainActivity extends Activity {
         void saveTask(Long id, String title, String dueDate, String rule, int every,
                 Long placeId, String priority, int durationMinutes,
                 Long assigneeId, String customTime, int reminderLeadDays,
-                java.util.List<Long> rotationMembers) {
+                java.util.List<Long> rotationMembers, Long projectId) {
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (id != null && isWasteTask(id) && dueDate.isEmpty())
@@ -16513,6 +16560,12 @@ public final class MainActivity extends Activity {
             else values.put("due_date", dueDate);
             values.put("repeat_rule", rule);
             values.put("repeat_every", every);
+            if(projectId==null) values.putNull("project_id");
+            else {
+                if(ProjectStore.find(getReadableDatabase(),projectId)==null)
+                    throw new IllegalArgumentException("Projekt nie istnieje.");
+                values.put("project_id",projectId);
+            }
             if (placeId == null) values.putNull("place_id");
             else {
                 try (Cursor c = getReadableDatabase().rawQuery(
@@ -16557,6 +16610,14 @@ public final class MainActivity extends Activity {
                 database.setTransactionSuccessful();
             } finally {
                 database.endTransaction();
+            }
+        }
+
+        Long taskProjectId(long taskId) {
+            try(Cursor c=getReadableDatabase().rawQuery(
+                    "SELECT project_id FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                return c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
             }
         }
 

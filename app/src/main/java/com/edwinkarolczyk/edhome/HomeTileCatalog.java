@@ -11,13 +11,13 @@ import java.util.Set;
 final class HomeTileCatalog {
     static final String ORDER_KEY = "home_tiles_v2_order";
     static final List<String> STARTER_IDS = Collections.unmodifiableList(Arrays.asList(
-        "tasks", "calendar", "places", "floorplan", "pantry", "audit",
+        "tasks", "projects", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "today",
         "timers", "shopping", "paycheck", "waste", "scanner", "storage",
         "storage_things", "storage_boxes", "vehicles", "garden"
     ));
     static final List<String> TARGETS = Collections.unmodifiableList(Arrays.asList(
-        "tasks", "today", "calendar", "places", "floorplan", "pantry", "audit",
+        "tasks", "projects", "today", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "timers", "shopping",
         "paycheck", "paycheck_private", "waste", "scanner", "storage",
         "storage_things", "storage_boxes", "vehicles", "garden", "diagnostics"
@@ -42,6 +42,7 @@ final class HomeTileCatalog {
     static String label(String target) {
         switch (target) {
             case "tasks": return "Czynności";
+            case "projects": return "Projekty";
             case "today": return "Na dziś";
             case "calendar": return "Kalendarz";
             case "places": return "Miejsca";
@@ -69,6 +70,7 @@ final class HomeTileCatalog {
 
     static String icon(String target) {
         switch (target) {
+            case "projects": return "tasks";
             case "timers": return "washer";
             case "shopping": return "box";
             case "paycheck": case "paycheck_private": return "cabinet";
