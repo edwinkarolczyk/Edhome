@@ -11,7 +11,7 @@ for token in (
     '"/api/v2/search?search_terms=" + encoded',
     '"&page_size=6&fields=code,product_name_pl,product_name,"',
     'for (String[] catalogue : CATALOGUES)',
-    'new Product(name, label, brand, imageUrl, null)',
+    'new Product(name, label, brand, imageUrl, null,',
     'return new NameSearchReport(results, joinResults(statuses), partialFailure);',
 ):
     assert token in api, "missing name search: "+token

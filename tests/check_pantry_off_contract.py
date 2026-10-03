@@ -11,7 +11,7 @@ required = {
     "opt-in database button": '.setPositiveButton("Szukaj produktu"',
     "offline manual fallback": '.setPositiveButton("Wpisz ręcznie"',
     "no inventory mutation on lookup": "checked.product, checked.details);",
-    "confirmation before inventory update": '.setPositiveButton("Dodaj +1", (d,w) -> {',
+    "confirmation before inventory update": "showPantryQuantityConfirm(barcode, item, pack, mode, operationId,",
     "transactional scanner reuse": 'PantryBarcodeStore.commit(db.getWritableDatabase()',
     "metadata insert": "PantryBarcodeStore.saveDetails(",
     "migration 14 to 15": "DATABASE_MIGRATED_14_TO_15_PANTRY_DETAILS",
@@ -51,7 +51,7 @@ for token in ('{"pantry_product_details", "id", "pantry_id", "brand", "image_url
               'inputVersion < 15 && "pantry_product_details".equals(definition[0])',
               "Nieprawidłowe powiązanie zdjęcia.",
               "Nieprawidłowe dane zdjęcia w kopii.",
-              "DB_VERSION = 36;"):
+              "DB_VERSION = 39;"):
     assert token in backup, "Missing backup contract: " + token
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 assert "if (found == null) {\n            name = new EditText(this);" in main

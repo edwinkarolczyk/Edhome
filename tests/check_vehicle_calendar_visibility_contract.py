@@ -31,13 +31,39 @@ for token in (
 ):
     assert token in section,token
 assert "upcomingVehicleDeadlines();" in calendar
+assert 'if ("month".equals(calendarView)) {' in calendar
+assert "renderCalendarMonth(month, selected);" in calendar
+assert "private boolean changeCalendarMonth(int delta)" in main
+assert 'DiagnosticLog.event("CALENDAR_MONTH_SWIPED"' in main
+assert "calendarMonthSwipeTracking" in main
+assert 'calendarView = "day";' in main
+assert "calendarMonthFrame = new android.widget.FrameLayout(this)" in main
+assert "fullCalendarMonth" in main
+assert "Gravity.BOTTOM | Gravity.RIGHT" in main
+assert "calendarMonthFrame.addView(add, addParams)" in main
+assert "selectedCard = card()" not in main
+assert "weekdayHeadings" in main
+assert 'headingIndex==6 ? sundayColor : subdued' in main
+assert "isSunday = day.getDayOfWeek()==java.time.DayOfWeek.SUNDAY" in main
+assert "(isSunday ? sundayColor : ink)" in main
+assert "isSelected ? skin.iconBacking : surface" not in main
+assert "target.atDay(wantedDay)" not in main
+assert 'text("‹  przesuń miesiąc palcem  ›"' not in main
+for token in (
+    "private void renderCalendarMonth(YearMonth month, LocalDate selected)",
+    "calendarMonthEventBar",
+    "WEEK_OF_WEEK_BASED_YEAR",
+    '"pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."',
+    '"SELECT due_date,title,priority FROM tasks WHERE done=0 "',
+):
+    assert token in main, token
 assert 'button("Przejdź do daty", () -> {' in calendar
 assert "showVehicleDateInCalendar(item.ocUntil)" in vehicle
 assert "showVehicleDateInCalendar(item.inspectionUntil)" in vehicle
 assert "SELECT deadline,COUNT(*) FROM (" in calendar
 assert "WHERE deadline=? ORDER BY name,kind" in calendar
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
-assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
+assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+)\.\d+'", gradle) is not None
 assert "versionNameSuffix ''" in gradle
 
 db=sqlite3.connect(":memory:")

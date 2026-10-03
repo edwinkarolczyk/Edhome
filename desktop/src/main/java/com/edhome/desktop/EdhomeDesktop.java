@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.6.0.73";
+    private static final String DESKTOP_VERSION = "0.7.0.79";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -92,7 +92,7 @@ public final class EdhomeDesktop extends JFrame {
     private static final String[] NAV = {
         "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
         "Magazyn", "Pomieszczenia", "Mapa", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
-        "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
+        "Ogród", "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
     };
 
     private final JPanel content = new JPanel(new BorderLayout());
@@ -341,6 +341,7 @@ public final class EdhomeDesktop extends JFrame {
         if ("Pojazdy".equals(name)) return tablePage("Pojazdy", "vehicles",
             cols("Nazwa","name","Rejestracja","registration","Przebieg","mileage",
                  "OC do","oc_until","Przegląd do","inspection_until"));
+        if ("Ogród".equals(name)) return garden();
         if ("Odpady".equals(name)) return waste();
         if ("Timery".equals(name)) return tablePage("Timery urządzeń", "device_timers",
             cols("Urządzenie","device_type","Nazwa","title","Start","start_at","Koniec","end_at"));
@@ -354,6 +355,146 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
         if ("Skaner".equals(name)) return scanner();
         return settings();
+    }
+
+    private JComponent garden() {
+        JPanel page=page("Ogród • uprawy");
+        JPanel root=new JPanel(new BorderLayout(10,10));
+        root.setBackground(APP_BG);
+
+        JPanel metrics=new JPanel(new GridLayout(1,4,10,10));
+        metrics.setBackground(APP_BG);
+        metrics.add(metric("Obszary",count("garden_areas")));
+        metrics.add(metric("Nasadzenia",count("garden_plantings")));
+        metrics.add(metric("Zbiory",count("garden_harvests")));
+        metrics.add(metric("Katalog",count("garden_catalog")));
+        root.add(metrics,BorderLayout.NORTH);
+
+        JPanel list=new JPanel();
+        list.setBackground(APP_BG);
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        JsonArray plantings=table("garden_plantings");
+        if(plantings.size()==0) {
+            JLabel empty=new JLabel("Brak nasadzeń. Dodaj je w EDHOME na telefonie.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18,8,18,8));
+            list.add(empty);
+        } else {
+            for(JsonElement element:plantings) {
+                if(!element.isJsonObject()) continue;
+                JsonObject p=element.getAsJsonObject();
+                long id=longValue(p,"id");
+                String plant=gardenPlantName(p);
+                String area=gardenAreaName(longValue(p,"area_id"));
+                String variety=gardenVariety(p);
+                String status=value(p,"status");
+                String season=value(p,"season_year");
+                String planned=gardenDateLine(p,"planned_sow","planned_plant","planned_harvest");
+                String actual=gardenDateLine(p,"actual_sow","actual_plant","actual_harvest");
+                String harvest=gardenHarvestSummary(id);
+
+                JPanel card=new RoundedPanel(APP_SURFACE,18);
+                card.setLayout(new BorderLayout(10,4));
+                card.setBorder(new EmptyBorder(10,12,10,12));
+                JPanel text=new JPanel();
+                text.setOpaque(false);
+                text.setLayout(new BoxLayout(text,BoxLayout.Y_AXIS));
+                JLabel title=new JLabel(plant+(variety.isBlank()?"":" • "+variety));
+                title.setForeground(APP_TEXT);
+                title.setFont(title.getFont().deriveFont(Font.BOLD,16f));
+                text.add(title);
+                JLabel meta=new JLabel(area+" • sezon "+(season.isBlank()?"—":season)
+                    +" • "+(status.isBlank()?"—":status));
+                meta.setForeground(APP_MUTED);
+                text.add(meta);
+                if(!planned.isBlank()) {
+                    JLabel line=new JLabel("Plan: "+planned);
+                    line.setForeground(APP_TEXT); text.add(line);
+                }
+                if(!actual.isBlank()) {
+                    JLabel line=new JLabel("Wykonane: "+actual);
+                    line.setForeground(APP_TEXT); text.add(line);
+                }
+                if(!harvest.isBlank()) {
+                    JLabel line=new JLabel("Zebrano: "+harvest);
+                    line.setForeground(APP_ACCENT); text.add(line);
+                }
+                card.add(text,BorderLayout.CENTER);
+                list.add(card);
+                list.add(Box.createVerticalStrut(8));
+            }
+        }
+        JScrollPane scroll=new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        root.add(scroll,BorderLayout.CENTER);
+
+        JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,6,0));
+        footer.setBackground(APP_BG);
+        JButton reload=actionButton("↻ Pobierz z telefonu");
+        reload.addActionListener(e->reloadFromPhone(reload));
+        footer.add(reload);
+        root.add(footer,BorderLayout.SOUTH);
+        page.add(root,BorderLayout.CENTER);
+        return page;
+    }
+
+    private String gardenPlantName(JsonObject planting) {
+        long catalogId=longValue(planting,"catalog_id");
+        long customId=longValue(planting,"custom_plant_id");
+        JsonObject row=catalogId>0?scannerRowById("garden_catalog",catalogId):
+            scannerRowById("garden_custom_plants",customId);
+        return row==null?"Roślina":value(row,"name");
+    }
+
+    private String gardenVariety(JsonObject planting) {
+        long catalogId=longValue(planting,"catalog_id");
+        long customId=longValue(planting,"custom_plant_id");
+        JsonObject row=catalogId>0?scannerRowById("garden_catalog",catalogId):
+            scannerRowById("garden_custom_plants",customId);
+        return row==null?"":value(row,"variety");
+    }
+
+    private String gardenAreaName(long areaId) {
+        JsonObject area=scannerRowById("garden_areas",areaId);
+        return area==null?"Nieznany obszar":value(area,"name");
+    }
+
+    private static String gardenDateLine(JsonObject row,String sow,String plant,String harvest) {
+        StringBuilder out=new StringBuilder();
+        String a=value(row,sow), b=value(row,plant), c=value(row,harvest);
+        if(!a.isBlank()) out.append("siew ").append(a);
+        if(!b.isBlank()) {
+            if(out.length()>0) out.append(" • ");
+            out.append("sadzenie ").append(b);
+        }
+        if(!c.isBlank()) {
+            if(out.length()>0) out.append(" • ");
+            out.append("zbiór ").append(c);
+        }
+        return out.toString();
+    }
+
+    private String gardenHarvestSummary(long plantingId) {
+        Map<String,Long> sums=new LinkedHashMap<>();
+        for(JsonElement element:table("garden_harvests")) {
+            if(!element.isJsonObject()) continue;
+            JsonObject row=element.getAsJsonObject();
+            if(longValue(row,"planting_id")!=plantingId) continue;
+            String unit=value(row,"unit");
+            long milli=longValue(row,"quantity_milli");
+            sums.put(unit,sums.getOrDefault(unit,0L)+milli);
+        }
+        StringBuilder out=new StringBuilder();
+        for(Map.Entry<String,Long> entry:sums.entrySet()) {
+            if(out.length()>0) out.append(" • ");
+            java.math.BigDecimal value=new java.math.BigDecimal(entry.getValue())
+                .divide(new java.math.BigDecimal("1000")).stripTrailingZeros();
+            out.append(value.toPlainString().replace('.',','))
+                .append(' ').append(entry.getKey());
+        }
+        return out.toString();
     }
 
     private JComponent floorMap() {
@@ -3128,137 +3269,73 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JComponent settings() {
-        JPanel page = page("Ustawienia • połączenie z telefonem");
+        // Ustawienia mają być operacyjne, nie serwisowym pulpitem.
+        // Połączenie, diagnostyka i komplet logów są jedynymi akcjami
+        // potrzebnymi użytkownikowi na co dzień.
+        PREFS.putBoolean("autoConnect", true);
+        PREFS.putBoolean("autoWrite", true);
 
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(APP_BG);
-        GridBagConstraints g = new GridBagConstraints();
-        g.insets = new Insets(6, 6, 6, 6);
-        g.fill = GridBagConstraints.HORIZONTAL;
+        JPanel page = page("Ustawienia • telefon i diagnostyka");
 
-        JTextField ip = new JTextField(PREFS.get("phoneIp", ""), 18);
-        JTextField token = new JTextField(PREFS.get("token", ""), 18);
-        JButton qrPair = new JButton("Pokaż QR do połączenia");
-        JButton pull = new JButton("Pobierz ręcznie przez Wi‑Fi");
-        JButton diagnose = new JButton("Diagnostyka połączenia PC ↔ telefon");
-        JButton downloadAllLogs = new JButton("⬇ Pobierz logi telefonu + Desktop na Pulpit");
-        JButton downloadPhoneLogs = new JButton("Pobierz nowe logi z telefonu");
-        JButton copyDesktopLogs = new JButton("Kopiuj diagnostykę EDHOME Desktop");
-        JButton saveDesktopLogs = new JButton("Zapisz diagnostykę Desktop TXT");
-        JButton importFile = new JButton("Wczytaj backup JSON");
-        JButton updateDesktop = new JButton("↻ Aktualizuj EDHOME Desktop — 1 klik  •  " + DESKTOP_VERSION);
-        JCheckBox autostart = new JCheckBox("Uruchamiaj EDHOME Desktop razem z Windows");
-        autostart.setOpaque(false);
-        autostart.setForeground(APP_TEXT);
-        autostart.setSelected(isAutostartEnabled());
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBackground(APP_BG);
 
-        JCheckBox startMinimized = new JCheckBox("Po starcie Windows uruchamiaj zminimalizowany do zasobnika");
-        startMinimized.setOpaque(false);
-        startMinimized.setForeground(APP_TEXT);
-        startMinimized.setSelected(PREFS.getBoolean("startMinimized", false));
+        JPanel statusCard = new RoundedPanel(APP_SURFACE, 20);
+        statusCard.setLayout(new BoxLayout(statusCard, BoxLayout.Y_AXIS));
+        statusCard.setBorder(new EmptyBorder(16, 18, 16, 18));
+        JLabel title = new JLabel("Połączenie EDHOME");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
+        statusCard.add(title);
+        statusCard.add(Box.createVerticalStrut(6));
 
-        JCheckBox autoConnect = new JCheckBox("Automatycznie pobieraj zmiany z telefonu w tle");
-        autoConnect.setOpaque(false);
-        autoConnect.setForeground(APP_TEXT);
-        autoConnect.setSelected(PREFS.getBoolean("autoConnect", true));
+        String savedHost = PREFS.get("phoneIp", "").trim();
+        String savedToken = PREFS.get("token", "").trim();
+        String stateText;
+        if (savedHost.isBlank() || savedToken.isBlank())
+            stateText = "Nie sparowano telefonu • użyj kodu QR";
+        else if (connected)
+            stateText = "ONLINE • telefon połączony • " + savedHost + ":" + PORT;
+        else
+            stateText = "OFFLINE • sparowano • " + savedHost + ":" + PORT;
+        JLabel pairState = new JLabel(stateText);
+        pairState.setForeground(connected ? APP_ACCENT : APP_MUTED);
+        statusCard.add(pairState);
+        content.add(statusCard);
+        content.add(Box.createVerticalStrut(12));
 
-        JCheckBox autoWrite = new JCheckBox("Automatycznie zapisuj zmiany z PC do telefonu");
-        autoWrite.setOpaque(false);
-        autoWrite.setForeground(APP_TEXT);
-        autoWrite.setSelected(PREFS.getBoolean("autoWrite", true));
-        JLabel help = new JLabel("<html><b>Najszybciej:</b> kliknij „Pokaż QR do połączenia”, "
-            + "a na telefonie EDHOME wybierz <b>Ustawienia → Skanuj QR z ekranu PC</b>.<br>"
-            + "Telefon i PC muszą być w tej samej sieci Wi‑Fi/LAN. "
-            + "Adres i kod poniżej zostają jako awaryjne połączenie ręczne.</html>");
+        JPanel actions = new JPanel(new GridLayout(3, 1, 0, 8));
+        actions.setBackground(APP_BG);
+        JButton qrPair = actionButton("Połącz telefon przez QR");
+        JButton diagnose = actionButton("Sprawdź połączenie PC ↔ telefon");
+        JButton downloadAllLogs =
+            actionButton("Pobierz logi telefonu + Desktop na Pulpit");
+        actions.add(qrPair);
+        actions.add(diagnose);
+        actions.add(downloadAllLogs);
+        content.add(actions);
+        content.add(Box.createVerticalStrut(12));
+
+        JLabel help = new JLabel(
+            "<html><b>Połączenie:</b> PC i telefon muszą być w tej samej sieci "
+          + "Wi‑Fi/LAN. Kliknij „Połącz telefon przez QR”, a w EDHOME Android "
+          + "zeskanuj kod z ekranu komputera.<br><br>"
+          + "<b>Logi:</b> jednym kliknięciem zapisujesz diagnostykę Desktopu "
+          + "oraz nowe logi telefonu na Pulpicie. Log telefonu jest usuwany "
+          + "z aplikacji dopiero po potwierdzonym zapisie na PC.</html>");
         help.setForeground(APP_MUTED);
+        content.add(help);
 
-        g.gridx=0; g.gridy=0; g.weightx=0; form.add(new JLabel("Adres telefonu:"),g);
-        g.gridx=1; g.weightx=1; form.add(ip,g);
-        g.gridx=0; g.gridy=1; g.weightx=0; form.add(new JLabel("Kod parowania:"),g);
-        g.gridx=1; g.weightx=1; form.add(token,g);
-        g.gridx=0; g.gridy=2; g.gridwidth=2; g.weightx=1; form.add(help,g);
-        g.gridy=3; g.gridwidth=2; form.add(qrPair,g);
-        g.gridy=4; g.gridwidth=1; g.weightx=.5; form.add(pull,g);
-        g.gridx=1; form.add(importFile,g);
-        g.gridx=0; g.gridy=5; g.gridwidth=2; g.weightx=1; form.add(diagnose,g);
-        g.gridy=6; form.add(downloadAllLogs,g);
-        g.gridy=7; g.gridwidth=1; g.weightx=.5; form.add(downloadPhoneLogs,g);
-        g.gridx=1; form.add(saveDesktopLogs,g);
-        g.gridx=0; g.gridy=8; g.gridwidth=2; g.weightx=1; form.add(copyDesktopLogs,g);
-        g.gridy=9; form.add(updateDesktop,g);
-        g.gridy=10; form.add(autostart,g);
-        g.gridy=11; form.add(startMinimized,g);
-        g.gridy=12; form.add(autoConnect,g);
-        g.gridy=13; form.add(autoWrite,g);
+        qrPair.addActionListener(e -> showQrPairing(pairState, qrPair));
+        diagnose.addActionListener(e -> diagnosePhoneConnection(
+            PREFS.get("phoneIp", "").trim(),
+            PREFS.get("token", "").trim(), diagnose));
+        downloadAllLogs.addActionListener(e -> saveAllDiagnosticsToDesktop(
+            PREFS.get("phoneIp", "").trim(),
+            PREFS.get("token", "").trim(), downloadAllLogs));
 
-        qrPair.addActionListener(e -> showQrPairing(ip, token, pull));
-        pull.addActionListener(e -> {
-            String host = ip.getText().trim();
-            String secret = token.getText().trim();
-            if (host.isBlank() || secret.isBlank()) {
-                JOptionPane.showMessageDialog(this, "Wpisz adres telefonu i kod parowania.");
-                return;
-            }
-            pullFromPhone(host, secret, pull);
-        });
-
-        diagnose.addActionListener(e ->
-            diagnosePhoneConnection(ip.getText().trim(),
-                token.getText().trim(), diagnose));
-        downloadAllLogs.addActionListener(e ->
-            saveAllDiagnosticsToDesktop(ip.getText().trim(),
-                token.getText().trim(), downloadAllLogs));
-        downloadPhoneLogs.addActionListener(e ->
-            downloadPhoneDiagnostics(ip.getText().trim(),
-                token.getText().trim(), downloadPhoneLogs));
-        copyDesktopLogs.addActionListener(e -> copyDesktopDiagnostics());
-        saveDesktopLogs.addActionListener(e -> saveDesktopDiagnostics());
-        importFile.addActionListener(e -> importBackup());
-        updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
-        autostart.addActionListener(e -> {
-            boolean wanted = autostart.isSelected();
-            try {
-                setAutostartEnabled(wanted);
-                autostart.setSelected(isAutostartEnabled());
-            } catch (Exception error) {
-                autostart.setSelected(!wanted);
-                JOptionPane.showMessageDialog(this,
-                    "Nie udało się zmienić autostartu Windows:\n" + rootMessage(error),
-                    "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-        startMinimized.addActionListener(e ->
-            PREFS.putBoolean("startMinimized", startMinimized.isSelected()));
-        autoConnect.addActionListener(e -> {
-            PREFS.putBoolean("autoConnect", autoConnect.isSelected());
-            if (autoConnect.isSelected()) autoConnectSaved(true);
-        });
-        autoWrite.addActionListener(e -> {
-            PREFS.putBoolean("autoWrite", autoWrite.isSelected());
-            if (autoWrite.isSelected() && dirty) scheduleAutoSave();
-        });
-
-        page.add(form, BorderLayout.NORTH);
-        JTextArea notes = new JTextArea(
-            "Połączenie QR jest jednorazowo potwierdzane losowym kodem i działa tylko w sieci lokalnej.\n"
-          + "Po zeskanowaniu Desktop zapisuje adres telefonu oraz kod lokalnego odczytu i od razu pobiera dane.\n\n"
-          + "Automatyczna wymiana działa w obie strony: telefon → PC jest odświeżany w tle, "
-          + "a zmiany wykonane na PC są automatycznie zapisywane do telefonu po krótkiej chwili.\n"
-          + "Zapis nadal używa kontroli wersji SHA-256 — przy równoczesnej zmianie tych samych danych "
-          + "Desktop nie nadpisze telefonu po cichu.\n\n"
-          + "Kolejny etap:\n"
-          + "• synchronizacja przyrostowa rekordów zamiast pełnego snapshotu,\n"
-          + "• kolejne operacje modułowe poza już dodanym CRUD zadań, zakupów, magazynu i miejsc,\n"
-          + "• pełna zgodność funkcji Android ↔ Desktop.\n"
-          + "Pulpit pokazuje zadania na dziś, zakupy i kafle modułów jak EDHOME.\n"
-          + "Autostart Windows, zasobnik i automatyczne ponowne wykrywanie telefonu po zmianie IP (DHCP) pozostają aktywne.");
-        notes.setBackground(APP_BG);
-        notes.setForeground(APP_MUTED);
-        notes.setEditable(false);
-        notes.setLineWrap(true);
-        notes.setWrapStyleWord(true);
-        notes.setBorder(new EmptyBorder(20, 4, 4, 4));
-        page.add(notes, BorderLayout.CENTER);
+        page.add(content, BorderLayout.NORTH);
         return page;
     }
 
@@ -3349,13 +3426,28 @@ public final class EdhomeDesktop extends JFrame {
                 }
 
                 PhoneDiagnosticsResult phone;
+                String phoneHost = rawHost;
                 try {
-                    phone = new LanClient(rawHost, PORT, secret).diagnostics();
-                } catch (Exception error) {
-                    DesktopDiagnosticLog.error("PHONE_DIAGNOSTICS_DOWNLOAD", error);
-                    summary.append("\n\nTelefon: nie pobrano logów — ")
-                        .append(rootMessage(error));
-                    return summary.toString();
+                    phone = new LanClient(phoneHost, PORT, secret).diagnostics();
+                } catch (Exception first) {
+                    String discovered = LanClient.discover(secret, PORT);
+                    if (discovered == null) {
+                        DesktopDiagnosticLog.error("PHONE_DIAGNOSTICS_DOWNLOAD", first);
+                        summary.append("\n\nTelefon: nie pobrano logów — ")
+                            .append(rootMessage(first));
+                        return summary.toString();
+                    }
+                    phoneHost = discovered;
+                    PREFS.put("phoneIp", discovered);
+                    try {
+                        phone = new LanClient(phoneHost, PORT, secret).diagnostics();
+                    } catch (Exception retry) {
+                        DesktopDiagnosticLog.error(
+                            "PHONE_DIAGNOSTICS_DOWNLOAD", retry);
+                        summary.append("\n\nTelefon: nie pobrano logów — ")
+                            .append(rootMessage(retry));
+                        return summary.toString();
+                    }
                 }
 
                 if (phone == null) {
@@ -3381,7 +3473,7 @@ public final class EdhomeDesktop extends JFrame {
                 summary.append("\n").append(phoneTarget.getFileName());
 
                 try {
-                    boolean cleared = new LanClient(rawHost, PORT, secret)
+                    boolean cleared = new LanClient(phoneHost, PORT, secret)
                         .ackDiagnostics(phone.id);
                     DesktopDiagnosticLog.event(
                         cleared ? "PHONE_DIAGNOSTICS_CLEARED"
@@ -3491,9 +3583,10 @@ public final class EdhomeDesktop extends JFrame {
 
     private void diagnosePhoneConnection(String rawHost, String secret,
             JButton trigger) {
-        if (rawHost == null || rawHost.isBlank()) {
+        if (rawHost == null || rawHost.isBlank()
+                || secret == null || secret.isBlank()) {
             JOptionPane.showMessageDialog(this,
-                "Wpisz adres telefonu z EDHOME Android.");
+                "Telefon nie jest jeszcze sparowany. Połącz go najpierw przez QR.");
             return;
         }
         trigger.setEnabled(false);
@@ -3838,27 +3931,34 @@ public final class EdhomeDesktop extends JFrame {
         System.exit(0);
     }
 
-    private void showQrPairing(JTextField ip, JTextField token, JButton pull) {
+    private void showQrPairing(JLabel pairState, JButton trigger) {
         if (qrPairingSession != null) {
             qrPairingSession.close();
             qrPairingSession = null;
         }
         final JDialog[] dialog = new JDialog[1];
         final JLabel status = new JLabel("Czekam na skan z telefonu…");
+        if (trigger != null) trigger.setEnabled(false);
         try {
             QrPairingSession session = QrPairingSession.start(payload ->
                 SwingUtilities.invokeLater(() -> {
-                    ip.setText(payload.phoneIp);
-                    token.setText(payload.token);
                     PREFS.put("phoneIp", payload.phoneIp);
                     PREFS.put("token", payload.token);
+                    PREFS.putBoolean("autoConnect", true);
+                    PREFS.putBoolean("autoWrite", true);
+                    pairState.setText("Połączono z Androidem " + payload.version
+                        + " • " + payload.phoneIp + ":" + PORT);
+                    pairState.setForeground(APP_ACCENT);
                     status.setText("Połączono z Androidem " + payload.version + ".");
+                    DesktopDiagnosticLog.event("QR_PAIRING_OK",
+                        "host=" + payload.phoneIp + " android=" + payload.version);
                     if (dialog[0] != null) dialog[0].dispose();
                     if (qrPairingSession != null) {
                         qrPairingSession.close();
                         qrPairingSession = null;
                     }
-                    pullFromPhone(payload.phoneIp, payload.token, pull);
+                    if (trigger != null) trigger.setEnabled(true);
+                    pullFromPhone(payload.phoneIp, payload.token, null);
                 }));
             qrPairingSession = session;
 
@@ -3868,13 +3968,17 @@ public final class EdhomeDesktop extends JFrame {
 
             JPanel body = new JPanel(new BorderLayout(10, 10));
             body.setBorder(new EmptyBorder(14, 18, 14, 18));
-            JLabel instructions = new JLabel("<html><b>Na telefonie:</b> EDHOME → Ustawienia "
-                + "→ Skanuj QR z ekranu PC.<br>QR wygasa po 3 minutach i działa wyłącznie w LAN.</html>");
+            JLabel instructions = new JLabel(
+                "<html><b>Na telefonie:</b> EDHOME → Ustawienia "
+              + "→ Skanuj QR z ekranu PC.<br>"
+              + "QR wygasa po 3 minutach i działa wyłącznie w sieci lokalnej."
+              + "</html>");
             body.add(instructions, BorderLayout.NORTH);
             body.add(qr, BorderLayout.CENTER);
             body.add(status, BorderLayout.SOUTH);
 
-            JDialog window = new JDialog(this, "EDHOME • połącz telefon przez QR", false);
+            JDialog window = new JDialog(this,
+                "EDHOME • połącz telefon przez QR", false);
             dialog[0] = window;
             window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
             window.setContentPane(body);
@@ -3887,10 +3991,13 @@ public final class EdhomeDesktop extends JFrame {
                         qrPairingSession.close();
                         qrPairingSession = null;
                     }
+                    if (trigger != null) trigger.setEnabled(true);
                 }
             });
             window.setVisible(true);
         } catch (Exception ex) {
+            if (trigger != null) trigger.setEnabled(true);
+            DesktopDiagnosticLog.error("QR_PAIRING_START", ex);
             JOptionPane.showMessageDialog(this,
                 "Nie można przygotować QR do połączenia:\n" + rootMessage(ex)
                     + "\nSprawdź, czy PC jest połączony z tą samą siecią co telefon.",
@@ -5698,6 +5805,9 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private boolean editRow(JsonObject row, String[][] columns) {
+        JsonObject before=row.deepCopy();
+        boolean storageRow=isDesktopStorageRow(row);
+        boolean storageRowLive=storageRow&&desktopStorageRowIsLive(row);
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(new EmptyBorder(8, 8, 8, 8));
         GridBagConstraints g = new GridBagConstraints();
@@ -5734,10 +5844,25 @@ public final class EdhomeDesktop extends JFrame {
         try {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
                 applyEditor(row, entry.getKey(), entry.getValue());
+            if(storageRow) {
+                if(storageRowLive&&!value(before,"kind").equals(value(row,"kind")))
+                    throw new IllegalArgumentException(
+                        "Typ istniejącej rzeczy/pudełka jest stały ze względu na QR i NFC.");
+                validateDesktopStorageRow(row);
+                boolean moved=!value(before,"parent_box_id").equals(
+                        value(row,"parent_box_id"))
+                    ||!value(before,"place_id").equals(value(row,"place_id"));
+                if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())
+                    throw new IllegalArgumentException(
+                        "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
+                if(storageRowLive&&moved)
+                    appendDesktopStorageMove(row,before);
+            }
             markDirty();
             showSection(current);
             return true;
         } catch (Exception error) {
+            restoreJsonObject(row,before);
             JOptionPane.showMessageDialog(this,
                 "Nie zapisano zmiany: " + rootMessage(error),
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
@@ -5745,8 +5870,118 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    private static void restoreJsonObject(JsonObject target,JsonObject source) {
+        for(String key:new ArrayList<>(target.keySet()))target.remove(key);
+        for(Map.Entry<String,JsonElement> entry:source.entrySet())
+            target.add(entry.getKey(),entry.getValue().deepCopy());
+    }
+
+    private boolean isDesktopStorageRow(JsonObject row) {
+        return row!=null&&row.has("parent_box_id")&&row.has("place_id")
+            &&row.has("created_at")&&row.has("kind");
+    }
+
+    private boolean desktopStorageRowIsLive(JsonObject row) {
+        for(JsonElement element:table("storage_items"))
+            if(element.isJsonObject()&&element.getAsJsonObject()==row)return true;
+        return false;
+    }
+
+    private void validateDesktopStorageRow(JsonObject row) {
+        String kind=value(row,"kind");
+        String parent=value(row,"parent_box_id");
+        String place=value(row,"place_id");
+        String lent=value(row,"lent_to");
+        String lentAt=value(row,"lent_at");
+        if(!"thing".equals(kind)&&!"box".equals(kind))
+            throw new IllegalArgumentException("Wybierz rzecz albo pudełko.");
+        if(!parent.isBlank()&&!place.isBlank())
+            throw new IllegalArgumentException(
+                "Wybierz jedno położenie: pudełko albo miejsce.");
+        if("box".equals(kind)&&!parent.isBlank())
+            throw new IllegalArgumentException(
+                "Pudełko można przypisać tylko do miejsca.");
+        if(!lent.isBlank()&&!"thing".equals(kind))
+            throw new IllegalArgumentException("Tylko rzecz może być wypożyczona.");
+        if(lent.isBlank()!=lentAt.isBlank())
+            throw new IllegalArgumentException(
+                "Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.");
+        if(!parent.isBlank()) {
+            JsonObject box;
+            try{box=scannerRowById("storage_items",Long.parseLong(parent));}
+            catch(Exception invalid){box=null;}
+            if(box==null||!"box".equals(value(box,"kind"))||box==row)
+                throw new IllegalArgumentException(
+                    "Rzecz możesz włożyć tylko do istniejącego pudełka.");
+        }
+        if(!place.isBlank()) {
+            JsonObject destination;
+            try{destination=scannerRowById("places",Long.parseLong(place));}
+            catch(Exception invalid){destination=null;}
+            if(destination==null)
+                throw new IllegalArgumentException(
+                    "Wybrane miejsce już nie istnieje.");
+        }
+    }
+
+    private JComboBox<Choice> storageParentBoxCombo(JsonObject row,String selected) {
+        java.util.List<Choice> options=new ArrayList<>();
+        options.add(new Choice("","—"));
+        if("thing".equals(value(row,"kind"))) {
+            long current=-1;
+            try{current=row.get("id").getAsLong();}catch(Exception ignored){}
+            for(JsonElement element:table("storage_items")) {
+                if(!element.isJsonObject())continue;
+                JsonObject candidate=element.getAsJsonObject();
+                if(!"box".equals(value(candidate,"kind")))continue;
+                long id;
+                try{id=candidate.get("id").getAsLong();}catch(Exception invalid){continue;}
+                if(id==current)continue;
+                options.add(new Choice(Long.toString(id),value(candidate,"name")));
+            }
+        }
+        JComboBox<Choice> combo=new JComboBox<>(options.toArray(new Choice[0]));
+        for(int i=0;i<options.size();i++)
+            if(options.get(i).value.equals(selected))combo.setSelectedIndex(i);
+        return combo;
+    }
+
+    private String desktopStorageLocation(JsonObject row) {
+        String parent=value(row,"parent_box_id");
+        if(!parent.isBlank())
+            return "Pudełko: "+referenceName("storage_items",parent);
+        String place=value(row,"place_id");
+        if(!place.isBlank())return placePath(place);
+        return "Bez miejsca";
+    }
+
+    private void appendDesktopStorageMove(JsonObject row,JsonObject before) {
+        long id=row.get("id").getAsLong();
+        JsonObject event=new JsonObject();
+        event.addProperty("id",nextId("storage_events"));
+        event.addProperty("item_id",id);
+        event.addProperty("name_snapshot",value(row,"name"));
+        event.addProperty("action","moved");
+        String details="EDHOME Desktop: "+desktopStorageLocation(before)
+            +" → "+desktopStorageLocation(row);
+        if(details.length()>300)details=details.substring(0,300);
+        event.addProperty("details",details);
+        event.addProperty("happened_at",System.currentTimeMillis());
+        table("storage_events").add(event);
+    }
+
     private JComponent editorFor(String key, JsonObject row) {
         String raw = value(row, key);
+        if("kind".equals(key)&&isDesktopStorageRow(row)
+                &&desktopStorageRowIsLive(row)) {
+            Choice locked="box".equals(raw)
+                ?new Choice("box","Pudełko"):new Choice("thing","Rzecz");
+            JComboBox<Choice> combo=new JComboBox<>(new Choice[]{locked});
+            combo.setEnabled(false);
+            combo.setToolTipText(
+                "Typ jest stały, ponieważ QR i NFC zapisują typ obiektu.");
+            return combo;
+        }
         java.util.List<Choice> choices = choicesFor(key, row);
         if (!choices.isEmpty()) {
             JComboBox<Choice> box = new JComboBox<>(
@@ -5765,7 +6000,14 @@ public final class EdhomeDesktop extends JFrame {
         if ("place_id".equals(key) || "parent_id".equals(key))
             return referenceCombo("places", raw, true);
         if ("parent_box_id".equals(key))
-            return referenceCombo("storage_items", raw, true);
+            return storageParentBoxCombo(row,raw);
+        if ("lent_to".equals(key)&&isDesktopStorageRow(row)) {
+            JTextField field=new JTextField(raw);
+            field.setEditable(false);
+            field.setToolTipText(
+                "Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.");
+            return field;
+        }
 
         JTextField field = new JTextField();
         if ("amount_grosz".equals(key)) {
@@ -6174,16 +6416,24 @@ public final class EdhomeDesktop extends JFrame {
                     String message = rootMessage(ex);
                     boolean conflict = message.contains("Konflikt")
                         || message.contains("nowsze dane");
-                    boolean firstConflict = conflict && !syncConflictPaused;
-                    if (conflict) syncConflictPaused = true;
+                    boolean rejected = message.contains(
+                        "Telefon odrzucił zmianę rekordową");
+                    boolean pauseRequired=conflict||rejected;
+                    boolean firstPause=pauseRequired&&!syncConflictPaused;
+                    if(pauseRequired)syncConflictPaused=true;
                     connection.setText(conflict
                         ? "KONFLIKT • lokalne zmiany zachowane • auto-sync wstrzymany"
-                        : "ZAPISANO LOKALNIE • synchronizacja oczekuje");
+                        : rejected
+                            ? "BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany"
+                            : "ZAPISANO LOKALNIE • synchronizacja oczekuje");
                     if (automatic) {
-                        if (trayIcon != null && firstConflict)
+                        if (trayIcon != null && firstPause)
                             trayIcon.displayMessage("EDHOME Desktop",
-                                "Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane. "
-                                    + "Automatyczne ponawianie zostało wstrzymane.",
+                                conflict
+                                    ?"Konflikt konkretnego rekordu. Lokalne zmiany zostały zachowane. "
+                                        +"Automatyczne ponawianie zostało wstrzymane."
+                                    :"Telefon odrzucił konkretną zmianę danych. "
+                                        +"Lokalna kopia została zachowana; sprawdź diagnostykę.",
                                 TrayIcon.MessageType.WARNING);
                     } else {
                         JOptionPane.showMessageDialog(EdhomeDesktop.this,
@@ -7032,6 +7282,17 @@ public final class EdhomeDesktop extends JFrame {
             }
             if (response.statusCode() == 401)
                 throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() == 400) {
+                String detail="";
+                try {
+                    JsonObject error=JsonParser.parseString(response.body())
+                        .getAsJsonObject();
+                    detail=error.has("message")
+                        ?error.get("message").getAsString().trim():"";
+                } catch(Exception ignored) { }
+                throw new IOException("Telefon odrzucił zmianę rekordową"
+                    +(detail.isBlank() ? ": HTTP 400." : ": "+detail));
+            }
             if (response.statusCode() != 200)
                 throw new IOException("Telefon odrzucił zmianę rekordową: HTTP "
                     + response.statusCode() + ".");

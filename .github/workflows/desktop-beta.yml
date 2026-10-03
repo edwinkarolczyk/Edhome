@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.6.0.73"
+  DESKTOP_VERSION: "0.7.0.79"
 
 on:
   push:
@@ -12,6 +12,9 @@ on:
       - "build.gradle"
       - ".github/workflows/desktop-beta.yml"
       - "tests/check_desktop_approved_scope.py"
+      - "tests/check_desktop_sync_contract.py"
+      - "tests/check_storage_stabilization_gate.py"
+      - "tests/check_desktop_settings_contract.py"
   workflow_dispatch:
 
 jobs:
@@ -35,6 +38,8 @@ jobs:
         run: |
           python tests/check_desktop_approved_scope.py
           python tests/check_desktop_sync_contract.py
+          python tests/check_storage_stabilization_gate.py
+          python tests/check_desktop_settings_contract.py
       - name: Compile and install distribution
         run: gradle --no-daemon :desktop:clean :desktop:installDist
       - name: Build Windows app image

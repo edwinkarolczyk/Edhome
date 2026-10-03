@@ -24,10 +24,10 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 36;
+    private static final int DB_VERSION = 39;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "calendar", "places", "pantry", "audit",
-        "updates", "backup", "settings", "today"
+        "updates", "backup", "settings", "today", "garden"
     };
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
@@ -71,11 +71,12 @@ final class DataBackup {
             "new_qty", "changed_at"},
         {"task_history", "id", "task_id", "title_snapshot", "completed_at",
             "due_date", "next_due_date", "assignee_id", "assignee_name_snapshot"},
-        {"pantry_barcodes", "id", "pantry_id", "barcode"},
+        {"pantry_barcodes", "id", "pantry_id", "barcode", "units_per_scan"},
         {"pantry_movements", "id", "operation_id", "pantry_id", "barcode",
             "name_snapshot", "kind", "qty", "before_qty", "after_qty", "happened_at"},
         {"pantry_product_details", "id", "pantry_id", "brand", "image_url"},
-        {"pantry_packages", "pantry_id", "unit", "size_milli"},
+        {"pantry_packages", "pantry_id", "unit", "size_milli",
+            "deposit_grosz", "deposit_pending"},
         {"vehicles", "id", "name", "registration", "mileage",
             "oc_until", "inspection_until", "notes",
             "oc_reminder_lead", "inspection_reminder_lead"},
@@ -89,7 +90,26 @@ final class DataBackup {
         {"vehicle_costs", "id", "operation_id", "vehicle_id", "kind",
             "paid_on", "amount_grosz", "note", "paycheck_operation_id"},
         {"vehicle_documents", "id", "operation_id", "vehicle_id", "kind",
-            "title", "document_number", "issued_on", "valid_until", "note", "created_at"}
+            "title", "document_number", "issued_on", "valid_until", "note", "created_at"},
+        {"garden_areas", "id", "name", "kind", "notes", "created_at"},
+        {"garden_catalog", "id", "catalog_key", "name", "latin_name", "variety",
+            "source_label", "source_url", "source_license", "sow_from_month",
+            "sow_to_month", "plant_from_month", "plant_to_month",
+            "harvest_from_month", "harvest_to_month", "spacing_cm", "depth_mm",
+            "sunlight", "watering", "notes", "updated_at"},
+        {"garden_catalog_overrides", "id", "catalog_id", "field_name",
+            "value_text", "updated_at"},
+        {"garden_custom_plants", "id", "name", "latin_name", "variety",
+            "notes", "created_at"},
+        {"garden_plantings", "id", "area_id", "catalog_id", "custom_plant_id",
+            "label", "status", "planned_sow", "actual_sow", "planned_plant",
+            "actual_plant", "planned_harvest", "actual_harvest", "notes", "created_at",
+            "season_year", "finished_at"},
+        {"garden_task_links", "id", "planting_id", "stage", "task_id", "created_at"},
+        {"garden_events", "id", "planting_id", "event_kind", "event_date", "note",
+            "created_at"},
+        {"garden_harvests", "id", "planting_id", "harvested_on", "quantity_milli",
+            "unit", "note", "created_at"}
     };
 
     private DataBackup() { }
@@ -105,6 +125,8 @@ final class DataBackup {
         JSONObject settings = new JSONObject();
         settings.put("household", prefs.getString("household", "Moje gospodarstwo"));
         settings.put("theme", prefs.getString("theme", "Grafitowy"));
+        settings.put("homeInterface",
+            prefs.getString("home_interface_mode", "current"));
         settings.put("homeTileOrder", prefs.getString("home_tile_order", ""));
         settings.put("homeTileOrderV2", HomeTileCatalog.encode(
             HomeTileCatalog.canonical(
@@ -138,6 +160,9 @@ final class DataBackup {
                 tile.put("target", prefs.getString("tile_target_" + id, ""));
             if (prefs.contains("tile_width_" + id))
                 tile.put("width", prefs.getString("tile_width_" + id, "small"));
+            if (prefs.contains(TileArtLibrary.prefKey(id)))
+                tile.put("art", prefs.getString(
+                    TileArtLibrary.prefKey(id),TileArtLibrary.NONE));
             if (tile.length() > 0) appearance.put(id, tile);
         }
         settings.put("homeTileAppearance", appearance);
@@ -147,6 +172,8 @@ final class DataBackup {
             HomeTileLayout.DRAG_KEY, HomeTileLayout.DEFAULT_DRAG_MS));
         settings.put("homeTilePageSlots", HomeTileLayout.pageSlots(prefs.getInt(
             HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS)));
+        settings.put("homeTileFullArt",
+            prefs.getBoolean("home_tile_full_art", true));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
         // Include user-selected small storage photos in the portable JSON backup.
@@ -166,7 +193,7 @@ final class DataBackup {
             catch(NumberFormatException invalid){continue;}
             if(!validStorageIds.contains(id))continue;
             String data=(String)value.getValue();
-            if(data.length()>50000)throw new IllegalStateException(
+            if(data.length()>StorageThumbs.MAX_BASE64_CHARS)throw new IllegalStateException(
                 "Nieprawidłowa miniatura magazynu.");
             JSONObject thumb=new JSONObject();
             thumb.put("itemId",id);
@@ -233,7 +260,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -243,6 +270,10 @@ final class DataBackup {
         JSONObject settings = root.getJSONObject("settings");
         String household = settings.getString("household");
         String theme = settings.getString("theme");
+        String homeInterface=settings.optString("homeInterface","current");
+        if(!java.util.Arrays.asList("current","concept5","concept8")
+                .contains(homeInterface))
+            throw new IllegalArgumentException("Nieprawidłowy interfejs Start.");
         String tileOrder = settings.optString("homeTileOrder", "");
         String tileOrderV2 = settings.has("homeTileOrderV2")
             ? settings.getString("homeTileOrderV2") : null;
@@ -277,6 +308,11 @@ final class DataBackup {
             HomeTileLayout.DEFAULT_DRAG_MS);
         int pageSlots = settings.optInt("homeTilePageSlots",
             HomeTileLayout.DEFAULT_PAGE_SLOTS);
+        boolean fullTileArt=settings.optBoolean("homeTileFullArt",true);
+        if(settings.has("homeTileFullArt")
+                &&!(settings.get("homeTileFullArt") instanceof Boolean))
+            throw new IllegalArgumentException(
+                "Nieprawidłowy tryb pełnego tła kafelków.");
         if (settings.has("homeTilePageSlots")
                 && (!(settings.get("homeTilePageSlots") instanceof Number)
                     || ((Number) settings.get("homeTilePageSlots"))
@@ -335,6 +371,7 @@ final class DataBackup {
         Map<String, String> icons = new HashMap<>();
         Map<String, String> targets = new HashMap<>();
         Map<String, String> widths = new HashMap<>();
+        Map<String, String> arts = new HashMap<>();
         if (appearance != null) {
             java.util.Iterator<String> keys = appearance.keys();
             while (keys.hasNext()) {
@@ -376,6 +413,14 @@ final class DataBackup {
                         throw new IllegalArgumentException("Nieznany rozmiar kafelka.");
                     widths.put(id, width);
                 }
+                if(tile.has("art")){
+                    String art=tile.getString("art");
+                    if(!TileArtLibrary.knownStyle(art)
+                            ||TileArtLibrary.NONE.equals(art))
+                        throw new IllegalArgumentException(
+                            "Nieznany styl grafiki kafelka.");
+                    arts.put(id,art);
+                }
             }
         }
         if (restoredTiles != null) for (String id : restoredTiles) {
@@ -414,6 +459,9 @@ final class DataBackup {
                 || (inputVersion < 33 && "vehicle_documents".equals(definition[0]))
                 || (inputVersion < 34 && "bank_evidence_queue".equals(definition[0]))
                 || (inputVersion < 35 && "nfc_links".equals(definition[0]))
+                || (inputVersion < 37 && definition[0].startsWith("garden_"))
+                || (inputVersion < 38 && ("garden_events".equals(definition[0])
+                    || "garden_harvests".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -490,6 +538,20 @@ final class DataBackup {
                             values.put(key, "other");
                             continue;
                         }
+                        if (inputVersion < 39
+                                && "pantry_barcodes".equals(definition[0])
+                                && "units_per_scan".equals(key)) {
+                            values.put(key, 1);
+                            continue;
+                        }
+                        if (inputVersion < 39
+                                && "pantry_packages".equals(definition[0])) {
+                            if ("deposit_grosz".equals(key)
+                                    || "deposit_pending".equals(key)) {
+                                values.put(key, 0);
+                                continue;
+                            }
+                        }
                         if (inputVersion < 30
                                 && "paycheck_transactions".equals(definition[0])
                                 && "status".equals(key)) {
@@ -526,6 +588,17 @@ final class DataBackup {
                                     || "inspection_reminder_lead".equals(key))) {
                             values.putNull(key);
                             continue;
+                        }
+                        if (inputVersion < 38
+                                && "garden_plantings".equals(definition[0])) {
+                            if ("season_year".equals(key)) {
+                                values.put(key, 0);
+                                continue;
+                            }
+                            if ("finished_at".equals(key)) {
+                                values.put(key, "");
+                                continue;
+                            }
                         }
                         if (inputVersion < 23
                                 && ("shopping_items".equals(definition[0])
@@ -902,6 +975,7 @@ final class DataBackup {
                     if (name == null || name.trim().isEmpty() || name.length() > 160
                             || !("box".equals(kind) || "thing".equals(kind))
                             || box != null && place != null
+                            || "box".equals(kind) && box != null
                             || person != null && (person.trim().isEmpty()
                                 || person.length() > 80 || !"thing".equals(kind))
                             || (person == null) != (lentAt == null)
@@ -953,13 +1027,20 @@ final class DataBackup {
                 }
                 if ("pantry_packages".equals(definition[0])) {
                     Long amount = values.getAsLong("size_milli");
+                    Long deposit = values.getAsLong("deposit_grosz");
+                    Long pending = values.getAsLong("deposit_pending");
                     if (amount == null || !PantryPackageRules.valid(
-                            values.getAsString("unit"), amount))
+                            values.getAsString("unit"), amount)
+                            || deposit == null || deposit < 0 || deposit > 100000
+                            || pending == null || pending < 0 || pending > 100000000L)
                         throw new IllegalArgumentException("Nieprawidłowe opakowanie w kopii.");
                 }
-                if ("pantry_barcodes".equals(definition[0])
-                        && !PantryScanRules.validBarcode(values.getAsString("barcode")))
-                    throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                if ("pantry_barcodes".equals(definition[0])) {
+                    Long units = values.getAsLong("units_per_scan");
+                    if (!PantryScanRules.validBarcode(values.getAsString("barcode"))
+                            || units == null || units < 1 || units > 10000)
+                        throw new IllegalArgumentException("Nieprawidłowy kod w kopii.");
+                }
                 if ("pantry_product_details".equals(definition[0])) {
                     String brand = values.getAsString("brand");
                     String imageUrl = values.getAsString("image_url");
@@ -976,11 +1057,11 @@ final class DataBackup {
                     String operation = values.getAsString("operation_id");
                     if (!PantryScanRules.validBarcode(values.getAsString("barcode"))
                             || operation == null || operation.isEmpty()
-                            || amount == null || amount != 1 || before == null
-                            || after == null || before > 100000000L
-                            || after > 100000000L
-                            || !("ADD".equals(kind) ? after == before + 1
-                                : "TAKE".equals(kind) && after + 1 == before))
+                            || amount == null || amount < 1 || amount > 10000
+                            || before == null || after == null
+                            || before > 100000000L || after > 100000000L
+                            || !("ADD".equals(kind) ? after == before + amount
+                                : "TAKE".equals(kind) && after + amount == before))
                         throw new IllegalArgumentException("Nieprawidłowy ruch w kopii.");
                 }
                 if ("audit_sessions".equals(definition[0])) {
@@ -1390,7 +1471,7 @@ final class DataBackup {
                 String jpeg=thumb.getString("jpegBase64");
                 if(id<=0||!presentStorageIds.contains(id)
                         ||restoredStorageThumbs.containsKey(id)
-                        ||jpeg.length()>50000)
+                        ||jpeg.length()>StorageThumbs.MAX_BASE64_CHARS)
                     throw new IllegalArgumentException(
                         "Nieprawidłowa miniatura rzeczy w kopii.");
                 byte[] bytes;
@@ -1415,8 +1496,11 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            StorageStore.assertIntegrity(database);
+            NfcLinkStore.assertIntegrity(database);
             SyncRecordStore.restoreMetadata(database,
                 inputVersion >= 36 ? syncRecords : null);
+            reserveQrIdentitySequences(database);
             // Deleted shopping rows intentionally leave receipt/price history.
             // After importing into a fresh database, AUTOINCREMENT would only
             // know IDs still present in shopping_items and could reuse an ID
@@ -1437,11 +1521,13 @@ final class DataBackup {
             SharedPreferences.Editor restored = prefs.edit()
                 .putString("household", household)
                 .putString("theme", theme)
+                .putString("home_interface_mode", homeInterface)
                 .putString("home_tile_order", tileOrder)
                 .putString(StorageQrLabels.HISTORY, qrHistory)
                 .putInt(HomeTileLayout.SHORT_KEY, shortHoldMs)
                 .putInt(HomeTileLayout.DRAG_KEY, dragHoldMs)
                 .putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)
+                .putBoolean("home_tile_full_art",fullTileArt)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
@@ -1450,6 +1536,7 @@ final class DataBackup {
                 if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
                         || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
                         || key.startsWith("tile_width_")
+                        || key.startsWith(TileArtLibrary.PREF_PREFIX)
                         || key.startsWith(StorageThumbs.PREFIX))
                     restored.remove(key);
             }
@@ -1466,6 +1553,8 @@ final class DataBackup {
                 restored.putString("tile_target_" + id, targets.get(id));
             for (String id : widths.keySet())
                 restored.putString("tile_width_" + id, widths.get(id));
+            for(String id:arts.keySet())
+                restored.putString(TileArtLibrary.prefKey(id),arts.get(id));
             for(Map.Entry<Long,String> thumb:restoredStorageThumbs.entrySet())
                 restored.putString(StorageThumbs.key(thumb.getKey()),
                     thumb.getValue());
@@ -1474,6 +1563,20 @@ final class DataBackup {
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
+        }
+    }
+
+    private static void reserveQrIdentitySequences(SQLiteDatabase database) {
+        for (String table : new String[]{"storage_items","places"}) {
+            database.execSQL("INSERT INTO sqlite_sequence(name,seq) "
+                + "SELECT ?,0 WHERE NOT EXISTS "
+                + "(SELECT 1 FROM sqlite_sequence WHERE name=?)",
+                new Object[]{table,table});
+            database.execSQL("UPDATE sqlite_sequence SET seq=MAX(seq,"
+                + "COALESCE((SELECT MAX(CAST(row_key AS INTEGER)) FROM sync_records "
+                + "WHERE table_name=? AND row_key NOT LIKE '%:%'),0)) "
+                + "WHERE name=?",
+                new Object[]{table,table});
         }
     }
 
@@ -1519,6 +1622,8 @@ final class DataBackup {
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
             || "changed_at".equals(column) || "size_milli".equals(column)
+            || "units_per_scan".equals(column) || "deposit_grosz".equals(column)
+            || "deposit_pending".equals(column)
             || "shopping_id".equals(column) || "packages".equals(column)
             || "amount_grosz".equals(column)
             || "quantity_milli".equals(column) || "unit_price_grosz".equals(column)
@@ -1532,6 +1637,14 @@ final class DataBackup {
             || "mileage".equals(column) || "vehicle_id".equals(column)
             || "tread_tenths".equals(column) || "mounted".equals(column)
             || "target_id".equals(column)
+            || "area_id".equals(column) || "catalog_id".equals(column)
+            || "custom_plant_id".equals(column) || "planting_id".equals(column)
+            || "sow_from_month".equals(column) || "sow_to_month".equals(column)
+            || "plant_from_month".equals(column) || "plant_to_month".equals(column)
+            || "harvest_from_month".equals(column) || "harvest_to_month".equals(column)
+            || "spacing_cm".equals(column) || "depth_mm".equals(column)
+            || "season_year".equals(column) || "quantity_milli".equals(column)
+            || "updated_at".equals(column)
             || "current".equals(column);
     }
 }

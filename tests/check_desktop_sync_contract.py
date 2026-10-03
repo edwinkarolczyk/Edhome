@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 root = Path(__file__).resolve().parents[1]
 server = (root / "app/src/main/java/com/edwinkarolczyk/edhome/LanSyncServer.java").read_text(encoding="utf-8")
@@ -19,6 +20,12 @@ assert 'PrivatePaycheck' not in server
 assert 'desktop_sync_token' in server
 assert 'isSiteLocalAddress()' in server
 assert 'android ↔ pc' in desktop.lower()
+
+assert '"Ogród"' in desktop
+assert 'return garden();' in desktop
+assert '"garden_plantings"' in desktop
+assert '"garden_harvests"' in desktop
+assert 'gardenHarvestSummary' in desktop
 
 print("desktop sync contract OK")
 
@@ -88,7 +95,7 @@ assert 'DesktopHardwareScanner' in desktop
 assert '"nfc_links"' in desktop
 assert 'DATABASE_MIGRATED_34_TO_35_NFC_LINKS' in main
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
-assert 'DB_VERSION = 36' in backup
+assert 'DB_VERSION = 39' in backup
 assert '{"nfc_links"' in backup
 
 # Incremental record sync v2 + backward-compatible v1.
@@ -110,7 +117,7 @@ assert 'localAddresses()' in desktop
 assert 'LinkedHashSet<String> prefixes' in desktop
 assert 'newFixedThreadPool(96)' in desktop
 assert 'ExecutorCompletionService<String>' in desktop
-assert 'Diagnostyka połączenia PC ↔ telefon' in desktop
+assert 'Sprawdź połączenie PC ↔ telefon' in desktop
 assert 'diagnosePhoneConnection' in desktop
 assert 'TCP ' in desktop and 'BRAK POŁĄCZENIA' in desktop
 assert 'Automatyczne szukanie telefonu' in desktop
@@ -178,11 +185,15 @@ for marker in ('"/diagnostics"', '"/diagnostics/ack"', '"x-edhome-diagnostics-id
 for marker in ('transferId()', 'clearIfTransferred(String expectedId)',
                'MessageDigest.getInstance("SHA-256")'):
     assert marker in phone_log, "Missing safe diagnostics cleanup: " + marker
-for marker in ('Pobierz nowe logi z telefonu', 'downloadPhoneDiagnostics',
+# Current approved UX: one button saves Desktop diagnostics and only new
+# phone diagnostics to the Windows Desktop. The phone log is acknowledged
+# (and removed on Android) only after the PC file was written successfully.
+for marker in ('Pobierz logi telefonu + Desktop na Pulpit',
+               'saveAllDiagnosticsToDesktop',
+               'downloadPhoneDiagnostics',
                'ackDiagnostics', 'X-EDHOME-DIAGNOSTICS-ID',
                'Brak nowych logów diagnostycznych na telefonie',
-               'Kopiuj diagnostykę EDHOME Desktop',
-               'Zapisz diagnostykę Desktop TXT'):
+               'Log telefonu po udanym zapisie został usunięty z aplikacji.'):
     assert marker in desktop, "Missing Desktop diagnostics UX: " + marker
 for marker in ('edhome-desktop.log', 'edhome-desktop.previous.log',
                'MAX_BYTES', 'readFullText()', 'readForClipboard()'):
@@ -232,3 +243,35 @@ assert 'downloadAllLogs.addActionListener' in desktop
 assert 'Files.writeString(desktopTarget, desktopDiagnosticsText()' in desktop
 assert 'Files.writeString(phoneTarget, phone.text' in desktop
 print("desktop one-click diagnostics export contract OK")
+
+# Sync rejection diagnostics: preserve phone validation reason and stop retry loops.
+assert 'DESKTOP_SYNC_PATCH_REJECTED' in server
+assert 'response.statusCode() == 400' in desktop
+assert 'detail=error.has("message")' in desktop
+assert 'Telefon odrzucił zmianę rekordową' in desktop
+assert 'BŁĄD DANYCH • lokalne zmiany zachowane • auto-sync wstrzymany' in desktop
+assert 'boolean rejected = message.contains(' in desktop
+print("desktop patch rejection diagnostics + retry pause OK")
+
+# Storage Desktop editor: same domain rules as Android + move history + rollback.
+assert 'validateDesktopStorageRow(row);' in desktop
+assert 'restoreJsonObject(row,before);' in desktop
+assert 'storageParentBoxCombo(row,raw)' in desktop
+assert 'Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.' in desktop
+assert 'appendDesktopStorageMove(row,before);' in desktop
+assert 'event.addProperty("action","moved")' in desktop
+assert 'Pudełko można przypisać tylko do miejsca.' in desktop
+assert 'Rzecz możesz włożyć tylko do istniejącego pudełka.' in desktop
+desktop_version_line=next(line for line in desktop.splitlines()
+    if 'DESKTOP_VERSION = "' in line)
+desktop_version=desktop_version_line.split('"')[1].split(".")
+assert desktop_version[:3]==["0","7","0"] and int(desktop_version[3]) >= 78
+print("desktop storage validation + move history + rollback OK")
+
+assert 'Typ istniejącej rzeczy/pudełka jest stały ze względu na QR i NFC.' in desktop
+assert 'Typ jest stały, ponieważ QR i NFC zapisują typ obiektu.' in desktop
+print("desktop storage QR/NFC kind identity immutable OK")
+
+assert 'if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())' in desktop
+assert 'Najpierw odnotuj zwrot wypożyczonej rzeczy.' in desktop
+print("desktop storage lent-item move guard OK")

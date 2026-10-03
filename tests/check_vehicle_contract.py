@@ -12,7 +12,7 @@ for token in (
     "VehicleStore.create(database);", "VehicleTyreStore.create(database);",
     "DATABASE_MIGRATED_24_TO_25_TYRE_SETS",
     "DATABASE_MIGRATED_23_TO_24_VEHICLES",
-    'super(context, "edhome-beta-preview.db", null, 36)',
+    'super(context, "edhome-beta-preview.db", null, 39)',
     'case "vehicles": vehicles(); break;',
     'header("Kalendarz • czynności i pojazdy")',
     "oc_until AS deadline", "inspection_until",
@@ -34,7 +34,7 @@ for token in (
 assert "PaycheckStore" not in store and "PantryBarcodeStore" not in store
 assert "VehicleRules.optionalDate" in store
 assert '"vehicles"' in catalog and 'case "vehicles": return "Pojazdy";' in catalog
-assert 'private static final int DB_VERSION = 36;' in backup
+assert 'private static final int DB_VERSION = 39;' in backup
 assert '{"vehicles", "id", "name", "registration", "mileage",' in backup
 assert '{"vehicle_events", "id", "operation_id", "vehicle_id",' in backup
 assert 'inputVersion < 24 && ("vehicles".equals(definition[0])' in backup
@@ -48,11 +48,11 @@ import re
 version_code = re.search(r"\bversionCode\s+(\d+)", gradle)
 version_name = re.search(r"\bversionName\s+'([^']+)'", gradle)
 assert version_code and int(version_code.group(1)) >= 84
-assert version_name and re.fullmatch(r"0\.6\.0\.\d+", version_name.group(1))
+assert version_name and re.fullmatch(r"0\.(?:6\.0|7\.\d+)\.\d+", version_name.group(1))
 assert "versionNameSuffix ''" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
-assert len(context["schema"](db))==33
+assert len(context["schema"](db))==41
 db.execute("INSERT INTO vehicles(id,name,registration,mileage,oc_until,inspection_until,notes) "
            "VALUES(1,'Audi A4','WD 123',150000,'2027-09-01','2027-08-05','')")
 db.execute("INSERT INTO vehicle_events(operation_id,vehicle_id,kind,event_date,mileage,note) "

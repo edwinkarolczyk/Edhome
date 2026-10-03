@@ -12,9 +12,9 @@ assert all('"' + name + '"' in skin for name in
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
-assert 'super(context, "edhome-beta-preview.db", null, 36' in main
-assert 'private static final int DB_VERSION = 36;' in backup
-assert "newVersion > 36" in main
+assert 'super(context, "edhome-beta-preview.db", null, 39' in main
+assert 'private static final int DB_VERSION = 39;' in backup
+assert "newVersion > 39" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
@@ -73,7 +73,7 @@ assert 'TileIcon.ICON_NAMES' in main and 'previewFrame' in main
 assert 'prefs.contains("tile_label_" + id)' in backup
 assert '"pin_hash"' in main and "unlocked = BetaUpdater.isBeta();" in main
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
-assert __import__("re").search(r"versionName '0\.6\.0\.\d+'", gradle) is not None
+assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+)\.\d+'", gradle) is not None
 settings=main.split("private void settings() {",1)[1].split("private void backup() {",1)[0]
 assert 'java.util.Arrays.asList(UiSkin.THEMES)' in settings
 assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings

@@ -1,6 +1,7 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Activity;
+import androidx.core.content.FileProvider;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 import android.app.AlertDialog;
@@ -25,6 +26,9 @@ import android.graphics.Bitmap;
 import android.widget.ImageView;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
@@ -72,7 +76,6 @@ import javax.crypto.spec.PBEKeySpec;
 
 /** Small, deliberately local-only EDHOME beta preview. */
 public final class MainActivity extends Activity {
-    private static boolean releaseFeaturesEnabled() { return true; }
     private static final int EXPORT_DIAGNOSTICS = 1210;
     private static final int IMPORT_BETA_APK = 1211;
     private static final int EXPORT_DATA_BACKUP = 1212;
@@ -87,17 +90,58 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
     private static final int EXPORT_QR_LABELS_PDF = 1222;
     private static final int TAKE_STORAGE_THUMBNAIL = 1223;
+    private static final int IMPORT_GARDEN_CATALOG = 1224;
+    private static final int EXPORT_GARDEN_CATALOG = 1225;
+    private static final int IMPORT_TILE_ART = 1226;
     private static final int STORAGE_CAMERA_PERMISSION = 7134;
     private byte[] pendingQrLabelsPdf;
     private int pendingQrLabelsCount;
     private String pendingCustomTileId;
+    private String pendingTileArtId;
+    private String pendingTileArtTarget;
+    private String pendingTileArtStyle;
+    private int pendingTileArtSpan;
     private long pendingStorageThumbnailId;
+    private Uri pendingStorageCameraUri;
+    private java.io.File pendingStorageCameraFile;
     private String pendingStatementBank;
     private NfcAdapter nfcAdapter;
     private PendingNfcTarget pendingNfcTarget;
     private AlertDialog nfcAssignmentDialog;
     private String scannerNfcStatus = "NFC gotowe";
     private String storageTemporaryKind;
+    private String storageGallerySearch = "";
+    private Long pendingStorageDestinationItemId;
+    private AlertDialog storageDestinationNfcDialog;
+    private String pendingStorageDropKind;
+    private Long pendingStorageDropId;
+    private String pendingStorageDropName;
+    private AlertDialog storageDropDialog;
+    private String pendingStorageScannerOperation;
+    private String pendingStorageScannerKind;
+    private AlertDialog storageScannerOperationDialog;
+    private AlertDialog quickStorageSetupDialog;
+    private TextView quickStorageSetupStatus;
+    private String quickStorageSetupKind;
+    private long quickStorageSetupId;
+    private boolean quickThingBatchActive;
+    private long quickThingBatchCurrentId;
+    private int quickThingBatchCounter;
+    private int quickThingBatchAdded;
+    private AlertDialog quickThingBatchDialog;
+    private boolean quickThingBatchDraftPhoto;
+    private String quickThingBatchPendingThumbnail;
+    private String quickThingBatchTargetKind;
+    private Long quickThingBatchTargetId;
+    private String quickThingBatchTargetName;
+    private boolean quickThingBatchWaitingForTarget;
+    private boolean quickThingBatchQrTargetPending;
+    private String suppressedNfcUid;
+    private long suppressedNfcUntilElapsed;
+    private String lastNfcRawUid;
+    private long lastNfcRawReadElapsed;
+    private boolean scannerNfcArmed;
+    private android.widget.FrameLayout calendarMonthFrame;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -179,10 +223,33 @@ public final class MainActivity extends Activity {
     private boolean homeDragDropped;
     private boolean homeDragFinishQueued;
     private TextView homeDragHint;
+    private static final String HOME_INTERFACE_PREF = "home_interface_mode";
+    private static final String HOME_INTERFACE_CURRENT = "current";
+    private static final String HOME_INTERFACE_CONCEPT5 = "concept5";
+    private static final String HOME_INTERFACE_CONCEPT8 = "concept8";
+
+    private String homeInterfaceMode() {
+        String value = prefs == null ? HOME_INTERFACE_CURRENT
+            : prefs.getString(HOME_INTERFACE_PREF, HOME_INTERFACE_CURRENT);
+        if (!HOME_INTERFACE_CONCEPT5.equals(value)
+                && !HOME_INTERFACE_CONCEPT8.equals(value))
+            return HOME_INTERFACE_CURRENT;
+        return value;
+    }
+
+    private boolean alternateHomeInterface() {
+        return !HOME_INTERFACE_CURRENT.equals(homeInterfaceMode());
+    }
+
+    private boolean structuredInterfaceShell() {
+        return skin.showcase() || alternateHomeInterface();
+    }
     private int homeShowcasePage;
     private int homeShowcaseSlideDirection;
     private float homeShowcaseSwipeDownX, homeShowcaseSwipeDownY;
     private boolean homeShowcaseSwipeTracking;
+    private float calendarMonthSwipeDownX, calendarMonthSwipeDownY;
+    private boolean calendarMonthSwipeTracking;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -190,13 +257,20 @@ public final class MainActivity extends Activity {
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
         ensureFloorPlanShellTileSeeded();
         ensureScannerTileSeeded();
+        ensureStorageShortcutTilesSeeded();
+        ensureGardenTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        int prunedStorageThumbs=StorageThumbs.prune(
+            prefs,db.getWritableDatabase());
+        if(prunedStorageThumbs>0)
+            DiagnosticLog.event("STORAGE_THUMBNAILS_PRUNED",
+                "count="+prunedStorageThumbs);
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-        if (releaseFeaturesEnabled() && (BetaUpdater.isBeta() || unlocked)) {
+        if (BetaUpdater.isBeta()) {
             LanSyncServer.ensureToken(prefs);
             LanSyncService.ensureStarted(this);
         }
@@ -206,7 +280,7 @@ public final class MainActivity extends Activity {
             screen = "timers";
         if (getIntent() != null && getIntent().getBooleanExtra("open_vehicles", false))
             screen = "vehicles";
-        if (releaseFeaturesEnabled() && getIntent() != null
+        if (BetaUpdater.isBeta() && getIntent() != null
                 && getIntent().getBooleanExtra("open_paycheck",false))
             screen="paycheck";
         updater = new BetaUpdater(this);
@@ -231,6 +305,26 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
         root.post(() -> handleNfcIntent(getIntent()));
+        new Thread(() -> {
+            int migrated=TileArtLibrary.migrateExistingCustomArt(this,prefs);
+            int bundled=0;
+            try{
+                bundled=TileArtLibrary.installBundled(this,prefs);
+            }catch(Exception failure){
+                DiagnosticLog.error("HOME_TILE_ART_BUNDLED_INSTALL",failure);
+            }
+            if(migrated>0)
+                DiagnosticLog.event("HOME_TILE_ART_MIGRATED","count="+migrated);
+            if(bundled>0)
+                DiagnosticLog.event("HOME_TILE_ART_BUNDLED_INSTALLED",
+                    "count="+bundled);
+            if(migrated>0||bundled>0){
+                runOnUiThread(() -> {
+                    if(!isFinishing()&&("home".equals(screen)
+                            ||"settings".equals(screen)))render();
+                });
+            }
+        },"edhome-tile-art-install").start();
         // The icon pack is part of the signed APK. Unpack in the background
         // without resetting the home screen, asking for ZIP or changing data.
         new Thread(() -> {
@@ -254,7 +348,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onStart() {
         super.onStart();
-        if (releaseFeaturesEnabled() && !desktopDataReceiverRegistered) {
+        if (BetaUpdater.isBeta() && !desktopDataReceiverRegistered) {
             IntentFilter filter = new IntentFilter(
                 "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -318,15 +412,14 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
         refreshNfcReaderMode();
-        if (releaseFeaturesEnabled() && (BetaUpdater.isBeta() || unlocked))
-            LanSyncService.ensureStarted(this);
+        if (BetaUpdater.isBeta()) LanSyncService.ensureStarted(this);
         if (root != null && !unlocked) render();
         if (privateNeedsRender && root != null) {
             privateNeedsRender = false;
             render();
         }
         if (unlocked && updater != null) updater.start();
-        if (releaseFeaturesEnabled() && bankNotificationPermissionGranted()
+        if (BetaUpdater.isBeta() && bankNotificationPermissionGranted()
                 && BankNotificationHints.enabled(this)
                 && !BankNotificationListener.isConnected()) {
             try {
@@ -346,7 +439,7 @@ public final class MainActivity extends Activity {
             go("timers");
         if (intent != null && intent.getBooleanExtra("open_vehicles", false))
             go("vehicles");
-        if (releaseFeaturesEnabled() && intent != null
+        if (BetaUpdater.isBeta() && intent != null
                 && intent.getBooleanExtra("open_paycheck",false))
             go("paycheck");
         handleNfcIntent(intent);
@@ -370,9 +463,14 @@ public final class MainActivity extends Activity {
             |NfcAdapter.FLAG_READER_NFC_F
             |NfcAdapter.FLAG_READER_NFC_V
             |NfcAdapter.FLAG_READER_NFC_BARCODE
-            |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+            |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
+            |NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS;
         try {
-            nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,null);
+            Bundle options=new Bundle();
+            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY,250);
+            nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,options);
+            DiagnosticLog.event(hasActiveNfcOperation()
+                ?"NFC_READER_EXCLUSIVE":"NFC_READER_AMBIENT");
             return true;
         } catch(Exception error) {
             DiagnosticLog.error("NFC_READER_ENABLE",error);
@@ -386,32 +484,77 @@ public final class MainActivity extends Activity {
         catch(Exception ignored) { }
     }
 
+    private boolean hasActiveNfcOperation() {
+        return pendingNfcTarget!=null
+            || pendingStorageDestinationItemId!=null
+            || pendingStorageDropKind!=null
+            || pendingStorageScannerOperation!=null
+            || quickThingBatchWaitingForTarget
+            || scannerNfcArmed;
+    }
+
     private void refreshNfcReaderMode() {
         if(nfcAdapter==null)return;
-        boolean shouldListen=pendingNfcTarget!=null
-            || "scanner".equals(screen)
-            || prefs==null
-            || prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
+        boolean shouldListen=hasActiveNfcOperation()
+            || (prefs!=null && prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,false));
         if(shouldListen)enableNfcReaderMode();
         else disableNfcReaderMode();
     }
 
+    private void openNfcPhoneSettings() {
+        try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+        catch(Exception unavailable) {
+            startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+        }
+    }
+
+    private void showNfcSystemInterferenceHelp() {
+        new AlertDialog.Builder(this)
+            .setTitle("Telefon reaguje na tag NFC?")
+            .setMessage("Podczas aktywnego skanowania EDHOME używa trybu Reader Mode "
+                +"i przejmuje tag dla aplikacji. Jeśli telefon nadal pokazuje własny "
+                +"komunikat „Wykryto tag NFC”, otwórz ustawienia NFC.\n\n"
+                +"Na Xiaomi / HyperOS sprawdź też opcję „Nie przeszkadzać NFC” "
+                +"w ustawieniach łączności. EDHOME nie może włączyć tej funkcji "
+                +"systemowej samodzielnie.")
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Ustawienia NFC",(d,w)->openNfcPhoneSettings())
+            .setPositiveButton("Spróbuj ponownie",(d,w)->{
+                disableNfcReaderMode();
+                if(enableNfcReaderMode())
+                    DiagnosticLog.event("NFC_READER_REARMED");
+            }).show();
+    }
+
+    private synchronized boolean isRawNfcDuplicate(String uid) {
+        long now=android.os.SystemClock.elapsedRealtime();
+        boolean duplicate=uid!=null && uid.equals(lastNfcRawUid)
+            && now-lastNfcRawReadElapsed<1600L;
+        lastNfcRawUid=uid;
+        lastNfcRawReadElapsed=now;
+        return duplicate;
+    }
+
     private void armScannerNfc() {
         if(nfcAdapter==null) {
+            scannerNfcArmed=false;
             scannerNfcStatus="NFC niedostępne na tym telefonie.";
             return;
         }
         if(!nfcAdapter.isEnabled()) {
+            scannerNfcArmed=false;
             scannerNfcStatus="NFC wyłączone — włącz NFC w telefonie.";
             return;
         }
         // Force a fresh reader session. This also recovers when ReaderMode was
         // disabled by an earlier Activity pause/resume or a system dialog.
         disableNfcReaderMode();
+        scannerNfcArmed=true;
         if(enableNfcReaderMode()) {
-            scannerNfcStatus="NFC aktywne — przyłóż naklejkę albo brelok.";
+            scannerNfcStatus="NFC aktywne tylko w EDHOME — przyłóż naklejkę albo brelok.";
             DiagnosticLog.event("NFC_SCANNER_ARMED");
         } else {
+            scannerNfcArmed=false;
             scannerNfcStatus="Nie udało się uruchomić odczytu NFC. Spróbuj ponownie.";
         }
     }
@@ -421,6 +564,10 @@ public final class MainActivity extends Activity {
         try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
         catch(Exception error) {
             runOnUiThread(() -> alert(error.getMessage()));
+            return;
+        }
+        if(isRawNfcDuplicate(uid)) {
+            DiagnosticLog.event("NFC_RAW_DUPLICATE_IGNORED");
             return;
         }
         runOnUiThread(() -> {
@@ -439,19 +586,45 @@ public final class MainActivity extends Activity {
         if(!NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
                 && !NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
                 && !NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action))return;
+        boolean activeBeforeDispatch=hasActiveNfcOperation();
+        if(activeBeforeDispatch)
+            DiagnosticLog.event("NFC_PLATFORM_DISPATCH_DURING_ACTIVE_SCAN");
         Tag tag;
         if(Build.VERSION.SDK_INT>=33)
             tag=intent.getParcelableExtra(NfcAdapter.EXTRA_TAG,Tag.class);
         else
             tag=(Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
         if(tag!=null)onNfcTagDiscovered(tag);
+        if(activeBeforeDispatch) root.postDelayed(()->{
+            if(hasActiveNfcOperation())showNfcSystemInterferenceHelp();
+        },250L);
     }
 
     private void handleNfcUid(String uid) {
         if(!unlocked)return;
+        if(consumeSuppressedNfcRepeat(uid)) {
+            DiagnosticLog.event("NFC_REPEAT_IGNORED");
+            return;
+        }
         try {
             NfcLinkStore.Link current=NfcLinkStore.findByUid(
                 db.getReadableDatabase(),uid);
+            if(quickThingBatchActive && quickThingBatchWaitingForTarget) {
+                handleQuickThingBatchTargetNfc(current,uid);
+                return;
+            }
+            if(pendingStorageScannerOperation!=null) {
+                handleStorageScannerSourceNfc(current);
+                return;
+            }
+            if(pendingStorageDropKind!=null && pendingStorageDropId!=null) {
+                handleStorageDropSourceNfc(current,uid);
+                return;
+            }
+            if(pendingStorageDestinationItemId!=null) {
+                handleStorageDestinationNfc(current,uid);
+                return;
+            }
             if(pendingNfcTarget!=null) {
                 PendingNfcTarget target=pendingNfcTarget;
                 if(current!=null && current.kind.equals(target.kind)
@@ -478,6 +651,10 @@ public final class MainActivity extends Activity {
                 return;
             }
             if(current==null) {
+                if("scanner".equals(screen)) {
+                    showScannerUnknownNfc(uid);
+                    return;
+                }
                 new AlertDialog.Builder(this)
                     .setTitle("Nieznany tag NFC")
                     .setMessage("UID: "+NfcLinkStore.shortUid(uid)
@@ -494,9 +671,35 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void suppressNfcRepeat(String uid) {
+        if(uid==null||uid.isEmpty())return;
+        suppressedNfcUid=uid;
+        suppressedNfcUntilElapsed=android.os.SystemClock.elapsedRealtime()+1800L;
+    }
+
+    private boolean consumeSuppressedNfcRepeat(String uid) {
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(suppressedNfcUid==null)return false;
+        if(now>=suppressedNfcUntilElapsed) {
+            suppressedNfcUid=null;
+            suppressedNfcUntilElapsed=0L;
+            return false;
+        }
+        return suppressedNfcUid.equals(uid);
+    }
+
+    private boolean isQuickStorageSetupTarget(String kind,long id) {
+        return quickStorageSetupDialog!=null
+            &&quickStorageSetupDialog.isShowing()
+            &&quickStorageSetupKind!=null
+            &&quickStorageSetupKind.equals(kind)
+            &&quickStorageSetupId==id;
+    }
+
     private void finishNfcAssignment(PendingNfcTarget target,String uid) {
         try {
             NfcLinkStore.bind(db.getWritableDatabase(),uid,target.kind,target.id);
+            suppressNfcRepeat(uid);
             pendingNfcTarget=null;
             refreshNfcReaderMode();
             if(nfcAssignmentDialog!=null) {
@@ -505,8 +708,10 @@ public final class MainActivity extends Activity {
             }
             DiagnosticLog.event("NFC_TAG_ASSIGNED");
             render();
-            alert("NFC przypisany\n"+target.name+"\nUID: "
-                +NfcLinkStore.shortUid(uid));
+            refreshQuickStorageSetupStatus(target.kind,target.id);
+            if(!isQuickStorageSetupTarget(target.kind,target.id))
+                alert("NFC przypisany\n"+target.name+"\nUID: "
+                    +NfcLinkStore.shortUid(uid));
         } catch(Exception error) {
             DiagnosticLog.error("NFC_ASSIGN",error);
             alert(error.getMessage()==null?"Nie zapisano NFC.":error.getMessage());
@@ -550,6 +755,7 @@ public final class MainActivity extends Activity {
             .setTitle("Przypisz tag NFC")
             .setMessage(name+"\n\nPrzyłóż teraz naklejkę NFC albo brelok do telefonu. "
                 +"EDHOME zapisze tylko UID — nie nadpisuje pamięci taga.")
+            .setNeutralButton("Problem z NFC",null)
             .setNegativeButton("Anuluj",(d,w)->{
                 pendingNfcTarget=null;
                 refreshNfcReaderMode();
@@ -560,6 +766,8 @@ public final class MainActivity extends Activity {
             refreshNfcReaderMode();
         });
         nfcAssignmentDialog.show();
+        nfcAssignmentDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            .setOnClickListener(v->showNfcSystemInterferenceHelp());
         DiagnosticLog.event("NFC_ASSIGN_WAITING");
     }
 
@@ -713,6 +921,20 @@ public final class MainActivity extends Activity {
         return true;
     }
 
+    private boolean changeCalendarMonth(int delta) {
+        if (delta == 0 || !"calendar".equals(screen)
+                || !"month".equals(calendarView)) return false;
+        YearMonth current = YearMonth.parse(calendarMonth);
+        YearMonth target = current.plusMonths(delta);
+        calendarMonth = target.toString();
+        calendarDay = target.equals(YearMonth.now())
+            ? LocalDate.now().toString() : target.atDay(1).toString();
+        DiagnosticLog.event("CALENDAR_MONTH_SWIPED",
+            "month=" + calendarMonth);
+        render();
+        return true;
+    }
+
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
         if (skin != null && "home".equals(screen)
                 && homeDragSource == null && event.getPointerCount() == 1) {
@@ -736,6 +958,34 @@ public final class MainActivity extends Activity {
                     break;
                 case MotionEvent.ACTION_CANCEL:
                     homeShowcaseSwipeTracking = false;
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (skin != null && "calendar".equals(screen)
+                && "month".equals(calendarView)
+                && event.getPointerCount() == 1) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    calendarMonthSwipeDownX = event.getRawX();
+                    calendarMonthSwipeDownY = event.getRawY();
+                    calendarMonthSwipeTracking = true;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (calendarMonthSwipeTracking) {
+                        float dx = event.getRawX() - calendarMonthSwipeDownX;
+                        float dy = event.getRawY() - calendarMonthSwipeDownY;
+                        calendarMonthSwipeTracking = false;
+                        if (Math.abs(dx) >= dp(56)
+                                && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                            if (changeCalendarMonth(dx < 0 ? 1 : -1))
+                                return true;
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    calendarMonthSwipeTracking = false;
                     break;
                 default:
                     break;
@@ -781,9 +1031,78 @@ public final class MainActivity extends Activity {
             null, skin.panel(this, Color.WHITE, 26)));
     }
 
+    private int semanticTextColor(String kind) {
+        int brightness=(Color.red(surface)*299+Color.green(surface)*587
+            +Color.blue(surface)*114)/1000;
+        boolean light=brightness>155;
+        switch(kind) {
+            case "place":
+                return Color.parseColor(light?"#1565C0":"#64B5F6");
+            case "box":
+                return Color.parseColor(light?"#A65300":"#FFB74D");
+            case "thing":
+                return Color.parseColor(light?"#2E7D32":"#81C784");
+            case "qr":
+                return Color.parseColor(light?"#00838F":"#4DD0E1");
+            case "nfc":
+                return Color.parseColor(light?"#C62828":"#FF6B6B");
+            default:
+                return ink;
+        }
+    }
+
+    private void semanticSpan(android.text.SpannableString styled,String source,
+            String regex,int color) {
+        java.util.regex.Matcher matcher=java.util.regex.Pattern.compile(regex)
+            .matcher(source);
+        while(matcher.find())
+            styled.setSpan(new android.text.style.ForegroundColorSpan(color),
+                matcher.start(),matcher.end(),
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    private CharSequence semanticText(String value) {
+        if(value==null||value.isEmpty())return value==null?"":value;
+        android.text.SpannableString styled=
+            new android.text.SpannableString(value);
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})miejsc(?:e|a|u|em|om|ami|ach)?(?!\\p{L})",
+            semanticTextColor("place"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})pudeł(?:ko|ka|ku|kiem|ek|kom|kami|kach)(?!\\p{L})",
+            semanticTextColor("box"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})rzecz(?:y|ą|ach|ami|om)?(?!\\p{L})",
+            semanticTextColor("thing"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})(?:QR|etykiet\\p{L}*)(?!\\p{L})",
+            semanticTextColor("qr"));
+        semanticSpan(styled,value,
+            "(?iu)(?<!\\p{L})(?:NFC|tag(?:u|iem|i|ów|om|ami|ach)?)(?!\\p{L})",
+            semanticTextColor("nfc"));
+        return styled;
+    }
+
+    private void applySemanticTextTree(View view) {
+        if(view instanceof TextView) {
+            TextView label=(TextView)view;
+            CharSequence current=label.getText();
+            if(current!=null&&current.length()>0)
+                label.setText(semanticText(current.toString()));
+            CharSequence hint=label.getHint();
+            if(hint!=null&&hint.length()>0)
+                label.setHint(semanticText(hint.toString()));
+        }
+        if(view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group=(android.view.ViewGroup)view;
+            for(int i=0;i<group.getChildCount();i++)
+                applySemanticTextTree(group.getChildAt(i));
+        }
+    }
+
     private TextView text(String value, int size, boolean bold) {
         TextView view = new TextView(this);
-        view.setText(value);
+        view.setText(semanticText(value));
         view.setTextSize(size);
         view.setTextColor(ink);
         view.setPadding(0, dp(2), 0, dp(2));
@@ -817,20 +1136,45 @@ public final class MainActivity extends Activity {
         return box;
     }
 
+    private static final String AUTO_ACTION_ROW_TAG =
+        "edhome:auto-action-row";
+    private static final String AUTO_SMALL_ACTION_ROW_TAG =
+        "edhome:auto-small-action-row";
+
     private Button button(String value, Runnable callback) {
         Button b = new Button(this);
-        b.setText(value);
-        b.setTextSize(14);
+        b.setText(semanticText(value));
+        b.setTextSize(13);
         b.setAllCaps(false);
         b.setTextColor(skin.accentInk);
         b.setBackground(skin.pill(this, accent));
         b.setElevation(dp(1));
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
         touchFeedback(b);
-        b.setMinHeight(dp(44));
         b.setOnClickListener(v -> callback.run());
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(2), 0, dp(2));
-        body.addView(b, params);
+
+        boolean compact=value!=null && value.length()<=28;
+        LinearLayout row=null;
+        if(compact && body.getChildCount()>0) {
+            View last=body.getChildAt(body.getChildCount()-1);
+            if(last instanceof LinearLayout
+                    &&AUTO_ACTION_ROW_TAG.equals(last.getTag())
+                    &&((LinearLayout)last).getChildCount()==1)
+                row=(LinearLayout)last;
+        }
+        if(row==null) {
+            row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setTag(AUTO_ACTION_ROW_TAG);
+            body.addView(row,new LinearLayout.LayoutParams(-1,dp(42)));
+        }
+        LinearLayout.LayoutParams params=compact
+            ?new LinearLayout.LayoutParams(0,dp(38),1f)
+            :new LinearLayout.LayoutParams(-1,dp(38));
+        params.setMargins(dp(2),dp(2),dp(2),dp(2));
+        row.addView(b,params);
         return b;
     }
 
@@ -884,7 +1228,10 @@ public final class MainActivity extends Activity {
         }
         DiagnosticLog.event("SCREEN", "id=" + destination);
         if ("scanner".equals(destination)) armScannerNfc();
-        else refreshNfcReaderMode();
+        else {
+            scannerNfcArmed=false;
+            refreshNfcReaderMode();
+        }
         render();
     }
 
@@ -902,7 +1249,7 @@ public final class MainActivity extends Activity {
         else if (privateAuthDialog == null)
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         root.removeAllViews();
-        if (skin.showcase()) root.setBackground(skin.page(this));
+        if (structuredInterfaceShell()) root.setBackground(skin.page(this));
         else root.setBackgroundColor(bg);
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
@@ -911,20 +1258,36 @@ public final class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
         getWindow().getDecorView().setSystemUiVisibility(systemBarFlags);
 
+        boolean fullCalendarMonth = unlocked
+            && "calendar".equals(screen) && "month".equals(calendarView);
+        calendarMonthFrame = null;
         ScrollView scroll = new ScrollView(this);
         pageScroll = scroll;
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
+        if (fullCalendarMonth) {
+            scroll.setVerticalScrollBarEnabled(false);
+            scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        }
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        int pageSide = skin.showcase() ? 12 : 16;
-        body.setPadding(dp(pageSide), dp(skin.showcase() ? 7 : 8),
-            dp(pageSide), dp(12));
+        int pageSide = fullCalendarMonth ? 0 : (structuredInterfaceShell() ? 12 : 16);
+        body.setPadding(dp(pageSide),
+            fullCalendarMonth ? 0 : dp(structuredInterfaceShell() ? 7 : 8),
+            dp(pageSide), fullCalendarMonth ? 0 : dp(12));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams scrollParams = skin.showcase()
+        LinearLayout.LayoutParams scrollParams = structuredInterfaceShell()
             ? new LinearLayout.LayoutParams(-1, 0, 1f)
             : new LinearLayout.LayoutParams(-1, -1);
-        root.addView(scroll, scrollParams);
+        if (fullCalendarMonth) {
+            calendarMonthFrame = new android.widget.FrameLayout(this);
+            calendarMonthFrame.addView(scroll,
+                new android.widget.FrameLayout.LayoutParams(-1, -1));
+            root.addView(calendarMonthFrame,
+                new LinearLayout.LayoutParams(-1, 0, 1f));
+        } else {
+            root.addView(scroll, scrollParams);
+        }
 
         if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();
         else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();
@@ -939,6 +1302,7 @@ public final class MainActivity extends Activity {
                 case "pantry": pantry(); break;
                 case "shopping": shopping(); break;
                 case "places": places(); break;
+                case "garden": garden(); break;
                 case "floorplan": floorPlanShell(); break;
                 case "storage": storage(); break;
                 case "vehicles": vehicles(); break;
@@ -955,7 +1319,12 @@ public final class MainActivity extends Activity {
                 default: home();
             }
         }
-        if (skin.showcase() && unlocked) addShowcaseBottomNavigation();
+        if (unlocked && !("calendar".equals(screen)
+                && "month".equals(calendarView))) {
+            if (alternateHomeInterface()) addConceptBottomNavigation();
+            else if (skin.showcase()) addShowcaseBottomNavigation();
+        }
+        applySemanticTextTree(root);
         renderedScreen=screen;
         // post-layout restore; direct scrollTo before layout is silently lost.
         scroll.post(()->{
@@ -978,7 +1347,7 @@ public final class MainActivity extends Activity {
     }
 
     private void setupPin() {
-        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
+        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
         note("Pierwsze uruchomienie. Ustaw lokalny PIN 4–8 cyfr.");
         EditText a = field("PIN", true);
         EditText b = field("Powtórz PIN", true);
@@ -999,10 +1368,6 @@ public final class MainActivity extends Activity {
                     .putString("pin_hash", Base64.encodeToString(hash, Base64.NO_WRAP))
                     .apply();
                 unlocked = true;
-                if (releaseFeaturesEnabled()) {
-                    LanSyncServer.ensureToken(prefs);
-                    LanSyncService.ensureStarted(this);
-                }
                 DiagnosticLog.event("PIN_SETUP_OK");
                 go("home");
             } catch (Exception error) {
@@ -1010,11 +1375,11 @@ public final class MainActivity extends Activity {
                 alert("Błąd zabezpieczenia PIN. Spróbuj ponownie.");
             }
         });
-        note("Zachowaj PIN w bezpiecznym miejscu i wykonuj regularne kopie danych.");
+        note("To tylko prototyp blokady. Brak odzyskiwania PIN i kopii danych — używaj danych testowych.");
     }
 
     private void unlockPin() {
-        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
+        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
         note("Odblokuj lokalną instalację.");
         EditText input = field("PIN", true);
         button("Odblokuj", () -> {
@@ -1024,10 +1389,6 @@ public final class MainActivity extends Activity {
                     prefs.getString("pin_salt", ""));
                 if (MessageDigest.isEqual(expected, actual)) {
                     unlocked = true;
-                    if (releaseFeaturesEnabled()) {
-                        LanSyncServer.ensureToken(prefs);
-                        LanSyncService.ensureStarted(this);
-                    }
                     DiagnosticLog.event("PIN_UNLOCK_OK");
                     go("home");
                 } else {
@@ -1094,7 +1455,7 @@ public final class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        if (skin.showcase()) {
+        if (structuredInterfaceShell()) {
             LinearLayout brand = new LinearLayout(this);
             brand.setOrientation(LinearLayout.VERTICAL);
             TextView appTitle = text("⌂  edhome", 21, true);
@@ -1132,13 +1493,14 @@ public final class MainActivity extends Activity {
             bellParams.setMargins(0, 0, dp(7), 0);
             row.addView(bell, bellParams);
         } else {
-            TextView appTitle = text(BuildConfig.DIAGNOSTICS_ENABLED
-                ? "EDHOME  •  BETA" : "EDHOME", 21, true);
+            TextView appTitle = text("EDHOME  •  "
+                + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
+                21, true);
             row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         }
 
-        if (releaseFeaturesEnabled()) {
-            TextView badge = text("", skin.showcase() ? 13 : 13, true);
+        if (BetaUpdater.isBeta()) {
+            TextView badge = text("", structuredInterfaceShell() ? 13 : 13, true);
             badge.setGravity(Gravity.CENTER);
             badge.setPadding(0, 0, 0, 0);
             badge.setClickable(true);
@@ -1171,7 +1533,7 @@ public final class MainActivity extends Activity {
                         badge.setText("●  ⇄ PC");
                         pulse = false;
                     }
-                    badge.setTextColor(skin.showcase() ? ink : (online
+                    badge.setTextColor(structuredInterfaceShell() ? ink : (online
                         ? desktopConnectionGreen() : desktopConnectionRed()));
                     badge.setContentDescription(syncing
                         ? "EDHOME Desktop synchronizuje dane."
@@ -1222,6 +1584,291 @@ public final class MainActivity extends Activity {
         item.setFocusable(true);
         touchFeedback(item);
         return item;
+    }
+
+    private void conceptSectionTitle(String label) {
+        TextView heading=text(label,19,true);
+        heading.setPadding(dp(2),dp(10),dp(2),dp(6));
+        body.addView(heading,new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    private int conceptCount(String table) {
+        if (!java.util.Arrays.asList("storage_items","places").contains(table))
+            return 0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM "+table,null)) {
+            return c.moveToFirst()?c.getInt(0):0;
+        } catch(Exception ignored) { return 0; }
+    }
+
+    private TextView conceptCell(String symbol,String title,String subtitle,
+            Runnable action) {
+        TextView item=text(symbol+"\n"+title+"\n"+subtitle,13,true);
+        item.setGravity(Gravity.CENTER);
+        item.setMinHeight(dp(92));
+        item.setPadding(dp(7),dp(9),dp(7),dp(9));
+        item.setBackground(skin.panel(this,surface,22));
+        item.setOnClickListener(v->action.run());
+        item.setClickable(true);
+        item.setFocusable(true);
+        touchFeedback(item);
+        return item;
+    }
+
+    private void conceptActionRow() {
+        conceptSectionTitle("Szybko dodaj");
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        body.addView(row,new LinearLayout.LayoutParams(-1,dp(84)));
+        String[][] actions={
+            {"◇","Rzecz"},{"✓","Zadanie"},{"●","Wydatek"},{"▣","QR / NFC"}
+        };
+        Runnable[] callbacks={
+            this::quickAddStorageThing,
+            ()->editTask(null,"","","once",1),
+            ()->go("paycheck"),
+            ()->go("scanner")
+        };
+        for(int i=0;i<actions.length;i++) {
+            TextView button=text(actions[i][0]+"\n"+actions[i][1],11,true);
+            button.setGravity(Gravity.CENTER);
+            button.setBackground(skin.panel(this,surface,20));
+            final Runnable callback=callbacks[i];
+            button.setOnClickListener(v->callback.run());
+            touchFeedback(button);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(76),1f);
+            lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+            row.addView(button,lp);
+        }
+    }
+
+    private void conceptTodayCard(int limit) {
+        conceptSectionTitle("Dzisiaj");
+        LinearLayout today=card();
+        String date=LocalDate.now().format(DateTimeFormatter.ofPattern(
+            "EEEE, d MMMM",Locale.forLanguageTag("pl-PL")));
+        TextView dateView=text(date,13,false);
+        dateView.setTextColor(subdued);
+        today.addView(dateView);
+        int shown=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT title,COALESCE(remind_time,'') FROM tasks "
+                    +"WHERE done=0 AND due_date=? "
+                    +"ORDER BY CASE priority WHEN 'urgent' THEN 0 "
+                    +"WHEN 'high' THEN 1 ELSE 2 END,id LIMIT ?",
+                new String[]{LocalDate.now().toString(),Integer.toString(limit)})) {
+            while(c.moveToNext()) {
+                String time=c.getString(1);
+                TextView task=text("○  "+(time.isEmpty()?"":time+"  ")+c.getString(0),
+                    14,false);
+                task.setMinHeight(dp(40));
+                task.setGravity(Gravity.CENTER_VERTICAL);
+                task.setOnClickListener(v->{
+                    tasksFilter="today";
+                    tasksPage=0;
+                    go("tasks");
+                });
+                touchFeedback(task);
+                today.addView(task);
+                shown++;
+            }
+        }
+        if(shown==0) {
+            TextView empty=text("Brak zadań z terminem na dziś.",14,false);
+            empty.setTextColor(subdued);
+            today.addView(empty);
+        }
+        smallButton(today,"Zobacz cały dzień",()->{
+            tasksFilter="today";
+            tasksPage=0;
+            go("tasks");
+        });
+    }
+
+    private void conceptModuleList(boolean compact) {
+        conceptSectionTitle("Moduły");
+        String[][] modules={
+            {"⌂","Mój dom","Miejsca i pomieszczenia","places"},
+            {"◇","Magazyn","Rzeczy, pudełka i lokalizacje","storage"},
+            {"✓","Zadania","Czynności i powtarzalne obowiązki","tasks"},
+            {"□","Kalendarz","Terminy i przypomnienia","calendar"},
+            {"●","PayCheck","Finanse domowe","paycheck"},
+            {"▤","Spiżarnia","Produkty i zapasy","pantry"},
+            {"≡","Lista zakupów","Zakupy do zrobienia","shopping"},
+            {"♢","Pojazdy","Serwis i dokumenty","vehicles"},
+            {"♲","Odpady","Harmonogram wywozu","waste"},
+            {"✿","Ogród","Rośliny i prace","garden"},
+            {"▱","Plan domu","Pomieszczenia i układ","floorplan"},
+            {"⚙","Ustawienia","Wygląd, synchronizacja i dane","settings"}
+        };
+        if(!compact) {
+            LinearLayout grid=new LinearLayout(this);
+            grid.setOrientation(LinearLayout.VERTICAL);
+            body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+            for(int i=0;i<modules.length;i+=2) {
+                LinearLayout row=new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                grid.addView(row,new LinearLayout.LayoutParams(-1,dp(98)));
+                for(int j=i;j<Math.min(i+2,modules.length);j++) {
+                    String[] item=modules[j];
+                    TextView cell=conceptCell(item[0],item[1],item[2],
+                        ()->go(item[3]));
+                    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(92),1f);
+                    lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+                    row.addView(cell,lp);
+                }
+            }
+        } else {
+            LinearLayout list=card();
+            for(String[] item:modules) {
+                TextView row=text(item[0]+"   "+item[1]+"\n      "+item[2],14,true);
+                row.setMinHeight(dp(52));
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setOnClickListener(v->go(item[3]));
+                touchFeedback(row);
+                list.addView(row);
+            }
+        }
+    }
+
+    private void homeConcept5() {
+        appTitleWithConnection();
+        String date=LocalDate.now().format(DateTimeFormatter.ofPattern(
+            "EEEE, d MMMM yyyy",Locale.forLanguageTag("pl-PL")));
+        TextView day=text(date,13,false);
+        day.setTextColor(subdued);
+        body.addView(day);
+
+        LinearLayout stats=new LinearLayout(this);
+        stats.setOrientation(LinearLayout.HORIZONTAL);
+        body.addView(stats,new LinearLayout.LayoutParams(-1,dp(92)));
+        int things=conceptCount("storage_items");
+        int places=conceptCount("places");
+        String[][] values={
+            {"✓",Integer.toString(db.openTasks()),"Zadania","tasks"},
+            {"! ",Integer.toString(db.overdueTasks()),"Zaległe","tasks"},
+            {"◇",Integer.toString(things),"Magazyn","storage"},
+            {"⌂",Integer.toString(places),"Miejsca","places"}
+        };
+        for(String[] value:values) {
+            TextView stat=conceptCell(value[0],value[1],value[2],()->go(value[3]));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(86),1f);
+            lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+            stats.addView(stat,lp);
+        }
+
+        conceptTodayCard(4);
+
+        LinearLayout focus=new LinearLayout(this);
+        focus.setOrientation(LinearLayout.HORIZONTAL);
+        body.addView(focus,new LinearLayout.LayoutParams(-1,dp(112)));
+        TextView finances=conceptCell("●","PayCheck","Finanse i potwierdzenia",
+            ()->go("paycheck"));
+        TextView storage=conceptCell("◇","Magazyn",
+            things+" rzeczy / pudełek",()->go("storage"));
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,dp(106),1f);
+        left.setMargins(dp(2),dp(2),dp(2),dp(2));
+        focus.addView(finances,left);
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,dp(106),1f);
+        right.setMargins(dp(2),dp(2),dp(2),dp(2));
+        focus.addView(storage,right);
+
+        conceptActionRow();
+        conceptModuleList(true);
+    }
+
+    private void homeConcept8() {
+        appTitleWithConnection();
+        conceptTodayCard(3);
+        conceptActionRow();
+
+        conceptSectionTitle("Najważniejsze");
+        LinearLayout important=new LinearLayout(this);
+        important.setOrientation(LinearLayout.VERTICAL);
+        body.addView(important,new LinearLayout.LayoutParams(-1,-2));
+        String[][] items={
+            {"◇","Magazyn",conceptCount("storage_items")+" obiektów","storage"},
+            {"□","Kalendarz","Plan dnia i terminy","calendar"},
+            {"●","PayCheck","Finanse domowe","paycheck"},
+            {"♢","Pojazdy","Przeglądy i dokumenty","vehicles"},
+            {"♲","Odpady","Harmonogram odbioru","waste"},
+            {"✓","Zadania",db.openTasks()+" otwartych","tasks"}
+        };
+        for(int i=0;i<items.length;i+=2) {
+            LinearLayout row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            important.addView(row,new LinearLayout.LayoutParams(-1,dp(96)));
+            for(int j=i;j<Math.min(i+2,items.length);j++) {
+                String[] item=items[j];
+                TextView cell=conceptCell(item[0],item[1],item[2],
+                    ()->go(item[3]));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(90),1f);
+                lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+                row.addView(cell,lp);
+            }
+        }
+        conceptModuleList(true);
+    }
+
+    private void showConceptAdd() {
+        final String[] labels={
+            "Szybko dodaj rzecz","Szybko dodaj pudełko","Dodaj zadanie",
+            "Lista zakupów","PayCheck / wydatek","Skan QR / NFC"
+        };
+        new AlertDialog.Builder(this).setTitle("Dodaj")
+            .setItems(labels,(dialog,which)->{
+                if(which==0)quickAddStorageThing();
+                else if(which==1)quickAddStorageBox();
+                else if(which==2)editTask(null,"","","once",1);
+                else if(which==3)go("shopping");
+                else if(which==4)go("paycheck");
+                else go("scanner");
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void addConceptBottomNavigation() {
+        LinearLayout nav=new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setPadding(dp(6),dp(5),dp(6),dp(5));
+        nav.setBackground(skin.panel(this,surface,0));
+        nav.setElevation(dp(10));
+
+        nav.addView(showcaseNavItem("⌂","Start","home".equals(screen),
+            ()->go("home")),new LinearLayout.LayoutParams(0,dp(58),1f));
+
+        if(HOME_INTERFACE_CONCEPT5.equals(homeInterfaceMode()))
+            nav.addView(showcaseNavItem("◇","Magazyn","storage".equals(screen),
+                ()->go("storage")),new LinearLayout.LayoutParams(0,dp(58),1f));
+        else
+            nav.addView(showcaseNavItem("⌂","Mój dom","places".equals(screen),
+                ()->go("places")),new LinearLayout.LayoutParams(0,dp(58),1f));
+
+        LinearLayout addCell=new LinearLayout(this);
+        addCell.setGravity(Gravity.CENTER);
+        TextView add=showcaseNavItem("+","Dodaj",false,this::showConceptAdd);
+        add.setTextColor(skin.buttonForeground);
+        GradientDrawable circle=new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(accent);
+        circle.setStroke(dp(1),skin.outline);
+        add.setBackground(circle);
+        addCell.addView(add,new LinearLayout.LayoutParams(dp(58),dp(58)));
+        nav.addView(addCell,new LinearLayout.LayoutParams(0,dp(60),1f));
+
+        if(HOME_INTERFACE_CONCEPT5.equals(homeInterfaceMode())) {
+            nav.addView(showcaseNavItem("□","Kalendarz","calendar".equals(screen),
+                ()->go("calendar")),new LinearLayout.LayoutParams(0,dp(58),1f));
+            nav.addView(showcaseNavItem("☰","Więcej","settings".equals(screen),
+                this::showShowcaseMore),new LinearLayout.LayoutParams(0,dp(58),1f));
+        } else {
+            nav.addView(showcaseNavItem("●","Finanse","paycheck".equals(screen),
+                ()->go("paycheck")),new LinearLayout.LayoutParams(0,dp(58),1f));
+            nav.addView(showcaseNavItem("□","Kalendarz","calendar".equals(screen),
+                ()->go("calendar")),new LinearLayout.LayoutParams(0,dp(58),1f));
+        }
+        root.addView(nav,new LinearLayout.LayoutParams(-1,dp(70)));
     }
 
     private void addShowcaseBottomNavigation() {
@@ -1284,7 +1931,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showShowcaseMore() {
-        final String[] labels = releaseFeaturesEnabled()
+        final String[] labels = BetaUpdater.isBeta()
             ? new String[]{"Skaner", "Aktualizacje", "Kopia danych",
                 "Ustawienia", "Diagnostyka"}
             : new String[]{"Skaner", "Aktualizacje", "Kopia danych", "Ustawienia"};
@@ -1443,7 +2090,27 @@ public final class MainActivity extends Activity {
         return moveHomeTileAtIndex(id, target);
     }
 
+    private TextView homeTileCaption(LinearLayout tile) {
+        if(tile==null)return null;
+        for(int i=tile.getChildCount()-1;i>=0;i--) {
+            View child=tile.getChildAt(i);
+            if(child instanceof TextView
+                    && "home_caption".equals(child.getTag()))
+                return (TextView)child;
+        }
+        return null;
+    }
+
     private void home() {
+        String interfaceMode = homeInterfaceMode();
+        if (HOME_INTERFACE_CONCEPT5.equals(interfaceMode)) {
+            homeConcept5();
+            return;
+        }
+        if (HOME_INTERFACE_CONCEPT8.equals(interfaceMode)) {
+            homeConcept8();
+            return;
+        }
         appTitleWithConnection();
         int overdue = db.overdueTasks();
         if (skin.showcase()) {
@@ -1513,7 +2180,7 @@ public final class MainActivity extends Activity {
             ? (skin.showcase()
                 ? "✥  TRYB UKŁADU • przeciągnij • krawędź ekranu = zmień stronę • ⋮⋮: menu"
                 : "✥  TRYB UKŁADU • 1 palec: przesuń • 2 palce: rozmiar")
-            : "✥  Krócej: menu • dłużej: przeciągnij • przesuń ekran w bok", 13, false);
+            : "✥  Przesuń ekran w bok • wybierz „Układ”, aby przenosić kafelki", 13, false);
         editHint.setTextColor(homeEditMode ? accent : ink);
         editHint.setMinHeight(dp(34));
         editHint.setGravity(Gravity.CENTER_VERTICAL);
@@ -1579,11 +2246,11 @@ public final class MainActivity extends Activity {
             LinearLayout tile = homeTile(tiles, tileId);
             tile.setTag(tileId);
             homeTileViews.put(tileId, tile);
-            TextView caption = (TextView) tile.getChildAt(tile.getChildCount() - 1);
+            TextView caption = homeTileCaption(tile);
             String visibleLabel = skin.showcase() && !homeEditMode
                 ? showcaseHomeLabel(homeTileTarget(tileId))
                 : homeTileLabel(tileId);
-            caption.setText(visibleLabel);
+            if(caption!=null)caption.setText(visibleLabel);
             tile.setContentDescription(visibleLabel
                 + ". Dotknij, aby otworzyć. Krócej przytrzymaj dla menu; "
                 + "dłużej dla przeciągania. Czasy: Ustawienia.");
@@ -1808,7 +2475,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> order = HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            releaseFeaturesEnabled());
+            BetaUpdater.isBeta());
         boolean present = false;
         for (String tileId : order) {
             String target = prefs.getString("tile_target_" + tileId,
@@ -1827,12 +2494,25 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("FLOORPLAN_SHELL_TILE_SEEDED");
     }
 
+    private void ensureGardenTileSeeded() {
+        if (prefs.getBoolean("garden_tile_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        if (!order.contains("garden")) order.add("garden");
+        SharedPreferences.Editor edit=prefs.edit()
+            .putBoolean("garden_tile_seeded_v1",true)
+            .putString(HomeTileCatalog.ORDER_KEY,HomeTileCatalog.encode(order));
+        if(edit.commit()) DiagnosticLog.event("GARDEN_TILE_SEEDED");
+    }
+
     private void ensureScannerTileSeeded() {
         if (prefs.getBoolean("scanner_tile_seeded_v1", false)) return;
         java.util.List<String> order = HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            releaseFeaturesEnabled());
+            BetaUpdater.isBeta());
         boolean present = false;
         for (String tileId : order) {
             String target = prefs.getString("tile_target_" + tileId,
@@ -1855,10 +2535,31 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("SCANNER_TILE_SEEDED");
     }
 
+    private void ensureStorageShortcutTilesSeeded() {
+        if (prefs.getBoolean("storage_shortcuts_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            BetaUpdater.isBeta());
+        int insertAt = order.indexOf("storage");
+        insertAt = insertAt < 0 ? order.size() : insertAt + 1;
+        if (!order.contains("storage_things")) {
+            order.add(insertAt, "storage_things");
+            insertAt++;
+        }
+        if (!order.contains("storage_boxes"))
+            order.add(insertAt, "storage_boxes");
+        boolean ok = prefs.edit()
+            .putBoolean("storage_shortcuts_seeded_v1", true)
+            .putString(HomeTileCatalog.ORDER_KEY, HomeTileCatalog.encode(order))
+            .commit();
+        if (ok) DiagnosticLog.event("STORAGE_SHORTCUT_TILES_SEEDED");
+    }
+
     private String homeTileTarget(String id) {
         String target = prefs.getString("tile_target_" + id,
             HomeTileCatalog.defaultTarget(id));
-        return HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
+        return HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
             ? target : "tasks";
     }
 
@@ -1886,6 +2587,12 @@ public final class MainActivity extends Activity {
             go("tasks");
             return;
         }
+        if ("storage_things".equals(target) || "storage_boxes".equals(target)) {
+            storageTemporaryKind = "storage_things".equals(target)
+                ? "thing" : "box";
+            go("storage");
+            return;
+        }
         go(target);
     }
 
@@ -1904,7 +2611,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> names = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
+            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
                     || homeTargetAlreadyAdded(target,null))
                 continue;
             targets.add(target);
@@ -1982,7 +2689,8 @@ public final class MainActivity extends Activity {
                 HomeTileCatalog.encode(hidden))
             .remove("tile_target_" + id).remove("tile_label_" + id)
             .remove("tile_tint_" + id).remove("tile_icon_" + id)
-            .remove("tile_width_" + id).commit();
+            .remove("tile_width_" + id)
+            .remove(TileArtLibrary.prefKey(id)).commit();
         if (!saved) { alert("Nie można usunąć skrótu."); return; }
         DiagnosticLog.event("HOME_TILE_REMOVED");
         render();
@@ -1996,7 +2704,9 @@ public final class MainActivity extends Activity {
     }
 
     private boolean beginHomeDrag(View tile, String id) {
-        if (skin.showcase() && !homeEditMode) return false;
+        // Zwykłe przewijanie nigdy nie może rozpocząć przenoszenia kafelka.
+        // Najpierw użytkownik świadomie włącza tryb „Układ”.
+        if (!homeEditMode) return false;
         if (!homeTileOrder().contains(id)
                 || homeTileGrid == null || homeDragSource != null) return false;
         homeDragOrder = homeTileOrder();
@@ -2343,6 +3053,62 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("HOME_TILE_ACTIONS_OPENED");
     }
 
+    private boolean homeFullTileArtEnabled() {
+        return prefs.getBoolean("home_tile_full_art", true);
+    }
+
+    private Bitmap homeFullTileBitmap(String iconId) {
+        // Zwykłe ikony AI 3D mają format 192x192 i nigdy nie są tłem.
+        // Pełne tło dostaje wyłącznie grafika faktycznie zaimportowana
+        // jako własny kafelek PNG/WebP.
+        if (TileCustomImage.available(this, iconId))
+            return TileCustomImage.bitmap(this, iconId);
+        return null;
+    }
+
+    private Drawable homeFullTileBackground(Drawable base, Bitmap image) {
+        // CENTER_CROP bez rozciągania proporcji. Tło jest przycinane do
+        // zaokrąglonego kafelka, bez deformowania proporcji grafiki.
+        return new Drawable() {
+            private final android.graphics.Paint artPaint =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG
+                    |android.graphics.Paint.FILTER_BITMAP_FLAG);
+            @Override public void draw(android.graphics.Canvas canvas) {
+                android.graphics.Rect bounds=getBounds();
+                base.setBounds(bounds);
+                base.draw(canvas);
+                if(image==null||image.getWidth()<1||image.getHeight()<1)return;
+                float scale=Math.max(
+                    bounds.width()/(float)image.getWidth(),
+                    bounds.height()/(float)image.getHeight());
+                float width=image.getWidth()*scale;
+                float height=image.getHeight()*scale;
+                float left=bounds.left+(bounds.width()-width)/2f;
+                float top=bounds.top+(bounds.height()-height)/2f;
+                android.graphics.RectF destination=new android.graphics.RectF(
+                    left,top,left+width,top+height);
+                android.graphics.Path clip=new android.graphics.Path();
+                float radius=dp(24);
+                clip.addRoundRect(new android.graphics.RectF(bounds),
+                    radius,radius,android.graphics.Path.Direction.CW);
+                int save=canvas.save();
+                canvas.clipPath(clip);
+                canvas.drawBitmap(image,null,destination,artPaint);
+                canvas.restoreToCount(save);
+            }
+            @Override public void setAlpha(int alpha) {
+                artPaint.setAlpha(alpha);
+            }
+            @Override public void setColorFilter(
+                    android.graphics.ColorFilter filter) {
+                artPaint.setColorFilter(filter);
+            }
+            @Override public int getOpacity() {
+                return android.graphics.PixelFormat.TRANSLUCENT;
+            }
+        };
+    }
+
     private String defaultTileIcon(String target) {
         return "ai3d".equals(prefs.getString("icon_style", "standard"))
             && IconPack3D.installed(this) ? IconPack3D.defaultFor(target)
@@ -2418,6 +3184,89 @@ public final class MainActivity extends Activity {
         catch (Exception failed) { alert("Nie można otworzyć wyboru paczki ZIP."); }
     }
 
+    private void refreshHomeTileEditorPreview(LinearLayout frame,
+            String target,String caption,String iconId,String tintCode,
+            String artStyle,int span) {
+        frame.removeAllViews();
+        if(span!=2)span=1;
+        int viewport=getResources().getDisplayMetrics().widthPixels;
+        float density=getResources().getDisplayMetrics().density;
+        int gap=HomeTileLayout.HOME_GAP_DP;
+        int contentWidth=Math.max(dp(1),viewport-dp(32));
+        int side=Math.max(dp(1),(contentWidth-dp(gap)*2)/3);
+        int tileWidth=side*span+dp(gap)*(span-1);
+        int tileHeight=Math.min(
+            side+dp(HomeTileLayout.HOME_EXTRA_HEIGHT_DP),dp(82));
+
+        LinearLayout tile=new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setPadding(dp(4),dp(3),dp(4),dp(5));
+
+        boolean customTint=!"default".equals(tintCode);
+        int tileTint=customTint?skin.tileTint(tintCode):accent;
+        boolean highlighted="tasks".equals(target)||customTint;
+
+        Bitmap fullArtBitmap=null;
+        boolean requestedArt=!TileArtLibrary.NONE.equals(artStyle);
+        if(homeFullTileArtEnabled()){
+            if(requestedArt)
+                fullArtBitmap=TileArtLibrary.bitmap(
+                    this,target,artStyle,span);
+            else
+                fullArtBitmap=homeFullTileBitmap(iconId);
+        }
+        boolean fullTileArt=fullArtBitmap!=null;
+        Drawable tileBase=skin.tile(this,highlighted,tileTint);
+        tile.setBackground(fullTileArt
+            ?homeFullTileBackground(tileBase,fullArtBitmap):tileBase);
+        tile.setElevation(dp(highlighted?5:3));
+
+        TextView handle=text("⋮⋮",17,true);
+        handle.setTextColor(fullTileArt?0xDD24373A:
+            (highlighted?skin.tileText(tileTint):subdued));
+        if(fullTileArt)handle.setShadowLayer(3f,0f,1f,Color.WHITE);
+        handle.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        handle.setPadding(dp(3),0,dp(8),0);
+        tile.addView(handle,new LinearLayout.LayoutParams(-1,dp(19)));
+
+        if(requestedArt&&!fullTileArt){
+            TextView missing=text("Brak grafiki "+(span==2?"2P":"1P")
+                +" w "+TileArtLibrary.styleLabel(artStyle),12,true);
+            missing.setGravity(Gravity.CENTER);
+            missing.setTextColor(ink);
+            tile.addView(missing,new LinearLayout.LayoutParams(-1,0,1f));
+        }else if(fullTileArt){
+            View spacer=new View(this);
+            tile.addView(spacer,new LinearLayout.LayoutParams(-1,0,1f));
+        }else{
+            int iconWidth=tileWidth-dp(10);
+            int iconHeight=tileHeight-dp(19)-dp(31)-dp(14);
+            int displayedIconSize=Math.max(
+                dp(24),Math.min(iconWidth,iconHeight));
+            LinearLayout.LayoutParams iconParams=
+                new LinearLayout.LayoutParams(
+                    displayedIconSize,displayedIconSize);
+            iconParams.gravity=Gravity.CENTER_HORIZONTAL;
+            tile.addView(tileIconImage(iconId,
+                Math.round(displayedIconSize/density),highlighted),iconParams);
+            TextView captionView=text(caption,12,true);
+            captionView.setTextColor(highlighted
+                ?skin.tileText(tileTint):ink);
+            captionView.setGravity(Gravity.CENTER);
+            captionView.setMaxLines(2);
+            captionView.setEllipsize(
+                android.text.TextUtils.TruncateAt.END);
+            tile.addView(captionView,
+                new LinearLayout.LayoutParams(-1,dp(31)));
+        }
+
+        LinearLayout.LayoutParams previewParams=
+            new LinearLayout.LayoutParams(tileWidth,tileHeight);
+        previewParams.gravity=Gravity.CENTER_HORIZONTAL;
+        frame.addView(tile,previewParams);
+    }
+
     private void editHomeTile(String id) {
         if (!homeTileOrder().contains(id)) return;
         LinearLayout form = new LinearLayout(this);
@@ -2429,7 +3278,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> targetLabels = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
+            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
                     || (!target.equals(homeTileTarget(id))
                         && homeTargetAlreadyAdded(target,id)))continue;
             targets.add(target);
@@ -2520,22 +3369,101 @@ public final class MainActivity extends Activity {
         size.setSelection("double".equals(
             prefs.getString("tile_width_" + id, "small")) ? 1 : 0);
         form.addView(size);
-        LinearLayout previewFrame = new LinearLayout(this);
-        previewFrame.setGravity(Gravity.CENTER);
-        previewFrame.setPadding(0, dp(9), 0, dp(9));
-        form.addView(previewFrame);
-        icon.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onNothingSelected(android.widget.AdapterView<?> p) { }
-            @Override public void onItemSelected(android.widget.AdapterView<?> p,
-                    View view, int position, long rowId) {
-                previewFrame.removeAllViews();
-                if (position < 0 || position >= filteredIconIds.size()) return;
-                View pictogram = tileIconImage(
-                    filteredIconIds.get(position), 88, false);
-                previewFrame.addView(pictogram,
-                    new LinearLayout.LayoutParams(dp(88), dp(88)));
+
+        form.addView(text("Grafika kafelka — pełne tło",15,true));
+        java.util.List<String> artIds=new java.util.ArrayList<>(
+            TileArtLibrary.styleIds());
+        java.util.List<String> artNames=new java.util.ArrayList<>();
+        int initialSpan=size.getSelectedItemPosition()==1?2:1;
+        String initialTarget=targets.get(destination.getSelectedItemPosition());
+        for(String style:artIds)
+            artNames.add(TileArtLibrary.styleLabel(style));
+        Spinner art=new Spinner(this);
+        art.setAdapter(themeSpinnerAdapter(artNames));
+        String previousArt=prefs.getString(
+            TileArtLibrary.prefKey(id),TileArtLibrary.NONE);
+        int previousArtIndex=artIds.indexOf(previousArt);
+        art.setSelection(previousArtIndex<0?0:previousArtIndex);
+        form.addView(art);
+        form.addView(text(
+            "1P = 840 × 656 px • 2P = 1728 × 656 px. "
+                +"EDHOME nigdy nie rozciąga 1P do 2P ani odwrotnie.",
+            12,false));
+        Button addArt=new Button(this);
+        addArt.setText("Dodaj / zastąp grafikę w wybranym stylu");
+        addArt.setAllCaps(false);
+        form.addView(addArt);
+        addArt.setOnClickListener(v -> {
+            int pos=art.getSelectedItemPosition();
+            if(pos<=0||pos>=artIds.size()){
+                alert("Najpierw wybierz Styl 1, Styl 2 albo Styl 3.");
+                return;
+            }
+            String target=targets.get(destination.getSelectedItemPosition());
+            int span=size.getSelectedItemPosition()==1?2:1;
+            pendingTileArtId=id;
+            pendingTileArtTarget=target;
+            pendingTileArtStyle=artIds.get(pos);
+            pendingTileArtSpan=span;
+            if(tileDialog[0]!=null)tileDialog[0].dismiss();
+            Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            picker.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"image/png","image/webp","image/jpeg"});
+            try{startActivityForResult(picker,IMPORT_TILE_ART);}
+            catch(Exception failure){
+                pendingTileArtId=null;
+                pendingTileArtTarget=null;
+                pendingTileArtStyle=null;
+                pendingTileArtSpan=0;
+                alert("Nie można wybrać grafiki kafelka.");
             }
         });
+
+        form.addView(text("Podgląd na ekranie Start",15,true));
+        LinearLayout previewFrame = new LinearLayout(this);
+        previewFrame.setGravity(Gravity.CENTER);
+        previewFrame.setPadding(0,dp(9),0,dp(9));
+        form.addView(previewFrame);
+
+        final Runnable[] previewRefresh=new Runnable[1];
+        previewRefresh[0]=() -> {
+            int targetIndex=destination.getSelectedItemPosition();
+            if(targetIndex<0||targetIndex>=targets.size())return;
+            String target=targets.get(targetIndex);
+            int iconIndex=icon.getSelectedItemPosition();
+            String chosenIcon=iconIndex>=0
+                &&iconIndex<filteredIconIds.size()
+                ?filteredIconIds.get(iconIndex):defaultTileIcon(target);
+            int artIndex=art.getSelectedItemPosition();
+            String chosenArt=artIndex>=0&&artIndex<artIds.size()
+                ?artIds.get(artIndex):TileArtLibrary.NONE;
+            int tintIndex=color.getSelectedItemPosition();
+            String chosenTint=tintIndex>=0&&tintIndex<codes.length
+                ?codes[tintIndex]:"default";
+            int chosenSpan=size.getSelectedItemPosition()==1?2:1;
+            String chosenCaption=label.getText().toString().trim();
+            if(chosenCaption.isEmpty())
+                chosenCaption=HomeTileCatalog.label(target);
+            refreshHomeTileEditorPreview(previewFrame,target,
+                chosenCaption,chosenIcon,chosenTint,chosenArt,chosenSpan);
+        };
+        android.widget.AdapterView.OnItemSelectedListener previewSelection=
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> parent) { }
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> parent,View view,
+                        int position,long rowId) {
+                    if(previewRefresh[0]!=null)previewRefresh[0].run();
+                }
+            };
+        icon.setOnItemSelectedListener(previewSelection);
+        art.setOnItemSelectedListener(previewSelection);
+        size.setOnItemSelectedListener(previewSelection);
+        destination.setOnItemSelectedListener(previewSelection);
+        color.setOnItemSelectedListener(previewSelection);
         iconSearch.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence text,
                     int start, int count, int after) { }
@@ -2574,6 +3502,20 @@ public final class MainActivity extends Activity {
             @Override public void afterTextChanged(
                     android.text.Editable text) { }
         });
+        label.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text,
+                    int start,int count,int after) { }
+            @Override public void onTextChanged(CharSequence text,
+                    int start,int before,int count) {
+                if(previewRefresh[0]!=null)previewRefresh[0].run();
+            }
+            @Override public void afterTextChanged(
+                    android.text.Editable text) { }
+        });
+        previewFrame.post(() -> {
+            if(previewRefresh[0]!=null)previewRefresh[0].run();
+        });
+
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setView(form)
             .setNegativeButton("Anuluj", null)
@@ -2618,6 +3560,22 @@ public final class MainActivity extends Activity {
                     String tileSize = sizeValues[size.getSelectedItemPosition()];
                     if ("small".equals(tileSize)) change.remove("tile_width_" + id);
                     else change.putString("tile_width_" + id, tileSize);
+                    int artIndex=art.getSelectedItemPosition();
+                    String artStyle=artIndex>=0&&artIndex<artIds.size()
+                        ?artIds.get(artIndex):TileArtLibrary.NONE;
+                    int artSpan="double".equals(tileSize)?2:1;
+                    if(!TileArtLibrary.NONE.equals(artStyle)
+                            &&!TileArtLibrary.available(
+                                this,target,artStyle,artSpan)){
+                        alert("Brak grafiki "+(artSpan==2?"2P":"1P")
+                            +" dla "+HomeTileCatalog.label(target)+" w "
+                            +TileArtLibrary.styleLabel(artStyle)+". "
+                            +"Dodaj właściwy plik albo wybierz „Brak”.");
+                        return;
+                    }
+                    if(TileArtLibrary.NONE.equals(artStyle))
+                        change.remove(TileArtLibrary.prefKey(id));
+                    else change.putString(TileArtLibrary.prefKey(id),artStyle);
                     if (!change.commit()) {
                         alert("Nie udało się zapisać ustawień kafelka.");
                         return;
@@ -2631,7 +3589,8 @@ public final class MainActivity extends Activity {
                     prefs.edit().remove("tile_label_" + id)
                         .remove("tile_tint_" + id)
                         .remove("tile_icon_" + id)
-                        .remove("tile_width_" + id).apply();
+                        .remove("tile_width_" + id)
+                        .remove(TileArtLibrary.prefKey(id)).apply();
                     DiagnosticLog.event("HOME_TILE_APPEARANCE_RESET");
                     dialog.dismiss();
                     render();
@@ -2645,7 +3604,7 @@ public final class MainActivity extends Activity {
         return HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            releaseFeaturesEnabled());
+            BetaUpdater.isBeta());
     }
 
     private java.util.List<String> hiddenHomeTiles() {
@@ -3214,20 +4173,46 @@ public final class MainActivity extends Activity {
 
     private void smallButton(LinearLayout container, String label, Runnable action) {
         Button b = new Button(this);
-        b.setText(label);
+        b.setText(semanticText(label));
         b.setAllCaps(false);
-        b.setTextSize(13);
+        b.setTextSize(12);
         boolean onHome = "home".equals(screen);
         b.setTextColor(onHome ? skin.buttonForeground : ink);
         b.setBackground(skin.pill(this, onHome
             ? (skin.light ? 0xFFEFF8F2 : 0xFFEAF5F5) : skin.tileTop));
         b.setElevation(dp(1));
-        b.setMinHeight(dp(40));
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
         touchFeedback(b);
         b.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.setMargins(0, dp(2), 0, dp(2));
-        container.addView(b, params);
+
+        boolean compact=container.getOrientation()==LinearLayout.VERTICAL
+            &&label!=null && label.length()<=28;
+        if(compact) {
+            LinearLayout row=null;
+            if(container.getChildCount()>0) {
+                View last=container.getChildAt(container.getChildCount()-1);
+                if(last instanceof LinearLayout
+                        &&AUTO_SMALL_ACTION_ROW_TAG.equals(last.getTag())
+                        &&((LinearLayout)last).getChildCount()==1)
+                    row=(LinearLayout)last;
+            }
+            if(row==null) {
+                row=new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setTag(AUTO_SMALL_ACTION_ROW_TAG);
+                container.addView(row,new LinearLayout.LayoutParams(-1,dp(40)));
+            }
+            LinearLayout.LayoutParams params=
+                new LinearLayout.LayoutParams(0,dp(36),1f);
+            params.setMargins(dp(2),dp(2),dp(2),dp(2));
+            row.addView(b,params);
+            return;
+        }
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(38));
+        params.setMargins(0,dp(2),0,dp(2));
+        container.addView(b,params);
     }
 
     private void drawTask(long id, String name, boolean done, String due,
@@ -3243,7 +4228,8 @@ public final class MainActivity extends Activity {
         String[] planning = db.taskPlanning(id);
         String description = (due.isEmpty() ? "Bez terminu" : "Termin: " + due)
             + " • " + TaskRules.label(rule, every)
-            + " • " + planning[1] + " min"
+            + " • " + TaskRules.hoursText(
+                Integer.parseInt(planning[1])) + " h"
             + " • Priorytet: " + TASK_PRIORITY_LABELS[
                 Math.max(0, java.util.Arrays.asList(TASK_PRIORITIES)
                     .indexOf(planning[0]))];
@@ -3502,12 +4488,14 @@ public final class MainActivity extends Activity {
         priority.setSelection(Math.max(0,
             java.util.Arrays.asList(TASK_PRIORITIES).indexOf(currentPlanning[0])));
         form.addView(priority);
-        form.addView(text("Szacowany czas wykonania (minuty)", 16, true));
+        form.addView(text("Szacowany czas wykonania (godziny)", 16, true));
         EditText duration = new EditText(this);
         duration.setSingleLine(true);
-        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        duration.setHint("Od 1 do 480 minut");
-        duration.setText(currentPlanning[1]);
+        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        duration.setHint("Np. 0,5 • 1 • 1,5 • maks. 8 h");
+        duration.setText(TaskRules.hoursText(
+            Integer.parseInt(currentPlanning[1])));
         duration.setTextColor(ink);
         duration.setHintTextColor(subdued);
         form.addView(duration);
@@ -3746,19 +4734,15 @@ public final class MainActivity extends Activity {
                         return;
                     }
                 }
-                int estimatedMinutes;
-                try {
-                    estimatedMinutes = Integer.parseInt(
-                        duration.getText().toString().trim());
-                } catch (NumberFormatException problem) {
-                    duration.setError("Podaj czas od 1 do 480 minut.");
+                Integer parsedDurationMinutes = TaskRules.minutesFromHours(
+                    duration.getText().toString(),
+                    MIN_TASK_MINUTES, MAX_TASK_MINUTES);
+                if (parsedDurationMinutes == null) {
+                    duration.setError("Podaj czas w godzinach, np. 0,5 / 1 / 1,5 "
+                        + "(maks. 8 h).");
                     return;
                 }
-                if (estimatedMinutes < MIN_TASK_MINUTES
-                        || estimatedMinutes > MAX_TASK_MINUTES) {
-                    duration.setError("Podaj czas od 1 do 480 minut.");
-                    return;
-                }
+                int estimatedMinutes = parsedDurationMinutes;
                 String selectedPriority = TASK_PRIORITIES[
                     priority.getSelectedItemPosition()];
                 String title = name.getText().toString().trim();
@@ -3911,10 +4895,284 @@ public final class MainActivity extends Activity {
         }
     }
 
+
+    private TextView calendarMonthEventBar(String label, String kind) {
+        int tint = "vehicle".equals(kind)
+            ? skin.tileTint("blue")
+            : ("urgent".equals(kind) || "high".equals(kind)
+                ? skin.tileTint("amber") : accent);
+        TextView bar = text(label, 9, true);
+        bar.setSingleLine(true);
+        bar.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(4), 0, dp(3), 0);
+        bar.setTextColor(skin.tileText(tint));
+        bar.setBackground(skin.pill(this, tint));
+        return bar;
+    }
+
+    /** Compact month grid inspired by a phone calendar: week numbers on the
+     * left and short event bars inside each day. Data and recurrence rules
+     * remain unchanged; this is presentation only. */
+    private void renderCalendarMonth(YearMonth month, LocalDate selected) {
+        Locale pl = Locale.forLanguageTag("pl-PL");
+        String monthName = month.getMonth().getDisplayName(
+            TextStyle.FULL_STANDALONE, pl);
+        if (!monthName.isEmpty()) {
+            monthName = monthName.substring(0, 1).toUpperCase(pl)
+                + monthName.substring(1);
+        }
+
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setOrientation(LinearLayout.HORIZONTAL);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setPadding(0, 0, 0, dp(2));
+        body.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(46)));
+
+        TextView home = text("☰", 22, true);
+        home.setGravity(Gravity.CENTER);
+        home.setContentDescription("Wróć do Start");
+        home.setOnClickListener(v -> go("home"));
+        touchFeedback(home);
+        toolbar.addView(home, new LinearLayout.LayoutParams(dp(42), dp(40)));
+
+        TextView monthTitle = text(monthName + " " + month.getYear() + " ▾", 22, true);
+        monthTitle.setGravity(Gravity.CENTER_VERTICAL);
+        monthTitle.setContentDescription("Zmień widok kalendarza");
+        monthTitle.setOnClickListener(v -> {
+            String[] labels = {"Miesiąc", "Tydzień", "Dzień", "Agenda"};
+            String[] values = {"month", "week", "day", "agenda"};
+            new AlertDialog.Builder(this)
+                .setTitle("Widok kalendarza")
+                .setItems(labels, (dialog, which) -> {
+                    calendarView = values[which];
+                    render();
+                })
+                .setNegativeButton("Anuluj", null)
+                .show();
+        });
+        touchFeedback(monthTitle);
+        toolbar.addView(monthTitle, new LinearLayout.LayoutParams(0, dp(40), 1f));
+
+        TextView jump = text("⌕", 21, true);
+        jump.setGravity(Gravity.CENTER);
+        jump.setContentDescription("Przejdź do daty");
+        jump.setOnClickListener(v -> {
+            LocalDate initial = LocalDate.parse(calendarDay);
+            new DatePickerDialog(this, (picker, year, monthIndex, dayOfMonth) -> {
+                LocalDate day = LocalDate.of(year, monthIndex + 1, dayOfMonth);
+                calendarDay = day.toString();
+                calendarMonth = YearMonth.from(day).toString();
+                render();
+            }, initial.getYear(), initial.getMonthValue() - 1,
+                initial.getDayOfMonth()).show();
+        });
+        touchFeedback(jump);
+        toolbar.addView(jump, new LinearLayout.LayoutParams(dp(38), dp(38)));
+
+        TextView today = text("◉", 18, true);
+        today.setGravity(Gravity.CENTER);
+        today.setContentDescription("Dzisiaj");
+        today.setOnClickListener(v -> {
+            LocalDate now = LocalDate.now();
+            calendarDay = now.toString();
+            calendarMonth = YearMonth.from(now).toString();
+            render();
+        });
+        touchFeedback(today);
+        toolbar.addView(today, new LinearLayout.LayoutParams(dp(38), dp(38)));
+
+        int overdue = db.overdueTasks();
+        TextView tasks = text(overdue > 0 ? "✓" + Math.min(overdue, 9) : "✓", 16, true);
+        tasks.setGravity(Gravity.CENTER);
+        tasks.setContentDescription(overdue > 0
+            ? "Oczekujące zadania, zaległe: " + overdue
+            : "Oczekujące zadania");
+        tasks.setOnClickListener(v -> {
+            tasksFilter = overdue > 0 ? "overdue" : "all";
+            go("tasks");
+        });
+        touchFeedback(tasks);
+        toolbar.addView(tasks, new LinearLayout.LayoutParams(dp(40), dp(38)));
+
+        LocalDate first = month.atDay(1);
+        LocalDate gridStart = first.minusDays(first.getDayOfWeek().getValue() - 1);
+        LocalDate gridEnd = gridStart.plusDays(41);
+
+        Map<String, java.util.List<String[]>> events = new HashMap<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT due_date,title,priority FROM tasks WHERE done=0 "
+                    + "AND due_date>=? AND due_date<=? "
+                    + "ORDER BY due_date,CASE priority WHEN 'urgent' THEN 0 "
+                    + "WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,id",
+                new String[]{gridStart.toString(), gridEnd.toString()})) {
+            while (c.moveToNext()) {
+                events.computeIfAbsent(c.getString(0),
+                    key -> new java.util.ArrayList<>()).add(
+                        new String[]{c.getString(1), c.getString(2)});
+            }
+        }
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT deadline,kind,name FROM ("
+                    + "SELECT oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+                    + "WHERE oc_until!='' UNION ALL "
+                    + "SELECT inspection_until,'Przegląd',name FROM vehicles "
+                    + "WHERE inspection_until!='') WHERE deadline>=? "
+                    + "AND deadline<=? ORDER BY deadline,name,kind",
+                new String[]{gridStart.toString(), gridEnd.toString()})) {
+            while (c.moveToNext()) {
+                events.computeIfAbsent(c.getString(0),
+                    key -> new java.util.ArrayList<>()).add(
+                        new String[]{c.getString(1) + " " + c.getString(2),
+                            "vehicle"});
+            }
+        }
+
+        LinearLayout headings = new LinearLayout(this);
+        headings.setOrientation(LinearLayout.HORIZONTAL);
+        headings.setGravity(Gravity.CENTER_VERTICAL);
+        body.addView(headings, new LinearLayout.LayoutParams(-1, dp(28)));
+        TextView weekHeading = text("", 8, false);
+        headings.addView(weekHeading,
+            new LinearLayout.LayoutParams(dp(30), dp(26)));
+        int sundayColor = skin.light
+            ? Color.rgb(198,40,40) : Color.rgb(239,83,80);
+        String[] weekdayHeadings = {
+            "pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."
+        };
+        for (int headingIndex=0; headingIndex<weekdayHeadings.length; headingIndex++) {
+            TextView dayHeading = text(weekdayHeadings[headingIndex], 10, true);
+            dayHeading.setGravity(Gravity.CENTER);
+            dayHeading.setTextColor(headingIndex==6 ? sundayColor : subdued);
+            headings.addView(dayHeading,
+                new LinearLayout.LayoutParams(0, dp(26), 1f));
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        int viewportDp = Math.round(
+            getResources().getDisplayMetrics().heightPixels / density);
+        int calendarRowDp = Math.max(72,
+            Math.min(104, (viewportDp - 150) / 6));
+
+        for (int week = 0; week < 6; week++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.TOP);
+            LinearLayout.LayoutParams rowParams =
+                new LinearLayout.LayoutParams(-1, dp(calendarRowDp));
+            rowParams.setMargins(0, dp(1), 0, dp(1));
+            body.addView(row, rowParams);
+
+            LocalDate monday = gridStart.plusDays(week * 7L);
+            int weekNumber = monday.get(
+                java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+            TextView weekView = text(Integer.toString(weekNumber), 10, false);
+            weekView.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+            weekView.setPadding(0, dp(7), 0, 0);
+            weekView.setTextColor(subdued);
+            weekView.setBackground(skin.panel(this, skin.iconBacking, 10));
+            LinearLayout.LayoutParams weekParams =
+                new LinearLayout.LayoutParams(dp(30), dp(calendarRowDp - 2));
+            weekParams.setMargins(0, 0, dp(2), 0);
+            row.addView(weekView, weekParams);
+
+            for (int weekday = 0; weekday < 7; weekday++) {
+                LocalDate day = monday.plusDays(weekday);
+                String iso = day.toString();
+                boolean inMonth = YearMonth.from(day).equals(month);
+                boolean isToday = iso.equals(LocalDate.now().toString());
+                boolean isSunday = day.getDayOfWeek()==java.time.DayOfWeek.SUNDAY;
+
+                LinearLayout cell = new LinearLayout(this);
+                cell.setOrientation(LinearLayout.VERTICAL);
+                cell.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+                cell.setPadding(dp(2), dp(2), dp(2), dp(1));
+                cell.setBackground(skin.panel(this,
+                    isToday ? skin.iconBacking : surface, 10));
+
+                TextView number = text(Integer.toString(day.getDayOfMonth()), 11, true);
+                number.setGravity(Gravity.CENTER);
+                number.setTextColor(inMonth
+                    ? (isSunday ? sundayColor : ink) : subdued);
+                if (isToday) {
+                    number.setBackground(rounded(accent));
+                    number.setTextColor(skin.accentInk);
+                }
+                cell.addView(number, new LinearLayout.LayoutParams(-1, dp(21)));
+
+                java.util.List<String[]> dayEvents = events.get(iso);
+                if (dayEvents != null) {
+                    int visible = Math.min(2, dayEvents.size());
+                    for (int i = 0; i < visible; i++) {
+                        String[] event = dayEvents.get(i);
+                        TextView bar = calendarMonthEventBar(event[0], event[1]);
+                        bar.setTextSize(8);
+                        bar.setContentDescription(event[0] + ", " + iso);
+                        bar.setOnClickListener(v -> {
+                            calendarDay = iso;
+                            calendarMonth = YearMonth.from(day).toString();
+                            calendarView = "day";
+                            render();
+                        });
+                        touchFeedback(bar);
+                        LinearLayout.LayoutParams barParams =
+                            new LinearLayout.LayoutParams(-1, dp(17));
+                        barParams.setMargins(0, dp(1), 0, 0);
+                        cell.addView(bar, barParams);
+                    }
+                    if (dayEvents.size() > visible) {
+                        TextView more = text("+" + (dayEvents.size() - visible), 8, true);
+                        more.setGravity(Gravity.CENTER_HORIZONTAL);
+                        more.setTextColor(subdued);
+                        cell.addView(more,
+                            new LinearLayout.LayoutParams(-1, dp(12)));
+                    }
+                }
+
+                cell.setOnClickListener(v -> {
+                    calendarDay = iso;
+                    calendarMonth = YearMonth.from(day).toString();
+                    calendarView = "day";
+                    render();
+                });
+                cell.setClickable(true);
+                cell.setFocusable(true);
+                touchFeedback(cell);
+
+                LinearLayout.LayoutParams cellParams =
+                    new LinearLayout.LayoutParams(0, dp(calendarRowDp - 2), 1f);
+                cellParams.setMargins(dp(1), 0, dp(1), 0);
+                row.addView(cell, cellParams);
+            }
+        }
+
+        if (calendarMonthFrame != null) {
+            TextView add = text("+", 30, true);
+            add.setGravity(Gravity.CENTER);
+            add.setTextColor(skin.accentInk);
+            add.setBackground(skin.pill(this, accent));
+            add.setElevation(dp(12));
+            add.setContentDescription("Dodaj czynność");
+            add.setOnClickListener(v ->
+                editTask(null, "", calendarDay, "once", 1));
+            touchFeedback(add);
+            android.widget.FrameLayout.LayoutParams addParams =
+                new android.widget.FrameLayout.LayoutParams(dp(58), dp(58),
+                    Gravity.BOTTOM | Gravity.RIGHT);
+            addParams.setMargins(0, 0, dp(14), dp(14));
+            calendarMonthFrame.addView(add, addParams);
+        }
+
+    }
+
     private void calendar() {
-        header("Kalendarz • czynności i pojazdy");
         YearMonth month = YearMonth.parse(calendarMonth);
         LocalDate selected = LocalDate.parse(calendarDay);
+        if ("month".equals(calendarView)) {
+            renderCalendarMonth(month, selected);
+            return;
+        }
+        header("Kalendarz • czynności i pojazdy");
         note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
             new Locale("pl", "PL")) + " " + month.getYear());
         LinearLayout views = new LinearLayout(this);
@@ -4148,6 +5406,645 @@ public final class MainActivity extends Activity {
             + "Planowanie dostępności domowników będzie rozwijane osobno.");
     }
 
+
+    private void garden() {
+        header("Ogród • uprawy");
+        note("Działa offline. Katalog referencyjny, Twoje korekty i faktyczne "
+            + "nasadzenia są oddzielone, więc późniejsza aktualizacja bazy "
+            + "nie nadpisze Twojej historii.");
+
+        LinearLayout actions=compactActionRow();
+        compactAction(actions,"+ Obszar",this::gardenAreaDialog);
+        compactAction(actions,"+ Roślina",this::gardenPlantDialog);
+        compactAction(actions,"+ Nasadzenie",this::gardenPlantingDialog);
+        LinearLayout links=compactActionRow();
+        compactAction(links,"▦ Kalendarz",()->go("calendar"));
+        compactAction(links,"✓ Czynności",()->{tasksFilter="all";go("tasks");});
+        compactAction(links,"▥ Plony",this::gardenSeasonReport);
+        compactAction(links,"≡ Katalog",this::gardenCatalogInfo);
+
+        LinearLayout summary=card();
+        summary.addView(text("Obszary: "+gardenCount("garden_areas")
+            +"   •   własne rośliny: "+gardenCount("garden_custom_plants")
+            +"   •   katalog: "+gardenCount("garden_catalog"),14,true));
+        summary.addView(text("Nasadzenia: "+gardenCount("garden_plantings")
+            +" • katalog można aktualizować niezależnie od danych użytkownika.",12,false));
+
+        title("Obszary");
+        int areas=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT a.name,a.kind,a.notes,COUNT(p.id) FROM garden_areas a "
+                +"LEFT JOIN garden_plantings p ON p.area_id=a.id "
+                +"GROUP BY a.id,a.name,a.kind,a.notes ORDER BY a.name COLLATE NOCASE",null)){
+            while(c.moveToNext()){
+                areas++;
+                LinearLayout box=card();
+                box.addView(text(c.getString(0)+" • "+c.getString(1),17,true));
+                box.addView(text("Nasadzenia: "+c.getInt(3)
+                    +(c.getString(2).isEmpty()?"":" • "+c.getString(2)),13,false));
+            }
+        }
+        if(areas==0) note("Dodaj pierwszy obszar: grządkę, tunel, donice, sad albo własny typ.");
+
+        title("Nasadzenia");
+        int shown=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT p.id,a.name,COALESCE(NULLIF(gc.name,''),NULLIF(cp.name,''),'Roślina'),"
+                +"COALESCE(NULLIF(gc.variety,''),cp.variety,''),p.label,p.status,"
+                +"p.planned_sow,p.planned_plant,p.planned_harvest,p.notes,"
+                +"p.actual_sow,p.actual_plant,p.actual_harvest,p.season_year,p.finished_at "
+                +"FROM garden_plantings p JOIN garden_areas a ON a.id=p.area_id "
+                +"LEFT JOIN garden_catalog gc ON gc.id=p.catalog_id "
+                +"LEFT JOIN garden_custom_plants cp ON cp.id=p.custom_plant_id "
+                +"ORDER BY p.id DESC LIMIT 80",null)){
+            while(c.moveToNext()){
+                shown++;
+                long plantingId=c.getLong(0);
+                LinearLayout box=card();
+                String variety=c.getString(3), label=c.getString(4);
+                String displayName=c.getString(2)+(variety.isEmpty()?"":" • "+variety)
+                    +(label.isEmpty()?"":" • "+label);
+                String status=c.getString(5);
+                int season=c.getInt(13);
+                box.addView(text(displayName,17,true));
+                box.addView(text(c.getString(1)+" • sezon "+season+" • "+status,13,false));
+                String planned="";
+                if(!c.getString(6).isEmpty()) planned+="siew "+c.getString(6);
+                if(!c.getString(7).isEmpty()) planned+=(planned.isEmpty()?"":" • ")+"sadzenie "+c.getString(7);
+                if(!c.getString(8).isEmpty()) planned+=(planned.isEmpty()?"":" • ")+"zbiór "+c.getString(8);
+                if(!planned.isEmpty()) box.addView(text("Plan: "+planned,12,false));
+                String actual="";
+                if(!c.getString(10).isEmpty()) actual+="siew "+c.getString(10);
+                if(!c.getString(11).isEmpty()) actual+=(actual.isEmpty()?"":" • ")+"sadzenie "+c.getString(11);
+                if(!c.getString(12).isEmpty()) actual+=(actual.isEmpty()?"":" • ")+"pierwszy zbiór "+c.getString(12);
+                if(!c.getString(14).isEmpty()) actual+=(actual.isEmpty()?"":" • ")+"koniec "+c.getString(14);
+                if(!actual.isEmpty()) box.addView(text("Wykonane: "+actual,12,false));
+                String harvests=GardenStore.harvestSummary(db.getReadableDatabase(),plantingId);
+                if(!harvests.isEmpty()) box.addView(text("Zebrano: "+harvests,13,true));
+                if(!c.getString(9).isEmpty()) box.addView(text(c.getString(9),12,false));
+                int linked=GardenStore.linkedTaskCount(db.getReadableDatabase(),plantingId);
+                box.addView(text("Kalendarz: "+linked+" termin(y) połączone z Czynnościami",12,false));
+                int activeGardenTasks=GardenStore.activeActivityTaskCount(
+                    db.getReadableDatabase(),plantingId);
+                String nextGardenTask=GardenStore.nextActivityTask(
+                    db.getReadableDatabase(),plantingId);
+                box.addView(text("Prace ogrodowe: "+activeGardenTasks+" aktywne"
+                    +(nextGardenTask.isEmpty()?"":" • najbliższa: "+nextGardenTask),12,false));
+                LinearLayout row=compactActionRow();
+                compactAction(row,"Cykl / zbiory",()->
+                    gardenCycleDialog(plantingId,displayName,status));
+                compactAction(row,"+ Czynność",()->
+                    gardenActivityDialog(plantingId,displayName));
+                compactAction(row,"Powiadomienia",()->
+                    gardenScheduleDialog(plantingId,displayName));
+            }
+        }
+        if(shown==0) note("Brak nasadzeń.");
+        note("Terminy Ogrodu korzystają z istniejących Czynności, Kalendarza "
+            +"i powiadomień. Nie powstaje drugi system przypomnień.");
+    }
+
+    private int gardenCount(String table) {
+        try(Cursor c=db.getReadableDatabase().rawQuery("SELECT COUNT(*) FROM "+table,null)){
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
+
+    private void gardenAreaDialog() {
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        EditText name=new EditText(this); name.setHint("Nazwa, np. Grządka 1"); name.setSingleLine(true);
+        EditText kind=new EditText(this); kind.setHint("Typ: grządka / tunel / donica / sad"); kind.setSingleLine(true);
+        EditText notes=new EditText(this); notes.setHint("Notatka (opcjonalnie)");
+        form.addView(name); form.addView(kind); form.addView(notes); lightDialogForm(form);
+        new AlertDialog.Builder(this).setTitle("Nowy obszar ogrodu").setView(form)
+            .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
+                try{GardenStore.addArea(db.getWritableDatabase(),name.getText().toString(),
+                    kind.getText().toString(),notes.getText().toString());
+                    DiagnosticLog.event("GARDEN_AREA_ADDED"); render();}
+                catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać obszaru.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenPlantDialog() {
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        EditText name=new EditText(this); name.setHint("Nazwa, np. Pomidor"); name.setSingleLine(true);
+        EditText variety=new EditText(this); variety.setHint("Odmiana, np. Malinowy"); variety.setSingleLine(true);
+        EditText latin=new EditText(this); latin.setHint("Nazwa łacińska (opcjonalnie)"); latin.setSingleLine(true);
+        EditText notes=new EditText(this); notes.setHint("Moje uwagi");
+        form.addView(name); form.addView(variety); form.addView(latin); form.addView(notes); lightDialogForm(form);
+        new AlertDialog.Builder(this).setTitle("Moja roślina / odmiana").setView(form)
+            .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
+                try{GardenStore.addCustomPlant(db.getWritableDatabase(),name.getText().toString(),
+                    latin.getText().toString(),variety.getText().toString(),notes.getText().toString());
+                    DiagnosticLog.event("GARDEN_CUSTOM_PLANT_ADDED"); render();}
+                catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać rośliny.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenPlantingDialog() {
+        java.util.List<Long> areaIds=new java.util.ArrayList<>();
+        java.util.List<String> areaNames=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM garden_areas ORDER BY name COLLATE NOCASE",null)){
+            while(c.moveToNext()){areaIds.add(c.getLong(0));areaNames.add(c.getString(1));}
+        }
+        java.util.List<Long> plantIds=new java.util.ArrayList<>();
+        java.util.List<Boolean> catalogFlags=new java.util.ArrayList<>();
+        java.util.List<String> plantNames=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,variety FROM garden_custom_plants ORDER BY name COLLATE NOCASE,variety COLLATE NOCASE",null)){
+            while(c.moveToNext()){plantIds.add(c.getLong(0));catalogFlags.add(false);
+                plantNames.add(c.getString(1)+(c.getString(2).isEmpty()?"":" • "+c.getString(2))+" • moja");}
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,variety FROM garden_catalog ORDER BY name COLLATE NOCASE,variety COLLATE NOCASE",null)){
+            while(c.moveToNext()){plantIds.add(c.getLong(0));catalogFlags.add(true);
+                plantNames.add(c.getString(1)+(c.getString(2).isEmpty()?"":" • "+c.getString(2))+" • katalog");}
+        }
+        if(areaIds.isEmpty()){alert("Najpierw dodaj obszar ogrodu.");return;}
+        if(plantIds.isEmpty()){alert("Najpierw dodaj własną roślinę albo zaimportuj katalog.");return;}
+
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        form.addView(text("Obszar",13,true)); Spinner area=new Spinner(this);
+        area.setAdapter(lightDialogSpinnerAdapter(areaNames)); form.addView(area);
+        form.addView(text("Roślina",13,true)); Spinner plant=new Spinner(this);
+        plant.setAdapter(lightDialogSpinnerAdapter(plantNames)); form.addView(plant);
+        EditText label=new EditText(this); label.setHint("Nazwa nasadzenia (opcjonalnie)");
+        EditText sow=new EditText(this); sow.setHint("Planowany siew RRRR-MM-DD");
+        EditText plantDate=new EditText(this); plantDate.setHint("Planowane sadzenie RRRR-MM-DD");
+        EditText harvest=new EditText(this); harvest.setHint("Planowany zbiór RRRR-MM-DD");
+        EditText notes=new EditText(this); notes.setHint("Notatka");
+        form.addView(label);form.addView(sow);form.addView(plantDate);form.addView(harvest);form.addView(notes);
+        lightDialogForm(form); ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle("Nowe nasadzenie").setView(scroll)
+            .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
+                try{int ai=area.getSelectedItemPosition(),pi=plant.getSelectedItemPosition();
+                    long selected=plantIds.get(pi);
+                    long plantingId=GardenStore.addPlanting(db.getWritableDatabase(),areaIds.get(ai),
+                        catalogFlags.get(pi)?selected:0L,catalogFlags.get(pi)?0L:selected,
+                        label.getText().toString(),sow.getText().toString(),
+                        plantDate.getText().toString(),harvest.getText().toString(),notes.getText().toString());
+                    // Planowane daty od razu pojawiają się w tym samym Kalendarzu.
+                    GardenStore.syncPlanTasks(db.getWritableDatabase(),plantingId,null,0);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_PLANTING_ADDED");
+                    render();}
+                catch(Exception e){alert(e.getMessage()==null?"Nie udało się dodać nasadzenia.":e.getMessage());}
+            }).show();
+    }
+
+    private void gardenCycleDialog(long plantingId,String label,String status) {
+        java.util.List<String> actions=new java.util.ArrayList<>();
+        java.util.List<String> codes=new java.util.ArrayList<>();
+        if(!"finished".equals(status)&&!"cancelled".equals(status)) {
+            actions.add("Zapisz faktyczny siew"); codes.add("sow");
+            actions.add("Zapisz faktyczne sadzenie"); codes.add("plant");
+            actions.add("Dodaj zbiór / plon"); codes.add("harvest");
+            actions.add("Zakończ sezon"); codes.add("finish");
+        }
+        if("finished".equals(status)) {
+            actions.add("Rozpocznij kolejny sezon"); codes.add("next");
+        }
+        actions.add("Historia sezonu"); codes.add("history");
+        new AlertDialog.Builder(this)
+            .setTitle("Cykl uprawy • "+label)
+            .setItems(actions.toArray(new String[0]),(dialog,which)->{
+                String code=codes.get(which);
+                if("sow".equals(code)||"plant".equals(code))
+                    gardenStageDialog(plantingId,label,code);
+                else if("harvest".equals(code))
+                    gardenHarvestDialog(plantingId,label);
+                else if("finish".equals(code))
+                    gardenFinishDialog(plantingId,label);
+                else if("next".equals(code))
+                    gardenNextSeasonDialog(plantingId,label);
+                else gardenHistoryDialog(plantingId,label);
+            }).show();
+    }
+
+    private EditText gardenDateInput(LinearLayout form,String label,String initial) {
+        EditText date=new EditText(this);
+        date.setSingleLine(true);
+        date.setFocusable(false);
+        date.setClickable(true);
+        date.setText(initial==null||initial.isEmpty()?LocalDate.now().toString():initial);
+        date.setHint(label);
+        date.setTextColor(ink);
+        date.setHintTextColor(subdued);
+        date.setOnClickListener(v->{
+            LocalDate start;
+            try{start=LocalDate.parse(date.getText().toString());}
+            catch(Exception ignored){start=LocalDate.now();}
+            new DatePickerDialog(this,(view,year,month,day)->
+                date.setText(LocalDate.of(year,month+1,day).toString()),
+                start.getYear(),start.getMonthValue()-1,start.getDayOfMonth()).show();
+        });
+        form.addView(text(label,13,true));
+        form.addView(date);
+        return date;
+    }
+
+    private void gardenStageDialog(long plantingId,String label,String stage) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText date=gardenDateInput(form,
+            "sow".equals(stage)?"Faktyczny siew":"Faktyczne sadzenie",
+            LocalDate.now().toString());
+        EditText note=new EditText(this);
+        note.setHint("Notatka (opcjonalnie)");
+        form.addView(note);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle(("sow".equals(stage)?"Siew • ":"Sadzenie • ")+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try{
+                    GardenStore.markStage(db.getWritableDatabase(),plantingId,stage,
+                        date.getText().toString(),note.getText().toString());
+                    Long taskId=GardenStore.linkedTaskId(db.getReadableDatabase(),
+                        plantingId,stage);
+                    if(taskId!=null) db.completeTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_STAGE_DONE","stage="+stage);
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie zapisano etapu uprawy.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenHarvestDialog(long plantingId,String label) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText date=gardenDateInput(form,"Data zbioru",LocalDate.now().toString());
+        EditText quantity=new EditText(this);
+        quantity.setSingleLine(true);
+        quantity.setHint("Ilość, np. 2,5");
+        quantity.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(text("Ilość",13,true));
+        form.addView(quantity);
+        Spinner unit=new Spinner(this);
+        unit.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList("kg","g","szt.","l","ml")));
+        form.addView(text("Jednostka",13,true));
+        form.addView(unit);
+        EditText note=new EditText(this);
+        note.setHint("Notatka (opcjonalnie)");
+        form.addView(note);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Dodaj zbiór • "+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try{
+                    GardenStore.addHarvest(db.getWritableDatabase(),plantingId,
+                        date.getText().toString(),quantity.getText().toString(),
+                        (String)unit.getSelectedItem(),note.getText().toString());
+                    Long taskId=GardenStore.linkedTaskId(db.getReadableDatabase(),
+                        plantingId,"harvest");
+                    if(taskId!=null) db.completeTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_HARVEST_ADDED");
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie zapisano zbioru.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenFinishDialog(long plantingId,String label) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText date=gardenDateInput(form,"Data zakończenia",LocalDate.now().toString());
+        EditText note=new EditText(this);
+        note.setHint("Podsumowanie sezonu (opcjonalnie)");
+        form.addView(note);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Zakończyć sezon • "+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zakończ",(d,w)->{
+                try{
+                    GardenStore.finishSeason(db.getWritableDatabase(),plantingId,
+                        date.getText().toString(),note.getText().toString());
+                    DiagnosticLog.event("GARDEN_SEASON_FINISHED");
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie zakończono sezonu.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenNextSeasonDialog(long plantingId,String label) {
+        int current=GardenStore.seasonYear(db.getReadableDatabase(),plantingId);
+        int suggested=Math.max(LocalDate.now().getYear(),current)+1;
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText year=new EditText(this);
+        year.setSingleLine(true);
+        year.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        year.setText(Integer.toString(suggested));
+        form.addView(text("Rok kolejnego sezonu",13,true));
+        form.addView(year);
+        form.addView(text("EDHOME skopiuje miejsce, roślinę/odmianę i planowane "
+            +"miesiące, ale nie skopiuje wykonania ani plonów.",12,false));
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Nowy sezon • "+label)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",(d,w)->{
+                try{
+                    int target=Integer.parseInt(year.getText().toString().trim());
+                    long newId=GardenStore.cloneNextSeason(db.getWritableDatabase(),
+                        plantingId,target);
+                    GardenStore.syncPlanTasks(db.getWritableDatabase(),newId,null,0);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("GARDEN_NEXT_SEASON","year="+target);
+                    render();
+                }catch(Exception e){
+                    alert(e.getMessage()==null?"Nie utworzono kolejnego sezonu.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenHistoryDialog(long plantingId,String label) {
+        StringBuilder history=new StringBuilder();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT event_date,event_kind,note FROM garden_events "
+                +"WHERE planting_id=? ORDER BY event_date,id",
+                new String[]{Long.toString(plantingId)})){
+            while(c.moveToNext()){
+                if(history.length()>0)history.append("\n");
+                history.append(c.getString(0)).append(" • ")
+                    .append(gardenEventLabel(c.getString(1)));
+                if(!c.getString(2).isEmpty()) history.append(" • ").append(c.getString(2));
+            }
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT harvested_on,quantity_milli,unit,note FROM garden_harvests "
+                +"WHERE planting_id=? ORDER BY harvested_on,id",
+                new String[]{Long.toString(plantingId)})){
+            while(c.moveToNext()){
+                history.append("\n").append(c.getString(0)).append(" • plon ")
+                    .append(GardenStore.formatMilli(c.getLong(1))).append(' ')
+                    .append(c.getString(2));
+                if(!c.getString(3).isEmpty()) history.append(" • ").append(c.getString(3));
+            }
+        }
+        alert(history.length()==0
+            ?"Brak zapisanej historii sezonu."
+            :label+"\n\n"+history.toString());
+    }
+
+    private String gardenEventLabel(String kind) {
+        switch(kind){
+            case "sow": return "siew";
+            case "plant": return "sadzenie";
+            case "harvest": return "zbiór";
+            case "finish": return "zakończenie sezonu";
+            case "cancel": return "anulowanie";
+            default: return "notatka";
+        }
+    }
+
+    private void gardenActivityDialog(long plantingId,String label) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(8),dp(18),dp(8));
+
+        form.addView(text("Rodzaj czynności",14,true));
+        Spinner kind=new Spinner(this);
+        java.util.List<String> kindLabels=java.util.Arrays.asList(
+            "Podlewanie","Nawożenie","Przycinanie","Przygotowanie gleby",
+            "Ochrona / oprysk","Własna czynność");
+        String[] kindCodes={"water","fertilize","prune","soil","protect","custom"};
+        kind.setAdapter(lightDialogSpinnerAdapter(kindLabels));
+        form.addView(kind);
+
+        EditText custom=new EditText(this);
+        custom.setHint("Nazwa własnej czynności");
+        custom.setSingleLine(true);
+        custom.setVisibility(View.GONE);
+        form.addView(custom);
+        kind.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                custom.setVisibility(position==5?View.VISIBLE:View.GONE);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+
+        form.addView(text("Pierwszy termin",14,true));
+        EditText due=new EditText(this);
+        due.setHint("RRRR-MM-DD");
+        due.setSingleLine(true);
+        due.setFocusable(false);
+        due.setText(LocalDate.now().toString());
+        due.setOnClickListener(v -> {
+            LocalDate initial;
+            try { initial=LocalDate.parse(due.getText().toString()); }
+            catch(Exception ignored){ initial=LocalDate.now(); }
+            new DatePickerDialog(this,(picker,year,month,day)->
+                due.setText(LocalDate.of(year,month+1,day).toString()),
+                initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth()).show();
+        });
+        form.addView(due);
+        smallButton(form,"Wybierz datę",()->due.performClick());
+
+        form.addView(text("Powtarzanie",14,true));
+        Spinner repeat=new Spinner(this);
+        repeat.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(TaskRules.LABELS)));
+        form.addView(repeat);
+        EditText every=new EditText(this);
+        every.setSingleLine(true);
+        every.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        every.setText("1");
+        every.setHint("Co ile");
+        every.setVisibility(View.GONE);
+        form.addView(every);
+        repeat.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                every.setVisibility(TaskRules.custom(TaskRules.RULES[position])
+                    ?View.VISIBLE:View.GONE);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+
+        form.addView(text("Powiadomienie",14,true));
+        Spinner reminder=new Spinner(this);
+        java.util.List<String> reminderLabels=java.util.Arrays.asList(
+            "Bez powiadomienia","09:00 w dniu terminu","09:00 dzień wcześniej",
+            "09:00 trzy dni wcześniej","18:00 dzień wcześniej");
+        reminder.setAdapter(lightDialogSpinnerAdapter(reminderLabels));
+        form.addView(reminder);
+
+        lightDialogForm(form);
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Nowa czynność • "+label)
+            .setView(scroll)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dodaj",null)
+            .create();
+        dialog.setOnShowListener(ignored ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                try {
+                    int repeatPos=repeat.getSelectedItemPosition();
+                    String rule=TaskRules.RULES[repeatPos];
+                    int interval=1;
+                    if(TaskRules.custom(rule)) {
+                        try { interval=Integer.parseInt(every.getText().toString().trim()); }
+                        catch(Exception bad) {
+                            throw new IllegalArgumentException(
+                                "Podaj poprawny odstęp powtarzania.");
+                        }
+                    }
+                    String remindTime=null;
+                    int lead=0;
+                    switch(reminder.getSelectedItemPosition()) {
+                        case 1: remindTime="09:00"; lead=0; break;
+                        case 2: remindTime="09:00"; lead=1; break;
+                        case 3: remindTime="09:00"; lead=3; break;
+                        case 4: remindTime="18:00"; lead=1; break;
+                        default: break;
+                    }
+                    long taskId=GardenStore.createActivityTask(
+                        db.getWritableDatabase(),plantingId,
+                        kindCodes[kind.getSelectedItemPosition()],
+                        custom.getText().toString(),
+                        due.getText().toString().trim(),rule,interval,
+                        remindTime,lead);
+                    ReminderReceiver.schedule(this);
+                    if(remindTime!=null && Build.VERSION.SDK_INT>=33
+                            && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            !=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS},7132);
+                    DiagnosticLog.event("GARDEN_ACTIVITY_TASK_ADDED",
+                        "task="+taskId+" planting="+plantingId);
+                    dialog.dismiss();
+                    render();
+                } catch(IllegalArgumentException invalid) {
+                    alert(invalid.getMessage());
+                } catch(Exception error) {
+                    DiagnosticLog.error("GARDEN_ACTIVITY_TASK_SAVE",error);
+                    alert("Nie udało się dodać czynności ogrodowej.");
+                }
+            }));
+        dialog.show();
+    }
+
+    private void gardenScheduleDialog(long plantingId,String label) {
+        java.util.List<String> options=java.util.Arrays.asList(
+            "Bez powiadomienia",
+            "09:00 w dniu terminu",
+            "09:00 dzień wcześniej",
+            "09:00 trzy dni wcześniej",
+            "18:00 dzień wcześniej");
+        Spinner reminder=new Spinner(this);
+        reminder.setAdapter(lightDialogSpinnerAdapter(options));
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        form.addView(text("Siew, sadzenie i zbiór są tymi samymi Czynnościami, "
+            +"które widzisz w Kalendarzu.",13,false));
+        form.addView(reminder);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this)
+            .setTitle("Ogród • "+label)
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try{
+                    String time=null; int lead=0;
+                    switch(reminder.getSelectedItemPosition()){
+                        case 1: time="09:00"; lead=0; break;
+                        case 2: time="09:00"; lead=1; break;
+                        case 3: time="09:00"; lead=3; break;
+                        case 4: time="18:00"; lead=1; break;
+                        default: break;
+                    }
+                    int linked=GardenStore.syncPlanTasks(db.getWritableDatabase(),
+                        plantingId,time,lead);
+                    ReminderReceiver.schedule(this);
+                    if(time!=null && Build.VERSION.SDK_INT>=33
+                            && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            !=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS},7131);
+                    DiagnosticLog.event("GARDEN_TASKS_SYNCED","count="+linked);
+                    render();
+                    alert(linked==0
+                        ?"To nasadzenie nie ma jeszcze planowanych dat."
+                        :"Zapisano "+linked+" termin(y) w Kalendarzu.");
+                } catch(Exception e) {
+                    alert(e.getMessage()==null
+                        ?"Nie udało się zapisać terminów Ogrodu.":e.getMessage());
+                }
+            }).show();
+    }
+
+    private void gardenSeasonReport() {
+        String report=GardenStore.seasonReport(db.getReadableDatabase());
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18),dp(12),dp(18),dp(12));
+        box.addView(text("Porównanie zapisanych plonów sezon po sezonie. "
+            +"EDHOME nie przelicza automatycznie kg na sztuki ani nie zgaduje "
+            +"brakujących danych.",13,false));
+        TextView details=text(report,14,false);
+        details.setTextIsSelectable(true);
+        box.addView(details);
+        scroll.addView(box);
+        new AlertDialog.Builder(this)
+            .setTitle("Ogród • historia plonów")
+            .setView(scroll)
+            .setPositiveButton("Zamknij",null)
+            .show();
+    }
+
+    private void gardenCatalogInfo() {
+        String message="Katalog referencyjny: "+gardenCount("garden_catalog")+" pozycji\n"
+            +"Moje korekty: "+gardenCount("garden_catalog_overrides")+"\n\n"
+            +"Katalog jest osobną warstwą. Import CSV nie usuwa nasadzeń ani Twoich "
+            +"korekt. EDHOME nie pobiera ani nie wskazuje pirackich baz — importujesz "
+            +"plik, do którego masz prawo.";
+        new AlertDialog.Builder(this)
+            .setTitle("Ogród • katalog roślin")
+            .setMessage(message)
+            .setItems(new String[]{"Import CSV","Eksport CSV","Zamknij"},
+                (dialog,which)->{
+                    if(which==0) gardenImportCatalog();
+                    else if(which==1) gardenExportCatalog();
+                }).show();
+    }
+
+    private void gardenImportCatalog() {
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("text/*");
+        startActivityForResult(intent,IMPORT_GARDEN_CATALOG);
+    }
+
+    private void gardenExportCatalog() {
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("text/csv")
+            .putExtra(Intent.EXTRA_TITLE,"EDHOME-Ogrod-katalog.csv");
+        startActivityForResult(intent,EXPORT_GARDEN_CATALOG);
+    }
 
     /** Dates read directly from vehicles; no duplicate task or expense records. */
     private void vehicles() {
@@ -4967,6 +6864,7 @@ public final class MainActivity extends Activity {
         note("Ty nazywasz lokalizacje. Dom → Kuchnia → Szafka → "
             + "Półka to przykładowa ścieżka, nie narzucona lista. "
             + "Rodzaj jest opcjonalny; miejsce może mieć dowolną liczbę podmiejsc.");
+        button("⚡ Szybko dodaj miejsce", this::quickAddPlace);
         button("+ Dodaj miejsce główne", () ->
             placeEditor(null, "", "", null, "places"));
         java.util.List<PlaceEntry> entries = readPlaces();
@@ -5004,7 +6902,7 @@ public final class MainActivity extends Activity {
         pictogram.setBackground(skin.panel(this, skin.iconBacking, 20));
         row.addView(pictogram,
             new LinearLayout.LayoutParams(dp(47), dp(47)));
-        TextView heading = text(entry.name, 19, true);
+        TextView heading = storageKindText("place", entry.name, 19, true);
         LinearLayout.LayoutParams headingParams =
             new LinearLayout.LayoutParams(0, -2, 1);
         headingParams.setMargins(dp(12), 0, 0, 0);
@@ -5038,7 +6936,7 @@ public final class MainActivity extends Activity {
             placeEditor(null, "", "", entry.id, "places"));
         taskAction(actions, "Edytuj", () -> placeEditor(entry.id,
             entry.name, entry.kind, entry.parent, entry.icon));
-        if (releaseFeaturesEnabled())
+        if (BetaUpdater.isBeta())
             smallButton(box,"QR i etykieta miejsca",
                 () -> showPlaceQr(entry));
         nfcTargetButton(box,"place",entry.id,entry.name);
@@ -5217,6 +7115,7 @@ public final class MainActivity extends Activity {
                             ? "PLACE_ADDED" : "PLACE_EDITED");
                         dialog.dismiss();
                         render();
+                        if(id!=null)refreshQuickStorageSetupStatus("place",id);
                     } catch (IllegalArgumentException error) {
                         alert(error.getMessage());
                     } catch (Exception error) {
@@ -5240,18 +7139,21 @@ public final class MainActivity extends Activity {
     private static final String STORAGE_ACTION_PREFIX = "storage_action_";
 
     private boolean storageThingsVisible() {
-        return "thing".equals(storageTemporaryKind)
-            || prefs.getBoolean(STORAGE_SHOW_THINGS_PREF,true);
+        if (storageTemporaryKind != null)
+            return "thing".equals(storageTemporaryKind);
+        return prefs.getBoolean(STORAGE_SHOW_THINGS_PREF,true);
     }
 
     private boolean storageBoxesVisible() {
-        return "box".equals(storageTemporaryKind)
-            || prefs.getBoolean(STORAGE_SHOW_BOXES_PREF,true);
+        if (storageTemporaryKind != null)
+            return "box".equals(storageTemporaryKind);
+        return prefs.getBoolean(STORAGE_SHOW_BOXES_PREF,true);
     }
 
     private boolean storagePlacesVisible() {
-        return "place".equals(storageTemporaryKind)
-            || prefs.getBoolean(STORAGE_SHOW_PLACES_PREF,true);
+        if (storageTemporaryKind != null)
+            return "place".equals(storageTemporaryKind);
+        return prefs.getBoolean(STORAGE_SHOW_PLACES_PREF,true);
     }
 
     private boolean storageActionVisible(String kind,String action) {
@@ -5262,6 +7164,31 @@ public final class MainActivity extends Activity {
         header("Skaner EDHOME");
         note("Jeden skaner dla QR EDHOME, NFC i kodów produktów. "
             + "Najpierw rozpoznaję obiekt, potem pokazuję właściwe działania.");
+        LinearLayout warehouse = card();
+        warehouse.addView(text("Magazyn • szybkie operacje", 18, true));
+        warehouse.addView(text(
+            "Każda zmiana położenia ma trzy drogi: QR, NFC albo wybór ręczny. "
+            + "Po wskazaniu operacji Skaner wie, jakiego obiektu oczekuje.",
+            13, false));
+        smallButton(warehouse, "Przenieś rzecz", () ->
+            beginStorageScannerOperation("move", "thing"));
+        smallButton(warehouse, "Wyjmij rzecz", () ->
+            beginStorageScannerOperation("take_out", "thing"));
+        smallButton(warehouse, "Przenieś pudełko", () ->
+            beginStorageScannerOperation("move", "box"));
+        smallButton(warehouse, "Rzeczy", () -> {
+            storageTemporaryKind="thing";
+            go("storage");
+        });
+        smallButton(warehouse, "Pudełka", () -> {
+            storageTemporaryKind="box";
+            go("storage");
+        });
+        smallButton(warehouse, "Miejsca", () -> {
+            storageTemporaryKind="place";
+            go("storage");
+        });
+
         LinearLayout state = card();
         state.addView(text("Po zeskanowaniu domyślnie", 18, true));
         state.addView(text(scanActionLabel(
@@ -5294,6 +7221,8 @@ public final class MainActivity extends Activity {
         nfcState.addView(text(scannerNfcStatus, 15, true));
         if (nfcAdapter != null && !nfcAdapter.isEnabled())
             nfcState.addView(text("Włącz NFC w ustawieniach telefonu i wróć tutaj.", 13, false));
+        smallButton(nfcState,"Telefon pokazuje własne NFC? • Pomoc",
+            this::showNfcSystemInterferenceHelp);
 
         LinearLayout rules = card();
         rules.addView(text("Jak działają reguły", 18, true));
@@ -5394,8 +7323,40 @@ public final class MainActivity extends Activity {
         String code = raw == null ? "" : raw.trim();
         if (code.isEmpty()) return;
         StorageQr.Target storageTarget = StorageQr.decode(code);
+        if (quickThingBatchQrTargetPending) {
+            quickThingBatchQrTargetPending=false;
+            if(storageTarget==null
+                    ||(!"box".equals(storageTarget.kind)
+                        &&!"place".equals(storageTarget.kind))) {
+                alert("Szybkie dodawanie oczekuje QR pudełka albo miejsca.");
+                showQuickThingBatchTargetChooser();
+                return;
+            }
+            quickThingBatchSelectTarget(
+                storageTarget.kind,storageTarget.id,"qr");
+            return;
+        }
         if (storageTarget != null) {
+            if(pendingStorageScannerOperation!=null) {
+                handleStorageScannerSource(storageTarget.kind,storageTarget.id);
+                return;
+            }
+            if (pendingStorageDropKind != null && pendingStorageDropId != null) {
+                handleStorageDropSource(storageTarget.kind, storageTarget.id, "qr");
+                return;
+            }
+            if (pendingStorageDestinationItemId != null) {
+                handleStorageDestinationQr(storageTarget);
+                return;
+            }
             handleStorageTargetScan(storageTarget.kind, storageTarget.id, "qr");
+            return;
+        }
+        if(pendingStorageScannerOperation!=null) {
+            String expected="box".equals(pendingStorageScannerKind)
+                ?"pudełka":"rzeczy";
+            clearStorageScannerOperation();
+            alert("Ta operacja oczekuje QR "+expected+". Spróbuj ponownie.");
             return;
         }
         if (PantryScanRules.validBarcode(code)) {
@@ -5449,6 +7410,346 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void showScannerUnknownNfc(String uid) {
+        disableNfcReaderMode();
+        String[] options={
+            "Przypisz do istniejącego",
+            "＋ Nowa Rzecz",
+            "＋ Nowe Pudełko",
+            "＋ Nowe Miejsce",
+            "Anuluj"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Nieznany tag NFC")
+            .setMessage("UID: "+NfcLinkStore.shortUid(uid)
+                +"\n\nCo chcesz zrobić z tym tagiem?")
+            .setItems(options,(dialog,which)->{
+                if(which==0)showScannerExistingTargetKind(uid);
+                else if(which==1)showScannerCreateNfcTarget(uid,"thing");
+                else if(which==2)showScannerCreateNfcTarget(uid,"box");
+                else if(which==3)showScannerCreateNfcTarget(uid,"place");
+                else refreshNfcReaderMode();
+            })
+            .setOnCancelListener(dialog->refreshNfcReaderMode())
+            .show();
+        DiagnosticLog.event("NFC_SCANNER_UNKNOWN_TAG");
+    }
+
+    private void showScannerExistingTargetKind(String uid) {
+        String[] options={"Rzecz","Pudełko","Miejsce","Wróć"};
+        new AlertDialog.Builder(this)
+            .setTitle("Przypisz tag do istniejącego")
+            .setItems(options,(dialog,which)->{
+                if(which==0)showScannerExistingTargetPicker(uid,"thing");
+                else if(which==1)showScannerExistingTargetPicker(uid,"box");
+                else if(which==2)showScannerExistingTargetPicker(uid,"place");
+                else showScannerUnknownNfc(uid);
+            })
+            .setOnCancelListener(dialog->showScannerUnknownNfc(uid))
+            .show();
+    }
+
+    private void showScannerExistingTargetPicker(String uid,String kind) {
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<Long> ids=new java.util.ArrayList<>();
+        if("place".equals(kind)) {
+            for(PlaceEntry place:readPlaces()) {
+                labels.add(db.placePath(place.id));
+                ids.add(place.id);
+            }
+        } else {
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT id,name FROM storage_items WHERE kind=? "
+                        +"ORDER BY name COLLATE NOCASE,id",
+                    new String[]{kind})) {
+                while(c.moveToNext()) {
+                    labels.add(c.getString(1));
+                    ids.add(c.getLong(0));
+                }
+            }
+        }
+        if(labels.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Brak obiektów")
+                .setMessage("Nie ma jeszcze "
+                    +("place".equals(kind)?"miejsc":
+                        "box".equals(kind)?"pudełek":"rzeczy")
+                    +" do przypisania.")
+                .setNegativeButton("Wróć",(d,w)->
+                    showScannerExistingTargetKind(uid))
+                .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz "+NfcLinkStore.kindLabel(kind).toLowerCase(
+                java.util.Locale.forLanguageTag("pl-PL")))
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                bindScannerUnknownNfc(uid,kind,ids.get(which),labels.get(which)))
+            .setNegativeButton("Wróć",(d,w)->
+                showScannerExistingTargetKind(uid))
+            .show();
+    }
+
+    private void bindScannerUnknownNfc(String uid,String kind,long id,String name) {
+        NfcLinkStore.Link old=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),kind,id);
+        Runnable bind=()->{
+            try {
+                NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,id);
+                suppressNfcRepeat(uid);
+                DiagnosticLog.event("NFC_SCANNER_TAG_ASSIGNED",
+                    "kind="+kind+" id="+id);
+                refreshNfcReaderMode();
+                if("thing".equals(kind))showStorageThingDetails(id);
+                else if("box".equals(kind)||"place".equals(kind))
+                    showScannerStorageContents(kind,id,name);
+            } catch(Exception error) {
+                DiagnosticLog.error("NFC_SCANNER_ASSIGN",error);
+                alert(error.getMessage()==null
+                    ?"Nie udało się przypisać taga.":error.getMessage());
+                refreshNfcReaderMode();
+            }
+        };
+        if(old!=null&&!old.uid.equalsIgnoreCase(uid)) {
+            new AlertDialog.Builder(this)
+                .setTitle("Obiekt ma już tag NFC")
+                .setMessage(name+"\nAktualny tag: "
+                    +NfcLinkStore.shortUid(old.uid)
+                    +"\n\nZastąpić go nowym tagiem?")
+                .setNegativeButton("Nie",(d,w)->refreshNfcReaderMode())
+                .setPositiveButton("Zastąp",(d,w)->bind.run())
+                .show();
+        } else bind.run();
+    }
+
+    private void showScannerCreateNfcTarget(String uid,String kind) {
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("thing".equals(kind)?"Nazwa rzeczy":
+            "box".equals(kind)?"Nazwa pudełka":"Nazwa miejsca");
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text("Po zapisaniu EDHOME automatycznie przypisze "
+            +"ten tag NFC do nowego obiektu.",13,false));
+        lightDialogForm(layout);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Nowa "+NfcLinkStore.kindLabel(kind))
+            .setView(layout)
+            .setNegativeButton("Wróć",(d,w)->showScannerUnknownNfc(uid))
+            .setPositiveButton("Utwórz i przypisz",null)
+            .setCancelable(false)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()) {
+                    name.setError("Podaj nazwę.");
+                    return;
+                }
+                long id=0L;
+                try {
+                    if("place".equals(kind)) {
+                        String problem=PlaceRules.validateFields(
+                            value,"","places");
+                        if(problem!=null) {
+                            name.setError(problem);
+                            return;
+                        }
+                        if(!db.savePlace(null,value,"",null,"places")) {
+                            name.setError("Takie miejsce już istnieje.");
+                            return;
+                        }
+                        try(Cursor c=db.getReadableDatabase().rawQuery(
+                                "SELECT id FROM places WHERE parent_id IS NULL "
+                                    +"AND name=? COLLATE NOCASE "
+                                    +"ORDER BY id DESC LIMIT 1",
+                                new String[]{value})) {
+                            if(c.moveToFirst())id=c.getLong(0);
+                        }
+                    } else {
+                        id=StorageStore.create(db.getWritableDatabase(),
+                            value,kind,null,null);
+                    }
+                    if(id<=0)throw new IllegalStateException(
+                        "Nie znaleziono utworzonego obiektu.");
+                    NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,id);
+                    suppressNfcRepeat(uid);
+                    dialog.dismiss();
+                    DiagnosticLog.event("NFC_SCANNER_TARGET_CREATED",
+                        "kind="+kind+" id="+id);
+                    refreshNfcReaderMode();
+                    if("thing".equals(kind))showStorageThingDetails(id);
+                    else showScannerStorageContents(kind,id,value);
+                } catch(Exception error) {
+                    DiagnosticLog.error("NFC_SCANNER_TARGET_CREATE",error);
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć obiektu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private java.util.List<StorageStore.Item> scannerStorageThings(
+            String kind,long id) {
+        java.util.List<StorageStore.Item> all=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items ORDER BY name COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item!=null)all.add(item);
+            }
+        }
+
+        java.util.Set<Long> allowedPlaces=new java.util.HashSet<>();
+        if("place".equals(kind)) {
+            allowedPlaces.add(id);
+            java.util.List<PlaceEntry> places=readPlaces();
+            boolean changed=true;
+            for(int pass=0;changed&&pass<128;pass++) {
+                changed=false;
+                for(PlaceEntry place:places)
+                    if(place.parent!=null&&allowedPlaces.contains(place.parent)
+                            &&allowedPlaces.add(place.id))
+                        changed=true;
+            }
+        }
+
+        java.util.List<StorageStore.Item> things=new java.util.ArrayList<>();
+        for(StorageStore.Item item:all) {
+            if(!"thing".equals(item.kind))continue;
+            if("box".equals(kind)) {
+                if(item.boxId!=null&&item.boxId==id)things.add(item);
+            } else {
+                Long place=StorageStore.effectivePlaceId(
+                    db.getReadableDatabase(),item);
+                if(place!=null&&allowedPlaces.contains(place))things.add(item);
+            }
+        }
+        return things;
+    }
+
+    private int scannerStorageBoxCount(String kind,long id) {
+        int count=0;
+        java.util.Set<Long> allowedPlaces=new java.util.HashSet<>();
+        if("place".equals(kind)) {
+            allowedPlaces.add(id);
+            java.util.List<PlaceEntry> places=readPlaces();
+            boolean changed=true;
+            for(int pass=0;changed&&pass<128;pass++) {
+                changed=false;
+                for(PlaceEntry place:places)
+                    if(place.parent!=null&&allowedPlaces.contains(place.parent)
+                            &&allowedPlaces.add(place.id))
+                        changed=true;
+            }
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items WHERE kind='box'",null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item box=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(box==null)continue;
+                if("box".equals(kind)) {
+                    // The scanned box itself is the container, not a child.
+                } else {
+                    Long place=StorageStore.effectivePlaceId(
+                        db.getReadableDatabase(),box);
+                    if(place!=null&&allowedPlaces.contains(place))count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private int scannerSubplaceCount(long id) {
+        java.util.Set<Long> allowed=new java.util.HashSet<>();
+        allowed.add(id);
+        java.util.List<PlaceEntry> places=readPlaces();
+        boolean changed=true;
+        for(int pass=0;changed&&pass<128;pass++) {
+            changed=false;
+            for(PlaceEntry place:places)
+                if(place.parent!=null&&allowed.contains(place.parent)
+                        &&allowed.add(place.id))
+                    changed=true;
+        }
+        return Math.max(0,allowed.size()-1);
+    }
+
+    private void showScannerStorageContents(String kind,long id,String name) {
+        java.util.List<StorageStore.Item> things=
+            scannerStorageThings(kind,id);
+        int boxCount=scannerStorageBoxCount(kind,id);
+        int subplaces="place".equals(kind)?scannerSubplaceCount(id):0;
+
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(12),dp(8),dp(12),dp(8));
+        content.addView(storageKindText(kind,name,20,true));
+        String summary=things.size()+" "
+            +(things.size()==1?"rzecz":"rzeczy");
+        if("place".equals(kind))
+            summary+=" • "+boxCount+" pudełek • "+subplaces+" podmiejsc";
+        content.addView(text(summary,13,false));
+
+        if(things.isEmpty()) {
+            TextView empty=text("Brak rzeczy w tym "
+                +("box".equals(kind)?"pudełku.":"miejscu."),14,false);
+            empty.setTextColor(subdued);
+            empty.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams emptyParams=
+                new LinearLayout.LayoutParams(-1,dp(90));
+            emptyParams.setMargins(0,dp(8),0,dp(4));
+            content.addView(empty,emptyParams);
+        } else {
+            LinearLayout grid=new LinearLayout(this);
+            grid.setOrientation(LinearLayout.VERTICAL);
+            content.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+            renderStorageGalleryGrid(grid,things,"");
+        }
+
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.addView(content,new ScrollView.LayoutParams(-1,-2));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("box".equals(kind)
+                ?"Pudełko • zawartość":"Miejsce • zawartość")
+            .setView(scroll)
+            .setNegativeButton("Zamknij",(d,w)->refreshNfcReaderMode())
+            .create();
+
+        if("box".equals(kind)) {
+            smallButton(content,"📥 Włóż rzecz tutaj • QR / NFC",()->{
+                dialog.dismiss();
+                beginStorageDropTarget("box",id,name);
+            });
+            smallButton(content,"Otwórz pełne pudełko",()->{
+                dialog.dismiss();
+                storageTemporaryKind="box";
+                expandStorageNfcPath(id);
+                go("storage");
+            });
+        } else {
+            smallButton(content,"📍 Zostaw tutaj rzecz lub pudełko • QR / NFC",()->{
+                dialog.dismiss();
+                beginStorageDropTarget("place",id,name);
+            });
+            smallButton(content,"Otwórz pełne Miejsce",()->{
+                dialog.dismiss();
+                go("places");
+            });
+        }
+        dialog.setOnDismissListener(d->refreshNfcReaderMode());
+        dialog.show();
+        DiagnosticLog.event("NFC_SCANNER_STORAGE_CONTENTS",
+            "kind="+kind+" id="+id+" things="+things.size());
+    }
+
     private void handleKnownNfcScan(NfcLinkStore.Link link) {
         String name = NfcLinkStore.targetName(
             db.getReadableDatabase(), link.kind, link.targetId);
@@ -5462,6 +7763,18 @@ public final class MainActivity extends Activity {
                     NfcLinkStore.clearUid(db.getWritableDatabase(), link.uid);
                     render();
                 }).show();
+            return;
+        }
+        if("scanner".equals(screen)) {
+            suppressNfcRepeat(link.uid);
+            if("thing".equals(link.kind))
+                showStorageThingDetails(link.targetId);
+            else if("box".equals(link.kind)||"place".equals(link.kind))
+                showScannerStorageContents(link.kind,link.targetId,name);
+            else
+                showScannedTargetActions("nfc",link.kind,link.targetId,name);
+            DiagnosticLog.event("NFC_SCANNER_TARGET_OPENED",
+                "kind="+link.kind+" id="+link.targetId);
             return;
         }
         if ("open".equals(resolveScanAction("nfc", link.kind, link.targetId)))
@@ -5493,6 +7806,11 @@ public final class MainActivity extends Activity {
                         qrLabel(item));
             }
         }
+        if ("scanner".equals(screen)
+                && ("box".equals(kind) || "place".equals(kind))) {
+            showScannedTargetActions(source, kind, id, name);
+            return;
+        }
         if ("open".equals(resolveScanAction(source, kind, id)))
             openScannedTarget(kind, id, name);
         else
@@ -5523,8 +7841,9 @@ public final class MainActivity extends Activity {
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(16), dp(12), dp(16), dp(10));
-        actions.addView(text(("nfc".equals(source) ? "NFC" : "QR")
-            + " • " + NfcLinkStore.kindLabel(kind), 14, false));
+        actions.addView(storageKindText(kind,
+            ("nfc".equals(source) ? "NFC" : "QR")
+                + " • " + NfcLinkStore.kindLabel(kind),14,true));
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(name).setView(actions)
             .setNegativeButton("Zamknij", null).create();
@@ -5534,13 +7853,29 @@ public final class MainActivity extends Activity {
             openScannedTarget(kind, id, name);
         });
 
+        if ("box".equals(kind))
+            smallButton(actions, "📥 Włóż rzecz tutaj • skanuj QR / NFC", () -> {
+                dialog.dismiss();
+                beginStorageDropTarget("box", id, name);
+            });
+        else if ("place".equals(kind))
+            smallButton(actions, "📍 Zostaw tutaj rzecz lub pudełko • skanuj QR / NFC", () -> {
+                dialog.dismiss();
+                beginStorageDropTarget("place", id, name);
+            });
+
         if ("thing".equals(kind) || "box".equals(kind)) {
             StorageStore.Item item = StorageStore.find(db.getReadableDatabase(), id);
             if (item != null) {
-                smallButton(actions, "Przenieś / edytuj", () -> {
+                smallButton(actions, "Przenieś • NFC / QR / ręcznie", () -> {
                     dialog.dismiss();
-                    storageEditor(item.kind, item.id);
+                    showStorageMoveOptions(item);
                 });
+                if("thing".equals(kind) && item.boxId!=null)
+                    smallButton(actions, "Wyjmij z pudełka", () -> {
+                        dialog.dismiss();
+                        takeStorageThingOut(item);
+                    });
                 if ("thing".equals(kind) && item.lentTo == null)
                     smallButton(actions, "Wypożycz", () -> {
                         dialog.dismiss();
@@ -5620,15 +7955,26 @@ public final class MainActivity extends Activity {
         boolean showThings=storageThingsVisible();
         boolean showBoxes=storageBoxesVisible();
         boolean showPlaces=storagePlacesVisible();
-        header("Rzeczy • pudełka • QR");
+        header("Rzeczy • Pudełka • Miejsca");
+        storageViewSwitcher();
+        storageKindLegend();
         note("Rzeczy dziedziczą lokalizację po pudełku. Przeniesienie pudełka "
             + "zmienia ich wyświetlaną lokalizację, ale nie zmienia indywidualnego QR.");
-        if(showThings)button("+ Dodaj rzecz", () -> storageEditor("thing", null));
-        if(showBoxes)button("+ Dodaj pudełko", () -> storageEditor("box", null));
-        if (releaseFeaturesEnabled()) {
-            button("▣ Drukuj wybrane etykiety QR / PDF",
+        if(showThings) {
+            button("⚡ Szybko dodaj rzecz", this::quickAddStorageThing);
+            button("+ Dodaj rzecz", () -> storageEditor("thing", null));
+        }
+        if(showBoxes) {
+            button("⚡ Szybko dodaj pudełko", this::quickAddStorageBox);
+            button("+ Dodaj pudełko", () -> storageEditor("box", null));
+        }
+        if(showPlaces)
+            button("⚡ Szybko dodaj miejsce", this::quickAddPlace);
+        if (BetaUpdater.isBeta()) {
+            LinearLayout qrTools=compactActionRow();
+            compactAction(qrTools,"▣ Drukuj wybrane etykiety QR / PDF",
                 this::selectBulkQrLabels);
-            button("◷ Historia skanowania i drukowania QR",
+            compactAction(qrTools,"◷ Historia skanowania i drukowania QR",
                 this::showQrHistory);
         }
         button("▣ Skaner EDHOME • QR / NFC / kody", () -> go("scanner"));
@@ -5646,8 +7992,10 @@ public final class MainActivity extends Activity {
                 if(item!=null)items.add(item);
             }
         }
-        if(showThings && prefs.getBoolean(STORAGE_GALLERY_PREF,true))
+        if("thing".equals(storageTemporaryKind)) {
             storageThingsGallery(items);
+            return;
+        }
         title("Podgląd magazynu");
         note("Widok: "
             +(showPlaces?"miejsca ":"")
@@ -5703,13 +8051,156 @@ public final class MainActivity extends Activity {
             note(!showPlaces&&!showBoxes&&!showThings
                 ?"Wszystkie typy są ukryte. Włącz je w Ustawieniach."
                 :"Brak elementów dla wybranego widoku magazynu.");
-        title("Ostatnie ruchy magazynu");
+        LinearLayout history=collapsedStorageHistory();
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT name_snapshot,action,details FROM storage_events "
                 +"ORDER BY id DESC LIMIT 12",null)){
-            while(c.moveToNext())note(c.getString(0)+" • "+c.getString(1)
-                +" • "+c.getString(2));
+            while(c.moveToNext()) {
+                TextView event=text(c.getString(0)+" • "+c.getString(1)
+                    +" • "+c.getString(2),12,false);
+                event.setTextColor(subdued);
+                history.addView(event,new LinearLayout.LayoutParams(-1,-2));
+            }
         }
+    }
+
+    private LinearLayout collapsedStorageHistory() {
+        LinearLayout header=card();
+        header.setPadding(dp(12),dp(5),dp(12),dp(5));
+        TextView label=text("▸ Ostatnie ruchy magazynu",18,true);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(label,new LinearLayout.LayoutParams(-1,dp(40)));
+        LinearLayout entries=new LinearLayout(this);
+        entries.setOrientation(LinearLayout.VERTICAL);
+        entries.setPadding(dp(10),dp(2),dp(10),dp(5));
+        entries.setVisibility(View.GONE);
+        body.addView(entries,new LinearLayout.LayoutParams(-1,-2));
+        header.setClickable(true);
+        header.setFocusable(true);
+        touchFeedback(header);
+        header.setOnClickListener(v->{
+            boolean expand=entries.getVisibility()!=View.VISIBLE;
+            entries.setVisibility(expand?View.VISIBLE:View.GONE);
+            label.setText(semanticText((expand?"▾ ":"▸ ")
+                +"Ostatnie ruchy magazynu"));
+        });
+        return entries;
+    }
+
+    private void storageViewSwitcher() {
+        HorizontalScrollView filters = new HorizontalScrollView(this);
+        filters.setHorizontalScrollBarEnabled(false);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        filters.addView(row);
+        body.addView(filters, new LinearLayout.LayoutParams(-1, dp(40)));
+        String selected = storageTemporaryKind == null ? "all" : storageTemporaryKind;
+        for (String[] filter : new String[][] {
+            {"all", "Wszystko"}, {"thing", "Rzeczy"},
+            {"box", "Pudełka"}, {"place", "Miejsca"} }) {
+            Button chip = new Button(this);
+            chip.setAllCaps(false);
+            chip.setText(semanticText(filter[1]));
+            chip.setTextSize(11);
+            chip.setMinHeight(0);
+            chip.setMinimumHeight(0);
+            boolean active = filter[0].equals(selected);
+            chip.setTextColor(active ? skin.accentInk : ink);
+            chip.setBackground(rounded(active ? accent : surface));
+            LinearLayout.LayoutParams cp =
+                new LinearLayout.LayoutParams(-2, dp(36));
+            cp.setMargins(0, 0, dp(5), 0);
+            row.addView(chip, cp);
+            chip.setOnClickListener(v -> {
+                storageTemporaryKind = "all".equals(filter[0])
+                    ? null : filter[0];
+                DiagnosticLog.event("STORAGE_VIEW_CHANGED",
+                    "kind=" + filter[0]);
+                render();
+            });
+        }
+    }
+
+    private int storageKindTextColor(String kind) {
+        return semanticTextColor(kind);
+    }
+
+    private TextView storageKindText(String kind,String value,int size,
+            boolean bold) {
+        TextView view=text(value,size,bold);
+        view.setTextColor(storageKindTextColor(kind));
+        return view;
+    }
+
+    private void storageKindLegend() {
+        LinearLayout legend=new LinearLayout(this);
+        legend.setOrientation(LinearLayout.HORIZONTAL);
+        legend.setGravity(Gravity.CENTER_VERTICAL);
+        String[][] values={{"place","● Miejsce"},{"box","● Pudełko"},
+            {"thing","● Rzecz"}};
+        for(String[] value:values) {
+            TextView label=storageKindText(value[0],value[1],12,true);
+            label.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(28),1f);
+            lp.setMargins(dp(2),0,dp(2),dp(4));
+            legend.addView(label,lp);
+        }
+        body.addView(legend,new LinearLayout.LayoutParams(-1,-2));
+    }
+
+    private void bindStorageThumbnailPeek(View target,Bitmap thumbnail) {
+        if(thumbnail==null)return;
+        final float[] down={0f,0f};
+        final boolean[] peeking={false};
+        final PopupWindow[] popup={null};
+        final Runnable[] showPeek=new Runnable[1];
+        showPeek[0]=()->{
+            if(!target.isPressed())return;
+            ImageView preview=new ImageView(this);
+            preview.setImageBitmap(thumbnail);
+            preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            preview.setPadding(dp(8),dp(8),dp(8),dp(8));
+            preview.setBackgroundColor(Color.argb(242,0,0,0));
+            int width=Math.max(dp(220),
+                getResources().getDisplayMetrics().widthPixels-dp(24));
+            int height=Math.max(dp(260),
+                getResources().getDisplayMetrics().heightPixels-dp(96));
+            PopupWindow shown=new PopupWindow(preview,width,height,false);
+            shown.setTouchable(false);
+            shown.setOutsideTouchable(false);
+            shown.setClippingEnabled(true);
+            shown.setElevation(dp(12));
+            shown.showAtLocation(root,Gravity.CENTER,0,0);
+            popup[0]=shown;
+            peeking[0]=true;
+            target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        };
+        target.setOnTouchListener((v,event)->{
+            int action=event.getActionMasked();
+            if(action==MotionEvent.ACTION_DOWN) {
+                down[0]=event.getX();
+                down[1]=event.getY();
+                peeking[0]=false;
+                v.postDelayed(showPeek[0],400L);
+            } else if(action==MotionEvent.ACTION_MOVE&&!peeking[0]) {
+                float dx=event.getX()-down[0];
+                float dy=event.getY()-down[1];
+                int slop=ViewConfiguration.get(this).getScaledTouchSlop();
+                if(dx*dx+dy*dy>slop*slop)
+                    v.removeCallbacks(showPeek[0]);
+            } else if(action==MotionEvent.ACTION_UP
+                    ||action==MotionEvent.ACTION_CANCEL) {
+                v.removeCallbacks(showPeek[0]);
+                boolean consumed=peeking[0];
+                if(popup[0]!=null) {
+                    popup[0].dismiss();
+                    popup[0]=null;
+                }
+                peeking[0]=false;
+                if(action==MotionEvent.ACTION_UP&&consumed)return true;
+            }
+            return false;
+        });
     }
 
     private void storageThingsGallery(java.util.List<StorageStore.Item> items) {
@@ -5718,20 +8209,67 @@ public final class MainActivity extends Activity {
             if(!"box".equals(item.kind))things.add(item);
         if(things.isEmpty())return;
 
-        title("Galeria rzeczy");
-        note("Szybki podgląd tego, co masz. Dotknij miniatury, aby otworzyć rzecz. "
-            +"Brak zdjęcia nie ukrywa przedmiotu.");
+        title("Rzeczy");
+        note("Tylko miniatury. Dotknij, aby otworzyć rzecz. Przytrzymaj "
+            +"miniaturę około 0,4 s, aby powiększyć ją tylko na czas trzymania.");
+        EditText search=new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Szukaj rzeczy lub miejsca…");
+        search.setText(storageGallerySearch);
+        search.setTextColor(ink);
+        search.setHintTextColor(subdued);
+        body.addView(search,new LinearLayout.LayoutParams(-1,-2));
+
         LinearLayout grid=new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+        renderStorageGalleryGrid(grid,things,storageGallerySearch);
 
-        for(int i=0;i<things.size();i+=2) {
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value,int start,
+                    int count,int after) { }
+            @Override public void onTextChanged(CharSequence value,int start,
+                    int before,int count) {
+                storageGallerySearch=value==null?"":value.toString();
+                renderStorageGalleryGrid(grid,things,storageGallerySearch);
+            }
+            @Override public void afterTextChanged(android.text.Editable value) { }
+        });
+        search.setSelection(search.getText().length());
+        DiagnosticLog.event("STORAGE_THINGS_GALLERY_VIEWED",
+            "count="+things.size());
+    }
+
+    private String storageSearchKey(String value) {
+        if(value==null)return "";
+        return java.text.Normalizer.normalize(
+            value.toLowerCase(java.util.Locale.ROOT),
+            java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","").trim();
+    }
+
+    private void renderStorageGalleryGrid(LinearLayout grid,
+            java.util.List<StorageStore.Item> things,String query) {
+        grid.removeAllViews();
+        String wanted=storageSearchKey(query);
+        java.util.List<StorageStore.Item> filtered=new java.util.ArrayList<>();
+        for(StorageStore.Item item:things) {
+            String location=StorageStore.location(db.getReadableDatabase(),item);
+            String haystack=storageSearchKey(item.name+" "+location);
+            if(wanted.isEmpty()||haystack.contains(wanted))filtered.add(item);
+        }
+        if(filtered.isEmpty()) {
+            TextView empty=text("Nie znaleziono rzeczy pasującej do wyszukiwania.",14,false);
+            empty.setTextColor(subdued);
+            grid.addView(empty,new LinearLayout.LayoutParams(-1,-2));
+            return;
+        }
+        for(int i=0;i<filtered.size();i+=3) {
             LinearLayout row=new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             grid.addView(row,new LinearLayout.LayoutParams(-1,-2));
-            for(int slot=0;slot<2;slot++) {
+            for(int slot=0;slot<3;slot++) {
                 int index=i+slot;
-                if(index>=things.size()) {
+                if(index>=filtered.size()) {
                     View spacer=new View(this);
                     LinearLayout.LayoutParams empty=new LinearLayout.LayoutParams(
                         0,dp(1),1f);
@@ -5739,39 +8277,34 @@ public final class MainActivity extends Activity {
                     row.addView(spacer,empty);
                     continue;
                 }
-                StorageStore.Item item=things.get(index);
+                StorageStore.Item item=filtered.get(index);
                 LinearLayout tile=new LinearLayout(this);
                 tile.setOrientation(LinearLayout.VERTICAL);
-                tile.setPadding(dp(10),dp(10),dp(10),dp(10));
-                tile.setBackground(skin.panel(this,surface,22));
-                tile.setElevation(dp(2));
+                tile.setPadding(dp(3),dp(3),dp(3),dp(3));
+                tile.setBackground(skin.panel(this,surface,18));
+                tile.setElevation(dp(1));
                 tile.setClickable(true);
                 tile.setFocusable(true);
                 touchFeedback(tile);
 
                 Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+                if(thumbnail!=null)bindStorageThumbnailPeek(tile,thumbnail);
                 if(thumbnail!=null) {
                     ImageView image=new ImageView(this);
                     image.setImageBitmap(thumbnail);
                     image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    tile.addView(image,new LinearLayout.LayoutParams(-1,dp(118)));
+                    tile.addView(image,new LinearLayout.LayoutParams(-1,dp(108)));
                 } else {
-                    TextView missing=text("◉\nBrak zdjęcia",14,true);
+                    TextView missing=text("◉",24,true);
                     missing.setGravity(Gravity.CENTER);
                     missing.setTextColor(subdued);
-                    tile.addView(missing,new LinearLayout.LayoutParams(-1,dp(118)));
+                    missing.setContentDescription("Brak zdjęcia");
+                    tile.addView(missing,new LinearLayout.LayoutParams(-1,dp(108)));
                 }
 
-                TextView name=text(item.name,15,true);
-                name.setMaxLines(2);
-                tile.addView(name);
-                TextView location=text(
-                    StorageStore.location(db.getReadableDatabase(),item),11,false);
-                location.setTextColor(subdued);
-                location.setMaxLines(2);
-                tile.addView(location);
-                tile.setContentDescription("Rzecz: "+item.name+" • otwórz");
-                tile.setOnClickListener(v->storageEditor(item.kind,item.id));
+                tile.setContentDescription("Rzecz: "+item.name
+                    +". Dotknij, aby otworzyć szczegóły.");
+                tile.setOnClickListener(v->showStorageThingDetails(item.id));
 
                 LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(
                     0,-2,1f);
@@ -5779,8 +8312,100 @@ public final class MainActivity extends Activity {
                 row.addView(tile,cell);
             }
         }
-        DiagnosticLog.event("STORAGE_THINGS_GALLERY_VIEWED",
-            "count="+things.size());
+    }
+
+    private void showStorageThingDetails(long itemId) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(item==null || !"thing".equals(item.kind)) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        LinearLayout details=new LinearLayout(this);
+        details.setOrientation(LinearLayout.VERTICAL);
+        details.setPadding(dp(16),dp(10),dp(16),dp(10));
+
+        Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+        if(thumbnail!=null) {
+            ImageView image=new ImageView(this);
+            image.setImageBitmap(thumbnail);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            details.addView(image,new LinearLayout.LayoutParams(-1,dp(220)));
+        }
+        details.addView(storageKindText("thing",item.name,20,true));
+        TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
+            .replace(" / "," → "),13,false);
+        where.setTextColor(subdued);
+        details.addView(where);
+        NfcLinkStore.Link nfc=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),item.kind,item.id);
+        if(nfc!=null) {
+            TextView tag=text("NFC: "+NfcLinkStore.shortUid(nfc.uid),12,false);
+            tag.setTextColor(subdued);
+            details.addView(tag);
+        }
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Rzecz")
+            .setView(details)
+            .setNegativeButton("Zamknij",null)
+            .create();
+        smallButton(details,"📍 Gdzie to jest?",()->{
+            dialog.dismiss();
+            showStorageLocator(item);
+        });
+        smallButton(details,"📦 Przenieś • QR / NFC / ręcznie",()->{
+            dialog.dismiss();
+            showStorageMoveOptions(item);
+        });
+        if(item.boxId!=null)
+            smallButton(details,"↥ Wyjmij z pudełka",()->{
+                dialog.dismiss();
+                takeStorageThingOut(item);
+            });
+        smallButton(details,"📷 Dodaj / zmień zdjęcie",()->{
+            dialog.dismiss();
+            selectStorageThumbnail(item.id);
+        });
+        smallButton(details,"NFC • Zarządzaj tagiem",()->{
+            dialog.dismiss();
+            showNfcTargetMenu(null,item.kind,item.id,item.name);
+        });
+        smallButton(details,"QR / etykieta",()->{
+            dialog.dismiss();
+            showStorageQr(item);
+        });
+        smallButton(details,"Edytuj położenie ręcznie",()->{
+            dialog.dismiss();
+            storageEditor(item.kind,item.id);
+        });
+        lightDialogForm(details);
+        dialog.show();
+        DiagnosticLog.event("STORAGE_THING_DETAILS_OPENED","id="+item.id);
+    }
+
+    private void showStorageLocator(StorageStore.Item item) {
+        StorageStore.Item current=StorageStore.find(db.getReadableDatabase(),item.id);
+        if(current==null) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        String path=StorageStore.location(db.getReadableDatabase(),current)
+            .replace(" / "," → ");
+        String message="Idź kolejno:\n\n"+path;
+        if(current.lentTo!=null)
+            message+="\n\nRzecz jest wypożyczona: "+current.lentTo;
+        new AlertDialog.Builder(this)
+            .setTitle("📍 "+current.name)
+            .setMessage(message)
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Pokaż w drzewie",(d,w)->{
+                expandStorageNfcPath(current.id);
+                render();
+            })
+            .setPositiveButton("Otwórz rzecz",(d,w)->
+                storageEditor(current.kind,current.id))
+            .show();
+        DiagnosticLog.event("STORAGE_LOCATOR_OPENED","id="+current.id);
     }
 
     /** Reparent a newly built card into its branch while retaining card style. */
@@ -5800,6 +8425,8 @@ public final class MainActivity extends Activity {
         LinearLayout row=card();
         row.setPadding(dp(12+Math.min(depth,8)*13),dp(4),dp(12),dp(4));
         TextView heading=text((collapsed?"▸ ":"▾ ")+label,17,true);
+        if(label.startsWith("▣ Pudełko"))
+            heading.setTextColor(storageKindTextColor("box"));
         heading.setMinHeight(dp(44));
         heading.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(heading);
@@ -5823,6 +8450,72 @@ public final class MainActivity extends Activity {
         return children;
     }
 
+    private LinearLayout storageTreePlaceHeading(PlaceEntry place,int depth,
+            String prefKey,boolean collapsed,LinearLayout target) {
+        LinearLayout box=card();
+        box.setPadding(dp(10+Math.min(depth,8)*13),dp(3),dp(10),dp(3));
+        storageTreeAttach(box,target);
+
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        box.addView(row,new LinearLayout.LayoutParams(-1,dp(46)));
+
+        TextView heading=text((collapsed?"▸ ":"▾ ")+"⌂ "+place.name,16,true);
+        heading.setTextColor(storageKindTextColor("place"));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heading.setClickable(true);
+        heading.setFocusable(true);
+        touchFeedback(heading);
+        LinearLayout.LayoutParams hp=
+            new LinearLayout.LayoutParams(0,dp(44),1f);
+        hp.setMargins(0,0,dp(4),0);
+        row.addView(heading,hp);
+
+        if(BetaUpdater.isBeta()&&storageActionVisible("place","qr"))
+            storagePlaceHeaderAction(row,"QR / etykieta",
+                ()->showPlaceQr(place));
+        if(storageActionVisible("place","nfc"))
+            storagePlaceHeaderAction(row,"NFC",
+                ()->showNfcTargetMenu(box,"place",place.id,place.name));
+
+        LinearLayout children=new LinearLayout(this);
+        children.setOrientation(LinearLayout.VERTICAL);
+        children.setVisibility(collapsed?View.GONE:View.VISIBLE);
+        target.addView(children,new LinearLayout.LayoutParams(-1,-2));
+
+        heading.setContentDescription(place.name+(collapsed
+            ?" • Rozwiń":" • Zwiń"));
+        heading.setOnClickListener(v->{
+            boolean nowCollapsed=children.getVisibility()==View.VISIBLE;
+            children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);
+            heading.setText((nowCollapsed?"▸ ":"▾ ")+"⌂ "+place.name);
+            heading.setContentDescription(place.name+(nowCollapsed
+                ?" • Rozwiń":" • Zwiń"));
+            prefs.edit().putBoolean(prefKey,nowCollapsed).apply();
+        });
+        return children;
+    }
+
+    private void storagePlaceHeaderAction(LinearLayout row,String label,
+            Runnable action) {
+        TextView button=text(label,11,true);
+        button.setGravity(Gravity.CENTER);
+        button.setMaxLines(2);
+        button.setPadding(dp(6),0,dp(6),0);
+        button.setBackground(skin.panel(this,skin.tileTop,16));
+        button.setClickable(true);
+        button.setFocusable(true);
+        touchFeedback(button);
+        button.setOnClickListener(v->action.run());
+        LinearLayout.LayoutParams lp=
+            new LinearLayout.LayoutParams(dp(78),dp(40));
+        lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+        row.addView(button,lp);
+    }
+
     private void storageTreePlace(PlaceEntry place,
             java.util.List<PlaceEntry> places,
             java.util.List<StorageStore.Item> items,
@@ -5835,13 +8528,7 @@ public final class MainActivity extends Activity {
         if(visible) {
             String key="storage_tree_place_"+place.id;
             boolean collapsed=prefs.getBoolean(key,false);
-            children=storageTreeHeading("⌂ "+place.name,
-                depth,key,collapsed,target);
-            if (releaseFeaturesEnabled() && storageActionVisible("place","qr"))
-                smallButton(children,"QR i etykieta miejsca",
-                    () -> showPlaceQr(place));
-            if(storageActionVisible("place","nfc"))
-                nfcTargetButton(children,"place",place.id,place.name);
+            children=storageTreePlaceHeading(place,depth,key,collapsed,target);
             childDepth=depth+1;
         }
         for(PlaceEntry child:places)
@@ -5869,41 +8556,65 @@ public final class MainActivity extends Activity {
                     depth,key,prefs.getBoolean(key,false),target);
                 childDepth=depth+1;
             }
+
             LinearLayout details=card();
-            details.setPadding(dp(12+Math.min(depth,8)*13),dp(5),dp(12),dp(7));
+            details.setPadding(dp(12+Math.min(depth,8)*13),dp(6),dp(12),dp(7));
             storageTreeAttach(details,inner);
+
             Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+            LinearLayout summary=new LinearLayout(this);
+            summary.setOrientation(LinearLayout.HORIZONTAL);
+            summary.setGravity(Gravity.CENTER_VERTICAL);
+            details.addView(summary,new LinearLayout.LayoutParams(-1,-2));
+
+            View thumbView;
             if(thumbnail!=null) {
                 ImageView preview=new ImageView(this);
                 preview.setImageBitmap(thumbnail);
                 preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                details.addView(preview,new LinearLayout.LayoutParams(
-                    dp(82),dp(82)));
+                thumbView=preview;
+            } else {
+                TextView missing=text("▧",30,true);
+                missing.setGravity(Gravity.CENTER);
+                missing.setTextColor(subdued);
+                missing.setBackground(skin.panel(this,skin.tileTop,14));
+                thumbView=missing;
             }
-            if(!isBox)details.addView(text("◉ "+item.name,16,true));
-            if(storageActionVisible(item.kind,"photo")) {
-                smallButton(details,thumbnail==null?"Dodaj zdjęcie • miniatura":
-                    "Zmień zdjęcie • miniatura",()->selectStorageThumbnail(item.id));
-                if(thumbnail!=null)
-                    smallButton(details,"Usuń zdjęcie",()->{
-                        prefs.edit().remove(StorageThumbs.key(item.id)).apply();
-                        render();
-                    });
+            thumbView.setClickable(true);
+            thumbView.setFocusable(true);
+            thumbView.setContentDescription((thumbnail==null
+                ?"Brak miniatury":"Miniatura")+" • dotknij, aby pokazać akcje");
+            touchFeedback(thumbView);
+            thumbView.setOnClickListener(v->showStorageThumbnailActions(item.id));
+            if(thumbnail!=null)bindStorageThumbnailPeek(thumbView,thumbnail);
+            LinearLayout.LayoutParams tp=
+                new LinearLayout.LayoutParams(dp(82),dp(82));
+            tp.setMargins(0,0,dp(8),0);
+            summary.addView(thumbView,tp);
+
+            LinearLayout info=new LinearLayout(this);
+            info.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams ip=
+                new LinearLayout.LayoutParams(0,-2,1f);
+            ip.setMargins(0,0,dp(5),0);
+            summary.addView(info,ip);
+            if(!isBox)info.addView(storageKindText(
+                "thing","◉ "+item.name,16,true));
+            TextView location=text(
+                StorageStore.location(db.getReadableDatabase(),item),12,false);
+            location.setTextColor(subdued);
+            info.addView(location);
+            if(item.lentTo!=null) {
+                TextView lent=text("Wypożyczono: "+item.lentTo,13,false);
+                lent.setTextColor(subdued);
+                info.addView(lent);
             }
-            details.addView(text(StorageStore.location(db.getReadableDatabase(),item),
-                12,false));
-            if(item.lentTo!=null)
-                details.addView(text("Wypożyczono: "+item.lentTo,13,false));
-            if(storageActionVisible(item.kind,"qr"))
-                smallButton(details,"Pokaż QR",()->showStorageQr(item));
-            if(storageActionVisible(item.kind,"nfc"))
-                nfcTargetButton(details,item.kind,item.id,item.name);
-            if (releaseFeaturesEnabled() && storageActionVisible(item.kind,"print"))
-                smallButton(details,"Drukuj etykietę / PDF / Udostępnij",
-                    () -> selectQrLabelFormat(java.util.Collections.singletonList(
-                        qrLabel(item))));
-            if(item.lentTo==null && storageActionVisible(item.kind,"move"))
-                smallButton(details,"Przenieś",()->storageEditor(item.kind,item.id));
+
+            if(storageActionVisible(item.kind,"photo"))
+                storageItemHeaderAction(summary,
+                    thumbnail==null?"Dodaj zdjęcie":"Zmień zdjęcie\nminiatura",
+                    ()->selectStorageThumbnail(item.id));
+
             if(!isBox && storageActionVisible(item.kind,"lend")) {
                 if(item.lentTo==null)
                     smallButton(details,"Wypożycz",()->askStorageLend(item));
@@ -5932,6 +8643,77 @@ public final class MainActivity extends Activity {
             for(StorageStore.Item child:items)
                 if(child.boxId!=null && child.boxId==item.id)
                     storageTreeItem(child,items,drawnItems,childDepth,inner);
+    }
+
+    private void storageItemHeaderAction(LinearLayout row,String label,
+            Runnable action) {
+        TextView button=text(label,11,true);
+        button.setGravity(Gravity.CENTER);
+        button.setMaxLines(2);
+        button.setPadding(dp(5),0,dp(5),0);
+        button.setBackground(skin.panel(this,skin.tileTop,16));
+        button.setClickable(true);
+        button.setFocusable(true);
+        touchFeedback(button);
+        button.setOnClickListener(v->action.run());
+        LinearLayout.LayoutParams lp=
+            new LinearLayout.LayoutParams(dp(98),dp(64));
+        lp.setMargins(dp(2),dp(2),0,dp(2));
+        row.addView(button,lp);
+    }
+
+    private void showStorageThumbnailActions(long itemId) {
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(item==null) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        java.util.ArrayList<Runnable> actions=new java.util.ArrayList<>();
+
+        if(thumbnail!=null&&storageActionVisible(item.kind,"photo")) {
+            labels.add("Usuń zdjęcie");
+            actions.add(()->{
+                prefs.edit().remove(StorageThumbs.key(item.id)).apply();
+                DiagnosticLog.event("STORAGE_THUMBNAIL_REMOVED");
+                render();
+            });
+        }
+        if(storageActionVisible(item.kind,"qr")) {
+            labels.add("Pokaż QR");
+            actions.add(()->showStorageQr(item));
+        }
+        if(storageActionVisible(item.kind,"nfc")) {
+            NfcLinkStore.Link link=null;
+            try{
+                link=NfcLinkStore.findByTarget(
+                    db.getReadableDatabase(),item.kind,item.id);
+            }catch(Exception ignored){ }
+            labels.add(link==null
+                ?"NFC • Przypisz tag NFC":"NFC • Zarządzaj tagiem");
+            actions.add(()->showNfcTargetMenu(
+                body,item.kind,item.id,item.name));
+        }
+        if(BetaUpdater.isBeta()&&storageActionVisible(item.kind,"print")) {
+            labels.add("Drukuj etykietę / PDF / Udostępnij");
+            actions.add(()->selectQrLabelFormat(
+                java.util.Collections.singletonList(qrLabel(item))));
+        }
+        if(item.lentTo==null&&storageActionVisible(item.kind,"move")) {
+            labels.add("Przenieś • NFC / QR / ręcznie");
+            actions.add(()->showStorageMoveOptions(item));
+        }
+        if(labels.isEmpty()) {
+            alert("Brak dodatkowych akcji dla tego elementu.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Akcje • "+item.name)
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                actions.get(which).run())
+            .setNegativeButton("Zamknij",null)
+            .show();
     }
 
     private void selectStorageThumbnail(long id) {
@@ -5982,12 +8764,86 @@ public final class MainActivity extends Activity {
         Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
         if(camera.resolveActivity(getPackageManager())==null) {
             pendingStorageThumbnailId=0;
-            alert("Nie znaleziono aplikacji aparatu.");return;
+            alert("Nie znaleziono aplikacji aparatu.");
+            continueQuickThingBatchAfterPhoto(id);
+            return;
         }
-        try {startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);}
-        catch(Exception error) {
+        try {
+            java.io.File dir=new java.io.File(getCacheDir(),"storage_camera");
+            if(!dir.exists()&&!dir.mkdirs())
+                throw new IllegalStateException("Nie utworzono katalogu zdjęcia.");
+            java.io.File file=java.io.File.createTempFile(
+                "edhome_"+id+"_","_full.jpg",dir);
+            Uri uri=FileProvider.getUriForFile(this,
+                getPackageName()+".storage.files",file);
+            pendingStorageCameraFile=file;
+            pendingStorageCameraUri=uri;
+            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT,uri);
+            camera.setClipData(ClipData.newRawUri("EDHOME zdjęcie",uri));
+            camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                |Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);
+        } catch(Exception error) {
+            cleanupStorageCameraTemp();
             pendingStorageThumbnailId=0;
-            alert("Nie można uruchomić aparatu.");
+            alert("Nie można uruchomić aparatu z pełną jakością.");
+            continueQuickThingBatchAfterPhoto(id);
+        }
+    }
+
+    private void cleanupStorageCameraTemp() {
+        pendingStorageCameraUri=null;
+        java.io.File file=pendingStorageCameraFile;
+        pendingStorageCameraFile=null;
+        if(file!=null&&file.exists())file.delete();
+    }
+
+    private void takeQuickThingBatchDraftPhoto() {
+        if(!quickThingBatchActive)return;
+        quickThingBatchDraftPhoto=true;
+        quickThingBatchPendingThumbnail=null;
+        if(Build.VERSION.SDK_INT>=23
+                &&checkSelfPermission(android.Manifest.permission.CAMERA)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA},
+                STORAGE_CAMERA_PERMISSION);
+            return;
+        }
+        launchQuickThingBatchDraftCamera();
+    }
+
+    private void launchQuickThingBatchDraftCamera() {
+        if(!quickThingBatchActive)return;
+        quickThingBatchDraftPhoto=true;
+        Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        if(camera.resolveActivity(getPackageManager())==null) {
+            quickThingBatchDraftPhoto=false;
+            alert("Nie znaleziono aplikacji aparatu. Rzecz nie została utworzona.");
+            quickThingBatchFinish();
+            return;
+        }
+        try {
+            java.io.File dir=new java.io.File(getCacheDir(),"storage_camera");
+            if(!dir.exists()&&!dir.mkdirs())
+                throw new IllegalStateException("Nie utworzono katalogu zdjęcia.");
+            java.io.File file=java.io.File.createTempFile(
+                "edhome_quick_","_full.jpg",dir);
+            Uri uri=FileProvider.getUriForFile(this,
+                getPackageName()+".storage.files",file);
+            pendingStorageCameraFile=file;
+            pendingStorageCameraUri=uri;
+            pendingStorageThumbnailId=0L;
+            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT,uri);
+            camera.setClipData(ClipData.newRawUri("EDHOME zdjęcie",uri));
+            camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                |Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_WAITING");
+        } catch(Exception error) {
+            cleanupStorageCameraTemp();
+            quickThingBatchDraftPhoto=false;
+            alert("Nie można uruchomić aparatu. Rzecz nie została utworzona.");
+            quickThingBatchFinish();
         }
     }
 
@@ -5998,6 +8854,1422 @@ public final class MainActivity extends Activity {
             throw new IllegalStateException("Nie zapisano miniatury.");
         DiagnosticLog.event("STORAGE_THUMBNAIL_SAVED");
         render();
+        refreshQuickStorageSetupStatus("thing",id);
+        refreshQuickStorageSetupStatus("box",id);
+    }
+
+    private void continueQuickThingBatchAfterPhoto(long id) {
+        // Zwykła edycja miniatury nie steruje seryjnym szybkim dodawaniem.
+    }
+
+    private void quickAddStorageThing() {
+        startQuickThingBatch();
+    }
+
+    private boolean isQuickThingBatchTarget(long id) {
+        return quickThingBatchActive && quickThingBatchCurrentId==id && id>0;
+    }
+
+    private void startQuickThingBatch() {
+        if(quickThingBatchActive) {
+            if(quickThingBatchTargetKind==null || quickThingBatchTargetId==null)
+                showQuickThingBatchTargetChooser();
+            else if(!quickThingBatchDraftPhoto)
+                quickThingBatchNext();
+            return;
+        }
+        quickThingBatchActive=true;
+        quickThingBatchCurrentId=0L;
+        quickThingBatchCounter=1;
+        quickThingBatchAdded=0;
+        quickThingBatchPendingThumbnail=null;
+        quickThingBatchTargetKind=null;
+        quickThingBatchTargetId=null;
+        quickThingBatchTargetName=null;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_STARTED",
+            "flow=target_then_photos");
+        showQuickThingBatchTargetChooser();
+    }
+
+    /** One box/place is selected before taking any photos. */
+    private void showQuickThingBatchTargetChooser() {
+        if(!quickThingBatchActive)return;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+        quickThingBatchDialog=null;
+        quickThingBatchDraftPhoto=false;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
+
+        boolean nfcReady=nfcAdapter!=null&&nfcAdapter.isEnabled();
+        if(nfcReady) {
+            quickThingBatchWaitingForTarget=true;
+            disableNfcReaderMode();
+            if(!enableNfcReaderMode()) {
+                quickThingBatchWaitingForTarget=false;
+                nfcReady=false;
+            }
+        } else refreshNfcReaderMode();
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        if(quickThingBatchTargetKind!=null&&quickThingBatchTargetId!=null) {
+            actions.addView(text("Aktualny cel: "
+                +quickThingBatchTargetLabel(),15,true));
+        }
+        actions.addView(text(nfcReady
+            ?"Przyłóż tag NFC pudełka albo miejsca. Ten cel zostanie użyty dla całej serii zdjęć."
+            :"Wybierz pudełko albo miejsce dla całej serii. NFC jest niedostępne lub wyłączone.",
+            13,nfcReady));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(quickThingBatchTargetId==null
+                ?"Szybkie dodawanie • wybierz położenie"
+                :"Szybkie dodawanie • zmień położenie")
+            .setView(actions)
+            .setCancelable(false)
+            .create();
+        quickThingBatchDialog=dialog;
+
+        smallButton(actions,"QR • zeskanuj pudełko lub miejsce",()->{
+            quickThingBatchWaitingForTarget=false;
+            refreshNfcReaderMode();
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            launchQuickThingBatchTargetQr();
+        });
+        smallButton(actions,"Ręcznie • wybierz z listy",()->{
+            quickThingBatchWaitingForTarget=false;
+            refreshNfcReaderMode();
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            showQuickThingBatchTargetPicker();
+        });
+        if(!nfcReady&&nfcAdapter!=null)
+            smallButton(actions,"Włącz / ustaw NFC",this::openNfcPhoneSettings);
+        smallButton(actions,"Zakończ serię",()->{
+            quickThingBatchWaitingForTarget=false;
+            quickThingBatchFinish();
+        });
+        lightDialogForm(actions);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_TARGET_WAITING");
+    }
+
+    private String quickThingBatchTargetLabel() {
+        if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null)
+            return "brak";
+        String prefix="box".equals(quickThingBatchTargetKind)
+            ?"Pudełko: ":"Miejsce: ";
+        String name=quickThingBatchTargetName;
+        if(name==null||name.trim().isEmpty())
+            name=NfcLinkStore.targetName(db.getReadableDatabase(),
+                quickThingBatchTargetKind,quickThingBatchTargetId);
+        return prefix+(name==null||name.isEmpty()
+            ?"#"+quickThingBatchTargetId:name);
+    }
+
+    private void handleQuickThingBatchTargetNfc(
+            NfcLinkStore.Link current,String uid) {
+        if(!quickThingBatchActive||!quickThingBatchWaitingForTarget)return;
+        quickThingBatchWaitingForTarget=false;
+        disableNfcReaderMode();
+        if(current==null) {
+            if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+                quickThingBatchDialog.dismiss();
+            quickThingBatchDialog=null;
+            showQuickThingBatchUnknownTargetNfc(uid);
+            return;
+        }
+        if(!"box".equals(current.kind)&&!"place".equals(current.kind)) {
+            alert("Ten tag wskazuje "
+                +NfcLinkStore.kindLabel(current.kind)
+                +". Szybkie dodawanie potrzebuje pudełka albo miejsca.");
+            root.postDelayed(this::showQuickThingBatchTargetChooser,100L);
+            return;
+        }
+        suppressNfcRepeat(uid);
+        quickThingBatchSelectTarget(current.kind,current.targetId,"nfc");
+    }
+
+    private void launchQuickThingBatchTargetQr() {
+        if(!quickThingBatchActive)return;
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active()) {
+            alert("Inny skaner jest teraz aktywny.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        quickThingBatchQrTargetPending=true;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj QR pudełka albo miejsca");
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_TARGET_QR_WAITING");
+        } catch(Exception error) {
+            quickThingBatchQrTargetPending=false;
+            centralScannerCameraPending=false;
+            DiagnosticLog.error("STORAGE_QUICK_BATCH_TARGET_QR",error);
+            alert("Nie można uruchomić skanera QR.");
+            showQuickThingBatchTargetChooser();
+        }
+    }
+
+    private void showQuickThingBatchTargetPicker() {
+        if(!quickThingBatchActive)return;
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<String> kinds=new java.util.ArrayList<>();
+        java.util.List<Long> ids=new java.util.ArrayList<>();
+        for(PlaceEntry place:readPlaces()) {
+            labels.add("Miejsce: "+db.placePath(place.id));
+            kinds.add("place");
+            ids.add(place.id);
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM storage_items WHERE kind='box' "
+                    +"ORDER BY name COLLATE NOCASE,id",null)) {
+            while(c.moveToNext()) {
+                labels.add("Pudełko: "+c.getString(1));
+                kinds.add("box");
+                ids.add(c.getLong(0));
+            }
+        }
+        if(labels.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Brak celu")
+                .setMessage("Nie ma jeszcze pudełek ani miejsc. "
+                    +"Użyj nieznanego taga NFC, aby utworzyć nowe pudełko lub miejsce.")
+                .setNegativeButton("Zakończ serię",(d,w)->quickThingBatchFinish())
+                .setPositiveButton("Wróć",(d,w)->showQuickThingBatchTargetChooser())
+                .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Cel całej serii")
+            .setItems(labels.toArray(new String[0]),(d,which)->
+                quickThingBatchSelectTarget(
+                    kinds.get(which),ids.get(which),"manual"))
+            .setNegativeButton("Wróć",(d,w)->showQuickThingBatchTargetChooser())
+            .show();
+    }
+
+    private void quickThingBatchSelectTarget(
+            String kind,long id,String source) {
+        if(!quickThingBatchActive)return;
+        if(!"box".equals(kind)&&!"place".equals(kind)) {
+            alert("Wybierz pudełko albo miejsce.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        String name=NfcLinkStore.targetName(db.getReadableDatabase(),kind,id);
+        if(name.isEmpty()) {
+            alert("Wybrane pudełko lub miejsce już nie istnieje.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        quickThingBatchTargetKind=kind;
+        quickThingBatchTargetId=id;
+        quickThingBatchTargetName=name;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
+        pendingStorageDestinationItemId=null;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+        quickThingBatchDialog=null;
+        refreshNfcReaderMode();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_TARGET_SELECTED",
+            "target="+kind+":"+id+" source="+source);
+        root.postDelayed(this::quickThingBatchNext,80L);
+    }
+
+    private void showQuickThingBatchUnknownTargetNfc(String uid) {
+        if(!quickThingBatchActive)return;
+        java.util.List<String> labels=java.util.Arrays.asList(
+            "＋ Nowe pudełko","＋ Nowe miejsce","Anuluj");
+        new AlertDialog.Builder(this)
+            .setTitle("Nieznany tag NFC")
+            .setMessage("Ten tag nie jest przypisany. "
+                +"Możesz od razu utworzyć cel dla całej serii zdjęć.")
+            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                if(which==0)showQuickThingBatchUnknownTargetName(uid,"box");
+                else if(which==1)showQuickThingBatchUnknownTargetName(uid,"place");
+                else showQuickThingBatchTargetChooser();
+            })
+            .setOnCancelListener(dialog->showQuickThingBatchTargetChooser())
+            .show();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_UNKNOWN_NFC",
+            "uid="+NfcLinkStore.shortUid(uid));
+    }
+
+    private void showQuickThingBatchUnknownTargetName(String uid,String kind) {
+        if(!quickThingBatchActive)return;
+        boolean box="box".equals(kind);
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint(box?"Nazwa nowego pudełka":"Nazwa nowego miejsca");
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text("Po zapisaniu ten tag NFC będzie przypisany do "
+            +(box?"pudełka":"miejsca")
+            +" i od razu zacznie się robienie zdjęć rzeczy.",13,false));
+        lightDialogForm(layout);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(box?"Nowe pudełko z tego taga":"Nowe miejsce z tego taga")
+            .setView(layout)
+            .setNegativeButton("Wróć",(d,w)->
+                showQuickThingBatchUnknownTargetNfc(uid))
+            .setPositiveButton("Utwórz i zacznij zdjęcia",null)
+            .setCancelable(false)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()) {
+                    name.setError("Podaj nazwę.");
+                    return;
+                }
+                long targetId=0L;
+                try {
+                    if(box) {
+                        targetId=StorageStore.create(db.getWritableDatabase(),
+                            value,"box",null,null);
+                    } else {
+                        String problem=PlaceRules.validateFields(
+                            value,"","places");
+                        if(problem!=null) {
+                            name.setError(problem);
+                            return;
+                        }
+                        if(!db.savePlace(null,value,"",null,"places")) {
+                            name.setError("Takie miejsce już istnieje.");
+                            return;
+                        }
+                        try(Cursor c=db.getReadableDatabase().rawQuery(
+                                "SELECT id FROM places WHERE parent_id IS NULL "
+                                    +"AND name=? COLLATE NOCASE "
+                                    +"ORDER BY id DESC LIMIT 1",
+                                new String[]{value})) {
+                            if(c.moveToFirst())targetId=c.getLong(0);
+                        }
+                        if(targetId<=0)
+                            throw new IllegalStateException(
+                                "Nie znaleziono utworzonego miejsca.");
+                    }
+                    NfcLinkStore.bind(
+                        db.getWritableDatabase(),uid,kind,targetId);
+                    suppressNfcRepeat(uid);
+                    dialog.dismiss();
+                    DiagnosticLog.event(
+                        "STORAGE_QUICK_BATCH_UNKNOWN_TARGET_CREATED",
+                        "target="+kind+":"+targetId);
+                    quickThingBatchSelectTarget(kind,targetId,"nfc-new");
+                } catch(Exception error) {
+                    if(targetId>0) {
+                        try {
+                            NfcLinkStore.clearTarget(
+                                db.getWritableDatabase(),kind,targetId);
+                            if(box)StorageStore.remove(
+                                db.getWritableDatabase(),targetId);
+                            else db.deletePlace(targetId);
+                        } catch(Exception cleanup) {
+                            DiagnosticLog.error(
+                                "STORAGE_QUICK_BATCH_TARGET_CLEANUP",cleanup);
+                        }
+                    }
+                    DiagnosticLog.error(
+                        "STORAGE_QUICK_BATCH_UNKNOWN_TARGET_CREATE",error);
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć celu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    /** Start the next photo only after a series target has been selected. */
+    private void quickThingBatchNext() {
+        if(!quickThingBatchActive)return;
+        if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null) {
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        if(NfcLinkStore.targetName(db.getReadableDatabase(),
+                quickThingBatchTargetKind,quickThingBatchTargetId).isEmpty()) {
+            quickThingBatchTargetKind=null;
+            quickThingBatchTargetId=null;
+            quickThingBatchTargetName=null;
+            alert("Cel serii już nie istnieje. Wybierz nowe położenie.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        quickThingBatchCurrentId=0L;
+        quickThingBatchPendingThumbnail=null;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_STARTED",
+            "index="+quickThingBatchCounter
+                +" target="+quickThingBatchTargetKind+":"+quickThingBatchTargetId);
+        takeQuickThingBatchDraftPhoto();
+    }
+
+    /** Every successful photo creates the next automatically named Thing. */
+    private void quickThingBatchCommitPhoto() {
+        if(!quickThingBatchActive||quickThingBatchPendingThumbnail==null)return;
+        if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null) {
+            quickThingBatchPendingThumbnail=null;
+            alert("Brak celu serii. Rzecz nie została utworzona.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        String name="Rzecz "+quickThingBatchCounter;
+        Long box="box".equals(quickThingBatchTargetKind)
+            ?quickThingBatchTargetId:null;
+        Long place="place".equals(quickThingBatchTargetKind)
+            ?quickThingBatchTargetId:null;
+        long id=0L;
+        try {
+            String thumbnail=quickThingBatchPendingThumbnail;
+            id=StorageStore.create(
+                db.getWritableDatabase(),name,"thing",box,place);
+            if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit()) {
+                StorageStore.remove(db.getWritableDatabase(),id);
+                throw new IllegalStateException("Nie zapisano zdjęcia rzeczy.");
+            }
+            quickThingBatchPendingThumbnail=null;
+            quickThingBatchCurrentId=id;
+            quickThingBatchAdded++;
+            int createdIndex=quickThingBatchCounter;
+            quickThingBatchCounter++;
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_CREATED",
+                "id="+id+" name=Rzecz "+createdIndex
+                    +" target="+quickThingBatchTargetKind+":"+quickThingBatchTargetId
+                    +" after_photo=true");
+            render();
+            showQuickThingBatchAfterPhoto(id,name);
+        } catch(Exception error) {
+            if(id>0) {
+                try {
+                    prefs.edit().remove(StorageThumbs.key(id)).apply();
+                    StorageStore.remove(db.getWritableDatabase(),id);
+                } catch(Exception ignored) { }
+            }
+            quickThingBatchPendingThumbnail=null;
+            DiagnosticLog.error("STORAGE_QUICK_BATCH_PHOTO_COMMIT",error);
+            alert(error.getMessage()==null
+                ?"Nie udało się utworzyć rzeczy ze zdjęcia.":error.getMessage());
+            showQuickThingBatchAfterFailure();
+        }
+    }
+
+    private void showQuickThingBatchAfterPhoto(long id,String name) {
+        if(!quickThingBatchActive)return;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(12),dp(18),dp(12));
+        actions.addView(text("Dodano: "+name,17,true));
+        actions.addView(text(quickThingBatchTargetLabel(),13,false));
+        actions.addView(text("Dodanych w tej serii: "+quickThingBatchAdded,
+            12,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Dodać jeszcze?")
+            .setView(actions)
+            .setCancelable(false)
+            .create();
+        quickThingBatchDialog=dialog;
+        smallButton(actions,"📷 Dodaj następną",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchCurrentId=0L;
+            quickThingBatchNext();
+        });
+        smallButton(actions,"📍 Zmień pudełko / miejsce",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchCurrentId=0L;
+            showQuickThingBatchTargetChooser();
+        });
+        smallButton(actions,"✓ Zakończ serię",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchFinish();
+        });
+        lightDialogForm(actions);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+    }
+
+    private void showQuickThingBatchAfterFailure() {
+        if(!quickThingBatchActive)return;
+        new AlertDialog.Builder(this)
+            .setTitle("Nie utworzono rzeczy")
+            .setMessage("Możesz ponowić zdjęcie, zmienić położenie albo zakończyć serię.")
+            .setNegativeButton("Zakończ serię",(d,w)->quickThingBatchFinish())
+            .setNeutralButton("Zmień miejsce",(d,w)->
+                showQuickThingBatchTargetChooser())
+            .setPositiveButton("Zrób zdjęcie",(d,w)->
+                quickThingBatchNext())
+            .show();
+    }
+
+    private void quickThingBatchAdvance(long id,String source) {
+        if(!isQuickThingBatchTarget(id))return;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_COMPAT_MOVE",
+            "id="+id+" source="+source);
+        quickThingBatchCurrentId=0L;
+    }
+
+    private void quickThingBatchFinish() {
+        int added=quickThingBatchAdded;
+        quickThingBatchActive=false;
+        quickThingBatchDraftPhoto=false;
+        quickThingBatchPendingThumbnail=null;
+        quickThingBatchCurrentId=0L;
+        quickThingBatchCounter=0;
+        quickThingBatchAdded=0;
+        quickThingBatchTargetKind=null;
+        quickThingBatchTargetId=null;
+        quickThingBatchTargetName=null;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
+        quickThingBatchDialog=null;
+        cleanupStorageCameraTemp();
+        refreshNfcReaderMode();
+        render();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_FINISHED","count="+added);
+        if(added>0)
+            alert("Szybkie dodawanie zakończone. Dodano rzeczy: "+added+".");
+    }
+
+    private void quickAddStorageBox() {
+        quickAddStorageItem("box");
+    }
+
+    private void quickAddStorageItem(String kind) {
+        boolean box="box".equals(kind);
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint(box?"Nazwa pudełka":"Co to jest?");
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        TextView help=text(box
+            ?"Po utworzeniu możesz po kolei dodać zdjęcie, NFC, QR i położenie. "
+                +"Każda czynność zapisuje się od razu; kończysz dopiero przyciskiem Gotowe."
+            :"Po utworzeniu możesz po kolei dodać zdjęcie, NFC, QR i położenie. "
+                +"Każda czynność zapisuje się od razu; kończysz dopiero przyciskiem Gotowe.",
+            13,false);
+        help.setTextColor(subdued);
+        layout.addView(help);
+        lightDialogForm(layout);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(box?"⚡ Szybko dodaj pudełko":"⚡ Szybko dodaj rzecz")
+            .setView(layout)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    long id=StorageStore.create(db.getWritableDatabase(),
+                        name.getText().toString(),kind,null,null);
+                    DiagnosticLog.event("STORAGE_QUICK_CREATED",
+                        "kind="+kind+" id="+id);
+                    dialog.dismiss();
+                    render();
+                    root.postDelayed(()->showQuickStorageSetup(kind,id),80L);
+                } catch(Exception error) {
+                    name.setError(error.getMessage()==null
+                        ?"Podaj nazwę.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void quickAddPlace() {
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa miejsca");
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        TextView help=text("Najpierw tworzę miejsce główne. Potem w tym samym "
+            +"szybkim dodawaniu możesz przypisać NFC, otworzyć QR i ustawić "
+            +"miejsce nadrzędne ręcznie. Kończysz dopiero przyciskiem Gotowe.",
+            13,false);
+        help.setTextColor(subdued);
+        layout.addView(help);
+        lightDialogForm(layout);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("⚡ Szybko dodaj miejsce")
+            .setView(layout)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                String problem=PlaceRules.validateFields(value,"","places");
+                if(problem!=null) {
+                    name.setError(problem);
+                    return;
+                }
+                try {
+                    if(!db.savePlace(null,value,"",null,"places")) {
+                        name.setError("Takie miejsce już istnieje.");
+                        return;
+                    }
+                    long id=0L;
+                    try(Cursor c=db.getReadableDatabase().rawQuery(
+                            "SELECT id FROM places WHERE parent_id IS NULL "
+                                +"AND name=? COLLATE NOCASE ORDER BY id DESC LIMIT 1",
+                            new String[]{value})) {
+                        if(c.moveToFirst())id=c.getLong(0);
+                    }
+                    if(id<=0)throw new IllegalStateException(
+                        "Miejsce zapisano, ale nie udało się otworzyć jego konfiguracji.");
+                    DiagnosticLog.event("PLACE_QUICK_CREATED","id="+id);
+                    dialog.dismiss();
+                    render();
+                    final long createdId=id;
+                    root.postDelayed(()->showQuickStorageSetup("place",createdId),80L);
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie udało się dodać miejsca.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void showQuickStorageThing(long id) {
+        showQuickStorageSetup("thing",id);
+    }
+
+    private String quickStorageSetupName(String kind,long id) {
+        if("place".equals(kind))
+            return NfcLinkStore.targetName(db.getReadableDatabase(),"place",id);
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        return item==null?"":item.name;
+    }
+
+    private String quickStorageSetupStatusText(String kind,long id) {
+        String name=quickStorageSetupName(kind,id);
+        if(name.isEmpty())return "Obiekt już nie istnieje.";
+        NfcLinkStore.Link nfc=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),kind,id);
+        String nfcState=nfc==null?"NFC: nie przypisano"
+            :"NFC: "+NfcLinkStore.shortUid(nfc.uid);
+        if("place".equals(kind)) {
+            String path=name;
+            for(PlaceEntry place:readPlaces())
+                if(place.id==id) { path=db.placePath(place.id); break; }
+            return "Położenie: "+path+"\n"+nfcState+"\nQR: gotowy automatycznie";
+        }
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        if(item==null)return "Obiekt już nie istnieje.";
+        boolean photo=prefs.contains(StorageThumbs.key(id));
+        return "Położenie: "
+            +StorageStore.location(db.getReadableDatabase(),item)
+                .replace(" / "," → ")
+            +"\nZdjęcie: "+(photo?"dodane":"brak")
+            +"\n"+nfcState
+            +"\nQR: gotowy automatycznie";
+    }
+
+    private void refreshQuickStorageSetupStatus(String kind,long id) {
+        if(quickStorageSetupDialog==null||!quickStorageSetupDialog.isShowing()
+                ||quickStorageSetupStatus==null
+                ||quickStorageSetupId!=id
+                ||quickStorageSetupKind==null
+                ||!quickStorageSetupKind.equals(kind))return;
+        quickStorageSetupStatus.setText(quickStorageSetupStatusText(kind,id));
+    }
+
+    private void showQuickStorageSetup(String kind,long id) {
+        String name=quickStorageSetupName(kind,id);
+        if(name.isEmpty())return;
+        if(quickStorageSetupDialog!=null&&quickStorageSetupDialog.isShowing())
+            quickStorageSetupDialog.dismiss();
+
+        quickStorageSetupKind=kind;
+        quickStorageSetupId=id;
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        actions.addView(storageKindText(kind,name,18,true));
+        quickStorageSetupStatus=text(
+            quickStorageSetupStatusText(kind,id),13,false);
+        quickStorageSetupStatus.setTextColor(subdued);
+        actions.addView(quickStorageSetupStatus);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie")
+            .setView(actions)
+            .setNegativeButton("Gotowe",null)
+            .create();
+        quickStorageSetupDialog=dialog;
+
+        if(!"place".equals(kind)) {
+            smallButton(actions,"📷 Dodaj / zmień zdjęcie",()->
+                selectStorageThumbnail(id));
+            smallButton(actions,"📍 Ustaw położenie • NFC / QR / lista",()->{
+                StorageStore.Item current=StorageStore.find(
+                    db.getReadableDatabase(),id);
+                if(current==null)alert("Obiekt już nie istnieje.");
+                else showStorageMoveOptions(current);
+            });
+        } else {
+            smallButton(actions,"📍 Ustaw nadrzędne ręcznie",()->{
+                PlaceEntry selected=null;
+                for(PlaceEntry place:readPlaces())
+                    if(place.id==id) { selected=place; break; }
+                if(selected==null) {
+                    alert("Miejsce już nie istnieje.");
+                    return;
+                }
+                placeEditor(selected.id,selected.name,selected.kind,
+                    selected.parent,selected.icon);
+            });
+        }
+
+        smallButton(actions,"NFC • Przypisz / zmień tag",()->
+            beginNfcAssignment(kind,id,name));
+
+        if("place".equals(kind)) {
+            smallButton(actions,"QR • Pokaż / etykieta",()->{
+                for(PlaceEntry place:readPlaces())
+                    if(place.id==id) {
+                        showPlaceQr(place);
+                        return;
+                    }
+                alert("Miejsce już nie istnieje.");
+            });
+        } else {
+            smallButton(actions,"QR • Pokaż / etykieta",()->{
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),id);
+                if(item==null)alert("Obiekt już nie istnieje.");
+                else showStorageQr(item);
+            });
+        }
+
+        dialog.setOnDismissListener(d->{
+            if(quickStorageSetupDialog==dialog) {
+                quickStorageSetupDialog=null;
+                quickStorageSetupStatus=null;
+                quickStorageSetupKind=null;
+                quickStorageSetupId=0L;
+            }
+        });
+        dialog.show();
+    }
+
+    private void beginStorageScannerOperation(String operation,String kind) {
+        String what="box".equals(kind)?"pudełko":"rzecz";
+        String action="take_out".equals(operation)
+            ?"Wyjmij rzecz z pudełka":"Przenieś "+what;
+        String[] methods={"QR • zeskanuj "+what,
+            "NFC • przyłóż tag "+what,
+            "Ręcznie • wybierz z listy"};
+        new AlertDialog.Builder(this)
+            .setTitle(action)
+            .setItems(methods,(dialog,which)->{
+                if(which==0)beginStorageScannerSourceQr(operation,kind);
+                else if(which==1)beginStorageScannerSourceNfc(operation,kind);
+                else showStorageScannerSourcePicker(operation,kind);
+            })
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
+    private void beginStorageScannerSourceQr(String operation,String kind) {
+        clearStorageScannerOperation();
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active())
+            return;
+        pendingStorageScannerOperation=operation;
+        pendingStorageScannerKind=kind;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj QR "
+                +("box".equals(kind)?"pudełka":"rzeczy"));
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_SCANNER_SOURCE_QR_WAITING",
+                "operation="+operation+" kind="+kind);
+        } catch(Exception problem) {
+            centralScannerCameraPending=false;
+            clearStorageScannerOperation();
+            DiagnosticLog.error("STORAGE_SCANNER_SOURCE_QR_LAUNCH",problem);
+            alert("Nie można uruchomić skanera QR.");
+        }
+    }
+
+    private void beginStorageScannerSourceNfc(String operation,String kind) {
+        clearStorageScannerOperation();
+        if(nfcAdapter==null) {
+            alert("Ten telefon nie ma NFC. Użyj QR albo wybierz obiekt ręcznie.");
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            alert("NFC jest wyłączone. Włącz NFC albo użyj QR / wyboru ręcznego.");
+            return;
+        }
+        pendingStorageScannerOperation=operation;
+        pendingStorageScannerKind=kind;
+        disableNfcReaderMode();
+        if(!enableNfcReaderMode()) {
+            clearStorageScannerOperation();
+            alert("Nie udało się uruchomić odczytu NFC.");
+            return;
+        }
+        String what="box".equals(kind)?"pudełko":"rzecz";
+        storageScannerOperationDialog=new AlertDialog.Builder(this)
+            .setTitle("NFC • "+("take_out".equals(operation)
+                ?"Wyjmij rzecz":"Przenieś "+what))
+            .setMessage("Przyłóż tag NFC "+what+".")
+            .setNegativeButton("Anuluj",(d,w)->clearStorageScannerOperation())
+            .create();
+        storageScannerOperationDialog.setOnCancelListener(
+            d->clearStorageScannerOperation());
+        storageScannerOperationDialog.show();
+        DiagnosticLog.event("STORAGE_SCANNER_SOURCE_NFC_WAITING",
+            "operation="+operation+" kind="+kind);
+    }
+
+    private void showStorageScannerSourcePicker(String operation,String kind) {
+        java.util.List<StorageStore.Item> items=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items WHERE kind=? "
+                    +"ORDER BY name COLLATE NOCASE,id",
+                new String[]{kind})) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item==null)continue;
+                if("take_out".equals(operation)&&item.boxId==null)continue;
+                items.add(item);
+                labels.add(item.name+" • "
+                    +StorageStore.location(db.getReadableDatabase(),item)
+                        .replace(" / "," → "));
+            }
+        }
+        if(items.isEmpty()) {
+            alert("take_out".equals(operation)
+                ?"Brak rzeczy znajdujących się w pudełkach."
+                :"Brak obiektów tego typu w magazynie.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz "+("box".equals(kind)?"pudełko":"rzecz"))
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                completeStorageScannerOperation(operation,items.get(which)))
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
+    private void handleStorageScannerSource(String kind,long id) {
+        String operation=pendingStorageScannerOperation;
+        String expected=pendingStorageScannerKind;
+        if(operation==null||expected==null)return;
+        if(!expected.equals(kind)) {
+            clearStorageScannerOperation();
+            alert("Oczekiwano "+("box".equals(expected)?"pudełka":"rzeczy")
+                +", a zeskanowano inny typ.");
+            return;
+        }
+        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
+        clearStorageScannerOperation();
+        if(item==null) {
+            alert("Zeskanowany obiekt już nie istnieje.");
+            return;
+        }
+        completeStorageScannerOperation(operation,item);
+    }
+
+    private void handleStorageScannerSourceNfc(NfcLinkStore.Link current) {
+        if(current==null) {
+            alert("Ten tag NFC nie jest przypisany do rzeczy ani pudełka.");
+            return;
+        }
+        String expected=pendingStorageScannerKind;
+        if(expected==null||!expected.equals(current.kind)) {
+            alert("Ta operacja oczekuje tagu "
+                +("box".equals(expected)?"pudełka":"rzeczy")+".");
+            return;
+        }
+        String operation=pendingStorageScannerOperation;
+        StorageStore.Item item=StorageStore.find(
+            db.getReadableDatabase(),current.targetId);
+        clearStorageScannerOperation();
+        if(item==null) {
+            alert("Obiekt przypisany do tagu już nie istnieje.");
+            return;
+        }
+        completeStorageScannerOperation(operation,item);
+    }
+
+    private void clearStorageScannerOperation() {
+        pendingStorageScannerOperation=null;
+        pendingStorageScannerKind=null;
+        AlertDialog dialog=storageScannerOperationDialog;
+        storageScannerOperationDialog=null;
+        if(dialog!=null&&dialog.isShowing())dialog.dismiss();
+        refreshNfcReaderMode();
+    }
+
+    private void completeStorageScannerOperation(String operation,
+            StorageStore.Item item) {
+        if(item==null)return;
+        if("take_out".equals(operation)) {
+            takeStorageThingOut(item);
+            return;
+        }
+        showStorageMoveOptions(item);
+    }
+
+    private void takeStorageThingOut(StorageStore.Item item) {
+        StorageStore.Item current=item==null?null:
+            StorageStore.find(db.getReadableDatabase(),item.id);
+        if(current==null||!"thing".equals(current.kind)) {
+            alert("Rzecz już nie istnieje.");
+            return;
+        }
+        if(current.boxId==null) {
+            alert("Ta rzecz nie znajduje się w pudełku.");
+            return;
+        }
+        StorageStore.Item box=StorageStore.find(
+            db.getReadableDatabase(),current.boxId);
+        if(box==null||!"box".equals(box.kind)) {
+            alert("Pudełko tej rzeczy już nie istnieje.");
+            return;
+        }
+        Long place=StorageStore.effectivePlaceId(db.getReadableDatabase(),box);
+        try {
+            StorageStore.move(db.getWritableDatabase(),current.id,null,place);
+            StorageStore.Item moved=StorageStore.find(
+                db.getReadableDatabase(),current.id);
+            DiagnosticLog.event("STORAGE_THING_TAKEN_OUT",
+                "item="+current.id+" box="+box.id);
+            render();
+            if(moved!=null)alert("Wyjęto z pudełka.\nNowe położenie:\n"
+                +StorageStore.location(db.getReadableDatabase(),moved)
+                    .replace(" / "," → "));
+        } catch(Exception error) {
+            DiagnosticLog.error("STORAGE_THING_TAKE_OUT",error);
+            alert(error.getMessage()==null
+                ?"Nie udało się wyjąć rzeczy.":error.getMessage());
+        }
+    }
+
+    private void beginStorageDropTarget(String targetKind,long targetId,
+            String targetName) {
+        if(!"box".equals(targetKind) && !"place".equals(targetKind)) {
+            alert("Najpierw zeskanuj pudełko albo miejsce.");
+            return;
+        }
+        if(NfcLinkStore.targetName(db.getReadableDatabase(),targetKind,targetId)
+                .isEmpty()) {
+            alert("Cel już nie istnieje.");
+            return;
+        }
+        clearStorageDropTarget();
+        pendingStorageDestinationItemId=null;
+        if(storageDestinationNfcDialog!=null) {
+            storageDestinationNfcDialog.dismiss();
+            storageDestinationNfcDialog=null;
+        }
+        pendingStorageDropKind=targetKind;
+        pendingStorageDropId=targetId;
+        pendingStorageDropName=targetName;
+
+        boolean nfcReady=nfcAdapter!=null && nfcAdapter.isEnabled();
+        if(nfcReady) {
+            disableNfcReaderMode();
+            nfcReady=enableNfcReaderMode();
+        }
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        String what="box".equals(targetKind)?"rzecz":"rzecz albo pudełko";
+        actions.addView(text("Cel: "+targetName,18,true));
+        actions.addView(text("Teraz zeskanuj "+what+". Możesz użyć QR"
+            +(nfcReady?" albo po prostu przyłożyć NFC.":"."),
+            13,false));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("box".equals(targetKind)
+                ?"📥 Włóż do pudełka":"📍 Zostaw w miejscu")
+            .setView(actions)
+            .setNegativeButton("Anuluj",(d,w)->clearStorageDropTarget())
+            .create();
+        storageDropDialog=dialog;
+        smallButton(actions,"▣ Skanuj QR "+what,()->launchStorageDropSourceQr());
+        if(!nfcReady) {
+            TextView state=text(nfcAdapter==null
+                ?"NFC niedostępne na tym telefonie."
+                :"NFC jest wyłączone — QR nadal działa.",12,false);
+            state.setTextColor(subdued);
+            actions.addView(state);
+        } else {
+            TextView state=text("NFC aktywne — przyłóż tag "+what+".",12,true);
+            state.setTextColor(accent);
+            actions.addView(state);
+        }
+        dialog.setOnCancelListener(d->clearStorageDropTarget());
+        dialog.show();
+        DiagnosticLog.event("STORAGE_DROP_TARGET_WAITING",
+            "target="+targetKind+":"+targetId);
+    }
+
+    private void launchStorageDropSourceQr() {
+        if(pendingStorageDropKind==null || pendingStorageDropId==null)return;
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active())
+            return;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj "
+                +("box".equals(pendingStorageDropKind)
+                    ?"rzecz do pudełka":"rzecz albo pudełko do miejsca"));
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_DROP_SOURCE_QR_WAITING");
+        } catch(Exception problem) {
+            centralScannerCameraPending=false;
+            DiagnosticLog.error("STORAGE_DROP_SOURCE_QR_LAUNCH",problem);
+            alert("Nie można uruchomić skanera QR.");
+        }
+    }
+
+    private void handleStorageDropSourceNfc(NfcLinkStore.Link current,String uid) {
+        if(current==null) {
+            alert("Ten tag NFC nie jest przypisany do rzeczy ani pudełka.");
+            return;
+        }
+        suppressNfcRepeat(uid);
+        handleStorageDropSource(current.kind,current.targetId,"nfc");
+    }
+
+    private void handleStorageDropSource(String sourceKind,long sourceId,String source) {
+        String targetKind=pendingStorageDropKind;
+        Long targetId=pendingStorageDropId;
+        if(targetKind==null || targetId==null)return;
+
+        if("box".equals(targetKind) && !"thing".equals(sourceKind)) {
+            alert("Do pudełka możesz włożyć rzecz. Zeskanuj QR albo NFC rzeczy.");
+            return;
+        }
+        if("place".equals(targetKind)
+                && !"thing".equals(sourceKind) && !"box".equals(sourceKind)) {
+            alert("W miejscu możesz zostawić rzecz albo pudełko.");
+            return;
+        }
+        if(!applyStorageDestination(sourceId,targetKind,targetId,source))return;
+
+        DiagnosticLog.event("STORAGE_DROP_COMPLETED",
+            "source="+sourceKind+":"+sourceId+" target="+targetKind+":"+targetId);
+        clearStorageDropTarget();
+    }
+
+    private void clearStorageDropTarget() {
+        pendingStorageDropKind=null;
+        pendingStorageDropId=null;
+        pendingStorageDropName=null;
+        AlertDialog dialog=storageDropDialog;
+        storageDropDialog=null;
+        if(dialog!=null && dialog.isShowing())dialog.dismiss();
+        refreshNfcReaderMode();
+    }
+
+    private void showStorageMoveOptions(StorageStore.Item item) {
+        if(item==null)return;
+        String destination="box".equals(item.kind)?"miejsce":"pudełko albo miejsce";
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(10),dp(18),dp(10));
+        actions.addView(text("Teraz: "
+            +StorageStore.location(db.getReadableDatabase(),item)
+                .replace(" / "," → "),13,false));
+        actions.addView(text("Cel: "+destination+".",13,false));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Przenieś • "+item.name)
+            .setView(actions)
+            .setNegativeButton("Anuluj",null)
+            .create();
+        smallButton(actions,"NFC • Dotknij tagu celu",()->{
+            dialog.dismiss();
+            beginStorageDestinationNfc(item.id);
+        });
+        smallButton(actions,"QR • Zeskanuj etykietę celu",()->{
+            dialog.dismiss();
+            beginStorageDestinationQr(item.id);
+        });
+        smallButton(actions,"Wybierz ręcznie",()->{
+            dialog.dismiss();
+            storageEditor(item.kind,item.id);
+        });
+        dialog.show();
+    }
+
+    private void beginStorageDestinationNfc(long itemId) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null||(!"thing".equals(moving.kind)&&!"box".equals(moving.kind))) {
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        if(nfcAdapter==null) {
+            alert("Ten telefon nie ma NFC. Użyj QR albo wybierz położenie z listy.");
+            return;
+        }
+        if(!nfcAdapter.isEnabled()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Włącz NFC")
+                .setMessage("Włącz NFC i wróć do EDHOME.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Ustawienia NFC",(d,w)->{
+                    try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+                    catch(Exception unavailable) {
+                        startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                    }
+                }).show();
+            return;
+        }
+        pendingStorageDestinationItemId=itemId;
+        disableNfcReaderMode();
+        if(!enableNfcReaderMode()) {
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            alert("Nie udało się uruchomić odczytu NFC.");
+            return;
+        }
+        String destination="box".equals(moving.kind)?"miejsca":"pudełka albo miejsca";
+        if(storageDestinationNfcDialog!=null)storageDestinationNfcDialog.dismiss();
+        storageDestinationNfcDialog=new AlertDialog.Builder(this)
+            .setTitle("📍 Przenieś • "+moving.name)
+            .setMessage("Przyłóż tag NFC "+destination+".\n\n"
+                +("thing".equals(moving.kind)
+                    ?"Jeśli wybierzesz pudełko przypisane do miejsca, EDHOME "
+                        +"automatycznie odziedziczy całą ścieżkę."
+                    :"Pudełko można przenieść bezpośrednio do miejsca."))
+            .setNeutralButton("Problem z NFC",null)
+            .setNegativeButton("Anuluj",(d,w)->{
+                pendingStorageDestinationItemId=null;
+                refreshNfcReaderMode();
+            }).create();
+        storageDestinationNfcDialog.setOnCancelListener(d->{
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+        });
+        storageDestinationNfcDialog.show();
+        storageDestinationNfcDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            .setOnClickListener(v->showNfcSystemInterferenceHelp());
+        DiagnosticLog.event("STORAGE_LOCATION_NFC_WAITING","id="+itemId);
+    }
+
+    private void beginStorageDestinationQr(long itemId) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null||(!"thing".equals(moving.kind)&&!"box".equals(moving.kind))) {
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active())
+            return;
+        pendingStorageDestinationItemId=itemId;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj QR "
+                +("box".equals(moving.kind)?"miejsca":"pudełka albo miejsca"));
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_LOCATION_QR_WAITING","id="+itemId);
+        } catch(Exception problem) {
+            centralScannerCameraPending=false;
+            pendingStorageDestinationItemId=null;
+            DiagnosticLog.error("STORAGE_LOCATION_QR_LAUNCH",problem);
+            alert("Nie można uruchomić skanera QR.");
+        }
+    }
+
+    private void handleStorageDestinationQr(StorageQr.Target target) {
+        Long itemId=pendingStorageDestinationItemId;
+        if(itemId==null)return;
+        pendingStorageDestinationItemId=null;
+        applyStorageDestination(itemId,target.kind,target.id,"qr");
+    }
+
+    private void handleStorageDestinationNfc(NfcLinkStore.Link current,String uid) {
+        Long itemId=pendingStorageDestinationItemId;
+        if(itemId==null)return;
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null) {
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        if(current==null) {
+            showCreateStorageTargetFromUnknownNfc(itemId,uid);
+            return;
+        }
+        boolean quickBatch=isQuickThingBatchTarget(itemId);
+        if(!applyStorageDestination(itemId,current.kind,current.targetId,"nfc"))return;
+        suppressNfcRepeat(uid);
+        if(quickBatch)
+            DiagnosticLog.event("NFC_QUICK_BATCH_CONTINUED","id="+itemId);
+        pendingStorageDestinationItemId=null;
+        if(storageDestinationNfcDialog!=null) {
+            storageDestinationNfcDialog.dismiss();
+            storageDestinationNfcDialog=null;
+        }
+        refreshNfcReaderMode();
+    }
+
+    private void showCreateStorageTargetFromUnknownNfc(long itemId,String uid) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null) {
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        disableNfcReaderMode();
+        String title="Nieznany tag NFC";
+        String message="Ten tag nie jest jeszcze przypisany. "
+            +("box".equals(moving.kind)
+                ?"Utworzyć nowe miejsce i od razu przenieść do niego pudełko?"
+                :"Utworzyć nowe pudełko albo miejsce i od razu przypisać do niego tę rzecz?");
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<String> kinds=new java.util.ArrayList<>();
+        if("thing".equals(moving.kind)) {
+            labels.add("＋ Nowe pudełko");
+            kinds.add("box");
+        }
+        labels.add("＋ Nowe miejsce");
+        kinds.add("place");
+        labels.add("Anuluj");
+        kinds.add("cancel");
+
+        new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                String kind=kinds.get(which);
+                if("cancel".equals(kind)) {
+                    refreshNfcReaderMode();
+                    return;
+                }
+                showCreateStorageTargetNameDialog(itemId,uid,kind);
+            })
+            .setOnCancelListener(dialog->refreshNfcReaderMode())
+            .show();
+        DiagnosticLog.event("STORAGE_UNKNOWN_NFC_TARGET",
+            "item="+itemId+" uid="+NfcLinkStore.shortUid(uid));
+    }
+
+    private void showCreateStorageTargetNameDialog(long itemId,String uid,String kind) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null) {
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return;
+        }
+        boolean box="box".equals(kind);
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint(box?"Nazwa nowego pudełka":"Nazwa nowego miejsca");
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text(box
+            ?"Po zapisaniu EDHOME przypisze ten tag NFC do pudełka i przeniesie do niego bieżącą rzecz."
+            :"Po zapisaniu EDHOME przypisze ten tag NFC do miejsca i przeniesie do niego bieżący obiekt.",
+            13,false));
+        lightDialogForm(layout);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(box?"Nowe pudełko z tego taga":"Nowe miejsce z tego taga")
+            .setView(layout)
+            .setNegativeButton("Wróć",(d,w)->
+                showCreateStorageTargetFromUnknownNfc(itemId,uid))
+            .setPositiveButton("Utwórz i użyj",null)
+            .setCancelable(false)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()) {
+                    name.setError("Podaj nazwę.");
+                    return;
+                }
+                try {
+                    long targetId;
+                    if(box) {
+                        targetId=StorageStore.create(db.getWritableDatabase(),
+                            value,"box",null,null);
+                    } else {
+                        String problem=PlaceRules.validateFields(value,"","places");
+                        if(problem!=null) {
+                            name.setError(problem);
+                            return;
+                        }
+                        if(!db.savePlace(null,value,"",null,"places")) {
+                            name.setError("Takie miejsce już istnieje.");
+                            return;
+                        }
+                        targetId=0L;
+                        try(Cursor c=db.getReadableDatabase().rawQuery(
+                                "SELECT id FROM places WHERE parent_id IS NULL "
+                                    +"AND name=? COLLATE NOCASE ORDER BY id DESC LIMIT 1",
+                                new String[]{value})) {
+                            if(c.moveToFirst())targetId=c.getLong(0);
+                        }
+                        if(targetId<=0)
+                            throw new IllegalStateException(
+                                "Miejsce zapisano, ale nie znaleziono jego identyfikatora.");
+                    }
+
+                    boolean completed=false;
+                    try {
+                        NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,targetId);
+                        suppressNfcRepeat(uid);
+                        if(storageDestinationNfcDialog!=null) {
+                            storageDestinationNfcDialog.dismiss();
+                            storageDestinationNfcDialog=null;
+                        }
+                        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing()) {
+                            quickThingBatchDialog.dismiss();
+                            quickThingBatchDialog=null;
+                        }
+                        dialog.dismiss();
+                        completed=applyStorageDestination(
+                            itemId,kind,targetId,"nfc");
+                        if(!completed)
+                            throw new IllegalStateException(
+                                "Nie udało się ustawić położenia.");
+                        pendingStorageDestinationItemId=null;
+                        DiagnosticLog.event("STORAGE_UNKNOWN_NFC_TARGET_CREATED",
+                            "item="+itemId+" target="+kind+":"+targetId);
+                        refreshNfcReaderMode();
+                    } catch(Exception failure) {
+                        try {
+                            NfcLinkStore.clearTarget(
+                                db.getWritableDatabase(),kind,targetId);
+                            if(box) StorageStore.remove(
+                                db.getWritableDatabase(),targetId);
+                            else db.deletePlace(targetId);
+                        } catch(Exception cleanupError) {
+                            DiagnosticLog.error(
+                                "STORAGE_UNKNOWN_NFC_TARGET_CLEANUP",cleanupError);
+                        }
+                        throw failure;
+                    }
+                } catch(Exception error) {
+                    DiagnosticLog.error("STORAGE_UNKNOWN_NFC_TARGET_CREATE",error);
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć celu.":error.getMessage());
+                    refreshNfcReaderMode();
+                }
+            }));
+        dialog.show();
+    }
+
+    private boolean applyStorageDestination(long itemId,String targetKind,long targetId,
+            String source) {
+        StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
+        if(moving==null) {
+            alert("Rzecz albo pudełko już nie istnieje.");
+            return false;
+        }
+        boolean thing="thing".equals(moving.kind);
+        boolean box="box".equals(moving.kind);
+        if(!thing&&!box)return false;
+        if(box&&!"place".equals(targetKind)) {
+            alert("Pudełko możesz przenieść tylko do miejsca.");
+            return false;
+        }
+        if(thing&&!"box".equals(targetKind)&&!"place".equals(targetKind)) {
+            alert("Rzecz możesz przenieść do pudełka albo miejsca.");
+            return false;
+        }
+        if("box".equals(targetKind)) {
+            StorageStore.Item target=StorageStore.find(db.getReadableDatabase(),targetId);
+            if(target==null||!"box".equals(target.kind)) {
+                alert("Docelowe pudełko już nie istnieje.");
+                return false;
+            }
+        } else if("place".equals(targetKind)
+                &&NfcLinkStore.targetName(db.getReadableDatabase(),"place",targetId)
+                    .isEmpty()) {
+            alert("Docelowe miejsce już nie istnieje.");
+            return false;
+        }
+        Long nextBox="box".equals(targetKind)?targetId:null;
+        Long nextPlace="place".equals(targetKind)?targetId:null;
+        if(StorageStore.sameDestination(moving,nextBox,nextPlace)) {
+            DiagnosticLog.event("STORAGE_LOCATION_NOOP",
+                "item="+itemId+" target="+targetKind+":"+targetId);
+            refreshQuickStorageSetupStatus(moving.kind,itemId);
+            if(!isQuickStorageSetupTarget(moving.kind,itemId)
+                    &&!isQuickThingBatchTarget(itemId))
+                alert("Już znajduje się tutaj.");
+            if(isQuickThingBatchTarget(itemId))
+                quickThingBatchAdvance(itemId,source);
+            return true;
+        }
+        try {
+            if("box".equals(targetKind))
+                StorageStore.move(db.getWritableDatabase(),itemId,targetId,null);
+            else
+                StorageStore.move(db.getWritableDatabase(),itemId,null,targetId);
+            StorageStore.Item moved=StorageStore.find(db.getReadableDatabase(),itemId);
+            String locationEvent="nfc".equals(source)
+                ?"STORAGE_LOCATION_SET_BY_NFC"
+                :"qr".equals(source)
+                    ?"STORAGE_LOCATION_SET_BY_QR"
+                    :"STORAGE_LOCATION_SET_MANUALLY";
+            DiagnosticLog.event(locationEvent,
+                "item="+itemId+" target="+targetKind+":"+targetId);
+            render();
+            refreshQuickStorageSetupStatus(moving.kind,itemId);
+            if(moved!=null&&!isQuickStorageSetupTarget(moving.kind,itemId)
+                    &&!isQuickThingBatchTarget(itemId))
+                alert("Położenie zapisane:\n"
+                    +StorageStore.location(db.getReadableDatabase(),moved)
+                        .replace(" / "," → "));
+            if(isQuickThingBatchTarget(itemId))
+                quickThingBatchAdvance(itemId,source);
+            return true;
+        } catch(Exception error) {
+            DiagnosticLog.error("STORAGE_LOCATION_MOVE",error);
+            alert(error.getMessage()==null?"Nie zapisano położenia.":error.getMessage());
+            return false;
+        }
     }
 
     private void storageEditor(String kind, Long itemId) {
@@ -6014,7 +10286,8 @@ public final class MainActivity extends Activity {
         name.setHint("Nazwa rzeczy albo pudełka");
         name.setText(existing==null?"":existing.name);
         if(existing==null)layout.addView(name);
-        else layout.addView(text("Przenieś: "+existing.name,18,true));
+        else layout.addView(storageKindText(existing.kind,
+            "Przenieś: "+existing.name,18,true));
         java.util.List<Long> boxIds=new java.util.ArrayList<>();
         java.util.List<Long> placeIds=new java.util.ArrayList<>();
         java.util.List<String> labels=new java.util.ArrayList<>();
@@ -6023,13 +10296,15 @@ public final class MainActivity extends Activity {
             boxIds.add(null);placeIds.add(place.id);
             labels.add("Miejsce: "+db.placePath(place.id));
         }
-        try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT id,name FROM storage_items WHERE kind='box' ORDER BY name",
-                null)) {
-            while(c.moveToNext()){
-                if(itemId!=null && c.getLong(0)==itemId)continue;
-                boxIds.add(c.getLong(0));placeIds.add(null);
-                labels.add("W pudełku: "+c.getString(1));
+        if("thing".equals(kind)) {
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT id,name FROM storage_items WHERE kind='box' ORDER BY name",
+                    null)) {
+                while(c.moveToNext()){
+                    if(itemId!=null && c.getLong(0)==itemId)continue;
+                    boxIds.add(c.getLong(0));placeIds.add(null);
+                    labels.add("W pudełku: "+c.getString(1));
+                }
             }
         }
         Spinner destination=new Spinner(this);
@@ -6052,14 +10327,25 @@ public final class MainActivity extends Activity {
                     int i=destination.getSelectedItemPosition();
                     long createdId=0L;
                     String createdName=name.getText().toString().trim();
+                    Long selectedBox=boxIds.get(i);
+                    Long selectedPlace=placeIds.get(i);
                     if(existing==null)createdId=StorageStore.create(
                         db.getWritableDatabase(),createdName,kind,
-                        boxIds.get(i),placeIds.get(i));
-                    else StorageStore.move(db.getWritableDatabase(),existing.id,
-                        boxIds.get(i),placeIds.get(i));
+                        selectedBox,selectedPlace);
+                    else {
+                        if(StorageStore.sameDestination(
+                                existing,selectedBox,selectedPlace)) {
+                            alert("Już znajduje się tutaj.");
+                            return;
+                        }
+                        StorageStore.move(db.getWritableDatabase(),existing.id,
+                            selectedBox,selectedPlace);
+                    }
                     DiagnosticLog.event(existing==null?
                         "STORAGE_CREATED":"STORAGE_MOVED");
                     render();
+                    if(existing!=null)
+                        refreshQuickStorageSetupStatus(existing.kind,existing.id);
                     if(existing==null) {
                         final long newId=createdId;
                         final String newName=createdName;
@@ -6175,7 +10461,7 @@ public final class MainActivity extends Activity {
 
     private void selectQrLabelFormat(
             java.util.List<StorageQrLabels.Label> selected) {
-        if(!releaseFeaturesEnabled())return;
+        if(!BetaUpdater.isBeta())return;
         String[] formats=StorageQrLabels.FORMATS.clone();
         if(selected.size()==1) formats[3]="A4 — wybór zbiorczy";
         new AlertDialog.Builder(this).setTitle(
@@ -6296,7 +10582,7 @@ public final class MainActivity extends Activity {
                 .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
                     +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
                 .setView(picture).setNegativeButton("Zamknij",null);
-            if(releaseFeaturesEnabled())preview.setNeutralButton(
+            if(BetaUpdater.isBeta())preview.setNeutralButton(
                 "Kopiuj kod",(d,w)->{
                     ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
                         .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
@@ -6379,7 +10665,7 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
-        if (releaseFeaturesEnabled()) {
+        if (BetaUpdater.isBeta()) {
             button("Powiadomienia bankowe • wybierz aplikacje",
                 this::configureBankNotifications);
             note("Nowe powiadomienia automatycznie trafiają do kolejki "
@@ -6390,7 +10676,7 @@ public final class MainActivity extends Activity {
             showBankNotificationHints();
         }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
-        if(releaseFeaturesEnabled()) {
+        if(BetaUpdater.isBeta()) {
             int bankOpen=BankEvidenceStore.list(
                 db.getReadableDatabase(),"open").size();
             int bankMatched=BankEvidenceStore.list(
@@ -6474,7 +10760,7 @@ public final class MainActivity extends Activity {
     }
 
     private void configureBankNotifications() {
-        if(!releaseFeaturesEnabled())return;
+        if(!BetaUpdater.isBeta())return;
         Intent launcher=new Intent(Intent.ACTION_MAIN);
         launcher.addCategory(Intent.CATEGORY_LAUNCHER);
         java.util.Map<String,String> available=new java.util.TreeMap<>();
@@ -6891,7 +11177,7 @@ public final class MainActivity extends Activity {
      * Stable operation ID guarantees retry cannot create the same draft twice.
      */
     private void assignBankHintToShared(BankNotificationHints.Entry signal) {
-        if(!releaseFeaturesEnabled())return;
+        if(!BetaUpdater.isBeta())return;
         if(BankNotificationHints.alreadyHandled(this,signal.key)) {
             BankNotificationHints.remove(this,signal.key);
             render();
@@ -7007,7 +11293,7 @@ public final class MainActivity extends Activity {
     }
 
     private void bankImportDiag(String state,int files,int rows) {
-        if(!releaseFeaturesEnabled()||prefs==null)return;
+        if(!BetaUpdater.isBeta()||prefs==null)return;
         prefs.edit().putString("bank_import_diag_state",state)
             .putInt("bank_import_diag_files",Math.max(0,files))
             .putInt("bank_import_diag_rows",Math.max(0,rows))
@@ -8491,11 +12777,11 @@ public final class MainActivity extends Activity {
         compactAction(row1, "+ Produkt", () -> pantryProductDialog(null, ""));
 
         LinearLayout row2 = compactActionRow();
-        compactAction(row2, "📷 Dodaj +1", () -> {
+        compactAction(row2, "📷 Dodaj / zgrzewka", () -> {
             finishPantryBatch();
             openPantryCamera(false);
         });
-        compactAction(row2, "📷 Wyjmij −1", () -> {
+        compactAction(row2, "📷 Wyjmij / ilość", () -> {
             finishPantryBatch();
             launchTakeScanner(false);
         });
@@ -8505,6 +12791,30 @@ public final class MainActivity extends Activity {
         compactAction(row3, pantrySearch.isEmpty() ? "⌕ Szukaj" : "⌕ Filtr",
             this::showPantrySearchDialog);
         compactAction(row3, "⋯ Więcej", this::showPantryMoreMenu);
+
+        int depositUnits = PantryPackageStore.totalPendingDepositUnits(
+            db.getReadableDatabase());
+        int depositStockUnits = PantryPackageStore.stockDepositUnits(
+            db.getReadableDatabase());
+        long depositValue = PantryPackageStore.totalDepositGrosz(
+            db.getReadableDatabase());
+        long depositStockValue = PantryPackageStore.stockDepositGrosz(
+            db.getReadableDatabase());
+        if (depositUnits > 0 || depositStockUnits > 0) {
+            LinearLayout depositCard = card();
+            TextView depositTitle = text("♻ Kaucje • łącznie "
+                + MoneyRules.format(PantryPackageStore.allDepositGrosz(
+                    db.getReadableDatabase())), 15, true);
+            depositCard.addView(depositTitle);
+            depositCard.addView(text(
+                "W zapasie: " + depositStockUnits + " opak. • "
+                    + MoneyRules.format(depositStockValue)
+                    + "\nPuste do zwrotu: " + depositUnits + " opak. • "
+                    + MoneyRules.format(depositValue),
+                12, false));
+            depositCard.setOnClickListener(v -> showPantryDepositSummary());
+            touchFeedback(depositCard);
+        }
 
         int matched = 0;
         int shown = 0;
@@ -8577,9 +12887,10 @@ public final class MainActivity extends Activity {
                     render();
                 });
                 taskAction(quick, "－1", () -> {
-                    db.changeStock(id, -1);
-                    DiagnosticLog.event("PANTRY_DECREMENT");
-                    render();
+                    if (db.consumeStock(id, 1)) {
+                        DiagnosticLog.event("PANTRY_DECREMENT");
+                        render();
+                    }
                 });
                 taskAction(quick, "⋯ Więcej",
                     () -> showPantryProductMenu(id, name, qty, category));
@@ -8650,8 +12961,8 @@ public final class MainActivity extends Activity {
             ? new String[]{"⏹ Zakończ serię • zapisano " + pantryBatch.committed(),
                 "⌨ Wpisz kod ręcznie", "Historia skanów",
                 "◫ Rozpocznij / wznów remanent"}
-            : new String[]{"📷 Skanuj serię — dodawaj +1",
-                "📷 Skanuj serię — wyciągaj −1",
+            : new String[]{"📷 Skanuj serię — dodawaj wg opakowania",
+                "📷 Skanuj serię — wyciągaj wg opakowania",
                 "⌨ Wpisz kod ręcznie", "Historia skanów",
                 "◫ Rozpocznij / wznów remanent"};
         new AlertDialog.Builder(this)
@@ -8701,6 +13012,7 @@ public final class MainActivity extends Activity {
         actions.add("Ustaw ilość");
         actions.add("NFC");
         actions.add("Historia cen");
+        actions.add("Kaucja / opakowania zwrotne");
         actions.add("Edytuj produkt");
         actions.add("Usuń produkt");
         if (details != null && !details.imageUrl.isEmpty())
@@ -8739,6 +13051,8 @@ public final class MainActivity extends Activity {
                     showNfcTargetMenu(null, "pantry", id, name);
                 } else if ("Historia cen".equals(action)) {
                     showPantryPriceHistory(id, name);
+                } else if ("Kaucja / opakowania zwrotne".equals(action)) {
+                    showPantryDepositDialog(id, name);
                 } else if ("Edytuj produkt".equals(action)) {
                     pantryProductDialog(id, name);
                 } else if ("Usuń produkt".equals(action)) {
@@ -8860,9 +13174,9 @@ public final class MainActivity extends Activity {
         input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
         new AlertDialog.Builder(this).setTitle("Wpisz kod kreskowy")
             .setView(input).setNegativeButton("Anuluj", null)
-            .setNeutralButton("Wyciągnij −1", (d, w) -> onPantryBarcode(
+            .setNeutralButton("Wyciągnij / ilość", (d, w) -> onPantryBarcode(
                 input.getText().toString().trim(), "TAKE"))
-            .setPositiveButton("Dodaj +1", (d, w) -> onPantryBarcode(
+            .setPositiveButton("Dodaj / ilość", (d, w) -> onPantryBarcode(
                 input.getText().toString().trim(), "ADD")).show();
     }
 
@@ -8928,17 +13242,208 @@ public final class MainActivity extends Activity {
                     + "zmieniony. Spróbuj ponownie albo wyeksportuj diagnostykę.");
             return;
         }
-        String question = "TAKE".equals(mode) ? "Wyciągnąć 1 opak.?" : "Dodać 1 opak.?";
-        new AlertDialog.Builder(this).setTitle(item.name)
-            .setMessage("Kod: " + barcode + "\nObecny stan: "
-                + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli)
-                + "\n" + question)
-            .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
-            .setPositiveButton("TAKE".equals(mode) ? "Wyciągnij −1" : "Dodaj +1",
-                (d,w) -> commitPantryBarcode(barcode, null, mode, operationId))
-            .setOnCancelListener(d -> finishPantryBatch()).show();
+        int defaultUnits = PantryBarcodeStore.unitsPerScan(
+            db.getReadableDatabase(), barcode);
+        showPantryQuantityConfirm(barcode, item, pack, mode, operationId,
+            defaultUnits);
     }
 
+
+    private void showPantryQuantityConfirm(String barcode,
+            PantryBarcodeStore.Item item, PantryPackageStore.Pack pack,
+            String mode, String operationId, int defaultUnits) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(12),dp(18),dp(8));
+        form.addView(text("Obecny stan: "
+            +PantryPackageRules.summary(item.qty,pack.unit,pack.sizeMilli),14,false));
+        int suggested=Math.max(1,Math.min(10000,defaultUnits));
+        EditText amount=new EditText(this);
+        amount.setSingleLine(true);
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        amount.setText(Integer.toString(suggested));
+        form.addView(text("Ile sztuk / opakowań podstawowych "
+            +("TAKE".equals(mode)?"wyciągnąć":"dodać")+"?",14,true));
+        form.addView(amount);
+        LinearLayout quickAmounts=new LinearLayout(this);
+        quickAmounts.setOrientation(LinearLayout.HORIZONTAL);
+        for(int preset:new int[]{1,2,6,12}) {
+            Button quick=new Button(this);
+            quick.setAllCaps(false);
+            quick.setText((("TAKE".equals(mode))?"−":"+")+preset);
+            quick.setTextSize(12);
+            final int value=preset;
+            quick.setOnClickListener(v->{
+                amount.setText(Integer.toString(value));
+                amount.setSelection(amount.getText().length());
+            });
+            quickAmounts.addView(quick,
+                new LinearLayout.LayoutParams(0,dp(42),1f));
+        }
+        form.addView(quickAmounts,new LinearLayout.LayoutParams(-1,dp(44)));
+        if(defaultUnits>1)
+            form.addView(text("Ten kod jest zapisany jako opakowanie zbiorcze: "
+                +defaultUnits+" szt. na jeden skan.",12,false));
+        if("TAKE".equals(mode) && pack.depositGrosz>0)
+            form.addView(text("Po wyjęciu doliczę tyle samo pustych opakowań "
+                +"do kaucji • "+MoneyRules.format(pack.depositGrosz)+" / szt.",
+                12,false));
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(item.name)
+            .setView(form)
+            .setNegativeButton("Anuluj",(d,w)->finishPantryBatch())
+            .setNeutralButton("1 szt.",null)
+            .setPositiveButton("TAKE".equals(mode)?"Wyciągnij":"Dodaj",null)
+            .create();
+        dialog.setOnShowListener(ignore->{
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                amount.setText("1");
+                amount.setSelection(amount.getText().length());
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                int quantity;
+                try {
+                    quantity=Integer.parseInt(amount.getText().toString().trim());
+                    if(quantity<1||quantity>10000)throw new NumberFormatException();
+                } catch(NumberFormatException invalid) {
+                    amount.setError("Podaj liczbę 1–10000.");
+                    return;
+                }
+                if("TAKE".equals(mode)&&quantity>item.qty) {
+                    amount.setError("Masz tylko "+item.qty+" opak.");
+                    return;
+                }
+                dialog.dismiss();
+                commitPantryBarcode(barcode,null,mode,operationId,null,null,
+                    pack.unit,pack.sizeMilli,item.id,quantity,defaultUnits);
+            });
+        });
+        dialog.setOnCancelListener(d->finishPantryBatch());
+        dialog.show();
+    }
+
+    private void showPantryDepositSummary() {
+        java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT p.id,p.name,p.qty,pp.deposit_grosz,pp.deposit_pending "
+                    +"FROM pantry p JOIN pantry_packages pp ON pp.pantry_id=p.id "
+                    +"WHERE pp.deposit_grosz>0 OR pp.deposit_pending>0 "
+                    +"ORDER BY p.name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                ids.add(c.getLong(0));
+                long rate=c.getLong(3);
+                int stock=c.getInt(2);
+                int empty=c.getInt(4);
+                long value=rate*((long)stock+empty);
+                labels.add(c.getString(1)+" • zapas "+stock+" • puste "+empty
+                    +" • "+MoneyRules.format(value));
+            }
+        }
+        String total="łącznie "
+            +MoneyRules.format(PantryPackageStore.allDepositGrosz(
+                db.getReadableDatabase()));
+        if(ids.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Kaucje")
+                .setMessage("Nie masz jeszcze produktów z ustawioną kaucją. "
+                    +"Otwórz produkt → Kaucja / opakowania zwrotne.")
+                .setPositiveButton("Zamknij",null).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Kaucje • "+total)
+            .setItems(labels.toArray(new String[0]),(d,which)->{
+                long id=ids.get(which);
+                String name=labels.get(which).split(" • ",2)[0];
+                showPantryDepositDialog(id,name);
+            }).setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showPantryDepositDialog(long pantryId,String name) {
+        PantryPackageStore.Pack pack=PantryPackageStore.find(
+            db.getReadableDatabase(),pantryId);
+        int stockQty=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT qty FROM pantry WHERE id=?",
+                new String[]{Long.toString(pantryId)})) {
+            if(c.moveToFirst())stockQty=c.getInt(0);
+        }
+        String state=pack.depositGrosz<=0
+            ?"Kaucja wyłączona."
+            :"Kaucja: "+MoneyRules.format(pack.depositGrosz)+" / szt.\n"
+                +"W zapasie: "+stockQty+" opak. = "
+                +MoneyRules.format(pack.depositGrosz*stockQty)+"\n"
+                +"Puste do zwrotu: "+pack.depositPending+" opak. = "
+                +MoneyRules.format(pack.depositGrosz*pack.depositPending)+"\n"
+                +"Łączna wartość kaucji: "
+                +MoneyRules.format(pack.depositGrosz*((long)stockQty+pack.depositPending));
+        java.util.ArrayList<String> actions=new java.util.ArrayList<>();
+        actions.add("Ustaw stawkę kaucji");
+        if(pack.depositPending>0)actions.add("Oddaj opakowania");
+        if(pack.depositGrosz>0&&pack.depositPending==0)actions.add("Wyłącz kaucję");
+        new AlertDialog.Builder(this).setTitle(name+" • kaucja")
+            .setMessage(state)
+            .setItems(actions.toArray(new String[0]),(dialog,which)->{
+                String action=actions.get(which);
+                if("Ustaw stawkę kaucji".equals(action)) {
+                    EditText money=new EditText(this);
+                    money.setSingleLine(true);
+                    money.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+                        |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+                    money.setHint("np. 0,50");
+                    if(pack.depositGrosz>0)
+                        money.setText(MoneyRules.format(pack.depositGrosz)
+                            .replace(" zł",""));
+                    new AlertDialog.Builder(this)
+                        .setTitle("Kaucja za 1 opakowanie")
+                        .setView(money).setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Zapisz",(d,w)->{
+                            try {
+                                long grosz=MoneyRules.parse(
+                                    money.getText().toString().trim());
+                                if(grosz>100000)
+                                    throw new IllegalArgumentException(
+                                        "Maksymalnie 1000 zł za sztukę.");
+                                PantryPackageStore.setDeposit(
+                                    db.getWritableDatabase(),pantryId,grosz);
+                                DiagnosticLog.event("PANTRY_DEPOSIT_RATE_SAVED");
+                                render();
+                            } catch(IllegalArgumentException invalid) {
+                                alert(invalid.getMessage());
+                            }
+                        }).show();
+                } else if("Oddaj opakowania".equals(action)) {
+                    EditText count=new EditText(this);
+                    count.setSingleLine(true);
+                    count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                    count.setText(Integer.toString(pack.depositPending));
+                    new AlertDialog.Builder(this)
+                        .setTitle("Oddaj opakowania")
+                        .setMessage("Masz do zwrotu: "+pack.depositPending
+                            +" • wartość: "
+                            +MoneyRules.format(pack.depositGrosz*pack.depositPending))
+                        .setView(count).setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Oddane",(d,w)->{
+                            try {
+                                int amount=Integer.parseInt(
+                                    count.getText().toString().trim());
+                                PantryPackageStore.returnDeposit(
+                                    db.getWritableDatabase(),pantryId,amount);
+                                DiagnosticLog.event("PANTRY_DEPOSIT_RETURNED");
+                                render();
+                            } catch(Exception invalid) {
+                                alert(invalid.getMessage()==null
+                                    ?"Podaj poprawną ilość.":invalid.getMessage());
+                            }
+                        }).show();
+                } else {
+                    PantryPackageStore.setDeposit(
+                        db.getWritableDatabase(),pantryId,0L);
+                    DiagnosticLog.event("PANTRY_DEPOSIT_DISABLED");
+                    render();
+                }
+            }).setNegativeButton("Zamknij",null).show();
+    }
 
     /** A second barcode can refer to an item already stored offline. */
     private void choosePantryProductForCode(String barcode, String operationId) {
@@ -8970,7 +13475,8 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("Wybierz swój produkt")
             .setMessage("Powiąż zeskanowany kod z produktem, który masz już w spiżarni. "
-                + "Nazwa i ilość zostaną zachowane; po zatwierdzeniu dodam 1 opakowanie.")
+                + "Nazwa zostanie zachowana; wybierzesz ile sztuk oznacza ten kod, "
+                + "np. 6 dla zgrzewki.")
             .setItems(captions.toArray(new String[0]), (d,which) ->
                 confirmExistingPantryCode(barcode, operationId, ids.get(which)))
             .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
@@ -8991,15 +13497,42 @@ public final class MainActivity extends Activity {
             int qty = c.getInt(1);
             PantryPackageStore.Pack pack = PantryPackageStore.find(
                 db.getReadableDatabase(), pantryId);
-            new AlertDialog.Builder(this).setTitle("Przypisz kod i dodaj +1")
-                .setMessage(name + "\n" + PantryPackageRules.summary(
-                    qty, pack.unit, pack.sizeMilli) + "\nNowy kod: " + barcode
-                    + "\n\nPotwierdź, że to dokładnie ten sam produkt i opakowanie.")
-                .setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
-                .setPositiveButton("Powiąż i dodaj +1", (d,w) ->
-                    commitPantryBarcode(barcode, null, "ADD", operationId, null,
-                        null, pack.unit, pack.sizeMilli, pantryId))
-                .setOnCancelListener(d -> finishPantryBatch()).show();
+            LinearLayout form=new LinearLayout(this);
+            form.setOrientation(LinearLayout.VERTICAL);
+            form.setPadding(dp(18),dp(10),dp(18),dp(8));
+            form.addView(text(name+"\n"+PantryPackageRules.summary(
+                qty,pack.unit,pack.sizeMilli)+"\nNowy kod: "+barcode,14,false));
+            EditText units=new EditText(this);
+            units.setSingleLine(true);
+            units.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            units.setText("1");
+            form.addView(text("Ile sztuk podstawowych oznacza ten kod? "
+                +"Dla zgrzewki wpisz np. 6.",13,true));
+            form.addView(units);
+            lightDialogForm(form);
+            AlertDialog linkDialog=new AlertDialog.Builder(this)
+                .setTitle("Przypisz kod do produktu")
+                .setView(form)
+                .setNegativeButton("Anuluj",(d,w)->finishPantryBatch())
+                .setPositiveButton("Powiąż i dodaj",null)
+                .create();
+            linkDialog.setOnShowListener(ignore->
+                linkDialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                    .setOnClickListener(v->{
+                        int count;
+                        try {
+                            count=Integer.parseInt(units.getText().toString().trim());
+                            if(count<1||count>10000)throw new NumberFormatException();
+                        } catch(NumberFormatException invalid) {
+                            units.setError("Podaj liczbę 1–10000.");
+                            return;
+                        }
+                        linkDialog.dismiss();
+                        commitPantryBarcode(barcode,null,"ADD",operationId,null,
+                            null,pack.unit,pack.sizeMilli,pantryId,count,count);
+                    }));
+            linkDialog.setOnCancelListener(d->finishPantryBatch());
+            linkDialog.show();
         }
     }
 
@@ -9200,7 +13733,10 @@ public final class MainActivity extends Activity {
             }
             final PantryProductLookup.Product selected =
                 new PantryProductLookup.Product(candidate.name, candidate.source,
-                    candidate.brand, candidate.imageUrl, image);
+                    candidate.brand, candidate.imageUrl, image,
+                    PantryPackSuggestion.verified(candidate.unitsPerScan,
+                        candidate.baseUnit, candidate.baseSizeMilli,
+                        candidate.quantityLabel));
             runOnUiThread(() -> {
                 if (!isFinishing() && !isDestroyed())
                     showNewPantryProductDialog(scannedBarcode, operationId,
@@ -9255,21 +13791,34 @@ public final class MainActivity extends Activity {
             found == null ? "other" : PantryCategories.fromSource(found.source));
         form.addView(text("Kategoria produktu", 14, false));
         form.addView(categorySpinner);
-        form.addView(text("Zawartość jednego opakowania", 14, false));
-        final Spinner packUnit = pantryPackageUnitSpinner("szt.");
+        form.addView(text("Zawartość jednej sztuki / opakowania podstawowego",
+            14, false));
+        String suggestedUnit = found == null ? "szt." : found.baseUnit;
+        final Spinner packUnit = pantryPackageUnitSpinner(suggestedUnit);
         final EditText packSize = new EditText(this);
         packSize.setSingleLine(true);
         packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        packSize.setText("1");
-        packSize.setHint("np. 0,5");
+        packSize.setText(found == null ? "1"
+            : PantryPackageRules.format(found.baseSizeMilli));
+        packSize.setHint("np. 1,5 l albo 0,085 kg");
         form.addView(packUnit);
         form.addView(packSize);
+        final EditText scanUnits = new EditText(this);
+        scanUnits.setSingleLine(true);
+        scanUnits.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        scanUnits.setText(Integer.toString(found == null ? 1 : found.unitsPerScan));
+        scanUnits.setHint("np. 6");
+        form.addView(text("Ile sztuk podstawowych dodaje jeden skan", 14, false));
+        form.addView(scanUnits);
+        if (found != null && !found.quantityLabel.isEmpty())
+            form.addView(text("Baza podała: " + found.quantityLabel
+                + " • sprawdź na opakowaniu przed zapisem.", 12, false));
         lightDialogForm(form);
         new AlertDialog.Builder(this)
             .setTitle(found == null ? "Nowy produkt" : "Potwierdź produkt")
             .setView(form).setNegativeButton("Anuluj", (d,w) -> finishPantryBatch())
-            .setPositiveButton("Dodaj +1", (d,w) -> {
+            .setPositiveButton("Dodaj wg ilości", (d,w) -> {
                 String entered = found != null ? found.name
                     : manualName.getText().toString().trim();
                 if (entered.isEmpty() || entered.length() > 160) {
@@ -9286,9 +13835,18 @@ public final class MainActivity extends Activity {
                     alert(wrong.getMessage());
                     return;
                 }
+                int units;
+                try {
+                    units = Integer.parseInt(scanUnits.getText().toString().trim());
+                    if (units < 1 || units > 10000)
+                        throw new NumberFormatException();
+                } catch (NumberFormatException wrong) {
+                    alert("Ilość w zgrzewce musi wynosić 1–10000.");
+                    return;
+                }
                 commitPantryBarcode(barcode, entered, "ADD", operationId,
                     found, PantryCategories.IDS[categorySpinner.getSelectedItemPosition()],
-                    unit, sizeMilli);
+                    unit, sizeMilli, 0L, units, units);
             }).setOnCancelListener(d -> finishPantryBatch()).show();
     }
 
@@ -9341,9 +13899,18 @@ public final class MainActivity extends Activity {
     private void commitPantryBarcode(String barcode, String name,
             String mode, String operationId, PantryProductLookup.Product found,
             String newCategory, String unit, long sizeMilli, long selectedPantryId) {
+        commitPantryBarcode(barcode,name,mode,operationId,found,newCategory,
+            unit,sizeMilli,selectedPantryId,1,1);
+    }
+
+    private void commitPantryBarcode(String barcode, String name,
+            String mode, String operationId, PantryProductLookup.Product found,
+            String newCategory, String unit, long sizeMilli, long selectedPantryId,
+            int quantity, int unitsPerScan) {
         try {
             String result = PantryBarcodeStore.commit(db.getWritableDatabase(),
-                barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId);
+                barcode, name, mode, operationId, unit, sizeMilli,
+                selectedPantryId, quantity, unitsPerScan);
             if ("DUPLICATE_IGNORED".equals(result)) {
                 abortPantryScan("PANTRY_SCAN_DUPLICATE_IGNORED", null,
                     "Ta operacja skanowania była już zapisana. Nie zmieniono "
@@ -9391,12 +13958,14 @@ public final class MainActivity extends Activity {
     private void showPantryScanHistory() {
         StringBuilder history = new StringBuilder();
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
-                "SELECT name_snapshot,kind,before_qty,after_qty "
+                "SELECT name_snapshot,kind,qty,before_qty,after_qty "
                 + "FROM pantry_movements ORDER BY id DESC LIMIT 30", null)) {
             while (cursor.moveToNext()) {
-                history.append("TAKE".equals(cursor.getString(1)) ? "−1 opak. " : "+1 opak. ")
+                int amount=cursor.getInt(2);
+                history.append("TAKE".equals(cursor.getString(1)) ? "−" : "+")
+                    .append(amount).append(" opak. ")
                     .append(cursor.getString(0)).append(" • ")
-                    .append(cursor.getInt(2)).append(" → ").append(cursor.getInt(3))
+                    .append(cursor.getInt(3)).append(" → ").append(cursor.getInt(4))
                     .append(" opak.\n");
             }
         }
@@ -10155,8 +14724,8 @@ public final class MainActivity extends Activity {
         String hardware=nfcAdapter==null?"Brak modułu NFC"
             :nfcAdapter.isEnabled()?"NFC w telefonie: WŁĄCZONE":"NFC w telefonie: WYŁĄCZONE";
         nfc.addView(text(hardware+" • przypisane tagi: "+nfcAssignedCount(),14,true));
-        settingsYesNo(nfc,"Nasłuch NFC w całej aplikacji",
-            NFC_GLOBAL_LISTEN_PREF,true,this::refreshNfcReaderMode);
+        settingsYesNo(nfc,"Nasłuch NFC poza aktywną operacją",
+            NFC_GLOBAL_LISTEN_PREF,false,this::refreshNfcReaderMode);
         settingsNfcAction(nfc,"Domyślne działanie po skanie NFC",
             SCAN_DEFAULT_NFC,false);
         LinearLayout nfcTypes=settingsNestedAccordion(nfc,"nfc_types",
@@ -10168,12 +14737,10 @@ public final class MainActivity extends Activity {
         settingsNfcAction(nfcTypes,"Pojazdy",scanTypeKey("nfc","vehicle"),true);
         smallButton(nfc,"Otwórz Skaner EDHOME",()->go("scanner"));
         smallButton(nfc,nfcAdapter!=null&&nfcAdapter.isEnabled()
-            ?"Ustawienia NFC telefonu":"Włącz NFC w telefonie",()->{
-            try{startActivity(new Intent(Settings.ACTION_NFC_SETTINGS));}
-            catch(Exception unavailable){
-                startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
-            }
-        });
+            ?"Ustawienia NFC telefonu":"Włącz NFC w telefonie",
+            this::openNfcPhoneSettings);
+        smallButton(nfc,"Telefon przejmuje tagi? • Diagnostyka",
+            this::showNfcSystemInterferenceHelp);
         smallButton(nfc,"Przywróć domyślne reguły NFC",this::resetNfcScanRules);
         nfc.addView(text("Przypisanie, zmiana i odpięcie taga są dostępne na karcie "
             +"Rzeczy, Pudełka, Miejsca, Produktu lub Pojazdu. EDHOME zapisuje UID "
@@ -10243,7 +14810,34 @@ public final class MainActivity extends Activity {
         });
 
         LinearLayout appearance=settingsAccordion("appearance","Wygląd i kafelki",
-            "Motyw, ikony oraz gesty na panelu głównym.",false);
+            "Motyw, interfejs, ikony oraz gesty na panelu głównym.",false);
+
+        appearance.addView(text("Interfejs EDHOME",14,true));
+        Spinner interfaceChoice=new Spinner(this);
+        java.util.List<String> interfaceLabels=java.util.Arrays.asList(
+            "Obecny interfejs", "Koncepcja 5", "Koncepcja 8");
+        interfaceChoice.setAdapter(themeSpinnerAdapter(interfaceLabels));
+        String currentInterface=homeInterfaceMode();
+        interfaceChoice.setSelection(HOME_INTERFACE_CONCEPT5.equals(currentInterface)
+            ? 1 : HOME_INTERFACE_CONCEPT8.equals(currentInterface) ? 2 : 0);
+        appearance.addView(interfaceChoice,new LinearLayout.LayoutParams(-1,dp(52)));
+        appearance.addView(text(
+            "Koncepcja 5 i Koncepcja 8 są dodatkowymi interfejsami. "
+                +"Nie usuwają obecnego układu, kafelków ani danych. "
+                +"Możesz wrócić do obecnego interfejsu w dowolnym momencie.",
+            12,false));
+        smallButton(appearance,"Zastosuj interfejs",()->{
+            int selectedInterface=interfaceChoice.getSelectedItemPosition();
+            String mode=selectedInterface==1 ? HOME_INTERFACE_CONCEPT5
+                : selectedInterface==2 ? HOME_INTERFACE_CONCEPT8
+                : HOME_INTERFACE_CURRENT;
+            prefs.edit().putString(HOME_INTERFACE_PREF,mode).apply();
+            homeShowcasePage=0;
+            homeEditMode=false;
+            DiagnosticLog.event("HOME_INTERFACE_CHANGED","mode="+mode);
+            render();
+        });
+
         Spinner themeChoice=new Spinner(this);
         themeChoice.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(UiSkin.THEMES)));
         int currentTheme=java.util.Arrays.asList(UiSkin.THEMES).indexOf(skin.name);
@@ -10261,9 +14855,13 @@ public final class MainActivity extends Activity {
         });
         Spinner homePageSlots=new Spinner(this);
         java.util.List<String> homePageSlotLabels=java.util.Arrays.asList(
-            "6 miejsc • 2 × 3",
+            "6 miejsc • 3 × 2",
             "9 miejsc • 3 × 3",
-            "12 miejsc • 4 × 3");
+            "12 miejsc • 3 × 4",
+            "15 miejsc • 3 × 5",
+            "18 miejsc • 3 × 6",
+            "21 miejsc • 3 × 7",
+            "24 miejsca • 3 × 8");
         homePageSlots.setAdapter(themeSpinnerAdapter(homePageSlotLabels));
         int currentPageSlots=homePageCapacity();
         int pageSlotSelection=1;
@@ -10315,6 +14913,20 @@ public final class MainActivity extends Activity {
                 render();
             });
         }
+        boolean fullTileArt=homeFullTileArtEnabled();
+        smallButton(appearance,fullTileArt
+            ?"Pełne grafiki kafelków jako tło: WŁ. → wyłącz"
+            :"Pełne grafiki kafelków jako tło: WYŁ. → włącz",()->{
+                prefs.edit().putBoolean("home_tile_full_art",!fullTileArt).apply();
+                DiagnosticLog.event("HOME_TILE_FULL_ART_CHANGED",
+                    "enabled="+(!fullTileArt));
+                render();
+            });
+        appearance.addView(text(
+            "Pełne tło działa tylko dla grafiki PNG/WebP przygotowanej jako "
+                +"cały kafelek. Zwykłe ikony AI 3D pozostają ikonami. "
+                +"Nazwa jest już częścią grafiki, więc EDHOME jej nie dubluje.",12,false));
+
         LinearLayout gestures=settingsNestedAccordion(appearance,"tile_gestures",
             "Czas przytrzymania kafelków",false);
         Spinner shortHold=new Spinner(this);
@@ -10370,7 +14982,7 @@ public final class MainActivity extends Activity {
             render();
         });
 
-        if(releaseFeaturesEnabled()){
+        if(BetaUpdater.isBeta()){
             LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
                 "Parowanie, stan połączenia i diagnostyka LAN.",false);
             String ip=LanSyncServer.localAddress();
@@ -10526,12 +15138,9 @@ public final class MainActivity extends Activity {
                 + "\nversionCode: " + BuildConfig.VERSION_CODE));
         updateTile(tiles, "◷", "Co\nnowego", false, () ->
             alert("EDHOME " + BuildConfig.VERSION_NAME
-                + "\nNajważniejsze zmiany względem Stable 0.5.0:"
-                + "\n• PayCheck: banki, import i kolejka potwierdzeń."
-                + "\n• Pojazdy: OC, przeglądy, opony, koszty i dokumenty."
-                + "\n• Synchronizacja LAN z EDHOME Desktop."
-                + "\n• NFC, QR/PDF i miniatury magazynu."
-                + "\n• Panel Start: strony 6/9/12 miejsc i przenoszenie kafelków."));
+                + "\nUkład Start 3 × 3. Gdy jest więcej niż 9 kafelków, "
+                + "przesuwaj strony palcem w lewo lub prawo. "
+                + "Aktywna strona jest zaznaczona kropką."));
         updateTile(tiles, "⌂", "Panel\ngłówny", false, () -> go("home"));
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
@@ -10607,7 +15216,33 @@ public final class MainActivity extends Activity {
             if (customTint) tileTint = skin.tileTint(selected);
         }
         boolean highlighted = primary || customTint;
-        tile.setBackground(skin.tile(this, highlighted, tileTint));
+        String homeIconId=null;
+        Bitmap homeFullArtBitmap=null;
+        boolean fullTileArt=false;
+        if(isHome) {
+            homeIconId=prefs.getString("tile_icon_" + id,
+                defaultTileIcon(tileTarget));
+            if(!TileIcon.known(homeIconId)
+                    && !IconPack3D.known(this,homeIconId)
+                    && !TileCustomImage.available(this,homeIconId))
+                homeIconId=defaultTileIcon(tileTarget);
+            if(homeFullTileArtEnabled()) {
+                String artStyle=prefs.getString(
+                    TileArtLibrary.prefKey(id),TileArtLibrary.NONE);
+                if(!TileArtLibrary.NONE.equals(artStyle)){
+                    homeFullArtBitmap=TileArtLibrary.bitmap(
+                        this,tileTarget,artStyle,span);
+                    if(homeFullArtBitmap==null)
+                        homeIconId=defaultTileIcon(tileTarget);
+                }else{
+                    homeFullArtBitmap=homeFullTileBitmap(homeIconId);
+                }
+                fullTileArt=homeFullArtBitmap!=null;
+            }
+        }
+        Drawable tileBase=skin.tile(this, highlighted, tileTint);
+        tile.setBackground(fullTileArt
+            ?homeFullTileBackground(tileBase,homeFullArtBitmap):tileBase);
         tile.setElevation(dp(highlighted ? 5 : 3));
         tile.setOnClickListener(v -> callback.run());
         touchFeedback(tile);
@@ -10634,7 +15269,9 @@ public final class MainActivity extends Activity {
             && (!skin.showcase() || homeEditMode);
         if (showTileHandle) {
             TextView handle = text("⋮⋮", 17, true);
-            handle.setTextColor(highlighted ? skin.tileText(tileTint) : subdued);
+            handle.setTextColor(fullTileArt?0xDD24373A:
+                (highlighted ? skin.tileText(tileTint) : subdued));
+            if(fullTileArt)handle.setShadowLayer(3f,0f,1f,Color.WHITE);
             handle.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
             handle.setPadding(dp(3), 0, dp(8), 0);
             handle.setContentDescription("Edytuj lub przeciągnij " + caption);
@@ -10692,14 +15329,13 @@ public final class MainActivity extends Activity {
             new LinearLayout.LayoutParams(displayedIconSize, displayedIconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         if (isHome) {
-            String target = tileTarget;
-            String iconId = prefs.getString("tile_icon_" + id,
-                defaultTileIcon(target));
-            if (!TileIcon.known(iconId) && !IconPack3D.known(this, iconId)
-                    && !TileCustomImage.available(this, iconId))
-                iconId = defaultTileIcon(target);
-            tile.addView(tileIconImage(iconId,
-                Math.round(displayedIconSize / density), highlighted), iconParams);
+            if(fullTileArt) {
+                View spacer=new View(this);
+                tile.addView(spacer,new LinearLayout.LayoutParams(-1,0,1f));
+            } else {
+                tile.addView(tileIconImage(homeIconId,
+                    Math.round(displayedIconSize / density), highlighted), iconParams);
+            }
         } else {
             TextView pictogram = text(symbol, 29, true);
             pictogram.setTextColor(highlighted && skin.light
@@ -10708,16 +15344,19 @@ public final class MainActivity extends Activity {
             pictogram.setBackground(skin.panel(this, skin.iconBacking, 24));
             tile.addView(pictogram, iconParams);
         }
-        TextView captionView = text(caption,
-            isHome && skin.showcase() && !homeEditMode ? 11 : 12, true);
-        captionView.setTextColor(highlighted
-            ? skin.tileText(tileTint) : ink);
-        captionView.setGravity(Gravity.CENTER);
-        captionView.setMaxLines(2);
-        captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        tile.addView(captionView,
-            new LinearLayout.LayoutParams(-1,
-                dp(isHome && skin.showcase() ? 28 : 31)));
+        if(!fullTileArt) {
+            TextView captionView = text(caption,
+                isHome && skin.showcase() && !homeEditMode ? 11 : 12, true);
+            captionView.setTextColor(highlighted
+                ? skin.tileText(tileTint) : ink);
+            captionView.setGravity(Gravity.CENTER);
+            captionView.setTag("home_caption");
+            captionView.setMaxLines(2);
+            captionView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tile.addView(captionView,
+                new LinearLayout.LayoutParams(-1,
+                    dp(isHome && skin.showcase() ? 28 : 31)));
+        }
         return tile;
     }
 
@@ -10849,15 +15488,69 @@ public final class MainActivity extends Activity {
         if(requestCode!=STORAGE_CAMERA_PERMISSION)return;
         boolean granted=grantResults.length>0
             &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if(quickThingBatchDraftPhoto) {
+            if(granted)launchQuickThingBatchDraftCamera();
+            else {
+                quickThingBatchDraftPhoto=false;
+                alert("Aby szybko dodać rzecz, zezwól EDHOME na użycie aparatu. "
+                    +"Rzecz nie została utworzona.");
+                quickThingBatchFinish();
+            }
+            return;
+        }
         if(granted)launchStorageThumbnailCamera();
         else {
+            long id=pendingStorageThumbnailId;
             pendingStorageThumbnailId=0;
-            alert("Aby zrobić miniaturę aparatem, zezwól EDHOME na użycie aparatu.");
+            alert("Aby zrobić zdjęcie aparatem, zezwól EDHOME na użycie aparatu.");
+            continueQuickThingBatchAfterPhoto(id);
         }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == IMPORT_GARDEN_CATALOG) {
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                try (InputStream in=getContentResolver().openInputStream(data.getData());
+                     ByteArrayOutputStream out=new ByteArrayOutputStream()) {
+                    if(in==null) throw new IllegalStateException("Brak dostępu do pliku.");
+                    byte[] block=new byte[8192];
+                    int n;
+                    while((n=in.read(block))!=-1) {
+                        if(out.size()+n>GardenCatalogCsv.MAX_BYTES)
+                            throw new IllegalArgumentException("Katalog przekracza 2 MB.");
+                        out.write(block,0,n);
+                    }
+                    String csv=new String(out.toByteArray(),StandardCharsets.UTF_8);
+                    int count=GardenStore.importCatalogCsv(db.getWritableDatabase(),csv);
+                    DiagnosticLog.event("GARDEN_CATALOG_IMPORTED","count="+count);
+                    render();
+                    alert("Zaimportowano "+count+" pozycji katalogu. "
+                        +"Twoje korekty i nasadzenia pozostały bez zmian.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("GARDEN_CATALOG_IMPORT",error);
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zaimportować katalogu.":error.getMessage());
+                }
+            }
+            return;
+        }
+        if (request == EXPORT_GARDEN_CATALOG) {
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                try (OutputStream out=getContentResolver().openOutputStream(data.getData(),"wt")) {
+                    if(out==null) throw new IllegalStateException("Brak dostępu do pliku.");
+                    String csv=GardenStore.exportCatalogCsv(db.getReadableDatabase());
+                    out.write(csv.getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    DiagnosticLog.event("GARDEN_CATALOG_EXPORTED");
+                    alert("Zapisano katalog Ogrodu jako CSV.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("GARDEN_CATALOG_EXPORT",error);
+                    alert("Nie udało się zapisać katalogu CSV.");
+                }
+            }
+            return;
+        }
         if (request == EXPORT_QR_LABELS_PDF) {
             byte[] pdf=pendingQrLabelsPdf;
             int count=pendingQrLabelsCount;
@@ -10907,6 +15600,43 @@ public final class MainActivity extends Activity {
             }
             return;
         }
+        if (request == IMPORT_TILE_ART) {
+            final String tileId=pendingTileArtId;
+            final String target=pendingTileArtTarget;
+            final String style=pendingTileArtStyle;
+            final int span=pendingTileArtSpan;
+            pendingTileArtId=null;
+            pendingTileArtTarget=null;
+            pendingTileArtStyle=null;
+            pendingTileArtSpan=0;
+            if(result==RESULT_OK&&tileId!=null&&target!=null&&style!=null
+                    &&span>0&&data!=null&&data.getData()!=null){
+                final Uri chosen=data.getData();
+                new Thread(() -> {
+                    String failure=null;
+                    try{TileArtLibrary.importImage(
+                        this,target,style,span,chosen);}
+                    catch(Exception problem){failure=problem.getMessage();}
+                    final String error=failure;
+                    runOnUiThread(() -> {
+                        if(error!=null){
+                            alert("Nie zapisano grafiki kafelka: "+error);
+                            return;
+                        }
+                        if(prefs.edit().putString(
+                                TileArtLibrary.prefKey(tileId),style).commit()){
+                            DiagnosticLog.event("HOME_TILE_ART_IMPORTED",
+                                "style="+style+" span="+span+" target="+target);
+                            render();
+                            alert("Zapisano "+TileArtLibrary.styleLabel(style)
+                                +" • "+(span==2?"2P":"1P")+" dla "
+                                +HomeTileCatalog.label(target)+".");
+                        }else alert("Nie zapisano wyboru grafiki.");
+                    });
+                },"edhome-tile-art-import").start();
+            }
+            return;
+        }
         if (request == IMPORT_AI_3D_PACK) {
             if (result == RESULT_OK && data != null && data.getData() != null) {
                 final Uri chosen = data.getData();
@@ -10945,8 +15675,21 @@ public final class MainActivity extends Activity {
         if (scan != null) {
             if (centralScannerCameraPending) {
                 centralScannerCameraPending = false;
-                if (scan.getContents() != null)
+                if (scan.getContents() != null) {
                     handleCentralScan(scan.getContents());
+                } else {
+                    if(quickThingBatchQrTargetPending) {
+                        quickThingBatchQrTargetPending=false;
+                        showQuickThingBatchTargetChooser();
+                        return;
+                    }
+                    if(pendingStorageDestinationItemId!=null)
+                        pendingStorageDestinationItemId=null;
+                    if(pendingStorageDropKind!=null)
+                        clearStorageDropTarget();
+                    if(pendingStorageScannerOperation!=null)
+                        clearStorageScannerOperation();
+                }
                 return;
             }
             if (desktopPairQrCameraPending) {
@@ -10989,21 +15732,60 @@ public final class MainActivity extends Activity {
         }
         if (request == TAKE_STORAGE_THUMBNAIL) {
             long id=pendingStorageThumbnailId;
+            Uri photo=pendingStorageCameraUri;
+            java.io.File file=pendingStorageCameraFile;
+            boolean quickDraft=quickThingBatchDraftPhoto;
             pendingStorageThumbnailId=0;
-            if(result==RESULT_OK&&id>0) {
-                try {
-                    Object raw=data==null||data.getExtras()==null?null:
-                        data.getExtras().get("data");
-                    if(!(raw instanceof Bitmap))
+            pendingStorageCameraUri=null;
+            pendingStorageCameraFile=null;
+            quickThingBatchDraftPhoto=false;
+            try {
+                if(quickDraft) {
+                    if(result!=RESULT_OK) {
+                        DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_CANCELLED");
+                        if(file!=null&&file.exists())file.delete();
+                        new AlertDialog.Builder(this)
+                            .setTitle("Zdjęcie anulowane")
+                            .setMessage("Rzecz nie została utworzona.")
+                            .setNegativeButton("Zakończ serię",(d,w)->
+                                quickThingBatchFinish())
+                            .setNeutralButton("Zmień miejsce",(d,w)->
+                                showQuickThingBatchTargetChooser())
+                            .setPositiveButton("Zrób zdjęcie ponownie",(d,w)->
+                                takeQuickThingBatchDraftPhoto())
+                            .show();
+                        return;
+                    }
+                    if(photo==null||file==null||!file.exists()||file.length()<4)
                         throw new IllegalArgumentException(
-                            "Aparat nie zwrócił zdjęcia.");
-                    saveStorageThumbnail(id,StorageThumbs.compress((Bitmap)raw));
-                }catch(Exception error) {
-                    DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
-                    alert(error instanceof IllegalArgumentException
-                        ?error.getMessage():"Nie udało się zapisać miniatury.");
+                            "Aparat nie zapisał pełnego zdjęcia.");
+                    quickThingBatchPendingThumbnail=StorageThumbs.compress(
+                        getContentResolver(),photo);
+                    DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_STAGED");
+                } else if(result==RESULT_OK&&id>0) {
+                    if(photo==null||file==null||!file.exists()||file.length()<4)
+                        throw new IllegalArgumentException(
+                            "Aparat nie zapisał pełnego zdjęcia. "
+                            +"Spróbuj ponownie albo wybierz zdjęcie z galerii.");
+                    saveStorageThumbnail(id,StorageThumbs.compress(
+                        getContentResolver(),photo));
+                    DiagnosticLog.event("STORAGE_THUMBNAIL_FULLRES_SAVED");
                 }
+            } catch(Exception error) {
+                DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
+                alert(error instanceof IllegalArgumentException
+                    ?error.getMessage():"Nie udało się zapisać miniatury.");
+                if(quickDraft) {
+                    if(file!=null&&file.exists())file.delete();
+                    quickThingBatchPendingThumbnail=null;
+                    quickThingBatchFinish();
+                    return;
+                }
+            } finally {
+                if(file!=null&&file.exists())file.delete();
             }
+            if(quickDraft)quickThingBatchCommitPhoto();
+            else continueQuickThingBatchAfterPhoto(id);
             return;
         }
         if (request == IMPORT_STORAGE_THUMBNAIL) {
@@ -11178,7 +15960,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 36);
+            super(context, "edhome-beta-preview.db", null, 39);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -11218,12 +16000,14 @@ public final class MainActivity extends Activity {
             PantryBarcodeStore.createTables(database);
             PantryBarcodeStore.createDetails(database);
             PantryPackageStore.create(database);
+            GardenStore.create(database);
+            GardenStore.upgrade38(database);
             SyncRecordStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 36) {
+            if (oldVersion < 1 || newVersion > 39) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -11407,12 +16191,52 @@ public final class MainActivity extends Activity {
             if(oldVersion < 36) {
                 try {
                     SyncRecordStore.create(database);
-                    SyncRecordStore.ensureAll(database);
                 } catch (Exception error) {
                     throw new IllegalStateException(
                         "Nie udało się utworzyć metadanych synchronizacji.", error);
                 }
                 DiagnosticLog.event("DATABASE_MIGRATED_35_TO_36_SYNC_RECORDS");
+            }
+            if(oldVersion < 37) {
+                try {
+                    GardenStore.create(database);
+                } catch(Exception error) {
+                    throw new IllegalStateException("Nie udało się utworzyć danych Ogrodu.",error);
+                }
+                DiagnosticLog.event("DATABASE_MIGRATED_36_TO_37_GARDEN");
+            }
+            if(oldVersion < 38) {
+                try {
+                    GardenStore.upgrade38(database);
+                } catch(Exception error) {
+                    throw new IllegalStateException(
+                        "Nie udało się rozszerzyć historii sezonów Ogrodu.",error);
+                }
+                DiagnosticLog.event("DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE");
+            }
+            if(oldVersion < 39) {
+                database.execSQL("ALTER TABLE pantry_barcodes ADD COLUMN "
+                    + "units_per_scan INTEGER NOT NULL DEFAULT 1 "
+                    + "CHECK(units_per_scan BETWEEN 1 AND 10000)");
+                database.execSQL("ALTER TABLE pantry_packages ADD COLUMN "
+                    + "deposit_grosz INTEGER NOT NULL DEFAULT 0 "
+                    + "CHECK(deposit_grosz BETWEEN 0 AND 100000)");
+                database.execSQL("ALTER TABLE pantry_packages ADD COLUMN "
+                    + "deposit_pending INTEGER NOT NULL DEFAULT 0 "
+                    + "CHECK(deposit_pending BETWEEN 0 AND 100000000)");
+                DiagnosticLog.event("DATABASE_MIGRATED_38_TO_39_PANTRY_PACKAGING");
+            }
+            if(newVersion >= 36) {
+                try {
+                    // Synchronizację uzupełniamy dopiero po wszystkich zmianach schematu.
+                    // DataBackup.syncDefinitions() zawsze opisuje najnowszy układ tabel.
+                    SyncRecordStore.create(database);
+                    SyncRecordStore.ensureAll(database);
+                } catch(Exception error) {
+                    throw new IllegalStateException(
+                        "Nie udało się uzupełnić metadanych synchronizacji po migracji bazy.",
+                        error);
+                }
             }
         }
 
@@ -12323,6 +17147,31 @@ public final class MainActivity extends Activity {
             else getWritableDatabase().execSQL(
                 "UPDATE pantry SET qty=qty+1 WHERE id=? AND qty<100000000",
                 new Object[]{id});
+        }
+
+        boolean consumeStock(long id,int amount) {
+            if(amount<1||amount>10000)
+                throw new IllegalArgumentException("Nieprawidłowa ilość.");
+            SQLiteDatabase database=getWritableDatabase();
+            database.beginTransaction();
+            try {
+                int changed;
+                try(Cursor c=database.rawQuery(
+                        "SELECT qty FROM pantry WHERE id=?",
+                        new String[]{Long.toString(id)})) {
+                    if(!c.moveToFirst()||c.getInt(0)<amount)return false;
+                    int before=c.getInt(0);
+                    ContentValues values=new ContentValues();
+                    values.put("qty",before-amount);
+                    changed=database.update("pantry",values,
+                        "id=? AND qty=?",new String[]{
+                            Long.toString(id),Integer.toString(before)});
+                }
+                if(changed!=1)return false;
+                PantryPackageStore.addPendingDeposit(database,id,amount);
+                database.setTransactionSuccessful();
+                return true;
+            } finally { database.endTransaction(); }
         }
 
         void setStock(long id, int qty) {

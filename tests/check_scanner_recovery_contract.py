@@ -56,6 +56,16 @@ for marker in (
     assert marker in main, "Central scanner contract missing: " + marker
 assert main.index('case "scanner": scannerHub(); break;') < main.index('case "audit": audit(); break;')
 assert 'placeholder("Skaner"' not in main
+for marker in (
+    'showScannerUnknownNfc(uid);',
+    'showStorageThingDetails(link.targetId);',
+    'showScannerStorageContents(link.kind,link.targetId,name);',
+    'Miejsce • zawartość',
+    'Pudełko • zawartość',
+    '📥 Włóż rzecz tutaj • QR / NFC',
+    '📍 Zostaw tutaj rzecz lub pudełko • QR / NFC',
+):
+    assert marker in main, "Scanner gallery routing missing: " + marker
 
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 print("Scanner recovery + central QR/NFC/product action routing: PASS")

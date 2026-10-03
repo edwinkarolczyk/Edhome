@@ -49,6 +49,7 @@ public final class PantryTakeCaptureActivity extends Activity {
     private String lastBarcode = "";
     private String pendingStockBarcode;
     private long pendingPantryId = -1;
+    private int pendingUnits = 1;
     private long lastCommittedPantryId = -1;
     private boolean approvedRepeat;
     private final Runnable tick = new Runnable() {
@@ -193,6 +194,7 @@ public final class PantryTakeCaptureActivity extends Activity {
         if (another != null) another.setEnabled(false);
         pendingStockBarcode = null;
         pendingPantryId = -1;
+        pendingUnits = 1;
         approvedRepeat = false;
     }
 
@@ -249,14 +251,21 @@ public final class PantryTakeCaptureActivity extends Activity {
                     DiagnosticLog.event("PANTRY_TAKE_LOCAL_ALIAS_MATCH");
                 pendingStockBarcode = known.linkedBarcode;
                 pendingPantryId = item.id;
-                if (item.qty <= 0) {
+                pendingUnits = PantryBarcodeStore.unitsPerScan(
+                    db, known.linkedBarcode);
+                if (item.qty < pendingUnits) {
                     cancelPending("PANTRY_TAKE_EMPTY");
-                    title.setText(item.name + " • brak opakowań. Nie odejmuję.");
+                    title.setText(item.name + " • stan " + item.qty
+                        + ", a ten kod oznacza " + pendingUnits
+                        + " szt. Nie odejmuję.");
                     return;
                 }
                 PantryPackageStore.Pack pack = PantryPackageStore.find(db, item.id);
                 title.setText(item.name + " • stan: "
-                    + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli));
+                    + PantryPackageRules.summary(item.qty, pack.unit, pack.sizeMilli)
+                    + (pendingUnits > 1
+                        ? " • skan = " + pendingUnits + " szt." : ""));
+                takeNow.setText("Wyjmij teraz −" + pendingUnits);
             } finally { db.close(); }
         } catch (Exception problem) {
             DiagnosticLog.error("PANTRY_TAKE_READ", problem);
@@ -273,7 +282,8 @@ public final class PantryTakeCaptureActivity extends Activity {
     private void showRemaining() {
         if (countdown.pending() == null) return;
         long left = countdown.millisLeft(SystemClock.elapsedRealtime());
-        timer.setText("−1 za " + ((left + 999) / 1000) + " s • kolejny kod anuluje ten");
+        timer.setText("−" + pendingUnits + " za "
+            + ((left + 999) / 1000) + " s • kolejny kod anuluje ten");
     }
 
     private void armSameAgain() {
@@ -290,8 +300,10 @@ public final class PantryTakeCaptureActivity extends Activity {
         String scannedBarcode = countdown.consume(); // single use before touching SQLite
         String barcode = pendingStockBarcode;
         long pantryId = pendingPantryId;
+        int units = pendingUnits;
         pendingStockBarcode = null;
         pendingPantryId = -1;
+        pendingUnits = 1;
         if (scannedBarcode == null || barcode == null || pantryId <= 0) {
             title.setText("Nie potwierdzono produktu. Stan spiżarni bez zmian.");
             timer.setText("Brak oczekującego wyjęcia");
@@ -305,8 +317,11 @@ public final class PantryTakeCaptureActivity extends Activity {
                 getDatabasePath("edhome-beta-preview.db").getPath(), null,
                 SQLiteDatabase.OPEN_READWRITE);
             try {
+                PantryPackageStore.Pack pack =
+                    PantryPackageStore.find(db, pantryId);
                 String result = PantryBarcodeStore.commit(db, barcode, null, "TAKE",
-                    UUID.randomUUID().toString());
+                    UUID.randomUUID().toString(), pack.unit, pack.sizeMilli,
+                    pantryId, units, units);
                 if (!"COMMITTED".equals(result)) {
                     DiagnosticLog.event("PANTRY_TAKE_DUPLICATE_IGNORED");
                     title.setText("Operacja już zapisana. Nie odjęto ponownie.");
@@ -318,7 +333,9 @@ public final class PantryTakeCaptureActivity extends Activity {
             lastCommittedPantryId = pantryId;
             committed++;
             DiagnosticLog.event("PANTRY_TAKE_COMMITTED");
-            title.setText("Zapisano −1 opakowanie. Możesz skanować następny kod.");
+            title.setText("Zapisano −" + units
+                + (units == 1 ? " opakowanie." : " opakowań.")
+                + " Możesz skanować następny kod.");
             timer.setText("W tej sesji zapisano: " + committed);
             another.setEnabled(true);
             if (!batch) finishScanner();

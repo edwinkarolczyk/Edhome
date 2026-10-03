@@ -13,12 +13,14 @@ final class HomeTileCatalog {
     static final List<String> STARTER_IDS = Collections.unmodifiableList(Arrays.asList(
         "tasks", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "today",
-        "timers", "shopping", "paycheck", "waste", "scanner", "storage", "vehicles"
+        "timers", "shopping", "paycheck", "waste", "scanner", "storage",
+        "storage_things", "storage_boxes", "vehicles", "garden"
     ));
     static final List<String> TARGETS = Collections.unmodifiableList(Arrays.asList(
         "tasks", "today", "calendar", "places", "floorplan", "pantry", "audit",
         "updates", "backup", "settings", "timers", "shopping",
-        "paycheck", "paycheck_private", "waste", "scanner", "storage", "vehicles", "diagnostics"
+        "paycheck", "paycheck_private", "waste", "scanner", "storage",
+        "storage_things", "storage_boxes", "vehicles", "garden", "diagnostics"
     ));
 
     private HomeTileCatalog() { }
@@ -55,8 +57,11 @@ final class HomeTileCatalog {
             case "paycheck_private": return "Moje finanse";
             case "waste": return "Odpady";
             case "scanner": return "Skaner";
-            case "storage": return "Magazyn";
+            case "storage": return "Magazyn domowy";
+            case "storage_things": return "Rzeczy";
+            case "storage_boxes": return "Pudełka";
             case "vehicles": return "Pojazdy";
+            case "garden": return "Ogród";
             case "diagnostics": return "Diagnostyka";
             default: throw new IllegalArgumentException("Unknown target");
         }
@@ -70,8 +75,11 @@ final class HomeTileCatalog {
             case "waste": return "box";
             case "scanner": return "audit";
             case "storage": return "shelf";
+            case "storage_things": return "audit";
+            case "storage_boxes": return "box";
             case "floorplan": return "garage";
             case "vehicles": return "garage";
+            case "garden": return "garden";
             case "diagnostics": return "settings";
             default: return target;
         }

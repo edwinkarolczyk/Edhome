@@ -44,12 +44,26 @@ final class PantryProductLookup {
         final String brand;
         final String imageUrl;
         final byte[] image;
+        final int unitsPerScan;
+        final String baseUnit;
+        final long baseSizeMilli;
+        final String quantityLabel;
         Product(String name, String source, String brand, String imageUrl, byte[] image) {
+            this(name, source, brand, imageUrl, image,
+                PantryPackSuggestion.none());
+        }
+        Product(String name, String source, String brand, String imageUrl, byte[] image,
+                PantryPackSuggestion pack) {
             this.name = name;
             this.source = source;
             this.brand = brand;
             this.imageUrl = imageUrl;
             this.image = image;
+            PantryPackSuggestion safe = pack == null ? PantryPackSuggestion.none() : pack;
+            this.unitsPerScan = safe.unitsPerScan;
+            this.baseUnit = safe.unit;
+            this.baseSizeMilli = safe.sizeMilli;
+            this.quantityLabel = safe.label;
         }
     }
 
@@ -235,8 +249,8 @@ final class PantryProductLookup {
             throws Exception {
         URL endpoint = new URL("https://" + host + "/api/v2/product/"
             + barcode + ".json?fields=code,product_name_pl,product_name,"
-            + "product_name_en,generic_name_pl,generic_name,brands,"
-            + "image_front_url,image_url");
+            + "product_name_en,generic_name_pl,generic_name,brands,quantity,"
+            + "product_quantity,product_quantity_unit,image_front_url,image_url");
         byte[] result = get(endpoint, MAX_JSON_BYTES, false);
         if (result == null) return new Attempt(null, false);
         JSONObject root = new JSONObject(new String(result, StandardCharsets.UTF_8));
@@ -258,7 +272,8 @@ final class PantryProductLookup {
             try { image = get(new URL(url), MAX_IMAGE_BYTES, true); }
             catch (Exception ignored) { /* A photo must not hide a recognized name. */ }
         }
-        return new Attempt(new Product(name, source, brand, url, image), false);
+        PantryPackSuggestion pack = readPackSuggestion(row);
+        return new Attempt(new Product(name, source, brand, url, image, pack), false);
     }
 
 
@@ -292,8 +307,8 @@ final class PantryProductLookup {
                 URL endpoint = new URL("https://" + catalogue[0]
                     + "/api/v2/search?search_terms=" + encoded
                     + "&page_size=6&fields=code,product_name_pl,product_name,"
-                    + "product_name_en,generic_name_pl,generic_name,brands,"
-                    + "image_front_url,image_url");
+                    + "product_name_en,generic_name_pl,generic_name,brands,quantity,"
+                    + "product_quantity,product_quantity_unit,image_front_url,image_url");
                 byte[] response = get(endpoint, MAX_JSON_BYTES, false);
                 JSONObject root = response == null ? null
                     : new JSONObject(new String(response, StandardCharsets.UTF_8));
@@ -306,7 +321,8 @@ final class PantryProductLookup {
                         if (name.isEmpty()) continue;
                         String brand = clip(row.optString("brands", ""), 100);
                         String imageUrl = readImageUrl(row);
-                        results.add(new Product(name, label, brand, imageUrl, null));
+                        results.add(new Product(name, label, brand, imageUrl, null,
+                            readPackSuggestion(row)));
                         found++;
                     }
                 }
@@ -321,6 +337,21 @@ final class PantryProductLookup {
                 + (status.startsWith("problem") ? "_ERROR" : "_COMPLETE"));
         }
         return new NameSearchReport(results, joinResults(statuses), partialFailure);
+    }
+
+    private static PantryPackSuggestion readPackSuggestion(JSONObject row) {
+        String quantity = clip(row.optString("quantity", ""), 120);
+        PantryPackSuggestion parsed = PantryPackSuggestion.parse(quantity);
+        if (!parsed.label.isEmpty()) return parsed;
+
+        Object rawQuantity = row.opt("product_quantity");
+        String rawUnit = clip(row.optString("product_quantity_unit", ""), 20);
+        if (rawQuantity != null && rawQuantity != JSONObject.NULL && !rawUnit.isEmpty()) {
+            String combined = String.valueOf(rawQuantity) + " " + rawUnit;
+            PantryPackSuggestion fallback = PantryPackSuggestion.parse(combined);
+            if (!fallback.label.isEmpty()) return fallback;
+        }
+        return PantryPackSuggestion.none();
     }
 
     private static String readProductName(JSONObject row) {

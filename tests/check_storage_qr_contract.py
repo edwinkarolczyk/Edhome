@@ -14,7 +14,7 @@ gradle=Path("app/build.gradle").read_text()
 for token in (
     'StorageStore.createTables(database);',
     'DATABASE_MIGRATED_18_TO_19_STORAGE_QR',
-    'super(context, "edhome-beta-preview.db", null, 36)',
+    'super(context, "edhome-beta-preview.db", null, 39)',
     'case "storage": storage(); break;',
     'private boolean storageQrCameraPending;',
     'if (storageQrCameraPending) {',
@@ -44,7 +44,7 @@ for token in (
     assert token in store, "Missing storage safety: "+token
 
 for token in (
-    'DB_VERSION = 36;',
+    'DB_VERSION = 39;',
     '{"storage_items", "id", "name", "kind", "parent_box_id", "place_id",',
     '{"storage_events", "id", "item_id", "name_snapshot", "action",',
     'inputVersion < 19 && ("storage_items".equals(definition[0])',
@@ -112,3 +112,25 @@ assert 'android:exported="false"' in beta
 assert '"r".equals(mode)' in provider
 assert 'getCacheDir()' in main and 'FLAG_GRANT_READ_URI_PERMISSION' in main
 print("QR place/thing/box, printable formats, PDF export/share and history: PASS")
+
+
+# Stabilizacja 0.7.4.5: QR identity is never recycled by sync or backup restore.
+sync=Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text()
+assert 'private static boolean qrIdentityTable(String table)' in sync
+assert '"storage_items".equals(table) || "places".equals(table)' in sync
+assert 'retiredRowExists(db, table, rowKey)' in sync
+assert 'deleted_at IS NOT NULL' in sync
+assert 'reserveQrIdentitySequences(database);' in backup
+assert 'new String[]{"storage_items","places"}' in backup
+assert 'MAX(CAST(row_key AS INTEGER)) FROM sync_records' in backup
+version_name=next(line.split("'")[1] for line in gradle.splitlines()
+    if line.strip().startswith("versionName "))
+version_parts=version_name.split(".")
+assert version_parts[:3]==["0","7","4"] and int(version_parts[3]) >= 5
+print("Storage QR tombstone identity + restore sequence reservation: PASS")
+
+# Idempotencja lokalizacji: ponowne wskazanie tego samego celu nie tworzy historii moved.
+assert 'static boolean sameDestination(Item item,Long box,Long place)' in store
+assert 'if(sameDestination(item,box,place))' in store
+assert 'static Long effectivePlaceId(SQLiteDatabase db,Item item)' in store
+print("Storage same-destination no-op + inherited place helper: PASS")

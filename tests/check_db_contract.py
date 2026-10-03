@@ -21,6 +21,7 @@ document_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleDocume
 tyre_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleTyreStore.java").read_text(encoding="utf-8")
 vehicle_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleStore.java").read_text(encoding="utf-8")
 sync_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
+garden_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/GardenStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -73,8 +74,16 @@ step11 = statements(section(upgrade, "if (oldVersion < 11 && oldVersion >= 4)", 
 step12 = statements(section(upgrade, "if (oldVersion < 12)", "if (oldVersion < 13)"))
 step13 = statements(section(upgrade, "if (oldVersion < 13)", "if (oldVersion < 14)"))
 pantry14 = statements(section(pantry_store, "static void createTables(SQLiteDatabase db)", "static void createDetails(").replace("db.execSQL(", "database.execSQL("))
+pantry14_v38 = [sql.replace(
+    ", units_per_scan INTEGER NOT NULL DEFAULT 1 CHECK(units_per_scan BETWEEN 1 AND 10000)",
+    "") for sql in pantry14]
 pantry15 = statements(section(pantry_store, "static void createDetails(SQLiteDatabase db)", "static final class Details").replace("db.execSQL(", "database.execSQL("))
 pantry17 = statements(section(package_store, "static void create(SQLiteDatabase db)", "static void fillLegacy(").replace("db.execSQL(", "database.execSQL("))
+pantry17_v38 = [sql.replace(
+    ", deposit_grosz INTEGER NOT NULL DEFAULT 0 CHECK(deposit_grosz BETWEEN 0 AND 100000)",
+    "").replace(
+    ", deposit_pending INTEGER NOT NULL DEFAULT 0 CHECK(deposit_pending BETWEEN 0 AND 100000000)",
+    "") for sql in pantry17]
 receipts18 = statements(section(receipt_store, "static void create(SQLiteDatabase db)", "static boolean received(").replace("db.execSQL(", "database.execSQL("))
 storage19 = statements(section(storage_store, "static void createTables(SQLiteDatabase db)", "static final class Item").replace("db.execSQL(", "database.execSQL("))
 paycheck32 = statements(section(paycheck_store, "static void create(SQLiteDatabase db)", "static String add(").replace("db.execSQL(", "database.execSQL("))
@@ -97,6 +106,14 @@ sync36 = [
     "CREATE INDEX sync_records_updated_idx ON sync_records(updated_at)",
 ]
 step36 = sync36.copy()
+garden37 = statements(section(garden_store, "static void create(SQLiteDatabase db)",
+                              "static void upgrade38(").replace("db.execSQL(", "database.execSQL("))
+step37 = garden37.copy()
+garden38 = statements(section(garden_store, "static void upgrade38(SQLiteDatabase db)",
+                              "private static boolean hasColumn").replace(
+                                  "db.execSQL(", "database.execSQL("))
+step38 = garden38.copy()
+step39 = statements(section(upgrade, "if(oldVersion < 39)", "if(newVersion >= 36)"))
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
 step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
@@ -145,12 +162,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 36, "Database version and backup format differ"
+assert version == backup_version == 39, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
 expected = schema(fresh)
-assert len(expected) == 33 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 41 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -206,10 +223,10 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         for statement in step13:
             if statement.startswith("ALTER TABLE task_history"):
                 db.execute(statement)
-    execute(db, pantry14)  # v13 to v14, also after older migrations
+    execute(db, pantry14_v38)  # v13 to v14 historical schema
     execute(db, pantry15)  # v14 to v15, preserves existing pantry rows
     execute(db, step16)  # v15 to v16, default unknown products to other
-    execute(db, pantry17 + legacy17)  # v16 to v17, one szt. per legacy pack
+    execute(db, pantry17_v38 + legacy17)  # v16 to v17 historical schema
     execute(db, receipts22)  # v17 to v18, receipt ledger without changing stock
     execute(db, storage19)  # v18 to v19, object and box QR, history
     execute(db, paycheck20)  # v19 to v20, shared-only money ledger
@@ -229,6 +246,9 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step34)  # v33 to v34, persistent bank evidence queue
     execute(db, step35)  # v34 to v35, NFC links
     execute(db, step36)  # v35 to v36, sync UUID/revision/tombstone sidecar
+    execute(db, step37)  # v36 to v37, Garden foundation
+    execute(db, step38)  # v37 to v38, crop cycle, harvests and season history
+    execute(db, step39)  # v38 to v39, multipack and deposit metadata
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -313,7 +333,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-for accepted in range(2,36):
+for accepted in range(2,39):
     assert ("inputVersion != "+str(accepted)) in backup
 assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
@@ -346,13 +366,13 @@ assert 'task_id ASC, position ASC' in backup
 # An already-upgraded v14 installation must preserve barcode links and inventory.
 existing14 = sqlite3.connect(":memory:")
 execute(existing14, legacy_create + audit + history + rotations + places + sibling_index
-        + members + shifts + shopping22 + timers + pantry14)
+        + members + shifts + shopping22 + timers + pantry14_v38)
 existing14.execute("INSERT INTO pantry(id,name,qty) VALUES (2,'Mleko',7)")
 existing14.execute("INSERT INTO pantry_barcodes(pantry_id,barcode) "
                    "VALUES(2,'5901234123457')")
 execute(existing14, pantry15)
 execute(existing14, step16)
-execute(existing14, pantry17 + legacy17)
+execute(existing14, pantry17_v38 + legacy17)
 execute(existing14, receipts22)
 execute(existing14, storage19)
 execute(existing14, paycheck20)
@@ -372,6 +392,9 @@ execute(existing14, step33)
 execute(existing14, step34)
 execute(existing14, step35)
 execute(existing14, step36)
+execute(existing14, step37)
+execute(existing14, step38)
+execute(existing14, step39)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -380,8 +403,8 @@ existing14.close()
 # Existing SQLite v23 with populated objects and shopping history stays intact.
 existing23 = sqlite3.connect(":memory:")
 execute(existing23, create + audit + history + rotations + places
-        + sibling_index + members + shifts + shopping + timers + pantry14
-        + pantry15 + pantry17 + receipts18 + storage19 + paycheck20 + goals21
+        + sibling_index + members + shifts + shopping + timers + pantry14_v38
+        + pantry15 + pantry17_v38 + receipts18 + storage19 + paycheck20 + goals21
         + prices22)
 existing23.execute("INSERT INTO pantry(id,name,qty) VALUES(9,'Ryż',6)")
 existing23.execute("INSERT INTO shopping_items(id,name) VALUES(42,'Ryż')")
@@ -398,8 +421,11 @@ execute(existing23, step33)
 execute(existing23, step34)
 execute(existing23, step35)
 execute(existing23, step36)
+execute(existing23, step37)
+execute(existing23, step38)
+execute(existing23, step39)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v35→v36: PASS; sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v38→v39: PASS; pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")

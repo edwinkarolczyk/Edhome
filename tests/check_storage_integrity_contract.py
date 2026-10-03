@@ -52,3 +52,25 @@ db.execute("UPDATE vehicle_tyre_sets SET place_id=NULL WHERE id=42")
 assert may_delete(1)
 assert db.execute("SELECT place_id FROM tasks").fetchone()==(None,)
 print("Storage + vehicle tyres place deletion guard, history and hierarchy: PASS")
+
+
+# Stabilizacja 0.7.4.4: jedna semantyka Rzecz -> Pudełko/Miejsce,
+# Pudełko -> Miejsce także poza UI (backup + sync).
+sync=Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text()
+nfc=Path("app/src/main/java/com/edwinkarolczyk/edhome/NfcLinkStore.java").read_text()
+backup=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text()
+assert 'Pudełko można przypisać tylko do miejsca, nie do innego pudełka.' in store
+assert 'static void assertIntegrity(SQLiteDatabase db)' in store
+assert 'Pudełko nie może znajdować się w innym pudełku.' in store
+assert 'Rzecz wskazuje nieistniejące pudełko.' in store
+assert 'Rzecz lub pudełko wskazuje nieistniejące miejsce.' in store
+assert 'static void assertIntegrity(SQLiteDatabase db)' in nfc
+assert 'Jeden obiekt ma więcej niż jeden tag NFC.' in nfc
+assert 'NFC wskazuje nieistniejący obiekt.' in nfc
+assert 'StorageStore.assertIntegrity(db);' in sync
+assert 'NfcLinkStore.assertIntegrity(db);' in sync
+assert 'storageGraphTouched=true;' in sync
+assert 'StorageStore.assertIntegrity(database);' in backup
+assert 'NfcLinkStore.assertIntegrity(database);' in backup
+assert '|| "box".equals(kind) && box != null' in backup
+print("Storage 0.7.4.4 integrity gate: PASS")

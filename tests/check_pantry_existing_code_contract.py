@@ -10,11 +10,11 @@ for token in (
     'SELECT id,name,qty FROM pantry ORDER BY name COLLATE NOCASE LIMIT 250',
     'confirmExistingPantryCode(barcode, operationId, ids.get(which))',
     'SELECT name,qty FROM pantry WHERE id=?',
-    'Powiąż i dodaj +1',
-    'null, pack.unit, pack.sizeMilli, pantryId)',
+    'Powiąż i dodaj',
+    'pack.unit,pack.sizeMilli,pantryId,count,count);',
     'commitPantryBarcode(barcode, name, mode, operationId, found, newCategory,',
     'unit, sizeMilli, 0L);',
-    'barcode, name, mode, operationId, unit, sizeMilli, selectedPantryId)',
+    'selectedPantryId, quantity, unitsPerScan);',
 ):
     assert token in main, "Missing existing product UI or stock guard: "+token
 for token in (
