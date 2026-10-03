@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 177,
-  "versionName": "0.7.4.36",
-  "changelog": "EDHOME 0.7.4.36 — Beta. Stabilizacja danych, synchronizacji LAN, Magazynu, QR/NFC, backupu i testów regresji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.36/edhome-beta.apk",
-  "sha256": "f429098d330a862d5a85e20913b129871946fc27ba8e8cb19e872f40936b60e3"
+  "versionCode": 180,
+  "versionName": "0.7.4.39",
+  "changelog": "EDHOME 0.7.4.39 — Beta. Projekty: podprojekty, czynności do 10 h, trudność względna 1–5, zależności, zasoby Rzeczy/Pudełka, koszty oraz planowanie całego drzewa projektu. SQLite v41, backup i synchronizacja zależności. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.39/edhome-beta.apk",
+  "sha256": "ae64f2ef6780cf1cfe5c752e73eba25d5d1209a7350e421b96cb4c563e28c3df"
 }
