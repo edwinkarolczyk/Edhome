@@ -200,6 +200,8 @@ jobs:
         run: python3 tests/check_paycheck_provenance_contract.py
       - name: SQLite migration and backup contract
         run: python3 tests/check_db_contract.py
+      - name: Projects hierarchy, dependencies and planning contract
+        run: python3 tests/check_projects_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
         run: python3 tests/check_settings_diagnostics_contract.py
       - name: Backup schema, nulls and JSON roundtrip contract
@@ -484,7 +486,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja danych, synchronizacji LAN, Magazynu, QR/NFC, backupu i testów regresji. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Projekty: podprojekty, czynności do 10 h, trudność względna 1–5, zależności, zasoby Rzeczy/Pudełka, koszty oraz planowanie całego drzewa projektu. SQLite v41, backup i synchronizacja zależności. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
