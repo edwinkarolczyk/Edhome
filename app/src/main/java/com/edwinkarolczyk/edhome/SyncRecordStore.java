@@ -511,6 +511,8 @@ final class SyncRecordStore {
         if (DataBackup.syncColumns(table) == null) return null;
         if ("task_rotation_members".equals(table))
             return new String[]{"task_id","member_id"};
+        if ("project_task_dependencies".equals(table))
+            return new String[]{"task_id","depends_on_task_id"};
         if ("pantry_packages".equals(table))
             return new String[]{"pantry_id"};
         return new String[]{"id"};
