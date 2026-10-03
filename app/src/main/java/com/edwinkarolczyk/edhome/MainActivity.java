@@ -17442,6 +17442,9 @@ public final class MainActivity extends Activity {
             try {
                 database.delete("task_rotation_members", "task_id=?",
                     new String[]{Long.toString(id)});
+                database.delete("project_task_dependencies",
+                    "task_id=? OR depends_on_task_id=?",
+                    new String[]{Long.toString(id),Long.toString(id)});
                 database.delete("tasks", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
             } finally {
