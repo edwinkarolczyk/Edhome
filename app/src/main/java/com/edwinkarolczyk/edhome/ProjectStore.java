@@ -1,0 +1,280 @@
+package com.edwinkarolczyk.edhome;
+
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/** Lokalna hierarchia projektów oparta na istniejących Czynnościach i Magazynie. */
+final class ProjectStore {
+    static final String[] STATUSES={"active","paused","done"};
+
+    static final class Project {
+        final long id;
+        final String name;
+        final Long parentId;
+        final Long placeId;
+        final Long assigneeId;
+        final String status;
+        final String dueDate;
+        final Long budgetGrosz;
+        Project(long id,String name,Long parentId,Long placeId,Long assigneeId,
+                String status,String dueDate,Long budgetGrosz) {
+            this.id=id; this.name=name; this.parentId=parentId;
+            this.placeId=placeId; this.assigneeId=assigneeId;
+            this.status=status; this.dueDate=dueDate; this.budgetGrosz=budgetGrosz;
+        }
+    }
+
+    static final class Stats {
+        final int tasks;
+        final int doneTasks;
+        final int overdueTasks;
+        final int totalMinutes;
+        final int doneMinutes;
+        final long plannedCostGrosz;
+        final long spentCostGrosz;
+        Stats(int tasks,int doneTasks,int overdueTasks,int totalMinutes,
+                int doneMinutes,long plannedCostGrosz,long spentCostGrosz) {
+            this.tasks=tasks; this.doneTasks=doneTasks;
+            this.overdueTasks=overdueTasks; this.totalMinutes=totalMinutes;
+            this.doneMinutes=doneMinutes;
+            this.plannedCostGrosz=plannedCostGrosz;
+            this.spentCostGrosz=spentCostGrosz;
+        }
+        int progressPct() {
+            if(totalMinutes<=0)return tasks<=0?0:(doneTasks*100/tasks);
+            return Math.max(0,Math.min(100,
+                (int)Math.round(doneMinutes*100.0/totalMinutes)));
+        }
+        int remainingMinutes(){return Math.max(0,totalMinutes-doneMinutes);}
+    }
+
+    private ProjectStore(){}
+
+    static void create(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS projects ("
+            +"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            +"name TEXT NOT NULL COLLATE NOCASE,"
+            +"parent_id INTEGER,"
+            +"place_id INTEGER,"
+            +"assignee_id INTEGER,"
+            +"status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','paused','done')),"
+            +"due_date TEXT,"
+            +"budget_grosz INTEGER,"
+            +"created_at INTEGER NOT NULL,"
+            +"CHECK(parent_id IS NULL OR parent_id!=id))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS projects_parent_idx "
+            +"ON projects(parent_id,name COLLATE NOCASE)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS project_resources ("
+            +"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            +"project_id INTEGER NOT NULL,"
+            +"target_kind TEXT NOT NULL CHECK(target_kind IN ('thing','box')),"
+            +"target_id INTEGER NOT NULL,"
+            +"created_at INTEGER NOT NULL,"
+            +"UNIQUE(project_id,target_kind,target_id))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS project_resources_project_idx "
+            +"ON project_resources(project_id,id)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS project_costs ("
+            +"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            +"project_id INTEGER NOT NULL,"
+            +"name TEXT NOT NULL,"
+            +"qty_milli INTEGER NOT NULL DEFAULT 1000,"
+            +"unit TEXT NOT NULL DEFAULT 'szt.',"
+            +"unit_price_grosz INTEGER NOT NULL DEFAULT 0,"
+            +"status TEXT NOT NULL DEFAULT 'planned' "
+            +"CHECK(status IN ('planned','bought','paid')),"
+            +"note TEXT NOT NULL DEFAULT '',"
+            +"created_at INTEGER NOT NULL)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS project_costs_project_idx "
+            +"ON project_costs(project_id,id)");
+    }
+
+    static Project find(SQLiteDatabase db,long id) {
+        try(Cursor c=db.rawQuery(
+                "SELECT id,name,parent_id,place_id,assignee_id,status,due_date,budget_grosz "
+                +"FROM projects WHERE id=?",new String[]{Long.toString(id)})) {
+            return c.moveToFirst()?new Project(c.getLong(0),c.getString(1),
+                c.isNull(2)?null:c.getLong(2),c.isNull(3)?null:c.getLong(3),
+                c.isNull(4)?null:c.getLong(4),c.getString(5),
+                c.isNull(6)?"":c.getString(6),c.isNull(7)?null:c.getLong(7)):null;
+        }
+    }
+
+    static List<Project> children(SQLiteDatabase db,Long parentId) {
+        ArrayList<Project> out=new ArrayList<>();
+        String where=parentId==null?"parent_id IS NULL":"parent_id=?";
+        String[] args=parentId==null?null:new String[]{Long.toString(parentId)};
+        try(Cursor c=db.rawQuery(
+                "SELECT id,name,parent_id,place_id,assignee_id,status,due_date,budget_grosz "
+                +"FROM projects WHERE "+where+" ORDER BY name COLLATE NOCASE,id",args)) {
+            while(c.moveToNext())out.add(new Project(c.getLong(0),c.getString(1),
+                c.isNull(2)?null:c.getLong(2),c.isNull(3)?null:c.getLong(3),
+                c.isNull(4)?null:c.getLong(4),c.getString(5),
+                c.isNull(6)?"":c.getString(6),c.isNull(7)?null:c.getLong(7)));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    static long addProject(SQLiteDatabase db,String rawName,Long parentId,
+            Long placeId,Long assigneeId,String dueDate,Long budgetGrosz) {
+        String name=rawName==null?"":rawName.trim();
+        if(name.isEmpty()||name.length()>160)
+            throw new IllegalArgumentException("Podaj nazwę projektu 1–160 znaków.");
+        if(parentId!=null&&find(db,parentId)==null)
+            throw new IllegalArgumentException("Projekt nadrzędny już nie istnieje.");
+        if(placeId!=null)try(Cursor c=db.rawQuery(
+                "SELECT 1 FROM places WHERE id=?",
+                new String[]{Long.toString(placeId)})) {
+            if(!c.moveToFirst())throw new IllegalArgumentException("Miejsce już nie istnieje.");
+        }
+        if(assigneeId!=null)try(Cursor c=db.rawQuery(
+                "SELECT 1 FROM household_members WHERE id=?",
+                new String[]{Long.toString(assigneeId)})) {
+            if(!c.moveToFirst())throw new IllegalArgumentException("Wykonawca już nie istnieje.");
+        }
+        if(dueDate==null)dueDate="";
+        dueDate=dueDate.trim();
+        if(!dueDate.isEmpty())try{java.time.LocalDate.parse(dueDate);}
+        catch(Exception invalid){throw new IllegalArgumentException("Nieprawidłowy termin projektu.");}
+        if(budgetGrosz!=null&&budgetGrosz<0)
+            throw new IllegalArgumentException("Budżet nie może być ujemny.");
+        ContentValues v=new ContentValues();
+        v.put("name",name);
+        if(parentId==null)v.putNull("parent_id");else v.put("parent_id",parentId);
+        if(placeId==null)v.putNull("place_id");else v.put("place_id",placeId);
+        if(assigneeId==null)v.putNull("assignee_id");else v.put("assignee_id",assigneeId);
+        v.put("status","active");
+        if(dueDate.isEmpty())v.putNull("due_date");else v.put("due_date",dueDate);
+        if(budgetGrosz==null)v.putNull("budget_grosz");else v.put("budget_grosz",budgetGrosz);
+        v.put("created_at",System.currentTimeMillis());
+        return db.insertOrThrow("projects",null,v);
+    }
+
+    static void setStatus(SQLiteDatabase db,long id,String status) {
+        boolean valid=false;
+        for(String value:STATUSES)if(value.equals(status))valid=true;
+        if(!valid)throw new IllegalArgumentException("Nieprawidłowy status projektu.");
+        ContentValues v=new ContentValues();v.put("status",status);
+        if(db.update("projects",v,"id=?",new String[]{Long.toString(id)})!=1)
+            throw new IllegalArgumentException("Projekt już nie istnieje.");
+    }
+
+    static Set<Long> descendantIds(SQLiteDatabase db,long root) {
+        if(find(db,root)==null)return Collections.emptySet();
+        HashSet<Long> result=new HashSet<>();
+        result.add(root);
+        for(int pass=0;pass<256;pass++) {
+            int before=result.size();
+            try(Cursor c=db.rawQuery("SELECT id,parent_id FROM projects WHERE parent_id IS NOT NULL",null)) {
+                while(c.moveToNext())if(result.contains(c.getLong(1)))result.add(c.getLong(0));
+            }
+            if(result.size()==before)return result;
+        }
+        throw new IllegalStateException("Zbyt głęboka hierarchia projektów.");
+    }
+
+    private static String inClause(Set<Long> ids) {
+        StringBuilder b=new StringBuilder();
+        for(int i=0;i<ids.size();i++) {
+            if(i>0)b.append(',');
+            b.append('?');
+        }
+        return b.toString();
+    }
+    private static String[] args(Set<Long> ids) {
+        String[] out=new String[ids.size()];int i=0;
+        for(Long id:ids)out[i++]=Long.toString(id);
+        return out;
+    }
+
+    static Stats stats(SQLiteDatabase db,long projectId) {
+        Set<Long> ids=descendantIds(db,projectId);
+        if(ids.isEmpty())return new Stats(0,0,0,0,0,0,0);
+        String in=inClause(ids);String[] a=args(ids);
+        int tasks=0,done=0,overdue=0,totalMinutes=0,doneMinutes=0;
+        try(Cursor c=db.rawQuery(
+                "SELECT done,duration_minutes,due_date FROM tasks WHERE project_id IN ("+in+")",a)) {
+            String today=java.time.LocalDate.now().toString();
+            while(c.moveToNext()) {
+                tasks++;
+                int minutes=Math.max(1,c.getInt(1));
+                totalMinutes+=minutes;
+                if(c.getInt(0)!=0){done++;doneMinutes+=minutes;}
+                else if(!c.isNull(2)&&c.getString(2).compareTo(today)<0)overdue++;
+            }
+        }
+        long planned=0,spent=0;
+        try(Cursor c=db.rawQuery(
+                "SELECT qty_milli,unit_price_grosz,status FROM project_costs "
+                    +"WHERE project_id IN ("+in+")",a)) {
+            while(c.moveToNext()) {
+                long value=Math.max(0,Math.round(c.getLong(0)*c.getLong(1)/1000.0));
+                planned+=value;
+                if("bought".equals(c.getString(2))||"paid".equals(c.getString(2)))
+                    spent+=value;
+            }
+        }
+        return new Stats(tasks,done,overdue,totalMinutes,doneMinutes,planned,spent);
+    }
+
+    static String timeClass(SQLiteDatabase db,long projectId,long taskId) {
+        Set<Long> ids=descendantIds(db,projectId);
+        if(ids.isEmpty())return "";
+        ArrayList<long[]> rows=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT id,duration_minutes FROM tasks WHERE project_id IN ("
+                    +inClause(ids)+") ORDER BY duration_minutes,id",args(ids))) {
+            while(c.moveToNext())rows.add(new long[]{c.getLong(0),c.getLong(1)});
+        }
+        if(rows.isEmpty())return "";
+        int index=-1;
+        for(int i=0;i<rows.size();i++)if(rows.get(i)[0]==taskId){index=i;break;}
+        if(index<0)return "";
+        int bucket=Math.min(4,(int)Math.floor(index*5.0/rows.size()));
+        return new String[]{"Szybka","Krótka","Średnia","Długa","Czasochłonna"}[bucket];
+    }
+
+    static void addResource(SQLiteDatabase db,long projectId,String kind,long targetId) {
+        if(find(db,projectId)==null)throw new IllegalArgumentException("Projekt nie istnieje.");
+        if(!"thing".equals(kind)&&!"box".equals(kind))
+            throw new IllegalArgumentException("Do projektu można przypisać Rzecz albo Pudełko.");
+        StorageStore.Item item=StorageStore.find(db,targetId);
+        if(item==null||!kind.equals(item.kind))
+            throw new IllegalArgumentException("Zasób już nie istnieje.");
+        ContentValues v=new ContentValues();
+        v.put("project_id",projectId);v.put("target_kind",kind);
+        v.put("target_id",targetId);v.put("created_at",System.currentTimeMillis());
+        db.insertWithOnConflict("project_resources",null,v,SQLiteDatabase.CONFLICT_IGNORE);
+    }
+
+    static long addCost(SQLiteDatabase db,long projectId,String rawName,
+            long qtyMilli,String unit,long unitPriceGrosz,String status,String note) {
+        if(find(db,projectId)==null)throw new IllegalArgumentException("Projekt nie istnieje.");
+        String name=rawName==null?"":rawName.trim();
+        if(name.isEmpty()||name.length()>160)
+            throw new IllegalArgumentException("Podaj nazwę kosztu/zakupu.");
+        if(qtyMilli<=0||unitPriceGrosz<0)
+            throw new IllegalArgumentException("Ilość i cena muszą być poprawne.");
+        if(!"planned".equals(status)&&!"bought".equals(status)&&!"paid".equals(status))
+            throw new IllegalArgumentException("Nieprawidłowy status kosztu.");
+        ContentValues v=new ContentValues();
+        v.put("project_id",projectId);v.put("name",name);v.put("qty_milli",qtyMilli);
+        v.put("unit",unit==null?"szt.":unit);v.put("unit_price_grosz",unitPriceGrosz);
+        v.put("status",status);v.put("note",note==null?"":note.trim());
+        v.put("created_at",System.currentTimeMillis());
+        return db.insertOrThrow("project_costs",null,v);
+    }
+
+    static void setCostStatus(SQLiteDatabase db,long id,String status) {
+        if(!"planned".equals(status)&&!"bought".equals(status)&&!"paid".equals(status))
+            throw new IllegalArgumentException("Nieprawidłowy status kosztu.");
+        ContentValues v=new ContentValues();v.put("status",status);
+        db.update("project_costs",v,"id=?",new String[]{Long.toString(id)});
+    }
+}
