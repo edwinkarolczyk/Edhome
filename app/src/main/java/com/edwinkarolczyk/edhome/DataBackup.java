@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 40;
+    private static final int DB_VERSION = 41;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -44,6 +44,7 @@ final class DataBackup {
         {"project_resources", "id", "project_id", "target_kind", "target_id", "created_at"},
         {"project_costs", "id", "project_id", "name", "qty_milli", "unit",
             "unit_price_grosz", "status", "note", "created_at"},
+        {"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"},
         {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty", "category"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked",
@@ -266,7 +267,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -471,6 +472,8 @@ final class DataBackup {
                 || (inputVersion < 40 && ("projects".equals(definition[0])
                     || "project_resources".equals(definition[0])
                     || "project_costs".equals(definition[0])))
+                || (inputVersion < 41
+                    && "project_task_dependencies".equals(definition[0]))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -1134,7 +1137,7 @@ final class DataBackup {
                     if (priority == null
                             || !java.util.Arrays.asList(
                                 "low", "normal", "high", "urgent").contains(priority)
-                            || minutes == null || minutes < 1 || minutes > 480)
+                            || minutes == null || minutes < 1 || minutes > 600)
                         throw new IllegalArgumentException(
                             "Nieprawidłowy priorytet lub czas czynności.");
                 }
@@ -1629,7 +1632,7 @@ final class DataBackup {
             || "inspection_reminder_lead".equals(column)
             || "start_at".equals(column) || "end_at".equals(column)
             || "acknowledged_at".equals(column)
-            || "task_id".equals(column)
+            || "task_id".equals(column) || "depends_on_task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
             || "project_id".equals(column) || "target_id".equals(column)
             || "budget_grosz".equals(column) || "unit_price_grosz".equals(column)
