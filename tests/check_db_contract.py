@@ -22,6 +22,7 @@ tyre_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleTyreStore.
 vehicle_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleStore.java").read_text(encoding="utf-8")
 sync_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 garden_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/GardenStore.java").read_text(encoding="utf-8")
+project_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/ProjectStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -113,7 +114,10 @@ garden38 = statements(section(garden_store, "static void upgrade38(SQLiteDatabas
                               "private static boolean hasColumn").replace(
                                   "db.execSQL(", "database.execSQL("))
 step38 = garden38.copy()
-step39 = statements(section(upgrade, "if(oldVersion < 39)", "if(newVersion >= 36)"))
+step39 = statements(section(upgrade, "if(oldVersion < 39)", "if(oldVersion < 40)"))
+project40 = statements(section(project_store, "static void create(SQLiteDatabase db)",
+                               "static Project find(").replace("db.execSQL(", "database.execSQL("))
+step40 = statements(section(upgrade, "if(oldVersion < 40)", "if(newVersion >= 36)")) + project40
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
 step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
@@ -162,12 +166,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 39, "Database version and backup format differ"
+assert version == backup_version == 40, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40)
 expected = schema(fresh)
-assert len(expected) == 41 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 44 and len(project40) == 6 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -249,6 +253,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step37)  # v36 to v37, Garden foundation
     execute(db, step38)  # v37 to v38, crop cycle, harvests and season history
     execute(db, step39)  # v38 to v39, multipack and deposit metadata
+    execute(db, step40)  # v39 to v40, projects and task links
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -269,8 +274,8 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     assert db.execute(
         "SELECT task_kind,waste_fraction FROM tasks WHERE id=7"
     ).fetchone() == ("general", None)
-    assert db.execute("SELECT remind_time,reminder_lead_days FROM tasks "
-                      "WHERE id=7").fetchone() == (None, 0)
+    assert db.execute("SELECT remind_time,reminder_lead_days,project_id FROM tasks "
+                      "WHERE id=7").fetchone() == (None, 0, None)
     db.execute("INSERT INTO places (id,name,kind) VALUES (12,'Dom','Dom')")
     db.execute("INSERT INTO places (id,name,parent_id,kind,icon) "
                "VALUES (13,'Kuchnia',12,'Pomieszczenie','room')")
