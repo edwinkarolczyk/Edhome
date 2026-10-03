@@ -338,7 +338,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-for accepted in range(2,39):
+for accepted in range(2,40):
     assert ("inputVersion != "+str(accepted)) in backup
 assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
@@ -400,6 +400,7 @@ execute(existing14, step36)
 execute(existing14, step37)
 execute(existing14, step38)
 execute(existing14, step39)
+execute(existing14, step40)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -429,8 +430,11 @@ execute(existing23, step36)
 execute(existing23, step37)
 execute(existing23, step38)
 execute(existing23, step39)
+# Ten fixture korzysta już z bieżącej definicji tabeli tasks, więc dodajemy
+# tylko nowe tabele projektowe, bez ponownego ALTER TABLE project_id.
+execute(existing23, project40)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v38→v39: PASS; pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v39→v40: PASS; Projects, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
