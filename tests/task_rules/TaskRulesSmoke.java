@@ -48,6 +48,20 @@ public final class TaskRulesSmoke {
             LocalDate.of(2026, 3, 31)), "2026-05-31");
         valid(TaskRules.nextDue("2026-10-01", "once", 1,
             LocalDate.of(2026, 10, 1)) == null, "One-off must not repeat");
-        System.out.println("TaskRulesSmoke: 17 checks passed");
+        equals(TaskRules.hoursText(30), "0,5");
+        equals(TaskRules.hoursText(60), "1");
+        equals(TaskRules.hoursText(90), "1,5");
+        equals(TaskRules.hoursText(480), "8");
+        valid(Integer.valueOf(30).equals(
+            TaskRules.minutesFromHours("0,5", 1, 480)),
+            "Polish decimal comma must parse");
+        valid(Integer.valueOf(75).equals(
+            TaskRules.minutesFromHours("1.25", 1, 480)),
+            "Decimal point must parse");
+        valid(TaskRules.minutesFromHours("0", 1, 480) == null,
+            "Zero hours must be rejected");
+        valid(TaskRules.minutesFromHours("8,1", 1, 480) == null,
+            "Task duration must stay within eight hours");
+        System.out.println("TaskRulesSmoke: 25 checks passed");
     }
 }

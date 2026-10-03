@@ -4085,7 +4085,8 @@ public final class MainActivity extends Activity {
         String[] planning = db.taskPlanning(id);
         String description = (due.isEmpty() ? "Bez terminu" : "Termin: " + due)
             + " • " + TaskRules.label(rule, every)
-            + " • " + planning[1] + " min"
+            + " • " + TaskRules.hoursText(
+                Integer.parseInt(planning[1])) + " h"
             + " • Priorytet: " + TASK_PRIORITY_LABELS[
                 Math.max(0, java.util.Arrays.asList(TASK_PRIORITIES)
                     .indexOf(planning[0]))];
@@ -4344,12 +4345,14 @@ public final class MainActivity extends Activity {
         priority.setSelection(Math.max(0,
             java.util.Arrays.asList(TASK_PRIORITIES).indexOf(currentPlanning[0])));
         form.addView(priority);
-        form.addView(text("Szacowany czas wykonania (minuty)", 16, true));
+        form.addView(text("Szacowany czas wykonania (godziny)", 16, true));
         EditText duration = new EditText(this);
         duration.setSingleLine(true);
-        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        duration.setHint("Od 1 do 480 minut");
-        duration.setText(currentPlanning[1]);
+        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        duration.setHint("Np. 0,5 • 1 • 1,5 • maks. 8 h");
+        duration.setText(TaskRules.hoursText(
+            Integer.parseInt(currentPlanning[1])));
         duration.setTextColor(ink);
         duration.setHintTextColor(subdued);
         form.addView(duration);
@@ -4588,19 +4591,15 @@ public final class MainActivity extends Activity {
                         return;
                     }
                 }
-                int estimatedMinutes;
-                try {
-                    estimatedMinutes = Integer.parseInt(
-                        duration.getText().toString().trim());
-                } catch (NumberFormatException problem) {
-                    duration.setError("Podaj czas od 1 do 480 minut.");
+                Integer parsedDurationMinutes = TaskRules.minutesFromHours(
+                    duration.getText().toString(),
+                    MIN_TASK_MINUTES, MAX_TASK_MINUTES);
+                if (parsedDurationMinutes == null) {
+                    duration.setError("Podaj czas w godzinach, np. 0,5 / 1 / 1,5 "
+                        + "(maks. 8 h).");
                     return;
                 }
-                if (estimatedMinutes < MIN_TASK_MINUTES
-                        || estimatedMinutes > MAX_TASK_MINUTES) {
-                    duration.setError("Podaj czas od 1 do 480 minut.");
-                    return;
-                }
+                int estimatedMinutes = parsedDurationMinutes;
                 String selectedPriority = TASK_PRIORITIES[
                     priority.getSelectedItemPosition()];
                 String title = name.getText().toString().trim();

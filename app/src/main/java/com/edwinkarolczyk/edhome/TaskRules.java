@@ -32,6 +32,33 @@ final class TaskRules {
     static boolean recurring(String rule) { return !"once".equals(rule); }
     static boolean custom(String rule) { return rule.startsWith("every_"); }
 
+    /** User-facing task duration in hours; storage stays in whole minutes. */
+    static String hoursText(int minutes) {
+        java.math.BigDecimal hours = java.math.BigDecimal.valueOf(minutes)
+            .divide(java.math.BigDecimal.valueOf(60), 2,
+                java.math.RoundingMode.HALF_UP)
+            .stripTrailingZeros();
+        return hours.toPlainString().replace('.', ',');
+    }
+
+    /** Accept Polish comma or decimal point and convert hours back to minutes. */
+    static Integer minutesFromHours(String text, int minMinutes, int maxMinutes) {
+        if (text == null || minMinutes < 1 || maxMinutes < minMinutes) return null;
+        String normalized = text.trim().replace(',', '.');
+        if (normalized.isEmpty()) return null;
+        try {
+            java.math.BigDecimal hours = new java.math.BigDecimal(normalized);
+            if (hours.compareTo(java.math.BigDecimal.ZERO) <= 0) return null;
+            int minutes = hours.multiply(java.math.BigDecimal.valueOf(60))
+                .setScale(0, java.math.RoundingMode.HALF_UP)
+                .intValue();
+            return minutes >= minMinutes && minutes <= maxMinutes
+                ? minutes : null;
+        } catch (NumberFormatException error) {
+            return null;
+        }
+    }
+
     static String validate(String title, String dueDate, String rule, int every) {
         if (title == null || title.trim().isEmpty() || title.trim().length() > 160)
             return "Podaj nazwę (maks. 160 znaków).";
