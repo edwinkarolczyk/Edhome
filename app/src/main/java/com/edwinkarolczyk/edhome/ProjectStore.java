@@ -93,6 +93,18 @@ final class ProjectStore {
             +"created_at INTEGER NOT NULL)");
         db.execSQL("CREATE INDEX IF NOT EXISTS project_costs_project_idx "
             +"ON project_costs(project_id,id)");
+        upgrade41(db);
+    }
+
+    static void upgrade41(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS project_task_dependencies ("
+            +"task_id INTEGER NOT NULL,"
+            +"depends_on_task_id INTEGER NOT NULL,"
+            +"created_at INTEGER NOT NULL,"
+            +"CHECK(task_id!=depends_on_task_id),"
+            +"UNIQUE(task_id,depends_on_task_id))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS project_task_dependencies_task_idx "
+            +"ON project_task_dependencies(task_id,depends_on_task_id)");
     }
 
     static Project find(SQLiteDatabase db,long id) {
@@ -226,18 +238,142 @@ final class ProjectStore {
     static String timeClass(SQLiteDatabase db,long projectId,long taskId) {
         Set<Long> ids=descendantIds(db,projectId);
         if(ids.isEmpty())return "";
-        ArrayList<long[]> rows=new ArrayList<>();
+        int min=Integer.MAX_VALUE,max=0,value=-1;
         try(Cursor c=db.rawQuery(
                 "SELECT id,duration_minutes FROM tasks WHERE project_id IN ("
-                    +inClause(ids)+") ORDER BY duration_minutes,id",args(ids))) {
-            while(c.moveToNext())rows.add(new long[]{c.getLong(0),c.getLong(1)});
+                    +inClause(ids)+")",args(ids))) {
+            while(c.moveToNext()) {
+                int minutes=Math.max(1,c.getInt(1));
+                min=Math.min(min,minutes);
+                max=Math.max(max,minutes);
+                if(c.getLong(0)==taskId)value=minutes;
+            }
         }
-        if(rows.isEmpty())return "";
-        int index=-1;
-        for(int i=0;i<rows.size();i++)if(rows.get(i)[0]==taskId){index=i;break;}
-        if(index<0)return "";
-        int bucket=Math.min(4,(int)Math.floor(index*5.0/rows.size()));
-        return new String[]{"Szybka","Krótka","Średnia","Długa","Czasochłonna"}[bucket];
+        if(value<0)return "";
+        int score=min==max?3:1+(int)Math.round((value-min)*4.0/(max-min));
+        score=Math.max(1,Math.min(5,score));
+        String[] labels={"Bardzo łatwa","Łatwa","Średnia","Trudna","Bardzo trudna"};
+        return "Trudność "+score+"/5 • "+labels[score-1];
+    }
+
+    private static Long taskProjectId(SQLiteDatabase db,long taskId) {
+        try(Cursor c=db.rawQuery("SELECT project_id FROM tasks WHERE id=?",
+                new String[]{Long.toString(taskId)})) {
+            return c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
+        }
+    }
+
+    static long rootProjectId(SQLiteDatabase db,long projectId) {
+        Project current=find(db,projectId);
+        if(current==null)throw new IllegalArgumentException("Projekt nie istnieje.");
+        HashSet<Long> seen=new HashSet<>();
+        while(current.parentId!=null) {
+            if(!seen.add(current.id))
+                throw new IllegalStateException("Wykryto pętlę w hierarchii projektów.");
+            Project parent=find(db,current.parentId);
+            if(parent==null)break;
+            current=parent;
+        }
+        return current.id;
+    }
+
+    static List<Long> dependencyIds(SQLiteDatabase db,long taskId) {
+        ArrayList<Long> out=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT depends_on_task_id FROM project_task_dependencies "
+                    +"WHERE task_id=? ORDER BY created_at,depends_on_task_id",
+                new String[]{Long.toString(taskId)})) {
+            while(c.moveToNext())out.add(c.getLong(0));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    static int openDependencyCount(SQLiteDatabase db,long taskId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT COUNT(*) FROM project_task_dependencies d "
+                    +"JOIN tasks t ON t.id=d.depends_on_task_id "
+                    +"WHERE d.task_id=? AND t.done=0",
+                new String[]{Long.toString(taskId)})) {
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
+
+    private static boolean reaches(SQLiteDatabase db,long start,long target) {
+        ArrayList<Long> pending=new ArrayList<>();
+        HashSet<Long> seen=new HashSet<>();
+        pending.add(start);
+        while(!pending.isEmpty()) {
+            long current=pending.remove(pending.size()-1);
+            if(current==target)return true;
+            if(!seen.add(current))continue;
+            try(Cursor c=db.rawQuery(
+                    "SELECT depends_on_task_id FROM project_task_dependencies "
+                        +"WHERE task_id=?",
+                    new String[]{Long.toString(current)})) {
+                while(c.moveToNext())pending.add(c.getLong(0));
+            }
+            if(seen.size()>20000)
+                throw new IllegalStateException("Zbyt wiele zależności projektu.");
+        }
+        return false;
+    }
+
+    static void addDependency(SQLiteDatabase db,long taskId,long dependsOnTaskId) {
+        if(taskId==dependsOnTaskId)
+            throw new IllegalArgumentException("Czynność nie może zależeć od samej siebie.");
+        Long project=taskProjectId(db,taskId);
+        Long prerequisiteProject=taskProjectId(db,dependsOnTaskId);
+        if(project==null||prerequisiteProject==null)
+            throw new IllegalArgumentException(
+                "Zależności można ustawiać tylko między czynnościami projektów.");
+        if(rootProjectId(db,project)!=rootProjectId(db,prerequisiteProject))
+            throw new IllegalArgumentException(
+                "Zależność musi dotyczyć czynności z tego samego projektu głównego.");
+        if(reaches(db,dependsOnTaskId,taskId))
+            throw new IllegalArgumentException("Ta zależność utworzyłaby pętlę.");
+        ContentValues v=new ContentValues();
+        v.put("task_id",taskId);
+        v.put("depends_on_task_id",dependsOnTaskId);
+        v.put("created_at",System.currentTimeMillis());
+        db.insertWithOnConflict("project_task_dependencies",null,v,
+            SQLiteDatabase.CONFLICT_IGNORE);
+    }
+
+    static void removeDependency(SQLiteDatabase db,long taskId,long dependsOnTaskId) {
+        db.delete("project_task_dependencies",
+            "task_id=? AND depends_on_task_id=?",
+            new String[]{Long.toString(taskId),Long.toString(dependsOnTaskId)});
+    }
+
+    static List<Long> openTaskIdsForPlanning(SQLiteDatabase db,long projectId) {
+        Set<Long> projects=descendantIds(db,projectId);
+        if(projects.isEmpty())return Collections.emptyList();
+        java.util.LinkedHashSet<Long> remaining=new java.util.LinkedHashSet<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT id FROM tasks WHERE done=0 AND project_id IN ("
+                    +inClause(projects)+") ORDER BY duration_minutes DESC,id",
+                args(projects))) {
+            while(c.moveToNext())remaining.add(c.getLong(0));
+        }
+        ArrayList<Long> ordered=new ArrayList<>();
+        while(!remaining.isEmpty()) {
+            boolean progress=false;
+            ArrayList<Long> snapshot=new ArrayList<>(remaining);
+            for(Long task:snapshot) {
+                boolean waits=false;
+                for(Long dependency:dependencyIds(db,task))
+                    if(remaining.contains(dependency)) {waits=true;break;}
+                if(waits)continue;
+                ordered.add(task);
+                remaining.remove(task);
+                progress=true;
+            }
+            if(!progress) {
+                ordered.addAll(remaining);
+                break;
+            }
+        }
+        return Collections.unmodifiableList(ordered);
     }
 
     static void addResource(SQLiteDatabase db,long projectId,String kind,long targetId) {
