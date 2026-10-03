@@ -8479,6 +8479,11 @@ public final class MainActivity extends Activity {
         refreshQuickStorageSetupStatus("box",id);
     }
 
+    private void continueQuickThingBatchAfterPhoto(long id) {
+        if(isQuickThingBatchTarget(id))
+            root.postDelayed(()->quickThingBatchStartDestinationNfc(id),100L);
+    }
+
     private void quickAddStorageThing() {
         startQuickThingBatch();
     }
