@@ -95,7 +95,7 @@ assert 'DesktopHardwareScanner' in desktop
 assert '"nfc_links"' in desktop
 assert 'DATABASE_MIGRATED_34_TO_35_NFC_LINKS' in main
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
-assert 'DB_VERSION = 39' in backup
+assert 'DB_VERSION = 41' in backup
 assert '{"nfc_links"' in backup
 
 # Incremental record sync v2 + backward-compatible v1.
@@ -144,6 +144,8 @@ assert 'SyncRecordStore.create(database)' in main
 assert 'syncRecords' in backup
 assert 'SyncRecordStore.restoreMetadata' in backup
 assert 'payload.addProperty("version", 2)' in desktop
+assert '"project_task_dependencies".equals(table)' in desktop
+assert 'canonicalId(row.get("depends_on_task_id"))' in desktop
 assert 'syncUuid' in desktop and 'baseRevision' in desktop and 'rowKey' in desktop
 assert 'ensureDesktopSyncMetadata' in desktop
 assert 'applyPatchAck' in desktop
