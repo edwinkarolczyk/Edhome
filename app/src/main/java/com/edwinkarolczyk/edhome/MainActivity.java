@@ -131,6 +131,11 @@ public final class MainActivity extends Activity {
     private AlertDialog quickThingBatchDialog;
     private boolean quickThingBatchDraftPhoto;
     private String quickThingBatchPendingThumbnail;
+    private String quickThingBatchTargetKind;
+    private Long quickThingBatchTargetId;
+    private String quickThingBatchTargetName;
+    private boolean quickThingBatchWaitingForTarget;
+    private boolean quickThingBatchQrTargetPending;
     private String suppressedNfcUid;
     private long suppressedNfcUntilElapsed;
     private String lastNfcRawUid;
@@ -484,6 +489,7 @@ public final class MainActivity extends Activity {
             || pendingStorageDestinationItemId!=null
             || pendingStorageDropKind!=null
             || pendingStorageScannerOperation!=null
+            || quickThingBatchWaitingForTarget
             || scannerNfcArmed;
     }
 
@@ -603,6 +609,10 @@ public final class MainActivity extends Activity {
         try {
             NfcLinkStore.Link current=NfcLinkStore.findByUid(
                 db.getReadableDatabase(),uid);
+            if(quickThingBatchActive && quickThingBatchWaitingForTarget) {
+                handleQuickThingBatchTargetNfc(current,uid);
+                return;
+            }
             if(pendingStorageScannerOperation!=null) {
                 handleStorageScannerSourceNfc(current);
                 return;
@@ -7309,6 +7319,19 @@ public final class MainActivity extends Activity {
         String code = raw == null ? "" : raw.trim();
         if (code.isEmpty()) return;
         StorageQr.Target storageTarget = StorageQr.decode(code);
+        if (quickThingBatchQrTargetPending) {
+            quickThingBatchQrTargetPending=false;
+            if(storageTarget==null
+                    ||(!"box".equals(storageTarget.kind)
+                        &&!"place".equals(storageTarget.kind))) {
+                alert("Szybkie dodawanie oczekuje QR pudełka albo miejsca.");
+                showQuickThingBatchTargetChooser();
+                return;
+            }
+            quickThingBatchSelectTarget(
+                storageTarget.kind,storageTarget.id,"qr");
+            return;
+        }
         if (storageTarget != null) {
             if(pendingStorageScannerOperation!=null) {
                 handleStorageScannerSource(storageTarget.kind,storageTarget.id);
@@ -8480,8 +8503,7 @@ public final class MainActivity extends Activity {
     }
 
     private void continueQuickThingBatchAfterPhoto(long id) {
-        if(isQuickThingBatchTarget(id))
-            root.postDelayed(()->quickThingBatchStartDestinationNfc(id),100L);
+        // Zwykła edycja miniatury nie steruje seryjnym szybkim dodawaniem.
     }
 
     private void quickAddStorageThing() {
@@ -8494,10 +8516,10 @@ public final class MainActivity extends Activity {
 
     private void startQuickThingBatch() {
         if(quickThingBatchActive) {
-            if(quickThingBatchCurrentId>0)
-                quickThingBatchStartDestinationNfc(quickThingBatchCurrentId);
+            if(quickThingBatchTargetKind==null || quickThingBatchTargetId==null)
+                showQuickThingBatchTargetChooser();
             else if(!quickThingBatchDraftPhoto)
-                takeQuickThingBatchDraftPhoto();
+                quickThingBatchNext();
             return;
         }
         quickThingBatchActive=true;
@@ -8505,164 +8527,147 @@ public final class MainActivity extends Activity {
         quickThingBatchCounter=1;
         quickThingBatchAdded=0;
         quickThingBatchPendingThumbnail=null;
-        DiagnosticLog.event("STORAGE_QUICK_BATCH_STARTED");
-        quickThingBatchNext();
+        quickThingBatchTargetKind=null;
+        quickThingBatchTargetId=null;
+        quickThingBatchTargetName=null;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_STARTED",
+            "flow=target_then_photos");
+        showQuickThingBatchTargetChooser();
     }
 
-    /** Start the next cycle with a photo. No storage row exists yet. */
-    private void quickThingBatchNext() {
+    /** One box/place is selected before taking any photos. */
+    private void showQuickThingBatchTargetChooser() {
         if(!quickThingBatchActive)return;
-        quickThingBatchCurrentId=0L;
-        quickThingBatchPendingThumbnail=null;
-        DiagnosticLog.event("STORAGE_QUICK_BATCH_DRAFT_STARTED",
-            "index="+quickThingBatchCounter);
-        takeQuickThingBatchDraftPhoto();
-    }
-
-    private void quickThingBatchAskDraftName() {
-        if(!quickThingBatchActive || quickThingBatchPendingThumbnail==null)return;
         if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
             quickThingBatchDialog.dismiss();
-
-        String defaultName="Rzecz "+quickThingBatchCounter;
-        LinearLayout layout=new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
-        layout.addView(text("Zdjęcie: dodane ✓",13,false));
-        EditText name=new EditText(this);
-        name.setSingleLine(true);
-        name.setHint("Nazwa rzeczy");
-        name.setText(defaultName);
-        name.setSelectAllOnFocus(true);
-        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
-        layout.addView(text("Rzecz powstanie dopiero po zatwierdzeniu nazwy. "
-            +"Następnie EDHOME od razu uruchomi odczyt NFC położenia.",13,false));
-
-        AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("Szybkie dodawanie • nazwa")
-            .setView(layout)
-            .setCancelable(false)
-            .create();
-        quickThingBatchDialog=dialog;
-
-        smallButton(layout,"Dalej • od razu skanuj NFC",()->{
-            String value=name.getText().toString().trim();
-            if(value.isEmpty()) {
-                name.setError("Podaj nazwę.");
-                return;
-            }
-            quickThingBatchCreateFromDraft(value);
-        });
-        smallButton(layout,"Zakończ serię • nie twórz tej rzeczy",()->{
-            dialog.dismiss();
-            quickThingBatchDialog=null;
-            quickThingBatchFinish();
-        });
-        lightDialogForm(layout);
-        dialog.setCanceledOnTouchOutside(false);
-        dialog.show();
-    }
-
-    private void quickThingBatchCreateFromDraft(String name) {
-        if(!quickThingBatchActive || quickThingBatchPendingThumbnail==null)return;
-        try {
-            String thumbnail=quickThingBatchPendingThumbnail;
-            long id=StorageStore.create(db.getWritableDatabase(),
-                name,"thing",null,null);
-            if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit()) {
-                StorageStore.remove(db.getWritableDatabase(),id);
-                throw new IllegalStateException("Nie zapisano zdjęcia rzeczy.");
-            }
-            quickThingBatchPendingThumbnail=null;
-            quickThingBatchCurrentId=id;
-            quickThingBatchAdded++;
-            DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_CREATED",
-                "id="+id+" index="+quickThingBatchCounter+" after_photo=true");
-            if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
-                quickThingBatchDialog.dismiss();
-            quickThingBatchDialog=null;
-            render();
-            root.postDelayed(()->{
-                if(isQuickThingBatchTarget(id))
-                    quickThingBatchStartDestinationNfc(id);
-            },100L);
-        } catch(Exception error) {
-            alert(error.getMessage()==null
-                ?"Nie udało się utworzyć rzeczy.":error.getMessage());
-        }
-    }
-
-    /** NFC is armed immediately after photo + name, without an extra tap. */
-    private void quickThingBatchStartDestinationNfc(long id) {
-        if(!isQuickThingBatchTarget(id))return;
-        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
-        if(item==null) {
-            quickThingBatchFinish();
-            return;
-        }
-        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
-            quickThingBatchDialog.dismiss();
+        quickThingBatchDialog=null;
+        quickThingBatchDraftPhoto=false;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
 
         boolean nfcReady=nfcAdapter!=null&&nfcAdapter.isEnabled();
         if(nfcReady) {
-            pendingStorageDestinationItemId=id;
+            quickThingBatchWaitingForTarget=true;
             disableNfcReaderMode();
-            if(!enableNfcReaderMode())nfcReady=false;
-        }
+            if(!enableNfcReaderMode()) {
+                quickThingBatchWaitingForTarget=false;
+                nfcReady=false;
+            }
+        } else refreshNfcReaderMode();
 
         LinearLayout actions=new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(18),dp(10),dp(18),dp(10));
-        actions.addView(storageKindText("thing",item.name,18,true));
-        TextView state=text(nfcReady
-            ?"NFC aktywne — przyłóż tag pudełka albo miejsca."
-            :nfcAdapter==null
-                ?"Ten telefon nie ma NFC. Wybierz QR albo ręcznie."
-                :"NFC jest wyłączone. Wybierz QR/ręcznie albo włącz NFC.",
-            13,nfcReady);
-        state.setTextColor(nfcReady?accent:subdued);
-        actions.addView(state);
+        if(quickThingBatchTargetKind!=null&&quickThingBatchTargetId!=null) {
+            actions.addView(text("Aktualny cel: "
+                +quickThingBatchTargetLabel(),15,true));
+        }
+        actions.addView(text(nfcReady
+            ?"Przyłóż tag NFC pudełka albo miejsca. Ten cel zostanie użyty dla całej serii zdjęć."
+            :"Wybierz pudełko albo miejsce dla całej serii. NFC jest niedostępne lub wyłączone.",
+            13,nfcReady));
 
         AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("Szybkie dodawanie • położenie")
+            .setTitle(quickThingBatchTargetId==null
+                ?"Szybkie dodawanie • wybierz położenie"
+                :"Szybkie dodawanie • zmień położenie")
             .setView(actions)
             .setCancelable(false)
             .create();
         quickThingBatchDialog=dialog;
 
         smallButton(actions,"QR • zeskanuj pudełko lub miejsce",()->{
+            quickThingBatchWaitingForTarget=false;
+            refreshNfcReaderMode();
             dialog.dismiss();
             quickThingBatchDialog=null;
-            pendingStorageDestinationItemId=null;
-            refreshNfcReaderMode();
-            beginStorageDestinationQr(id);
+            launchQuickThingBatchTargetQr();
         });
         smallButton(actions,"Ręcznie • wybierz z listy",()->{
-            pendingStorageDestinationItemId=null;
+            quickThingBatchWaitingForTarget=false;
             refreshNfcReaderMode();
-            showQuickThingBatchManualDestination(id);
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            showQuickThingBatchTargetPicker();
         });
-        if(!nfcReady&&nfcAdapter!=null) {
-            smallButton(actions,"Włącz / ustaw NFC",()->openNfcPhoneSettings());
-        }
-        smallButton(actions,"Pomiń położenie",()->{
-            pendingStorageDestinationItemId=null;
-            refreshNfcReaderMode();
-            quickThingBatchAdvance(id,"skip");
-        });
+        if(!nfcReady&&nfcAdapter!=null)
+            smallButton(actions,"Włącz / ustaw NFC",this::openNfcPhoneSettings);
         smallButton(actions,"Zakończ serię",()->{
-            pendingStorageDestinationItemId=null;
-            refreshNfcReaderMode();
+            quickThingBatchWaitingForTarget=false;
             quickThingBatchFinish();
         });
         lightDialogForm(actions);
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
-        DiagnosticLog.event("STORAGE_QUICK_BATCH_NFC_AUTO_WAITING","id="+id);
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_TARGET_WAITING");
     }
 
-    private void showQuickThingBatchManualDestination(long itemId) {
-        if(!isQuickThingBatchTarget(itemId))return;
+    private String quickThingBatchTargetLabel() {
+        if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null)
+            return "brak";
+        String prefix="box".equals(quickThingBatchTargetKind)
+            ?"Pudełko: ":"Miejsce: ";
+        String name=quickThingBatchTargetName;
+        if(name==null||name.trim().isEmpty())
+            name=NfcLinkStore.targetName(db.getReadableDatabase(),
+                quickThingBatchTargetKind,quickThingBatchTargetId);
+        return prefix+(name==null||name.isEmpty()
+            ?"#"+quickThingBatchTargetId:name);
+    }
+
+    private void handleQuickThingBatchTargetNfc(
+            NfcLinkStore.Link current,String uid) {
+        if(!quickThingBatchActive||!quickThingBatchWaitingForTarget)return;
+        quickThingBatchWaitingForTarget=false;
+        disableNfcReaderMode();
+        if(current==null) {
+            if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+                quickThingBatchDialog.dismiss();
+            quickThingBatchDialog=null;
+            showQuickThingBatchUnknownTargetNfc(uid);
+            return;
+        }
+        if(!"box".equals(current.kind)&&!"place".equals(current.kind)) {
+            alert("Ten tag wskazuje "
+                +NfcLinkStore.kindLabel(current.kind)
+                +". Szybkie dodawanie potrzebuje pudełka albo miejsca.");
+            root.postDelayed(this::showQuickThingBatchTargetChooser,100L);
+            return;
+        }
+        suppressNfcRepeat(uid);
+        quickThingBatchSelectTarget(current.kind,current.targetId,"nfc");
+    }
+
+    private void launchQuickThingBatchTargetQr() {
+        if(!quickThingBatchActive)return;
+        if(centralScannerCameraPending||pantrySingleCameraPending||pantryBatch.active()) {
+            alert("Inny skaner jest teraz aktywny.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        quickThingBatchQrTargetPending=true;
+        centralScannerCameraPending=true;
+        try {
+            IntentIntegrator scanner=new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            scanner.setPrompt("EDHOME: zeskanuj QR pudełka albo miejsca");
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_TARGET_QR_WAITING");
+        } catch(Exception error) {
+            quickThingBatchQrTargetPending=false;
+            centralScannerCameraPending=false;
+            DiagnosticLog.error("STORAGE_QUICK_BATCH_TARGET_QR",error);
+            alert("Nie można uruchomić skanera QR.");
+            showQuickThingBatchTargetChooser();
+        }
+    }
+
+    private void showQuickThingBatchTargetPicker() {
+        if(!quickThingBatchActive)return;
         java.util.List<String> labels=new java.util.ArrayList<>();
         java.util.List<String> kinds=new java.util.ArrayList<>();
         java.util.List<Long> ids=new java.util.ArrayList<>();
@@ -8681,45 +8686,264 @@ public final class MainActivity extends Activity {
             }
         }
         if(labels.isEmpty()) {
-            alert("Nie ma jeszcze pudełek ani miejsc. Możesz pominąć położenie.");
+            new AlertDialog.Builder(this)
+                .setTitle("Brak celu")
+                .setMessage("Nie ma jeszcze pudełek ani miejsc. "
+                    +"Użyj nieznanego taga NFC, aby utworzyć nowe pudełko lub miejsce.")
+                .setNegativeButton("Zakończ serię",(d,w)->quickThingBatchFinish())
+                .setPositiveButton("Wróć",(d,w)->showQuickThingBatchTargetChooser())
+                .show();
             return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("Wybierz pudełko lub miejsce")
+            .setTitle("Cel całej serii")
             .setItems(labels.toArray(new String[0]),(d,which)->
-                applyStorageDestination(itemId,kinds.get(which),ids.get(which),"manual"))
-            .setNegativeButton("Anuluj",null)
+                quickThingBatchSelectTarget(
+                    kinds.get(which),ids.get(which),"manual"))
+            .setNegativeButton("Wróć",(d,w)->showQuickThingBatchTargetChooser())
             .show();
     }
 
-    private void quickThingBatchAdvance(long id,String source) {
-        if(!isQuickThingBatchTarget(id))return;
+    private void quickThingBatchSelectTarget(
+            String kind,long id,String source) {
+        if(!quickThingBatchActive)return;
+        if(!"box".equals(kind)&&!"place".equals(kind)) {
+            alert("Wybierz pudełko albo miejsce.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        String name=NfcLinkStore.targetName(db.getReadableDatabase(),kind,id);
+        if(name.isEmpty()) {
+            alert("Wybrane pudełko lub miejsce już nie istnieje.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        quickThingBatchTargetKind=kind;
+        quickThingBatchTargetId=id;
+        quickThingBatchTargetName=name;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
+        pendingStorageDestinationItemId=null;
         if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
             quickThingBatchDialog.dismiss();
         quickThingBatchDialog=null;
-        pendingStorageDestinationItemId=null;
         refreshNfcReaderMode();
-        DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_DONE",
-            "id="+id+" source="+source);
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_TARGET_SELECTED",
+            "target="+kind+":"+id+" source="+source);
+        root.postDelayed(this::quickThingBatchNext,80L);
+    }
+
+    private void showQuickThingBatchUnknownTargetNfc(String uid) {
+        if(!quickThingBatchActive)return;
+        java.util.List<String> labels=java.util.Arrays.asList(
+            "＋ Nowe pudełko","＋ Nowe miejsce","Anuluj");
+        new AlertDialog.Builder(this)
+            .setTitle("Nieznany tag NFC")
+            .setMessage("Ten tag nie jest przypisany. "
+                +"Możesz od razu utworzyć cel dla całej serii zdjęć.")
+            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                if(which==0)showQuickThingBatchUnknownTargetName(uid,"box");
+                else if(which==1)showQuickThingBatchUnknownTargetName(uid,"place");
+                else showQuickThingBatchTargetChooser();
+            })
+            .setOnCancelListener(dialog->showQuickThingBatchTargetChooser())
+            .show();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_UNKNOWN_NFC",
+            "uid="+NfcLinkStore.shortUid(uid));
+    }
+
+    private void showQuickThingBatchUnknownTargetName(String uid,String kind) {
+        if(!quickThingBatchActive)return;
+        boolean box="box".equals(kind);
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint(box?"Nazwa nowego pudełka":"Nazwa nowego miejsca");
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text("Po zapisaniu ten tag NFC będzie przypisany do "
+            +(box?"pudełka":"miejsca")
+            +" i od razu zacznie się robienie zdjęć rzeczy.",13,false));
+        lightDialogForm(layout);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(box?"Nowe pudełko z tego taga":"Nowe miejsce z tego taga")
+            .setView(layout)
+            .setNegativeButton("Wróć",(d,w)->
+                showQuickThingBatchUnknownTargetNfc(uid))
+            .setPositiveButton("Utwórz i zacznij zdjęcia",null)
+            .setCancelable(false)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()) {
+                    name.setError("Podaj nazwę.");
+                    return;
+                }
+                long targetId=0L;
+                try {
+                    if(box) {
+                        targetId=StorageStore.create(db.getWritableDatabase(),
+                            value,"box",null,null);
+                    } else {
+                        String problem=PlaceRules.validateFields(
+                            value,"","places");
+                        if(problem!=null) {
+                            name.setError(problem);
+                            return;
+                        }
+                        if(!db.savePlace(null,value,"",null,"places")) {
+                            name.setError("Takie miejsce już istnieje.");
+                            return;
+                        }
+                        try(Cursor c=db.getReadableDatabase().rawQuery(
+                                "SELECT id FROM places WHERE parent_id IS NULL "
+                                    +"AND name=? COLLATE NOCASE "
+                                    +"ORDER BY id DESC LIMIT 1",
+                                new String[]{value})) {
+                            if(c.moveToFirst())targetId=c.getLong(0);
+                        }
+                        if(targetId<=0)
+                            throw new IllegalStateException(
+                                "Nie znaleziono utworzonego miejsca.");
+                    }
+                    NfcLinkStore.bind(
+                        db.getWritableDatabase(),uid,kind,targetId);
+                    suppressNfcRepeat(uid);
+                    dialog.dismiss();
+                    DiagnosticLog.event(
+                        "STORAGE_QUICK_BATCH_UNKNOWN_TARGET_CREATED",
+                        "target="+kind+":"+targetId);
+                    quickThingBatchSelectTarget(kind,targetId,"nfc-new");
+                } catch(Exception error) {
+                    if(targetId>0) {
+                        try {
+                            NfcLinkStore.clearTarget(
+                                db.getWritableDatabase(),kind,targetId);
+                            if(box)StorageStore.remove(
+                                db.getWritableDatabase(),targetId);
+                            else db.deletePlace(targetId);
+                        } catch(Exception cleanup) {
+                            DiagnosticLog.error(
+                                "STORAGE_QUICK_BATCH_TARGET_CLEANUP",cleanup);
+                        }
+                    }
+                    DiagnosticLog.error(
+                        "STORAGE_QUICK_BATCH_UNKNOWN_TARGET_CREATE",error);
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć celu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    /** Start the next photo only after a series target has been selected. */
+    private void quickThingBatchNext() {
+        if(!quickThingBatchActive)return;
+        if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null) {
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        if(NfcLinkStore.targetName(db.getReadableDatabase(),
+                quickThingBatchTargetKind,quickThingBatchTargetId).isEmpty()) {
+            quickThingBatchTargetKind=null;
+            quickThingBatchTargetId=null;
+            quickThingBatchTargetName=null;
+            alert("Cel serii już nie istnieje. Wybierz nowe położenie.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
         quickThingBatchCurrentId=0L;
-        quickThingBatchCounter++;
+        quickThingBatchPendingThumbnail=null;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_STARTED",
+            "index="+quickThingBatchCounter
+                +" target="+quickThingBatchTargetKind+":"+quickThingBatchTargetId);
+        takeQuickThingBatchDraftPhoto();
+    }
+
+    /** Every successful photo creates the next automatically named Thing. */
+    private void quickThingBatchCommitPhoto() {
+        if(!quickThingBatchActive||quickThingBatchPendingThumbnail==null)return;
+        if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null) {
+            quickThingBatchPendingThumbnail=null;
+            alert("Brak celu serii. Rzecz nie została utworzona.");
+            showQuickThingBatchTargetChooser();
+            return;
+        }
+        String name="Rzecz "+quickThingBatchCounter;
+        Long box="box".equals(quickThingBatchTargetKind)
+            ?quickThingBatchTargetId:null;
+        Long place="place".equals(quickThingBatchTargetKind)
+            ?quickThingBatchTargetId:null;
+        long id=0L;
+        try {
+            String thumbnail=quickThingBatchPendingThumbnail;
+            id=StorageStore.create(
+                db.getWritableDatabase(),name,"thing",box,place);
+            if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit()) {
+                StorageStore.remove(db.getWritableDatabase(),id);
+                throw new IllegalStateException("Nie zapisano zdjęcia rzeczy.");
+            }
+            quickThingBatchPendingThumbnail=null;
+            quickThingBatchCurrentId=id;
+            quickThingBatchAdded++;
+            int createdIndex=quickThingBatchCounter;
+            quickThingBatchCounter++;
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_CREATED",
+                "id="+id+" name=Rzecz "+createdIndex
+                    +" target="+quickThingBatchTargetKind+":"+quickThingBatchTargetId
+                    +" after_photo=true");
+            render();
+            showQuickThingBatchAfterPhoto(id,name);
+        } catch(Exception error) {
+            if(id>0) {
+                try {
+                    prefs.edit().remove(StorageThumbs.key(id)).apply();
+                    StorageStore.remove(db.getWritableDatabase(),id);
+                } catch(Exception ignored) { }
+            }
+            quickThingBatchPendingThumbnail=null;
+            DiagnosticLog.error("STORAGE_QUICK_BATCH_PHOTO_COMMIT",error);
+            alert(error.getMessage()==null
+                ?"Nie udało się utworzyć rzeczy ze zdjęcia.":error.getMessage());
+            showQuickThingBatchAfterFailure();
+        }
+    }
+
+    private void showQuickThingBatchAfterPhoto(long id,String name) {
+        if(!quickThingBatchActive)return;
+        if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+            quickThingBatchDialog.dismiss();
 
         LinearLayout actions=new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(18),dp(12),dp(18),dp(12));
-        actions.addView(text("Rzecz zapisana. Co dalej?",15,true));
+        actions.addView(text("Dodano: "+name,17,true));
+        actions.addView(text(quickThingBatchTargetLabel(),13,false));
+        actions.addView(text("Dodanych w tej serii: "+quickThingBatchAdded,
+            12,false));
+
         AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("Szybkie dodawanie")
+            .setTitle("Dodać jeszcze?")
             .setView(actions)
             .setCancelable(false)
             .create();
         quickThingBatchDialog=dialog;
-        smallButton(actions,"＋ Dodaj następną rzecz",()->{
+        smallButton(actions,"📷 Dodaj następną",()->{
             dialog.dismiss();
             quickThingBatchDialog=null;
+            quickThingBatchCurrentId=0L;
             quickThingBatchNext();
         });
-        smallButton(actions,"Zakończ serię",()->{
+        smallButton(actions,"📍 Zmień pudełko / miejsce",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchCurrentId=0L;
+            showQuickThingBatchTargetChooser();
+        });
+        smallButton(actions,"✓ Zakończ serię",()->{
             dialog.dismiss();
             quickThingBatchDialog=null;
             quickThingBatchFinish();
@@ -8729,29 +8953,41 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void showQuickThingBatchAfterFailure() {
+        if(!quickThingBatchActive)return;
+        new AlertDialog.Builder(this)
+            .setTitle("Nie utworzono rzeczy")
+            .setMessage("Możesz ponowić zdjęcie, zmienić położenie albo zakończyć serię.")
+            .setNegativeButton("Zakończ serię",(d,w)->quickThingBatchFinish())
+            .setNeutralButton("Zmień miejsce",(d,w)->
+                showQuickThingBatchTargetChooser())
+            .setPositiveButton("Zrób zdjęcie",(d,w)->
+                quickThingBatchNext())
+            .show();
+    }
+
     private void quickThingBatchFinish() {
         int added=quickThingBatchAdded;
-        long current=quickThingBatchCurrentId;
         quickThingBatchActive=false;
         quickThingBatchDraftPhoto=false;
         quickThingBatchPendingThumbnail=null;
         quickThingBatchCurrentId=0L;
         quickThingBatchCounter=0;
         quickThingBatchAdded=0;
+        quickThingBatchTargetKind=null;
+        quickThingBatchTargetId=null;
+        quickThingBatchTargetName=null;
+        quickThingBatchWaitingForTarget=false;
+        quickThingBatchQrTargetPending=false;
         if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
             quickThingBatchDialog.dismiss();
         quickThingBatchDialog=null;
-        if(pendingStorageDestinationItemId!=null
-                &&pendingStorageDestinationItemId==current)
-            pendingStorageDestinationItemId=null;
-        if(storageDestinationNfcDialog!=null&&storageDestinationNfcDialog.isShowing())
-            storageDestinationNfcDialog.dismiss();
-        storageDestinationNfcDialog=null;
         cleanupStorageCameraTemp();
         refreshNfcReaderMode();
         render();
         DiagnosticLog.event("STORAGE_QUICK_BATCH_FINISHED","count="+added);
-        if(added>0)alert("Szybkie dodawanie zakończone. Dodano rzeczy: "+added+".");
+        if(added>0)
+            alert("Szybkie dodawanie zakończone. Dodano rzeczy: "+added+".");
     }
 
     private void quickAddStorageBox() {
@@ -15079,6 +15315,11 @@ public final class MainActivity extends Activity {
                 if (scan.getContents() != null) {
                     handleCentralScan(scan.getContents());
                 } else {
+                    if(quickThingBatchQrTargetPending) {
+                        quickThingBatchQrTargetPending=false;
+                        showQuickThingBatchTargetChooser();
+                        return;
+                    }
                     if(pendingStorageDestinationItemId!=null)
                         pendingStorageDestinationItemId=null;
                     if(pendingStorageDropKind!=null)
@@ -15145,6 +15386,8 @@ public final class MainActivity extends Activity {
                             .setMessage("Rzecz nie została utworzona.")
                             .setNegativeButton("Zakończ serię",(d,w)->
                                 quickThingBatchFinish())
+                            .setNeutralButton("Zmień miejsce",(d,w)->
+                                showQuickThingBatchTargetChooser())
                             .setPositiveButton("Zrób zdjęcie ponownie",(d,w)->
                                 takeQuickThingBatchDraftPhoto())
                             .show();
@@ -15178,7 +15421,7 @@ public final class MainActivity extends Activity {
             } finally {
                 if(file!=null&&file.exists())file.delete();
             }
-            if(quickDraft)quickThingBatchAskDraftName();
+            if(quickDraft)quickThingBatchCommitPhoto();
             else continueQuickThingBatchAfterPhoto(id);
             return;
         }

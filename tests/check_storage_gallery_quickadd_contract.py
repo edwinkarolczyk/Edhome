@@ -167,46 +167,58 @@ assert '&&!isQuickThingBatchTarget(itemId)' in main
 print("OK: quick setup NFC debounce + non-modal progress")
 
 
-# Szybkie dodawanie rzeczy: zdjęcie jest szkicem poza bazą, potem nazwa,
-# dopiero wtedy powstaje Rzecz i NFC celu uruchamia się automatycznie.
+# Szybkie dodawanie rzeczy: najpierw jeden cel dla serii, potem zdjęcia.
+# Każde poprawne zdjęcie tworzy od razu Rzecz N w wybranym pudełku/miejscu.
 for marker in (
-    'private boolean quickThingBatchActive;',
-    'private boolean quickThingBatchDraftPhoto;',
-    'private String quickThingBatchPendingThumbnail;',
-    'private void takeQuickThingBatchDraftPhoto()',
-    'private void launchQuickThingBatchDraftCamera()',
-    'private void quickThingBatchAskDraftName()',
-    'Rzecz powstanie dopiero po zatwierdzeniu nazwy.',
-    'Dalej • od razu skanuj NFC',
-    'private void quickThingBatchCreateFromDraft(String name)',
-    'after_photo=true',
-    'private void quickThingBatchStartDestinationNfc(long id)',
-    'NFC aktywne — przyłóż tag pudełka albo miejsca.',
-    'STORAGE_QUICK_BATCH_NFC_AUTO_WAITING',
-    'QR • zeskanuj pudełko lub miejsce',
-    'Ręcznie • wybierz z listy',
-    'Pomiń położenie',
-    '＋ Dodaj następną rzecz',
-    'Zakończ serię',
+    'private String quickThingBatchTargetKind;',
+    'private Long quickThingBatchTargetId;',
+    'private boolean quickThingBatchWaitingForTarget;',
+    'private void showQuickThingBatchTargetChooser()',
+    'Przyłóż tag NFC pudełka albo miejsca.',
+    'private void handleQuickThingBatchTargetNfc(',
+    'private void launchQuickThingBatchTargetQr()',
+    'private void showQuickThingBatchTargetPicker()',
+    'private void quickThingBatchSelectTarget(',
+    'private void showQuickThingBatchUnknownTargetNfc(String uid)',
+    '＋ Nowe pudełko',
+    '＋ Nowe miejsce',
+    'Utwórz i zacznij zdjęcia',
+    'private void quickThingBatchCommitPhoto()',
+    'String name="Rzecz "+quickThingBatchCounter;',
+    'StorageStore.create(',
+    'Dodać jeszcze?',
+    '📷 Dodaj następną',
+    '📍 Zmień pudełko / miejsce',
+    '✓ Zakończ serię',
+    'STORAGE_QUICK_BATCH_TARGET_SELECTED',
+    'STORAGE_QUICK_BATCH_ITEM_CREATED',
 ):
-    assert marker in main, f"Missing post-photo quick Thing flow: {marker}"
+    assert marker in main, f"Missing target-first quick Thing flow: {marker}"
 
 quick_thing = main[
     main.index('private void quickAddStorageThing()'):
     main.index('private void quickAddStorageBox()')
 ]
-quick_next = quick_thing[
-    quick_thing.index('private void quickThingBatchNext()'):
-    quick_thing.index('private void quickThingBatchAskDraftName()')
+start_batch = quick_thing[
+    quick_thing.index('private void startQuickThingBatch()'):
+    quick_thing.index('private void showQuickThingBatchTargetChooser()')
 ]
-assert 'StorageStore.create' not in quick_next
-assert 'takeQuickThingBatchDraftPhoto();' in quick_next
-create_draft = quick_thing[
-    quick_thing.index('private void quickThingBatchCreateFromDraft'):
-    quick_thing.index('private void quickThingBatchStartDestinationNfc')
+assert 'showQuickThingBatchTargetChooser();' in start_batch
+assert 'takeQuickThingBatchDraftPhoto();' not in start_batch
+
+commit_photo = quick_thing[
+    quick_thing.index('private void quickThingBatchCommitPhoto()'):
+    quick_thing.index('private void showQuickThingBatchAfterPhoto')
 ]
-assert 'StorageStore.create' in create_draft
-assert 'StorageThumbs.key(id)' in create_draft
-assert 'quickThingBatchStartDestinationNfc(id)' in quick_thing
-assert 'beginStorageDestinationNfc(id)' not in quick_thing
-print("OK: quick Thing is created after photo+name, auto-arms NFC, then asks continue/finish")
+assert 'String name="Rzecz "+quickThingBatchCounter;' in commit_photo
+assert 'StorageStore.create' in commit_photo
+assert 'quickThingBatchCounter++;' in commit_photo
+assert 'StorageThumbs.key(id)' in commit_photo
+
+# Old per-item sequence must be gone: no name dialog and no NFC after every photo.
+assert 'quickThingBatchAskDraftName' not in quick_thing
+assert 'quickThingBatchCreateFromDraft' not in quick_thing
+assert 'quickThingBatchStartDestinationNfc' not in quick_thing
+assert 'Dalej • od razu skanuj NFC' not in quick_thing
+assert 'STORAGE_QUICK_BATCH_NFC_AUTO_WAITING' not in quick_thing
+print("OK: quick Thing selects target once, then each photo creates Rzecz N")
