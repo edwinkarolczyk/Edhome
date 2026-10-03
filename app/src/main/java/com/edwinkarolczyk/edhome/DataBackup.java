@@ -221,6 +221,8 @@ final class DataBackup {
                 JSONArray rows = new JSONArray();
                 String orderBy = "task_rotation_members".equals(definition[0])
                     ? "task_id ASC, position ASC"
+                    : "project_task_dependencies".equals(definition[0])
+                        ? "task_id ASC, depends_on_task_id ASC"
                     : "pantry_packages".equals(definition[0])
                         ? "pantry_id ASC" : "id ASC";
                 try (Cursor cursor = database.query(definition[0], columns,
@@ -681,6 +683,7 @@ final class DataBackup {
                     }
                 }
                 if (!"task_rotation_members".equals(definition[0])
+                        && !"project_task_dependencies".equals(definition[0])
                         && !"pantry_packages".equals(definition[0])) {
                     Long id = values.getAsLong("id");
                     if (id == null || id <= 0 || !ids.add(id))
@@ -1430,6 +1433,21 @@ final class DataBackup {
                 throw new IllegalArgumentException(
                     "Czynność wskazuje nieistniejącego domownika.");
         }
+        Set<String> dependencyPairs = new HashSet<>();
+        for (ContentValues row : parsed.get("project_task_dependencies")) {
+            Long taskId = row.getAsLong("task_id");
+            Long dependsOn = row.getAsLong("depends_on_task_id");
+            Long created = row.getAsLong("created_at");
+            String pair = taskId + ":" + dependsOn;
+            if (taskId == null || dependsOn == null
+                    || taskId.equals(dependsOn)
+                    || !tasks.contains(taskId) || !tasks.contains(dependsOn)
+                    || created == null || created <= 0
+                    || !dependencyPairs.add(pair))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa zależność czynności projektu w kopii.");
+        }
+
         Map<Long, Set<Long>> rotationMembers = new HashMap<>();
         Map<Long, Set<Long>> rotationPositions = new HashMap<>();
         for (ContentValues row : parsed.get("task_rotation_members")) {
