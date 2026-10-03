@@ -37,8 +37,12 @@ assert "private boolean changeCalendarMonth(int delta)" in main
 assert 'DiagnosticLog.event("CALENDAR_MONTH_SWIPED"' in main
 assert "calendarMonthSwipeTracking" in main
 assert 'calendarView = "day";' in main
-assert 'text("‹  przesuń miesiąc palcem  ›"' in main
+assert "calendarMonthFrame = new android.widget.FrameLayout(this)" in main
+assert "fullCalendarMonth" in main
+assert "Gravity.BOTTOM | Gravity.RIGHT" in main
+assert "calendarMonthFrame.addView(add, addParams)" in main
 assert "selectedCard = card()" not in main
+assert 'text("‹  przesuń miesiąc palcem  ›"' not in main
 for token in (
     "private void renderCalendarMonth(YearMonth month, LocalDate selected)",
     "calendarMonthEventBar",

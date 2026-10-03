@@ -131,6 +131,10 @@ public final class MainActivity extends Activity {
     private AlertDialog quickThingBatchDialog;
     private String suppressedNfcUid;
     private long suppressedNfcUntilElapsed;
+    private String lastNfcRawUid;
+    private long lastNfcRawReadElapsed;
+    private boolean scannerNfcArmed;
+    private android.widget.FrameLayout calendarMonthFrame;
     private SharedPreferences prefs;
     private LocalDb db;
     private BetaUpdater updater;
@@ -452,9 +456,14 @@ public final class MainActivity extends Activity {
             |NfcAdapter.FLAG_READER_NFC_F
             |NfcAdapter.FLAG_READER_NFC_V
             |NfcAdapter.FLAG_READER_NFC_BARCODE
-            |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+            |NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
+            |NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS;
         try {
-            nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,null);
+            Bundle options=new Bundle();
+            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY,250);
+            nfcAdapter.enableReaderMode(this,this::onNfcTagDiscovered,flags,options);
+            DiagnosticLog.event(hasActiveNfcOperation()
+                ?"NFC_READER_EXCLUSIVE":"NFC_READER_AMBIENT");
             return true;
         } catch(Exception error) {
             DiagnosticLog.error("NFC_READER_ENABLE",error);
@@ -468,35 +477,76 @@ public final class MainActivity extends Activity {
         catch(Exception ignored) { }
     }
 
-    private void refreshNfcReaderMode() {
-        if(nfcAdapter==null)return;
-        boolean shouldListen=pendingNfcTarget!=null
+    private boolean hasActiveNfcOperation() {
+        return pendingNfcTarget!=null
             || pendingStorageDestinationItemId!=null
             || pendingStorageDropKind!=null
             || pendingStorageScannerOperation!=null
-            || "scanner".equals(screen)
-            || prefs==null
-            || prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true);
+            || scannerNfcArmed;
+    }
+
+    private void refreshNfcReaderMode() {
+        if(nfcAdapter==null)return;
+        boolean shouldListen=hasActiveNfcOperation()
+            || (prefs!=null && prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,false));
         if(shouldListen)enableNfcReaderMode();
         else disableNfcReaderMode();
     }
 
+    private void openNfcPhoneSettings() {
+        try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+        catch(Exception unavailable) {
+            startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+        }
+    }
+
+    private void showNfcSystemInterferenceHelp() {
+        new AlertDialog.Builder(this)
+            .setTitle("Telefon reaguje na tag NFC?")
+            .setMessage("Podczas aktywnego skanowania EDHOME używa trybu Reader Mode "
+                +"i przejmuje tag dla aplikacji. Jeśli telefon nadal pokazuje własny "
+                +"komunikat „Wykryto tag NFC”, otwórz ustawienia NFC.\n\n"
+                +"Na Xiaomi / HyperOS sprawdź też opcję „Nie przeszkadzać NFC” "
+                +"w ustawieniach łączności. EDHOME nie może włączyć tej funkcji "
+                +"systemowej samodzielnie.")
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Ustawienia NFC",(d,w)->openNfcPhoneSettings())
+            .setPositiveButton("Spróbuj ponownie",(d,w)->{
+                disableNfcReaderMode();
+                if(enableNfcReaderMode())
+                    DiagnosticLog.event("NFC_READER_REARMED");
+            }).show();
+    }
+
+    private synchronized boolean isRawNfcDuplicate(String uid) {
+        long now=android.os.SystemClock.elapsedRealtime();
+        boolean duplicate=uid!=null && uid.equals(lastNfcRawUid)
+            && now-lastNfcRawReadElapsed<1600L;
+        lastNfcRawUid=uid;
+        lastNfcRawReadElapsed=now;
+        return duplicate;
+    }
+
     private void armScannerNfc() {
         if(nfcAdapter==null) {
+            scannerNfcArmed=false;
             scannerNfcStatus="NFC niedostępne na tym telefonie.";
             return;
         }
         if(!nfcAdapter.isEnabled()) {
+            scannerNfcArmed=false;
             scannerNfcStatus="NFC wyłączone — włącz NFC w telefonie.";
             return;
         }
         // Force a fresh reader session. This also recovers when ReaderMode was
         // disabled by an earlier Activity pause/resume or a system dialog.
         disableNfcReaderMode();
+        scannerNfcArmed=true;
         if(enableNfcReaderMode()) {
-            scannerNfcStatus="NFC aktywne — przyłóż naklejkę albo brelok.";
+            scannerNfcStatus="NFC aktywne tylko w EDHOME — przyłóż naklejkę albo brelok.";
             DiagnosticLog.event("NFC_SCANNER_ARMED");
         } else {
+            scannerNfcArmed=false;
             scannerNfcStatus="Nie udało się uruchomić odczytu NFC. Spróbuj ponownie.";
         }
     }
@@ -506,6 +556,10 @@ public final class MainActivity extends Activity {
         try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
         catch(Exception error) {
             runOnUiThread(() -> alert(error.getMessage()));
+            return;
+        }
+        if(isRawNfcDuplicate(uid)) {
+            DiagnosticLog.event("NFC_RAW_DUPLICATE_IGNORED");
             return;
         }
         runOnUiThread(() -> {
@@ -524,12 +578,18 @@ public final class MainActivity extends Activity {
         if(!NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
                 && !NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
                 && !NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action))return;
+        boolean activeBeforeDispatch=hasActiveNfcOperation();
+        if(activeBeforeDispatch)
+            DiagnosticLog.event("NFC_PLATFORM_DISPATCH_DURING_ACTIVE_SCAN");
         Tag tag;
         if(Build.VERSION.SDK_INT>=33)
             tag=intent.getParcelableExtra(NfcAdapter.EXTRA_TAG,Tag.class);
         else
             tag=(Tag)intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
         if(tag!=null)onNfcTagDiscovered(tag);
+        if(activeBeforeDispatch) root.postDelayed(()->{
+            if(hasActiveNfcOperation())showNfcSystemInterferenceHelp();
+        },250L);
     }
 
     private void handleNfcUid(String uid) {
@@ -679,6 +739,7 @@ public final class MainActivity extends Activity {
             .setTitle("Przypisz tag NFC")
             .setMessage(name+"\n\nPrzyłóż teraz naklejkę NFC albo brelok do telefonu. "
                 +"EDHOME zapisze tylko UID — nie nadpisuje pamięci taga.")
+            .setNeutralButton("Problem z NFC",null)
             .setNegativeButton("Anuluj",(d,w)->{
                 pendingNfcTarget=null;
                 refreshNfcReaderMode();
@@ -689,6 +750,8 @@ public final class MainActivity extends Activity {
             refreshNfcReaderMode();
         });
         nfcAssignmentDialog.show();
+        nfcAssignmentDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            .setOnClickListener(v->showNfcSystemInterferenceHelp());
         DiagnosticLog.event("NFC_ASSIGN_WAITING");
     }
 
@@ -1153,7 +1216,10 @@ public final class MainActivity extends Activity {
         }
         DiagnosticLog.event("SCREEN", "id=" + destination);
         if ("scanner".equals(destination)) armScannerNfc();
-        else refreshNfcReaderMode();
+        else {
+            scannerNfcArmed=false;
+            refreshNfcReaderMode();
+        }
         render();
     }
 
@@ -1180,20 +1246,36 @@ public final class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0;
         getWindow().getDecorView().setSystemUiVisibility(systemBarFlags);
 
+        boolean fullCalendarMonth = unlocked
+            && "calendar".equals(screen) && "month".equals(calendarView);
+        calendarMonthFrame = null;
         ScrollView scroll = new ScrollView(this);
         pageScroll = scroll;
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
+        if (fullCalendarMonth) {
+            scroll.setVerticalScrollBarEnabled(false);
+            scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        }
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        int pageSide = structuredInterfaceShell() ? 12 : 16;
-        body.setPadding(dp(pageSide), dp(structuredInterfaceShell() ? 7 : 8),
-            dp(pageSide), dp(12));
+        int pageSide = fullCalendarMonth ? 0 : (structuredInterfaceShell() ? 12 : 16);
+        body.setPadding(dp(pageSide),
+            fullCalendarMonth ? 0 : dp(structuredInterfaceShell() ? 7 : 8),
+            dp(pageSide), fullCalendarMonth ? 0 : dp(12));
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         LinearLayout.LayoutParams scrollParams = structuredInterfaceShell()
             ? new LinearLayout.LayoutParams(-1, 0, 1f)
             : new LinearLayout.LayoutParams(-1, -1);
-        root.addView(scroll, scrollParams);
+        if (fullCalendarMonth) {
+            calendarMonthFrame = new android.widget.FrameLayout(this);
+            calendarMonthFrame.addView(scroll,
+                new android.widget.FrameLayout.LayoutParams(-1, -1));
+            root.addView(calendarMonthFrame,
+                new LinearLayout.LayoutParams(-1, 0, 1f));
+        } else {
+            root.addView(scroll, scrollParams);
+        }
 
         if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();
         else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();
@@ -1225,7 +1307,8 @@ public final class MainActivity extends Activity {
                 default: home();
             }
         }
-        if (unlocked) {
+        if (unlocked && !("calendar".equals(screen)
+                && "month".equals(calendarView))) {
             if (alternateHomeInterface()) addConceptBottomNavigation();
             else if (skin.showcase()) addShowcaseBottomNavigation();
         }
@@ -4834,12 +4917,12 @@ public final class MainActivity extends Activity {
         toolbar.setPadding(0, 0, 0, dp(2));
         body.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(46)));
 
-        TextView prev = text("‹", 28, true);
-        prev.setGravity(Gravity.CENTER);
-        prev.setContentDescription("Poprzedni miesiąc");
-        prev.setOnClickListener(v -> changeCalendarMonth(-1));
-        touchFeedback(prev);
-        toolbar.addView(prev, new LinearLayout.LayoutParams(dp(34), dp(40)));
+        TextView home = text("☰", 22, true);
+        home.setGravity(Gravity.CENTER);
+        home.setContentDescription("Wróć do Start");
+        home.setOnClickListener(v -> go("home"));
+        touchFeedback(home);
+        toolbar.addView(home, new LinearLayout.LayoutParams(dp(42), dp(40)));
 
         TextView monthTitle = text(monthName + " " + month.getYear() + " ▾", 22, true);
         monthTitle.setGravity(Gravity.CENTER_VERTICAL);
@@ -4900,13 +4983,6 @@ public final class MainActivity extends Activity {
         touchFeedback(tasks);
         toolbar.addView(tasks, new LinearLayout.LayoutParams(dp(40), dp(38)));
 
-        TextView next = text("›", 28, true);
-        next.setGravity(Gravity.CENTER);
-        next.setContentDescription("Następny miesiąc");
-        next.setOnClickListener(v -> changeCalendarMonth(1));
-        touchFeedback(next);
-        toolbar.addView(next, new LinearLayout.LayoutParams(dp(34), dp(40)));
-
         LocalDate first = month.atDay(1);
         LocalDate gridStart = first.minusDays(first.getDayOfWeek().getValue() - 1);
         LocalDate gridEnd = gridStart.plusDays(41);
@@ -4959,8 +5035,8 @@ public final class MainActivity extends Activity {
         float density = getResources().getDisplayMetrics().density;
         int viewportDp = Math.round(
             getResources().getDisplayMetrics().heightPixels / density);
-        int calendarRowDp = Math.max(64,
-            Math.min(82, (viewportDp - 170) / 6));
+        int calendarRowDp = Math.max(72,
+            Math.min(104, (viewportDp - 150) / 6));
 
         for (int week = 0; week < 6; week++) {
             LinearLayout row = new LinearLayout(this);
@@ -5053,26 +5129,23 @@ public final class MainActivity extends Activity {
             }
         }
 
-        TextView swipeHint = text("‹  przesuń miesiąc palcem  ›", 10, false);
-        swipeHint.setGravity(Gravity.CENTER);
-        swipeHint.setTextColor(subdued);
-        body.addView(swipeHint, new LinearLayout.LayoutParams(-1, dp(22)));
+        if (calendarMonthFrame != null) {
+            TextView add = text("+", 30, true);
+            add.setGravity(Gravity.CENTER);
+            add.setTextColor(skin.accentInk);
+            add.setBackground(skin.pill(this, accent));
+            add.setElevation(dp(12));
+            add.setContentDescription("Dodaj czynność");
+            add.setOnClickListener(v ->
+                editTask(null, "", calendarDay, "once", 1));
+            touchFeedback(add);
+            android.widget.FrameLayout.LayoutParams addParams =
+                new android.widget.FrameLayout.LayoutParams(dp(58), dp(58),
+                    Gravity.BOTTOM | Gravity.RIGHT);
+            addParams.setMargins(0, 0, dp(14), dp(14));
+            calendarMonthFrame.addView(add, addParams);
+        }
 
-        LinearLayout addRow = new LinearLayout(this);
-        addRow.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        body.addView(addRow, new LinearLayout.LayoutParams(-1, dp(58)));
-        TextView add = text("+", 28, true);
-        add.setGravity(Gravity.CENTER);
-        add.setTextColor(skin.accentInk);
-        add.setBackground(skin.pill(this, accent));
-        add.setContentDescription("Dodaj czynność");
-        add.setOnClickListener(v ->
-            editTask(null, "", calendarDay, "once", 1));
-        touchFeedback(add);
-        LinearLayout.LayoutParams addParams =
-            new LinearLayout.LayoutParams(dp(54), dp(54));
-        addParams.setMargins(0, dp(2), dp(2), dp(2));
-        addRow.addView(add, addParams);
     }
 
     private void calendar() {
@@ -7131,6 +7204,8 @@ public final class MainActivity extends Activity {
         nfcState.addView(text(scannerNfcStatus, 15, true));
         if (nfcAdapter != null && !nfcAdapter.isEnabled())
             nfcState.addView(text("Włącz NFC w ustawieniach telefonu i wróć tutaj.", 13, false));
+        smallButton(nfcState,"Telefon pokazuje własne NFC? • Pomoc",
+            this::showNfcSystemInterferenceHelp);
 
         LinearLayout rules = card();
         rules.addView(text("Jak działają reguły", 18, true));
@@ -9184,6 +9259,7 @@ public final class MainActivity extends Activity {
                     ?"Jeśli wybierzesz pudełko przypisane do miejsca, EDHOME "
                         +"automatycznie odziedziczy całą ścieżkę."
                     :"Pudełko można przenieść bezpośrednio do miejsca."))
+            .setNeutralButton("Problem z NFC",null)
             .setNegativeButton("Anuluj",(d,w)->{
                 pendingStorageDestinationItemId=null;
                 refreshNfcReaderMode();
@@ -9193,6 +9269,8 @@ public final class MainActivity extends Activity {
             refreshNfcReaderMode();
         });
         storageDestinationNfcDialog.show();
+        storageDestinationNfcDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            .setOnClickListener(v->showNfcSystemInterferenceHelp());
         DiagnosticLog.event("STORAGE_LOCATION_NFC_WAITING","id="+itemId);
     }
 
@@ -9245,8 +9323,11 @@ public final class MainActivity extends Activity {
                 +("box".equals(moving.kind)?"miejsca.":"pudełka ani miejsca."));
             return;
         }
+        boolean quickBatch=isQuickThingBatchTarget(itemId);
         if(!applyStorageDestination(itemId,current.kind,current.targetId,"nfc"))return;
         suppressNfcRepeat(uid);
+        if(quickBatch)
+            DiagnosticLog.event("NFC_QUICK_BATCH_CONTINUED","id="+itemId);
         pendingStorageDestinationItemId=null;
         if(storageDestinationNfcDialog!=null) {
             storageDestinationNfcDialog.dismiss();
@@ -13780,8 +13861,8 @@ public final class MainActivity extends Activity {
         String hardware=nfcAdapter==null?"Brak modułu NFC"
             :nfcAdapter.isEnabled()?"NFC w telefonie: WŁĄCZONE":"NFC w telefonie: WYŁĄCZONE";
         nfc.addView(text(hardware+" • przypisane tagi: "+nfcAssignedCount(),14,true));
-        settingsYesNo(nfc,"Nasłuch NFC w całej aplikacji",
-            NFC_GLOBAL_LISTEN_PREF,true,this::refreshNfcReaderMode);
+        settingsYesNo(nfc,"Nasłuch NFC poza aktywną operacją",
+            NFC_GLOBAL_LISTEN_PREF,false,this::refreshNfcReaderMode);
         settingsNfcAction(nfc,"Domyślne działanie po skanie NFC",
             SCAN_DEFAULT_NFC,false);
         LinearLayout nfcTypes=settingsNestedAccordion(nfc,"nfc_types",
@@ -13793,12 +13874,10 @@ public final class MainActivity extends Activity {
         settingsNfcAction(nfcTypes,"Pojazdy",scanTypeKey("nfc","vehicle"),true);
         smallButton(nfc,"Otwórz Skaner EDHOME",()->go("scanner"));
         smallButton(nfc,nfcAdapter!=null&&nfcAdapter.isEnabled()
-            ?"Ustawienia NFC telefonu":"Włącz NFC w telefonie",()->{
-            try{startActivity(new Intent(Settings.ACTION_NFC_SETTINGS));}
-            catch(Exception unavailable){
-                startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
-            }
-        });
+            ?"Ustawienia NFC telefonu":"Włącz NFC w telefonie",
+            this::openNfcPhoneSettings);
+        smallButton(nfc,"Telefon przejmuje tagi? • Diagnostyka",
+            this::showNfcSystemInterferenceHelp);
         smallButton(nfc,"Przywróć domyślne reguły NFC",this::resetNfcScanRules);
         nfc.addView(text("Przypisanie, zmiana i odpięcie taga są dostępne na karcie "
             +"Rzeczy, Pudełka, Miejsca, Produktu lub Pojazdu. EDHOME zapisuje UID "

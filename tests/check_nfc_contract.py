@@ -50,13 +50,13 @@ assert 'alert("Skaner NFC jest aktywny.' not in main
 
 assert 'NFC_GLOBAL_LISTEN_PREF = "nfc_global_listen"' in main
 assert 'private void refreshNfcReaderMode()' in main
-assert 'prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,true)' in main
+assert 'prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,false)' in main
 assert 'pendingNfcTarget!=null' in main
 assert 'if ("scanner".equals(destination)) armScannerNfc();' in main
 assert 'else refreshNfcReaderMode();' in main
 assert 'disableNfcReaderMode();\n        if(!enableNfcReaderMode())' in main
 assert 'settingsAccordion("nfc","NFC"' in main
-assert 'settingsYesNo(nfc,"Nasłuch NFC w całej aplikacji"' in main
+assert 'settingsYesNo(nfc,"Nasłuch NFC poza aktywną operacją"' in main
 assert 'SCAN_DEFAULT_NFC = "scan_default_nfc_global"' in main
 assert 'settingsNfcAction(nfc,"Domyślne działanie po skanie NFC"' in main
 assert 'settingsNfcAction(nfcTypes,"Rzeczy / narzędzia",scanTypeKey("nfc","thing"),true)' in main
@@ -64,6 +64,20 @@ assert 'settingsNfcAction(nfcTypes,"Pudełka",scanTypeKey("nfc","box"),true)' in
 assert 'settingsNfcAction(nfcTypes,"Miejsca",scanTypeKey("nfc","place"),true)' in main
 assert 'String nfcGlobal = prefs.getString(SCAN_DEFAULT_NFC, "");' in main
 assert 'private void resetNfcScanRules()' in main
+for token in (
+    "FLAG_READER_NO_PLATFORM_SOUNDS",
+    "EXTRA_READER_PRESENCE_CHECK_DELAY",
+    "private boolean hasActiveNfcOperation()",
+    "NFC_READER_EXCLUSIVE",
+    "private void showNfcSystemInterferenceHelp()",
+    "Nie przeszkadzać NFC",
+    "private synchronized boolean isRawNfcDuplicate",
+    "NFC_RAW_DUPLICATE_IGNORED",
+    "NFC_PLATFORM_DISPATCH_DURING_ACTIVE_SCAN",
+    "NFC_QUICK_BATCH_CONTINUED",
+    'setNeutralButton("Problem z NFC",null)',
+):
+    assert token in main, "NFC exclusive/diagnostic contract missing: "+token
 
 # A known NFC tag now enters the central Scanner routing. It may show actions
 # or open immediately according to the saved per-object/type/global rule.
