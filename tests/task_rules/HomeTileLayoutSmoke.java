@@ -24,12 +24,20 @@ public final class HomeTileLayoutSmoke {
         equal(HomeTileLayout.pageSlots(6), 6, "two home rows");
         equal(HomeTileLayout.pageSlots(9), 9, "three home rows");
         equal(HomeTileLayout.pageSlots(12), 12, "four home rows");
+        equal(HomeTileLayout.pageSlots(15), 15, "five home rows");
+        equal(HomeTileLayout.pageSlots(18), 18, "six home rows");
+        equal(HomeTileLayout.pageSlots(21), 21, "seven home rows");
+        equal(HomeTileLayout.pageSlots(24), 24, "eight home rows");
         equal(HomeTileLayout.pageSlots(7), 9, "invalid page slots fall back");
         if (!HomeTileLayout.validPageSlots(6)
                 || !HomeTileLayout.validPageSlots(9)
                 || !HomeTileLayout.validPageSlots(12)
+                || !HomeTileLayout.validPageSlots(15)
+                || !HomeTileLayout.validPageSlots(18)
+                || !HomeTileLayout.validPageSlots(21)
+                || !HomeTileLayout.validPageSlots(24)
                 || HomeTileLayout.validPageSlots(3)
-                || HomeTileLayout.validPageSlots(15))
+                || HomeTileLayout.validPageSlots(30))
             throw new AssertionError("home page slot validation");
         if (!HomeTileLayout.validPair(450, 1100)
                 || !HomeTileLayout.validPair(800, 1100)

@@ -6,7 +6,7 @@ final class HomeTileLayout {
     static final String DRAG_KEY = "home_tile_drag_hold_ms";
     static final String PAGE_SLOTS_KEY = "home_tile_page_slots";
     static final int DEFAULT_PAGE_SLOTS = 9;
-    static final int[] PAGE_SLOT_OPTIONS = {6, 9, 12};
+    static final int[] PAGE_SLOT_OPTIONS = {6, 9, 12, 15, 18, 21, 24};
     static final int DEFAULT_SHORT_MS = 450;
     static final int DEFAULT_DRAG_MS = 1100;
     static final int[] SHORT_OPTIONS = {300, 450, 600, 800};

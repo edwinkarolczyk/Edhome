@@ -13587,9 +13587,13 @@ public final class MainActivity extends Activity {
         });
         Spinner homePageSlots=new Spinner(this);
         java.util.List<String> homePageSlotLabels=java.util.Arrays.asList(
-            "6 miejsc • 2 × 3",
+            "6 miejsc • 3 × 2",
             "9 miejsc • 3 × 3",
-            "12 miejsc • 4 × 3");
+            "12 miejsc • 3 × 4",
+            "15 miejsc • 3 × 5",
+            "18 miejsc • 3 × 6",
+            "21 miejsc • 3 × 7",
+            "24 miejsca • 3 × 8");
         homePageSlots.setAdapter(themeSpinnerAdapter(homePageSlotLabels));
         int currentPageSlots=homePageCapacity();
         int pageSlotSelection=1;
