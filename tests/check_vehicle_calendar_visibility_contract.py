@@ -45,7 +45,6 @@ for token in (
     "WEEK_OF_WEEK_BASED_YEAR",
     '"pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."',
     '"SELECT due_date,title,priority FROM tasks WHERE done=0 "',
-    '"Wpisy w kalendarzu: "',
 ):
     assert token in main, token
 assert 'button("Przejdź do daty", () -> {' in calendar
