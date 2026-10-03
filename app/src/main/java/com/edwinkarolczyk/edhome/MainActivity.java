@@ -4096,6 +4096,583 @@ public final class MainActivity extends Activity {
             + finished + " • Historia na ekranie: " + past);
     }
 
+    private String projectTimeText(int minutes) {
+        if(minutes<=0)return "0 h";
+        return TaskRules.hoursText(minutes)+" h";
+    }
+
+    private String projectPath(long id) {
+        java.util.ArrayList<String> names=new java.util.ArrayList<>();
+        java.util.HashSet<Long> seen=new java.util.HashSet<>();
+        Long cursor=id;
+        for(int depth=0;cursor!=null&&depth<128;depth++) {
+            if(!seen.add(cursor))break;
+            ProjectStore.Project item=ProjectStore.find(
+                db.getReadableDatabase(),cursor);
+            if(item==null)break;
+            names.add(0,item.name);
+            cursor=item.parentId;
+        }
+        return android.text.TextUtils.join(" → ",names);
+    }
+
+    private void projects() {
+        if(selectedProjectId<=0) {
+            header("Projekty");
+            note("Projekt może zawierać podprojekty, Czynności, Rzeczy/Pudełka "
+                +"oraz własne koszty. PayCheck pozostaje niezależny.");
+            button("+ Nowy projekt",()->showProjectEditor(null));
+            java.util.List<ProjectStore.Project> roots=
+                ProjectStore.children(db.getReadableDatabase(),null);
+            if(roots.isEmpty()) {
+                note("Brak projektów. Dodaj pierwszy, np. „Remont domu”.");
+                return;
+            }
+            for(ProjectStore.Project project:roots)
+                renderProjectSummaryCard(project);
+            return;
+        }
+
+        ProjectStore.Project project=ProjectStore.find(
+            db.getReadableDatabase(),selectedProjectId);
+        if(project==null) {
+            selectedProjectId=0;
+            render();
+            return;
+        }
+        header(project.name);
+        button(project.parentId==null?"← Wszystkie projekty":"← Projekt nadrzędny",()->{
+            selectedProjectId=project.parentId==null?0:project.parentId;
+            render();
+        });
+        note(projectPath(project.id));
+
+        ProjectStore.Stats stats=ProjectStore.stats(
+            db.getReadableDatabase(),project.id);
+        LinearLayout summary=card();
+        summary.addView(text("Postęp: "+stats.progressPct()+"%",22,true));
+        android.widget.ProgressBar progress=new android.widget.ProgressBar(
+            this,null,android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(stats.progressPct());
+        summary.addView(progress,new LinearLayout.LayoutParams(-1,dp(10)));
+        summary.addView(text(stats.doneTasks+" / "+stats.tasks+" czynności • "
+            +projectTimeText(stats.doneMinutes)+" / "
+            +projectTimeText(stats.totalMinutes),14,false));
+        summary.addView(text("Pozostało: "+projectTimeText(stats.remainingMinutes())
+            +(stats.overdueTasks>0?" • zaległe: "+stats.overdueTasks:""),14,false));
+        summary.addView(text("Koszt planowany: "
+            +MoneyRules.format(stats.plannedCostGrosz)
+            +" • kupiono/zapłacono: "+MoneyRules.format(stats.spentCostGrosz),
+            14,false));
+        if(project.budgetGrosz!=null)
+            summary.addView(text("Budżet projektu: "
+                +MoneyRules.format(project.budgetGrosz),14,false));
+        summary.addView(text("Status: "
+            +("done".equals(project.status)?"Zakończony":
+                "paused".equals(project.status)?"Wstrzymany":"W trakcie"),
+            13,false));
+        smallButton(summary,"Zmień status",()->showProjectStatusDialog(project.id));
+
+        LinearLayout actions=compactActionRow();
+        compactAction(actions,"+ Podprojekt",()->showProjectEditor(project.id));
+        compactAction(actions,"+ Czynności seryjnie",
+            ()->showProjectQuickTasks(project.id));
+        LinearLayout actions2=compactActionRow();
+        compactAction(actions2,"+ Rzecz / Pudełko",
+            ()->showProjectResourcePicker(project.id));
+        compactAction(actions2,"+ Koszt / zakup",
+            ()->showProjectCostDialog(project.id));
+        button("Zaproponuj terminy projektu",()->showProjectPlanSuggestions(project.id));
+        button("+ Pełna czynność",()->{
+            taskEditorProjectPreset=project.id;
+            editTask(null,"","","once",1);
+        });
+
+        java.util.List<ProjectStore.Project> children=
+            ProjectStore.children(db.getReadableDatabase(),project.id);
+        if(!children.isEmpty()) {
+            title("Podprojekty");
+            for(ProjectStore.Project child:children)
+                renderProjectSummaryCard(child);
+        }
+
+        renderProjectTasks(project);
+        renderProjectResources(project.id);
+        renderProjectCosts(project.id);
+    }
+
+    private void renderProjectSummaryCard(ProjectStore.Project project) {
+        ProjectStore.Stats stats=ProjectStore.stats(
+            db.getReadableDatabase(),project.id);
+        LinearLayout box=card();
+        box.addView(text(project.name,19,true));
+        box.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
+            +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",
+            13,false));
+        box.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
+            +(project.budgetGrosz==null?"":" / budżet "
+                +MoneyRules.format(project.budgetGrosz)),13,false));
+        box.setClickable(true);
+        box.setFocusable(true);
+        touchFeedback(box);
+        box.setOnClickListener(v->{
+            selectedProjectId=project.id;
+            render();
+        });
+    }
+
+    private void showProjectEditor(Long parentId) {
+        ProjectStore.Project parent=parentId==null?null:
+            ProjectStore.find(db.getReadableDatabase(),parentId);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint(parent==null?"Nazwa projektu":"Nazwa podprojektu");
+        form.addView(text("Nazwa",14,true));
+        form.addView(name);
+
+        EditText due=new EditText(this);
+        due.setSingleLine(true);
+        due.setHint("RRRR-MM-DD • opcjonalnie");
+        due.setFocusable(false);
+        due.setOnClickListener(v->{
+            java.time.LocalDate initial=java.time.LocalDate.now();
+            new DatePickerDialog(this,(picker,y,m,d)->
+                due.setText(java.time.LocalDate.of(y,m+1,d).toString()),
+                initial.getYear(),initial.getMonthValue()-1,
+                initial.getDayOfMonth()).show();
+        });
+        form.addView(text("Termin projektu",14,true));
+        form.addView(due);
+        smallButton(form,"Wybierz termin",()->due.performClick());
+
+        EditText budget=new EditText(this);
+        budget.setSingleLine(true);
+        budget.setHint("Budżet PLN • opcjonalnie");
+        budget.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(text("Budżet projektu",14,true));
+        form.addView(budget);
+
+        java.util.ArrayList<Long> placeIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> placeNames=new java.util.ArrayList<>();
+        placeIds.add(null);placeNames.add("Bez miejsca");
+        for(PlaceEntry place:readPlaces()) {
+            placeIds.add(place.id);placeNames.add(db.placePath(place.id));
+        }
+        Spinner place=new Spinner(this);
+        place.setAdapter(lightDialogSpinnerAdapter(placeNames));
+        if(parent!=null&&parent.placeId!=null)
+            for(int i=1;i<placeIds.size();i++)
+                if(parent.placeId.equals(placeIds.get(i)))place.setSelection(i);
+        form.addView(text("Domyślne miejsce",14,true));form.addView(place);
+
+        java.util.ArrayList<Long> memberIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> memberNames=new java.util.ArrayList<>();
+        memberIds.add(null);memberNames.add("Bez wykonawcy");
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                memberIds.add(c.getLong(0));memberNames.add(c.getString(1));
+            }
+        }
+        Spinner member=new Spinner(this);
+        member.setAdapter(lightDialogSpinnerAdapter(memberNames));
+        if(parent!=null&&parent.assigneeId!=null)
+            for(int i=1;i<memberIds.size();i++)
+                if(parent.assigneeId.equals(memberIds.get(i)))member.setSelection(i);
+        form.addView(text("Domyślny wykonawca",14,true));form.addView(member);
+        lightDialogForm(form);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(parent==null?"Nowy projekt":"Nowy podprojekt")
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    Long budgetGrosz=budget.getText().toString().trim().isEmpty()
+                        ?null:MoneyRules.parse(budget.getText().toString());
+                    long id=ProjectStore.addProject(db.getWritableDatabase(),
+                        name.getText().toString(),parentId,
+                        placeIds.get(place.getSelectedItemPosition()),
+                        memberIds.get(member.getSelectedItemPosition()),
+                        due.getText().toString(),budgetGrosz);
+                    DiagnosticLog.event("PROJECT_CREATED","id="+id);
+                    dialog.dismiss();
+                    selectedProjectId=id;
+                    render();
+                } catch(Exception error) {
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć projektu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void showProjectStatusDialog(long projectId) {
+        String[] labels={"W trakcie","Wstrzymany","Zakończony"};
+        String[] values={"active","paused","done"};
+        new AlertDialog.Builder(this).setTitle("Status projektu")
+            .setItems(labels,(d,which)->{
+                ProjectStore.setStatus(db.getWritableDatabase(),
+                    projectId,values[which]);
+                DiagnosticLog.event("PROJECT_STATUS_CHANGED",
+                    "id="+projectId+" status="+values[which]);
+                render();
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void showProjectQuickTasks(long projectId) {
+        ProjectStore.Project project=ProjectStore.find(
+            db.getReadableDatabase(),projectId);
+        if(project==null)return;
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);name.setHint("Nazwa czynności");
+        EditText hours=new EditText(this);
+        hours.setSingleLine(true);hours.setHint("Czas, np. 0,5 / 1 / 2,5 h");
+        hours.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText due=new EditText(this);
+        due.setSingleLine(true);due.setHint("Termin RRRR-MM-DD • opcjonalnie");
+        EditText reminder=new EditText(this);
+        reminder.setSingleLine(true);reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
+        form.addView(text("Czynność",14,true));form.addView(name);
+        form.addView(text("Szacowany czas",14,true));form.addView(hours);
+        form.addView(text("Termin",14,true));form.addView(due);
+        form.addView(text("Przypomnienie",14,true));form.addView(reminder);
+        form.addView(text("Miejsce i wykonawca są dziedziczone z projektu. "
+            +"Pełny formularz pozwala je zmienić.",12,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie • "+project.name)
+            .setView(form).setCancelable(false).create();
+        Runnable save=()->{
+            Integer minutes=TaskRules.minutesFromHours(hours.getText().toString(),
+                MIN_TASK_MINUTES,MAX_TASK_MINUTES);
+            if(name.getText().toString().trim().isEmpty()) {
+                name.setError("Podaj nazwę.");return;
+            }
+            if(minutes==null) {
+                hours.setError("Podaj czas w godzinach, maks. 8 h.");return;
+            }
+            String dueValue=due.getText().toString().trim();
+            String remind=reminder.getText().toString().trim();
+            String custom=remind.isEmpty()?null:remind;
+            try {
+                db.saveTask(null,name.getText().toString().trim(),dueValue,
+                    "once",1,project.placeId,"normal",minutes,
+                    project.assigneeId,custom,0,new java.util.ArrayList<>(),
+                    project.id);
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event("PROJECT_QUICK_TASK_ADDED",
+                    "project="+project.id);
+                name.setText("");
+                hours.setText("");
+                due.setText("");
+                reminder.setText("");
+                name.requestFocus();
+            } catch(Exception error) {
+                alert(error.getMessage()==null?"Nie zapisano czynności.":error.getMessage());
+            }
+        };
+        smallButton(form,"＋ Zapisz i dodaj następną",save);
+        smallButton(form,"✓ Zapisz i zakończ",()->{
+            int before=db.openTasks();
+            save.run();
+            if(db.openTasks()>before) {
+                dialog.dismiss();
+                render();
+            }
+        });
+        smallButton(form,"Pełny formularz",()->{
+            dialog.dismiss();
+            taskEditorProjectPreset=project.id;
+            editTask(null,"","","once",1);
+        });
+        smallButton(form,"Zakończ",()->{dialog.dismiss();render();});
+        lightDialogForm(form);
+        dialog.show();
+    }
+
+    private void renderProjectTasks(ProjectStore.Project project) {
+        title("Czynności");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,title,done,due_date,duration_minutes FROM tasks "
+                    +"WHERE project_id=? ORDER BY done,due_date IS NULL,due_date,id",
+                new String[]{Long.toString(project.id)})) {
+            while(c.moveToNext()) {
+                count++;
+                final long taskId=c.getLong(0);
+                final String taskName=c.getString(1);
+                final boolean done=c.getInt(2)!=0;
+                final String due=c.isNull(3)?"":c.getString(3);
+                final int minutes=c.getInt(4);
+                LinearLayout box=card();
+                CheckBox check=new CheckBox(this);
+                check.setText(taskName);
+                check.setTextColor(done?subdued:ink);
+                check.setChecked(done);
+                box.addView(check);
+                box.addView(text(projectTimeText(minutes)+" • "
+                    +ProjectStore.timeClass(db.getReadableDatabase(),
+                        project.id,taskId)
+                    +(due.isEmpty()?"":" • "+due),12,false));
+                check.setOnCheckedChangeListener((v,value)->{
+                    if(value)db.completeTask(taskId);else db.reopenTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event(value?"PROJECT_TASK_COMPLETED":
+                        "PROJECT_TASK_REOPENED","task="+taskId);
+                    render();
+                });
+                smallButton(box,"Edytuj",()->{
+                    try(Cursor row=db.getReadableDatabase().rawQuery(
+                            "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
+                            new String[]{Long.toString(taskId)})) {
+                        if(row.moveToFirst())
+                            editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
+                    }
+                });
+            }
+        }
+        if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void showProjectResourcePicker(long projectId) {
+        java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+        java.util.ArrayList<String> kinds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,kind FROM storage_items "
+                    +"WHERE kind IN ('thing','box') ORDER BY kind,name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item==null)continue;
+                ids.add(item.id);kinds.add(item.kind);
+                labels.add(("box".equals(item.kind)?"Pudełko: ":"Rzecz: ")
+                    +item.name+" • "+StorageStore.location(
+                        db.getReadableDatabase(),item));
+            }
+        }
+        if(labels.isEmpty()) {alert("Brak Rzeczy i Pudełek w Magazynie.");return;}
+        new AlertDialog.Builder(this).setTitle("Dodaj zasób do projektu")
+            .setItems(labels.toArray(new String[0]),(d,which)->{
+                ProjectStore.addResource(db.getWritableDatabase(),projectId,
+                    kinds.get(which),ids.get(which));
+                DiagnosticLog.event("PROJECT_RESOURCE_ADDED",
+                    "project="+projectId);
+                render();
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void renderProjectResources(long projectId) {
+        title("Rzeczy i Pudełka");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,target_kind,target_id FROM project_resources "
+                    +"WHERE project_id=? ORDER BY id",
+                new String[]{Long.toString(projectId)})) {
+            while(c.moveToNext()) {
+                count++;
+                final long linkId=c.getLong(0);
+                String kind=c.getString(1);
+                long targetId=c.getLong(2);
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),targetId);
+                LinearLayout box=card();
+                box.addView(storageKindText(kind,
+                    item==null?"Usunięty zasób":
+                        ("box".equals(kind)?"Pudełko • ":"Rzecz • ")+item.name,
+                    16,true));
+                if(item!=null)box.addView(text(
+                    StorageStore.location(db.getReadableDatabase(),item),12,false));
+                smallButton(box,"Usuń z projektu",()->{
+                    db.getWritableDatabase().delete("project_resources","id=?",
+                        new String[]{Long.toString(linkId)});
+                    render();
+                });
+            }
+        }
+        if(count==0)note("Brak przypisanych Rzeczy/Pudełek.");
+    }
+
+    private long parseProjectQtyMilli(String value) {
+        try {
+            java.math.BigDecimal q=new java.math.BigDecimal(
+                value.trim().replace(',','.'));
+            long milli=q.multiply(java.math.BigDecimal.valueOf(1000))
+                .setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();
+            if(milli<=0)throw new Exception();
+            return milli;
+        } catch(Exception invalid) {
+            throw new IllegalArgumentException("Podaj poprawną ilość, np. 1 / 2,5.");
+        }
+    }
+
+    private void showProjectCostDialog(long projectId) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText name=new EditText(this);name.setHint("Np. Płytki");
+        EditText qty=new EditText(this);qty.setHint("Ilość");qty.setText("1");
+        EditText unit=new EditText(this);unit.setHint("Jednostka");unit.setText("szt.");
+        EditText price=new EditText(this);price.setHint("Cena za 1 w PLN");
+        qty.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        Spinner status=new Spinner(this);
+        status.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList("Planowane","Kupione","Zapłacone")));
+        EditText note=new EditText(this);note.setHint("Notatka • opcjonalnie");
+        form.addView(text("Nazwa",13,true));form.addView(name);
+        form.addView(text("Ilość",13,true));form.addView(qty);
+        form.addView(text("Jednostka",13,true));form.addView(unit);
+        form.addView(text("Cena jednostkowa",13,true));form.addView(price);
+        form.addView(text("Status",13,true));form.addView(status);
+        form.addView(note);lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Koszt / zakup projektu").setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dodaj",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    long priceGrosz=MoneyRules.parse(price.getText().toString());
+                    String[] values={"planned","bought","paid"};
+                    ProjectStore.addCost(db.getWritableDatabase(),projectId,
+                        name.getText().toString(),parseProjectQtyMilli(
+                            qty.getText().toString()),unit.getText().toString(),
+                        priceGrosz,values[status.getSelectedItemPosition()],
+                        note.getText().toString());
+                    DiagnosticLog.event("PROJECT_COST_ADDED",
+                        "project="+projectId);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    name.setError(error.getMessage()==null
+                        ?"Nie dodano kosztu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void renderProjectCosts(long projectId) {
+        title("Koszty i zakupy");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty_milli,unit,unit_price_grosz,status,note "
+                    +"FROM project_costs WHERE project_id=? ORDER BY id",
+                new String[]{Long.toString(projectId)})) {
+            while(c.moveToNext()) {
+                count++;
+                final long costId=c.getLong(0);
+                String name=c.getString(1);
+                long qty=c.getLong(2);
+                String unit=c.getString(3);
+                long price=c.getLong(4);
+                String status=c.getString(5);
+                String noteValue=c.getString(6);
+                long total=Math.round(qty*price/1000.0);
+                LinearLayout box=card();
+                box.addView(text(name,16,true));
+                box.addView(text(java.math.BigDecimal.valueOf(qty)
+                    .divide(java.math.BigDecimal.valueOf(1000))
+                    .stripTrailingZeros().toPlainString()
+                    +" "+unit+" × "+MoneyRules.format(price)
+                    +" = "+MoneyRules.format(total),13,false));
+                box.addView(text(("planned".equals(status)?"Planowane":
+                    "bought".equals(status)?"Kupione":"Zapłacone")
+                    +(noteValue.isEmpty()?"":" • "+noteValue),12,false));
+                smallButton(box,"Następny status",()->{
+                    String next="planned".equals(status)?"bought":
+                        "bought".equals(status)?"paid":"planned";
+                    ProjectStore.setCostStatus(db.getWritableDatabase(),costId,next);
+                    render();
+                });
+                smallButton(box,"Usuń",()->{
+                    db.getWritableDatabase().delete("project_costs","id=?",
+                        new String[]{Long.toString(costId)});
+                    render();
+                });
+            }
+        }
+        if(count==0)note("Brak kosztów. Koszty projektu nie są księgowane w PayCheck.");
+    }
+
+    private void showProjectPlanSuggestions(long projectId) {
+        ProjectStore.Project project=ProjectStore.find(
+            db.getReadableDatabase(),projectId);
+        if(project==null)return;
+        java.util.LinkedHashMap<Long,String> suggestions=
+            new java.util.LinkedHashMap<>();
+        java.util.ArrayList<String> lines=new java.util.ArrayList<>();
+        java.util.HashSet<String> usedDates=new java.util.HashSet<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,title,duration_minutes,assignee_id FROM tasks "
+                    +"WHERE project_id=? AND done=0 ORDER BY duration_minutes DESC,id",
+                new String[]{Long.toString(projectId)})) {
+            while(c.moveToNext()) {
+                long taskId=c.getLong(0);
+                String taskName=c.getString(1);
+                int minutes=c.getInt(2);
+                Long member=c.isNull(3)?project.assigneeId:c.getLong(3);
+                if(member==null) {
+                    lines.add("• "+taskName+" — brak wykonawcy");
+                    continue;
+                }
+                java.util.List<TimeSuggestions.Option> options=
+                    TimeSuggestions.propose(java.time.LocalDateTime.now(),minutes,
+                        day->db.effectiveShift(member,day.toString()));
+                TimeSuggestions.Option chosen=null;
+                for(TimeSuggestions.Option option:options)
+                    if(!usedDates.contains(option.date.toString())) {
+                        chosen=option;break;
+                    }
+                if(chosen==null&&!options.isEmpty())chosen=options.get(0);
+                if(chosen==null) {
+                    lines.add("• "+taskName+" — brak wolnego terminu w 28 dniach");
+                    continue;
+                }
+                usedDates.add(chosen.date.toString());
+                suggestions.put(taskId,chosen.date.toString());
+                lines.add("• "+taskName+" — "+chosen.date+" • "
+                    +chosen.start+"–"+chosen.end);
+            }
+        }
+        if(lines.isEmpty()) {alert("Brak otwartych czynności do zaplanowania.");return;}
+        String message=android.text.TextUtils.join("\n",lines);
+        new AlertDialog.Builder(this).setTitle("Propozycja planu projektu")
+            .setMessage(message+"\n\nTerminy są propozycją na podstawie grafików. "
+                +"EDHOME nie księguje czasu pracy i nie zmienia kosztów.")
+            .setNegativeButton("Zostaw bez zmian",null)
+            .setPositiveButton("Ustaw proponowane daty",(d,w)->{
+                SQLiteDatabase database=db.getWritableDatabase();
+                database.beginTransaction();
+                try {
+                    for(java.util.Map.Entry<Long,String> item:suggestions.entrySet()) {
+                        ContentValues values=new ContentValues();
+                        values.put("due_date",item.getValue());
+                        database.update("tasks",values,"id=? AND done=0",
+                            new String[]{Long.toString(item.getKey())});
+                    }
+                    database.setTransactionSuccessful();
+                } finally {database.endTransaction();}
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event("PROJECT_PLAN_APPLIED",
+                    "project="+projectId+" tasks="+suggestions.size());
+                render();
+            }).show();
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
 
