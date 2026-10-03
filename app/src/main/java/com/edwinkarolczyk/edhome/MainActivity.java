@@ -204,7 +204,7 @@ public final class MainActivity extends Activity {
         "Niski", "Normalny", "Wysoki", "Pilny"
     };
     private static final int MIN_TASK_MINUTES = 1;
-    private static final int MAX_TASK_MINUTES = 480;
+    private static final int MAX_TASK_MINUTES = 600;
     private int bg, surface, ink, subdued, accent;
     private UiSkin skin;
     private boolean homeEditMode;
@@ -4361,7 +4361,7 @@ public final class MainActivity extends Activity {
                 name.setError("Podaj nazwę.");return;
             }
             if(minutes==null) {
-                hours.setError("Podaj czas w godzinach, maks. 8 h.");return;
+                hours.setError("Podaj czas w godzinach, maks. 10 h.");return;
             }
             String dueValue=due.getText().toString().trim();
             String remind=reminder.getText().toString().trim();
@@ -4416,6 +4416,10 @@ public final class MainActivity extends Activity {
                 final boolean done=c.getInt(2)!=0;
                 final String due=c.isNull(3)?"":c.getString(3);
                 final int minutes=c.getInt(4);
+                final int blockers=ProjectStore.openDependencyCount(
+                    db.getReadableDatabase(),taskId);
+                final int dependencies=ProjectStore.dependencyIds(
+                    db.getReadableDatabase(),taskId).size();
                 LinearLayout box=card();
                 CheckBox check=new CheckBox(this);
                 check.setText(taskName);
@@ -4426,6 +4430,10 @@ public final class MainActivity extends Activity {
                     +ProjectStore.timeClass(db.getReadableDatabase(),
                         project.id,taskId)
                     +(due.isEmpty()?"":" • "+due),12,false));
+                if(dependencies>0)
+                    box.addView(text(blockers>0
+                        ?"Czeka na "+blockers+" wcześniejsze czynności"
+                        :"Zależności zakończone • można rozpocząć",12,false));
                 check.setOnCheckedChangeListener((v,value)->{
                     if(value)db.completeTask(taskId);else db.reopenTask(taskId);
                     ReminderReceiver.schedule(this);
@@ -4433,7 +4441,10 @@ public final class MainActivity extends Activity {
                         "PROJECT_TASK_REOPENED","task="+taskId);
                     render();
                 });
-                smallButton(box,"Edytuj",()->{
+                LinearLayout actions=compactActionRow();
+                compactAction(actions,"Zależności",
+                    ()->showProjectDependencyDialog(taskId,project.id));
+                compactAction(actions,"Edytuj",()->{
                     try(Cursor row=db.getReadableDatabase().rawQuery(
                             "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
                             new String[]{Long.toString(taskId)})) {
@@ -4444,6 +4455,60 @@ public final class MainActivity extends Activity {
             }
         }
         if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void showProjectDependencyDialog(long taskId,long projectId) {
+        long rootProject=ProjectStore.rootProjectId(
+            db.getReadableDatabase(),projectId);
+        java.util.Set<Long> projectIds=ProjectStore.descendantIds(
+            db.getReadableDatabase(),rootProject);
+        java.util.HashSet<Long> existing=new java.util.HashSet<>(
+            ProjectStore.dependencyIds(db.getReadableDatabase(),taskId));
+        java.util.ArrayList<Long> candidateIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        java.util.ArrayList<Boolean> remove=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,title,done,project_id FROM tasks "
+                    +"WHERE project_id IS NOT NULL ORDER BY done,title COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext()) {
+                long candidate=c.getLong(0);
+                if(candidate==taskId||!projectIds.contains(c.getLong(3)))continue;
+                boolean linked=existing.contains(candidate);
+                candidateIds.add(candidate);
+                remove.add(linked);
+                labels.add((linked?"✓ Usuń zależność: ":"＋ Wykonaj po: ")
+                    +c.getString(1)+" • "+projectPath(c.getLong(3))
+                    +(c.getInt(2)!=0?" • wykonana":""));
+            }
+        }
+        if(labels.isEmpty()) {
+            alert("Brak innych czynności w tym projekcie.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Zależności czynności")
+            .setMessage("Wybierz czynność, która ma być wykonana wcześniej. "
+                +"Ponowne kliknięcie istniejącej zależności ją usuwa.")
+            .setItems(labels.toArray(new String[0]),(d,which)->{
+                try {
+                    long other=candidateIds.get(which);
+                    if(remove.get(which))
+                        ProjectStore.removeDependency(
+                            db.getWritableDatabase(),taskId,other);
+                    else
+                        ProjectStore.addDependency(
+                            db.getWritableDatabase(),taskId,other);
+                    DiagnosticLog.event(remove.get(which)
+                        ?"PROJECT_DEPENDENCY_REMOVED":"PROJECT_DEPENDENCY_ADDED",
+                        "task="+taskId+" other="+other);
+                    render();
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zmienić zależności.":error.getMessage());
+                }
+            })
+            .setNegativeButton("Zamknij",null).show();
     }
 
     private void showProjectResourcePicker(long projectId) {
@@ -4614,45 +4679,89 @@ public final class MainActivity extends Activity {
         if(project==null)return;
         java.util.LinkedHashMap<Long,String> suggestions=
             new java.util.LinkedHashMap<>();
+        java.util.HashMap<Long,java.time.LocalDate> plannedDates=
+            new java.util.HashMap<>();
+        java.util.HashMap<Long,java.time.LocalDateTime> memberCursors=
+            new java.util.HashMap<>();
         java.util.ArrayList<String> lines=new java.util.ArrayList<>();
-        java.util.HashSet<String> usedDates=new java.util.HashSet<>();
-        try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT id,title,duration_minutes,assignee_id FROM tasks "
-                    +"WHERE project_id=? AND done=0 ORDER BY duration_minutes DESC,id",
-                new String[]{Long.toString(projectId)})) {
-            while(c.moveToNext()) {
-                long taskId=c.getLong(0);
-                String taskName=c.getString(1);
-                int minutes=c.getInt(2);
-                Long member=c.isNull(3)?project.assigneeId:c.getLong(3);
+        java.time.LocalDateTime now=java.time.LocalDateTime.now();
+
+        for(Long taskId:ProjectStore.openTaskIdsForPlanning(
+                db.getReadableDatabase(),projectId)) {
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT title,duration_minutes,assignee_id,project_id "
+                        +"FROM tasks WHERE id=? AND done=0",
+                    new String[]{Long.toString(taskId)})) {
+                if(!c.moveToFirst())continue;
+                String taskName=c.getString(0);
+                int minutes=c.getInt(1);
+                long taskProject=c.getLong(3);
+                ProjectStore.Project owningProject=ProjectStore.find(
+                    db.getReadableDatabase(),taskProject);
+                Long member=c.isNull(2)
+                    ?(owningProject==null?project.assigneeId:owningProject.assigneeId)
+                    :c.getLong(2);
+                String prefix=projectPath(taskProject)+" → "+taskName;
                 if(member==null) {
-                    lines.add("• "+taskName+" — brak wykonawcy");
+                    lines.add("• "+prefix+" — brak wykonawcy");
                     continue;
                 }
-                java.util.List<TimeSuggestions.Option> options=
-                    TimeSuggestions.propose(java.time.LocalDateTime.now(),minutes,
-                        day->db.effectiveShift(member,day.toString()));
-                TimeSuggestions.Option chosen=null;
-                for(TimeSuggestions.Option option:options)
-                    if(!usedDates.contains(option.date.toString())) {
-                        chosen=option;break;
+
+                java.time.LocalDateTime cursor=memberCursors.containsKey(member)
+                    ?memberCursors.get(member):now;
+                boolean blockedOutsidePlan=false;
+                for(Long dependency:ProjectStore.dependencyIds(
+                        db.getReadableDatabase(),taskId)) {
+                    java.time.LocalDate planned=plannedDates.get(dependency);
+                    if(planned!=null) {
+                        java.time.LocalDateTime after=planned.plusDays(1).atStartOfDay();
+                        if(after.isAfter(cursor))cursor=after;
+                        continue;
                     }
-                if(chosen==null&&!options.isEmpty())chosen=options.get(0);
-                if(chosen==null) {
-                    lines.add("• "+taskName+" — brak wolnego terminu w 28 dniach");
+                    try(Cursor dep=db.getReadableDatabase().rawQuery(
+                            "SELECT done,due_date FROM tasks WHERE id=?",
+                            new String[]{Long.toString(dependency)})) {
+                        if(!dep.moveToFirst()||dep.getInt(0)!=0)continue;
+                        if(dep.isNull(1)||dep.getString(1).trim().isEmpty()) {
+                            blockedOutsidePlan=true;
+                            break;
+                        }
+                        java.time.LocalDateTime after=java.time.LocalDate
+                            .parse(dep.getString(1)).plusDays(1).atStartOfDay();
+                        if(after.isAfter(cursor))cursor=after;
+                    }
+                }
+                if(blockedOutsidePlan) {
+                    lines.add("• "+prefix
+                        +" — czeka na wcześniejszą czynność bez terminu");
                     continue;
                 }
-                usedDates.add(chosen.date.toString());
+
+                java.util.List<TimeSuggestions.Option> options=
+                    TimeSuggestions.propose(cursor,minutes,
+                        day->db.effectiveShift(member,day.toString()));
+                if(options.isEmpty()) {
+                    lines.add("• "+prefix+" — brak wolnego terminu w 28 dniach");
+                    continue;
+                }
+                TimeSuggestions.Option chosen=options.get(0);
                 suggestions.put(taskId,chosen.date.toString());
-                lines.add("• "+taskName+" — "+chosen.date+" • "
+                plannedDates.put(taskId,chosen.date);
+                memberCursors.put(member,chosen.date.plusDays(1).atStartOfDay());
+                lines.add("• "+prefix+" — "+chosen.date+" • "
                     +chosen.start+"–"+chosen.end);
             }
         }
-        if(lines.isEmpty()) {alert("Brak otwartych czynności do zaplanowania.");return;}
+        if(lines.isEmpty()) {
+            alert("Brak otwartych czynności do zaplanowania.");
+            return;
+        }
         String message=android.text.TextUtils.join("\n",lines);
         new AlertDialog.Builder(this).setTitle("Propozycja planu projektu")
-            .setMessage(message+"\n\nTerminy są propozycją na podstawie grafików. "
-                +"EDHOME nie księguje czasu pracy i nie zmienia kosztów.")
+            .setMessage(message+"\n\nPlan obejmuje również podprojekty i respektuje "
+                +"kolejność zależności. Dla jednej osoby EDHOME proponuje "
+                +"konserwatywnie jedną czynność dziennie. Terminy pozostają "
+                +"propozycją do zatwierdzenia.")
             .setNegativeButton("Zostaw bez zmian",null)
             .setPositiveButton("Ustaw proponowane daty",(d,w)->{
                 SQLiteDatabase database=db.getWritableDatabase();
@@ -16577,7 +16686,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 40);
+            super(context, "edhome-beta-preview.db", null, 41);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -16626,7 +16735,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 40) {
+            if (oldVersion < 1 || newVersion > 41) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -16849,6 +16958,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN project_id INTEGER");
                 ProjectStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_39_TO_40_PROJECTS");
+            }
+            if(oldVersion < 41) {
+                ProjectStore.upgrade41(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_40_TO_41_PROJECT_DEPENDENCIES");
             }
             if(newVersion >= 36) {
                 try {
