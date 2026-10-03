@@ -53,7 +53,8 @@ assert 'private void refreshNfcReaderMode()' in main
 assert 'prefs.getBoolean(NFC_GLOBAL_LISTEN_PREF,false)' in main
 assert 'pendingNfcTarget!=null' in main
 assert 'if ("scanner".equals(destination)) armScannerNfc();' in main
-assert 'else refreshNfcReaderMode();' in main
+assert 'scannerNfcArmed=false;' in main
+assert 'refreshNfcReaderMode();' in main
 assert 'disableNfcReaderMode();\n        if(!enableNfcReaderMode())' in main
 assert 'settingsAccordion("nfc","NFC"' in main
 assert 'settingsYesNo(nfc,"Nasłuch NFC poza aktywną operacją"' in main
