@@ -74,5 +74,5 @@ assert 'task.put("reminder_lead_days",leadDays)' in store
 assert '{"garden_task_links", "id", "planting_id", "stage", "task_id", "created_at"}' in backup
 assert '{"garden_events", "id", "planting_id", "event_kind", "event_date", "note",' in backup
 assert '{"garden_harvests", "id", "planting_id", "harvested_on", "quantity_milli",' in backup
-assert "private static final int DB_VERSION = 40;" in backup
+assert "private static final int DB_VERSION = 41;" in backup
 print("Garden 0.7: catalog + crop cycle + recurring care tasks + season yield report PASS")
