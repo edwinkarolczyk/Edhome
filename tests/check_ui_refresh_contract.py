@@ -12,9 +12,9 @@ assert all('"' + name + '"' in skin for name in
 assert all('"' + name + '"' in skin for name in
            ("Grafitowy", "Leśny", "Jasny", "Trener 2"))
 assert "UiSkin.forName(" in main and "UiSkin.accepted(theme)" in backup
-assert 'super(context, "edhome-beta-preview.db", null, 39' in main
-assert 'private static final int DB_VERSION = 39;' in backup
-assert "newVersion > 39" in main
+assert 'super(context, "edhome-beta-preview.db", null, 40' in main
+assert 'private static final int DB_VERSION = 40;' in backup
+assert "newVersion > 40" in main
 home_ids = main.split("private static final String[] HOME_TILE_IDS = {", 1)[1].split("};", 1)[0]
 assert len(re.findall(r'"(tasks|calendar|places|pantry|audit|updates|backup|settings|today)"', home_ids)) == 9
 assert "showTileActions(tile, tileId);" in main
@@ -80,4 +80,4 @@ assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
 assert 'smallButton(appearance,"Zastosuj motyw"' in settings
 assert 'settingsAccordion("appearance","Wygląd i kafelki"' in settings
 assert 'for (int i = 0; i < UiSkin.THEMES.length; i++)' not in settings
-print("6 themes via compact dropdown, unlimited configurable tiles, drag, backup and SQLite v22: PASS")
+print("6 themes via compact dropdown, unlimited configurable tiles, drag, backup and SQLite v40: PASS")
