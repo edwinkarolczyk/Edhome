@@ -33,6 +33,12 @@ for token in (
 assert "upcomingVehicleDeadlines();" in calendar
 assert 'if ("month".equals(calendarView)) {' in calendar
 assert "renderCalendarMonth(month, selected);" in calendar
+assert "private boolean changeCalendarMonth(int delta)" in main
+assert 'DiagnosticLog.event("CALENDAR_MONTH_SWIPED"' in main
+assert "calendarMonthSwipeTracking" in main
+assert 'calendarView = "day";' in main
+assert 'text("‹  przesuń miesiąc palcem  ›"' in main
+assert "selectedCard = card()" not in main
 for token in (
     "private void renderCalendarMonth(YearMonth month, LocalDate selected)",
     "calendarMonthEventBar",
