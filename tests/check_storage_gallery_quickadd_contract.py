@@ -28,7 +28,7 @@ for marker in (
     'applyStorageDestination(\n                            itemId,kind,targetId,"nfc")',
     'STORAGE_UNKNOWN_NFC_TARGET_CREATED',
 ):
-    assert marker in main, f"Missing unknown NFC create-target flow: {marker}
+    assert marker in main, f"Missing unknown NFC create-target flow: {marker}"
 assert 'STORAGE_LOCATION_SET_BY_QR' in main
 assert 'private void showStorageMoveOptions(StorageStore.Item item)' in main
 assert 'NFC • Dotknij tagu celu' in main
