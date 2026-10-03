@@ -9,6 +9,7 @@ main = (root / "app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
 sync = (root / "app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 time = (root / "app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java").read_text(encoding="utf-8")
+desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").read_text(encoding="utf-8")
 
 # Projekty są warstwą nad wspólnymi Czynnościami i Magazynem.
 for marker in (
@@ -40,6 +41,9 @@ assert 'private static final int DB_VERSION = 41;' in backup
 assert '{"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"}' in backup
 assert '"project_task_dependencies".equals(table)' in sync
 assert 'return new String[]{"task_id","depends_on_task_id"};' in sync
+assert '"project_task_dependencies".equals(table)' in desktop
+assert 'canonicalId(row.get("depends_on_task_id"))' in desktop
+assert 'database.delete("project_task_dependencies"' in main
 
 # Minimalny kontrakt SQL zależności: brak self-loop i brak duplikatów.
 db = sqlite3.connect(":memory:")
