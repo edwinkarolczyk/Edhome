@@ -651,6 +651,10 @@ public final class MainActivity extends Activity {
                 return;
             }
             if(current==null) {
+                if("scanner".equals(screen)) {
+                    showScannerUnknownNfc(uid);
+                    return;
+                }
                 new AlertDialog.Builder(this)
                     .setTitle("Nieznany tag NFC")
                     .setMessage("UID: "+NfcLinkStore.shortUid(uid)
@@ -7406,6 +7410,346 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void showScannerUnknownNfc(String uid) {
+        disableNfcReaderMode();
+        String[] options={
+            "Przypisz do istniejącego",
+            "＋ Nowa Rzecz",
+            "＋ Nowe Pudełko",
+            "＋ Nowe Miejsce",
+            "Anuluj"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Nieznany tag NFC")
+            .setMessage("UID: "+NfcLinkStore.shortUid(uid)
+                +"\n\nCo chcesz zrobić z tym tagiem?")
+            .setItems(options,(dialog,which)->{
+                if(which==0)showScannerExistingTargetKind(uid);
+                else if(which==1)showScannerCreateNfcTarget(uid,"thing");
+                else if(which==2)showScannerCreateNfcTarget(uid,"box");
+                else if(which==3)showScannerCreateNfcTarget(uid,"place");
+                else refreshNfcReaderMode();
+            })
+            .setOnCancelListener(dialog->refreshNfcReaderMode())
+            .show();
+        DiagnosticLog.event("NFC_SCANNER_UNKNOWN_TAG");
+    }
+
+    private void showScannerExistingTargetKind(String uid) {
+        String[] options={"Rzecz","Pudełko","Miejsce","Wróć"};
+        new AlertDialog.Builder(this)
+            .setTitle("Przypisz tag do istniejącego")
+            .setItems(options,(dialog,which)->{
+                if(which==0)showScannerExistingTargetPicker(uid,"thing");
+                else if(which==1)showScannerExistingTargetPicker(uid,"box");
+                else if(which==2)showScannerExistingTargetPicker(uid,"place");
+                else showScannerUnknownNfc(uid);
+            })
+            .setOnCancelListener(dialog->showScannerUnknownNfc(uid))
+            .show();
+    }
+
+    private void showScannerExistingTargetPicker(String uid,String kind) {
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<Long> ids=new java.util.ArrayList<>();
+        if("place".equals(kind)) {
+            for(PlaceEntry place:readPlaces()) {
+                labels.add(db.placePath(place.id));
+                ids.add(place.id);
+            }
+        } else {
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT id,name FROM storage_items WHERE kind=? "
+                        +"ORDER BY name COLLATE NOCASE,id",
+                    new String[]{kind})) {
+                while(c.moveToNext()) {
+                    labels.add(c.getString(1));
+                    ids.add(c.getLong(0));
+                }
+            }
+        }
+        if(labels.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Brak obiektów")
+                .setMessage("Nie ma jeszcze "
+                    +("place".equals(kind)?"miejsc":
+                        "box".equals(kind)?"pudełek":"rzeczy")
+                    +" do przypisania.")
+                .setNegativeButton("Wróć",(d,w)->
+                    showScannerExistingTargetKind(uid))
+                .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Wybierz "+NfcLinkStore.kindLabel(kind).toLowerCase(
+                java.util.Locale.forLanguageTag("pl-PL")))
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                bindScannerUnknownNfc(uid,kind,ids.get(which),labels.get(which)))
+            .setNegativeButton("Wróć",(d,w)->
+                showScannerExistingTargetKind(uid))
+            .show();
+    }
+
+    private void bindScannerUnknownNfc(String uid,String kind,long id,String name) {
+        NfcLinkStore.Link old=NfcLinkStore.findByTarget(
+            db.getReadableDatabase(),kind,id);
+        Runnable bind=()->{
+            try {
+                NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,id);
+                suppressNfcRepeat(uid);
+                DiagnosticLog.event("NFC_SCANNER_TAG_ASSIGNED",
+                    "kind="+kind+" id="+id);
+                refreshNfcReaderMode();
+                if("thing".equals(kind))showStorageThingDetails(id);
+                else if("box".equals(kind)||"place".equals(kind))
+                    showScannerStorageContents(kind,id,name);
+            } catch(Exception error) {
+                DiagnosticLog.error("NFC_SCANNER_ASSIGN",error);
+                alert(error.getMessage()==null
+                    ?"Nie udało się przypisać taga.":error.getMessage());
+                refreshNfcReaderMode();
+            }
+        };
+        if(old!=null&&!old.uid.equalsIgnoreCase(uid)) {
+            new AlertDialog.Builder(this)
+                .setTitle("Obiekt ma już tag NFC")
+                .setMessage(name+"\nAktualny tag: "
+                    +NfcLinkStore.shortUid(old.uid)
+                    +"\n\nZastąpić go nowym tagiem?")
+                .setNegativeButton("Nie",(d,w)->refreshNfcReaderMode())
+                .setPositiveButton("Zastąp",(d,w)->bind.run())
+                .show();
+        } else bind.run();
+    }
+
+    private void showScannerCreateNfcTarget(String uid,String kind) {
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("thing".equals(kind)?"Nazwa rzeczy":
+            "box".equals(kind)?"Nazwa pudełka":"Nazwa miejsca");
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(18),dp(12),dp(18),dp(12));
+        layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        layout.addView(text("Po zapisaniu EDHOME automatycznie przypisze "
+            +"ten tag NFC do nowego obiektu.",13,false));
+        lightDialogForm(layout);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Nowa "+NfcLinkStore.kindLabel(kind))
+            .setView(layout)
+            .setNegativeButton("Wróć",(d,w)->showScannerUnknownNfc(uid))
+            .setPositiveButton("Utwórz i przypisz",null)
+            .setCancelable(false)
+            .create();
+        dialog.setOnShowListener(ignore->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()) {
+                    name.setError("Podaj nazwę.");
+                    return;
+                }
+                long id=0L;
+                try {
+                    if("place".equals(kind)) {
+                        String problem=PlaceRules.validateFields(
+                            value,"","places");
+                        if(problem!=null) {
+                            name.setError(problem);
+                            return;
+                        }
+                        if(!db.savePlace(null,value,"",null,"places")) {
+                            name.setError("Takie miejsce już istnieje.");
+                            return;
+                        }
+                        try(Cursor c=db.getReadableDatabase().rawQuery(
+                                "SELECT id FROM places WHERE parent_id IS NULL "
+                                    +"AND name=? COLLATE NOCASE "
+                                    +"ORDER BY id DESC LIMIT 1",
+                                new String[]{value})) {
+                            if(c.moveToFirst())id=c.getLong(0);
+                        }
+                    } else {
+                        id=StorageStore.create(db.getWritableDatabase(),
+                            value,kind,null,null);
+                    }
+                    if(id<=0)throw new IllegalStateException(
+                        "Nie znaleziono utworzonego obiektu.");
+                    NfcLinkStore.bind(db.getWritableDatabase(),uid,kind,id);
+                    suppressNfcRepeat(uid);
+                    dialog.dismiss();
+                    DiagnosticLog.event("NFC_SCANNER_TARGET_CREATED",
+                        "kind="+kind+" id="+id);
+                    refreshNfcReaderMode();
+                    if("thing".equals(kind))showStorageThingDetails(id);
+                    else showScannerStorageContents(kind,id,value);
+                } catch(Exception error) {
+                    DiagnosticLog.error("NFC_SCANNER_TARGET_CREATE",error);
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć obiektu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private java.util.List<StorageStore.Item> scannerStorageThings(
+            String kind,long id) {
+        java.util.List<StorageStore.Item> all=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items ORDER BY name COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item!=null)all.add(item);
+            }
+        }
+
+        java.util.Set<Long> allowedPlaces=new java.util.HashSet<>();
+        if("place".equals(kind)) {
+            allowedPlaces.add(id);
+            java.util.List<PlaceEntry> places=readPlaces();
+            boolean changed=true;
+            for(int pass=0;changed&&pass<128;pass++) {
+                changed=false;
+                for(PlaceEntry place:places)
+                    if(place.parent!=null&&allowedPlaces.contains(place.parent)
+                            &&allowedPlaces.add(place.id))
+                        changed=true;
+            }
+        }
+
+        java.util.List<StorageStore.Item> things=new java.util.ArrayList<>();
+        for(StorageStore.Item item:all) {
+            if(!"thing".equals(item.kind))continue;
+            if("box".equals(kind)) {
+                if(item.boxId!=null&&item.boxId==id)things.add(item);
+            } else {
+                Long place=StorageStore.effectivePlaceId(
+                    db.getReadableDatabase(),item);
+                if(place!=null&&allowedPlaces.contains(place))things.add(item);
+            }
+        }
+        return things;
+    }
+
+    private int scannerStorageBoxCount(String kind,long id) {
+        int count=0;
+        java.util.Set<Long> allowedPlaces=new java.util.HashSet<>();
+        if("place".equals(kind)) {
+            allowedPlaces.add(id);
+            java.util.List<PlaceEntry> places=readPlaces();
+            boolean changed=true;
+            for(int pass=0;changed&&pass<128;pass++) {
+                changed=false;
+                for(PlaceEntry place:places)
+                    if(place.parent!=null&&allowedPlaces.contains(place.parent)
+                            &&allowedPlaces.add(place.id))
+                        changed=true;
+            }
+        }
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM storage_items WHERE kind='box'",null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item box=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(box==null)continue;
+                if("box".equals(kind)) {
+                    // The scanned box itself is the container, not a child.
+                } else {
+                    Long place=StorageStore.effectivePlaceId(
+                        db.getReadableDatabase(),box);
+                    if(place!=null&&allowedPlaces.contains(place))count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private int scannerSubplaceCount(long id) {
+        java.util.Set<Long> allowed=new java.util.HashSet<>();
+        allowed.add(id);
+        java.util.List<PlaceEntry> places=readPlaces();
+        boolean changed=true;
+        for(int pass=0;changed&&pass<128;pass++) {
+            changed=false;
+            for(PlaceEntry place:places)
+                if(place.parent!=null&&allowed.contains(place.parent)
+                        &&allowed.add(place.id))
+                    changed=true;
+        }
+        return Math.max(0,allowed.size()-1);
+    }
+
+    private void showScannerStorageContents(String kind,long id,String name) {
+        java.util.List<StorageStore.Item> things=
+            scannerStorageThings(kind,id);
+        int boxCount=scannerStorageBoxCount(kind,id);
+        int subplaces="place".equals(kind)?scannerSubplaceCount(id):0;
+
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(12),dp(8),dp(12),dp(8));
+        content.addView(storageKindText(kind,name,20,true));
+        String summary=things.size()+" "
+            +(things.size()==1?"rzecz":"rzeczy");
+        if("place".equals(kind))
+            summary+=" • "+boxCount+" pudełek • "+subplaces+" podmiejsc";
+        content.addView(text(summary,13,false));
+
+        if(things.isEmpty()) {
+            TextView empty=text("Brak rzeczy w tym "
+                +("box".equals(kind)?"pudełku.":"miejscu."),14,false);
+            empty.setTextColor(subdued);
+            empty.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams emptyParams=
+                new LinearLayout.LayoutParams(-1,dp(90));
+            emptyParams.setMargins(0,dp(8),0,dp(4));
+            content.addView(empty,emptyParams);
+        } else {
+            LinearLayout grid=new LinearLayout(this);
+            grid.setOrientation(LinearLayout.VERTICAL);
+            content.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+            renderStorageGalleryGrid(grid,things,"");
+        }
+
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.addView(content,new ScrollView.LayoutParams(-1,-2));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("box".equals(kind)
+                ?"Pudełko • zawartość":"Miejsce • zawartość")
+            .setView(scroll)
+            .setNegativeButton("Zamknij",(d,w)->refreshNfcReaderMode())
+            .create();
+
+        if("box".equals(kind)) {
+            smallButton(content,"📥 Włóż rzecz tutaj • QR / NFC",()->{
+                dialog.dismiss();
+                beginStorageDropTarget("box",id,name);
+            });
+            smallButton(content,"Otwórz pełne pudełko",()->{
+                dialog.dismiss();
+                storageTemporaryKind="box";
+                expandStorageNfcPath(id);
+                go("storage");
+            });
+        } else {
+            smallButton(content,"📍 Zostaw tutaj rzecz lub pudełko • QR / NFC",()->{
+                dialog.dismiss();
+                beginStorageDropTarget("place",id,name);
+            });
+            smallButton(content,"Otwórz pełne Miejsce",()->{
+                dialog.dismiss();
+                go("places");
+            });
+        }
+        dialog.setOnDismissListener(d->refreshNfcReaderMode());
+        dialog.show();
+        DiagnosticLog.event("NFC_SCANNER_STORAGE_CONTENTS",
+            "kind="+kind+" id="+id+" things="+things.size());
+    }
+
     private void handleKnownNfcScan(NfcLinkStore.Link link) {
         String name = NfcLinkStore.targetName(
             db.getReadableDatabase(), link.kind, link.targetId);
@@ -7419,6 +7763,18 @@ public final class MainActivity extends Activity {
                     NfcLinkStore.clearUid(db.getWritableDatabase(), link.uid);
                     render();
                 }).show();
+            return;
+        }
+        if("scanner".equals(screen)) {
+            suppressNfcRepeat(link.uid);
+            if("thing".equals(link.kind))
+                showStorageThingDetails(link.targetId);
+            else if("box".equals(link.kind)||"place".equals(link.kind))
+                showScannerStorageContents(link.kind,link.targetId,name);
+            else
+                showScannedTargetActions("nfc",link.kind,link.targetId,name);
+            DiagnosticLog.event("NFC_SCANNER_TARGET_OPENED",
+                "kind="+link.kind+" id="+link.targetId);
             return;
         }
         if ("open".equals(resolveScanAction("nfc", link.kind, link.targetId)))

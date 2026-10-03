@@ -85,6 +85,24 @@ for token in (
 assert 'handleKnownNfcScan(current);' in main
 assert 'resolveScanAction("nfc", link.kind, link.targetId)' in main
 assert 'showScannedTargetActions("nfc", link.kind, link.targetId, name)' in main
+for token in (
+    'if("scanner".equals(screen)) {',
+    'showScannerUnknownNfc(uid);',
+    'private void showScannerUnknownNfc(String uid)',
+    'Przypisz do istniejącego',
+    '＋ Nowa Rzecz',
+    '＋ Nowe Pudełko',
+    '＋ Nowe Miejsce',
+    'private void showScannerExistingTargetPicker(String uid,String kind)',
+    'private void bindScannerUnknownNfc(String uid,String kind,long id,String name)',
+    'private void showScannerCreateNfcTarget(String uid,String kind)',
+    'NFC_SCANNER_TAG_ASSIGNED',
+    'NFC_SCANNER_TARGET_CREATED',
+    'private void showScannerStorageContents(String kind,long id,String name)',
+    'renderStorageGalleryGrid(grid,things,"")',
+    'NFC_SCANNER_STORAGE_CONTENTS',
+):
+    assert token in main, "Central scanner storage/NFC flow missing: "+token
 
 # Each agreed target is exposed in the object UI.
 for token in (
