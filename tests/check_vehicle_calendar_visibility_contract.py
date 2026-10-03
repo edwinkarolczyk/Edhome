@@ -31,6 +31,17 @@ for token in (
 ):
     assert token in section,token
 assert "upcomingVehicleDeadlines();" in calendar
+assert 'if ("month".equals(calendarView)) {' in calendar
+assert "renderCalendarMonth(month, selected);" in calendar
+for token in (
+    "private void renderCalendarMonth(YearMonth month, LocalDate selected)",
+    "calendarMonthEventBar",
+    "WEEK_OF_WEEK_BASED_YEAR",
+    '"pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."',
+    '"SELECT due_date,title,priority FROM tasks WHERE done=0 "',
+    '"Wpisy w kalendarzu: "',
+):
+    assert token in main, token
 assert 'button("Przejdź do daty", () -> {' in calendar
 assert "showVehicleDateInCalendar(item.ocUntil)" in vehicle
 assert "showVehicleDateInCalendar(item.inspectionUntil)" in vehicle

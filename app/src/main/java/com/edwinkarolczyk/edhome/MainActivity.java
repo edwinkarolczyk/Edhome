@@ -4752,10 +4752,290 @@ public final class MainActivity extends Activity {
         }
     }
 
+
+    private TextView calendarMonthEventBar(String label, String kind) {
+        int tint = "vehicle".equals(kind)
+            ? skin.tileTint("blue")
+            : ("urgent".equals(kind) || "high".equals(kind)
+                ? skin.tileTint("amber") : accent);
+        TextView bar = text(label, 9, true);
+        bar.setSingleLine(true);
+        bar.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(4), 0, dp(3), 0);
+        bar.setTextColor(skin.tileText(tint));
+        bar.setBackground(skin.pill(this, tint));
+        return bar;
+    }
+
+    /** Compact month grid inspired by a phone calendar: week numbers on the
+     * left and short event bars inside each day. Data and recurrence rules
+     * remain unchanged; this is presentation only. */
+    private void renderCalendarMonth(YearMonth month, LocalDate selected) {
+        Locale pl = Locale.forLanguageTag("pl-PL");
+        String monthName = month.getMonth().getDisplayName(
+            TextStyle.FULL_STANDALONE, pl);
+        if (!monthName.isEmpty()) {
+            monthName = monthName.substring(0, 1).toUpperCase(pl)
+                + monthName.substring(1);
+        }
+
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setOrientation(LinearLayout.HORIZONTAL);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setPadding(0, dp(2), 0, dp(4));
+        body.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        TextView prev = text("‹", 30, true);
+        prev.setGravity(Gravity.CENTER);
+        prev.setContentDescription("Poprzedni miesiąc");
+        prev.setOnClickListener(v -> {
+            LocalDate day = month.minusMonths(1).atDay(1);
+            calendarMonth = YearMonth.from(day).toString();
+            calendarDay = day.toString();
+            render();
+        });
+        touchFeedback(prev);
+        toolbar.addView(prev, new LinearLayout.LayoutParams(dp(42), dp(42)));
+
+        TextView monthTitle = text(monthName + " " + month.getYear(), 22, true);
+        monthTitle.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.addView(monthTitle, new LinearLayout.LayoutParams(0, dp(42), 1f));
+
+        TextView today = text("Dziś", 12, true);
+        today.setGravity(Gravity.CENTER);
+        today.setBackground(skin.pill(this, skin.iconBacking));
+        today.setOnClickListener(v -> {
+            LocalDate now = LocalDate.now();
+            calendarDay = now.toString();
+            calendarMonth = YearMonth.from(now).toString();
+            render();
+        });
+        touchFeedback(today);
+        LinearLayout.LayoutParams todayParams =
+            new LinearLayout.LayoutParams(dp(50), dp(34));
+        todayParams.setMargins(dp(2), 0, dp(3), 0);
+        toolbar.addView(today, todayParams);
+
+        TextView next = text("›", 30, true);
+        next.setGravity(Gravity.CENTER);
+        next.setContentDescription("Następny miesiąc");
+        next.setOnClickListener(v -> {
+            LocalDate day = month.plusMonths(1).atDay(1);
+            calendarMonth = YearMonth.from(day).toString();
+            calendarDay = day.toString();
+            render();
+        });
+        touchFeedback(next);
+        toolbar.addView(next, new LinearLayout.LayoutParams(dp(42), dp(42)));
+
+        LinearLayout modes = new LinearLayout(this);
+        modes.setOrientation(LinearLayout.HORIZONTAL);
+        modes.setGravity(Gravity.CENTER);
+        body.addView(modes, new LinearLayout.LayoutParams(-1, dp(38)));
+        String[][] modeItems = {
+            {"month", "Miesiąc"}, {"week", "Tydzień"},
+            {"day", "Dzień"}, {"agenda", "Agenda"}
+        };
+        for (String[] mode : modeItems) {
+            TextView chip = text(mode[1], 11, "month".equals(mode[0]));
+            chip.setGravity(Gravity.CENTER);
+            chip.setTextColor("month".equals(mode[0]) ? skin.accentInk : ink);
+            chip.setBackground(skin.pill(this,
+                "month".equals(mode[0]) ? accent : surface));
+            chip.setOnClickListener(v -> {
+                calendarView = mode[0];
+                render();
+            });
+            touchFeedback(chip);
+            LinearLayout.LayoutParams chipParams =
+                new LinearLayout.LayoutParams(0, dp(32), 1f);
+            chipParams.setMargins(dp(2), dp(2), dp(2), dp(2));
+            modes.addView(chip, chipParams);
+        }
+
+        LocalDate first = month.atDay(1);
+        LocalDate gridStart = first.minusDays(first.getDayOfWeek().getValue() - 1);
+        LocalDate gridEnd = gridStart.plusDays(41);
+
+        Map<String, java.util.List<String[]>> events = new HashMap<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT due_date,title,priority FROM tasks WHERE done=0 "
+                    + "AND due_date>=? AND due_date<=? "
+                    + "ORDER BY due_date,CASE priority WHEN 'urgent' THEN 0 "
+                    + "WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,id",
+                new String[]{gridStart.toString(), gridEnd.toString()})) {
+            while (c.moveToNext()) {
+                events.computeIfAbsent(c.getString(0),
+                    key -> new java.util.ArrayList<>()).add(
+                        new String[]{c.getString(1), c.getString(2)});
+            }
+        }
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT deadline,kind,name FROM ("
+                    + "SELECT oc_until AS deadline,'OC' AS kind,name FROM vehicles "
+                    + "WHERE oc_until!='' UNION ALL "
+                    + "SELECT inspection_until,'Przegląd',name FROM vehicles "
+                    + "WHERE inspection_until!='') WHERE deadline>=? "
+                    + "AND deadline<=? ORDER BY deadline,name,kind",
+                new String[]{gridStart.toString(), gridEnd.toString()})) {
+            while (c.moveToNext()) {
+                events.computeIfAbsent(c.getString(0),
+                    key -> new java.util.ArrayList<>()).add(
+                        new String[]{c.getString(1) + " " + c.getString(2),
+                            "vehicle"});
+            }
+        }
+
+        LinearLayout headings = new LinearLayout(this);
+        headings.setOrientation(LinearLayout.HORIZONTAL);
+        headings.setGravity(Gravity.CENTER_VERTICAL);
+        body.addView(headings, new LinearLayout.LayoutParams(-1, dp(30)));
+        TextView weekHeading = text("tydz.", 8, false);
+        weekHeading.setGravity(Gravity.CENTER);
+        weekHeading.setTextColor(subdued);
+        headings.addView(weekHeading,
+            new LinearLayout.LayoutParams(dp(34), dp(28)));
+        for (String label : new String[]{
+                "pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."}) {
+            TextView dayHeading = text(label, 10, true);
+            dayHeading.setGravity(Gravity.CENTER);
+            dayHeading.setTextColor(subdued);
+            headings.addView(dayHeading,
+                new LinearLayout.LayoutParams(0, dp(28), 1f));
+        }
+
+        for (int week = 0; week < 6; week++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.TOP);
+            LinearLayout.LayoutParams rowParams =
+                new LinearLayout.LayoutParams(-1, dp(88));
+            rowParams.setMargins(0, dp(1), 0, dp(1));
+            body.addView(row, rowParams);
+
+            LocalDate monday = gridStart.plusDays(week * 7L);
+            int weekNumber = monday.get(
+                java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+            TextView weekView = text(Integer.toString(weekNumber), 11, false);
+            weekView.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+            weekView.setPadding(0, dp(8), 0, 0);
+            weekView.setTextColor(subdued);
+            weekView.setBackground(skin.panel(this, skin.iconBacking, 12));
+            LinearLayout.LayoutParams weekParams =
+                new LinearLayout.LayoutParams(dp(34), dp(86));
+            weekParams.setMargins(0, 0, dp(2), 0);
+            row.addView(weekView, weekParams);
+
+            for (int weekday = 0; weekday < 7; weekday++) {
+                LocalDate day = monday.plusDays(weekday);
+                String iso = day.toString();
+                boolean inMonth = YearMonth.from(day).equals(month);
+                boolean isSelected = iso.equals(selected.toString());
+                boolean isToday = iso.equals(LocalDate.now().toString());
+
+                LinearLayout cell = new LinearLayout(this);
+                cell.setOrientation(LinearLayout.VERTICAL);
+                cell.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+                cell.setPadding(dp(2), dp(2), dp(2), dp(2));
+                cell.setBackground(skin.panel(this,
+                    isSelected ? skin.iconBacking : surface, 12));
+
+                TextView number = text(Integer.toString(day.getDayOfMonth()), 11, true);
+                number.setGravity(Gravity.CENTER);
+                number.setTextColor(inMonth ? ink : subdued);
+                if (isToday) {
+                    number.setBackground(rounded(accent));
+                    number.setTextColor(skin.accentInk);
+                }
+                cell.addView(number, new LinearLayout.LayoutParams(-1, dp(23)));
+
+                java.util.List<String[]> dayEvents = events.get(iso);
+                if (dayEvents != null) {
+                    int visible = Math.min(2, dayEvents.size());
+                    for (int i = 0; i < visible; i++) {
+                        String[] event = dayEvents.get(i);
+                        TextView bar = calendarMonthEventBar(event[0], event[1]);
+                        bar.setContentDescription(event[0] + ", " + iso);
+                        bar.setOnClickListener(v -> {
+                            calendarDay = iso;
+                            calendarMonth = YearMonth.from(day).toString();
+                            calendarView = "day";
+                            render();
+                        });
+                        touchFeedback(bar);
+                        LinearLayout.LayoutParams barParams =
+                            new LinearLayout.LayoutParams(-1, dp(20));
+                        barParams.setMargins(0, dp(1), 0, 0);
+                        cell.addView(bar, barParams);
+                    }
+                    if (dayEvents.size() > visible) {
+                        TextView more = text("+" + (dayEvents.size() - visible), 9, true);
+                        more.setGravity(Gravity.CENTER_HORIZONTAL);
+                        more.setTextColor(subdued);
+                        cell.addView(more,
+                            new LinearLayout.LayoutParams(-1, dp(15)));
+                    }
+                }
+
+                cell.setOnClickListener(v -> {
+                    calendarDay = iso;
+                    calendarMonth = YearMonth.from(day).toString();
+                    render();
+                });
+                cell.setClickable(true);
+                cell.setFocusable(true);
+                touchFeedback(cell);
+
+                LinearLayout.LayoutParams cellParams =
+                    new LinearLayout.LayoutParams(0, dp(86), 1f);
+                cellParams.setMargins(dp(1), 0, dp(1), 0);
+                row.addView(cell, cellParams);
+            }
+        }
+
+        LocalDate selectedDay = LocalDate.parse(calendarDay);
+        java.util.List<String[]> selectedEvents = events.get(selectedDay.toString());
+        LinearLayout selectedCard = card();
+        selectedCard.setPadding(dp(12), dp(8), dp(12), dp(8));
+        selectedCard.addView(text(selectedDay.format(
+            DateTimeFormatter.ofPattern("EEEE, d MMMM", pl)), 15, true));
+        int selectedCount = selectedEvents == null ? 0 : selectedEvents.size();
+        TextView selectedInfo = text(selectedCount == 0
+            ? "Brak wpisów na ten dzień."
+            : "Wpisy w kalendarzu: " + selectedCount, 12, false);
+        selectedInfo.setTextColor(subdued);
+        selectedCard.addView(selectedInfo);
+        smallButton(selectedCard, "Otwórz dzień", () -> {
+            calendarView = "day";
+            render();
+        });
+
+        LinearLayout addRow = new LinearLayout(this);
+        addRow.setGravity(Gravity.RIGHT);
+        body.addView(addRow, new LinearLayout.LayoutParams(-1, dp(64)));
+        TextView add = text("+", 28, true);
+        add.setGravity(Gravity.CENTER);
+        add.setTextColor(skin.accentInk);
+        add.setBackground(skin.pill(this, accent));
+        add.setContentDescription("Dodaj czynność");
+        add.setOnClickListener(v ->
+            editTask(null, "", selectedDay.toString(), "once", 1));
+        touchFeedback(add);
+        LinearLayout.LayoutParams addParams =
+            new LinearLayout.LayoutParams(dp(58), dp(58));
+        addParams.setMargins(0, dp(3), dp(2), dp(3));
+        addRow.addView(add, addParams);
+    }
+
     private void calendar() {
         header("Kalendarz • czynności i pojazdy");
         YearMonth month = YearMonth.parse(calendarMonth);
         LocalDate selected = LocalDate.parse(calendarDay);
+        if ("month".equals(calendarView)) {
+            renderCalendarMonth(month, selected);
+            return;
+        }
         note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
             new Locale("pl", "PL")) + " " + month.getYear());
         LinearLayout views = new LinearLayout(this);
