@@ -129,6 +129,8 @@ public final class MainActivity extends Activity {
     private int quickThingBatchCounter;
     private int quickThingBatchAdded;
     private AlertDialog quickThingBatchDialog;
+    private boolean quickThingBatchDraftPhoto;
+    private String quickThingBatchPendingThumbnail;
     private String suppressedNfcUid;
     private long suppressedNfcUntilElapsed;
     private String lastNfcRawUid;
@@ -910,13 +912,9 @@ public final class MainActivity extends Activity {
                 || !"month".equals(calendarView)) return false;
         YearMonth current = YearMonth.parse(calendarMonth);
         YearMonth target = current.plusMonths(delta);
-        int wantedDay = 1;
-        try {
-            wantedDay = LocalDate.parse(calendarDay).getDayOfMonth();
-        } catch (Exception ignored) { }
-        wantedDay = Math.max(1, Math.min(wantedDay, target.lengthOfMonth()));
         calendarMonth = target.toString();
-        calendarDay = target.atDay(wantedDay).toString();
+        calendarDay = target.equals(YearMonth.now())
+            ? LocalDate.now().toString() : target.atDay(1).toString();
         DiagnosticLog.event("CALENDAR_MONTH_SWIPED",
             "month=" + calendarMonth);
         render();
@@ -5023,11 +5021,15 @@ public final class MainActivity extends Activity {
         TextView weekHeading = text("", 8, false);
         headings.addView(weekHeading,
             new LinearLayout.LayoutParams(dp(30), dp(26)));
-        for (String label : new String[]{
-                "pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."}) {
-            TextView dayHeading = text(label, 10, true);
+        int sundayColor = skin.light
+            ? Color.rgb(198,40,40) : Color.rgb(239,83,80);
+        String[] weekdayHeadings = {
+            "pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz."
+        };
+        for (int headingIndex=0; headingIndex<weekdayHeadings.length; headingIndex++) {
+            TextView dayHeading = text(weekdayHeadings[headingIndex], 10, true);
             dayHeading.setGravity(Gravity.CENTER);
-            dayHeading.setTextColor(subdued);
+            dayHeading.setTextColor(headingIndex==6 ? sundayColor : subdued);
             headings.addView(dayHeading,
                 new LinearLayout.LayoutParams(0, dp(26), 1f));
         }
@@ -5064,19 +5066,20 @@ public final class MainActivity extends Activity {
                 LocalDate day = monday.plusDays(weekday);
                 String iso = day.toString();
                 boolean inMonth = YearMonth.from(day).equals(month);
-                boolean isSelected = iso.equals(selected.toString());
                 boolean isToday = iso.equals(LocalDate.now().toString());
+                boolean isSunday = day.getDayOfWeek()==java.time.DayOfWeek.SUNDAY;
 
                 LinearLayout cell = new LinearLayout(this);
                 cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
                 cell.setPadding(dp(2), dp(2), dp(2), dp(1));
                 cell.setBackground(skin.panel(this,
-                    isSelected ? skin.iconBacking : surface, 10));
+                    isToday ? skin.iconBacking : surface, 10));
 
                 TextView number = text(Integer.toString(day.getDayOfMonth()), 11, true);
                 number.setGravity(Gravity.CENTER);
-                number.setTextColor(inMonth ? ink : subdued);
+                number.setTextColor(inMonth
+                    ? (isSunday ? sundayColor : ink) : subdued);
                 if (isToday) {
                     number.setBackground(rounded(accent));
                     number.setTextColor(skin.accentInk);
@@ -8416,6 +8419,55 @@ public final class MainActivity extends Activity {
         if(file!=null&&file.exists())file.delete();
     }
 
+    private void takeQuickThingBatchDraftPhoto() {
+        if(!quickThingBatchActive)return;
+        quickThingBatchDraftPhoto=true;
+        quickThingBatchPendingThumbnail=null;
+        if(Build.VERSION.SDK_INT>=23
+                &&checkSelfPermission(android.Manifest.permission.CAMERA)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA},
+                STORAGE_CAMERA_PERMISSION);
+            return;
+        }
+        launchQuickThingBatchDraftCamera();
+    }
+
+    private void launchQuickThingBatchDraftCamera() {
+        if(!quickThingBatchActive)return;
+        quickThingBatchDraftPhoto=true;
+        Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        if(camera.resolveActivity(getPackageManager())==null) {
+            quickThingBatchDraftPhoto=false;
+            alert("Nie znaleziono aplikacji aparatu. Rzecz nie została utworzona.");
+            quickThingBatchFinish();
+            return;
+        }
+        try {
+            java.io.File dir=new java.io.File(getCacheDir(),"storage_camera");
+            if(!dir.exists()&&!dir.mkdirs())
+                throw new IllegalStateException("Nie utworzono katalogu zdjęcia.");
+            java.io.File file=java.io.File.createTempFile(
+                "edhome_quick_","_full.jpg",dir);
+            Uri uri=FileProvider.getUriForFile(this,
+                getPackageName()+".storage.files",file);
+            pendingStorageCameraFile=file;
+            pendingStorageCameraUri=uri;
+            pendingStorageThumbnailId=0L;
+            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT,uri);
+            camera.setClipData(ClipData.newRawUri("EDHOME zdjęcie",uri));
+            camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                |Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(camera,TAKE_STORAGE_THUMBNAIL);
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_WAITING");
+        } catch(Exception error) {
+            cleanupStorageCameraTemp();
+            quickThingBatchDraftPhoto=false;
+            alert("Nie można uruchomić aparatu. Rzecz nie została utworzona.");
+            quickThingBatchFinish();
+        }
+    }
+
     private void saveStorageThumbnail(long id,String thumbnail) {
         if(StorageStore.find(db.getReadableDatabase(),id)==null)
             throw new IllegalArgumentException("Rzecz już nie istnieje.");
@@ -8438,67 +8490,48 @@ public final class MainActivity extends Activity {
     private void startQuickThingBatch() {
         if(quickThingBatchActive) {
             if(quickThingBatchCurrentId>0)
-                quickThingBatchAskDestination(quickThingBatchCurrentId);
+                quickThingBatchStartDestinationNfc(quickThingBatchCurrentId);
+            else if(!quickThingBatchDraftPhoto)
+                takeQuickThingBatchDraftPhoto();
             return;
         }
         quickThingBatchActive=true;
         quickThingBatchCurrentId=0L;
         quickThingBatchCounter=1;
         quickThingBatchAdded=0;
+        quickThingBatchPendingThumbnail=null;
         DiagnosticLog.event("STORAGE_QUICK_BATCH_STARTED");
         quickThingBatchNext();
     }
 
+    /** Start the next cycle with a photo. No storage row exists yet. */
     private void quickThingBatchNext() {
         if(!quickThingBatchActive)return;
-        try {
-            String defaultName="Rzecz "+quickThingBatchCounter;
-            long id=StorageStore.create(db.getWritableDatabase(),
-                defaultName,"thing",null,null);
-            quickThingBatchCurrentId=id;
-            quickThingBatchAdded++;
-            DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_CREATED",
-                "id="+id+" index="+quickThingBatchCounter);
-            render();
-            root.postDelayed(()->{
-                if(isQuickThingBatchTarget(id))takeStorageThumbnail(id);
-            },100L);
-        } catch(Exception error) {
-            quickThingBatchFinish();
-            alert(error.getMessage()==null
-                ?"Nie udało się rozpocząć szybkiego dodawania.":error.getMessage());
-        }
+        quickThingBatchCurrentId=0L;
+        quickThingBatchPendingThumbnail=null;
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_DRAFT_STARTED",
+            "index="+quickThingBatchCounter);
+        takeQuickThingBatchDraftPhoto();
     }
 
-    private void continueQuickThingBatchAfterPhoto(long id) {
-        if(!isQuickThingBatchTarget(id))return;
-        root.postDelayed(()->{
-            if(isQuickThingBatchTarget(id))quickThingBatchAskName(id);
-        },100L);
-    }
-
-    private void quickThingBatchAskName(long id) {
-        if(!isQuickThingBatchTarget(id))return;
-        StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
-        if(item==null) {
-            quickThingBatchFinish();
-            return;
-        }
+    private void quickThingBatchAskDraftName() {
+        if(!quickThingBatchActive || quickThingBatchPendingThumbnail==null)return;
         if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
             quickThingBatchDialog.dismiss();
 
+        String defaultName="Rzecz "+quickThingBatchCounter;
         LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18),dp(12),dp(18),dp(12));
-        layout.addView(text("Zdjęcie: "
-            +(prefs.contains(StorageThumbs.key(id))?"dodane":"pominięte"),
-            13,false));
+        layout.addView(text("Zdjęcie: dodane ✓",13,false));
         EditText name=new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Opcjonalnie — domyślnie: "+item.name);
+        name.setHint("Nazwa rzeczy");
+        name.setText(defaultName);
+        name.setSelectAllOnFocus(true);
         layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
-        layout.addView(text("Możesz zostawić pole puste. EDHOME zachowa nazwę "
-            +item.name+".",13,false));
+        layout.addView(text("Rzecz powstanie dopiero po zatwierdzeniu nazwy. "
+            +"Następnie EDHOME od razu uruchomi odczyt NFC położenia.",13,false));
 
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Szybkie dodawanie • nazwa")
@@ -8507,27 +8540,15 @@ public final class MainActivity extends Activity {
             .create();
         quickThingBatchDialog=dialog;
 
-        smallButton(layout,"Dalej",()->{
+        smallButton(layout,"Dalej • od razu skanuj NFC",()->{
             String value=name.getText().toString().trim();
-            try {
-                if(!value.isEmpty()) {
-                    StorageStore.rename(db.getWritableDatabase(),id,value);
-                    DiagnosticLog.event("STORAGE_QUICK_BATCH_NAMED","id="+id);
-                }
-                dialog.dismiss();
-                quickThingBatchDialog=null;
-                quickThingBatchAskDestination(id);
-            } catch(Exception error) {
-                name.setError(error.getMessage()==null
-                    ?"Nie zapisano nazwy.":error.getMessage());
+            if(value.isEmpty()) {
+                name.setError("Podaj nazwę.");
+                return;
             }
+            quickThingBatchCreateFromDraft(value);
         });
-        smallButton(layout,"Pomiń nazwę • zostaw "+item.name,()->{
-            dialog.dismiss();
-            quickThingBatchDialog=null;
-            quickThingBatchAskDestination(id);
-        });
-        smallButton(layout,"Zakończ serię",()->{
+        smallButton(layout,"Zakończ serię • nie twórz tej rzeczy",()->{
             dialog.dismiss();
             quickThingBatchDialog=null;
             quickThingBatchFinish();
@@ -8537,7 +8558,37 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
-    private void quickThingBatchAskDestination(long id) {
+    private void quickThingBatchCreateFromDraft(String name) {
+        if(!quickThingBatchActive || quickThingBatchPendingThumbnail==null)return;
+        try {
+            String thumbnail=quickThingBatchPendingThumbnail;
+            long id=StorageStore.create(db.getWritableDatabase(),
+                name,"thing",null,null);
+            if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit()) {
+                StorageStore.remove(db.getWritableDatabase(),id);
+                throw new IllegalStateException("Nie zapisano zdjęcia rzeczy.");
+            }
+            quickThingBatchPendingThumbnail=null;
+            quickThingBatchCurrentId=id;
+            quickThingBatchAdded++;
+            DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_CREATED",
+                "id="+id+" index="+quickThingBatchCounter+" after_photo=true");
+            if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
+                quickThingBatchDialog.dismiss();
+            quickThingBatchDialog=null;
+            render();
+            root.postDelayed(()->{
+                if(isQuickThingBatchTarget(id))
+                    quickThingBatchStartDestinationNfc(id);
+            },100L);
+        } catch(Exception error) {
+            alert(error.getMessage()==null
+                ?"Nie udało się utworzyć rzeczy.":error.getMessage());
+        }
+    }
+
+    /** NFC is armed immediately after photo + name, without an extra tap. */
+    private void quickThingBatchStartDestinationNfc(long id) {
         if(!isQuickThingBatchTarget(id))return;
         StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),id);
         if(item==null) {
@@ -8547,12 +8598,25 @@ public final class MainActivity extends Activity {
         if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
             quickThingBatchDialog.dismiss();
 
+        boolean nfcReady=nfcAdapter!=null&&nfcAdapter.isEnabled();
+        if(nfcReady) {
+            pendingStorageDestinationItemId=id;
+            disableNfcReaderMode();
+            if(!enableNfcReaderMode())nfcReady=false;
+        }
+
         LinearLayout actions=new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
         actions.setPadding(dp(18),dp(10),dp(18),dp(10));
         actions.addView(storageKindText("thing",item.name,18,true));
-        actions.addView(text("Wybierz pudełko albo miejsce. Po zapisie EDHOME "
-            +"od razu przejdzie do zdjęcia następnej rzeczy.",13,false));
+        TextView state=text(nfcReady
+            ?"NFC aktywne — przyłóż tag pudełka albo miejsca."
+            :nfcAdapter==null
+                ?"Ten telefon nie ma NFC. Wybierz QR albo ręcznie."
+                :"NFC jest wyłączone. Wybierz QR/ręcznie albo włącz NFC.",
+            13,nfcReady);
+        state.setTextColor(nfcReady?accent:subdued);
+        actions.addView(state);
 
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Szybkie dodawanie • położenie")
@@ -8561,18 +8625,35 @@ public final class MainActivity extends Activity {
             .create();
         quickThingBatchDialog=dialog;
 
-        smallButton(actions,"NFC • dotknij pudełka lub miejsca",()->
-            beginStorageDestinationNfc(id));
-        smallButton(actions,"QR • zeskanuj pudełko lub miejsce",()->
-            beginStorageDestinationQr(id));
-        smallButton(actions,"Ręcznie • wybierz z listy",()->
-            showQuickThingBatchManualDestination(id));
-        smallButton(actions,"Pomiń położenie",()->
-            quickThingBatchAdvance(id,"skip"));
-        smallButton(actions,"Zakończ serię",this::quickThingBatchFinish);
+        smallButton(actions,"QR • zeskanuj pudełko lub miejsce",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            beginStorageDestinationQr(id);
+        });
+        smallButton(actions,"Ręcznie • wybierz z listy",()->{
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            showQuickThingBatchManualDestination(id);
+        });
+        if(!nfcReady&&nfcAdapter!=null) {
+            smallButton(actions,"Włącz / ustaw NFC",()->openNfcPhoneSettings());
+        }
+        smallButton(actions,"Pomiń położenie",()->{
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            quickThingBatchAdvance(id,"skip");
+        });
+        smallButton(actions,"Zakończ serię",()->{
+            pendingStorageDestinationItemId=null;
+            refreshNfcReaderMode();
+            quickThingBatchFinish();
+        });
         lightDialogForm(actions);
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
+        DiagnosticLog.event("STORAGE_QUICK_BATCH_NFC_AUTO_WAITING","id="+id);
     }
 
     private void showQuickThingBatchManualDestination(long itemId) {
@@ -8611,17 +8692,44 @@ public final class MainActivity extends Activity {
         if(quickThingBatchDialog!=null&&quickThingBatchDialog.isShowing())
             quickThingBatchDialog.dismiss();
         quickThingBatchDialog=null;
+        pendingStorageDestinationItemId=null;
+        refreshNfcReaderMode();
         DiagnosticLog.event("STORAGE_QUICK_BATCH_ITEM_DONE",
             "id="+id+" source="+source);
         quickThingBatchCurrentId=0L;
         quickThingBatchCounter++;
-        root.postDelayed(this::quickThingBatchNext,180L);
+
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(18),dp(12),dp(18),dp(12));
+        actions.addView(text("Rzecz zapisana. Co dalej?",15,true));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie")
+            .setView(actions)
+            .setCancelable(false)
+            .create();
+        quickThingBatchDialog=dialog;
+        smallButton(actions,"＋ Dodaj następną rzecz",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchNext();
+        });
+        smallButton(actions,"Zakończ serię",()->{
+            dialog.dismiss();
+            quickThingBatchDialog=null;
+            quickThingBatchFinish();
+        });
+        lightDialogForm(actions);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
     }
 
     private void quickThingBatchFinish() {
         int added=quickThingBatchAdded;
         long current=quickThingBatchCurrentId;
         quickThingBatchActive=false;
+        quickThingBatchDraftPhoto=false;
+        quickThingBatchPendingThumbnail=null;
         quickThingBatchCurrentId=0L;
         quickThingBatchCounter=0;
         quickThingBatchAdded=0;
@@ -8634,6 +8742,7 @@ public final class MainActivity extends Activity {
         if(storageDestinationNfcDialog!=null&&storageDestinationNfcDialog.isShowing())
             storageDestinationNfcDialog.dismiss();
         storageDestinationNfcDialog=null;
+        cleanupStorageCameraTemp();
         refreshNfcReaderMode();
         render();
         DiagnosticLog.event("STORAGE_QUICK_BATCH_FINISHED","count="+added);
@@ -14625,12 +14734,21 @@ public final class MainActivity extends Activity {
         if(requestCode!=STORAGE_CAMERA_PERMISSION)return;
         boolean granted=grantResults.length>0
             &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if(quickThingBatchDraftPhoto) {
+            if(granted)launchQuickThingBatchDraftCamera();
+            else {
+                quickThingBatchDraftPhoto=false;
+                alert("Aby szybko dodać rzecz, zezwól EDHOME na użycie aparatu. "
+                    +"Rzecz nie została utworzona.");
+                quickThingBatchFinish();
+            }
+            return;
+        }
         if(granted)launchStorageThumbnailCamera();
         else {
             long id=pendingStorageThumbnailId;
             pendingStorageThumbnailId=0;
-            alert("Aby zrobić zdjęcie aparatem, zezwól EDHOME na użycie aparatu. "
-                +"Możesz kontynuować bez zdjęcia.");
+            alert("Aby zrobić zdjęcie aparatem, zezwól EDHOME na użycie aparatu.");
             continueQuickThingBatchAfterPhoto(id);
         }
     }
@@ -14857,11 +14975,33 @@ public final class MainActivity extends Activity {
             long id=pendingStorageThumbnailId;
             Uri photo=pendingStorageCameraUri;
             java.io.File file=pendingStorageCameraFile;
+            boolean quickDraft=quickThingBatchDraftPhoto;
             pendingStorageThumbnailId=0;
             pendingStorageCameraUri=null;
             pendingStorageCameraFile=null;
+            quickThingBatchDraftPhoto=false;
             try {
-                if(result==RESULT_OK&&id>0) {
+                if(quickDraft) {
+                    if(result!=RESULT_OK) {
+                        DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_CANCELLED");
+                        if(file!=null&&file.exists())file.delete();
+                        new AlertDialog.Builder(this)
+                            .setTitle("Zdjęcie anulowane")
+                            .setMessage("Rzecz nie została utworzona.")
+                            .setNegativeButton("Zakończ serię",(d,w)->
+                                quickThingBatchFinish())
+                            .setPositiveButton("Zrób zdjęcie ponownie",(d,w)->
+                                takeQuickThingBatchDraftPhoto())
+                            .show();
+                        return;
+                    }
+                    if(photo==null||file==null||!file.exists()||file.length()<4)
+                        throw new IllegalArgumentException(
+                            "Aparat nie zapisał pełnego zdjęcia.");
+                    quickThingBatchPendingThumbnail=StorageThumbs.compress(
+                        getContentResolver(),photo);
+                    DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_STAGED");
+                } else if(result==RESULT_OK&&id>0) {
                     if(photo==null||file==null||!file.exists()||file.length()<4)
                         throw new IllegalArgumentException(
                             "Aparat nie zapisał pełnego zdjęcia. "
@@ -14874,10 +15014,17 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
                 alert(error instanceof IllegalArgumentException
                     ?error.getMessage():"Nie udało się zapisać miniatury.");
+                if(quickDraft) {
+                    if(file!=null&&file.exists())file.delete();
+                    quickThingBatchPendingThumbnail=null;
+                    quickThingBatchFinish();
+                    return;
+                }
             } finally {
                 if(file!=null&&file.exists())file.delete();
             }
-            continueQuickThingBatchAfterPhoto(id);
+            if(quickDraft)quickThingBatchAskDraftName();
+            else continueQuickThingBatchAfterPhoto(id);
             return;
         }
         if (request == IMPORT_STORAGE_THUMBNAIL) {

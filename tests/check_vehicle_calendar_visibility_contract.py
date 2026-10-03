@@ -42,6 +42,12 @@ assert "fullCalendarMonth" in main
 assert "Gravity.BOTTOM | Gravity.RIGHT" in main
 assert "calendarMonthFrame.addView(add, addParams)" in main
 assert "selectedCard = card()" not in main
+assert "weekdayHeadings" in main
+assert 'headingIndex==6 ? sundayColor : subdued' in main
+assert "isSunday = day.getDayOfWeek()==java.time.DayOfWeek.SUNDAY" in main
+assert "(isSunday ? sundayColor : ink)" in main
+assert "isSelected ? skin.iconBacking : surface" not in main
+assert "target.atDay(wantedDay)" not in main
 assert 'text("‹  przesuń miesiąc palcem  ›"' not in main
 for token in (
     "private void renderCalendarMonth(YearMonth month, LocalDate selected)",
