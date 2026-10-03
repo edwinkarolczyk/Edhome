@@ -5509,6 +5509,8 @@ public final class EdhomeDesktop extends JFrame {
         try {
             if ("tasks".equals(tableName)) {
                 removeRowsByLong("task_rotation_members", "task_id", id);
+                removeRowsByLong("project_task_dependencies", "task_id", id);
+                removeRowsByLong("project_task_dependencies", "depends_on_task_id", id);
                 table("tasks").remove(row);
             } else if ("pantry".equals(tableName)) {
                 if (hasOpenAuditSession())
@@ -6639,6 +6641,9 @@ public final class EdhomeDesktop extends JFrame {
             if ("task_rotation_members".equals(table))
                 return canonicalId(row.get("task_id")) + ":"
                     + canonicalId(row.get("member_id"));
+            if ("project_task_dependencies".equals(table))
+                return canonicalId(row.get("task_id")) + ":"
+                    + canonicalId(row.get("depends_on_task_id"));
             if ("pantry_packages".equals(table))
                 return canonicalId(row.get("pantry_id"));
             return canonicalId(row.get("id"));
