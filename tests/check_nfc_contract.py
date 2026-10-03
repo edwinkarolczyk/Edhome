@@ -41,7 +41,7 @@ for token in (
     'disableNfcReaderMode();',
     'if(enableNfcReaderMode())',
     'if ("scanner".equals(destination)) armScannerNfc();',
-    'scannerNfcStatus="NFC aktywne — przyłóż naklejkę albo brelok."',
+    'scannerNfcStatus="NFC aktywne tylko w EDHOME — przyłóż naklejkę albo brelok."',
     'scannerNfcStatus="✓ Odczytano NFC • "+NfcLinkStore.shortUid(uid)',
     'nfcState.addView(text(scannerNfcStatus, 15, true));',
 ):
