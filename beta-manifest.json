@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 183,
-  "versionName": "0.7.4.42",
-  "changelog": "EDHOME 0.7.4.42 — Beta. PayCheck: stałe pozycje przechodzą cyklicznie, raty mogą mieć miesiąc końcowy, a po potwierdzeniu transakcji EDHOME proponuje tylko mocne, jednoznaczne dopasowanie do Budżetu miesiąca; nic nie księguje automatycznie. Aktualizacje: nowy ekran QR do pobrania Beta i Stable. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.42/edhome-beta.apk",
-  "sha256": "752a22e30253b3c9b8c5accb78898f987a914c0109672fbf00f67c4960c545bc"
+  "versionCode": 184,
+  "versionName": "0.7.4.43",
+  "changelog": "EDHOME 0.7.4.43 — Beta. Projekty: Start/Stop pracy przy czynności, historia sesji, automatyczne odejmowanie przepracowanego czasu od planu, widok plan/wykonano/zostało/przekroczenie oraz minimum 30 min dla czynności projektowej. Planer używa czasu pozostałego. SQLite v43, backup i synchronizacja LAN obejmują sesje pracy. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.43/edhome-beta.apk",
+  "sha256": "2e33195cbe69377c52c2f4e58909a9bccbcc773bbdfb7842b6ed085e1c5b9cdd"
 }
