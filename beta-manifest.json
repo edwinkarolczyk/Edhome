@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 182,
-  "versionName": "0.7.4.41",
-  "changelog": "EDHOME 0.7.4.41 — Beta. PayCheck: nazwa sekcji ujednolicona do „Budżet miesiąca” na Androidzie i Desktopie. Miesięczny plan wpływów i wydatków, stałe lub zmienne kwoty, cykle oraz wykonanie wyłącznie z potwierdzonych transakcji pozostają bez zmian. Prywatny sejf zachowuje hasło 5–64 znaki. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.41/edhome-beta.apk",
-  "sha256": "b2c6059a5280cd107e3a7059ad7d4cf33e56f0b3eb65e11e848b9e783b420e98"
+  "versionCode": 183,
+  "versionName": "0.7.4.42",
+  "changelog": "EDHOME 0.7.4.42 — Beta. PayCheck: stałe pozycje przechodzą cyklicznie, raty mogą mieć miesiąc końcowy, a po potwierdzeniu transakcji EDHOME proponuje tylko mocne, jednoznaczne dopasowanie do Budżetu miesiąca; nic nie księguje automatycznie. Aktualizacje: nowy ekran QR do pobrania Beta i Stable. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.42/edhome-beta.apk",
+  "sha256": "752a22e30253b3c9b8c5accb78898f987a914c0109672fbf00f67c4960c545bc"
 }
