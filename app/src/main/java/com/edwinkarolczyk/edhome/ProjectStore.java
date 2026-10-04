@@ -124,14 +124,6 @@ final class ProjectStore {
             +"ON project_task_work_sessions(task_id,id)");
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS project_task_work_sessions_active_idx "
             +"ON project_task_work_sessions(task_id) WHERE ended_at IS NULL");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS project_task_min_duration_insert "
-            +"BEFORE INSERT ON tasks WHEN NEW.project_id IS NOT NULL "
-            +"AND NEW.duration_minutes<30 BEGIN "
-            +"SELECT RAISE(ABORT,'project task minimum 30 minutes'); END");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS project_task_min_duration_update "
-            +"BEFORE UPDATE OF project_id,duration_minutes ON tasks "
-            +"WHEN NEW.project_id IS NOT NULL AND NEW.duration_minutes<30 BEGIN "
-            +"SELECT RAISE(ABORT,'project task minimum 30 minutes'); END");
     }
 
     static Project find(SQLiteDatabase db,long id) {
