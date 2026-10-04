@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 181,
-  "versionName": "0.7.4.40",
-  "changelog": "EDHOME 0.7.4.40 — Beta. PayCheck: miesięczny plan wpływów i wydatków, stałe lub zmienne kwoty, cykle, prywatny szyfrowany plan oraz wykonanie liczone wyłącznie z potwierdzonych transakcji. Plan nie zmienia salda. SQLite pozostaje v41. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.40/edhome-beta.apk",
-  "sha256": "3746b9af7de450d8f012640ca776446a4de0850cd4cb2a3d9aed95cd5001dca6"
+  "versionCode": 182,
+  "versionName": "0.7.4.41",
+  "changelog": "EDHOME 0.7.4.41 — Beta. PayCheck: nazwa sekcji ujednolicona do „Budżet miesiąca” na Androidzie i Desktopie. Miesięczny plan wpływów i wydatków, stałe lub zmienne kwoty, cykle oraz wykonanie wyłącznie z potwierdzonych transakcji pozostają bez zmian. Prywatny sejf zachowuje hasło 5–64 znaki. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.41/edhome-beta.apk",
+  "sha256": "b2c6059a5280cd107e3a7059ad7d4cf33e56f0b3eb65e11e848b9e783b420e98"
 }
