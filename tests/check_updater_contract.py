@@ -2,6 +2,7 @@
 """Beta installer must be single-flight, retryable and poll modestly."""
 from pathlib import Path
 src=Path("app/src/main/java/com/edwinkarolczyk/edhome/BetaUpdater.java").read_text(encoding="utf-8")
+main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 for token in (
  "AUTO_CHECK_MS = 15L * 60L * 1000L;",
  "now - lastAutomaticCheckMs >= AUTO_CHECK_MS",
@@ -18,4 +19,15 @@ for token in (
  assert token in src, token
 assert src.count("check(false);")==1
 assert src.count("installerStartedFor = apk;")==1
-print("Updater single-flight, explicit retry and throttle: PASS")
+for token in (
+    'QR Beta /\\nStable',
+    'showUpdateDownloadQrCodes',
+    'releases/download/beta-v',
+    'edhome-beta.apk',
+    'https://play.google.com/store/apps/details',
+    'id=com.edwinkarolczyk.edhome',
+    'QR pobierania EDHOME Beta',
+    'QR pobierania EDHOME Stable',
+):
+    assert token in main, token
+print("Updater single-flight, explicit retry, throttle and Beta/Stable QR: PASS")
