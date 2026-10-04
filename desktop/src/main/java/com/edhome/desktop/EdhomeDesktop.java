@@ -759,7 +759,7 @@ public final class EdhomeDesktop extends JFrame {
         buttons.setOpaque(false);
         JButton importBank = actionButton("＋ Import banku");
         JButton queue = actionButton("Banki i potwierdzenia");
-        JButton futureBudget = actionButton("Budżet przyszły");
+        JButton futureBudget = actionButton("Budżet miesiąca");
         JButton analysis = actionButton("Analiza 12 mies.");
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
