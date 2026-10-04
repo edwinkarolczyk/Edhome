@@ -5203,7 +5203,9 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(taskId)})) {
                 if(!c.moveToFirst())continue;
                 String taskName=c.getString(0);
-                int minutes=c.getInt(1);
+                int plannedMinutes=c.getInt(1);
+                int minutes=ProjectStore.remainingMinutes(
+                    db.getReadableDatabase(),taskId,plannedMinutes);
                 long taskProject=c.getLong(3);
                 ProjectStore.Project owningProject=ProjectStore.find(
                     db.getReadableDatabase(),taskProject);
@@ -5211,6 +5213,12 @@ public final class MainActivity extends Activity {
                     ?(owningProject==null?project.assigneeId:owningProject.assigneeId)
                     :Long.valueOf(c.getLong(2));
                 String prefix=projectPath(taskProject)+" → "+taskName;
+                if(minutes<=0) {
+                    lines.add("• "+prefix
+                        +" — planowany czas wykorzystany; oznacz wykonanie albo "
+                        +"kontynuuj pomiar jako przekroczenie");
+                    continue;
+                }
                 if(member==null) {
                     lines.add("• "+prefix+" — brak wykonawcy");
                     continue;
@@ -18420,6 +18428,8 @@ public final class MainActivity extends Activity {
         void completeTask(long id) {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
+            if(ProjectStore.activeWorkStartedAt(database,id)!=null)
+                ProjectStore.stopWork(database,id);
             try (Cursor cursor = database.rawQuery(
                     "SELECT title,done,due_date,repeat_rule,repeat_every,assignee_id "
                     + "FROM tasks WHERE id=?",
