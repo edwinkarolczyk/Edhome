@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 180,
-  "versionName": "0.7.4.39",
-  "changelog": "EDHOME 0.7.4.39 — Beta. Projekty: podprojekty, czynności do 10 h, trudność względna 1–5, zależności, zasoby Rzeczy/Pudełka, koszty oraz planowanie całego drzewa projektu. SQLite v41, backup i synchronizacja zależności. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.39/edhome-beta.apk",
-  "sha256": "ae64f2ef6780cf1cfe5c752e73eba25d5d1209a7350e421b96cb4c563e28c3df"
+  "versionCode": 181,
+  "versionName": "0.7.4.40",
+  "changelog": "EDHOME 0.7.4.40 — Beta. PayCheck: miesięczny plan wpływów i wydatków, stałe lub zmienne kwoty, cykle, prywatny szyfrowany plan oraz wykonanie liczone wyłącznie z potwierdzonych transakcji. Plan nie zmienia salda. SQLite pozostaje v41. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.40/edhome-beta.apk",
+  "sha256": "3746b9af7de450d8f012640ca776446a4de0850cd4cb2a3d9aed95cd5001dca6"
 }
