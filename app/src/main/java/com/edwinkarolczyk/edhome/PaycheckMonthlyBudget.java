@@ -13,7 +13,9 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -26,6 +28,7 @@ import java.util.UUID;
 final class PaycheckMonthlyBudget {
     static final String PREF_KEY = "paycheck_monthly_budget_v1";
     static final int MAX_ITEMS = 200;
+    private static final int MAX_MATCHES_PER_ITEM = 2000;
     private static final int[] ALLOWED_CYCLES = {0, 1, 2, 3, 6, 12};
 
     static final class Item {
@@ -39,6 +42,7 @@ final class PaycheckMonthlyBudget {
         String endMonth;
         int cycleMonths;
         boolean active;
+        final List<String> matchedOperationIds = new ArrayList<>();
     }
 
     static final class Totals {
@@ -97,6 +101,41 @@ final class PaycheckMonthlyBudget {
         return removed;
     }
 
+    static boolean match(SharedPreferences prefs, String itemId,
+            String operationId) throws Exception {
+        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowa transakcja.");
+        List<Item> items = load(prefs);
+        Item target = null;
+        boolean changed = false;
+        for (Item item : items) {
+            if (item.id.equals(itemId)) target = item;
+            if (item.matchedOperationIds.remove(operationId)) changed = true;
+        }
+        if (target == null)
+            throw new IllegalArgumentException("Pozycja budżetu już nie istnieje.");
+        if (!target.matchedOperationIds.contains(operationId)) {
+            if (target.matchedOperationIds.size() >= MAX_MATCHES_PER_ITEM)
+                throw new IllegalArgumentException("Za dużo realizacji tej pozycji budżetu.");
+            target.matchedOperationIds.add(operationId);
+            changed = true;
+        }
+        if (changed) save(prefs, items);
+        return changed;
+    }
+
+    static boolean unmatch(SharedPreferences prefs, String operationId)
+            throws Exception {
+        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
+            return false;
+        List<Item> items = load(prefs);
+        boolean changed = false;
+        for (Item item : items)
+            if (item.matchedOperationIds.remove(operationId)) changed = true;
+        if (changed) save(prefs, items);
+        return changed;
+    }
+
     static String serialized(SharedPreferences prefs) throws Exception {
         return serialize(load(prefs));
     }
@@ -127,6 +166,43 @@ final class PaycheckMonthlyBudget {
         return totals;
     }
 
+    /**
+     * Suggest only a strong, unique match. The caller still asks the user.
+     * Fixed items need a very similar amount; estimates allow a wider range.
+     */
+    static Item suggest(List<Item> items, YearMonth month, String kind,
+            String category, long amountGrosz) {
+        Item best = null;
+        int bestScore = -1;
+        int secondScore = -1;
+        for (Item item : activeFor(items, month)) {
+            if (!kind.equals(item.kind)) continue;
+            long diff = Math.abs(item.amountGrosz - amountGrosz);
+            long tolerance = "estimate".equals(item.amountMode)
+                ? Math.max(500L, item.amountGrosz * 35L / 100L)
+                : Math.max(100L, item.amountGrosz * 5L / 100L);
+            if (diff > tolerance) continue;
+
+            int score = 0;
+            if (diff == 0L) score += 100;
+            else if ("estimate".equals(item.amountMode)) score += 55;
+            else score += 75;
+            if (item.category.equals(category)) score += 35;
+            if (item.cycleMonths > 0) score += 10;
+
+            if (score > bestScore) {
+                secondScore = bestScore;
+                bestScore = score;
+                best = item;
+            } else if (score > secondScore) {
+                secondScore = score;
+            }
+        }
+        if (best == null || bestScore < 70) return null;
+        if (secondScore >= bestScore - 10) return null;
+        return best;
+    }
+
     static Totals sharedActual(SQLiteDatabase db, YearMonth month, String status) {
         Totals totals = new Totals();
         try (Cursor cursor = db.rawQuery(
@@ -145,6 +221,27 @@ final class PaycheckMonthlyBudget {
         return totals;
     }
 
+    static long sharedMatchedActual(SQLiteDatabase db, Item item, YearMonth month) {
+        long total = 0L;
+        for (String operationId : item.matchedOperationIds) {
+            try (Cursor cursor = db.rawQuery(
+                    "SELECT kind,amount_grosz,created_at,statement_date,status "
+                    + "FROM paycheck_transactions "
+                    + "WHERE scope='shared' AND operation_id=?",
+                    new String[]{operationId})) {
+                if (!cursor.moveToFirst()
+                        || !"confirmed".equals(cursor.getString(4))
+                        || !item.kind.equals(cursor.getString(0)))
+                    continue;
+                YearMonth rowMonth = transactionMonth(
+                    cursor.getLong(2), cursor.isNull(3) ? null : cursor.getString(3));
+                if (month.equals(rowMonth))
+                    total = Math.addExact(total, cursor.getLong(1));
+            }
+        }
+        return total;
+    }
+
     static Totals privateActual(List<PrivatePaycheckVault.Entry> entries,
             YearMonth month, String status) {
         Totals totals = new Totals();
@@ -158,6 +255,25 @@ final class PaycheckMonthlyBudget {
             else totals.expense += entry.amountGrosz;
         }
         return totals;
+    }
+
+    static long privateMatchedActual(List<PrivatePaycheckVault.Entry> entries,
+            Item item, YearMonth month) {
+        if (item.matchedOperationIds.isEmpty()) return 0L;
+        Set<String> wanted = new HashSet<>(item.matchedOperationIds);
+        long total = 0L;
+        for (PrivatePaycheckVault.Entry entry : entries) {
+            if (!wanted.contains(entry.operationId)
+                    || !"confirmed".equals(entry.status)
+                    || !item.kind.equals(entry.kind))
+                continue;
+            YearMonth rowMonth = YearMonth.from(
+                Instant.ofEpochMilli(entry.createdAt)
+                    .atZone(ZoneId.systemDefault()).toLocalDate());
+            if (month.equals(rowMonth))
+                total = Math.addExact(total, entry.amountGrosz);
+        }
+        return total;
     }
 
     static String itemLabel(Item item) {
@@ -190,6 +306,10 @@ final class PaycheckMonthlyBudget {
         json.put("endMonth", item.endMonth);
         json.put("cycleMonths", item.cycleMonths);
         json.put("active", item.active);
+        JSONArray matches = new JSONArray();
+        for (String operationId : item.matchedOperationIds)
+            matches.put(operationId);
+        json.put("matches", matches);
         return json;
     }
 
@@ -205,22 +325,34 @@ final class PaycheckMonthlyBudget {
         item.endMonth = json.optString("endMonth", "");
         item.cycleMonths = json.getInt("cycleMonths");
         item.active = !json.has("active") || json.getBoolean("active");
+        JSONArray matches = json.optJSONArray("matches");
+        if (matches != null) {
+            if (matches.length() > MAX_MATCHES_PER_ITEM)
+                throw new IllegalArgumentException("Za dużo realizacji pozycji budżetu.");
+            for (int i = 0; i < matches.length(); i++)
+                item.matchedOperationIds.add(matches.getString(i));
+        }
         validate(item);
         return item;
     }
 
     private static List<Item> parseSerialized(String json) throws Exception {
-        if (json == null || json.length() > 200000 || json.indexOf('\0') >= 0)
+        if (json == null || json.length() > 400000 || json.indexOf('\0') >= 0)
             throw new IllegalArgumentException("Nieprawidłowy plan PayCheck.");
         JSONArray array = new JSONArray(json);
         if (array.length() > MAX_ITEMS)
             throw new IllegalArgumentException("Za dużo pozycji w planie PayCheck.");
         List<Item> result = new ArrayList<>();
-        java.util.HashSet<String> ids = new java.util.HashSet<>();
+        Set<String> ids = new HashSet<>();
+        Set<String> matched = new HashSet<>();
         for (int i = 0; i < array.length(); i++) {
             Item item = fromJson(array.getJSONObject(i));
             if (!ids.add(item.id))
                 throw new IllegalArgumentException("Powtórzona pozycja planu PayCheck.");
+            for (String operationId : item.matchedOperationIds)
+                if (!matched.add(operationId))
+                    throw new IllegalArgumentException(
+                        "Jedna transakcja nie może realizować dwóch pozycji budżetu.");
             result.add(item);
         }
         return result;
@@ -250,6 +382,16 @@ final class PaycheckMonthlyBudget {
                     || "estimate".equals(item.amountMode))
                 || !allowedCycle(item.cycleMonths))
             throw new IllegalArgumentException("Nieprawidłowa pozycja planu PayCheck.");
+        Set<String> matched = new HashSet<>();
+        if (item.matchedOperationIds.size() > MAX_MATCHES_PER_ITEM)
+            throw new IllegalArgumentException("Za dużo realizacji pozycji budżetu.");
+        for (String operationId : item.matchedOperationIds)
+            if (operationId == null
+                    || !operationId.matches("[0-9a-fA-F-]{36}")
+                    || !matched.add(operationId))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowe powiązanie transakcji z budżetem.");
+
         YearMonth start;
         try {
             start = YearMonth.parse(item.startMonth);
@@ -285,7 +427,7 @@ final class PaycheckMonthlyBudget {
         return offset >= 0 && offset % item.cycleMonths == 0;
     }
 
-    private static YearMonth transactionMonth(long createdAt, String statementDate) {
+    static YearMonth transactionMonth(long createdAt, String statementDate) {
         if (statementDate != null && !statementDate.isBlank()) {
             try {
                 return YearMonth.from(LocalDate.parse(statementDate));
