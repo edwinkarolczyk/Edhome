@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 184,
-  "versionName": "0.7.4.43",
-  "changelog": "EDHOME 0.7.4.43 — Beta. Projekty: Start/Stop pracy przy czynności, historia sesji, automatyczne odejmowanie przepracowanego czasu od planu, widok plan/wykonano/zostało/przekroczenie oraz minimum 30 min dla czynności projektowej. Planer używa czasu pozostałego. SQLite v43, backup i synchronizacja LAN obejmują sesje pracy. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.43/edhome-beta.apk",
-  "sha256": "2e33195cbe69377c52c2f4e58909a9bccbcc773bbdfb7842b6ed085e1c5b9cdd"
+  "versionCode": 185,
+  "versionName": "0.7.4.44",
+  "changelog": "EDHOME 0.7.4.44 — Beta. Projekty: Start/Stop pracy przy czynności, historia sesji, automatyczne odejmowanie przepracowanego czasu od planu, widok plan/wykonano/zostało/przekroczenie oraz minimum 20 min dla czynności projektowej. Planer używa czasu pozostałego. SQLite v43, backup i synchronizacja LAN obejmują sesje pracy. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.44/edhome-beta.apk",
+  "sha256": "e44f60f68c16ccd2b7698fbc914ee3f357a023a28ee68fbd168a4acb52e82449"
 }
