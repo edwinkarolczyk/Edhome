@@ -393,6 +393,13 @@ final class SyncRecordStore {
                 throw new IllegalArgumentException("Nieprawidłowy typ pola " + column + ".");
             }
         }
+        if ("tasks".equals(table)) {
+            Long projectId=values.getAsLong("project_id");
+            Long minutes=values.getAsLong("duration_minutes");
+            if(projectId!=null && (minutes==null || minutes<30))
+                throw new IllegalArgumentException(
+                    "Czynność projektowa musi mieć co najmniej 30 minut.");
+        }
         return values;
     }
 
