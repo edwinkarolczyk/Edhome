@@ -208,6 +208,7 @@ public final class MainActivity extends Activity {
         "Niski", "Normalny", "Wysoki", "Pilny"
     };
     private static final int MIN_TASK_MINUTES = 1;
+    private static final int PROJECT_MIN_TASK_MINUTES = 30;
     private static final int MAX_TASK_MINUTES = 600;
     private int bg, surface, ink, subdued, accent;
     private UiSkin skin;
@@ -4779,12 +4780,12 @@ public final class MainActivity extends Activity {
             .setView(form).setCancelable(false).create();
         Runnable save=()->{
             Integer minutes=TaskRules.minutesFromHours(hours.getText().toString(),
-                MIN_TASK_MINUTES,MAX_TASK_MINUTES);
+                PROJECT_MIN_TASK_MINUTES,MAX_TASK_MINUTES);
             if(name.getText().toString().trim().isEmpty()) {
                 name.setError("Podaj nazwę.");return;
             }
             if(minutes==null) {
-                hours.setError("Podaj czas w godzinach, maks. 10 h.");return;
+                hours.setError("Czynność projektowa: minimum 0,5 h, maksimum 10 h.");return;
             }
             String dueValue=due.getText().toString().trim();
             String remind=reminder.getText().toString().trim();
@@ -5626,7 +5627,7 @@ public final class MainActivity extends Activity {
         duration.setSingleLine(true);
         duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        duration.setHint("Np. 0,5 • 1 • 1,5 • maks. 8 h");
+        duration.setHint("Np. 0,5 • 1 • 1,5 • maks. 10 h");
         duration.setText(TaskRules.hoursText(
             Integer.parseInt(currentPlanning[1])));
         duration.setTextColor(ink);
@@ -17619,7 +17620,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 42);
+            super(context, "edhome-beta-preview.db", null, 43);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -17669,7 +17670,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 42) {
+            if (oldVersion < 1 || newVersion > 43) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -17901,6 +17902,10 @@ public final class MainActivity extends Activity {
                 UserProfileStore.create(database);
                 UserProfileStore.ensureAll(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_41_TO_42_USER_PROFILES");
+            }
+            if(oldVersion < 43) {
+                ProjectStore.upgrade43(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_42_TO_43_PROJECT_WORK_SESSIONS");
             }
             if(newVersion >= 36) {
                 try {
@@ -18165,8 +18170,12 @@ public final class MainActivity extends Activity {
                     "Aktualny wykonawca musi należeć do rotacji.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
-            if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
-                throw new IllegalArgumentException("Czas musi wynosić 1–600 minut.");
+            int minimumMinutes=projectId==null
+                ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
+            if (durationMinutes < minimumMinutes || durationMinutes > MAX_TASK_MINUTES)
+                throw new IllegalArgumentException(projectId==null
+                    ?"Czas musi wynosić 1–600 minut."
+                    :"Czynność projektowa musi mieć 30–600 minut.");
             ContentValues values = new ContentValues();
             values.put("priority", priority);
             values.put("duration_minutes", durationMinutes);
@@ -18384,6 +18393,8 @@ public final class MainActivity extends Activity {
                 database.delete("project_task_dependencies",
                     "task_id=? OR depends_on_task_id=?",
                     new String[]{Long.toString(id),Long.toString(id)});
+                database.delete("project_task_work_sessions", "task_id=?",
+                    new String[]{Long.toString(id)});
                 database.delete("tasks", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
             } finally {
