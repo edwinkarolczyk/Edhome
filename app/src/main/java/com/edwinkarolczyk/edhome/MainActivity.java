@@ -12640,6 +12640,8 @@ public final class MainActivity extends Activity {
                 try {
                     int removed=PaycheckStore.deleteMany(
                         db.getWritableDatabase(),selected);
+                    for(String operationId:selected)
+                        PaycheckMonthlyBudget.unmatch(prefs,operationId);
                     DiagnosticLog.event("PAYCHECK_SHARED_BULK_DELETED");
                     render();
                     alert("Usunięto wpisów PayCheck: "+removed+".");
@@ -12663,6 +12665,7 @@ public final class MainActivity extends Activity {
                     String result=PaycheckStore.delete(
                         db.getWritableDatabase(),operationId);
                     if("DELETED".equals(result)) {
+                        PaycheckMonthlyBudget.unmatch(prefs,operationId);
                         DiagnosticLog.event("PAYCHECK_SHARED_DELETED");
                         render();
                     } else alert("Wpis już nie istnieje.");
@@ -12984,13 +12987,39 @@ public final class MainActivity extends Activity {
                 return;
             }
             String[] labels = new String[items.size()];
+            YearMonth shownMonth=YearMonth.now();
+            java.util.List<PrivatePaycheckVault.Entry> privateEntries=
+                privateScope
+                    ? PrivatePaycheckVault.entries(
+                        this,privatePaycheckSession)
+                    : java.util.Collections.emptyList();
             for (int i = 0; i < items.size(); i++) {
                 PaycheckMonthlyBudget.Item item = items.get(i);
                 String range = item.startMonth
                     + (item.endMonth == null || item.endMonth.isBlank()
                         ? "" : " → " + item.endMonth);
+                boolean thisMonth=!PaycheckMonthlyBudget.activeFor(
+                    java.util.Collections.singletonList(item),
+                    shownMonth).isEmpty();
+                long actual=thisMonth
+                    ?(privateScope
+                        ?PaycheckMonthlyBudget.privateMatchedActual(
+                            privateEntries,item,shownMonth)
+                        :PaycheckMonthlyBudget.sharedMatchedActual(
+                            db.getReadableDatabase(),item,shownMonth))
+                    :0L;
+                String realization="";
+                if(thisMonth) {
+                    realization=actual==0L
+                        ?"\n"+budgetMonthLabel(shownMonth)+" • oczekuje"
+                        :"\n"+budgetMonthLabel(shownMonth)+" • wykonano "
+                            +MoneyRules.format(actual)
+                            +(actual==item.amountGrosz
+                                ?" ✓"
+                                :" • plan "+MoneyRules.format(item.amountGrosz));
+                }
                 labels[i] = PaycheckMonthlyBudget.itemLabel(item)
-                    + " • " + range;
+                    + " • " + range + realization;
             }
             AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(privateScope
@@ -13144,8 +13173,11 @@ public final class MainActivity extends Activity {
                         String status = PrivatePaycheckVault.add(
                             this, privatePaycheckSession, operationId,
                             type, group, grosz, description);
-                        if ("COMMITTED".equals(status)) render();
-                        else alert("Ta prywatna operacja była już zapisana.");
+                        if ("COMMITTED".equals(status)) {
+                            if(!offerPrivateBudgetMatch(
+                                    operationId,this::render))
+                                render();
+                        } else alert("Ta prywatna operacja była już zapisana.");
                     } catch (Exception error) {
                         alert("Nie zapisano prywatnej transakcji.");
                     }
@@ -13186,7 +13218,11 @@ public final class MainActivity extends Activity {
                                         &&privatePaycheckSession.active()
                                         &&PrivatePaycheckVault.confirmPending(
                                             this,privatePaycheckSession,
-                                            entry.operationId))render();
+                                            entry.operationId)) {
+                                    if(!offerPrivateBudgetMatch(
+                                            entry.operationId,this::render))
+                                        render();
+                                }
                             }catch(Exception error){
                                 alert("Nie potwierdzono prywatnego wpisu.");
                             }
