@@ -11345,6 +11345,7 @@ public final class MainActivity extends Activity {
             + "saldo liczy tylko potwierdzone operacje.");
         title("Saldo potwierdzone wspólne: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
+        sharedMonthlyBudgetBlock();
         Spinner kind=new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList("Wydatek −","Przychód +")));
@@ -12664,6 +12665,278 @@ public final class MainActivity extends Activity {
                 android.view.WindowManager.LayoutParams.FLAG_SECURE);
     }
 
+    private String budgetMonthLabel(YearMonth month) {
+        String name = month.getMonth().getDisplayName(
+            TextStyle.FULL_STANDALONE, new Locale("pl", "PL"));
+        if (!name.isEmpty())
+            name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        return name + " " + month.getYear();
+    }
+
+    private void sharedMonthlyBudgetBlock() {
+        final YearMonth month = YearMonth.now();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> items =
+                PaycheckMonthlyBudget.load(prefs);
+            PaycheckMonthlyBudget.Totals plan =
+                PaycheckMonthlyBudget.planned(items, month);
+            PaycheckMonthlyBudget.Totals confirmed =
+                PaycheckMonthlyBudget.sharedActual(
+                    db.getReadableDatabase(), month, "confirmed");
+            PaycheckMonthlyBudget.Totals pending =
+                PaycheckMonthlyBudget.sharedActual(
+                    db.getReadableDatabase(), month, "pending");
+            title("Budżet miesiąca • " + budgetMonthLabel(month));
+            note("Planowane wpływy: " + MoneyRules.format(plan.income)
+                + " • planowane wydatki: " + MoneyRules.format(plan.expense)
+                + " • plan zostaje: " + MoneyRules.format(plan.net()));
+            note("Potwierdzone transakcje: wpływy "
+                + MoneyRules.format(confirmed.income) + " • wydatki "
+                + MoneyRules.format(confirmed.expense) + " • faktycznie "
+                + MoneyRules.format(confirmed.net()) + ".");
+            if (!pending.empty())
+                note("Czeka na sprawdzenie: wpływy "
+                    + MoneyRules.format(pending.income) + " • wydatki "
+                    + MoneyRules.format(pending.expense)
+                    + ". Te kwoty NIE są jeszcze wykonaniem budżetu.");
+            note("Plan nie zmienia salda. Budżet jest wykonany dopiero przez "
+                + "transakcje potwierdzone po sprawdzeniu banku / wyciągu. "
+                + "Pozycja może mieć stałą kwotę albo zmienną prognozę.");
+            button("📅 Dodaj pozycję planu miesiąca",
+                () -> showBudgetItemDialog(false));
+            button("📋 Pozycje planu • " + items.size(),
+                () -> showBudgetItemsDialog(false));
+        } catch (Exception error) {
+            DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_READ", error);
+            note("Nie udało się odczytać miesięcznego planu PayCheck.");
+        }
+    }
+
+    private void privateMonthlyBudgetBlock(
+            java.util.List<PrivatePaycheckVault.Entry> entries) {
+        final YearMonth month = YearMonth.now();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> items =
+                PrivatePaycheckVault.budgetItems(this, privatePaycheckSession);
+            PaycheckMonthlyBudget.Totals plan =
+                PaycheckMonthlyBudget.planned(items, month);
+            PaycheckMonthlyBudget.Totals confirmed =
+                PaycheckMonthlyBudget.privateActual(entries, month, "confirmed");
+            PaycheckMonthlyBudget.Totals pending =
+                PaycheckMonthlyBudget.privateActual(entries, month, "pending");
+            title("Prywatny budżet miesiąca • " + budgetMonthLabel(month));
+            note("Planowane wpływy: " + MoneyRules.format(plan.income)
+                + " • planowane wydatki: " + MoneyRules.format(plan.expense)
+                + " • plan zostaje: " + MoneyRules.format(plan.net()));
+            note("Potwierdzone prywatne: wpływy "
+                + MoneyRules.format(confirmed.income) + " • wydatki "
+                + MoneyRules.format(confirmed.expense) + " • faktycznie "
+                + MoneyRules.format(confirmed.net()) + ".");
+            if (!pending.empty())
+                note("Prywatne do sprawdzenia: wpływy "
+                    + MoneyRules.format(pending.income) + " • wydatki "
+                    + MoneyRules.format(pending.expense)
+                    + ". Bez wpływu na wykonanie budżetu.");
+            note("Prywatny plan jest szyfrowany w sejfie. Tak samo jak we "
+                + "wspólnym PayCheck, dopiero potwierdzona transakcja jest "
+                + "traktowana jako rzeczywisty wpływ albo wydatek.");
+            button("📅 Dodaj prywatną pozycję planu",
+                () -> showBudgetItemDialog(true));
+            button("📋 Prywatne pozycje planu • " + items.size(),
+                () -> showBudgetItemsDialog(true));
+        } catch (Exception error) {
+            DiagnosticLog.event("PAYCHECK_PRIVATE_BUDGET_READ_FAILED");
+            note("Nie udało się odczytać prywatnego planu miesiąca.");
+        }
+    }
+
+    private void showBudgetItemDialog(boolean privateScope) {
+        if (privateScope && (privatePaycheckSession == null
+                || !privatePaycheckSession.active())) {
+            alert("Odblokuj najpierw prywatny sejf.");
+            return;
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa, np. Prąd / Pensja / Netflix");
+        form.addView(name);
+
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList("Wydatek −", "Przychód +")));
+        form.addView(kind);
+
+        Spinner category = new Spinner(this);
+        category.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        form.addView(category);
+
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota planowana w PLN");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(amount);
+
+        Spinner amountMode = new Spinner(this);
+        amountMode.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "Stała kwota", "Kwota zmienna / prognoza")));
+        form.addView(amountMode);
+
+        Spinner cycle = new Spinner(this);
+        cycle.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "Jednorazowo", "Co miesiąc", "Co 2 miesiące",
+            "Co kwartał", "Co 6 miesięcy", "Co rok")));
+        form.addView(cycle);
+
+        EditText start = new EditText(this);
+        start.setSingleLine(true);
+        start.setHint("Start YYYY-MM");
+        start.setText(YearMonth.now().toString());
+        form.addView(start);
+
+        EditText end = new EditText(this);
+        end.setSingleLine(true);
+        end.setHint("Koniec YYYY-MM (opcjonalnie)");
+        form.addView(end);
+
+        form.addView(text("Stała opłata może mieć stałą kwotę albo zmienną "
+            + "prognozę. Plan sam nie księguje pieniędzy.", 13, false));
+
+        final int[] cycles = {0, 1, 2, 3, 6, 12};
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(privateScope
+                ? "Nowa prywatna pozycja budżetu"
+                : "Nowa pozycja budżetu")
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz plan", null)
+            .create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    try {
+                        long grosz = MoneyRules.parse(
+                            amount.getText().toString());
+                        String itemName = name.getText().toString().trim();
+                        String itemKind = kind.getSelectedItemPosition() == 1
+                            ? "income" : "expense";
+                        String itemCategory = MoneyRules.CATEGORIES[
+                            category.getSelectedItemPosition()];
+                        String mode = amountMode.getSelectedItemPosition() == 1
+                            ? "estimate" : "fixed";
+                        PaycheckMonthlyBudget.Item item =
+                            PaycheckMonthlyBudget.newItem(
+                                itemName, itemKind, itemCategory, grosz, mode,
+                                start.getText().toString().trim(),
+                                end.getText().toString().trim(),
+                                cycles[cycle.getSelectedItemPosition()]);
+                        if (privateScope) {
+                            String result = PrivatePaycheckVault.addBudgetItem(
+                                this, privatePaycheckSession, item);
+                            if (!"COMMITTED".equals(result))
+                                throw new IllegalStateException(
+                                    "Ta pozycja już istnieje.");
+                            DiagnosticLog.event(
+                                "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
+                        } else {
+                            PaycheckMonthlyBudget.add(prefs, item);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
+                        }
+                        dialog.dismiss();
+                        render();
+                    } catch (IllegalArgumentException error) {
+                        amount.setError(error.getMessage());
+                    } catch (Exception error) {
+                        DiagnosticLog.error(
+                            privateScope
+                                ? "PAYCHECK_PRIVATE_BUDGET_ADD"
+                                : "PAYCHECK_SHARED_BUDGET_ADD",
+                            error);
+                        alert("Nie zapisano pozycji budżetu.");
+                    }
+                }));
+        dialog.show();
+        if (privateScope && dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    private void showBudgetItemsDialog(boolean privateScope) {
+        try {
+            final java.util.List<PaycheckMonthlyBudget.Item> items =
+                privateScope
+                    ? PrivatePaycheckVault.budgetItems(
+                        this, privatePaycheckSession)
+                    : PaycheckMonthlyBudget.load(prefs);
+            if (items.isEmpty()) {
+                alert("Brak pozycji planu.");
+                return;
+            }
+            String[] labels = new String[items.size()];
+            for (int i = 0; i < items.size(); i++) {
+                PaycheckMonthlyBudget.Item item = items.get(i);
+                String range = item.startMonth
+                    + (item.endMonth == null || item.endMonth.isBlank()
+                        ? "" : " → " + item.endMonth);
+                labels[i] = PaycheckMonthlyBudget.itemLabel(item)
+                    + " • " + range;
+            }
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(privateScope
+                    ? "Prywatny plan PayCheck"
+                    : "Plan PayCheck")
+                .setItems(labels, (d, which) ->
+                    confirmBudgetItemDelete(privateScope, items.get(which)))
+                .setNegativeButton("Zamknij", null)
+                .create();
+            dialog.show();
+            if (privateScope && dialog.getWindow() != null)
+                dialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        } catch (Exception error) {
+            if (!privateScope)
+                DiagnosticLog.error("PAYCHECK_BUDGET_LIST", error);
+            alert("Nie udało się otworzyć planu budżetu.");
+        }
+    }
+
+    private void confirmBudgetItemDelete(boolean privateScope,
+            PaycheckMonthlyBudget.Item item) {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Usunąć pozycję planu?")
+            .setMessage(PaycheckMonthlyBudget.itemLabel(item)
+                + "\n\nUsuwamy tylko plan. Żadna transakcja PayCheck "
+                + "nie zostanie usunięta ani zmieniona.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Usuń z planu", (d,w) -> {
+                try {
+                    boolean removed = privateScope
+                        ? PrivatePaycheckVault.deleteBudgetItem(
+                            this, privatePaycheckSession, item.id)
+                        : PaycheckMonthlyBudget.delete(prefs, item.id);
+                    if (removed) {
+                        DiagnosticLog.event(privateScope
+                            ? "PAYCHECK_PRIVATE_BUDGET_ITEM_DELETED"
+                            : "PAYCHECK_SHARED_BUDGET_ITEM_DELETED");
+                        render();
+                    }
+                } catch (Exception error) {
+                    alert("Nie udało się usunąć pozycji planu.");
+                }
+            })
+            .create();
+        dialog.show();
+        if (privateScope && dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
     private void privatePaycheck() {
         if (privatePaycheckSession == null || !privatePaycheckSession.active()) {
             go("paycheck");
@@ -12703,6 +12976,7 @@ public final class MainActivity extends Activity {
             return;
         }
         title("Saldo prywatne: " + MoneyRules.format(balance));
+        privateMonthlyBudgetBlock(entries);
         if(pendingPrivateBankHintKey!=null) {
             for(BankNotificationHints.Entry hint:BankNotificationHints.list(this))
                 if(hint.key.equals(pendingPrivateBankHintKey)) {
@@ -12990,7 +13264,7 @@ public final class MainActivity extends Activity {
                     archivePassword.getText().clear();
                     dialog.dismiss();
                     DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORTED");
-                    alert("Import zakończony. Nowe prywatne transakcje: " + imported
+                    alert("Import zakończony. Nowe prywatne wpisy/plany: " + imported
                         + ". Pozostałe operacje nie zostały nadpisane.");
                 } catch (Exception error) {
                     DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORT_REJECTED");
