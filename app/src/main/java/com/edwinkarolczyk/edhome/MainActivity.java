@@ -12437,8 +12437,12 @@ public final class MainActivity extends Activity {
                         statement.evidenceKey,statement.date);
                     if("MATCHED".equals(outcome)){
                         DiagnosticLog.event("PAYCHECK_CSV_MATCHED");
-                        render();
-                        showStatementEntries(rows,bank);
+                        Runnable done=()->{
+                            render();
+                            showStatementEntries(rows,bank);
+                        };
+                        if(!offerSharedBudgetMatch(operationId,done))
+                            done.run();
                     }else if("ALREADY_MATCHED".equals(outcome))
                         alert("Ten wpis jest już uzgodniony.");
                     else alert("Nie uzgodniono: ta transakcja "
@@ -12469,14 +12473,115 @@ public final class MainActivity extends Activity {
                     if ("CONFIRMED".equals(result)) {
                         if(hintKey!=null)BankNotificationHints.remove(this,hintKey);
                         DiagnosticLog.event("PAYCHECK_SHARED_CONFIRMED");
+                        if(!offerSharedBudgetMatch(operationId,this::render))
+                            render();
+                    } else {
+                        alert("Operacja już potwierdzona lub nie istnieje.");
+                        render();
                     }
-                    else alert("Operacja już potwierdzona lub nie istnieje.");
-                    render();
                 } catch (Exception error) {
                     DiagnosticLog.error("PAYCHECK_CONFIRM", error);
                     alert("Nie udało się potwierdzić. Saldo pozostało bez zmian.");
                 }
             }).show();
+    }
+
+    private boolean offerSharedBudgetMatch(String operationId,
+            Runnable done) {
+        try (Cursor tx = db.getReadableDatabase().rawQuery(
+                "SELECT kind,category,amount_grosz,created_at,statement_date,status "
+                + "FROM paycheck_transactions "
+                + "WHERE scope='shared' AND operation_id=?",
+                new String[]{operationId})) {
+            if (!tx.moveToFirst() || !"confirmed".equals(tx.getString(5)))
+                return false;
+            YearMonth month=PaycheckMonthlyBudget.transactionMonth(
+                tx.getLong(3),tx.isNull(4)?null:tx.getString(4));
+            java.util.List<PaycheckMonthlyBudget.Item> items=
+                PaycheckMonthlyBudget.load(prefs);
+            PaycheckMonthlyBudget.Item candidate=
+                PaycheckMonthlyBudget.suggest(items,month,
+                    tx.getString(0),tx.getString(1),tx.getLong(2));
+            if(candidate==null)return false;
+            new AlertDialog.Builder(this)
+                .setTitle("Pasuje do Budżetu miesiąca")
+                .setMessage(MoneyRules.format(tx.getLong(2))
+                    +" wygląda jak „"+candidate.name+"”.\n\n"
+                    +"Plan: "+MoneyRules.format(candidate.amountGrosz)
+                    +" • "+budgetMonthLabel(month)
+                    +"\n\nPrzypisać tę potwierdzoną transakcję? "
+                    +"Nie zmieni to salda drugi raz.")
+                .setNegativeButton("Nie, zostaw poza planem",(d,w)->done.run())
+                .setPositiveButton("Tak, przypisz",(d,w)->{
+                    try {
+                        PaycheckMonthlyBudget.match(
+                            prefs,candidate.id,operationId);
+                        DiagnosticLog.event(
+                            "PAYCHECK_SHARED_BUDGET_MATCHED");
+                    } catch(Exception error) {
+                        DiagnosticLog.error(
+                            "PAYCHECK_SHARED_BUDGET_MATCH",error);
+                        alert("Transakcja została potwierdzona, ale nie "
+                            +"przypisano jej do budżetu.");
+                    }
+                    done.run();
+                }).show();
+            return true;
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_SUGGEST",error);
+            return false;
+        }
+    }
+
+    private boolean offerPrivateBudgetMatch(String operationId,
+            Runnable done) {
+        if(privatePaycheckSession==null
+                || !privatePaycheckSession.active())return false;
+        try {
+            PrivatePaycheckVault.Entry tx=null;
+            java.util.List<PrivatePaycheckVault.Entry> entries=
+                PrivatePaycheckVault.entries(this,privatePaycheckSession);
+            for(PrivatePaycheckVault.Entry entry:entries)
+                if(operationId.equals(entry.operationId)) {
+                    tx=entry;break;
+                }
+            if(tx==null || !"confirmed".equals(tx.status))return false;
+            YearMonth month=YearMonth.from(
+                Instant.ofEpochMilli(tx.createdAt)
+                    .atZone(ZoneId.systemDefault()).toLocalDate());
+            java.util.List<PaycheckMonthlyBudget.Item> items=
+                PrivatePaycheckVault.budgetItems(
+                    this,privatePaycheckSession);
+            PaycheckMonthlyBudget.Item candidate=
+                PaycheckMonthlyBudget.suggest(items,month,
+                    tx.kind,tx.category,tx.amountGrosz);
+            if(candidate==null)return false;
+            final PrivatePaycheckVault.Entry chosenTx=tx;
+            new AlertDialog.Builder(this)
+                .setTitle("Pasuje do prywatnego budżetu")
+                .setMessage(MoneyRules.format(chosenTx.amountGrosz)
+                    +" wygląda jak „"+candidate.name+"”.\n\n"
+                    +"Plan: "+MoneyRules.format(candidate.amountGrosz)
+                    +" • "+budgetMonthLabel(month)
+                    +"\n\nPrzypisać tę potwierdzoną transakcję?")
+                .setNegativeButton("Nie, zostaw poza planem",(d,w)->done.run())
+                .setPositiveButton("Tak, przypisz",(d,w)->{
+                    try {
+                        PrivatePaycheckVault.matchBudgetOperation(
+                            this,privatePaycheckSession,
+                            candidate.id,operationId);
+                        DiagnosticLog.event(
+                            "PAYCHECK_PRIVATE_BUDGET_MATCHED");
+                    } catch(Exception error) {
+                        alert("Transakcja została potwierdzona, ale nie "
+                            +"przypisano jej do prywatnego budżetu.");
+                    }
+                    done.run();
+                }).show();
+            return true;
+        } catch(Exception error) {
+            return false;
+        }
     }
 
     private void deleteSharedPaycheckEntriesBulk() {
