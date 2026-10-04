@@ -102,7 +102,7 @@ final class DesktopBudgetPlanner {
         } catch (Exception error) {
             JOptionPane.showMessageDialog(owner,
                 "Nie można otworzyć planu budżetu:\n" + rootMessage(error),
-                "PayCheck • Budżet przyszły", JOptionPane.ERROR_MESSAGE);
+                "PayCheck • Budżet miesiąca", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -135,7 +135,7 @@ final class DesktopBudgetPlanner {
                 "Zamknij"
             };
             int action = JOptionPane.showOptionDialog(owner, body,
-                "PayCheck • Budżet przyszły",
+                "PayCheck • Budżet miesiąca",
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, actions, actions[0]);
             if (action < 0 || action == 5) return;
@@ -164,7 +164,7 @@ final class DesktopBudgetPlanner {
                     int yes = JOptionPane.showConfirmDialog(owner,
                         "Usunąć z planu „" + item.name + "”?\n"
                             + "Nie usuwa to żadnej transakcji PayCheck.",
-                        "Budżet przyszły", JOptionPane.YES_NO_OPTION);
+                        "Budżet miesiąca", JOptionPane.YES_NO_OPTION);
                     if (yes == JOptionPane.YES_OPTION) {
                         plan.items.remove(index);
                         save(plan);
@@ -175,7 +175,7 @@ final class DesktopBudgetPlanner {
             } catch (Exception error) {
                 JOptionPane.showMessageDialog(owner,
                     "Nie zapisano zmian:\n" + rootMessage(error),
-                    "PayCheck • Budżet przyszły", JOptionPane.ERROR_MESSAGE);
+                    "PayCheck • Budżet miesiąca", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
