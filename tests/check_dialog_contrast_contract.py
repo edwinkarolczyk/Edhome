@@ -51,6 +51,13 @@ def area(begin, end):
 assert "lightDialogForm(actions);" in area(
     "private void showScannedTargetActions(", "private void storage()")
 
+user_dialog=area("private void showAddUserDialog() {",
+                 "private void memberProfile() {")
+assert "lightDialogForm(form);" in user_dialog
+assert user_dialog.count("lightDialogSpinnerAdapter(") == 3
+assert user_dialog.count("DialogContrast.BACKGROUND") == 3
+assert "themeSpinnerAdapter(" not in user_dialog
+
 checks = (
     ("private void editVehicleTyres(", "private void changeVehicleTyres("),
     ("private void changeVehicleTyres(", "private String vehicleDeadline("),

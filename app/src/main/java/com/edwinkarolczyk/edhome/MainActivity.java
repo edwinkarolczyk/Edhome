@@ -3890,20 +3890,26 @@ public final class MainActivity extends Activity {
 
         form.addView(text("Avatar",13,true));
         Spinner avatar=new Spinner(this);
-        avatar.setAdapter(themeSpinnerAdapter(
+        avatar.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(UserProfileStore.AVATARS)));
+        avatar.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+            DialogContrast.BACKGROUND));
         form.addView(avatar,new LinearLayout.LayoutParams(-1,dp(52)));
 
         form.addView(text("Kolor profilu",13,true));
         Spinner color=new Spinner(this);
-        color.setAdapter(themeSpinnerAdapter(
+        color.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(UserProfileStore.COLOR_LABELS)));
+        color.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+            DialogContrast.BACKGROUND));
         form.addView(color,new LinearLayout.LayoutParams(-1,dp(52)));
 
         form.addView(text("Rola",13,true));
         Spinner role=new Spinner(this);
-        role.setAdapter(themeSpinnerAdapter(
+        role.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(UserProfileStore.ROLE_LABELS)));
+        role.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+            DialogContrast.BACKGROUND));
         boolean first=UserProfileStore.count(db.getReadableDatabase())==0;
         role.setSelection(first?0:1);
         form.addView(role,new LinearLayout.LayoutParams(-1,dp(52)));
@@ -3927,6 +3933,7 @@ public final class MainActivity extends Activity {
         form.addView(repeat,new LinearLayout.LayoutParams(-1,dp(54)));
         form.addView(text("PIN jest lokalny dla tego telefonu i nie trafia "
             +"do synchronizacji ani kopii danych.",12,false));
+        lightDialogForm(form);
 
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Dodaj użytkownika")
