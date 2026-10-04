@@ -80,9 +80,17 @@ final class PrivatePaycheckPortable {
                 rows.put(item);
             }
         }
+        JSONArray budget = new JSONArray();
+        for (PaycheckMonthlyBudget.Item item :
+                PrivatePaycheckVault.budgetItems(context, session)) {
+            if (budget.length() >= PaycheckMonthlyBudget.MAX_ITEMS)
+                throw new GeneralSecurityException("Too many private budget items.");
+            budget.put(PaycheckMonthlyBudget.toJson(item));
+        }
         JSONObject plain = new JSONObject();
         plain.put("format", FORMAT);
         plain.put("entries", rows);
+        plain.put("budget", budget);
         byte[] salt = PrivatePaycheckCrypto.newSalt();
         byte[] key = null;
         try {
@@ -141,6 +149,18 @@ final class PrivatePaycheckPortable {
                 throw new GeneralSecurityException("Invalid or repeated operation ID.");
             validate(row.getJSONObject("entry"));
         }
+        JSONArray budget = decoded.optJSONArray("budget");
+        if (budget == null) budget = new JSONArray();
+        if (budget.length() > PaycheckMonthlyBudget.MAX_ITEMS)
+            throw new GeneralSecurityException("Too many private budget items.");
+        Set<String> budgetIds = new HashSet<>();
+        for (int i = 0; i < budget.length(); i++) {
+            PaycheckMonthlyBudget.Item item =
+                PaycheckMonthlyBudget.fromJson(budget.getJSONObject(i));
+            if (!budgetIds.add(item.id))
+                throw new GeneralSecurityException(
+                    "Invalid or repeated private budget item.");
+        }
         int imported = 0;
         try (SQLiteDatabase database = open(context, session)) {
             database.beginTransaction();
@@ -167,6 +187,33 @@ final class PrivatePaycheckPortable {
                     values.put("sealed", PrivatePaycheckCrypto.seal(
                         session.secret(), entry.toString()));
                     database.insertOrThrow("private_paycheck_entries", null, values);
+                    imported++;
+                }
+                for (int i = 0; i < budget.length(); i++) {
+                    PaycheckMonthlyBudget.Item item =
+                        PaycheckMonthlyBudget.fromJson(budget.getJSONObject(i));
+                    try (Cursor prior = database.rawQuery(
+                            "SELECT sealed FROM private_paycheck_budget_items WHERE budget_id=?",
+                            new String[]{item.id})) {
+                        if (prior.moveToFirst()) {
+                            PaycheckMonthlyBudget.Item current =
+                                PaycheckMonthlyBudget.fromJson(new JSONObject(
+                                    PrivatePaycheckCrypto.unseal(
+                                        session.secret(), prior.getString(0))));
+                            if (!PaycheckMonthlyBudget.toJson(current).toString().equals(
+                                    PaycheckMonthlyBudget.toJson(item).toString()))
+                                throw new GeneralSecurityException(
+                                    "Conflicting private budget item; nothing imported.");
+                            continue;
+                        }
+                    }
+                    ContentValues budgetValues = new ContentValues();
+                    budgetValues.put("budget_id", item.id);
+                    budgetValues.put("sealed", PrivatePaycheckCrypto.seal(
+                        session.secret(),
+                        PaycheckMonthlyBudget.toJson(item).toString()));
+                    database.insertOrThrow(
+                        "private_paycheck_budget_items", null, budgetValues);
                     imported++;
                 }
                 database.setTransactionSuccessful();
