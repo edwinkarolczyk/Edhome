@@ -47,7 +47,7 @@ for token in (
 
 assert "pendingUnits = PantryBarcodeStore.unitsPerScan" in take
 assert "long selectedPantryId, int quantity, int unitsPerScan" in scan
-assert "DB_VERSION = 42;" in backup
+assert "DB_VERSION = 43;" in backup
 assert '"units_per_scan"' in backup
 assert '"deposit_grosz", "deposit_pending"' in backup
 print("Pantry multipack + deposit v39 contract: PASS")
