@@ -37,7 +37,7 @@ for marker in (
 
 assert "MAX_TASK_MINUTES = 600" in main
 assert "durationMinutes > 600" in time
-assert 'private static final int DB_VERSION = 41;' in backup
+assert 'private static final int DB_VERSION = 42;' in backup
 assert '{"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"}' in backup
 assert '"project_task_dependencies".equals(table)' in sync
 assert 'return new String[]{"task_id","depends_on_task_id"};' in sync
