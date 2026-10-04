@@ -1448,9 +1448,9 @@ final class DataBackup {
                     "Czynność wskazuje nieistniejącego domownika.");
             Long taskProjectId=task.getAsLong("project_id");
             Long taskMinutes=task.getAsLong("duration_minutes");
-            if(taskProjectId!=null && (taskMinutes==null || taskMinutes<30))
+            if(taskProjectId!=null && (taskMinutes==null || taskMinutes<20))
                 throw new IllegalArgumentException(
-                    "Czynność projektowa musi mieć co najmniej 30 minut.");
+                    "Czynność projektowa musi mieć co najmniej 20 minut.");
         }
         Set<String> dependencyPairs = new HashSet<>();
         for (ContentValues row : parsed.get("project_task_dependencies")) {
