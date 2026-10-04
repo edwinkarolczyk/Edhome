@@ -488,7 +488,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. PayCheck: miesięczny plan wpływów i wydatków, stałe lub zmienne kwoty, cykle, prywatny szyfrowany plan oraz wykonanie liczone wyłącznie z potwierdzonych transakcji. Plan nie zmienia salda. SQLite pozostaje v41. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. PayCheck: miesięczny plan wpływów i wydatków, stałe lub zmienne kwoty, cykle, prywatny szyfrowany plan oraz wykonanie liczone wyłącznie z potwierdzonych transakcji. Plan nie zmienia salda; prywatny sejf zachowuje hasło 5–64 znaki. SQLite pozostaje v41. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
