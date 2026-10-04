@@ -251,6 +251,7 @@ final class PrivatePaycheckVault {
                 for(String id:unique)
                     removed+=db.delete("private_paycheck_entries",
                         "operation_id=?",new String[]{id});
+                unlinkBudgetOperationsInside(db, session, unique);
                 db.setTransactionSuccessful();
                 return removed;
             } finally {db.endTransaction();}
@@ -301,6 +302,103 @@ final class PrivatePaycheckVault {
                 db.endTransaction();
             }
         }
+    }
+
+    static boolean matchBudgetOperation(Context context, Session session,
+            String budgetId, String operationId) throws Exception {
+        if (budgetId == null || !budgetId.matches("[0-9a-fA-F-]{36}")
+                || operationId == null
+                || !operationId.matches("[0-9a-fA-F-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowe powiązanie budżetu.");
+        try (SQLiteDatabase db = openDatabase(context, session)) {
+            db.beginTransaction();
+            try {
+                boolean targetFound = false;
+                boolean changed = false;
+                try (Cursor c = db.rawQuery(
+                        "SELECT budget_id,sealed FROM private_paycheck_budget_items ORDER BY id",
+                        null)) {
+                    while (c.moveToNext()) {
+                        String id = c.getString(0);
+                        PaycheckMonthlyBudget.Item item =
+                            PaycheckMonthlyBudget.fromJson(new JSONObject(
+                                PrivatePaycheckCrypto.unseal(
+                                    session.secret(), c.getString(1))));
+                        boolean rowChanged = item.matchedOperationIds.remove(operationId);
+                        if (id.equals(budgetId)) {
+                            targetFound = true;
+                            if (!item.matchedOperationIds.contains(operationId)) {
+                                item.matchedOperationIds.add(operationId);
+                                rowChanged = true;
+                            }
+                        }
+                        if (rowChanged) {
+                            ContentValues values = new ContentValues();
+                            values.put("sealed", PrivatePaycheckCrypto.seal(
+                                session.secret(),
+                                PaycheckMonthlyBudget.toJson(item).toString()));
+                            db.update("private_paycheck_budget_items", values,
+                                "budget_id=?", new String[]{id});
+                            changed = true;
+                        }
+                    }
+                }
+                if (!targetFound)
+                    throw new IllegalArgumentException(
+                        "Pozycja prywatnego budżetu już nie istnieje.");
+                db.setTransactionSuccessful();
+                return changed;
+            } finally {
+                db.endTransaction();
+            }
+        }
+    }
+
+    static boolean unmatchBudgetOperation(Context context, Session session,
+            String operationId) throws Exception {
+        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
+            return false;
+        try (SQLiteDatabase db = openDatabase(context, session)) {
+            db.beginTransaction();
+            try {
+                boolean changed = unlinkBudgetOperationsInside(db, session,
+                    java.util.Collections.singleton(operationId));
+                db.setTransactionSuccessful();
+                return changed;
+            } finally {
+                db.endTransaction();
+            }
+        }
+    }
+
+    private static boolean unlinkBudgetOperationsInside(SQLiteDatabase db,
+            Session session, java.util.Collection<String> operationIds)
+            throws Exception {
+        boolean changed = false;
+        java.util.Set<String> wanted =
+            new java.util.HashSet<>(operationIds);
+        try (Cursor c = db.rawQuery(
+                "SELECT budget_id,sealed FROM private_paycheck_budget_items ORDER BY id",
+                null)) {
+            while (c.moveToNext()) {
+                String id = c.getString(0);
+                PaycheckMonthlyBudget.Item item =
+                    PaycheckMonthlyBudget.fromJson(new JSONObject(
+                        PrivatePaycheckCrypto.unseal(
+                            session.secret(), c.getString(1))));
+                boolean rowChanged = item.matchedOperationIds.removeIf(
+                    wanted::contains);
+                if (!rowChanged) continue;
+                ContentValues values = new ContentValues();
+                values.put("sealed", PrivatePaycheckCrypto.seal(
+                    session.secret(),
+                    PaycheckMonthlyBudget.toJson(item).toString()));
+                db.update("private_paycheck_budget_items", values,
+                    "budget_id=?", new String[]{id});
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     static boolean deleteBudgetItem(Context context, Session session,
