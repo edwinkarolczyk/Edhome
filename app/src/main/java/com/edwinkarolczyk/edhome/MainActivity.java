@@ -16262,6 +16262,8 @@ public final class MainActivity extends Activity {
             updateTile(tiles, "i", "Kanał\nStable", false, () ->
                 alert("Stable pobiera aktualizacje z Google Play. Dostępny jest przycisk Później."));
         }
+        updateTile(tiles, "▦", "QR Beta /\nStable", false,
+            this::showUpdateDownloadQrCodes);
         updateTile(tiles, "▣", "Kopia\ndanych", false, () -> go("backup"));
         updateTile(tiles, "⚙", "Opcje\nzaawansowane", false, () -> go("updates_advanced"));
         updateTile(tiles, "◉", "Status\nkanału", false, () ->
@@ -16286,6 +16288,83 @@ public final class MainActivity extends Activity {
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
             : "Stable: możesz wybrać Aktualizuj lub Później.");
+    }
+
+    private Bitmap updateDownloadQrBitmap(String value, int size)
+            throws Exception {
+        com.google.zxing.common.BitMatrix bits =
+            new com.google.zxing.MultiFormatWriter().encode(
+                value, com.google.zxing.BarcodeFormat.QR_CODE, size, size);
+        Bitmap bitmap=Bitmap.createBitmap(
+            size,size,Bitmap.Config.ARGB_8888);
+        for(int y=0;y<size;y++)
+            for(int x=0;x<size;x++)
+                bitmap.setPixel(x,y,bits.get(x,y)
+                    ?Color.BLACK:Color.WHITE);
+        return bitmap;
+    }
+
+    private void showUpdateDownloadQrCodes() {
+        String betaVersion=BuildConfig.VERSION_NAME
+            .replace("-prototype","");
+        String betaUrl="https://github.com/edwinkarolczyk/Edhome/"
+            +"releases/download/beta-v"+betaVersion+"/edhome-beta.apk";
+        String stableUrl="https://play.google.com/store/apps/details"
+            +"?id=com.edwinkarolczyk.edhome";
+        try {
+            LinearLayout form=new LinearLayout(this);
+            form.setOrientation(LinearLayout.VERTICAL);
+            form.setPadding(dp(14),dp(10),dp(14),dp(10));
+            form.addView(text("Zeskanuj drugim telefonem lub tabletem. "
+                +"Beta prowadzi bezpośrednio do podpisanego APK tej wersji, "
+                +"Stable do oficjalnego kanału Google Play.",13,false));
+
+            LinearLayout codes=new LinearLayout(this);
+            codes.setOrientation(LinearLayout.HORIZONTAL);
+            codes.setGravity(Gravity.CENTER);
+
+            LinearLayout beta=new LinearLayout(this);
+            beta.setOrientation(LinearLayout.VERTICAL);
+            beta.setGravity(Gravity.CENTER);
+            beta.addView(text("BETA "+betaVersion,14,true));
+            ImageView betaQr=new ImageView(this);
+            betaQr.setImageBitmap(updateDownloadQrBitmap(betaUrl,420));
+            betaQr.setAdjustViewBounds(true);
+            betaQr.setContentDescription("QR pobierania EDHOME Beta");
+            betaQr.setOnClickListener(v->startActivity(
+                new Intent(Intent.ACTION_VIEW,Uri.parse(betaUrl))));
+            beta.addView(betaQr,new LinearLayout.LayoutParams(
+                dp(145),dp(145)));
+
+            LinearLayout stable=new LinearLayout(this);
+            stable.setOrientation(LinearLayout.VERTICAL);
+            stable.setGravity(Gravity.CENTER);
+            stable.addView(text("STABLE",14,true));
+            ImageView stableQr=new ImageView(this);
+            stableQr.setImageBitmap(updateDownloadQrBitmap(stableUrl,420));
+            stableQr.setAdjustViewBounds(true);
+            stableQr.setContentDescription("QR pobierania EDHOME Stable");
+            stableQr.setOnClickListener(v->startActivity(
+                new Intent(Intent.ACTION_VIEW,Uri.parse(stableUrl))));
+            stable.addView(stableQr,new LinearLayout.LayoutParams(
+                dp(145),dp(145)));
+
+            codes.addView(beta,new LinearLayout.LayoutParams(0,-2,1f));
+            codes.addView(stable,new LinearLayout.LayoutParams(0,-2,1f));
+            form.addView(codes);
+            form.addView(text("Dotknij QR, aby otworzyć link również na tym "
+                +"urządzeniu. Instalację Beta nadal potwierdza Android.",
+                12,false));
+
+            new AlertDialog.Builder(this)
+                .setTitle("Pobierz EDHOME • QR")
+                .setView(form)
+                .setNegativeButton("Zamknij",null)
+                .show();
+        } catch(Exception error) {
+            DiagnosticLog.error("UPDATE_DOWNLOAD_QR",error);
+            alert("Nie udało się utworzyć kodów QR.");
+        }
     }
 
     /** Three rounded tiles per row; the outer page owns vertical scrolling. */
