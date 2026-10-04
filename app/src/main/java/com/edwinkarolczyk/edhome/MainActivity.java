@@ -12909,11 +12909,12 @@ public final class MainActivity extends Activity {
 
         EditText end = new EditText(this);
         end.setSingleLine(true);
-        end.setHint("Koniec YYYY-MM (opcjonalnie)");
+        end.setHint("Koniec YYYY-MM • puste = bez końca");
         form.addView(end);
 
-        form.addView(text("Stała opłata może mieć stałą kwotę albo zmienną "
-            + "prognozę. Plan sam nie księguje pieniędzy.", 13, false));
+        form.addView(text("Stała opłata: wybierz „Co miesiąc” i zostaw koniec "
+            + "pusty. Rata: wybierz „Co miesiąc” i wpisz miesiąc ostatniej raty. "
+            + "Plan sam nie księguje pieniędzy.", 13, false));
 
         final int[] cycles = {0, 1, 2, 3, 6, 12};
         AlertDialog dialog = new AlertDialog.Builder(this)
