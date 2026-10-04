@@ -66,7 +66,7 @@ for marker in (
 
 # Future budget planner: plan is separate from real ledger and supports document-guided setup.
 for marker in (
-    "Budżet przyszły", "Importuj PDF / XLSX / CSV", "Rachunek cykliczny",
+    "Budżet miesiąca", "Importuj PDF / XLSX / CSV", "Rachunek cykliczny",
     "Rata / kredyt", "Dochód cykliczny", "Co 2 miesiące",
     "Kiedy ten cykl się kończy?", "Prognoza 12 miesięcy",
     "paycheck-budget-plan.json",
