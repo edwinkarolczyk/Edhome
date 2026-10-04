@@ -23,6 +23,7 @@ vehicle_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/VehicleStore.j
 sync_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 garden_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/GardenStore.java").read_text(encoding="utf-8")
 project_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/ProjectStore.java").read_text(encoding="utf-8")
+user_profile_store = Path("app/src/main/java/com/edwinkarolczyk/edhome/UserProfileStore.java").read_text(encoding="utf-8")
 
 def section(source, after, before):
     return source.split(after, 1)[1].split(before, 1)[0]
@@ -119,8 +120,11 @@ project40 = statements(section(project_store, "static void create(SQLiteDatabase
                                "static void upgrade41(").replace("db.execSQL(", "database.execSQL("))
 project41 = statements(section(project_store, "static void upgrade41(SQLiteDatabase db)",
                                "static Project find(").replace("db.execSQL(", "database.execSQL("))
+user42 = statements(section(user_profile_store, "static void create(SQLiteDatabase db)",
+                             "static void ensureAll").replace("db.execSQL(", "database.execSQL("))
+step42 = user42.copy()
 step40 = statements(section(upgrade, "if(oldVersion < 40)", "if(oldVersion < 41)")) + project40
-step41 = statements(section(upgrade, "if(oldVersion < 41)", "if(newVersion >= 36)")) + project41
+step41 = statements(section(upgrade, "if(oldVersion < 41)", "if(oldVersion < 42)")) + project41
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
 step32 = statements(section(upgrade, "if(oldVersion < 32)", "if(oldVersion < 33)"))
@@ -169,12 +173,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 41, "Database version and backup format differ"
+assert version == backup_version == 42, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42)
 expected = schema(fresh)
-assert len(expected) == 45 and len(project40) == 6 and len(project41) == 2 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 46 and len(user42) == 1 and len(project40) == 6 and len(project41) == 2 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 3 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -258,6 +262,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step39)  # v38 to v39, multipack and deposit metadata
     execute(db, step40)  # v39 to v40, projects and task links
     execute(db, step41)  # v40 to v41, project task dependencies
+    execute(db, step42)  # v41 to v42, profile użytkowników
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -342,7 +347,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-for accepted in range(2,41):
+for accepted in range(2,42):
     assert ("inputVersion != "+str(accepted)) in backup
 assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
@@ -352,6 +357,8 @@ assert 'PantryCategories.known(values.getAsString("category"))' in backup
 assert 'inputVersion < 5 && "tasks".equals(definition[0])' in backup
 assert '"priority".equals(key)' in backup and '"duration_minutes".equals(key)' in backup
 assert 'inputVersion < 6 && "household_members".equals(definition[0])' in backup
+assert 'inputVersion < 42' in backup and '"user_profiles".equals(definition[0])' in backup
+assert '{"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"}' in backup
 assert '"assignee_id".equals(key)' in backup
 assert 'inputVersion < 7 && ("member_weekly_shifts".equals(definition[0])' in backup
 assert '"member_id".equals(column)' in backup and '"weekday".equals(column)' in backup
@@ -406,7 +413,7 @@ execute(existing14, step38)
 execute(existing14, step39)
 # legacy_create jest generowane z bieżącego CREATE tasks, więc project_id już istnieje.
 # Dodajemy tylko nowe tabele projektowe i zależności.
-execute(existing14, project40 + project41)
+execute(existing14, project40 + project41 + user42)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -438,9 +445,9 @@ execute(existing23, step38)
 execute(existing23, step39)
 # Ten fixture korzysta już z bieżącej definicji tabeli tasks, więc dodajemy
 # tylko nowe tabele projektowe, bez ponownego ALTER TABLE project_id.
-execute(existing23, project40 + project41)
+execute(existing23, project40 + project41 + user42)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v40→v41: PASS; Projects/dependencies, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v41→v42: PASS; Projects/dependencies, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")

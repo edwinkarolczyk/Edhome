@@ -175,6 +175,10 @@ public final class MainActivity extends Activity {
     private long selectedProjectId;
     private Long taskEditorProjectPreset;
     private long selectedMemberId;
+    private String membersReturnScreen = "tasks";
+    private static final String ACTIVE_MEMBER_PREF = "active_member_id";
+    private static final String MEMBER_PIN_SALT_PREFIX = "member_pin_salt_";
+    private static final String MEMBER_PIN_HASH_PREFIX = "member_pin_hash_";
     private String pantrySearch = "";
     private int pantryPage;
     private String pantryCategoryFilter = "";
@@ -267,6 +271,8 @@ public final class MainActivity extends Activity {
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        UserProfileStore.ensureAll(db.getWritableDatabase());
+        ensureActiveMember();
         int prunedStorageThumbs=StorageThumbs.prune(
             prefs,db.getWritableDatabase());
         if(prunedStorageThumbs>0)
@@ -1004,9 +1010,10 @@ public final class MainActivity extends Activity {
         else if (unlocked && "storage".equals(screen)) go("places");
         else if (unlocked && "shopping".equals(screen)) go("pantry");
         else if (unlocked && "waste".equals(screen)) go("tasks");
-        else if (unlocked && "member_schedule".equals(screen)) go("members");
-        else if (unlocked && ("task_history".equals(screen)
-                || "members".equals(screen))) go("tasks");
+        else if (unlocked && "member_schedule".equals(screen)) go("member_profile");
+        else if (unlocked && "member_profile".equals(screen)) go("members");
+        else if (unlocked && "members".equals(screen)) go(membersReturnScreen);
+        else if (unlocked && "task_history".equals(screen)) go("tasks");
         else if (unlocked && !"home".equals(screen)) go("home");
         else super.onBackPressed();
     }
@@ -1301,6 +1308,7 @@ public final class MainActivity extends Activity {
                 case "timers": timers(); break;
                 case "waste": waste(); break;
                 case "members": members(); break;
+                case "member_profile": memberProfile(); break;
                 case "member_schedule": memberSchedule(); break;
                 case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
@@ -1348,6 +1356,120 @@ public final class MainActivity extends Activity {
         } finally {
             spec.clearPassword();
         }
+    }
+
+    private long activeMemberId() {
+        if(prefs==null||db==null)return 0L;
+        long id=prefs.getLong(ACTIVE_MEMBER_PREF,0L);
+        return id>0&&!db.memberName(id).isEmpty()?id:0L;
+    }
+
+    private String activeMemberName() {
+        long id=activeMemberId();
+        return id==0L?"":db.memberName(id);
+    }
+
+    private void ensureActiveMember() {
+        if(activeMemberId()!=0L)return;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM household_members ORDER BY id LIMIT 1",null)) {
+            if(c.moveToFirst())
+                prefs.edit().putLong(ACTIVE_MEMBER_PREF,c.getLong(0)).apply();
+            else
+                prefs.edit().remove(ACTIVE_MEMBER_PREF).apply();
+        }
+    }
+
+    private void setActiveMember(long memberId) {
+        if(memberId<=0L||db.memberName(memberId).isEmpty())
+            throw new IllegalArgumentException("Użytkownik nie istnieje.");
+        prefs.edit().putLong(ACTIVE_MEMBER_PREF,memberId).apply();
+        DiagnosticLog.event("ACTIVE_USER_CHANGED","member="+memberId);
+    }
+
+    private String memberPinSaltKey(long memberId) {
+        return MEMBER_PIN_SALT_PREFIX+memberId;
+    }
+
+    private String memberPinHashKey(long memberId) {
+        return MEMBER_PIN_HASH_PREFIX+memberId;
+    }
+
+    private boolean hasMemberPin(long memberId) {
+        return prefs.contains(memberPinSaltKey(memberId))
+            &&prefs.contains(memberPinHashKey(memberId));
+    }
+
+    private void saveMemberPin(long memberId,String pin) throws Exception {
+        if(pin==null||!pin.matches("[0-9]{5,8}"))
+            throw new IllegalArgumentException("PIN użytkownika musi mieć 5–8 cyfr.");
+        byte[] saltBytes=new byte[16];
+        new SecureRandom().nextBytes(saltBytes);
+        String salt=Base64.encodeToString(saltBytes,Base64.NO_WRAP);
+        String hash=Base64.encodeToString(derivedPin(pin,salt),Base64.NO_WRAP);
+        if(!prefs.edit().putString(memberPinSaltKey(memberId),salt)
+                .putString(memberPinHashKey(memberId),hash).commit())
+            throw new IllegalStateException("Nie udało się zapisać PIN-u użytkownika.");
+    }
+
+    private boolean verifyMemberPin(long memberId,String pin) {
+        try {
+            if(!hasMemberPin(memberId))return true;
+            byte[] expected=Base64.decode(
+                prefs.getString(memberPinHashKey(memberId),""),
+                Base64.NO_WRAP);
+            byte[] actual=derivedPin(pin,
+                prefs.getString(memberPinSaltKey(memberId),""));
+            return MessageDigest.isEqual(expected,actual);
+        } catch(Exception error) {
+            DiagnosticLog.error("USER_PIN_VERIFY",error);
+            return false;
+        }
+    }
+
+    private void clearMemberPin(long memberId) {
+        prefs.edit().remove(memberPinSaltKey(memberId))
+            .remove(memberPinHashKey(memberId)).apply();
+    }
+
+    private void activateMember(long memberId,String memberName) {
+        if(!hasMemberPin(memberId)) {
+            setActiveMember(memberId);
+            render();
+            return;
+        }
+        EditText pin=new EditText(this);
+        pin.setHint("PIN 5–8 cyfr");
+        pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin.setTextColor(ink);
+        pin.setHintTextColor(subdued);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24),dp(14),dp(24),0);
+        content.addView(text("Wpisz lokalny PIN profilu „"+memberName+"”.",14,false));
+        content.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Przełącz użytkownika")
+            .setView(content)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Przełącz",null)
+            .create();
+        dialog.setOnShowListener(ignored->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                if(!verifyMemberPin(memberId,pin.getText().toString())) {
+                    pin.setText("");
+                    pin.setError("Nieprawidłowy PIN.");
+                    DiagnosticLog.event("USER_PIN_UNLOCK_FAILED",
+                        "member="+memberId);
+                    return;
+                }
+                setActiveMember(memberId);
+                DiagnosticLog.event("USER_PIN_UNLOCK_OK","member="+memberId);
+                dialog.dismiss();
+                render();
+            }));
+        dialog.show();
     }
 
     private void setupPin() {
@@ -3688,53 +3810,354 @@ public final class MainActivity extends Activity {
     }
 
     private void members() {
-        header("Domownicy • wykonawcy czynności");
-        note("Lokalna lista wykonawców. Możesz pozostawić czynność bez osoby. "
-            + "Grafik i wyjątki ustawiasz osobno dla każdej osoby.");
-        EditText person = field("Imię lub nazwa osoby", false);
-        person.setSingleLine(true);
-        button("+ Dodaj domownika", () -> {
-            try {
-                if (!db.addMember(person.getText().toString())) {
-                    person.setError("Ta osoba jest już na liście.");
-                    return;
-                }
-                DiagnosticLog.event("MEMBER_ADDED");
-                render();
-            } catch (IllegalArgumentException error) {
-                person.setError("Podaj nazwę osoby (1–80 znaków).");
-            }
-        });
-        int count = 0;
-        try (Cursor people = db.getReadableDatabase().rawQuery(
-                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",
-                null)) {
-            while (people.moveToNext()) {
+        header("Użytkownicy • profile domowników");
+        note("Profile wykorzystują istniejących domowników, więc przypisane czynności "
+            +"i grafiki pozostają bez zmian. Imię, rola, avatar i kolor synchronizują "
+            +"się z EDHOME Desktop. PIN profilu zostaje tylko na tym urządzeniu.");
+
+        button("+ Dodaj użytkownika",this::showAddUserDialog);
+
+        UserProfileStore.ensureAll(db.getWritableDatabase());
+        long active=activeMemberId();
+        int count=0;
+        try(Cursor people=UserProfileStore.list(db.getReadableDatabase())) {
+            while(people.moveToNext()) {
                 count++;
-                long memberId = people.getLong(0);
-                String memberName = people.getString(1);
-                LinearLayout memberCard = card();
-                memberCard.addView(text(memberName, 18, true));
-                smallButton(memberCard, "Grafik i wyjątki →", () -> {
-                    selectedMemberId = memberId;
+                long memberId=people.getLong(0);
+                String memberName=people.getString(1);
+                String role=people.getString(2);
+                String avatar=people.getString(3);
+                String color=people.getString(4);
+
+                LinearLayout memberCard=card();
+                TextView who=text((active==memberId?"● ":"")
+                    +avatar+"  "+memberName,18,true);
+                try{who.setTextColor(Color.parseColor(color));}
+                catch(Exception ignored){who.setTextColor(ink);}
+                memberCard.addView(who);
+                memberCard.addView(text(UserProfileStore.roleLabel(role)
+                    +" • PIN: "+(hasMemberPin(memberId)
+                        ?"ustawiony na tym urządzeniu":"brak")
+                    +(active==memberId?" • AKTYWNY PROFIL":""),13,false));
+
+                smallButton(memberCard,"Profil i ustawienia →",()->{
+                    selectedMemberId=memberId;
+                    go("member_profile");
+                });
+                if(active!=memberId)
+                    smallButton(memberCard,"Ustaw jako aktywny",()->
+                        activateMember(memberId,memberName));
+                smallButton(memberCard,"Grafik i wyjątki →",()->{
+                    selectedMemberId=memberId;
                     go("member_schedule");
                 });
-                smallButton(memberCard, "Usuń domownika", () ->
+                smallButton(memberCard,"Usuń użytkownika",()->
                     new AlertDialog.Builder(this)
-                        .setTitle("Usunąć domownika?")
-                        .setMessage("Czynności przypisane do " + memberName
-                            + " pozostaną, ale bez wykonawcy.")
-                        .setNegativeButton("Anuluj", null)
-                        .setPositiveButton("Usuń", (dialog, which) -> {
+                        .setTitle("Usunąć użytkownika?")
+                        .setMessage("Czynności przypisane do "+memberName
+                            +" pozostaną, ale bez wykonawcy. Profil, lokalny PIN "
+                            +"i grafik tej osoby zostaną usunięte.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            clearMemberPin(memberId);
                             db.deleteMember(memberId);
-                            DiagnosticLog.event("MEMBER_REMOVED");
+                            if(activeMemberId()==0L)ensureActiveMember();
+                            DiagnosticLog.event("USER_PROFILE_REMOVED",
+                                "member="+memberId);
                             render();
                         }).show());
             }
         }
-        if (count == 0) note("Nie ma jeszcze domowników. Dodaj osobę, aby móc "
-            + "wybierać wykonawcę w formularzu czynności.");
-        button("← Czynności", () -> go("tasks"));
+        if(count==0)
+            note("Nie ma jeszcze użytkowników. Pierwszy utworzony profil "
+                +"zostanie administratorem.");
+        button("← "+("settings".equals(membersReturnScreen)
+            ?"Ustawienia":"Czynności"),()->go(membersReturnScreen));
+    }
+
+    private void showAddUserDialog() {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(22),dp(8),dp(22),0);
+
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Imię / nazwa profilu");
+        name.setTextColor(ink);
+        name.setHintTextColor(subdued);
+        form.addView(name,new LinearLayout.LayoutParams(-1,dp(54)));
+
+        form.addView(text("Avatar",13,true));
+        Spinner avatar=new Spinner(this);
+        avatar.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(UserProfileStore.AVATARS)));
+        form.addView(avatar,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        form.addView(text("Kolor profilu",13,true));
+        Spinner color=new Spinner(this);
+        color.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(UserProfileStore.COLOR_LABELS)));
+        form.addView(color,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        form.addView(text("Rola",13,true));
+        Spinner role=new Spinner(this);
+        role.setAdapter(themeSpinnerAdapter(
+            java.util.Arrays.asList(UserProfileStore.ROLE_LABELS)));
+        boolean first=UserProfileStore.count(db.getReadableDatabase())==0;
+        role.setSelection(first?0:1);
+        form.addView(role,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        EditText pin=new EditText(this);
+        pin.setSingleLine(true);
+        pin.setHint("PIN opcjonalny • 5–8 cyfr");
+        pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin.setTextColor(ink);
+        pin.setHintTextColor(subdued);
+        form.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+
+        EditText repeat=new EditText(this);
+        repeat.setSingleLine(true);
+        repeat.setHint("Powtórz PIN");
+        repeat.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        repeat.setTextColor(ink);
+        repeat.setHintTextColor(subdued);
+        form.addView(repeat,new LinearLayout.LayoutParams(-1,dp(54)));
+        form.addView(text("PIN jest lokalny dla tego telefonu i nie trafia "
+            +"do synchronizacji ani kopii danych.",12,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Dodaj użytkownika")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null)
+            .create();
+        dialog.setOnShowListener(ignored->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String clean=name.getText().toString().trim();
+                String one=pin.getText().toString();
+                String two=repeat.getText().toString();
+                if(clean.isEmpty()||clean.length()>80) {
+                    name.setError("Podaj imię / nazwę (1–80 znaków).");
+                    return;
+                }
+                if(!one.isEmpty()&&!one.matches("[0-9]{5,8}")) {
+                    pin.setError("PIN musi mieć 5–8 cyfr.");
+                    return;
+                }
+                if(!one.equals(two)) {
+                    repeat.setError("PIN-y nie są identyczne.");
+                    return;
+                }
+                int roleIndex=Math.max(0,role.getSelectedItemPosition());
+                int avatarIndex=Math.max(0,avatar.getSelectedItemPosition());
+                int colorIndex=Math.max(0,color.getSelectedItemPosition());
+                String selectedRole=UserProfileStore.ROLES[
+                    Math.min(roleIndex,UserProfileStore.ROLES.length-1)];
+                String selectedAvatar=UserProfileStore.AVATARS[
+                    Math.min(avatarIndex,UserProfileStore.AVATARS.length-1)];
+                String selectedColor=UserProfileStore.COLORS[
+                    Math.min(colorIndex,UserProfileStore.COLORS.length-1)];
+                try {
+                    long memberId=UserProfileStore.add(db.getWritableDatabase(),
+                        clean,selectedRole,selectedAvatar,selectedColor);
+                    if(memberId<0L) {
+                        name.setError("Użytkownik o tej nazwie już istnieje.");
+                        return;
+                    }
+                    try {
+                        if(!one.isEmpty())saveMemberPin(memberId,one);
+                    } catch(Exception pinError) {
+                        db.deleteMember(memberId);
+                        throw pinError;
+                    }
+                    if(activeMemberId()==0L)setActiveMember(memberId);
+                    selectedMemberId=memberId;
+                    DiagnosticLog.event("USER_PROFILE_ADDED",
+                        "member="+memberId+" role="+selectedRole);
+                    dialog.dismiss();
+                    go("member_profile");
+                } catch(Exception error) {
+                    DiagnosticLog.error("USER_PROFILE_ADD",error);
+                    alert(error.getMessage()==null
+                        ?"Nie udało się utworzyć użytkownika.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void memberProfile() {
+        UserProfileStore.ensureAll(db.getWritableDatabase());
+        try(Cursor profile=UserProfileStore.one(
+                db.getReadableDatabase(),selectedMemberId)) {
+            if(!profile.moveToFirst()) {
+                go("members");
+                return;
+            }
+            final long memberId=profile.getLong(0);
+            final String currentName=profile.getString(1);
+            final String currentRole=profile.getString(2);
+            final String currentAvatar=profile.getString(3);
+            final String currentColor=profile.getString(4);
+
+            header(currentAvatar+"  "+currentName+" • profil");
+            note((activeMemberId()==memberId?"Aktywny profil • ":"")
+                +UserProfileStore.roleLabel(currentRole)
+                +" • PIN "+(hasMemberPin(memberId)?"włączony":"wyłączony"));
+
+            LinearLayout data=card();
+            data.addView(text("Dane profilu",18,true));
+            EditText name=new EditText(this);
+            name.setSingleLine(true);
+            name.setText(currentName);
+            name.setTextColor(ink);
+            data.addView(name,new LinearLayout.LayoutParams(-1,dp(54)));
+
+            data.addView(text("Avatar",13,true));
+            Spinner avatar=new Spinner(this);
+            avatar.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(UserProfileStore.AVATARS)));
+            avatar.setSelection(Math.max(0,java.util.Arrays.asList(
+                UserProfileStore.AVATARS).indexOf(currentAvatar)));
+            data.addView(avatar,new LinearLayout.LayoutParams(-1,dp(52)));
+
+            data.addView(text("Kolor",13,true));
+            Spinner color=new Spinner(this);
+            color.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(UserProfileStore.COLOR_LABELS)));
+            color.setSelection(Math.max(0,java.util.Arrays.asList(
+                UserProfileStore.COLORS).indexOf(currentColor)));
+            data.addView(color,new LinearLayout.LayoutParams(-1,dp(52)));
+
+            data.addView(text("Rola",13,true));
+            Spinner role=new Spinner(this);
+            role.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(UserProfileStore.ROLE_LABELS)));
+            role.setSelection(UserProfileStore.ROLE_ADMIN.equals(currentRole)?0:1);
+            data.addView(role,new LinearLayout.LayoutParams(-1,dp(52)));
+
+            smallButton(data,"Zapisz profil",()->{
+                int ai=Math.max(0,avatar.getSelectedItemPosition());
+                int ci=Math.max(0,color.getSelectedItemPosition());
+                int ri=Math.max(0,role.getSelectedItemPosition());
+                try {
+                    boolean saved=UserProfileStore.update(db.getWritableDatabase(),
+                        memberId,name.getText().toString(),
+                        UserProfileStore.ROLES[Math.min(ri,
+                            UserProfileStore.ROLES.length-1)],
+                        UserProfileStore.AVATARS[Math.min(ai,
+                            UserProfileStore.AVATARS.length-1)],
+                        UserProfileStore.COLORS[Math.min(ci,
+                            UserProfileStore.COLORS.length-1)]);
+                    if(!saved) {
+                        name.setError("Taka nazwa użytkownika już istnieje.");
+                        return;
+                    }
+                    DiagnosticLog.event("USER_PROFILE_UPDATED",
+                        "member="+memberId);
+                    render();
+                } catch(Exception error) {
+                    name.setError(error.getMessage());
+                }
+            });
+
+            LinearLayout access=card();
+            access.addView(text("Dostęp na tym urządzeniu",18,true));
+            if(activeMemberId()!=memberId)
+                smallButton(access,"Ustaw jako aktywny profil",
+                    ()->activateMember(memberId,currentName));
+            else
+                access.addView(text("✓ To jest aktywny profil.",14,true));
+            smallButton(access,hasMemberPin(memberId)
+                ?"Zmień PIN profilu":"Ustaw PIN profilu",
+                ()->showMemberPinEditor(memberId,currentName));
+            if(hasMemberPin(memberId))
+                smallButton(access,"Usuń PIN profilu",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć PIN?")
+                        .setMessage("Profil będzie można przełączać bez PIN-u "
+                            +"na tym urządzeniu.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(d,w)->{
+                            clearMemberPin(memberId);
+                            DiagnosticLog.event("USER_PIN_REMOVED",
+                                "member="+memberId);
+                            render();
+                        }).show());
+
+            LinearLayout schedule=card();
+            schedule.addView(text("Praca i dostępność",18,true));
+            schedule.addView(text("Dotychczasowy grafik tej osoby został zachowany.",
+                13,false));
+            smallButton(schedule,"Grafik pracy i wyjątki →",()->{
+                selectedMemberId=memberId;
+                go("member_schedule");
+            });
+
+            LinearLayout next=card();
+            next.addView(text("Kolejne ustawienia profilu",18,true));
+            next.addView(text("Przygotowane pod: powiadomienia, prywatność, "
+                +"PayCheck, kalendarz/zadania i osobny układ kafelków. "
+                +"Na tym etapie role są zapisywane, ale nie blokują jeszcze modułów.",
+                13,false));
+
+            button("← Użytkownicy",()->go("members"));
+        }
+    }
+
+    private void showMemberPinEditor(long memberId,String memberName) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(22),dp(8),dp(22),0);
+        EditText pin=new EditText(this);
+        pin.setSingleLine(true);
+        pin.setHint("Nowy PIN • 5–8 cyfr");
+        pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin.setTextColor(ink);
+        pin.setHintTextColor(subdued);
+        form.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+        EditText repeat=new EditText(this);
+        repeat.setSingleLine(true);
+        repeat.setHint("Powtórz PIN");
+        repeat.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        repeat.setTextColor(ink);
+        repeat.setHintTextColor(subdued);
+        form.addView(repeat,new LinearLayout.LayoutParams(-1,dp(54)));
+        form.addView(text("PIN „"+memberName+"” pozostaje tylko na tym urządzeniu.",
+            12,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(hasMemberPin(memberId)?"Zmień PIN":"Ustaw PIN")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",null)
+            .create();
+        dialog.setOnShowListener(ignored->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String one=pin.getText().toString();
+                String two=repeat.getText().toString();
+                if(!one.matches("[0-9]{5,8}")) {
+                    pin.setError("PIN musi mieć 5–8 cyfr.");
+                    return;
+                }
+                if(!one.equals(two)) {
+                    repeat.setError("PIN-y nie są identyczne.");
+                    return;
+                }
+                try {
+                    saveMemberPin(memberId,one);
+                    DiagnosticLog.event("USER_PIN_SAVED","member="+memberId);
+                    dialog.dismiss();
+                    render();
+                } catch(Exception error) {
+                    pin.setError("Nie udało się zapisać PIN-u.");
+                    DiagnosticLog.error("USER_PIN_SAVE",error);
+                }
+            }));
+        dialog.show();
     }
 
     private void memberSchedule() {
@@ -3746,7 +4169,7 @@ public final class MainActivity extends Activity {
         header("Grafik pracy • " + name);
         note("Lokalny grafik pon.–niedz. Puste dni są nieustalone, "
             + "a nie automatycznie wolne. Zmiana nocna kończy się następnego dnia.");
-        button("← Domownicy", () -> go("members"));
+        button("← Profil użytkownika", () -> go("member_profile"));
         for (int day = 1; day <= 7; day++) {
             final int weekday = day;
             LinearLayout shiftCard = card();
@@ -4790,7 +5213,10 @@ public final class MainActivity extends Activity {
         compactAction(row1, "◷ Minutniki", () -> go("timers"));
         LinearLayout row2 = compactActionRow();
         compactAction(row2, "♻ Odpady", () -> go("waste"));
-        compactAction(row2, "♙ Domownicy", () -> go("members"));
+        compactAction(row2, "♙ Użytkownicy", () -> {
+            membersReturnScreen="tasks";
+            go("members");
+        });
         LinearLayout row3 = compactActionRow();
         compactAction(row3, "+ Nowa czynność",
             () -> editTask(null, "", "", "once", 1));
@@ -15861,6 +16287,18 @@ public final class MainActivity extends Activity {
             alert("Zapisano nazwę gospodarstwa.");
         });
 
+        LinearLayout users=settingsAccordion("users","Użytkownicy",
+            "Profile, role, lokalny PIN i grafiki domowników.",false);
+        String activeUser=activeMemberName();
+        users.addView(text("Aktywny profil: "
+            +(activeUser.isEmpty()?"brak":activeUser),14,true));
+        smallButton(users,"Zarządzaj użytkownikami",()->{
+            membersReturnScreen="settings";
+            go("members");
+        });
+        users.addView(text("Dane profilu synchronizują się z Desktopem. "
+            +"PIN profilu pozostaje lokalnie na tym urządzeniu.",12,false));
+
         LinearLayout nfc=settingsAccordion("nfc","NFC",
             "Cała obsługa NFC: nasłuch, zachowanie po skanie i reguły typów.",true);
         String hardware=nfcAdapter==null?"Brak modułu NFC"
@@ -17181,7 +17619,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 41);
+            super(context, "edhome-beta-preview.db", null, 42);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -17203,6 +17641,7 @@ public final class MainActivity extends Activity {
             addTaskHistory(database);
             addPlaces(database);
             addMembers(database);
+            UserProfileStore.create(database);
             addMemberSchedules(database);
             addShopping(database);
             ShoppingReceiptStore.create(database);
@@ -17230,7 +17669,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 41) {
+            if (oldVersion < 1 || newVersion > 42) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -17457,6 +17896,11 @@ public final class MainActivity extends Activity {
             if(oldVersion < 41) {
                 ProjectStore.upgrade41(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_40_TO_41_PROJECT_DEPENDENCIES");
+            }
+            if(oldVersion < 42) {
+                UserProfileStore.create(database);
+                UserProfileStore.ensureAll(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_41_TO_42_USER_PROFILES");
             }
             if(newVersion >= 36) {
                 try {
@@ -18000,13 +18444,9 @@ public final class MainActivity extends Activity {
         }
 
         boolean addMember(String name) {
-            String trimmed = name.trim();
-            if (trimmed.isEmpty() || trimmed.length() > 80)
-                throw new IllegalArgumentException("Nazwa osoby: 1–80 znaków.");
-            ContentValues values = new ContentValues();
-            values.put("name", trimmed);
-            return getWritableDatabase().insertWithOnConflict(
-                "household_members", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+            return UserProfileStore.add(getWritableDatabase(),name,
+                UserProfileStore.ROLE_MEMBER,UserProfileStore.DEFAULT_AVATAR,
+                UserProfileStore.DEFAULT_COLOR)!=-1L;
         }
 
         void deleteMember(long memberId) {
@@ -18071,8 +18511,11 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(memberId)});
                 database.delete("member_shift_exceptions", "member_id=?",
                     new String[]{Long.toString(memberId)});
+                database.delete("user_profiles", "member_id=?",
+                    new String[]{Long.toString(memberId)});
                 database.delete("household_members", "id=?",
                     new String[]{Long.toString(memberId)});
+                UserProfileStore.ensureAll(database);
                 database.setTransactionSuccessful();
             } finally {
                 database.endTransaction();
