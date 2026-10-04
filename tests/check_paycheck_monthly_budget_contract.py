@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Monthly PayCheck plan stays separate from real confirmed ledger."""
+from pathlib import Path
+
+root = Path("app/src/main/java/com/edwinkarolczyk/edhome")
+budget = (root / "PaycheckMonthlyBudget.java").read_text(encoding="utf-8")
+main = (root / "MainActivity.java").read_text(encoding="utf-8")
+vault = (root / "PrivatePaycheckVault.java").read_text(encoding="utf-8")
+backup = (root / "DataBackup.java").read_text(encoding="utf-8")
+portable = (root / "PrivatePaycheckPortable.java").read_text(encoding="utf-8")
+
+for token in (
+    'PREF_KEY = "paycheck_monthly_budget_v1"',
+    '"fixed".equals(item.amountMode)',
+    '"estimate".equals(item.amountMode)',
+    'new int[]{0, 1, 2, 3, 6, 12}',
+    '"FROM paycheck_transactions WHERE scope=\'shared\' AND status=?"',
+    'static Totals sharedActual(',
+    'static Totals privateActual(',
+    'static List<Item> activeFor(',
+    'static Totals planned(',
+):
+    assert token in budget, "Missing monthly budget contract: " + token
+
+for token in (
+    'sharedMonthlyBudgetBlock();',
+    'privateMonthlyBudgetBlock(entries);',
+    'Budżet miesiąca • ',
+    'Plan nie zmienia salda.',
+    'transakcje potwierdzone po sprawdzeniu banku / wyciągu',
+    'Prywatny plan jest szyfrowany w sejfie.',
+    'Stała kwota',
+    'Kwota zmienna / prognoza',
+    'Co miesiąc',
+    'Co 2 miesiące',
+    'Co kwartał',
+):
+    assert token in main, "Missing Android monthly budget UI: " + token
+
+assert "PaycheckStore.add" not in budget
+assert "INSERT INTO paycheck_transactions" not in budget
+assert "UPDATE paycheck_transactions" not in budget
+assert "DELETE FROM paycheck_transactions" not in budget
+
+for token in (
+    "private_paycheck_budget_items",
+    "PrivatePaycheckCrypto.seal(",
+    "PaycheckMonthlyBudget.fromJson(",
+    "static String addBudgetItem(",
+    "static boolean deleteBudgetItem(",
+):
+    assert token in vault, "Private budget must stay encrypted: " + token
+
+for token in (
+    'plain.put("budget", budget);',
+    'decoded.optJSONArray("budget")',
+    'private_paycheck_budget_items',
+):
+    assert token in portable, "Private encrypted backup missing: " + token
+
+for token in (
+    'settings.put("paycheckMonthlyBudget"',
+    'PaycheckMonthlyBudget.validateSerialized(paycheckMonthlyBudget);',
+    '.putString(PaycheckMonthlyBudget.PREF_KEY, paycheckMonthlyBudget)',
+):
+    assert token in backup, "Shared budget backup missing: " + token
+
+# Existing transaction confirmation remains the source of truth for real saldo.
+for token in (
+    'status=\'confirmed\'',
+    'Potwierdź po sprawdzeniu banku / wyciągu',
+    'Do potwierdzenia • bez wpływu na saldo',
+    'Sprawdziłem w banku • potwierdź',
+):
+    assert token in main, "Confirmed-ledger gate missing: " + token
+
+print("PayCheck monthly plan, private encryption and confirmed-transaction gate: PASS")
