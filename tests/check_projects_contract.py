@@ -37,13 +37,18 @@ for marker in (
 
 assert "MAX_TASK_MINUTES = 600" in main
 assert "durationMinutes > 600" in time
-assert 'private static final int DB_VERSION = 42;' in backup
+assert 'private static final int DB_VERSION = 43;' in backup
 assert '{"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"}' in backup
 assert '"project_task_dependencies".equals(table)' in sync
 assert 'return new String[]{"task_id","depends_on_task_id"};' in sync
 assert '"project_task_dependencies".equals(table)' in desktop
 assert 'canonicalId(row.get("depends_on_task_id"))' in desktop
 assert 'database.delete("project_task_dependencies"' in main
+assert 'project_task_work_sessions' in project
+assert 'PROJECT_MIN_TASK_MINUTES = 30' in main
+assert 'PROJECT_WORK_STARTED' in main and 'PROJECT_WORK_STOPPED' in main
+assert 'ProjectStore.remainingMinutes' in main
+assert 'database.delete("project_task_work_sessions"' in main
 
 # Minimalny kontrakt SQL zależności: brak self-loop i brak duplikatów.
 db = sqlite3.connect(":memory:")
