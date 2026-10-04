@@ -208,7 +208,7 @@ public final class MainActivity extends Activity {
         "Niski", "Normalny", "Wysoki", "Pilny"
     };
     private static final int MIN_TASK_MINUTES = 1;
-    private static final int PROJECT_MIN_TASK_MINUTES = 30;
+    private static final int PROJECT_MIN_TASK_MINUTES = 20;
     private static final int MAX_TASK_MINUTES = 600;
     private int bg, surface, ink, subdued, accent;
     private UiSkin skin;
@@ -4785,7 +4785,7 @@ public final class MainActivity extends Activity {
                 name.setError("Podaj nazwę.");return;
             }
             if(minutes==null) {
-                hours.setError("Czynność projektowa: minimum 0,5 h, maksimum 10 h.");return;
+                hours.setError("Czynność projektowa: minimum 20 min, maksimum 10 h.");return;
             }
             String dueValue=due.getText().toString().trim();
             String remind=reminder.getText().toString().trim();
@@ -5935,7 +5935,7 @@ public final class MainActivity extends Activity {
             if(parsedMinutes==null) {
                 duration.setError(proposalProject==null
                     ?"Podaj czas w godzinach, maks. 10 h."
-                    :"Czynność projektowa: minimum 0,5 h, maksimum 10 h.");
+                    :"Czynność projektowa: minimum 20 min, maksimum 10 h.");
                 return;
             }
             int minutes=parsedMinutes;
@@ -5995,7 +5995,7 @@ public final class MainActivity extends Activity {
                 if (parsedDurationMinutes == null) {
                     duration.setError(selectedProjectId==null
                         ?"Podaj czas w godzinach, maks. 10 h."
-                        :"Czynność projektowa: minimum 0,5 h, maksimum 10 h.");
+                        :"Czynność projektowa: minimum 20 min, maksimum 10 h.");
                     return;
                 }
                 int estimatedMinutes = parsedDurationMinutes;
@@ -18279,7 +18279,7 @@ public final class MainActivity extends Activity {
             if (durationMinutes < minimumMinutes || durationMinutes > MAX_TASK_MINUTES)
                 throw new IllegalArgumentException(projectId==null
                     ?"Czas musi wynosić 1–600 minut."
-                    :"Czynność projektowa musi mieć 30–600 minut.");
+                    :"Czynność projektowa musi mieć 20–600 minut.");
             ContentValues values = new ContentValues();
             values.put("priority", priority);
             values.put("duration_minutes", durationMinutes);
