@@ -396,9 +396,9 @@ final class SyncRecordStore {
         if ("tasks".equals(table)) {
             Long projectId=values.getAsLong("project_id");
             Long minutes=values.getAsLong("duration_minutes");
-            if(projectId!=null && (minutes==null || minutes<30))
+            if(projectId!=null && (minutes==null || minutes<20))
                 throw new IllegalArgumentException(
-                    "Czynność projektowa musi mieć co najmniej 30 minut.");
+                    "Czynność projektowa musi mieć co najmniej 20 minut.");
         }
         return values;
     }
