@@ -95,7 +95,7 @@ final class ProjectStore {
         db.execSQL("CREATE INDEX IF NOT EXISTS project_costs_project_idx "
             +"ON project_costs(project_id,id)");
         upgrade41(db);
-        upgrade42(db);
+        upgrade43(db);
     }
 
     static void upgrade41(SQLiteDatabase db) {
@@ -109,7 +109,7 @@ final class ProjectStore {
             +"ON project_task_dependencies(task_id,depends_on_task_id)");
     }
 
-    static void upgrade42(SQLiteDatabase db) {
+    static void upgrade43(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS project_task_work_sessions ("
             +"id INTEGER PRIMARY KEY AUTOINCREMENT,"
             +"task_id INTEGER NOT NULL,"
