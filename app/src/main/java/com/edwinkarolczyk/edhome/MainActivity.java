@@ -5833,10 +5833,16 @@ public final class MainActivity extends Activity {
                     + "nie wyznaczam fikcyjnych wolnych terminów.", 13, false));
                 return;
             }
+            Long proposalProject=projectIds.get(
+                chosenProject.getSelectedItemPosition());
+            int proposalMin=proposalProject==null
+                ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
             Integer parsedMinutes=TaskRules.minutesFromHours(
-                duration.getText().toString(),MIN_TASK_MINUTES,MAX_TASK_MINUTES);
+                duration.getText().toString(),proposalMin,MAX_TASK_MINUTES);
             if(parsedMinutes==null) {
-                duration.setError("Podaj czas w godzinach, np. 0,5 / 1 / 1,5 (maks. 8 h).");
+                duration.setError(proposalProject==null
+                    ?"Podaj czas w godzinach, maks. 10 h."
+                    :"Czynność projektowa: minimum 0,5 h, maksimum 10 h.");
                 return;
             }
             int minutes=parsedMinutes;
@@ -5886,12 +5892,17 @@ public final class MainActivity extends Activity {
                         return;
                     }
                 }
+                Long selectedProjectId=projectIds.get(
+                    chosenProject.getSelectedItemPosition());
+                int minimumDuration=selectedProjectId==null
+                    ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
                 Integer parsedDurationMinutes = TaskRules.minutesFromHours(
                     duration.getText().toString(),
-                    MIN_TASK_MINUTES, MAX_TASK_MINUTES);
+                    minimumDuration, MAX_TASK_MINUTES);
                 if (parsedDurationMinutes == null) {
-                    duration.setError("Podaj czas w godzinach, np. 0,5 / 1 / 1,5 "
-                        + "(maks. 8 h).");
+                    duration.setError(selectedProjectId==null
+                        ?"Podaj czas w godzinach, maks. 10 h."
+                        :"Czynność projektowa: minimum 0,5 h, maksimum 10 h.");
                     return;
                 }
                 int estimatedMinutes = parsedDurationMinutes;
@@ -5933,7 +5944,7 @@ public final class MainActivity extends Activity {
                     selectedPriority, estimatedMinutes,
                     selectedAssignee, customTime, leadDays,
                     new java.util.ArrayList<>(rotationIds),
-                    projectIds.get(chosenProject.getSelectedItemPosition()));
+                    selectedProjectId);
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
