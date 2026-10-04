@@ -5511,6 +5511,7 @@ public final class EdhomeDesktop extends JFrame {
                 removeRowsByLong("task_rotation_members", "task_id", id);
                 removeRowsByLong("project_task_dependencies", "task_id", id);
                 removeRowsByLong("project_task_dependencies", "depends_on_task_id", id);
+                removeRowsByLong("project_task_work_sessions", "task_id", id);
                 table("tasks").remove(row);
             } else if ("pantry".equals(tableName)) {
                 if (hasOpenAuditSession())
