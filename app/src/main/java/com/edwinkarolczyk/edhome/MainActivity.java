@@ -4840,31 +4840,92 @@ public final class MainActivity extends Activity {
                 final boolean done=c.getInt(2)!=0;
                 final String due=c.isNull(3)?"":c.getString(3);
                 final int minutes=c.getInt(4);
+                final int worked=ProjectStore.workedMinutes(
+                    db.getReadableDatabase(),taskId,true);
+                final int remaining=Math.max(0,minutes-worked);
+                final int overrun=Math.max(0,worked-minutes);
+                final Long activeStarted=ProjectStore.activeWorkStartedAt(
+                    db.getReadableDatabase(),taskId);
                 final int blockers=ProjectStore.openDependencyCount(
                     db.getReadableDatabase(),taskId);
                 final int dependencies=ProjectStore.dependencyIds(
                     db.getReadableDatabase(),taskId).size();
+
                 LinearLayout box=card();
                 CheckBox check=new CheckBox(this);
                 check.setText(taskName);
                 check.setTextColor(done?subdued:ink);
                 check.setChecked(done);
                 box.addView(check);
-                box.addView(text(projectTimeText(minutes)+" • "
-                    +ProjectStore.timeClass(db.getReadableDatabase(),
+
+                String timeLine="Plan: "+projectTimeText(minutes)
+                    +" • wykonano: "+projectTimeText(worked)
+                    +" • zostało: "+projectTimeText(remaining);
+                if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
+                box.addView(text(timeLine,12,false));
+                box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
                         project.id,taskId)
-                    +(due.isEmpty()?"":" • "+due),12,false));
+                    +(due.isEmpty()?"":" • termin "+due),12,false));
+
+                if(activeStarted!=null) {
+                    String started=Instant.ofEpochMilli(activeStarted)
+                        .atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("HH:mm"));
+                    box.addView(text("● Praca trwa od "+started,12,true));
+                }
                 if(dependencies>0)
                     box.addView(text(blockers>0
                         ?"Czeka na "+blockers+" wcześniejsze czynności"
                         :"Zależności zakończone • można rozpocząć",12,false));
+                if(!done&&remaining==0)
+                    box.addView(text("Planowany czas wykorzystany. "
+                        +"Możesz oznaczyć czynność jako wykonaną albo dalej mierzyć "
+                        +"pracę jako przekroczenie.",12,false));
+
                 check.setOnCheckedChangeListener((v,value)->{
+                    if(value&&ProjectStore.activeWorkStartedAt(
+                            db.getReadableDatabase(),taskId)!=null) {
+                        check.setChecked(false);
+                        alert("Najpierw zatrzymaj pomiar czasu tej czynności.");
+                        return;
+                    }
                     if(value)db.completeTask(taskId);else db.reopenTask(taskId);
                     ReminderReceiver.schedule(this);
                     DiagnosticLog.event(value?"PROJECT_TASK_COMPLETED":
                         "PROJECT_TASK_REOPENED","task="+taskId);
                     render();
                 });
+
+                LinearLayout work=compactActionRow();
+                if(!done) {
+                    if(activeStarted==null) {
+                        compactAction(work,"▶ Start",()->{
+                            try {
+                                ProjectStore.startWork(db.getWritableDatabase(),taskId);
+                                DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
+                                render();
+                            } catch(Exception error) {
+                                alert(error.getMessage()==null
+                                    ?"Nie udało się rozpocząć pracy.":error.getMessage());
+                            }
+                        });
+                    } else {
+                        compactAction(work,"■ Stop",()->{
+                            try {
+                                int session=ProjectStore.stopWork(
+                                    db.getWritableDatabase(),taskId);
+                                DiagnosticLog.event("PROJECT_WORK_STOPPED",
+                                    "task="+taskId+" minutes="+session);
+                                render();
+                            } catch(Exception error) {
+                                alert(error.getMessage()==null
+                                    ?"Nie udało się zatrzymać pracy.":error.getMessage());
+                            }
+                        });
+                    }
+                }
+                compactAction(work,"Czas",()->showProjectWorkHistory(taskId,taskName));
+
                 LinearLayout actions=compactActionRow();
                 compactAction(actions,"Zależności",
                     ()->showProjectDependencyDialog(taskId,project.id));
@@ -4879,6 +4940,30 @@ public final class MainActivity extends Activity {
             }
         }
         if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void showProjectWorkHistory(long taskId,String taskName) {
+        StringBuilder history=new StringBuilder();
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT started_at,ended_at,worked_minutes "
+                    +"FROM project_task_work_sessions WHERE task_id=? ORDER BY id DESC LIMIT 100",
+                new String[]{Long.toString(taskId)})) {
+            while(c.moveToNext()) {
+                count++;
+                String started=Instant.ofEpochMilli(c.getLong(0))
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                history.append(started);
+                if(c.isNull(1))history.append(" • trwa");
+                else history.append(" • ").append(projectTimeText(c.getInt(2)));
+                history.append("\n");
+            }
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Czas pracy • "+taskName)
+            .setMessage(count==0?"Brak zapisanych sesji pracy.":history.toString())
+            .setPositiveButton("OK",null).show();
     }
 
     private void showProjectDependencyDialog(long taskId,long projectId) {
