@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -94,6 +95,7 @@ final class ProjectStore {
         db.execSQL("CREATE INDEX IF NOT EXISTS project_costs_project_idx "
             +"ON project_costs(project_id,id)");
         upgrade41(db);
+        upgrade42(db);
     }
 
     static void upgrade41(SQLiteDatabase db) {
@@ -105,6 +107,23 @@ final class ProjectStore {
             +"UNIQUE(task_id,depends_on_task_id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS project_task_dependencies_task_idx "
             +"ON project_task_dependencies(task_id,depends_on_task_id)");
+    }
+
+    static void upgrade42(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS project_task_work_sessions ("
+            +"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            +"task_id INTEGER NOT NULL,"
+            +"started_at INTEGER NOT NULL,"
+            +"ended_at INTEGER,"
+            +"worked_minutes INTEGER,"
+            +"CHECK(ended_at IS NULL OR ended_at>=started_at),"
+            +"CHECK((ended_at IS NULL AND worked_minutes IS NULL) OR "
+                +"(ended_at IS NOT NULL AND worked_minutes IS NOT NULL "
+                +"AND worked_minutes>=1)))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS project_task_work_sessions_task_idx "
+            +"ON project_task_work_sessions(task_id,id)");
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS project_task_work_sessions_active_idx "
+            +"ON project_task_work_sessions(task_id) WHERE ended_at IS NULL");
     }
 
     static Project find(SQLiteDatabase db,long id) {
@@ -209,16 +228,39 @@ final class ProjectStore {
         Set<Long> ids=descendantIds(db,projectId);
         if(ids.isEmpty())return new Stats(0,0,0,0,0,0,0);
         String in=inClause(ids);String[] a=args(ids);
+        HashMap<Long,Integer> worked=new HashMap<>();
+        long now=System.currentTimeMillis();
+        try(Cursor c=db.rawQuery(
+                "SELECT s.task_id,s.started_at,s.ended_at,s.worked_minutes "
+                    +"FROM project_task_work_sessions s JOIN tasks t ON t.id=s.task_id "
+                    +"WHERE t.project_id IN ("+in+")",a)) {
+            while(c.moveToNext()) {
+                int minutes;
+                if(c.isNull(2)) {
+                    long elapsed=Math.max(0L,now-c.getLong(1));
+                    minutes=(int)Math.max(0L,elapsed/60000L);
+                } else minutes=Math.max(0,c.getInt(3));
+                worked.put(c.getLong(0),
+                    worked.getOrDefault(c.getLong(0),0)+minutes);
+            }
+        }
         int tasks=0,done=0,overdue=0,totalMinutes=0,doneMinutes=0;
         try(Cursor c=db.rawQuery(
-                "SELECT done,duration_minutes,due_date FROM tasks WHERE project_id IN ("+in+")",a)) {
+                "SELECT id,done,duration_minutes,due_date FROM tasks "
+                    +"WHERE project_id IN ("+in+")",a)) {
             String today=java.time.LocalDate.now().toString();
             while(c.moveToNext()) {
                 tasks++;
-                int minutes=Math.max(1,c.getInt(1));
+                long taskId=c.getLong(0);
+                int minutes=Math.max(1,c.getInt(2));
                 totalMinutes+=minutes;
-                if(c.getInt(0)!=0){done++;doneMinutes+=minutes;}
-                else if(!c.isNull(2)&&c.getString(2).compareTo(today)<0)overdue++;
+                if(c.getInt(1)!=0) {
+                    done++;
+                    doneMinutes+=minutes;
+                } else {
+                    doneMinutes+=Math.min(minutes,worked.getOrDefault(taskId,0));
+                    if(!c.isNull(3)&&c.getString(3).compareTo(today)<0)overdue++;
+                }
             }
         }
         long planned=0,spent=0;
@@ -233,6 +275,87 @@ final class ProjectStore {
             }
         }
         return new Stats(tasks,done,overdue,totalMinutes,doneMinutes,planned,spent);
+    }
+
+    static Long activeWorkStartedAt(SQLiteDatabase db,long taskId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT started_at FROM project_task_work_sessions "
+                    +"WHERE task_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1",
+                new String[]{Long.toString(taskId)})) {
+            return c.moveToFirst()?c.getLong(0):null;
+        }
+    }
+
+    static int workedMinutes(SQLiteDatabase db,long taskId,boolean includeActive) {
+        long total=0L;
+        try(Cursor c=db.rawQuery(
+                "SELECT started_at,ended_at,worked_minutes "
+                    +"FROM project_task_work_sessions WHERE task_id=?",
+                new String[]{Long.toString(taskId)})) {
+            long now=System.currentTimeMillis();
+            while(c.moveToNext()) {
+                if(c.isNull(1)) {
+                    if(includeActive)
+                        total+=Math.max(0L,now-c.getLong(0))/60000L;
+                } else total+=Math.max(0,c.getInt(2));
+            }
+        }
+        return (int)Math.min(Integer.MAX_VALUE,total);
+    }
+
+    static int remainingMinutes(SQLiteDatabase db,long taskId,int plannedMinutes) {
+        return Math.max(0,plannedMinutes-workedMinutes(db,taskId,true));
+    }
+
+    static int overrunMinutes(SQLiteDatabase db,long taskId,int plannedMinutes) {
+        return Math.max(0,workedMinutes(db,taskId,true)-plannedMinutes);
+    }
+
+    static void startWork(SQLiteDatabase db,long taskId) {
+        Long project=taskProjectId(db,taskId);
+        if(project==null)
+            throw new IllegalArgumentException("Start pracy dotyczy czynności projektu.");
+        try(Cursor c=db.rawQuery("SELECT done FROM tasks WHERE id=?",
+                new String[]{Long.toString(taskId)})) {
+            if(!c.moveToFirst())
+                throw new IllegalArgumentException("Czynność już nie istnieje.");
+            if(c.getInt(0)!=0)
+                throw new IllegalArgumentException("Czynność jest już oznaczona jako wykonana.");
+        }
+        if(openDependencyCount(db,taskId)>0)
+            throw new IllegalArgumentException(
+                "Najpierw zakończ wcześniejsze czynności zależne.");
+        if(activeWorkStartedAt(db,taskId)!=null)
+            throw new IllegalArgumentException("Ta czynność jest już uruchomiona.");
+        ContentValues v=new ContentValues();
+        v.put("task_id",taskId);
+        v.put("started_at",System.currentTimeMillis());
+        v.putNull("ended_at");
+        v.putNull("worked_minutes");
+        db.insertOrThrow("project_task_work_sessions",null,v);
+    }
+
+    static int stopWork(SQLiteDatabase db,long taskId) {
+        long sessionId;
+        long started;
+        try(Cursor c=db.rawQuery(
+                "SELECT id,started_at FROM project_task_work_sessions "
+                    +"WHERE task_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1",
+                new String[]{Long.toString(taskId)})) {
+            if(!c.moveToFirst())
+                throw new IllegalArgumentException("Ta czynność nie jest uruchomiona.");
+            sessionId=c.getLong(0);
+            started=c.getLong(1);
+        }
+        long ended=System.currentTimeMillis();
+        int minutes=(int)Math.max(1L,Math.round(Math.max(0L,ended-started)/60000.0));
+        ContentValues v=new ContentValues();
+        v.put("ended_at",ended);
+        v.put("worked_minutes",minutes);
+        if(db.update("project_task_work_sessions",v,"id=? AND ended_at IS NULL",
+                new String[]{Long.toString(sessionId)})!=1)
+            throw new IllegalStateException("Nie udało się zakończyć sesji pracy.");
+        return minutes;
     }
 
     static String timeClass(SQLiteDatabase db,long projectId,long taskId) {
