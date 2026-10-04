@@ -13,7 +13,7 @@ for token in (
     'PREF_KEY = "paycheck_monthly_budget_v1"',
     '"fixed".equals(item.amountMode)',
     '"estimate".equals(item.amountMode)',
-    'new int[]{0, 1, 2, 3, 6, 12}',
+    'ALLOWED_CYCLES = {0, 1, 2, 3, 6, 12}',
     '"FROM paycheck_transactions WHERE scope=\'shared\' AND status=?"',
     'static Totals sharedActual(',
     'static Totals privateActual(',
