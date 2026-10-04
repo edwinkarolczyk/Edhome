@@ -490,7 +490,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Projekty: Start/Stop pracy przy czynności, historia sesji, automatyczne odejmowanie przepracowanego czasu od planu, widok plan/wykonano/zostało/przekroczenie oraz minimum 30 min dla czynności projektowej. Planer używa czasu pozostałego. SQLite v43, backup i synchronizacja LAN obejmują sesje pracy. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Projekty: Start/Stop pracy przy czynności, historia sesji, automatyczne odejmowanie przepracowanego czasu od planu, widok plan/wykonano/zostało/przekroczenie oraz minimum 20 min dla czynności projektowej. Planer używa czasu pozostałego. SQLite v43, backup i synchronizacja LAN obejmują sesje pracy. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
