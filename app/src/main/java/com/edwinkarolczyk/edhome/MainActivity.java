@@ -12686,7 +12686,7 @@ public final class MainActivity extends Activity {
             PaycheckMonthlyBudget.Totals pending =
                 PaycheckMonthlyBudget.sharedActual(
                     db.getReadableDatabase(), month, "pending");
-            title("Budżet miesiąca • " + budgetMonthLabel(month));
+            title("Budżet miesiąca • wspólny • " + budgetMonthLabel(month));
             note("Planowane wpływy: " + MoneyRules.format(plan.income)
                 + " • planowane wydatki: " + MoneyRules.format(plan.expense)
                 + " • plan zostaje: " + MoneyRules.format(plan.net()));
@@ -12724,7 +12724,7 @@ public final class MainActivity extends Activity {
                 PaycheckMonthlyBudget.privateActual(entries, month, "confirmed");
             PaycheckMonthlyBudget.Totals pending =
                 PaycheckMonthlyBudget.privateActual(entries, month, "pending");
-            title("Prywatny budżet miesiąca • " + budgetMonthLabel(month));
+            title("Budżet miesiąca • prywatny • " + budgetMonthLabel(month));
             note("Planowane wpływy: " + MoneyRules.format(plan.income)
                 + " • planowane wydatki: " + MoneyRules.format(plan.expense)
                 + " • plan zostaje: " + MoneyRules.format(plan.net()));
