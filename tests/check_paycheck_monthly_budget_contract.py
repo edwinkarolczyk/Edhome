@@ -19,6 +19,11 @@ for token in (
     'static Totals privateActual(',
     'static List<Item> activeFor(',
     'static Totals planned(',
+    'static Item suggest(',
+    'static boolean match(SharedPreferences prefs',
+    'static long sharedMatchedActual(',
+    'static long privateMatchedActual(',
+    'matchedOperationIds',
 ):
     assert token in budget, "Missing monthly budget contract: " + token
 
@@ -34,6 +39,10 @@ for token in (
     'Co miesiąc',
     'Co 2 miesiące',
     'Co kwartał',
+    'Pasuje do Budżetu miesiąca',
+    'Nie, zostaw poza planem',
+    'Tak, przypisz',
+    'miesiąc ostatniej raty',
 ):
     assert token in main, "Missing Android monthly budget UI: " + token
 
@@ -48,6 +57,8 @@ for token in (
     "PaycheckMonthlyBudget.fromJson(",
     "static String addBudgetItem(",
     "static boolean deleteBudgetItem(",
+    "static boolean matchBudgetOperation(",
+    "unlinkBudgetOperationsInside(",
 ):
     assert token in vault, "Private budget must stay encrypted: " + token
 
@@ -74,4 +85,7 @@ for token in (
 ):
     assert token in main, "Confirmed-ledger gate missing: " + token
 
-print("PayCheck monthly plan, private encryption and confirmed-transaction gate: PASS")
+assert 'PaycheckMonthlyBudget.match(' in main
+assert 'PrivatePaycheckVault.matchBudgetOperation(' in main
+assert 'PaycheckMonthlyBudget.unmatch(prefs,operationId)' in main
+print("PayCheck monthly plan, simple matching, private encryption and confirmed-transaction gate: PASS")
