@@ -183,6 +183,8 @@ final class DataBackup {
             prefs.getBoolean("home_tile_full_art", true));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
+        settings.put("paycheckMonthlyBudget",
+            prefs.getString(PaycheckMonthlyBudget.PREF_KEY, "[]"));
         // Include user-selected small storage photos in the portable JSON backup.
         // Never export the original photo or its external content URI.
         JSONArray storageThumbs=new JSONArray();
@@ -347,6 +349,9 @@ final class DataBackup {
                         || ((Number) settings.get("pantryTakeDelaySeconds"))
                             .doubleValue() != takeDelaySeconds)))
             throw new IllegalArgumentException("Nieprawidłowy czas wyjmowania.");
+        String paycheckMonthlyBudget =
+            settings.optString("paycheckMonthlyBudget", "[]");
+        PaycheckMonthlyBudget.validateSerialized(paycheckMonthlyBudget);
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -1565,6 +1570,7 @@ final class DataBackup {
                 .putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)
                 .putBoolean("home_tile_full_art",fullTileArt)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
+                .putString(PaycheckMonthlyBudget.PREF_KEY, paycheckMonthlyBudget)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
                 .putString("quiet_hours_end", quietEnd);
