@@ -9,6 +9,8 @@ from pathlib import Path
 ctx=runpy.run_path("tests/check_db_contract.py")
 db=ctx["fresh"]
 source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
+archive=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackupArchive.java").read_text(encoding="utf-8")
+originals=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageOriginals.java").read_text(encoding="utf-8")
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
@@ -93,7 +95,30 @@ for table in manifest:
 restore=source.split("database.beginTransaction();",1)[1]
 assert restore.index("if (!restored.commit())")<restore.index(
     "database.setTransactionSuccessful()")<restore.index("database.endTransaction()")
-assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
-assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
-assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 49 domain tables including Projects work sessions, profiles, Garden, NFC and bank evidence; numeric/nullability, JSON roundtrip and rollback PASS")
+for token in (
+    'ZipOutputStream',
+    '"edhome-backup-archive"',
+    '"manifest.json"',
+    '"media/storage-originals/"',
+    'digestEntry(zip, entry)',
+    'DataBackup.restoreJson(database, prefs, inspection.json)',
+):
+    assert token in archive, token
+for token in (
+    'static void save(Context context, long itemId, Uri source)',
+    'MAX_FILE_BYTES = 32L * 1024 * 1024',
+    'regenerateThumbnails(',
+):
+    assert token in originals, token
+for token in (
+    'DataBackupArchive.create(',
+    'DataBackupArchive.verifyDocument(',
+    'DataBackupArchive.restore(',
+    'StorageOriginals.save(this,id,file)',
+    'StorageOriginals.save(this,id,selected)',
+    'setType("application/zip")',
+    'DATA_BACKUP_ZIP_EXPORTED',
+):
+    assert token in main, token
+assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain supported"
+print("Backup: 49 domain tables + verified ZIP manifest/SHA-256, original storage media, thumbnail regeneration, legacy JSON and rollback contract PASS")
