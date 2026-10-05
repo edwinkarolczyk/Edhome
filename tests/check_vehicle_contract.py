@@ -48,7 +48,7 @@ import re
 version_code = re.search(r"\bversionCode\s+(\d+)", gradle)
 version_name = re.search(r"\bversionName\s+'([^']+)'", gradle)
 assert version_code and int(version_code.group(1)) >= 84
-assert version_name and re.fullmatch(r"0\.(?:6\.0|7\.\d+)\.\d+", version_name.group(1))
+assert version_name and re.fullmatch(r"0\.(?:6\.0|7\.\d+|8\.\d+\.\d+)\.\d+", version_name.group(1))
 assert "versionNameSuffix ''" in gradle
 context=runpy.run_path("tests/check_db_contract.py")
 db=context["fresh"]
