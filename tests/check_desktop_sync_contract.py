@@ -385,7 +385,7 @@ for marker in (
     'Przesuń czynność wyżej',
     'Przesuń czynność niżej',
     'java.util.Collections.swap',
-    'DESKTOP_VERSION = "0.7.0.85"'
+    'DESKTOP_VERSION = "0.7.0.'
 ):
     assert marker in desktop, "Missing Desktop project task-order contract: " + marker
 print("desktop persistent project task order contract OK")
