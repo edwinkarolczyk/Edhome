@@ -17,7 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Exact user-selected storage photos kept privately so portable backups can restore them. */
+/** Oryginalne zdjęcia Magazynu zapisane prywatnie, aby pełna kopia mogła je odtworzyć. */
 final class StorageOriginals {
     static final String DIRECTORY = "edhome-storage-originals";
     static final long MAX_FILE_BYTES = 32L * 1024 * 1024;
@@ -149,7 +149,7 @@ final class StorageOriginals {
         finally { bitmap.recycle(); }
     }
 
-    /** Existing JSON thumbnail is kept if a legacy item has no original photo. */
+    /** Dla starszej rzeczy bez oryginału pozostaje miniatura zapisana w JSON. */
     static int regenerateThumbnails(Context context, SharedPreferences prefs,
             SQLiteDatabase database) {
         SharedPreferences.Editor editor = prefs.edit();
@@ -164,7 +164,7 @@ final class StorageOriginals {
                     editor.putString(StorageThumbs.key(id), thumbnail(image));
                     regenerated++;
                 } catch (Exception ignored) {
-                    // data.json already contains validated thumbnails for legacy compatibility.
+                    // data.json zawiera zweryfikowane miniatury jako zgodność dla starszych danych.
                 }
             }
         }
