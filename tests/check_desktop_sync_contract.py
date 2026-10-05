@@ -95,11 +95,15 @@ assert 'DesktopHardwareScanner' in desktop
 assert '"nfc_links"' in desktop
 assert 'DATABASE_MIGRATED_34_TO_35_NFC_LINKS' in main
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
-assert 'DB_VERSION = 43' in backup
+assert 'DB_VERSION = 44' in backup
 assert '{"nfc_links"' in backup
 assert '{"user_profiles"' in backup
 assert '{"project_task_work_sessions"' in backup
 assert 'removeRowsByLong("project_task_work_sessions", "task_id", id)' in desktop
+assert 'removeRowsByLong("project_task_blockers", "task_id", id)' in desktop
+assert '{"member_shift_hours"' in backup
+assert '{"member_project_windows"' in backup
+assert '{"project_task_blockers"' in backup
 
 # Incremental record sync v2 + backward-compatible v1.
 assert '"/patch"' in server

@@ -10,6 +10,7 @@ assert "CREATE TABLE IF NOT EXISTS user_profiles" in store
 assert "CHECK(id=member_id)" in store
 assert "ROLE_ADMIN" in store and "ROLE_MEMBER" in store
 assert "ensureAdministrator" in store
+assert "Najpierw ustaw innego użytkownika jako Administratora." in store
 assert "INSERT OR IGNORE INTO user_profiles" in store
 assert "DATABASE_MIGRATED_41_TO_42_USER_PROFILES" in main
 assert 'case "member_profile": memberProfile(); break;' in main
@@ -18,7 +19,7 @@ assert "Użytkownicy • profile domowników" in main
 assert "USER_PROFILE_ADDED" in main and "USER_PROFILE_UPDATED" in main
 assert "MEMBER_PIN_HASH_PREFIX" in main
 assert "PBKDF2WithHmacSHA256" in main
-assert 'DB_VERSION = 43' in backup
+assert 'DB_VERSION = 44' in backup
 assert '{"user_profiles"' in backup
 assert "MEMBER_PIN_HASH_PREFIX" not in backup
 assert "member_pin_hash_" not in backup

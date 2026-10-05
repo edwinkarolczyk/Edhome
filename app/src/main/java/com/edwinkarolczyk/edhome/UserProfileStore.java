@@ -114,6 +114,24 @@ final class UserProfileStore {
                 throw new IllegalArgumentException("Użytkownik nie istnieje.");
 
             ensureAll(db);
+            if(ROLE_MEMBER.equals(role)) {
+                try(Cursor current=db.rawQuery(
+                        "SELECT role FROM user_profiles WHERE member_id=?",
+                        new String[]{Long.toString(memberId)})) {
+                    boolean demoting=current.moveToFirst()
+                        &&ROLE_ADMIN.equals(current.getString(0));
+                    if(demoting) {
+                        try(Cursor others=db.rawQuery(
+                                "SELECT COUNT(*) FROM user_profiles "
+                                    +"WHERE role='admin' AND member_id<>?",
+                                new String[]{Long.toString(memberId)})) {
+                            if(!others.moveToFirst()||others.getInt(0)==0)
+                                throw new IllegalArgumentException(
+                                    "Najpierw ustaw innego użytkownika jako Administratora.");
+                        }
+                    }
+                }
+            }
             ContentValues profile=new ContentValues();
             profile.put("role",role);
             profile.put("avatar",avatar);
@@ -121,7 +139,6 @@ final class UserProfileStore {
             if(db.update("user_profiles",profile,"member_id=?",
                     new String[]{Long.toString(memberId)})!=1)
                 throw new IllegalStateException("Nie udało się zapisać profilu.");
-            ensureAdministrator(db);
             if(ownTransaction)db.setTransactionSuccessful();
             return true;
         } finally {

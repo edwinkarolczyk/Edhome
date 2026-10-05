@@ -325,6 +325,9 @@ final class ProjectStore {
         if(openDependencyCount(db,taskId)>0)
             throw new IllegalArgumentException(
                 "Najpierw zakończ wcześniejsze czynności zależne.");
+        String blocker=ProjectPlanningStore.startBlockReason(db,taskId);
+        if(!blocker.isEmpty())
+            throw new IllegalArgumentException(blocker);
         if(activeWorkStartedAt(db,taskId)!=null)
             throw new IllegalArgumentException("Ta czynność jest już uruchomiona.");
         ContentValues v=new ContentValues();

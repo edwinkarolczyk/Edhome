@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.80";
+    private static final String DESKTOP_VERSION = "0.7.0.81";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -5686,6 +5686,7 @@ public final class EdhomeDesktop extends JFrame {
                 removeRowsByLong("project_task_dependencies", "task_id", id);
                 removeRowsByLong("project_task_dependencies", "depends_on_task_id", id);
                 removeRowsByLong("project_task_work_sessions", "task_id", id);
+                removeRowsByLong("project_task_blockers", "task_id", id);
                 table("tasks").remove(row);
             } else if ("pantry".equals(tableName)) {
                 if (hasOpenAuditSession())

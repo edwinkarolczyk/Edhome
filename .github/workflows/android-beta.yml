@@ -206,6 +206,8 @@ jobs:
         run: python3 tests/check_user_profiles_contract.py
       - name: Projects hierarchy, dependencies and planning contract
         run: python3 tests/check_projects_contract.py
+      - name: Project availability, blockers and user-role contract
+        run: python3 tests/check_project_planning_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
         run: python3 tests/check_settings_diagnostics_contract.py
       - name: Backup schema, nulls and JSON roundtrip contract
@@ -490,7 +492,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Audyt UI Androida: poprawiony kontrast natywnych białych dialogów w Użytkownikach, PayCheck, Magazynie/Skanerze, Zakupach, Spiżarni, Ogrodzie, diagnostyce i QR aktualizacji. Listy Spinner w tych dialogach używają jasnego stylu. Dodano test regresyjny DialogContrast. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Projekty: ustawialne godziny I/II/III zmiany i osobne okna czasu na projekty per użytkownik; planer korzysta z pozostałego czasu po Start/Stop. Dodano twarde i miękkie wymagania czynności (zakup, dostawa, przygotowanie, zasób, akceptacja) z opcjonalną datą dostępności. Twardy bloker zatrzymuje Start i wpływa na propozycję terminu. Poprawiono zmianę ostatniego Administratora na Domownika — aplikacja wyświetla jasny komunikat zamiast po cichu przywracać rolę. SQLite v44, backup i synchronizacja LAN obejmują nowe dane. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

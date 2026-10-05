@@ -4067,7 +4067,11 @@ public final class MainActivity extends Activity {
                         "member="+memberId);
                     render();
                 } catch(Exception error) {
-                    name.setError(error.getMessage());
+                    String problem=error.getMessage()==null
+                        ?"Nie udało się zapisać profilu.":error.getMessage();
+                    if(problem.startsWith("Najpierw ustaw innego użytkownika"))
+                        alert(problem);
+                    else name.setError(problem);
                 }
             });
 
@@ -4170,90 +4174,203 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private String[] memberShiftLabels(long memberId) {
+        ProjectPlanningStore.ShiftHours first=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,"morning");
+        ProjectPlanningStore.ShiftHours second=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,"afternoon");
+        ProjectPlanningStore.ShiftHours third=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,"night");
+        return new String[]{
+            "Nie ustawiono","Wolne",
+            "I zmiana • "+first.label(),
+            "II zmiana • "+second.label(),
+            "III zmiana • "+third.label()
+        };
+    }
+
+    private void showMemberShiftHoursEditor(long memberId,String shift,String title) {
+        ProjectPlanningStore.ShiftHours current=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,shift);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20),dp(8),dp(20),0);
+        form.addView(text("Godziny pracy tej zmiany. Dla zmiany nocnej koniec "
+            +"może być wcześniejszy od początku, np. 22:00–06:00.",13,false));
+        EditText start=new EditText(this);
+        start.setSingleLine(true);start.setHint("Od HH:mm");start.setText(current.start);
+        EditText end=new EditText(this);
+        end.setSingleLine(true);end.setHint("Do HH:mm");end.setText(current.end);
+        form.addView(start);form.addView(end);
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(title+" • godziny pracy")
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    ProjectPlanningStore.setShiftHours(db.getWritableDatabase(),
+                        memberId,shift,start.getText().toString(),end.getText().toString());
+                    DiagnosticLog.event("MEMBER_SHIFT_HOURS_SAVED",
+                        "member="+memberId+" shift="+shift);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    start.setError(error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void showProjectAvailabilityEditor(long memberId,String shift,String title) {
+        java.util.List<TimeSuggestions.Window> current=
+            ProjectPlanningStore.windows(db.getReadableDatabase(),memberId,shift);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20),dp(8),dp(20),0);
+        form.addView(text("To nie jest czas pracy zawodowej, tylko godziny, "
+            +"w których EDHOME może proponować projekty. Możesz ustawić dwa okna. "
+            +"Zostaw oba puste, aby dla tego rodzaju dnia niczego nie planować.",
+            13,false));
+        EditText start1=new EditText(this);start1.setSingleLine(true);start1.setHint("Okno 1 • od HH:mm");
+        EditText end1=new EditText(this);end1.setSingleLine(true);end1.setHint("Okno 1 • do HH:mm");
+        EditText start2=new EditText(this);start2.setSingleLine(true);start2.setHint("Okno 2 • od HH:mm");
+        EditText end2=new EditText(this);end2.setSingleLine(true);end2.setHint("Okno 2 • do HH:mm");
+        if(current.size()>0){start1.setText(current.get(0).start.toString());end1.setText(current.get(0).end.toString());}
+        if(current.size()>1){start2.setText(current.get(1).start.toString());end2.setText(current.get(1).end.toString());}
+        form.addView(start1);form.addView(end1);form.addView(start2);form.addView(end2);
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(title+" • czas na projekty")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Domyślne",(d,w)->{
+                ProjectPlanningStore.resetWindows(db.getWritableDatabase(),memberId,shift);
+                DiagnosticLog.event("MEMBER_PROJECT_WINDOWS_RESET",
+                    "member="+memberId+" shift="+shift);
+                render();
+            })
+            .setPositiveButton("Zapisz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    ProjectPlanningStore.setWindows(db.getWritableDatabase(),memberId,shift,
+                        start1.getText().toString(),end1.getText().toString(),
+                        start2.getText().toString(),end2.getText().toString());
+                    DiagnosticLog.event("MEMBER_PROJECT_WINDOWS_SAVED",
+                        "member="+memberId+" shift="+shift);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    start1.setError(error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
     private void memberSchedule() {
-        String name = db.memberName(selectedMemberId);
-        if (name.isEmpty()) {
-            go("members");
-            return;
+        String name=db.memberName(selectedMemberId);
+        if(name.isEmpty()){go("members");return;}
+        header("Grafik i dostępność • "+name);
+        note("Grafik pracy oraz czas na projekty są oddzielne. Planer używa "
+            +"rodzaju zmiany z danego dnia, a następnie szuka miejsca wyłącznie "
+            +"w ustawionych oknach projektowych.");
+        button("← Profil użytkownika",()->go("member_profile"));
+
+        LinearLayout hours=card();
+        hours.addView(text("Godziny zmian",18,true));
+        for(int i=0;i<3;i++){
+            final String shift=ProjectPlanningStore.SHIFT_CODES[i];
+            final String title=ProjectPlanningStore.SHIFT_NAMES[i];
+            ProjectPlanningStore.ShiftHours value=ProjectPlanningStore.shiftHours(
+                db.getReadableDatabase(),selectedMemberId,shift);
+            smallButton(hours,title+" • "+value.label()+" →",
+                ()->showMemberShiftHoursEditor(selectedMemberId,shift,title));
         }
-        header("Grafik pracy • " + name);
-        note("Lokalny grafik pon.–niedz. Puste dni są nieustalone, "
-            + "a nie automatycznie wolne. Zmiana nocna kończy się następnego dnia.");
-        button("← Profil użytkownika", () -> go("member_profile"));
-        for (int day = 1; day <= 7; day++) {
-            final int weekday = day;
-            LinearLayout shiftCard = card();
-            shiftCard.addView(text(WEEKDAY_LABELS[day - 1], 17, true));
-            Spinner chosenShift = new Spinner(this);
+
+        LinearLayout availability=card();
+        availability.addView(text("Kiedy mogę robić projekty",18,true));
+        availability.addView(text("Ustawialne osobno dla I/II/III zmiany i dnia "
+            +"wolnego. Dwa okna pozwalają np. rozdzielić popołudnie na 16–18 i 20–22.",
+            13,false));
+        for(int i=0;i<ProjectPlanningStore.SHIFT_CODES.length;i++){
+            final String shift=ProjectPlanningStore.SHIFT_CODES[i];
+            final String title=ProjectPlanningStore.SHIFT_NAMES[i];
+            String summary=ProjectPlanningStore.windowsSummary(
+                db.getReadableDatabase(),selectedMemberId,shift);
+            smallButton(availability,title+" • "+summary+" →",
+                ()->showProjectAvailabilityEditor(selectedMemberId,shift,title));
+        }
+
+        String[] dynamicShiftLabels=memberShiftLabels(selectedMemberId);
+        title("Grafik tygodniowy");
+        for(int day=1;day<=7;day++){
+            final int weekday=day;
+            LinearLayout shiftCard=card();
+            shiftCard.addView(text(WEEKDAY_LABELS[day-1],17,true));
+            Spinner chosenShift=new Spinner(this);
             chosenShift.setAdapter(themeSpinnerAdapter(
-                java.util.Arrays.asList(SHIFT_LABELS)));
-            String configured = db.weeklyShift(selectedMemberId, weekday);
-            chosenShift.setSelection(Math.max(0, java.util.Arrays.asList(
+                java.util.Arrays.asList(dynamicShiftLabels)));
+            String configured=db.weeklyShift(selectedMemberId,weekday);
+            chosenShift.setSelection(Math.max(0,java.util.Arrays.asList(
                 SHIFT_VALUES).indexOf(configured)));
             shiftCard.addView(chosenShift);
-            smallButton(shiftCard, "Zapisz dzień", () -> {
-                db.setWeeklyShift(selectedMemberId, weekday,
+            smallButton(shiftCard,"Zapisz dzień",()->{
+                db.setWeeklyShift(selectedMemberId,weekday,
                     SHIFT_VALUES[chosenShift.getSelectedItemPosition()]);
                 DiagnosticLog.event("MEMBER_WEEKLY_SHIFT_SAVED");
                 render();
             });
         }
 
-        LinearLayout exception = card();
-        exception.addView(text("Wyjątek na konkretny dzień", 18, true));
+        LinearLayout exception=card();
+        exception.addView(text("Wyjątek na konkretny dzień",18,true));
         exception.addView(text("Nadpisuje tygodniowy grafik tylko dla tej daty. "
-            + "„Nie ustawiono” usuwa wyjątek i przywraca grafik tygodniowy.",
-            13, false));
-        EditText selectedDate = new EditText(this);
-        selectedDate.setSingleLine(true);
-        selectedDate.setFocusable(false);
-        selectedDate.setText(LocalDate.now().toString());
-        selectedDate.setTextColor(ink);
-        selectedDate.setOnClickListener(v -> {
-            LocalDate initial = LocalDate.parse(selectedDate.getText().toString());
-            new DatePickerDialog(this, (view, year, month, day) ->
-                selectedDate.setText(LocalDate.of(
-                    year, month + 1, day).toString()),
-                initial.getYear(), initial.getMonthValue() - 1,
-                initial.getDayOfMonth()).show();
+            +"Możesz np. oznaczyć urlop/dzień wolny bez zmiany całego tygodnia.",
+            13,false));
+        EditText selectedDate=new EditText(this);
+        selectedDate.setSingleLine(true);selectedDate.setFocusable(false);
+        selectedDate.setText(LocalDate.now().toString());selectedDate.setTextColor(ink);
+        selectedDate.setOnClickListener(v->{
+            LocalDate initial=LocalDate.parse(selectedDate.getText().toString());
+            new DatePickerDialog(this,(view,year,month,day)->
+                selectedDate.setText(LocalDate.of(year,month+1,day).toString()),
+                initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth()).show();
         });
         exception.addView(selectedDate);
-        smallButton(exception, "Wybierz datę", () -> selectedDate.performClick());
-        Spinner exceptionShift = new Spinner(this);
+        smallButton(exception,"Wybierz datę",()->selectedDate.performClick());
+        Spinner exceptionShift=new Spinner(this);
         exceptionShift.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList(SHIFT_LABELS)));
+            java.util.Arrays.asList(dynamicShiftLabels)));
         exception.addView(exceptionShift);
-        smallButton(exception, "Zapisz wyjątek / usuń wyjątek", () -> {
-            String date = selectedDate.getText().toString();
-            db.setShiftException(selectedMemberId, date,
+        smallButton(exception,"Zapisz wyjątek / usuń wyjątek",()->{
+            db.setShiftException(selectedMemberId,selectedDate.getText().toString(),
                 SHIFT_VALUES[exceptionShift.getSelectedItemPosition()]);
             DiagnosticLog.event("MEMBER_SHIFT_EXCEPTION_SAVED");
             render();
         });
-        LinearLayout saved = card();
-        saved.addView(text("Zapisane wyjątki", 18, true));
-        int exceptions = 0;
-        try (Cursor c = db.getReadableDatabase().rawQuery(
+
+        LinearLayout saved=card();
+        saved.addView(text("Zapisane wyjątki",18,true));
+        int exceptions=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT date,shift FROM member_shift_exceptions "
-                + "WHERE member_id=? ORDER BY date ASC",
-                new String[]{Long.toString(selectedMemberId)})) {
-            while (c.moveToNext()) {
+                    +"WHERE member_id=? ORDER BY date ASC",
+                new String[]{Long.toString(selectedMemberId)})){
+            while(c.moveToNext()){
                 exceptions++;
-                String date = c.getString(0);
-                String shift = c.getString(1);
-                saved.addView(text(date + " • " + SHIFT_LABELS[
-                    Math.max(0, java.util.Arrays.asList(SHIFT_VALUES)
-                        .indexOf(shift))], 15, false));
-                smallButton(saved, "Usuń wyjątek " + date, () -> {
-                    db.setShiftException(selectedMemberId, date, "unset");
+                String date=c.getString(0),shift=c.getString(1);
+                int idx=Math.max(0,java.util.Arrays.asList(SHIFT_VALUES).indexOf(shift));
+                saved.addView(text(date+" • "+dynamicShiftLabels[idx],15,false));
+                smallButton(saved,"Usuń wyjątek "+date,()->{
+                    db.setShiftException(selectedMemberId,date,"unset");
                     DiagnosticLog.event("MEMBER_SHIFT_EXCEPTION_REMOVED");
                     render();
                 });
             }
         }
-        if (exceptions == 0)
-            saved.addView(text("Brak wyjątków. Każda data korzysta z grafiku "
-                + "tygodniowego lub jest nieustalona.", 13, false));
+        if(exceptions==0)
+            saved.addView(text("Brak wyjątków. Każda data korzysta z grafiku tygodniowego.",
+                13,false));
     }
 
     private void waste() {
@@ -4859,6 +4976,10 @@ public final class MainActivity extends Activity {
                     db.getReadableDatabase(),taskId);
                 final int dependencies=ProjectStore.dependencyIds(
                     db.getReadableDatabase(),taskId).size();
+                final int hardRequirements=ProjectPlanningStore.openHardCount(
+                    db.getReadableDatabase(),taskId);
+                final int softRequirements=ProjectPlanningStore.openSoftCount(
+                    db.getReadableDatabase(),taskId);
 
                 LinearLayout box=card();
                 CheckBox check=new CheckBox(this);
@@ -4886,6 +5007,18 @@ public final class MainActivity extends Activity {
                     box.addView(text(blockers>0
                         ?"Czeka na "+blockers+" wcześniejsze czynności"
                         :"Zależności zakończone • można rozpocząć",12,false));
+                if(hardRequirements>0)
+                    box.addView(text("⛔ ZABLOKOWANE • niespełnione wymagania: "
+                        +hardRequirements,12,true));
+                else if(softRequirements>0)
+                    box.addView(text("⚠ Niespełnione zalecenia: "
+                        +softRequirements,12,false));
+                if(!done&&remaining>0&&!due.isEmpty()
+                        &&due.compareTo(LocalDate.now().toString())<0)
+                    box.addView(text("Termin minął • zostało "
+                        +projectTimeText(remaining)
+                        +" • planer może wyznaczyć nowy termin tylko dla reszty pracy.",
+                        12,true));
                 if(!done&&remaining==0)
                     box.addView(text("Planowany czas wykorzystany. "
                         +"Możesz oznaczyć czynność jako wykonaną albo dalej mierzyć "
@@ -4934,11 +5067,18 @@ public final class MainActivity extends Activity {
                     }
                 }
                 compactAction(work,"Czas",()->showProjectWorkHistory(taskId,taskName));
+                if(!done&&remaining>0&&!due.isEmpty()
+                        &&due.compareTo(LocalDate.now().toString())<0)
+                    compactAction(work,"↻ Termin",
+                        ()->showProjectPlanSuggestions(project.id));
 
                 LinearLayout actions=compactActionRow();
                 compactAction(actions,"Zależności",
                     ()->showProjectDependencyDialog(taskId,project.id));
-                compactAction(actions,"Edytuj",()->{
+                compactAction(actions,"Wymagania",
+                    ()->showProjectBlockers(taskId,taskName));
+                LinearLayout editRow=compactActionRow();
+                compactAction(editRow,"Edytuj",()->{
                     try(Cursor row=db.getReadableDatabase().rawQuery(
                             "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
                             new String[]{Long.toString(taskId)})) {
@@ -5028,6 +5168,104 @@ public final class MainActivity extends Activity {
             })
             .setNegativeButton("Zamknij",null).show();
     }
+
+    private void showProjectBlockers(long taskId,String taskName) {
+        java.util.List<ProjectPlanningStore.Blocker> items=
+            ProjectPlanningStore.blockers(db.getReadableDatabase(),taskId);
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        for(ProjectPlanningStore.Blocker item:items) {
+            String state=item.resolved?"✓":
+                item.hard?"⛔":"⚠";
+            labels.add(state+" "+ProjectPlanningStore.kindLabel(item.kind)
+                +" • "+item.label
+                +(item.availableOn.isEmpty()?"":" • od "+item.availableOn));
+        }
+        AlertDialog.Builder builder=new AlertDialog.Builder(this)
+            .setTitle("Wymagania • "+taskName)
+            .setMessage(items.isEmpty()
+                ?"Brak wymagań. Dodaj zakup, dostawę, przygotowanie, zasób "
+                    +"lub decyzję, bez której czynność nie powinna ruszyć."
+                :"⛔ twarde blokuje Start • ⚠ miękkie tylko ostrzega.")
+            .setNegativeButton("Zamknij",null)
+            .setPositiveButton("+ Dodaj",(d,w)->
+                showAddProjectBlockerDialog(taskId,taskName));
+        if(!items.isEmpty())builder.setItems(labels.toArray(new String[0]),(d,which)->
+            showProjectBlockerActions(items.get(which),taskName));
+        builder.show();
+    }
+
+    private void showProjectBlockerActions(ProjectPlanningStore.Blocker item,
+            String taskName) {
+        String[] options=item.resolved
+            ?new String[]{"Oznacz ponownie jako oczekujące","Usuń wymaganie"}
+            :new String[]{"Oznacz jako spełnione","Usuń wymaganie"};
+        new AlertDialog.Builder(this)
+            .setTitle(item.label)
+            .setMessage((item.hard?"Twardy bloker":"Miękkie ostrzeżenie")
+                +(item.availableOn.isEmpty()?"":" • najwcześniej "+item.availableOn))
+            .setItems(options,(d,which)->{
+                if(which==0) {
+                    ProjectPlanningStore.setResolved(db.getWritableDatabase(),
+                        item.id,!item.resolved);
+                    DiagnosticLog.event(item.resolved
+                        ?"PROJECT_BLOCKER_REOPENED":"PROJECT_BLOCKER_RESOLVED",
+                        "id="+item.id);
+                } else {
+                    ProjectPlanningStore.deleteBlocker(db.getWritableDatabase(),item.id);
+                    DiagnosticLog.event("PROJECT_BLOCKER_DELETED","id="+item.id);
+                }
+                render();
+            })
+            .setNegativeButton("Anuluj",null).show();
+    }
+
+    private void showAddProjectBlockerDialog(long taskId,String taskName) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20),dp(8),dp(20),0);
+        Spinner kind=new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(ProjectPlanningStore.BLOCKER_LABELS)));
+        EditText label=new EditText(this);
+        label.setSingleLine(true);label.setHint("Co musi być gotowe?");
+        Spinner strength=new Spinner(this);
+        strength.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(
+                "Twarde • blokuje Start","Miękkie • tylko ostrzega")));
+        EditText available=new EditText(this);
+        available.setSingleLine(true);
+        available.setHint("Najwcześniej od RRRR-MM-DD • opcjonalnie");
+        form.addView(text("Rodzaj",13,true));form.addView(kind);
+        form.addView(text("Wymaganie",13,true));form.addView(label);
+        form.addView(text("Znaczenie",13,true));form.addView(strength);
+        form.addView(text("Przewidywana dostępność",13,true));form.addView(available);
+        form.addView(text("Jeśli twardy bloker nie ma daty, planer nie zgaduje "
+            +"terminu. Jeśli ma datę, planuje nie wcześniej niż od tej daty, "
+            +"ale Start nadal wymaga oznaczenia blokera jako spełnionego.",
+            12,false));
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Nowe wymaganie • "+taskName)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dodaj",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    int index=kind.getSelectedItemPosition();
+                    ProjectPlanningStore.addBlocker(db.getWritableDatabase(),taskId,
+                        ProjectPlanningStore.BLOCKER_KINDS[index],
+                        label.getText().toString(),
+                        strength.getSelectedItemPosition()==0,
+                        available.getText().toString());
+                    DiagnosticLog.event("PROJECT_BLOCKER_ADDED","task="+taskId);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    label.setError(error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
 
     private void showProjectResourcePicker(long projectId) {
         java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
@@ -5195,9 +5433,8 @@ public final class MainActivity extends Activity {
         ProjectStore.Project project=ProjectStore.find(
             db.getReadableDatabase(),projectId);
         if(project==null)return;
-        java.util.LinkedHashMap<Long,String> suggestions=
-            new java.util.LinkedHashMap<>();
-        java.util.HashMap<Long,java.time.LocalDate> plannedDates=
+        java.util.LinkedHashMap<Long,String> suggestions=new java.util.LinkedHashMap<>();
+        java.util.HashMap<Long,java.time.LocalDateTime> plannedEnds=
             new java.util.HashMap<>();
         java.util.HashMap<Long,java.time.LocalDateTime> memberCursors=
             new java.util.HashMap<>();
@@ -5232,16 +5469,29 @@ public final class MainActivity extends Activity {
                     lines.add("• "+prefix+" — brak wykonawcy");
                     continue;
                 }
+                if(ProjectPlanningStore.hasUndatedHardBlocker(
+                        db.getReadableDatabase(),taskId)) {
+                    lines.add("• "+prefix+" — "
+                        +ProjectPlanningStore.startBlockReason(
+                            db.getReadableDatabase(),taskId));
+                    continue;
+                }
 
                 java.time.LocalDateTime cursor=memberCursors.containsKey(member)
                     ?memberCursors.get(member):now;
+                java.time.LocalDate notBefore=ProjectPlanningStore.planningNotBefore(
+                    db.getReadableDatabase(),taskId);
+                if(notBefore!=null) {
+                    java.time.LocalDateTime gate=notBefore.atStartOfDay();
+                    if(gate.isAfter(cursor))cursor=gate;
+                }
+
                 boolean blockedOutsidePlan=false;
                 for(Long dependency:ProjectStore.dependencyIds(
                         db.getReadableDatabase(),taskId)) {
-                    java.time.LocalDate planned=plannedDates.get(dependency);
-                    if(planned!=null) {
-                        java.time.LocalDateTime after=planned.plusDays(1).atStartOfDay();
-                        if(after.isAfter(cursor))cursor=after;
+                    java.time.LocalDateTime plannedEnd=plannedEnds.get(dependency);
+                    if(plannedEnd!=null) {
+                        if(plannedEnd.isAfter(cursor))cursor=plannedEnd;
                         continue;
                     }
                     try(Cursor dep=db.getReadableDatabase().rawQuery(
@@ -5249,8 +5499,7 @@ public final class MainActivity extends Activity {
                             new String[]{Long.toString(dependency)})) {
                         if(!dep.moveToFirst()||dep.getInt(0)!=0)continue;
                         if(dep.isNull(1)||dep.getString(1).trim().isEmpty()) {
-                            blockedOutsidePlan=true;
-                            break;
+                            blockedOutsidePlan=true;break;
                         }
                         java.time.LocalDateTime after=java.time.LocalDate
                             .parse(dep.getString(1)).plusDays(1).atStartOfDay();
@@ -5263,31 +5512,35 @@ public final class MainActivity extends Activity {
                     continue;
                 }
 
+                final long plannerMember=member;
                 java.util.List<TimeSuggestions.Option> options=
-                    TimeSuggestions.propose(cursor,minutes,
-                        day->db.effectiveShift(member,day.toString()));
+                    TimeSuggestions.proposeAvailability(cursor,minutes,
+                        day->ProjectPlanningStore.windows(db.getReadableDatabase(),
+                            plannerMember,db.effectiveShift(
+                                plannerMember,day.toString())));
                 if(options.isEmpty()) {
-                    lines.add("• "+prefix+" — brak wolnego terminu w 28 dniach");
+                    lines.add("• "+prefix
+                        +" — brak dostępnego okna projektowego w 28 dniach");
                     continue;
                 }
                 TimeSuggestions.Option chosen=options.get(0);
                 suggestions.put(taskId,chosen.date.toString());
-                plannedDates.put(taskId,chosen.date);
-                memberCursors.put(member,chosen.date.plusDays(1).atStartOfDay());
+                java.time.LocalDateTime chosenEnd=chosen.date.atTime(chosen.end);
+                plannedEnds.put(taskId,chosenEnd);
+                memberCursors.put(member,chosenEnd);
                 lines.add("• "+prefix+" — "+chosen.date+" • "
-                    +chosen.start+"–"+chosen.end);
+                    +chosen.start+"–"+chosen.end+" • zostało "
+                    +projectTimeText(minutes));
             }
         }
         if(lines.isEmpty()) {
-            alert("Brak otwartych czynności do zaplanowania.");
-            return;
+            alert("Brak otwartych czynności do zaplanowania.");return;
         }
         String message=android.text.TextUtils.join("\n",lines);
         new AlertDialog.Builder(this).setTitle("Propozycja planu projektu")
-            .setMessage(message+"\n\nPlan obejmuje również podprojekty i respektuje "
-                +"kolejność zależności. Dla jednej osoby EDHOME proponuje "
-                +"konserwatywnie jedną czynność dziennie. Terminy pozostają "
-                +"propozycją do zatwierdzenia.")
+            .setMessage(message+"\n\nPlan używa pozostałego czasu po Start/Stop, "
+                +"grafiku użytkownika, ustawionych okien projektowych, zależności "
+                +"oraz twardych wymagań. Nie zmienia terminów bez Twojej akceptacji.")
             .setNegativeButton("Zostaw bez zmian",null)
             .setPositiveButton("Ustaw proponowane daty",(d,w)->{
                 SQLiteDatabase database=db.getWritableDatabase();
@@ -5949,8 +6202,13 @@ public final class MainActivity extends Activity {
             }
             int minutes=parsedMinutes;
             java.util.List<TimeSuggestions.Option> candidates =
-                TimeSuggestions.propose(java.time.LocalDateTime.now(), minutes,
-                    day -> db.effectiveShift(chosen, day.toString()));
+                proposalProject==null
+                    ?TimeSuggestions.propose(java.time.LocalDateTime.now(),minutes,
+                        day->db.effectiveShift(chosen,day.toString()))
+                    :TimeSuggestions.proposeAvailability(
+                        java.time.LocalDateTime.now(),minutes,
+                        day->ProjectPlanningStore.windows(db.getReadableDatabase(),
+                            chosen,db.effectiveShift(chosen,day.toString())));
             if (candidates.isEmpty()) {
                 proposals.addView(text("Brak potwierdzonych okien w grafiku "
                     + "tej osoby przez 28 dni. Ustaw dni pracy/wolne i wyjątki "
@@ -17765,7 +18023,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 43);
+            super(context, "edhome-beta-preview.db", null, 44);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -17793,6 +18051,7 @@ public final class MainActivity extends Activity {
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
             ProjectStore.create(database);
+            ProjectPlanningStore.create(database);
             addNfcLinks(database);
             PaycheckStore.create(database);
             BankEvidenceStore.create(database);
@@ -17815,7 +18074,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 43) {
+            if (oldVersion < 1 || newVersion > 44) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -18051,6 +18310,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 43) {
                 ProjectStore.upgrade43(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_42_TO_43_PROJECT_WORK_SESSIONS");
+            }
+            if(oldVersion < 44) {
+                ProjectPlanningStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_43_TO_44_PROJECT_PLANNING");
             }
             if(newVersion >= 36) {
                 try {
@@ -18542,6 +18805,8 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(id),Long.toString(id)});
                 database.delete("project_task_work_sessions", "task_id=?",
                     new String[]{Long.toString(id)});
+                database.delete("project_task_blockers", "task_id=?",
+                    new String[]{Long.toString(id)});
                 database.delete("tasks", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
             } finally {
@@ -18669,6 +18934,7 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(memberId)});
                 database.delete("member_shift_exceptions", "member_id=?",
                     new String[]{Long.toString(memberId)});
+                ProjectPlanningStore.deleteMemberConfig(database,memberId);
                 database.delete("user_profiles", "member_id=?",
                     new String[]{Long.toString(memberId)});
                 database.delete("household_members", "id=?",

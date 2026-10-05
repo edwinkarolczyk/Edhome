@@ -28,6 +28,7 @@ for marker in (
 for marker in (
     'case "projects": projects();',
     "showProjectDependencyDialog",
+    "showProjectBlockers",
     "Zaproponuj terminy projektu",
     "Plan obejmuje również podprojekty i respektuje",
     "+ Rzecz / Pudełko",
@@ -37,7 +38,7 @@ for marker in (
 
 assert "MAX_TASK_MINUTES = 600" in main
 assert "durationMinutes > 600" in time
-assert 'private static final int DB_VERSION = 43;' in backup
+assert 'private static final int DB_VERSION = 44;' in backup
 assert '{"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"}' in backup
 assert '"project_task_dependencies".equals(table)' in sync
 assert 'return new String[]{"task_id","depends_on_task_id"};' in sync
@@ -48,6 +49,10 @@ assert 'project_task_work_sessions' in project
 assert 'PROJECT_MIN_TASK_MINUTES = 20' in main
 assert 'PROJECT_WORK_STARTED' in main and 'PROJECT_WORK_STOPPED' in main
 assert 'ProjectStore.remainingMinutes' in main
+assert 'TimeSuggestions.proposeAvailability' in main
+assert 'ProjectPlanningStore.windows' in main
+assert 'ProjectPlanningStore.startBlockReason' in project
+assert 'project_task_blockers' in main
 assert 'database.delete("project_task_work_sessions"' in main
 
 # Minimalny kontrakt SQL zależności: brak self-loop i brak duplikatów.
