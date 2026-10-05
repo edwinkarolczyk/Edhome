@@ -6,6 +6,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -28,7 +30,12 @@ final class SuplaCacheStore {
 
         File target = new File(context.getFilesDir(), FILE_NAME);
         File temp = new File(context.getFilesDir(), FILE_NAME + ".tmp");
-        Files.writeString(temp.toPath(), root.toString(), StandardCharsets.UTF_8);
+        byte[] bytes = root.toString().getBytes(StandardCharsets.UTF_8);
+        try (FileOutputStream output = new FileOutputStream(temp)) {
+            output.write(bytes);
+            output.flush();
+            output.getFD().sync();
+        }
         try {
             Files.move(temp.toPath(), target.toPath(),
                 StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -41,7 +48,18 @@ final class SuplaCacheStore {
         try {
             File target = new File(context.getFilesDir(), FILE_NAME);
             if (!target.isFile()) return empty();
-            String text = Files.readString(target.toPath(), StandardCharsets.UTF_8);
+            if (target.length() > 2L * 1024L * 1024L) return empty();
+            byte[] bytes = new byte[(int) target.length()];
+            int offset = 0;
+            try (FileInputStream input = new FileInputStream(target)) {
+                while (offset < bytes.length) {
+                    int count = input.read(bytes, offset, bytes.length - offset);
+                    if (count < 0) break;
+                    offset += count;
+                }
+            }
+            if (offset != bytes.length) return empty();
+            String text = new String(bytes, StandardCharsets.UTF_8);
             JSONObject root = new JSONObject(text);
             if (root.optInt("format", 0) != FORMAT
                     || root.optJSONArray("channels") == null) return empty();
