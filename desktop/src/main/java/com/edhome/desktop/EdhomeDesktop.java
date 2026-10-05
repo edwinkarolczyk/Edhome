@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.85";
+    private static final String DESKTOP_VERSION = "0.7.0.86";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -529,7 +529,27 @@ public final class EdhomeDesktop extends JFrame {
             + "</html>");
         meta.setForeground(APP_MUTED);
         head.add(meta,BorderLayout.CENTER);
-        wrapper.add(head,BorderLayout.NORTH);
+
+        java.util.List<JsonObject> selectedTasks = new ArrayList<>();
+        java.util.List<JCheckBox> selectors = new ArrayList<>();
+        JLabel selection = new JLabel("Zaznaczone: 0");
+        selection.setForeground(APP_ACCENT);
+
+        JPanel batchBar = new JPanel(new FlowLayout(FlowLayout.LEFT,6,0));
+        batchBar.setBackground(APP_BG);
+        JButton selectAll = actionButton("Zaznacz wszystkie");
+        JButton clearSelection = actionButton("Wyczyść");
+        JButton batchEdit = actionButton("Edytuj zaznaczone");
+        batchBar.add(selection);
+        batchBar.add(selectAll);
+        batchBar.add(clearSelection);
+        batchBar.add(batchEdit);
+
+        JPanel north = new JPanel(new BorderLayout(0,8));
+        north.setBackground(APP_BG);
+        north.add(head,BorderLayout.NORTH);
+        north.add(batchBar,BorderLayout.SOUTH);
+        wrapper.add(north,BorderLayout.NORTH);
 
         JPanel list = new JPanel();
         list.setBackground(APP_BG);
@@ -541,10 +561,39 @@ public final class EdhomeDesktop extends JFrame {
             list.add(empty);
         } else {
             for (JsonObject task : tasks) {
-                list.add(desktopProjectTaskCard(task));
+                JPanel row = new JPanel(new BorderLayout(8,0));
+                row.setOpaque(false);
+                JCheckBox selector = new JCheckBox();
+                selector.setOpaque(false);
+                selector.setToolTipText("Zaznacz czynność do edycji zbiorczej");
+                selector.addActionListener(e -> {
+                    if (selector.isSelected()) {
+                        if (!selectedTasks.contains(task)) selectedTasks.add(task);
+                    } else selectedTasks.remove(task);
+                    selection.setText("Zaznaczone: " + selectedTasks.size());
+                });
+                selectors.add(selector);
+                row.add(selector,BorderLayout.WEST);
+                row.add(desktopProjectTaskCard(task),BorderLayout.CENTER);
+                list.add(row);
                 list.add(Box.createVerticalStrut(8));
             }
         }
+
+        selectAll.addActionListener(e -> {
+            selectedTasks.clear();
+            selectedTasks.addAll(tasks);
+            for (JCheckBox selector : selectors) selector.setSelected(true);
+            selection.setText("Zaznaczone: " + selectedTasks.size());
+        });
+        clearSelection.addActionListener(e -> {
+            selectedTasks.clear();
+            for (JCheckBox selector : selectors) selector.setSelected(false);
+            selection.setText("Zaznaczone: 0");
+        });
+        batchEdit.addActionListener(e ->
+            showDesktopProjectBatchEdit(projectId,new ArrayList<>(selectedTasks)));
+
         JScrollPane scroll = new JScrollPane(list);
         scroll.setBorder(null);
         scroll.getViewport().setBackground(APP_BG);
@@ -556,6 +605,161 @@ public final class EdhomeDesktop extends JFrame {
         hint.setForeground(APP_MUTED);
         wrapper.add(hint,BorderLayout.SOUTH);
         return wrapper;
+    }
+
+    private void showDesktopProjectBatchEdit(long currentProjectId,
+            java.util.List<JsonObject> selected) {
+        if (selected == null || selected.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zaznacz co najmniej jedną czynność.");
+            return;
+        }
+
+        JCheckBox changeAssignee = new JCheckBox("Zmień wykonawcę");
+        JComboBox<Choice> assignee = referenceCombo("household_members","",true);
+        assignee.setEnabled(false);
+        changeAssignee.addActionListener(e -> assignee.setEnabled(changeAssignee.isSelected()));
+
+        JCheckBox changeDue = new JCheckBox("Zmień termin");
+        JTextField due = new JTextField(12);
+        due.setToolTipText("RRRR-MM-DD albo puste = bez terminu");
+        due.setEnabled(false);
+        changeDue.addActionListener(e -> due.setEnabled(changeDue.isSelected()));
+
+        JCheckBox changePriority = new JCheckBox("Zmień priorytet");
+        JComboBox<Choice> priority = new JComboBox<>(new Choice[]{
+            new Choice("low","Niski"),
+            new Choice("normal","Normalny"),
+            new Choice("high","Wysoki"),
+            new Choice("urgent","Pilny")
+        });
+        priority.setEnabled(false);
+        changePriority.addActionListener(e ->
+            priority.setEnabled(changePriority.isSelected()));
+
+        JCheckBox moveProject = new JCheckBox("Przenieś do projektu / podprojektu");
+        JComboBox<Choice> targetProject =
+            desktopProjectBatchTargetCombo(currentProjectId);
+        targetProject.setEnabled(false);
+        moveProject.addActionListener(e ->
+            targetProject.setEnabled(moveProject.isSelected()));
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(new EmptyBorder(8,8,8,8));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(5,5,5,5);
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.weightx = 1;
+        int y=0;
+
+        g.gridx=0;g.gridy=y;g.gridwidth=2;
+        form.add(new JLabel("Zaznaczone czynności: " + selected.size()),g);
+        y++;
+
+        g.gridwidth=1;g.gridx=0;g.gridy=y;form.add(changeAssignee,g);
+        g.gridx=1;form.add(assignee,g);y++;
+        g.gridx=0;g.gridy=y;form.add(changeDue,g);
+        g.gridx=1;form.add(due,g);y++;
+        g.gridx=0;g.gridy=y;form.add(changePriority,g);
+        g.gridx=1;form.add(priority,g);y++;
+        g.gridx=0;g.gridy=y;form.add(moveProject,g);
+        g.gridx=1;form.add(targetProject,g);
+
+        int result = JOptionPane.showConfirmDialog(this,form,
+            "EDHOME Desktop • edycja zbiorcza czynności",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+        if (!changeAssignee.isSelected() && !changeDue.isSelected()
+                && !changePriority.isSelected() && !moveProject.isSelected()) {
+            JOptionPane.showMessageDialog(this,
+                "Nie wybrano żadnej zmiany.");
+            return;
+        }
+
+        String dueValue = due.getText().trim();
+        if (changeDue.isSelected() && !dueValue.isBlank()) {
+            try { LocalDate.parse(dueValue); }
+            catch (Exception invalid) {
+                JOptionPane.showMessageDialog(this,
+                    "Nieprawidłowy termin. Użyj formatu RRRR-MM-DD.",
+                    "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
+        Choice assigneeValue = (Choice)assignee.getSelectedItem();
+        Choice priorityValue = (Choice)priority.getSelectedItem();
+        Choice projectValue = (Choice)targetProject.getSelectedItem();
+        long targetId = moveProject.isSelected() && projectValue != null
+            && !projectValue.value.isBlank()
+            ? Long.parseLong(projectValue.value) : currentProjectId;
+
+        if (moveProject.isSelected()
+                && desktopProjectRootId(targetId)
+                    != desktopProjectRootId(currentProjectId)) {
+            JOptionPane.showMessageDialog(this,
+                "Czynności można przenosić zbiorczo tylko w obrębie "
+                    + "tego samego projektu głównego. Dzięki temu zależności pozostają poprawne.",
+                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        java.util.Map<JsonObject,JsonObject> before = new java.util.LinkedHashMap<>();
+        try {
+            long nextOrder = moveProject.isSelected()
+                ? desktopNextProjectSortOrder(targetId) : 0L;
+            for (JsonObject task : selected) {
+                before.put(task,task.deepCopy());
+                if (changeAssignee.isSelected()) {
+                    String value = assigneeValue == null ? "" : assigneeValue.value;
+                    if (value.isBlank())
+                        task.add("assignee_id",com.google.gson.JsonNull.INSTANCE);
+                    else task.addProperty("assignee_id",Long.parseLong(value));
+                }
+                if (changeDue.isSelected()) {
+                    if (dueValue.isBlank())
+                        task.add("due_date",com.google.gson.JsonNull.INSTANCE);
+                    else task.addProperty("due_date",dueValue);
+                }
+                if (changePriority.isSelected() && priorityValue != null)
+                    task.addProperty("priority",priorityValue.value);
+                if (moveProject.isSelected()) {
+                    task.addProperty("project_id",targetId);
+                    task.addProperty("project_sort_order",nextOrder);
+                    nextOrder += 10L;
+                }
+            }
+            markDirty();
+            desktopProjectId = moveProject.isSelected() ? targetId : currentProjectId;
+            showSection("Projekty");
+            JOptionPane.showMessageDialog(this,
+                "Zmieniono czynności: " + selected.size()
+                    + ". Zapisano lokalnie; synchronizacja wyśle tylko zmienione rekordy.");
+        } catch (Exception error) {
+            for (java.util.Map.Entry<JsonObject,JsonObject> entry : before.entrySet())
+                restoreJsonObject(entry.getKey(),entry.getValue());
+            JOptionPane.showMessageDialog(this,
+                "Nie wykonano edycji zbiorczej:\n" + rootMessage(error),
+                "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private JComboBox<Choice> desktopProjectBatchTargetCombo(long projectId) {
+        java.util.List<Choice> options = new ArrayList<>();
+        long rootId = desktopProjectRootId(projectId);
+        for (JsonElement element : table("projects")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject project = element.getAsJsonObject();
+            long id = longValue(project,"id");
+            if (id <= 0 || desktopProjectRootId(id) != rootId) continue;
+            options.add(new Choice(Long.toString(id),desktopProjectPath(project)));
+        }
+        options.sort((a,b) -> a.label.compareToIgnoreCase(b.label));
+        JComboBox<Choice> combo = new JComboBox<>(options.toArray(new Choice[0]));
+        for (int i=0;i<options.size();i++)
+            if (Long.toString(projectId).equals(options.get(i).value))
+                combo.setSelectedIndex(i);
+        return combo;
     }
 
     private JPanel desktopProjectTaskCard(JsonObject task) {

@@ -347,6 +347,23 @@ assert 'row.addProperty("project_id",projectId);' in desktop
 assert 'DESKTOP_VERSION = "0.7.0.' in desktop
 print("desktop projects tree + fast task editor contract OK")
 
+# Desktop Projects: multi-select and safe batch editing.
+for marker in (
+    'Zaznacz wszystkie',
+    'Edytuj zaznaczone',
+    'showDesktopProjectBatchEdit',
+    'Zmień wykonawcę',
+    'Zmień termin',
+    'Zmień priorytet',
+    'Przenieś do projektu / podprojektu',
+    'desktopProjectBatchTargetCombo',
+    'samego projektu głównego'
+):
+    assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
+
+assert 'DESKTOP_VERSION = "0.7.0.86"' in desktop
+print("desktop project multi-select + batch edit contract OK")
+
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
 for marker in (
     'showDesktopTaskDependencies',
