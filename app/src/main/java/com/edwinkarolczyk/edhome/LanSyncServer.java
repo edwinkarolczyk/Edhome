@@ -96,12 +96,16 @@ final class LanSyncServer {
     interface SnapshotProvider { String snapshot() throws Exception; }
     interface RestoreProvider { void restore(String snapshot) throws Exception; }
     interface RevisionProvider { long revision() throws Exception; }
+    interface ChangesProvider {
+        String changes(long afterUpdatedAt, String afterUuid) throws Exception;
+    }
     interface PatchProvider { String patch(String incoming) throws Exception; }
 
     private final String token;
     private final SnapshotProvider provider;
     private final RestoreProvider restoreProvider;
     private final RevisionProvider revisionProvider;
+    private final ChangesProvider changesProvider;
     private final PatchProvider patchProvider;
     private final Object writeLock = new Object();
     private volatile boolean running;
@@ -110,11 +114,12 @@ final class LanSyncServer {
 
     LanSyncServer(String token, SnapshotProvider provider,
             RestoreProvider restoreProvider, RevisionProvider revisionProvider,
-            PatchProvider patchProvider) {
+            ChangesProvider changesProvider, PatchProvider patchProvider) {
         this.token = token;
         this.provider = provider;
         this.restoreProvider = restoreProvider;
         this.revisionProvider = revisionProvider;
+        this.changesProvider = changesProvider;
         this.patchProvider = patchProvider;
     }
 
@@ -256,9 +261,13 @@ final class LanSyncServer {
                 return;
             }
             String method = parts[0];
-            String path = parts[1];
+            String target = parts[1];
+            int queryMark = target.indexOf('?');
+            String path = queryMark >= 0 ? target.substring(0, queryMark) : target;
+            String query = queryMark >= 0 ? target.substring(queryMark + 1) : "";
 
-            syncTransfer = !selfClient && (("GET".equals(method) && "/snapshot".equals(path))
+            syncTransfer = !selfClient && (("GET".equals(method)
+                    && ("/snapshot".equals(path) || "/changes".equals(path)))
                 || ("POST".equals(method)
                     && ("/patch".equals(path) || "/snapshot".equals(path))));
             if (syncTransfer) beginSyncActivity();
@@ -273,6 +282,23 @@ final class LanSyncServer {
             if ("GET".equals(method) && "/state".equals(path)) {
                 long revision = revisionProvider == null ? -1L : revisionProvider.revision();
                 reply(peer, 200, "{\"ok\":true,\"revision\":" + revision + "}");
+                return;
+            }
+
+            if ("GET".equals(method) && "/changes".equals(path)) {
+                if (changesProvider == null) {
+                    reply(peer, 404, "{\"error\":\"CHANGES_UNAVAILABLE\"}");
+                    return;
+                }
+                long after = queryLong(query, "after", -1L);
+                String afterUuid = queryValue(query, "uuid");
+                if (after < 0L) {
+                    reply(peer, 400, "{\"error\":\"BAD_CURSOR\"}");
+                    return;
+                }
+                String changes = changesProvider.changes(after, afterUuid);
+                reply(peer, 200, changes);
+                DiagnosticLog.event("DESKTOP_SYNC_CHANGES_SENT");
                 return;
             }
 
@@ -394,6 +420,26 @@ final class LanSyncServer {
             DiagnosticLog.error("DESKTOP_SYNC_CLIENT", error);
         } finally {
             if (syncTransfer) endSyncActivity();
+        }
+    }
+
+    private static String queryValue(String query, String key) {
+        if (query == null || query.isBlank()) return "";
+        for (String part : query.split("&")) {
+            int equals = part.indexOf('=');
+            String name = equals < 0 ? part : part.substring(0, equals);
+            if (!key.equals(name)) continue;
+            return equals < 0 ? "" : part.substring(equals + 1);
+        }
+        return "";
+    }
+
+    private static long queryLong(String query, String key, long fallback) {
+        try {
+            String value = queryValue(query, key);
+            return value.isBlank() ? fallback : Long.parseLong(value);
+        } catch (NumberFormatException invalid) {
+            return fallback;
         }
     }
 
