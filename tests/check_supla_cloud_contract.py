@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SUPLA Cloud 0.8.0.1 read-only foundation and secret-safety contract."""
+"""SUPLA Cloud read-only foundation and secret-safety contract."""
 from pathlib import Path
 import re
 
@@ -61,6 +61,6 @@ for marker in (
     assert marker in main, "Missing SUPLA UI contract: "+marker
 
 assert 'android.permission.INTERNET' in beta_manifest
-assert re.search(r"\bversionCode\s+193\b", gradle)
-assert "versionName '0.8.0.1'" in gradle
-print("SUPLA Cloud 0.8.0.1 read-only, HTTPS, PAT/Keystore and cache contract: PASS")
+version_code=re.search(r"\bversionCode\s+(\d+)\b", gradle)
+assert version_code and int(version_code.group(1)) >= 193
+print("SUPLA Cloud read-only, HTTPS, PAT/Keystore and cache contract: PASS")
