@@ -15,9 +15,11 @@ for marker in (
     'page("Ustawienia • telefon i diagnostyka")',
     'actionButton("Połącz telefon przez QR")',
     'actionButton("Sprawdź połączenie PC ↔ telefon")',
+    'actionButton("Aktualizuj EDHOME Desktop — 1 klik")',
     'actionButton("Pobierz logi telefonu + Desktop na Pulpit")',
     'showQrPairing(pairState, qrPair)',
     'diagnosePhoneConnection(',
+    'oneClickDesktopUpdate(updateDesktop)',
     'saveAllDiagnosticsToDesktop(',
 ):
     assert marker in settings, f"Missing compact Desktop setting: {marker}"
@@ -26,7 +28,6 @@ for obsolete in (
     "Adres telefonu:", "Kod parowania:", "Pobierz ręcznie przez Wi‑Fi",
     "Wczytaj backup JSON", "Pobierz nowe logi z telefonu",
     "Kopiuj diagnostykę EDHOME Desktop", "Zapisz diagnostykę Desktop TXT",
-    "Aktualizuj EDHOME Desktop — 1 klik",
     "Uruchamiaj EDHOME Desktop razem z Windows",
     "Po starcie Windows uruchamiaj zminimalizowany do zasobnika",
     "Automatycznie pobieraj zmiany z telefonu w tle",

@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.86";
+    private static final String DESKTOP_VERSION = "0.7.0.87";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -4156,15 +4156,17 @@ public final class EdhomeDesktop extends JFrame {
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(4, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(5, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
         JButton diagnose = actionButton("Sprawdź połączenie PC ↔ telefon");
+        JButton updateDesktop = actionButton("Aktualizuj EDHOME Desktop — 1 klik");
         JButton downloadAllLogs =
             actionButton("Pobierz logi telefonu + Desktop na Pulpit");
         JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
         actions.add(diagnose);
+        actions.add(updateDesktop);
         actions.add(downloadAllLogs);
         actions.add(openBackups);
         content.add(actions);
@@ -4186,6 +4188,7 @@ public final class EdhomeDesktop extends JFrame {
         diagnose.addActionListener(e -> diagnosePhoneConnection(
             PREFS.get("phoneIp", "").trim(),
             PREFS.get("token", "").trim(), diagnose));
+        updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         downloadAllLogs.addActionListener(e -> saveAllDiagnosticsToDesktop(
             PREFS.get("phoneIp", "").trim(),
             PREFS.get("token", "").trim(), downloadAllLogs));
