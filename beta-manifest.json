@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 187,
-  "versionName": "0.7.4.46",
-  "changelog": "EDHOME 0.7.4.46 — Beta. Audyt UI Androida: poprawiony kontrast natywnych białych dialogów w Użytkownikach, PayCheck, Magazynie/Skanerze, Zakupach, Spiżarni, Ogrodzie, diagnostyce i QR aktualizacji. Listy Spinner w tych dialogach używają jasnego stylu. Dodano test regresyjny DialogContrast. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.46/edhome-beta.apk",
-  "sha256": "03a896abedc8cba3a495a3ebbdd833ae3bd14f7ede326f2cea8ab996a79e809e"
+  "versionCode": 188,
+  "versionName": "0.7.4.47",
+  "changelog": "EDHOME 0.7.4.47 — Beta. Projekty: ustawialne godziny I/II/III zmiany i osobne okna czasu na projekty per użytkownik; planer korzysta z pozostałego czasu po Start/Stop. Dodano twarde i miękkie wymagania czynności (zakup, dostawa, przygotowanie, zasób, akceptacja) z opcjonalną datą dostępności. Twardy bloker zatrzymuje Start i wpływa na propozycję terminu. Poprawiono zmianę ostatniego Administratora na Domownika — aplikacja wyświetla jasny komunikat zamiast po cichu przywracać rolę. SQLite v44, backup i synchronizacja LAN obejmują nowe dane. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.47/edhome-beta.apk",
+  "sha256": "bd91dfea3e899a5a4086c06280eec9f9a9d64a52feffc1a1d4be6dab46ab9834"
 }
