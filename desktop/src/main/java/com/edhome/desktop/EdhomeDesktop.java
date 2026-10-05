@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.81";
+    private static final String DESKTOP_VERSION = "0.7.0.82";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -4510,6 +4510,13 @@ public final class EdhomeDesktop extends JFrame {
             String tableName) {
         JPanel page = page(title);
 
+        boolean storageBatch = "storage_items".equals(tableName);
+        java.util.List<JsonObject> selectedRows = new ArrayList<>();
+        java.util.List<JCheckBox> selectors = new ArrayList<>();
+        JLabel selectedCount = new JLabel(storageBatch
+            ? "Zaznaczone: 0" : "");
+        selectedCount.setForeground(APP_ACCENT);
+
         JPanel list = new JPanel();
         list.setBackground(APP_BG);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
@@ -4521,7 +4528,26 @@ public final class EdhomeDesktop extends JFrame {
         } else {
             for (JsonElement el : rows) {
                 if (!el.isJsonObject()) continue;
-                list.add(recordCard(el.getAsJsonObject(), columns, tableName));
+                JsonObject row = el.getAsJsonObject();
+                if (storageBatch) {
+                    JPanel selectable = new JPanel(new BorderLayout(8, 0));
+                    selectable.setOpaque(false);
+                    JCheckBox selector = new JCheckBox();
+                    selector.setOpaque(false);
+                    selector.setToolTipText("Zaznacz do operacji zbiorczej");
+                    selector.addActionListener(e -> {
+                        if (selector.isSelected()) {
+                            if (!selectedRows.contains(row)) selectedRows.add(row);
+                        } else selectedRows.remove(row);
+                        selectedCount.setText("Zaznaczone: " + selectedRows.size());
+                    });
+                    selectors.add(selector);
+                    selectable.add(selector, BorderLayout.WEST);
+                    selectable.add(recordCard(row, columns, tableName), BorderLayout.CENTER);
+                    list.add(selectable);
+                } else {
+                    list.add(recordCard(row, columns, tableName));
+                }
                 list.add(Box.createVerticalStrut(10));
             }
         }
@@ -4534,9 +4560,14 @@ public final class EdhomeDesktop extends JFrame {
 
         JPanel footer = new JPanel(new BorderLayout(8, 0));
         footer.setBackground(APP_BG);
+        JPanel footerInfo = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        footerInfo.setOpaque(false);
         JLabel count = new JLabel("Pozycji: " + rows.size()
             + "  •  widok użytkowy — bez technicznych ID");
         count.setForeground(APP_MUTED);
+        footerInfo.add(count);
+        if (storageBatch) footerInfo.add(selectedCount);
+
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         actions.setBackground(APP_BG);
         JButton reload = actionButton("↻ Pobierz z telefonu");
@@ -4556,6 +4587,27 @@ public final class EdhomeDesktop extends JFrame {
             paste.addActionListener(e -> showQuickTaskBulkPaste());
             actions.add(paste);
         }
+        if (storageBatch) {
+            JButton selectAll = actionButton("Zaznacz wszystko");
+            selectAll.addActionListener(e -> {
+                for (JCheckBox selector : selectors) selector.setSelected(true);
+                selectedRows.clear();
+                for (JsonElement element : rows)
+                    if (element.isJsonObject()) selectedRows.add(element.getAsJsonObject());
+                selectedCount.setText("Zaznaczone: " + selectedRows.size());
+            });
+            JButton clear = actionButton("Wyczyść");
+            clear.addActionListener(e -> {
+                for (JCheckBox selector : selectors) selector.setSelected(false);
+                selectedRows.clear();
+                selectedCount.setText("Zaznaczone: 0");
+            });
+            JButton moveSelected = actionButton("⇄ Przenieś zaznaczone");
+            moveSelected.addActionListener(e -> showBatchStorageMove(selectedRows));
+            actions.add(selectAll);
+            actions.add(clear);
+            actions.add(moveSelected);
+        }
         if ("storage_items".equals(tableName) || "places".equals(tableName)) {
             JButton labels = actionButton("▣ Etykiety QR");
             labels.addActionListener(e -> showBulkQrLabels(tableName, rows));
@@ -4568,10 +4620,138 @@ public final class EdhomeDesktop extends JFrame {
         }
         actions.add(reload);
         actions.add(save);
-        footer.add(count, BorderLayout.WEST);
+        footer.add(footerInfo, BorderLayout.WEST);
         footer.add(actions, BorderLayout.EAST);
         page.add(footer, BorderLayout.SOUTH);
         return page;
+    }
+
+    private void showBatchStorageMove(java.util.List<JsonObject> selectedRows) {
+        if (selectedRows == null || selectedRows.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zaznacz co najmniej jedną rzecz albo pudełko.");
+            return;
+        }
+
+        java.util.List<JsonObject> selected = new ArrayList<>(selectedRows);
+        boolean allThings = true;
+        for (JsonObject row : selected) {
+            if (!"thing".equals(value(row, "kind"))) allThings = false;
+            if (!value(row, "lent_to").isBlank()) {
+                JOptionPane.showMessageDialog(this,
+                    "W zaznaczeniu znajduje się wypożyczona rzecz: "
+                        + value(row, "name")
+                        + ".\nNajpierw odnotuj jej zwrot.",
+                    "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
+        java.util.List<Choice> modes = new ArrayList<>();
+        modes.add(new Choice("place", "Przenieś do miejsca"));
+        if (allThings) modes.add(new Choice("box", "Włóż do pudełka"));
+        modes.add(new Choice("none", "Usuń przypisanie lokalizacji"));
+
+        JComboBox<Choice> mode = new JComboBox<>(modes.toArray(new Choice[0]));
+        JPanel form = new JPanel(new GridLayout(0, 1, 6, 6));
+        form.add(new JLabel("Zaznaczono: " + selected.size()));
+        form.add(new JLabel("Operacja:"));
+        form.add(mode);
+
+        int first = JOptionPane.showConfirmDialog(this, form,
+            "EDHOME Desktop • operacja zbiorcza",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (first != JOptionPane.OK_OPTION) return;
+
+        Choice chosenMode = (Choice) mode.getSelectedItem();
+        if (chosenMode == null) return;
+
+        Choice destination = new Choice("", "—");
+        if ("place".equals(chosenMode.value)) {
+            JComboBox<Choice> places = referenceCombo("places", "", false);
+            if (places.getItemCount() == 0) {
+                JOptionPane.showMessageDialog(this, "Nie ma żadnego miejsca docelowego.");
+                return;
+            }
+            int result = JOptionPane.showConfirmDialog(this, places,
+                "Wybierz miejsce dla " + selected.size() + " pozycji",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (result != JOptionPane.OK_OPTION) return;
+            destination = (Choice) places.getSelectedItem();
+        } else if ("box".equals(chosenMode.value)) {
+            JComboBox<Choice> boxes = storageBatchBoxCombo();
+            if (boxes.getItemCount() == 0) {
+                JOptionPane.showMessageDialog(this, "Nie ma żadnego pudełka docelowego.");
+                return;
+            }
+            int result = JOptionPane.showConfirmDialog(this, boxes,
+                "Wybierz pudełko dla " + selected.size() + " rzeczy",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (result != JOptionPane.OK_OPTION) return;
+            destination = (Choice) boxes.getSelectedItem();
+        }
+
+        String destinationText = "none".equals(chosenMode.value)
+            ? "bez lokalizacji" : destination == null ? "—" : destination.label;
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Zmienić lokalizację " + selected.size() + " pozycji na:\n"
+                + destinationText + "?",
+            "EDHOME Desktop • potwierdź operację zbiorczą",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        java.util.Map<JsonObject,JsonObject> before =
+            new java.util.LinkedHashMap<>();
+        try {
+            for (JsonObject row : selected) {
+                before.put(row, row.deepCopy());
+                if ("place".equals(chosenMode.value)) {
+                    row.add("parent_box_id", com.google.gson.JsonNull.INSTANCE);
+                    row.addProperty("place_id", Long.parseLong(destination.value));
+                } else if ("box".equals(chosenMode.value)) {
+                    row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+                    row.addProperty("parent_box_id", Long.parseLong(destination.value));
+                } else {
+                    row.add("parent_box_id", com.google.gson.JsonNull.INSTANCE);
+                    row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+                }
+                validateDesktopStorageRow(row);
+            }
+
+            for (JsonObject row : selected) {
+                JsonObject old = before.get(row);
+                boolean moved = !value(old, "parent_box_id").equals(
+                        value(row, "parent_box_id"))
+                    || !value(old, "place_id").equals(value(row, "place_id"));
+                if (moved) appendDesktopStorageMove(row, old);
+            }
+            markDirty();
+            showSection("Magazyn");
+            JOptionPane.showMessageDialog(this,
+                "Zmieniono lokalizację " + selected.size()
+                    + (selected.size() == 1 ? " pozycji." : " pozycji.")
+                    + "\nZmiany zapisano lokalnie i trafią do telefonu przez synchronizację.");
+        } catch (Exception error) {
+            for (java.util.Map.Entry<JsonObject,JsonObject> entry : before.entrySet())
+                restoreJsonObject(entry.getKey(), entry.getValue());
+            JOptionPane.showMessageDialog(this,
+                "Nie wykonano operacji zbiorczej:\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private JComboBox<Choice> storageBatchBoxCombo() {
+        java.util.List<Choice> options = new ArrayList<>();
+        for (JsonElement element : table("storage_items")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (!"box".equals(value(row, "kind"))) continue;
+            String id = value(row, "id");
+            if (id.isBlank()) continue;
+            String name = value(row, "name");
+            options.add(new Choice(id, name.isBlank() ? "Pudełko #" + id : name));
+        }
+        return new JComboBox<>(options.toArray(new Choice[0]));
     }
 
     private JPanel recordCard(JsonObject row, String[][] columns, String tableName) {

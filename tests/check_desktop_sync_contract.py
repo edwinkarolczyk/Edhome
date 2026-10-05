@@ -306,3 +306,19 @@ print("desktop storage QR/NFC kind identity immutable OK")
 assert 'if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())' in desktop
 assert 'Najpierw odnotuj zwrot wypożyczonej rzeczy.' in desktop
 print("desktop storage lent-item move guard OK")
+
+# Desktop-first bulk workflow: multi-select + safe batch storage move.
+for marker in (
+    'Zaznacz wszystko',
+    'Wyczyść',
+    'Przenieś zaznaczone',
+    'showBatchStorageMove',
+    'storageBatchBoxCombo',
+    'Zaznaczone: ',
+    'appendDesktopStorageMove(row, old)',
+    'validateDesktopStorageRow(row);'
+):
+    assert marker in desktop, "Missing Desktop storage batch-edit contract: " + marker
+
+assert 'DESKTOP_VERSION = "0.7.0.82"' in desktop
+print("desktop storage multi-select + batch move contract OK")
