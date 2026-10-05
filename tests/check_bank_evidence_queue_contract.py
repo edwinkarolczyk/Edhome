@@ -85,14 +85,14 @@ for token in (
     assert token in main,token
 
 for token in (
-    'super(context, "edhome-beta-preview.db", null, 44)',
+    'super(context, "edhome-beta-preview.db", null, 45)',
     'BankEvidenceStore.create(database);',
     'DATABASE_MIGRATED_33_TO_34_BANK_EVIDENCE_QUEUE',
 ):
     assert token in main,token
 
 for token in (
-    'private static final int DB_VERSION = 44;',
+    'private static final int DB_VERSION = 45;',
     '{"bank_evidence_queue", "id", "evidence_key"',
     'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])',
     '"bank_evidence_queue".equals(definition[0])',
