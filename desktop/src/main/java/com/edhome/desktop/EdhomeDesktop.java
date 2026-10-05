@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.87";
+    private static final String DESKTOP_VERSION = "0.7.0.88";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -204,9 +204,36 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    /** Czyści stary zapis typu 192.168.x.x:45823 i nigdy nie uznaje
+     * własnego adresu komputera za adres telefonu. */
+    private static String sanitizedPhoneHost() {
+        String raw = PREFS.get("phoneIp", "").trim();
+        if (raw.isBlank()) return "";
+        try {
+            String normalized = LanClient.normalizeHost(raw);
+            if (QrPairingSession.localAddresses().contains(normalized)) {
+                PREFS.remove("phoneIp");
+                DesktopDiagnosticLog.event("PHONE_IP_SELF_REJECTED",
+                    "host=" + normalized);
+                return "";
+            }
+            if (!normalized.equals(raw)) {
+                PREFS.put("phoneIp", normalized);
+                DesktopDiagnosticLog.event("PHONE_IP_NORMALIZED",
+                    "host=" + normalized);
+            }
+            return normalized;
+        } catch (Exception error) {
+            PREFS.remove("phoneIp");
+            DesktopDiagnosticLog.error("PHONE_IP_INVALID_SAVED", error);
+            return "";
+        }
+    }
+
     private EdhomeDesktop() {
         super("EDHOME Desktop Beta " + DESKTOP_VERSION);
         DesktopDiagnosticLog.event("WINDOW_CREATED");
+        sanitizedPhoneHost();
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(1050, 680));
         Rectangle usableScreen = GraphicsEnvironment.getLocalGraphicsEnvironment()
@@ -4141,7 +4168,7 @@ public final class EdhomeDesktop extends JFrame {
         statusCard.add(title);
         statusCard.add(Box.createVerticalStrut(6));
 
-        String savedHost = PREFS.get("phoneIp", "").trim();
+        String savedHost = sanitizedPhoneHost();
         String savedToken = PREFS.get("token", "").trim();
         String stateText;
         if (savedHost.isBlank() || savedToken.isBlank())
@@ -4199,7 +4226,7 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private String desktopDiagnosticsText() {
-        String host = PREFS.get("phoneIp", "").trim();
+        String host = sanitizedPhoneHost();
         return "EDHOME Desktop " + DESKTOP_VERSION + "\n"
             + "System: " + System.getProperty("os.name") + " "
                 + System.getProperty("os.version") + "\n"
@@ -4966,23 +4993,30 @@ public final class EdhomeDesktop extends JFrame {
         try {
             QrPairingSession session = QrPairingSession.start(payload ->
                 SwingUtilities.invokeLater(() -> {
-                    PREFS.put("phoneIp", payload.phoneIp);
+                    String pairedHost = LanClient.normalizeHost(payload.phoneIp);
+                    if (QrPairingSession.localAddresses().contains(pairedHost)) {
+                        status.setText("Odrzucono błędny adres telefonu — wskazuje ten komputer.");
+                        DesktopDiagnosticLog.event("QR_PAIRING_SELF_IP_REJECTED",
+                            "host=" + pairedHost);
+                        return;
+                    }
+                    PREFS.put("phoneIp", pairedHost);
                     PREFS.put("token", payload.token);
                     PREFS.putBoolean("autoConnect", true);
                     PREFS.putBoolean("autoWrite", true);
                     pairState.setText("Połączono z Androidem " + payload.version
-                        + " • " + payload.phoneIp + ":" + PORT);
+                        + " • " + pairedHost + ":" + PORT);
                     pairState.setForeground(APP_ACCENT);
                     status.setText("Połączono z Androidem " + payload.version + ".");
                     DesktopDiagnosticLog.event("QR_PAIRING_OK",
-                        "host=" + payload.phoneIp + " android=" + payload.version);
+                        "host=" + pairedHost + " android=" + payload.version);
                     if (dialog[0] != null) dialog[0].dispose();
                     if (qrPairingSession != null) {
                         qrPairingSession.close();
                         qrPairingSession = null;
                     }
                     if (trigger != null) trigger.setEnabled(true);
-                    pullFromPhone(payload.phoneIp, payload.token, null);
+                    pullFromPhone(pairedHost, payload.token, null);
                 }));
             qrPairingSession = session;
 

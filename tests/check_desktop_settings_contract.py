@@ -36,12 +36,15 @@ for obsolete in (
     assert obsolete not in settings, f"Old Settings clutter still visible: {obsolete}"
 
 for marker in (
-    'PREFS.put("phoneIp", payload.phoneIp)',
+    'PREFS.put("phoneIp", pairedHost)',
     'PREFS.put("token", payload.token)',
     'DesktopDiagnosticLog.event("QR_PAIRING_OK"',
     'pullFromPhone(payload.phoneIp, payload.token, null)',
     'LanClient.discover(secret, PORT)',
     'ackDiagnostics(phone.id)',
+    'sanitizedPhoneHost()',
+    'PHONE_IP_SELF_REJECTED',
+    'QR_PAIRING_SELF_IP_REJECTED',
 ):
     assert marker in src, f"Missing pairing/diagnostics stabilization: {marker}"
 
