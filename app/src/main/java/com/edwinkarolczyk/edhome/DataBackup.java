@@ -1704,6 +1704,7 @@ final class DataBackup {
             || "checked".equals(column) || "qty_milli".equals(column)
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
+            || "project_sort_order".equals(column)
             || "reminder_lead_days".equals(column)
             || "oc_reminder_lead".equals(column)
             || "inspection_reminder_lead".equals(column)
