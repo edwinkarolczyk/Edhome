@@ -172,6 +172,42 @@ public final class MainActivity extends Activity {
     private String calendarView = "month";
     private String tasksFilter = "all";
     private int tasksPage;
+
+    private static final int NAV_HISTORY_LIMIT=48;
+    private static final class NavState {
+        final String screen;
+        final int scrollY;
+        final long selectedProjectId;
+        final long selectedMemberId;
+        final String membersReturnScreen;
+        final String tasksFilter;
+        final int tasksPage;
+        final String pantrySearch;
+        final int pantryPage;
+        final String pantryCategoryFilter;
+        final String calendarMonth;
+        final String calendarDay;
+        final String calendarView;
+
+        NavState(String screen,int scrollY,long selectedProjectId,
+                long selectedMemberId,String membersReturnScreen,
+                String tasksFilter,int tasksPage,String pantrySearch,
+                int pantryPage,String pantryCategoryFilter,
+                String calendarMonth,String calendarDay,String calendarView) {
+            this.screen=screen;this.scrollY=scrollY;
+            this.selectedProjectId=selectedProjectId;
+            this.selectedMemberId=selectedMemberId;
+            this.membersReturnScreen=membersReturnScreen;
+            this.tasksFilter=tasksFilter;this.tasksPage=tasksPage;
+            this.pantrySearch=pantrySearch;this.pantryPage=pantryPage;
+            this.pantryCategoryFilter=pantryCategoryFilter;
+            this.calendarMonth=calendarMonth;this.calendarDay=calendarDay;
+            this.calendarView=calendarView;
+        }
+    }
+    private final java.util.ArrayDeque<NavState> navigationHistory=
+        new java.util.ArrayDeque<>();
+
     private long selectedProjectId;
     private Long taskEditorProjectPreset;
     private long selectedMemberId;
@@ -1005,18 +1041,11 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (unlocked && "paycheck_private".equals(screen)) go("paycheck");
-        else if (unlocked && "updates_advanced".equals(screen)) go("updates");
-        else if (unlocked && "places".equals(screen)) go("home");
-        else if (unlocked && "storage".equals(screen)) go("places");
-        else if (unlocked && "shopping".equals(screen)) go("pantry");
-        else if (unlocked && "waste".equals(screen)) go("tasks");
-        else if (unlocked && "member_schedule".equals(screen)) go("member_profile");
-        else if (unlocked && "member_profile".equals(screen)) go("members");
-        else if (unlocked && "members".equals(screen)) go(membersReturnScreen);
-        else if (unlocked && "task_history".equals(screen)) go("tasks");
-        else if (unlocked && !"home".equals(screen)) go("home");
-        else super.onBackPressed();
+        if(unlocked&&(!"home".equals(screen)||!navigationHistory.isEmpty())) {
+            goBack();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private int dp(float d) {
@@ -1221,14 +1250,52 @@ public final class MainActivity extends Activity {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(accent);
     }
 
-    private void go(String destination) {
+    private void saveCurrentViewport() {
+        if(pageScroll!=null&&screen.equals(renderedScreen))
+            screenScrollY.put(screen,pageScroll.getScrollY());
+    }
+
+    private NavState currentNavState() {
+        saveCurrentViewport();
+        return new NavState(screen,screenScrollY.getOrDefault(screen,0),
+            selectedProjectId,selectedMemberId,membersReturnScreen,
+            tasksFilter,tasksPage,pantrySearch,pantryPage,pantryCategoryFilter,
+            calendarMonth,calendarDay,calendarView);
+    }
+
+    private void pushNavigationState() {
+        NavState state=currentNavState();
+        navigationHistory.addLast(state);
+        while(navigationHistory.size()>NAV_HISTORY_LIMIT)
+            navigationHistory.removeFirst();
+    }
+
+    private void applyNavigationState(NavState state) {
+        selectedProjectId=state.selectedProjectId;
+        selectedMemberId=state.selectedMemberId;
+        membersReturnScreen=state.membersReturnScreen;
+        tasksFilter=state.tasksFilter;
+        tasksPage=state.tasksPage;
+        pantrySearch=state.pantrySearch;
+        pantryPage=state.pantryPage;
+        pantryCategoryFilter=state.pantryCategoryFilter;
+        calendarMonth=state.calendarMonth;
+        calendarDay=state.calendarDay;
+        calendarView=state.calendarView;
+        screenScrollY.put(state.screen,state.scrollY);
+        navigateTo(state.screen,false);
+    }
+
+    private void navigateTo(String destination,boolean rememberCurrent) {
+        if(destination==null||destination.trim().isEmpty())destination="home";
+        if(rememberCurrent&&!destination.equals(screen))
+            pushNavigationState();
+
         if (!"paycheck_private".equals(destination)
                 && privatePaycheckSession != null) {
             privatePaycheckSession.lock();
             privatePaycheckSession = null;
         }
-        if (pageScroll != null && screen.equals(renderedScreen))
-            screenScrollY.put(screen,pageScroll.getScrollY());
         if (!"storage".equals(destination)) storageTemporaryKind=null;
         screen = destination;
         if (!"home".equals(destination)) homeEditMode = false;
@@ -1243,6 +1310,69 @@ public final class MainActivity extends Activity {
             scannerNfcArmed=false;
             refreshNfcReaderMode();
         }
+        render();
+    }
+
+    private void go(String destination) {
+        navigateTo(destination,true);
+    }
+
+    private void goHome() {
+        navigationHistory.clear();
+        selectedProjectId=0L;
+        navigateTo("home",false);
+    }
+
+    private void goBack() {
+        if(!navigationHistory.isEmpty()) {
+            NavState previous=navigationHistory.removeLast();
+            DiagnosticLog.event("NAV_BACK",
+                "from="+screen+" to="+previous.screen);
+            applyNavigationState(previous);
+            return;
+        }
+        if("projects".equals(screen)&&selectedProjectId>0L) {
+            ProjectStore.Project current=ProjectStore.find(
+                db.getReadableDatabase(),selectedProjectId);
+            selectedProjectId=current==null||current.parentId==null
+                ?0L:current.parentId;
+            screenScrollY.put("projects",0);
+            render();
+            return;
+        }
+        String fallback;
+        if("paycheck_private".equals(screen))fallback="paycheck";
+        else if("updates_advanced".equals(screen))fallback="updates";
+        else if("storage".equals(screen))fallback="places";
+        else if("shopping".equals(screen))fallback="pantry";
+        else if("waste".equals(screen))fallback="tasks";
+        else if("member_schedule".equals(screen))fallback="member_profile";
+        else if("member_profile".equals(screen))fallback="members";
+        else if("members".equals(screen))fallback=membersReturnScreen;
+        else if("task_history".equals(screen))fallback="tasks";
+        else fallback="home";
+        DiagnosticLog.event("NAV_BACK_FALLBACK",
+            "from="+screen+" to="+fallback);
+        navigateTo(fallback,false);
+    }
+
+    private void openProject(long projectId) {
+        if(!"projects".equals(screen)||selectedProjectId!=projectId)
+            pushNavigationState();
+        selectedProjectId=projectId;
+        screenScrollY.put("projects",0);
+        render();
+    }
+
+    private void projectBack(ProjectStore.Project project) {
+        if(!navigationHistory.isEmpty()
+                &&"projects".equals(navigationHistory.peekLast().screen)) {
+            goBack();
+            return;
+        }
+        selectedProjectId=project==null||project.parentId==null
+            ?0L:project.parentId;
+        screenScrollY.put("projects",0);
         render();
     }
 
@@ -1497,7 +1627,7 @@ public final class MainActivity extends Activity {
                     .apply();
                 unlocked = true;
                 DiagnosticLog.event("PIN_SETUP_OK");
-                go("home");
+                goHome();
             } catch (Exception error) {
                 DiagnosticLog.error("PIN_SETUP", error);
                 alert("Błąd zabezpieczenia PIN. Spróbuj ponownie.");
@@ -1518,7 +1648,7 @@ public final class MainActivity extends Activity {
                 if (MessageDigest.isEqual(expected, actual)) {
                     unlocked = true;
                     DiagnosticLog.event("PIN_UNLOCK_OK");
-                    go("home");
+                    goHome();
                 } else {
                     DiagnosticLog.event("PIN_UNLOCK_FAILED");
                     input.setText("");
@@ -1964,7 +2094,7 @@ public final class MainActivity extends Activity {
         nav.setElevation(dp(10));
 
         nav.addView(showcaseNavItem("⌂","Start","home".equals(screen),
-            ()->go("home")),new LinearLayout.LayoutParams(0,dp(58),1f));
+            this::goHome),new LinearLayout.LayoutParams(0,dp(58),1f));
 
         if(HOME_INTERFACE_CONCEPT5.equals(homeInterfaceMode()))
             nav.addView(showcaseNavItem("◇","Magazyn","storage".equals(screen),
@@ -2008,7 +2138,7 @@ public final class MainActivity extends Activity {
         nav.setElevation(dp(10));
 
         nav.addView(showcaseNavItem("⌂", "Start", "home".equals(screen),
-            () -> go("home")), new LinearLayout.LayoutParams(0, dp(58), 1f));
+            this::goHome), new LinearLayout.LayoutParams(0, dp(58), 1f));
         nav.addView(showcaseNavItem("✓", "Zadania", "tasks".equals(screen),
             () -> go("tasks")), new LinearLayout.LayoutParams(0, dp(58), 1f));
 
@@ -2046,7 +2176,7 @@ public final class MainActivity extends Activity {
                 if (which == 0) {
                     if ("home".equals(screen)) showAddTileDialog();
                     else {
-                        go("home");
+                        goHome();
                         root.postDelayed(this::showAddTileDialog, 140L);
                     }
                 } else if (which == 1) go("tasks");
@@ -2086,11 +2216,11 @@ public final class MainActivity extends Activity {
         label.setGravity(Gravity.CENTER_VERTICAL);
         label.setPadding(0, 0, dp(6), 0);
         bar.addView(label, new LinearLayout.LayoutParams(0, dp(36), 1f));
-        TextView back = text("← Start", 12, true);
+        TextView back = text("← Cofnij", 12, true);
         back.setGravity(Gravity.CENTER);
         back.setPadding(dp(7), 0, dp(7), 0);
         back.setBackground(skin.panel(this, surface, 17));
-        back.setOnClickListener(v -> go("home"));
+        back.setOnClickListener(v -> goBack());
         back.setClickable(true);
         back.setFocusable(true);
         touchFeedback(back);
@@ -3873,8 +4003,7 @@ public final class MainActivity extends Activity {
         if(count==0)
             note("Nie ma jeszcze użytkowników. Pierwszy utworzony profil "
                 +"zostanie administratorem.");
-        button("← "+("settings".equals(membersReturnScreen)
-            ?"Ustawienia":"Czynności"),()->go(membersReturnScreen));
+        button("← Cofnij",this::goBack);
     }
 
     private void showAddUserDialog() {
@@ -4115,7 +4244,7 @@ public final class MainActivity extends Activity {
                 +"Na tym etapie role są zapisywane, ale nie blokują jeszcze modułów.",
                 13,false));
 
-            button("← Użytkownicy",()->go("members"));
+            button("← Cofnij",this::goBack);
         }
     }
 
@@ -4274,7 +4403,7 @@ public final class MainActivity extends Activity {
         note("Grafik pracy oraz czas na projekty są oddzielne. Planer używa "
             +"rodzaju zmiany z danego dnia, a następnie szuka miejsca wyłącznie "
             +"w ustawionych oknach projektowych.");
-        button("← Profil użytkownika",()->go("member_profile"));
+        button("← Cofnij",this::goBack);
 
         LinearLayout hours=card();
         hours.addView(text("Godziny zmian",18,true));
@@ -4691,10 +4820,8 @@ public final class MainActivity extends Activity {
             return;
         }
         header(project.name);
-        button(project.parentId==null?"← Wszystkie projekty":"← Projekt nadrzędny",()->{
-            selectedProjectId=project.parentId==null?0:project.parentId;
-            render();
-        });
+        button(project.parentId==null?"← Wszystkie projekty":"← Projekt nadrzędny",
+            ()->projectBack(project));
         note(projectPath(project.id));
 
         ProjectStore.Stats stats=ProjectStore.stats(
@@ -4766,10 +4893,7 @@ public final class MainActivity extends Activity {
         box.setClickable(true);
         box.setFocusable(true);
         touchFeedback(box);
-        box.setOnClickListener(v->{
-            selectedProjectId=project.id;
-            render();
-        });
+        box.setOnClickListener(v->openProject(project.id));
     }
 
     private void showProjectEditor(Long parentId) {
@@ -6349,7 +6473,7 @@ public final class MainActivity extends Activity {
 
     private void taskHistoryScreen() {
         title("Historia wykonanych czynności");
-        button("← Czynności", () -> go("tasks"));
+        button("← Cofnij", this::goBack);
         note("Ostatnie 100 wykonań. Historia zostaje również po usunięciu czynności z listy.");
         int count = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
@@ -6456,7 +6580,7 @@ public final class MainActivity extends Activity {
         TextView home = text("☰", 22, true);
         home.setGravity(Gravity.CENTER);
         home.setContentDescription("Wróć do Start");
-        home.setOnClickListener(v -> go("home"));
+        home.setOnClickListener(v -> goHome());
         touchFeedback(home);
         toolbar.addView(home, new LinearLayout.LayoutParams(dp(42), dp(40)));
 
@@ -9508,7 +9632,7 @@ public final class MainActivity extends Activity {
                 this::showQrHistory);
         }
         button("▣ Skaner EDHOME • QR / NFC / kody", () -> go("scanner"));
-        if(showPlaces)button("← Miejsca", () -> go("places"));
+        if(showPlaces)button("← Cofnij", this::goBack);
         // One read-only tree: Miejsce → podmiejsce → pudełko → rzecz.
         // Collapsing hides descendants without changing database relations.
         java.util.List<PlaceEntry> places=readPlaces();
@@ -14391,7 +14515,7 @@ public final class MainActivity extends Activity {
             + "dopiero osobny przycisk Przyjmij dopisuje wybrane opakowania "
             + "do wskazanego produktu w spiżarni. Cena zakupu jest opcjonalna; "
             + "nie księgujemy jej automatycznie w PayCheck.");
-        button("← Spiżarnia", () -> go("pantry"));
+        button("← Cofnij", this::goBack);
         EditText item = field("Co kupić?", false);
         EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
         quantity.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -17043,7 +17167,7 @@ public final class MainActivity extends Activity {
     private void updates() {
         title("EDHOME  •  " + (BetaUpdater.isBeta() ? "BETA" : "STABLE"));
         note("Aktualizacje aplikacji");
-        button("← Panel główny", () -> go("home"));
+        button("⌂ Panel główny", this::goHome);
         LinearLayout version = card();
         version.addView(text("Zainstalowana wersja", 15, false));
         version.addView(text(BuildConfig.VERSION_NAME, 29, true));
@@ -17126,7 +17250,7 @@ public final class MainActivity extends Activity {
                 + "\nUkład Start 3 × 3. Gdy jest więcej niż 9 kafelków, "
                 + "przesuwaj strony palcem w lewo lub prawo. "
                 + "Aktywna strona jest zaznaczona kropką."));
-        updateTile(tiles, "⌂", "Panel\ngłówny", false, () -> go("home"));
+        updateTile(tiles, "⌂", "Panel\ngłówny", false, this::goHome);
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
             : "Stable: możesz wybrać Aktualizuj lub Później.");
@@ -17426,7 +17550,7 @@ public final class MainActivity extends Activity {
 
     private void updatesAdvanced() {
         title("Aktualizacje • opcje zaawansowane");
-        button("← Aktualizacje", () -> go("updates"));
+        button("← Cofnij", this::goBack);
         note("Zainstalowany versionCode: " + BuildConfig.VERSION_CODE);
         if (!BetaUpdater.isBeta()) {
             note("Stable używa wyłącznie Google Play.");
@@ -17440,7 +17564,7 @@ public final class MainActivity extends Activity {
             note("Źródło: " + updater.configuredFeed());
             note("Adres nie jest dowodem działania serwera. Sprawdź połączenie poniżej.");
             button("Sprawdź aktualizację i połączenie", () -> updater.check(true));
-            button("← Aktualizacje", () -> go("updates"));
+            button("← Cofnij", this::goBack);
             return;
         }
         note(updater.configuredFeed().isEmpty() ? "Kanał nie jest jeszcze skonfigurowany."
@@ -17473,7 +17597,7 @@ public final class MainActivity extends Activity {
     }
 
     private void diagnostics() {
-        if (!DiagnosticLog.enabled()) { go("home"); return; }
+        if (!DiagnosticLog.enabled()) { goHome(); return; }
         header("Diagnostyka • tylko BETA");
         note("Pliki w aplikacji: do 1 MB każdy (bieżący i poprzedni segment). "
             + "Wklejanie do czatu ma oddzielny limit znaków; pełny eksport .txt go nie ma.");
