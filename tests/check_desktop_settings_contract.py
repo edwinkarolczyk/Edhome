@@ -39,7 +39,7 @@ for marker in (
     'PREFS.put("phoneIp", pairedHost)',
     'PREFS.put("token", payload.token)',
     'DesktopDiagnosticLog.event("QR_PAIRING_OK"',
-    'pullFromPhone(payload.phoneIp, payload.token, null)',
+    'pullFromPhone(pairedHost, payload.token, null)',
     'LanClient.discover(secret, PORT)',
     'ackDiagnostics(phone.id)',
     'sanitizedPhoneHost()',
