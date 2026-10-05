@@ -100,8 +100,10 @@ for token in (
     '"edhome-backup-archive"',
     '"manifest.json"',
     '"media/storage-originals/"',
+    '"media/storage-thumbnails/"',
     'digestEntry(zip, entry)',
-    'DataBackup.restoreJson(database, prefs, inspection.json)',
+    'readArchivedThumbnails(archive, inspection.paths)',
+    'DataBackup.restoreJson(database, prefs, inspection.json,',
 ):
     assert token in archive, token
 for token in (
@@ -121,4 +123,8 @@ for token in (
 ):
     assert token in main, token
 assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain supported"
+assert 'Map<Long,String> archivedStorageThumbs' in source
+assert 'restoredStorageThumbs.size() + archivedStorageThumbs.size() > 200' in source
+assert 'legacy_thumbs=' in main
+assert 'Etap: " + backupStage' in main
 print("Backup: 49 domain tables + verified ZIP manifest/SHA-256, original storage media, thumbnail regeneration, legacy JSON and rollback contract PASS")
