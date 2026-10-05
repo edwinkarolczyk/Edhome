@@ -15,10 +15,10 @@ version=re.search(r"versionName '([^']+)'",gradle).group(1)
 assert version.startswith("0.7.4."), version
 
 # Foundation + migration from last 0.6 DB.
-assert 'super(context, "edhome-beta-preview.db", null, 43)' in main
+assert 'super(context, "edhome-beta-preview.db", null, 44)' in main
 assert 'DATABASE_MIGRATED_36_TO_37_GARDEN' in main
 assert 'DATABASE_MIGRATED_37_TO_38_GARDEN_CYCLE' in main
-assert 'private static final int DB_VERSION = 43;' in backup
+assert 'private static final int DB_VERSION = 44;' in backup
 
 # Sync backfill must run only after the Garden v38 columns/tables exist.
 # Otherwise an existing v36/v37 install crashes on startup while ensureAll()
