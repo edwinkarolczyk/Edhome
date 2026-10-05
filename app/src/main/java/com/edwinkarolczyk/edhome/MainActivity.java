@@ -16859,7 +16859,7 @@ public final class MainActivity extends Activity {
                 render();
             } catch (Exception error) {
                 DiagnosticLog.error("SUPLA_SAVE", error);
-                alert(rootMessage(error));
+                alert(suplaErrorMessage(error));
             }
         });
 
@@ -16873,7 +16873,7 @@ public final class MainActivity extends Activity {
                     throw new IllegalStateException("Brak Personal Access Token SUPLA.");
             } catch (Exception error) {
                 DiagnosticLog.error("SUPLA_CONNECT_PREPARE", error);
-                alert(rootMessage(error));
+                alert(suplaErrorMessage(error));
                 return;
             }
 
@@ -16891,7 +16891,7 @@ public final class MainActivity extends Activity {
                     });
                 } catch (Exception error) {
                     DiagnosticLog.error("SUPLA_SYNC_FAILED", error);
-                    String message = rootMessage(error);
+                    String message = suplaErrorMessage(error);
                     runOnUiThread(() -> alert("Nie udało się pobrać danych SUPLA:\n"
                         + message));
                 }
@@ -16949,6 +16949,14 @@ public final class MainActivity extends Activity {
         prefs.edit().putString("supla_cloud_url", normalized).apply();
         DiagnosticLog.event("SUPLA_CONNECTION_SAVED");
         return normalized;
+    }
+
+    private static String suplaErrorMessage(Throwable error) {
+        if (error == null) return "Nieznany błąd SUPLA.";
+        String message = error.getMessage();
+        if (message == null || message.trim().isEmpty())
+            return error.getClass().getSimpleName();
+        return message.trim();
     }
 
     private String suplaFetchedAtLabel(long millis) {
