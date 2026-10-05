@@ -56,6 +56,9 @@ import android.widget.HorizontalScrollView;
 import android.view.Gravity;
 import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
