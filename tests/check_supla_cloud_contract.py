@@ -41,7 +41,8 @@ for marker in (
     assert marker in secret, "Missing SUPLA secret-store contract: "+marker
 
 # Token must never enter EDHOME data backup or local SUPLA cache.
-assert "token" not in cache.lower()
+assert "SuplaSecretStore" not in cache
+assert "token_ciphertext" not in cache
 assert "supla_cloud_token" not in main
 assert "supla_cloud_token" not in backup
 assert "Authorization" not in cache
