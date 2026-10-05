@@ -1226,6 +1226,8 @@ public final class MainActivity extends Activity {
         input.setTextSize(18);
         input.setSingleLine(true);
         if (number) input.setInputType(2 | 16);
+        else input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         body.addView(input, new LinearLayout.LayoutParams(-1, -2));
         return input;
     }
@@ -4013,6 +4015,8 @@ public final class MainActivity extends Activity {
 
         EditText name=new EditText(this);
         name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         name.setHint("Imię / nazwa profilu");
         name.setTextColor(ink);
         name.setHintTextColor(subdued);
@@ -4905,6 +4909,8 @@ public final class MainActivity extends Activity {
 
         EditText name=new EditText(this);
         name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         name.setHint(parent==null?"Nazwa projektu":"Nazwa podprojektu");
         form.addView(text("Nazwa",14,true));
         form.addView(name);
@@ -5009,7 +5015,10 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
         EditText name=new EditText(this);
-        name.setSingleLine(true);name.setHint("Nazwa czynności");
+        name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        name.setHint("Nazwa czynności");
         EditText hours=new EditText(this);
         hours.setSingleLine(true);hours.setHint("Czas, np. 0,5 / 1 / 2,5 h");
         hours.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -8641,6 +8650,8 @@ public final class MainActivity extends Activity {
         layout.addView(text("Nazwa miejsca • dowolna, Twoja", 16, true));
         EditText input = new EditText(this);
         input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         input.setText(name);
         input.setTextColor(ink);
         input.setHintTextColor(subdued);
@@ -18685,6 +18696,7 @@ public final class MainActivity extends Activity {
                 Long placeId, String priority, int durationMinutes,
                 Long assigneeId, String customTime, int reminderLeadDays,
                 java.util.List<Long> rotationMembers, Long projectId) {
+            title = TextEntryRules.capitalizeLabel(title);
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (id != null && isWasteTask(id) && dueDate.isEmpty())
@@ -19180,6 +19192,7 @@ public final class MainActivity extends Activity {
 
         boolean savePlace(Long id, String name, String kind,
                 Long parentId, String icon) {
+            name = TextEntryRules.capitalizeLabel(name);
             String error = PlaceRules.validateFields(name, kind, icon);
             if (error != null) throw new IllegalArgumentException(error);
             SQLiteDatabase database = getWritableDatabase();
@@ -19272,6 +19285,7 @@ public final class MainActivity extends Activity {
         }
 
         long startDeviceTimer(String type, String title, int minutes) {
+            title = TextEntryRules.capitalizeLabel(title);
             long now = System.currentTimeMillis();
             long end = DeviceTimerRules.endAt(now, minutes);
             if (!DeviceTimerRules.validType(type)
@@ -19348,6 +19362,7 @@ public final class MainActivity extends Activity {
         }
 
         void addStock(String name, String category, String unit, long milli) {
+            name = TextEntryRules.capitalizeLabel(name);
             if (!PantryPackageRules.valid(unit, milli))
                 throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
             if (!PantryCategories.known(category))
@@ -19424,6 +19439,7 @@ public final class MainActivity extends Activity {
 
         boolean editStock(long id, String name, String category, String unit,
                           long milli) {
+            name = TextEntryRules.capitalizeLabel(name);
             if (!PantryCategories.known(category)
                     || !PantryPackageRules.valid(unit, milli))
                 throw new IllegalArgumentException("Nieprawidłowe dane opakowania.");
@@ -19448,6 +19464,7 @@ public final class MainActivity extends Activity {
         }
 
         boolean renameStock(long id, String name) {
+            name = TextEntryRules.capitalizeLabel(name);
             SQLiteDatabase database = getWritableDatabase();
             try (Cursor c = database.rawQuery(
                     "SELECT id FROM pantry WHERE name=? COLLATE NOCASE AND id!=? LIMIT 1",

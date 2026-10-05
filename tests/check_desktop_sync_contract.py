@@ -346,3 +346,16 @@ assert 'row.add("project_id", com.google.gson.JsonNull.INSTANCE);' in desktop
 assert 'row.addProperty("project_id",projectId);' in desktop
 assert 'DESKTOP_VERSION = "0.7.0.83"' in desktop
 print("desktop projects tree + fast task editor contract OK")
+
+# Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
+for marker in (
+    'showDesktopTaskDependencies',
+    'desktopDependencyReaches',
+    'desktopProjectRootId',
+    'Ta zmiana utworzyłaby pętlę zależności.',
+    'shouldCapitalizeDesktopField',
+    'capitalizeLabel(task)',
+    'DESKTOP_VERSION = "0.7.0.84"'
+):
+    assert marker in desktop, "Missing Desktop project dependency/capitalization contract: " + marker
+print("desktop editable dependencies + capitalization contract OK")

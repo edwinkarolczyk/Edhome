@@ -206,6 +206,8 @@ jobs:
         run: python3 tests/check_user_profiles_contract.py
       - name: Projects hierarchy, dependencies and planning contract
         run: python3 tests/check_projects_contract.py
+      - name: Capitalized names and titles contract
+        run: python3 tests/check_text_entry_capitalization_contract.py
       - name: Project availability, blockers and user-role contract
         run: python3 tests/check_project_planning_contract.py
       - name: Settings crash and bounded clipboard diagnostics regression
@@ -494,7 +496,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Nawigacja: nagłówek modułów używa teraz „← Cofnij” zamiast „← Start”. Cofnięcie wraca do poprzedniego widoku i przywraca kontekst użytkownika/projektu, filtry, kalendarz oraz pozycję przewijania. Wejście w projekt i podprojekt zapisuje poprzedni poziom. Start/⌂ pozostaje osobnym przejściem do pulpitu, a Start/Stop czynności nadal dotyczy wyłącznie pomiaru pracy. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Wpisywanie nazw i tytułów: pola tekstowe automatycznie zaczynają od wielkiej litery, a zapis dodatkowo normalizuje pierwszą literę także po wklejeniu tekstu. Dotyczy m.in. projektów, czynności, Rzeczy/Pudełek, miejsc, użytkowników, spiżarni i listy zakupów. PIN-y, kody, adresy i pola techniczne pozostają bez zmian. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.83";
+    private static final String DESKTOP_VERSION = "0.7.0.84";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -821,20 +821,140 @@ public final class EdhomeDesktop extends JFrame {
 
     private void showDesktopTaskDependencies(JsonObject task) {
         long taskId = longValue(task,"id");
-        java.util.List<String> lines = new ArrayList<>();
+        long projectId = longValue(task,"project_id");
+        if (taskId <= 0 || projectId <= 0) {
+            JOptionPane.showMessageDialog(this,
+                "Zależności można ustawiać tylko dla czynności projektu.");
+            return;
+        }
+
+        long rootProjectId = desktopProjectRootId(projectId);
+        if (rootProjectId <= 0) {
+            JOptionPane.showMessageDialog(this,
+                "Nie można ustalić projektu głównego tej czynności.");
+            return;
+        }
+
+        java.util.Set<Long> current = desktopDependencyIds(taskId);
+        java.util.LinkedHashMap<Long,JCheckBox> choices = new java.util.LinkedHashMap<>();
+        JPanel list = new JPanel();
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        list.setBorder(new EmptyBorder(8,8,8,8));
+
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject candidate = element.getAsJsonObject();
+            long candidateId = longValue(candidate,"id");
+            long candidateProject = longValue(candidate,"project_id");
+            if (candidateId <= 0 || candidateId == taskId || candidateProject <= 0)
+                continue;
+            if (desktopProjectRootId(candidateProject) != rootProjectId) continue;
+
+            JsonObject project = desktopProjectById(candidateProject);
+            String projectPath = project == null ? "Projekt" : desktopProjectPath(project);
+            JCheckBox box = new JCheckBox(projectPath + "  •  "
+                + value(candidate,"title"));
+            box.setSelected(current.contains(candidateId));
+            box.setToolTipText(intValue(candidate,"done") != 0
+                ? "Czynność wykonana" : "Czynność do wykonania");
+            choices.put(candidateId,box);
+            list.add(box);
+        }
+
+        if (choices.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "W tym projekcie głównym nie ma innych czynności, "
+                    + "które można ustawić jako poprzednik.");
+            return;
+        }
+
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setPreferredSize(new Dimension(560,Math.min(430,
+            Math.max(180,choices.size()*32+24))));
+        int result = JOptionPane.showConfirmDialog(this,scroll,
+            "„" + value(task,"title") + "” • zależy od",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        java.util.LinkedHashSet<Long> desired = new java.util.LinkedHashSet<>();
+        for (java.util.Map.Entry<Long,JCheckBox> entry : choices.entrySet())
+            if (entry.getValue().isSelected()) desired.add(entry.getKey());
+
+        try {
+            for (Long dependency : desired) {
+                if (desktopDependencyReaches(
+                        dependency,taskId,taskId,desired,new java.util.HashSet<>()))
+                    throw new IllegalArgumentException(
+                        "Ta zmiana utworzyłaby pętlę zależności.");
+            }
+
+            JsonArray links = table("project_task_dependencies");
+            java.util.Set<Long> existing = new java.util.HashSet<>();
+            for (int i=links.size()-1; i>=0; i--) {
+                JsonElement element = links.get(i);
+                if (!element.isJsonObject()) continue;
+                JsonObject link = element.getAsJsonObject();
+                if (longValue(link,"task_id") != taskId) continue;
+                long dependency = longValue(link,"depends_on_task_id");
+                if (!desired.contains(dependency)) links.remove(i);
+                else existing.add(dependency);
+            }
+
+            long now = System.currentTimeMillis();
+            for (Long dependency : desired) {
+                if (existing.contains(dependency)) continue;
+                JsonObject link = new JsonObject();
+                link.addProperty("task_id",taskId);
+                link.addProperty("depends_on_task_id",dependency);
+                link.addProperty("created_at",now++);
+                links.add(link);
+            }
+            markDirty();
+            showSection("Projekty");
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie zapisano zależności:\n" + rootMessage(error),
+                "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private java.util.Set<Long> desktopDependencyIds(long taskId) {
+        java.util.LinkedHashSet<Long> out = new java.util.LinkedHashSet<>();
         for (JsonElement element : table("project_task_dependencies")) {
             if (!element.isJsonObject()) continue;
-            JsonObject dep = element.getAsJsonObject();
-            if (longValue(dep,"task_id") != taskId) continue;
-            JsonObject other = scannerRowById("tasks",longValue(dep,"depends_on_task_id"));
-            lines.add(other == null ? "Nieznana czynność" : value(other,"title"));
+            JsonObject link = element.getAsJsonObject();
+            if (longValue(link,"task_id") == taskId)
+                out.add(longValue(link,"depends_on_task_id"));
         }
-        JOptionPane.showMessageDialog(this,
-            lines.isEmpty()
-                ? "Ta czynność nie ma jeszcze zależności."
-                : "Ta czynność zależy od:\n• " + String.join("\n• ",lines)
-                    + "\n\nEdycja zależności będzie następnym krokiem Desktopu.",
-            "EDHOME Desktop • zależności",JOptionPane.INFORMATION_MESSAGE);
+        return out;
+    }
+
+    private boolean desktopDependencyReaches(long start,long target,
+            long editedTask,java.util.Set<Long> editedDependencies,
+            java.util.Set<Long> seen) {
+        if (start == target) return true;
+        if (!seen.add(start)) return false;
+        java.util.Set<Long> next = start == editedTask
+            ? editedDependencies : desktopDependencyIds(start);
+        for (Long dependency : next)
+            if (desktopDependencyReaches(
+                    dependency,target,editedTask,editedDependencies,seen))
+                return true;
+        return false;
+    }
+
+    private long desktopProjectRootId(long projectId) {
+        long current = projectId;
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        for (int depth=0; depth<128 && current>0; depth++) {
+            if (!seen.add(current)) return 0L;
+            JsonObject project = desktopProjectById(current);
+            if (project == null) return 0L;
+            long parent = longValue(project,"parent_id");
+            if (parent <= 0) return current;
+            current = parent;
+        }
+        return 0L;
     }
 
     private static String formatMinutes(int minutes) {
@@ -6209,6 +6329,7 @@ public final class EdhomeDesktop extends JFrame {
             }
             task = task.trim();
             if (task.isEmpty()) continue;
+            task = capitalizeLabel(task);
             if (task.length() > 160) task = task.substring(0, 160).trim();
             out.add(task);
         }
@@ -7004,8 +7125,28 @@ public final class EdhomeDesktop extends JFrame {
         } else {
             if (text.isBlank() && (key.endsWith("_date") || key.endsWith("_until")))
                 row.add(key, com.google.gson.JsonNull.INSTANCE);
-            else row.addProperty(key, text);
+            else row.addProperty(key, shouldCapitalizeDesktopField(key)
+                ? capitalizeLabel(text) : text);
         }
+    }
+
+    private static boolean shouldCapitalizeDesktopField(String key) {
+        return "name".equals(key) || "title".equals(key)
+            || "display_name".equals(key) || "label".equals(key);
+    }
+
+    private static String capitalizeLabel(String raw) {
+        if (raw == null) return "";
+        String text = raw.trim();
+        if (text.isEmpty()) return text;
+        for (int i=0; i<text.length(); i++) {
+            char ch=text.charAt(i);
+            if (!Character.isLetter(ch)) continue;
+            char upper=Character.toUpperCase(ch);
+            if (upper==ch) return text;
+            return text.substring(0,i)+upper+text.substring(i+1);
+        }
+        return text;
     }
 
     private static boolean isNumericKey(String key) {

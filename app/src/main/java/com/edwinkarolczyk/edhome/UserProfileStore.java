@@ -180,7 +180,7 @@ final class UserProfileStore {
     }
 
     private static String validateName(String name) {
-        String clean=name==null?"":name.trim();
+        String clean=TextEntryRules.capitalizeLabel(name);
         if(clean.isEmpty()||clean.length()>80)
             throw new IllegalArgumentException("Imię użytkownika: 1–80 znaków.");
         return clean;

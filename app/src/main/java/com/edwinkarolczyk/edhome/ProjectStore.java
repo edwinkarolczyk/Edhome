@@ -154,7 +154,7 @@ final class ProjectStore {
 
     static long addProject(SQLiteDatabase db,String rawName,Long parentId,
             Long placeId,Long assigneeId,String dueDate,Long budgetGrosz) {
-        String name=rawName==null?"":rawName.trim();
+        String name=TextEntryRules.capitalizeLabel(rawName);
         if(name.isEmpty()||name.length()>160)
             throw new IllegalArgumentException("Podaj nazwę projektu 1–160 znaków.");
         if(parentId!=null&&find(db,parentId)==null)
@@ -518,7 +518,7 @@ final class ProjectStore {
     static long addCost(SQLiteDatabase db,long projectId,String rawName,
             long qtyMilli,String unit,long unitPriceGrosz,String status,String note) {
         if(find(db,projectId)==null)throw new IllegalArgumentException("Projekt nie istnieje.");
-        String name=rawName==null?"":rawName.trim();
+        String name=TextEntryRules.capitalizeLabel(rawName);
         if(name.isEmpty()||name.length()>160)
             throw new IllegalArgumentException("Podaj nazwę kosztu/zakupu.");
         if(qtyMilli<=0||unitPriceGrosz<0)
