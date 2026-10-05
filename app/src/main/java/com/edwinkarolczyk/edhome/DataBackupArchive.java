@@ -26,7 +26,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-/** Verified ZIP wrapper for the ordinary EDHOME backup. Private PayCheck stays separate. */
+/** Zweryfikowana kopia ZIP EDHOME. Prywatny PayCheck pozostaje osobnym eksportem. */
 final class DataBackupArchive {
     static final long MAX_ARCHIVE_BYTES = 512L * 1024 * 1024;
     private static final long MAX_EXTRACTED_BYTES = 768L * 1024 * 1024;
@@ -309,7 +309,7 @@ final class DataBackupArchive {
                 regenerated = StorageOriginals.regenerateThumbnails(
                     context, prefs, database);
             } catch (Exception ignored) {
-                // data.json already contains validated thumbnails for legacy compatibility.
+                // data.json zawiera zweryfikowane miniatury jako zgodność dla starszych danych.
             }
             return new Restored(
                 inspection.storageCount, regenerated, inspection.tileCount);
