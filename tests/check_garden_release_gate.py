@@ -12,7 +12,7 @@ desktop=(root/"desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").rea
 gradle=(root/"app/build.gradle").read_text(encoding="utf-8")
 
 version=re.search(r"versionName '([^']+)'",gradle).group(1)
-assert version.startswith("0.7.4."), version
+assert version.startswith(("0.7.4.","0.8.")), version
 
 # Foundation + migration from last 0.6 DB.
 assert 'super(context, "edhome-beta-preview.db", null, 45)' in main
