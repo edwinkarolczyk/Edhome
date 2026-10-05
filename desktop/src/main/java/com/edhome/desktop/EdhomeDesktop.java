@@ -957,15 +957,6 @@ public final class EdhomeDesktop extends JFrame {
         return 0L;
     }
 
-    private static String formatMinutes(int minutes) {
-        int safe = Math.max(0,minutes);
-        int h = safe / 60;
-        int m = safe % 60;
-        if (h <= 0) return m + " min";
-        if (m == 0) return h + " h";
-        return h + " h " + m + " min";
-    }
-
     private static final class DesktopProjectRef {
         final JsonObject row;
         DesktopProjectRef(JsonObject row) { this.row=row; }

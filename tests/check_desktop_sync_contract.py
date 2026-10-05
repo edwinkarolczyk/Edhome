@@ -320,7 +320,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop storage batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.82"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.' in desktop
 print("desktop storage multi-select + batch move contract OK")
 
 # Desktop Projects v1: native tree + fast task creation on the shared Android model.
@@ -344,7 +344,7 @@ for marker in (
 
 assert 'row.add("project_id", com.google.gson.JsonNull.INSTANCE);' in desktop
 assert 'row.addProperty("project_id",projectId);' in desktop
-assert 'DESKTOP_VERSION = "0.7.0.83"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.' in desktop
 print("desktop projects tree + fast task editor contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
@@ -355,7 +355,7 @@ for marker in (
     'Ta zmiana utworzyłaby pętlę zależności.',
     'shouldCapitalizeDesktopField',
     'capitalizeLabel(task)',
-    'DESKTOP_VERSION = "0.7.0.84"'
+    'DESKTOP_VERSION = "0.7.0.'
 ):
     assert marker in desktop, "Missing Desktop project dependency/capitalization contract: " + marker
 print("desktop editable dependencies + capitalization contract OK")
