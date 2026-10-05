@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.79";
+    private static final String DESKTOP_VERSION = "0.7.0.80";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -81,6 +81,8 @@ public final class EdhomeDesktop extends JFrame {
         + "desktop-beta-latest/EDHOME-Desktop-Beta-Windows.zip";
     private static final Path CACHE = Path.of(System.getProperty("user.home"),
         ".edhome", "desktop-cache.json");
+    private static final Path PC_BACKUP_DIR = Path.of(
+        System.getProperty("user.home"), "EDHOME", "Backup");
     private static final Path INSTANCE_LOCK_PATH = Path.of(
         System.getProperty("user.home"), ".edhome", "desktop-instance.lock");
     private static FileChannel instanceLockChannel;
@@ -101,6 +103,8 @@ public final class EdhomeDesktop extends JFrame {
     private JsonObject syncedSnapshot;
     private String snapshotHash = "";
     private long phoneRevision = -1L;
+    private long phoneChangeCursorAt;
+    private String phoneChangeCursorUuid = "";
     private long lastFullReconcileAt;
     private long localEditGeneration;
     private boolean stateChecking;
@@ -3305,15 +3309,17 @@ public final class EdhomeDesktop extends JFrame {
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(3, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(4, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
         JButton diagnose = actionButton("Sprawdź połączenie PC ↔ telefon");
         JButton downloadAllLogs =
             actionButton("Pobierz logi telefonu + Desktop na Pulpit");
+        JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
         actions.add(diagnose);
         actions.add(downloadAllLogs);
+        actions.add(openBackups);
         content.add(actions);
         content.add(Box.createVerticalStrut(12));
 
@@ -3323,7 +3329,9 @@ public final class EdhomeDesktop extends JFrame {
           + "zeskanuj kod z ekranu komputera.<br><br>"
           + "<b>Logi:</b> jednym kliknięciem zapisujesz diagnostykę Desktopu "
           + "oraz nowe logi telefonu na Pulpicie. Log telefonu jest usuwany "
-          + "z aplikacji dopiero po potwierdzonym zapisie na PC.</html>");
+          + "z aplikacji dopiero po potwierdzonym zapisie na PC.<br><br>"
+          + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie "
+          + "w folderze EDHOME\\Backup oraz utrzymuje dzienne kopie.</html>");
         help.setForeground(APP_MUTED);
         content.add(help);
 
@@ -3334,6 +3342,7 @@ public final class EdhomeDesktop extends JFrame {
         downloadAllLogs.addActionListener(e -> saveAllDiagnosticsToDesktop(
             PREFS.get("phoneIp", "").trim(),
             PREFS.get("token", "").trim(), downloadAllLogs));
+        openBackups.addActionListener(e -> openPcBackupFolder());
 
         page.add(content, BorderLayout.NORTH);
         return page;
@@ -3715,6 +3724,7 @@ public final class EdhomeDesktop extends JFrame {
                     snapshotHash = result.sha256;
                     syncedSnapshot = snapshot.deepCopy();
                     phoneRevision = result.revision;
+                    updatePhoneChangeCursorFromSnapshot(snapshot);
                     lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
                     syncConflictPaused = false;
@@ -3722,6 +3732,7 @@ public final class EdhomeDesktop extends JFrame {
                     DesktopDiagnosticLog.event("SYNC_PULL_OK");
                     validate(snapshot);
                     saveCache(snapshot);
+                    savePcBackup(snapshot);
                     connection.setText("ONLINE • Android "
                         + str(snapshot,"sourceVersion",""));
                     connection.setForeground(APP_ACCENT);
@@ -3776,7 +3787,7 @@ public final class EdhomeDesktop extends JFrame {
         if (host.isBlank() || secret.isBlank()) return;
 
         long now = System.currentTimeMillis();
-        if (lastFullReconcileAt > 0 && now - lastFullReconcileAt >= 180000L) {
+        if (lastFullReconcileAt > 0 && now - lastFullReconcileAt >= 1800000L) {
             pullFromPhone(host, secret, null, true);
             return;
         }
@@ -3792,8 +3803,7 @@ public final class EdhomeDesktop extends JFrame {
                     long revision = get();
                     if (revision < 0) return; // starszy Android: pełna kontrola co 3 min
                     if (phoneRevision >= 0 && revision != phoneRevision) {
-                        phoneRevision = revision;
-                        pullFromPhone(host, secret, null, true);
+                        pullChangesFromPhone(host, secret, revision);
                     } else {
                         phoneRevision = revision;
                     }
@@ -3806,6 +3816,169 @@ public final class EdhomeDesktop extends JFrame {
                 }
             }
         }.execute();
+    }
+
+    private void pullChangesFromPhone(String host, String secret,
+            long observedRevision) {
+        if (connecting || dirty || autoSaving) return;
+        if (snapshot == null || syncedSnapshot == null) {
+            pullFromPhone(host, secret, null, true);
+            return;
+        }
+        connecting = true;
+        connection.setText("SYNC • pobieram zmiany z telefonu…");
+        final JsonObject working = snapshot.deepCopy();
+        final long startAt = Math.max(0L, phoneChangeCursorAt - 2000L);
+        new SwingWorker<PhoneDeltaSyncResult,Void>() {
+            @Override protected PhoneDeltaSyncResult doInBackground() throws Exception {
+                LanClient client = new LanClient(host, PORT, secret);
+                long cursorAt = startAt;
+                String cursorUuid = "";
+                int applied = 0;
+                int batches = 0;
+                while (true) {
+                    DeltaBatch batch = client.changes(cursorAt, cursorUuid);
+                    applied += applyPhoneChanges(working, batch.changes);
+                    batches++;
+                    if (!batch.hasMore) {
+                        long finalRevision;
+                        try { finalRevision = client.state(); }
+                        catch (Exception ignored) { finalRevision = observedRevision; }
+                        return new PhoneDeltaSyncResult(working, finalRevision,
+                            applied, batch.cursorUpdatedAt, batch.cursorSyncUuid);
+                    }
+                    if (batch.cursorUpdatedAt < cursorAt
+                            || (batch.cursorUpdatedAt == cursorAt
+                                && batch.cursorSyncUuid.equals(cursorUuid)))
+                        throw new IOException("Telefon nie przesunął kursora zmian.");
+                    cursorAt = batch.cursorUpdatedAt;
+                    cursorUuid = batch.cursorSyncUuid;
+                    if (batches > 200)
+                        throw new IOException("Za dużo paczek zmian — wymagane pełne pojednanie.");
+                }
+            }
+            @Override protected void done() {
+                connecting = false;
+                try {
+                    PhoneDeltaSyncResult result = get();
+                    snapshot = result.data;
+                    syncedSnapshot = snapshot.deepCopy();
+                    phoneRevision = result.revision;
+                    if (result.cursorUpdatedAt >= phoneChangeCursorAt) {
+                        phoneChangeCursorAt = result.cursorUpdatedAt;
+                        phoneChangeCursorUuid = result.cursorSyncUuid;
+                    }
+                    connected = true;
+                    syncConflictPaused = false;
+                    dirty = false;
+                    saveCache(snapshot);
+                    savePcBackup(snapshot);
+                    DesktopDiagnosticLog.event("SYNC_PULL_DELTA_OK",
+                        "changes=" + result.applied);
+                    connection.setText(result.applied == 0
+                        ? "ONLINE • dane aktualne"
+                        : "ONLINE • pobrano " + result.applied
+                            + (result.applied == 1 ? " zmianę" : " zmian"));
+                    showSection(current);
+                    updateTrayTooltip();
+                } catch (Exception error) {
+                    DesktopDiagnosticLog.error("SYNC_PULL_DELTA", error);
+                    connection.setText("SYNC • pełne pojednanie awaryjne…");
+                    pullFromPhone(host, secret, null, true);
+                }
+            }
+        }.execute();
+    }
+
+    private static int applyPhoneChanges(JsonObject root, JsonArray changes)
+            throws Exception {
+        if (root == null || !root.has("tables") || !root.get("tables").isJsonObject()
+                || !root.has("syncRecords") || !root.get("syncRecords").isJsonArray())
+            throw new IOException("Brak metadanych synchronizacji w lokalnej kopii.");
+        JsonObject tables = root.getAsJsonObject("tables");
+        JsonArray metadata = root.getAsJsonArray("syncRecords");
+        int applied = 0;
+        for (JsonElement element : changes) {
+            if (!element.isJsonObject())
+                throw new IOException("Nieprawidłowa zmiana z telefonu.");
+            JsonObject change = element.getAsJsonObject();
+            if (!change.has("meta") || !change.get("meta").isJsonObject())
+                throw new IOException("Zmiana z telefonu nie ma metadanych.");
+            JsonObject remoteMeta = change.getAsJsonObject("meta");
+            String uuid = value(remoteMeta, "syncUuid").toLowerCase(Locale.ROOT);
+            String tableName = value(remoteMeta, "table");
+            String rowKey = value(remoteMeta, "rowKey");
+            long remoteRevision = longValue(remoteMeta, "revision");
+            if (!uuid.matches("[0-9a-f-]{36}") || remoteRevision < 1L
+                    || !tables.has(tableName) || !tables.get(tableName).isJsonArray())
+                throw new IOException("Nieprawidłowa metadana zmiany z telefonu.");
+            int metaIndex = syncMetaIndexByUuid(metadata, uuid);
+            if (metaIndex >= 0) {
+                JsonObject localMeta = metadata.get(metaIndex).getAsJsonObject();
+                long localRevision = longValue(localMeta, "revision");
+                if (localRevision > remoteRevision) continue;
+                if (localRevision == remoteRevision
+                        && value(localMeta, "rowHash").equals(value(remoteMeta, "rowHash")))
+                    continue;
+            }
+            JsonArray rows = tables.getAsJsonArray(tableName);
+            int rowIndex = rowIndexByKey(tableName, rows, rowKey);
+            boolean deleted = remoteMeta.has("deletedAt")
+                && !remoteMeta.get("deletedAt").isJsonNull();
+            if (deleted) {
+                if (rowIndex >= 0) rows.remove(rowIndex);
+            } else {
+                if (!change.has("row") || !change.get("row").isJsonObject())
+                    throw new IOException("Zmiana rekordu nie zawiera danych.");
+                JsonObject row = change.getAsJsonObject("row");
+                if (!rowKey.equals(patchRowKey(tableName, row)))
+                    throw new IOException("Klucz zmiany nie pasuje do rekordu.");
+                if (rowIndex >= 0) rows.set(rowIndex, row.deepCopy());
+                else rows.add(row.deepCopy());
+            }
+            if (metaIndex >= 0) metadata.set(metaIndex, remoteMeta.deepCopy());
+            else metadata.add(remoteMeta.deepCopy());
+            applied++;
+        }
+        return applied;
+    }
+
+    private static int syncMetaIndexByUuid(JsonArray metadata, String uuid) {
+        for (int i = 0; i < metadata.size(); i++) {
+            JsonElement element = metadata.get(i);
+            if (!element.isJsonObject()) continue;
+            if (uuid.equalsIgnoreCase(value(element.getAsJsonObject(), "syncUuid"))) return i;
+        }
+        return -1;
+    }
+
+    private static int rowIndexByKey(String tableName, JsonArray rows, String rowKey) {
+        for (int i = 0; i < rows.size(); i++) {
+            JsonElement element = rows.get(i);
+            if (!element.isJsonObject()) continue;
+            if (rowKey.equals(patchRowKey(tableName, element.getAsJsonObject()))) return i;
+        }
+        return -1;
+    }
+
+    private void updatePhoneChangeCursorFromSnapshot(JsonObject root) {
+        long bestAt = 0L;
+        String bestUuid = "";
+        if (root != null && root.has("syncRecords")
+                && root.get("syncRecords").isJsonArray()) {
+            for (JsonElement element : root.getAsJsonArray("syncRecords")) {
+                if (!element.isJsonObject()) continue;
+                JsonObject meta = element.getAsJsonObject();
+                long at = longValue(meta, "updatedAt");
+                String uuid = value(meta, "syncUuid").toLowerCase(Locale.ROOT);
+                if (at > bestAt || (at == bestAt && uuid.compareTo(bestUuid) > 0)) {
+                    bestAt = at;
+                    bestUuid = uuid;
+                }
+            }
+        }
+        phoneChangeCursorAt = bestAt;
+        phoneChangeCursorUuid = bestUuid;
     }
 
     private void startAutoSaveLoop() {
@@ -3836,6 +4009,7 @@ public final class EdhomeDesktop extends JFrame {
             if (snapshot != null) {
                 ensureDesktopSyncMetadata(snapshot);
                 saveCache(snapshot);
+                savePcBackup(snapshot);
             }
         } catch (Exception error) {
             DesktopDiagnosticLog.error("LOCAL_CACHE_SAVE", error);
@@ -6228,6 +6402,67 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    private static synchronized void savePcBackup(JsonObject data) {
+        if (data == null) return;
+        try {
+            Files.createDirectories(PC_BACKUP_DIR);
+            String json = GSON.toJson(data);
+            writeBackupFile(PC_BACKUP_DIR.resolve("EDHOME-PC-latest.json"), json);
+            String day = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+            Path daily = PC_BACKUP_DIR.resolve("EDHOME-PC-" + day + ".json");
+            boolean refreshDaily = !Files.isRegularFile(daily);
+            if (!refreshDaily) {
+                try {
+                    refreshDaily = System.currentTimeMillis()
+                        - Files.getLastModifiedTime(daily).toMillis() >= 15 * 60 * 1000L;
+                } catch (IOException ignored) { refreshDaily = true; }
+            }
+            if (refreshDaily) writeBackupFile(daily, json);
+            try (java.util.stream.Stream<Path> stream = Files.list(PC_BACKUP_DIR)) {
+                java.util.List<Path> dailyFiles = stream.filter(Files::isRegularFile)
+                    .filter(file -> file.getFileName().toString()
+                        .matches("EDHOME-PC-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json"))
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .collect(java.util.stream.Collectors.toList());
+                for (int i = 30; i < dailyFiles.size(); i++) Files.deleteIfExists(dailyFiles.get(i));
+            }
+        } catch (Exception error) {
+            DesktopDiagnosticLog.error("PC_BACKUP_SAVE", error);
+        }
+    }
+
+    private static void writeBackupFile(Path target, String content) throws IOException {
+        Path temp = Files.createTempFile(PC_BACKUP_DIR, target.getFileName().toString() + ".", ".tmp");
+        boolean committed = false;
+        try {
+            Files.writeString(temp, content, StandardCharsets.UTF_8,
+                StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            try {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicUnavailable) {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            committed = true;
+        } finally {
+            if (!committed) try { Files.deleteIfExists(temp); } catch (IOException ignored) { }
+        }
+    }
+
+    private void openPcBackupFolder() {
+        try {
+            Files.createDirectories(PC_BACKUP_DIR);
+            if (!Desktop.isDesktopSupported())
+                throw new IOException("System nie obsługuje otwierania folderów.");
+            Desktop.getDesktop().open(PC_BACKUP_DIR.toFile());
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie można otworzyć folderu backupu:\n" + PC_BACKUP_DIR.toAbsolutePath()
+                    + "\n\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private static void validate(JsonObject root) {
         if (!"edhome-data-backup".equals(str(root,"format",""))
                 || !root.has("tables") || !root.get("tables").isJsonObject())
@@ -6294,11 +6529,13 @@ public final class EdhomeDesktop extends JFrame {
                     snapshotHash = result.sha256;
                     syncedSnapshot = snapshot.deepCopy();
                     phoneRevision = result.revision;
+                    updatePhoneChangeCursorFromSnapshot(snapshot);
                     lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
                     dirty = false;
                     validate(snapshot);
                     saveCache(snapshot);
+                    savePcBackup(snapshot);
                     connection.setText("ONLINE • EDYCJA • Android "
                         + str(snapshot,"sourceVersion",""));
                     showSection(current);
@@ -6392,6 +6629,7 @@ public final class EdhomeDesktop extends JFrame {
                     syncedSnapshot = result.data.deepCopy();
                     snapshotHash = result.sha256;
                     phoneRevision = result.revision;
+                    updatePhoneChangeCursorFromSnapshot(result.data);
                     if (!result.patchUsed)
                         lastFullReconcileAt = System.currentTimeMillis();
 
@@ -6399,6 +6637,7 @@ public final class EdhomeDesktop extends JFrame {
                         snapshot = result.data.deepCopy();
                         dirty = false;
                         saveCache(snapshot);
+                        savePcBackup(snapshot);
                     } else {
                         // Użytkownik zdążył zrobić kolejne zmiany w czasie synchronizacji.
                         dirty = true;
@@ -6917,6 +7156,39 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    private static final class DeltaBatch {
+        final JsonArray changes;
+        final boolean hasMore;
+        final long cursorUpdatedAt;
+        final String cursorSyncUuid;
+        DeltaBatch(JsonArray changes, boolean hasMore, long cursorUpdatedAt, String cursorSyncUuid) {
+            this.changes = changes == null ? new JsonArray() : changes;
+            this.hasMore = hasMore;
+            this.cursorUpdatedAt = cursorUpdatedAt;
+            this.cursorSyncUuid = cursorSyncUuid == null ? "" : cursorSyncUuid;
+        }
+    }
+
+    private static final class PhoneDeltaSyncResult {
+        final JsonObject data;
+        final long revision;
+        final int applied;
+        final long cursorUpdatedAt;
+        final String cursorSyncUuid;
+        PhoneDeltaSyncResult(JsonObject data, long revision, int applied,
+                long cursorUpdatedAt, String cursorSyncUuid) {
+            this.data = data;
+            this.revision = revision;
+            this.applied = applied;
+            this.cursorUpdatedAt = cursorUpdatedAt;
+            this.cursorSyncUuid = cursorSyncUuid == null ? "" : cursorSyncUuid;
+        }
+    }
+
+    private static final class DeltaUnsupportedException extends IOException {
+        DeltaUnsupportedException() { super("Telefon ma starszą wersję synchronizacji telefon → PC."); }
+    }
+
     private static final class PatchResult {
         final String sha256;
         final long revision;
@@ -7255,6 +7527,32 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IOException("Telefon odpowiedział HTTP " + response.statusCode() + ".");
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             return root.has("revision") ? root.get("revision").getAsLong() : -1L;
+        }
+
+        DeltaBatch changes(long afterUpdatedAt, String afterUuid) throws Exception {
+            String safeUuid = afterUuid == null ? "" : afterUuid.toLowerCase(Locale.ROOT);
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/changes?after="
+                        + afterUpdatedAt + "&uuid=" + safeUuid))
+                .timeout(Duration.ofSeconds(15))
+                .header("X-EDHOME-TOKEN", token)
+                .header("Accept", "application/json")
+                .GET().build();
+            HttpResponse<String> response =
+                http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 404) throw new DeltaUnsupportedException();
+            if (response.statusCode() == 401) throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon odrzucił pobranie zmian: HTTP " + response.statusCode() + ".");
+            JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
+            JsonArray changes = body.has("changes") && body.get("changes").isJsonArray()
+                ? body.getAsJsonArray("changes") : new JsonArray();
+            boolean hasMore = body.has("hasMore") && body.get("hasMore").getAsBoolean();
+            long cursorAt = body.has("cursorUpdatedAt")
+                ? body.get("cursorUpdatedAt").getAsLong() : afterUpdatedAt;
+            String cursorUuid = body.has("cursorSyncUuid")
+                ? body.get("cursorSyncUuid").getAsString() : safeUuid;
+            return new DeltaBatch(changes, hasMore, cursorAt, cursorUuid);
         }
 
         PatchResult patch(JsonObject patch) throws Exception {
