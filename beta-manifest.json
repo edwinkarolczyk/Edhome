@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 195,
-  "versionName": "0.8.0.3",
-  "changelog": "EDHOME 0.8.0.3 — Beta. Projekty: w szybkim dodawaniu dotknięcie terminu otwiera kalendarz Androida, a przypomnienie ma domyślnie 19:00; bez wybranego terminu przypomnienie nie jest zapisywane. Kanał Beta wymusza świeże pobranie manifestu aktualizacji bez cache. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.3/edhome-beta.apk",
-  "sha256": "1732abaca3c811d7192be9b6bf871ff17aa17f73bbdb3fdf90a0cacb13511069"
+  "versionCode": 197,
+  "versionName": "0.8.0.5",
+  "changelog": "EDHOME 0.8.0.5 — Beta. Kopia danych jest teraz zweryfikowanym ZIP-em: data.json + zachowane oryginalne zdjęcia Magazynu domowego + własne obrazy kafelków. Przywracanie sprawdza manifest i SHA-256, odtwarza pliki i regeneruje miniatury; starsze JSON-y nadal można importować. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.5/edhome-beta.apk",
+  "sha256": "fdca39cb637de3c8257df513aa6abef6fded49b97f5d10b3e076f0459498b406"
 }
