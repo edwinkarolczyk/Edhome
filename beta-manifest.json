@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 188,
-  "versionName": "0.7.4.47",
-  "changelog": "EDHOME 0.7.4.47 — Beta. Projekty: ustawialne godziny I/II/III zmiany i osobne okna czasu na projekty per użytkownik; planer korzysta z pozostałego czasu po Start/Stop. Dodano twarde i miękkie wymagania czynności (zakup, dostawa, przygotowanie, zasób, akceptacja) z opcjonalną datą dostępności. Twardy bloker zatrzymuje Start i wpływa na propozycję terminu. Poprawiono zmianę ostatniego Administratora na Domownika — aplikacja wyświetla jasny komunikat zamiast po cichu przywracać rolę. SQLite v44, backup i synchronizacja LAN obejmują nowe dane. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.47/edhome-beta.apk",
-  "sha256": "bd91dfea3e899a5a4086c06280eec9f9a9d64a52feffc1a1d4be6dab46ab9834"
+  "versionCode": 189,
+  "versionName": "0.7.4.48",
+  "changelog": "EDHOME 0.7.4.48 — Beta. Nawigacja: nagłówek modułów używa teraz „← Cofnij” zamiast „← Start”. Cofnięcie wraca do poprzedniego widoku i przywraca kontekst użytkownika/projektu, filtry, kalendarz oraz pozycję przewijania. Wejście w projekt i podprojekt zapisuje poprzedni poziom. Start/⌂ pozostaje osobnym przejściem do pulpitu, a Start/Stop czynności nadal dotyczy wyłącznie pomiaru pracy. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.48/edhome-beta.apk",
+  "sha256": "8c3af3cd96197389eab548320e88963e31d12407dc805452dd57a5498b0409aa"
 }
