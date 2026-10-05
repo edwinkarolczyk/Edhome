@@ -30,7 +30,7 @@ for marker in (
     "showProjectDependencyDialog",
     "showProjectBlockers",
     "Zaproponuj terminy projektu",
-    "Plan obejmuje również podprojekty i respektuje",
+    "Plan używa pozostałego czasu po Start/Stop",
     "+ Rzecz / Pudełko",
     "+ Koszt / zakup",
 ):
