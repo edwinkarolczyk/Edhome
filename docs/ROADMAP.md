@@ -258,6 +258,13 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 **Decyzje Edwina 21.09.2026:** cena opcjonalna podczas oznaczania „kupione”; wszystkie ceny produktów widoczne na wspólnym tablecie bez danych kont/księgowości prywatnej; wartość całego zapasu dopiero w późniejszym etapie. **Otwarte:** szczegółowa metoda późniejszej wyceny stanu i zachowanie przy niepełnych danych. Nie zmieniać kodu, APK ani `main` w tym wątku bez wyraźnego osobnego polecenia.
 
 
+## Uzgodnione rozszerzenia Magazynu i bezpieczeństwa danych — roadmapa
+
+- **Coroczny remanent / inwentaryzacja:** prosty kreator Magazynu domowego i Spiżarni uruchamiany raz w roku. Przejście miejsce po miejscu, QR/NFC/ręczne potwierdzenie, statusy **znaleziono / brak / inne miejsce / do wyjaśnienia**, możliwość korekty faktycznej lokalizacji podczas skanu, snapshot stanu na dany rok oraz porównanie z poprzednim remanentem. W Spiżarni dodatkowo ilości, zgrzewki, kaucje, terminy ważności i braki.
+- **Temperatura / mróz:** Miejsce dostaje opcję **„Narażone na mróz”**, a Rzecz i Pudełko **„Chronić przed mrozem”**. Przy przenoszeniu EDHOME ostrzega także wtedy, gdy w pudełku znajduje się choć jedna rzecz wrażliwa. Po integracji SUPLA rozszerzyć to o rzeczywiste odczyty temperatury i alerty progowe.
+- **Pełna kopia użytkownika:** zwykła kopia EDHOME ma być paczką ZIP z `data.json` i zachowanymi oryginalnymi zdjęciami/obrazami użytkownika; miniatur nie traktować jako jedynego źródła, tylko regenerować je po przywróceniu z oryginałów. Każda paczka ma manifest rozmiarów i SHA-256 oraz obowiązkową weryfikację przed uznaniem kopii za poprawną. Starszy JSON pozostaje formatem importu zgodnościowego.
+- **Prywatność:** prywatny sejf PayCheck, PIN-y i sekrety integracji nie wchodzą automatycznie do zwykłego ZIP-a; zachowują osobne mechanizmy zabezpieczeń.
+
 ## EDHOME na komputerze — plan architektury (bez deklaracji działającej wersji PC)
 
 - **Interfejs:** responsywny panel webowy otwierany w przeglądarce Windows / Linux / macOS; docelowo opcjonalny instalator Windows/EXE jako opakowanie panelu. Na dużym ekranie: lewy panel modułów, centrum z kalendarzem i listami, prawa karta szczegółów, przeciąganie myszą/touch.

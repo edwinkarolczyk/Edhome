@@ -130,6 +130,17 @@ final class DataBackup {
     private DataBackup() { }
 
     static String exportJson(SQLiteDatabase database, SharedPreferences prefs) throws Exception {
+        return exportJson(database, prefs, java.util.Collections.emptySet());
+    }
+
+    /**
+     * ZIP backups may omit thumbnails when the exact original image is included separately.
+     * Legacy items without an original keep their thumbnail in data.json.
+     */
+    static String exportJson(SQLiteDatabase database, SharedPreferences prefs,
+            Set<Long> omitStorageThumbnailIds) throws Exception {
+        if (omitStorageThumbnailIds == null)
+            omitStorageThumbnailIds = java.util.Collections.emptySet();
         JSONObject result = new JSONObject();
         result.put("format", FORMAT);
         result.put("formatVersion", FORMAT_VERSION);
@@ -208,7 +219,8 @@ final class DataBackup {
             long id;
             try{id=Long.parseLong(suffix);}
             catch(NumberFormatException invalid){continue;}
-            if(!validStorageIds.contains(id))continue;
+            if(!validStorageIds.contains(id)
+                    || omitStorageThumbnailIds.contains(id))continue;
             String data=(String)value.getValue();
             if(data.length()>StorageThumbs.MAX_BASE64_CHARS)throw new IllegalStateException(
                 "Nieprawidłowa miniatura magazynu.");
