@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 189,
-  "versionName": "0.7.4.48",
-  "changelog": "EDHOME 0.7.4.48 — Beta. Nawigacja: nagłówek modułów używa teraz „← Cofnij” zamiast „← Start”. Cofnięcie wraca do poprzedniego widoku i przywraca kontekst użytkownika/projektu, filtry, kalendarz oraz pozycję przewijania. Wejście w projekt i podprojekt zapisuje poprzedni poziom. Start/⌂ pozostaje osobnym przejściem do pulpitu, a Start/Stop czynności nadal dotyczy wyłącznie pomiaru pracy. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.48/edhome-beta.apk",
-  "sha256": "8c3af3cd96197389eab548320e88963e31d12407dc805452dd57a5498b0409aa"
+  "versionCode": 192,
+  "versionName": "0.7.4.51",
+  "changelog": "EDHOME 0.7.4.51 — Beta. Projekty: czas jest pokazywany czytelnie jako minuty/godziny zamiast wartości dziesiętnych (np. 30 min, 1 h 30 min); szybkie dodawanie ma gotowe czasy od 20 min do 10 h. Naprawiono puste okno Zależności — lista innych czynności jest widoczna i zależność ustawia się jednym tapnięciem. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.7.4.51/edhome-beta.apk",
+  "sha256": "8a56b0d9a77c25001bcc718765f785270a30e41ee8f16c7569f29e23183d6585"
 }
