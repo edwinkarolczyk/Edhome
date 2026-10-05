@@ -114,7 +114,7 @@ assert 'buildRecordPatch' in desktop
 assert 'baseRowSha256' in desktop
 assert 'PatchUnsupportedException' in desktop
 assert 'new javax.swing.Timer(1500' in desktop
-assert '180000L' in desktop
+assert '1800000L' in desktop
 assert 'ZAPISANO LOKALNIE' in desktop
 assert 'localAddresses()' in desktop
 assert 'LinkedHashSet<String> prefixes' in desktop
@@ -125,6 +125,28 @@ assert 'diagnosePhoneConnection' in desktop
 assert 'TCP ' in desktop and 'BRAK POŁĄCZENIA' in desktop
 assert 'Automatyczne szukanie telefonu' in desktop
 print("desktop incremental sync contract OK")
+
+# Android -> Desktop incremental pull + automatic PC backup.
+for marker in (
+    '"/changes"', 'ChangesProvider', 'DESKTOP_SYNC_CHANGES_SENT',
+    'exportChangesAfter', 'cursorUpdatedAt', 'cursorSyncUuid'
+):
+    assert marker in (server + service + sync_store), "Missing phone->PC delta contract: " + marker
+
+for marker in (
+    'pullChangesFromPhone', 'client.changes(', 'applyPhoneChanges',
+    'SYNC_PULL_DELTA_OK', 'phoneChangeCursorAt', '1800000L'
+):
+    assert marker in desktop, "Missing Desktop delta pull contract: " + marker
+
+for marker in (
+    'PC_BACKUP_DIR', 'EDHOME-PC-latest.json', 'EDHOME-PC-',
+    'savePcBackup(snapshot)', 'Otwórz backup EDHOME na PC',
+    'openPcBackupFolder'
+):
+    assert marker in desktop, "Missing PC backup contract: " + marker
+
+print("desktop phone delta pull + PC backup contract OK")
 
 # Hardening: direct SQLite patching, UUID identity, revisions and tombstones.
 patch_handler = server.split('if ("POST".equals(method) && "/patch".equals(path))',1)[1].split(
