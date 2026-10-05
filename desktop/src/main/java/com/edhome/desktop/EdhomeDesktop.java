@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.88";
+    private static final String DESKTOP_VERSION = "0.7.0.89";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -790,24 +790,28 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JPanel desktopProjectTaskCard(JsonObject task) {
+        long taskId = longValue(task,"id");
+        int duration = Math.max(20,intValue(task,"duration_minutes"));
+        boolean done = intValue(task,"done") != 0;
+        JsonObject activeSession = desktopActiveProjectWorkSession(taskId);
+
         JPanel card = new RoundedPanel(APP_SURFACE,16);
         card.setLayout(new BorderLayout(10,0));
         card.setBorder(new EmptyBorder(9,11,9,11));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE,86));
+        card.setMaximumSize(new Dimension(
+            Integer.MAX_VALUE,activeSession == null ? 86 : 108));
 
         JPanel text = new JPanel();
         text.setOpaque(false);
         text.setLayout(new BoxLayout(text,BoxLayout.Y_AXIS));
         String titleText = value(task,"title");
-        JLabel title = new JLabel((intValue(task,"done") != 0 ? "✓ " : "• ") + titleText);
+        JLabel title = new JLabel((done ? "✓ " : "• ") + titleText);
         title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD,14f));
         text.add(title);
 
-        long taskId = longValue(task,"id");
-        int duration = Math.max(20,intValue(task,"duration_minutes"));
         int worked = desktopTaskWorkedMinutes(taskId);
-        int left = intValue(task,"done") != 0 ? 0 : Math.max(0,duration-worked);
+        int left = done ? 0 : Math.max(0,duration-worked);
         int deps = desktopDependencyCount(taskId);
         String due = value(task,"due_date");
         JLabel meta = new JLabel("Plan: " + formatMinutes(duration)
@@ -818,10 +822,32 @@ public final class EdhomeDesktop extends JFrame {
         meta.setForeground(APP_MUTED);
         meta.setFont(meta.getFont().deriveFont(11f));
         text.add(meta);
+
+        if (activeSession != null) {
+            JLabel clock = new JLabel();
+            clock.setForeground(APP_ACCENT);
+            clock.setFont(clock.getFont().deriveFont(Font.BOLD,14f));
+            text.add(Box.createVerticalStrut(3));
+            text.add(clock);
+            bindDesktopProjectClock(clock,taskId,duration);
+        }
         card.add(text,BorderLayout.CENTER);
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT,5,8));
         actions.setOpaque(false);
+
+        if (activeSession != null) {
+            JButton stop = compactActionButton("■ Stop");
+            stop.setToolTipText("Zatrzymaj pomiar czasu");
+            stop.addActionListener(e -> stopDesktopProjectWork(task));
+            actions.add(stop);
+        } else if (!done) {
+            JButton startTime = compactActionButton("▶ Start czasu");
+            startTime.setToolTipText("Uruchom pomiar czasu tej czynności");
+            startTime.addActionListener(e -> startDesktopProjectWork(task));
+            actions.add(startTime);
+        }
+
         JButton edit = compactActionButton("Edytuj");
         edit.addActionListener(e -> editDesktopProjectTask(task));
         JButton up = compactActionButton("↑");
@@ -838,6 +864,186 @@ public final class EdhomeDesktop extends JFrame {
         actions.add(depsButton);
         card.add(actions,BorderLayout.EAST);
         return card;
+    }
+
+    private JsonObject desktopTaskById(long taskId) {
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject task = element.getAsJsonObject();
+            if (longValue(task,"id") == taskId) return task;
+        }
+        return null;
+    }
+
+    private JsonObject desktopActiveProjectWorkSession(long taskId) {
+        JsonObject newest = null;
+        long newestStarted = Long.MIN_VALUE;
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (longValue(row,"task_id") != taskId
+                    || !value(row,"ended_at").isBlank()) continue;
+            long started = longValue(row,"started_at");
+            if (started >= newestStarted) {
+                newestStarted = started;
+                newest = row;
+            }
+        }
+        return newest;
+    }
+
+    private long desktopClosedWorkedSeconds(long taskId) {
+        long seconds = 0L;
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (longValue(row,"task_id") != taskId
+                    || value(row,"ended_at").isBlank()) continue;
+            seconds += Math.max(0L,longValue(row,"worked_minutes")) * 60L;
+        }
+        return seconds;
+    }
+
+    private static String desktopProjectClockText(long seconds) {
+        long safe = Math.max(0L,seconds);
+        long hours = safe / 3600L;
+        long minutes = (safe % 3600L) / 60L;
+        long rest = safe % 60L;
+        return String.format(Locale.ROOT,"%02d:%02d:%02d",
+            hours,minutes,rest);
+    }
+
+    private void updateDesktopProjectClock(JLabel clock,long taskId,int plannedMinutes) {
+        JsonObject active = desktopActiveProjectWorkSession(taskId);
+        if (active == null) {
+            clock.setText("Pomiar zatrzymany");
+            return;
+        }
+        long started = longValue(active,"started_at");
+        long elapsed = Math.max(0L,
+            (System.currentTimeMillis()-started)/1000L);
+        long worked = desktopClosedWorkedSeconds(taskId)+elapsed;
+        long planned = Math.max(0L,(long)plannedMinutes)*60L;
+        long delta = planned-worked;
+        if (delta >= 0L)
+            clock.setText("● Pozostało " + desktopProjectClockText(delta)
+                + "   •   Trwa " + desktopProjectClockText(elapsed));
+        else
+            clock.setText("● Ponad plan +" + desktopProjectClockText(-delta)
+                + "   •   Trwa " + desktopProjectClockText(elapsed));
+    }
+
+    private void bindDesktopProjectClock(JLabel clock,long taskId,int plannedMinutes) {
+        updateDesktopProjectClock(clock,taskId,plannedMinutes);
+        javax.swing.Timer timer = new javax.swing.Timer(1000,null);
+        timer.addActionListener(e -> {
+            if (!clock.isShowing() || !"Projekty".equals(current)) {
+                timer.stop();
+                return;
+            }
+            updateDesktopProjectClock(clock,taskId,plannedMinutes);
+        });
+        timer.setInitialDelay(1000);
+        timer.start();
+    }
+
+    private int desktopOpenDependencyCount(long taskId) {
+        int open = 0;
+        for (JsonElement element : table("project_task_dependencies")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            if (longValue(link,"task_id") != taskId) continue;
+            JsonObject dependency = desktopTaskById(
+                longValue(link,"depends_on_task_id"));
+            if (dependency != null && intValue(dependency,"done") == 0) open++;
+        }
+        return open;
+    }
+
+    private String desktopHardBlockReason(long taskId) {
+        java.util.List<String> labels = new ArrayList<>();
+        int total = 0;
+        for (JsonElement element : table("project_task_blockers")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject blocker = element.getAsJsonObject();
+            if (longValue(blocker,"task_id") != taskId
+                    || intValue(blocker,"hard") != 1
+                    || intValue(blocker,"resolved") != 0) continue;
+            total++;
+            if (labels.size() < 3) {
+                String label = value(blocker,"label").trim();
+                labels.add(label.isBlank() ? "wymaganie" : label);
+            }
+        }
+        if (total == 0) return "";
+        return "Czynność jest zablokowana. Czeka na: "
+            + String.join(", ",labels)
+            + (total > labels.size() ? " (+" + (total-labels.size()) + ")" : "")
+            + ".";
+    }
+
+    private void startDesktopProjectWork(JsonObject task) {
+        long taskId = longValue(task,"id");
+        if (taskId <= 0 || desktopTaskById(taskId) == null) {
+            JOptionPane.showMessageDialog(this,"Czynność już nie istnieje.");
+            return;
+        }
+        if (intValue(task,"done") != 0) {
+            JOptionPane.showMessageDialog(this,
+                "Czynność jest już oznaczona jako wykonana.");
+            return;
+        }
+        if (desktopActiveProjectWorkSession(taskId) != null) {
+            JOptionPane.showMessageDialog(this,
+                "Ta czynność ma już uruchomiony pomiar czasu.");
+            showSection("Projekty");
+            return;
+        }
+        int openDependencies = desktopOpenDependencyCount(taskId);
+        if (openDependencies > 0) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zakończ wcześniejsze czynności zależne: "
+                    + openDependencies + ".");
+            return;
+        }
+        String blocker = desktopHardBlockReason(taskId);
+        if (!blocker.isBlank()) {
+            JOptionPane.showMessageDialog(this,blocker);
+            return;
+        }
+
+        JsonObject session = new JsonObject();
+        session.addProperty("id",nextId("project_task_work_sessions"));
+        session.addProperty("task_id",taskId);
+        session.addProperty("started_at",System.currentTimeMillis());
+        session.add("ended_at",com.google.gson.JsonNull.INSTANCE);
+        session.add("worked_minutes",com.google.gson.JsonNull.INSTANCE);
+        table("project_task_work_sessions").add(session);
+        markDirty();
+        DesktopDiagnosticLog.event("PROJECT_WORK_STARTED_DESKTOP",
+            "task="+taskId);
+        showSection("Projekty");
+    }
+
+    private void stopDesktopProjectWork(JsonObject task) {
+        long taskId = longValue(task,"id");
+        JsonObject session = desktopActiveProjectWorkSession(taskId);
+        if (session == null) {
+            JOptionPane.showMessageDialog(this,
+                "Ta czynność nie ma aktywnego pomiaru czasu.");
+            showSection("Projekty");
+            return;
+        }
+        long ended = System.currentTimeMillis();
+        long started = longValue(session,"started_at");
+        int minutes = (int)Math.max(1L,
+            Math.round(Math.max(0L,ended-started)/60000.0));
+        session.addProperty("ended_at",ended);
+        session.addProperty("worked_minutes",minutes);
+        markDirty();
+        DesktopDiagnosticLog.event("PROJECT_WORK_STOPPED_DESKTOP",
+            "task="+taskId+" minutes="+minutes);
+        showSection("Projekty");
     }
 
     private void addDesktopProjectTask(long projectId) {
