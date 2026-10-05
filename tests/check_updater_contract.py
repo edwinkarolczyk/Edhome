@@ -15,6 +15,12 @@ for token in (
  "installerStartedFor = null;",
  "public void installReady()",
  "DiagnosticLog.event(\"UPDATE_INSTALLER_OPENED\")",
+ "edhome_ts=",
+ "conn.setUseCaches(false);",
+ "conn.setDefaultUseCaches(false);",
+ "Cache-Control",
+ "no-cache, no-store",
+ "Pragma",
 ):
  assert token in src, token
 assert src.count("check(false);")==1

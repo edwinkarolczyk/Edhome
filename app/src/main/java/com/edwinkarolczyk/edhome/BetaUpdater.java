@@ -213,12 +213,18 @@ public final class BetaUpdater {
     }
 
     private static JSONObject readManifest(String endpoint) throws Exception {
-        URL url = new URL(endpoint);
+        String separator = endpoint.contains("?") ? "&" : "?";
+        URL url = new URL(endpoint + separator + "edhome_ts="
+            + System.currentTimeMillis());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setConnectTimeout(6500);
         conn.setReadTimeout(6500);
         conn.setInstanceFollowRedirects(false);
+        conn.setUseCaches(false);
+        conn.setDefaultUseCaches(false);
         conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("Cache-Control", "no-cache, no-store");
+        conn.setRequestProperty("Pragma", "no-cache");
         try {
             int status = conn.getResponseCode();
             if (status == 404 || status == 410)

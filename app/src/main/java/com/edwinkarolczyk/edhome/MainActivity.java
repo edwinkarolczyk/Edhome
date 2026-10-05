@@ -5034,9 +5034,27 @@ public final class MainActivity extends Activity {
             "3 h","4 h","6 h","8 h","10 h")));
         quickDuration.setSelection(1);
         EditText due=new EditText(this);
-        due.setSingleLine(true);due.setHint("Termin RRRR-MM-DD • opcjonalnie");
+        due.setSingleLine(true);
+        due.setHint("Termin • dotknij, aby wybrać datę");
+        due.setFocusable(false);
+        due.setClickable(true);
+        due.setTextColor(ink);
+        due.setHintTextColor(subdued);
+        due.setOnClickListener(v->{
+            LocalDate initial;
+            try { initial=LocalDate.parse(due.getText().toString().trim()); }
+            catch(Exception ignored) { initial=LocalDate.now(); }
+            new DatePickerDialog(this,(picker,year,month,day)->
+                due.setText(LocalDate.of(year,month+1,day).toString()),
+                initial.getYear(),initial.getMonthValue()-1,
+                initial.getDayOfMonth()).show();
+        });
         EditText reminder=new EditText(this);
-        reminder.setSingleLine(true);reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
+        reminder.setSingleLine(true);
+        reminder.setText("19:00");
+        reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
+        reminder.setTextColor(ink);
+        reminder.setHintTextColor(subdued);
         form.addView(text("Czynność",14,true));form.addView(name);
         form.addView(text("Szacowany czas",14,true));form.addView(quickDuration);
         form.addView(text("Termin",14,true));form.addView(due);
@@ -5054,7 +5072,7 @@ public final class MainActivity extends Activity {
             }
             String dueValue=due.getText().toString().trim();
             String remind=reminder.getText().toString().trim();
-            String custom=remind.isEmpty()?null:remind;
+            String custom=dueValue.isEmpty()||remind.isEmpty()?null:remind;
             try {
                 db.saveTask(null,name.getText().toString().trim(),dueValue,
                     "once",1,project.placeId,"normal",minutes,
@@ -5065,7 +5083,7 @@ public final class MainActivity extends Activity {
                     "project="+project.id);
                 name.setText("");
                 due.setText("");
-                reminder.setText("");
+                reminder.setText("19:00");
                 name.requestFocus();
             } catch(Exception error) {
                 alert(error.getMessage()==null?"Nie zapisano czynności.":error.getMessage());

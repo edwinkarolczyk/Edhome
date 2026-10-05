@@ -66,6 +66,14 @@ assert 'ORDER BY project_sort_order,id' in main
 assert 'if(hours==0)return rest+" min";' in main
 assert 'return hours+" h "+rest+" min";' in main
 assert '"20 min","30 min","45 min","1 h","1 h 30 min","2 h"' in main
+quick_tasks=main.split("private void showProjectQuickTasks",1)[1].split(
+    "private void renderProjectTasks",1)[0]
+assert 'due.setFocusable(false);' in quick_tasks
+assert 'new DatePickerDialog' in quick_tasks
+assert 'due.setHint("Termin • dotknij, aby wybrać datę")' in quick_tasks
+assert 'reminder.setText("19:00")' in quick_tasks
+assert 'dueValue.isEmpty()||remind.isEmpty()?null:remind' in quick_tasks
+
 dependency_dialog=main.split("private void showProjectDependencyDialog",1)[1].split(
     "private void showProjectBlockers",1)[0]
 assert '.setItems(labels.toArray(new String[0])' in dependency_dialog
