@@ -29,6 +29,7 @@ import java.util.UUID;
 final class SyncRecordStore {
     private static final String TABLE = "sync_records";
     private static final int MAX_PATCH_OPS = 500;
+    private static final int MAX_DELTA_BYTES = 4 * 1024 * 1024;
     private static final int MAX_METADATA_ROWS = 50000;
 
     private SyncRecordStore() { }
@@ -155,6 +156,66 @@ final class SyncRecordStore {
             }
         }
         ensureAll(db);
+    }
+
+    static String exportChangesAfter(SQLiteDatabase db, long afterUpdatedAt,
+            String afterUuid) throws Exception {
+        if (afterUpdatedAt < 0L)
+            throw new IllegalArgumentException("Nieprawidłowy kursor synchronizacji.");
+        String uuid = afterUuid == null ? "" : afterUuid.trim().toLowerCase(Locale.ROOT);
+        if (!uuid.isEmpty() && !uuid.matches("[0-9a-f-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowy kursor UUID.");
+
+        ensureAll(db);
+        JSONArray changes = new JSONArray();
+        long cursorUpdatedAt = afterUpdatedAt;
+        String cursorUuid = uuid;
+        int bytes = 0;
+        boolean hasMore = false;
+
+        try (Cursor cursor = db.query(TABLE,
+                new String[]{"sync_uuid","table_name","row_key","revision",
+                    "updated_at","deleted_at","row_hash"},
+                "(updated_at>? OR (updated_at=? AND sync_uuid>?))",
+                new String[]{Long.toString(afterUpdatedAt),
+                    Long.toString(afterUpdatedAt), uuid},
+                null, null, "updated_at ASC,sync_uuid ASC",
+                Integer.toString(MAX_PATCH_OPS + 1))) {
+            while (cursor.moveToNext()) {
+                if (changes.length() >= MAX_PATCH_OPS) {
+                    hasMore = true;
+                    break;
+                }
+                Meta meta = meta(cursor);
+                JSONObject change = new JSONObject();
+                change.put("meta", metaJson(meta));
+                if (meta.deletedAt == null) {
+                    JSONObject row = readRow(db, meta.table, meta.rowKey);
+                    if (row == null)
+                        throw new IllegalStateException(
+                            "Brak rekordu wskazanego przez metadane synchronizacji.");
+                    change.put("row", row);
+                }
+                int changeBytes = change.toString()
+                    .getBytes(StandardCharsets.UTF_8).length;
+                if (changes.length() > 0 && bytes + changeBytes > MAX_DELTA_BYTES) {
+                    hasMore = true;
+                    break;
+                }
+                changes.put(change);
+                bytes += changeBytes;
+                cursorUpdatedAt = meta.updatedAt;
+                cursorUuid = meta.syncUuid;
+            }
+        }
+
+        JSONObject response = new JSONObject();
+        response.put("ok", true);
+        response.put("changes", changes);
+        response.put("hasMore", hasMore);
+        response.put("cursorUpdatedAt", cursorUpdatedAt);
+        response.put("cursorSyncUuid", cursorUuid);
+        return response.toString();
     }
 
     static String applyPatch(SQLiteDatabase db, String incoming) throws Exception {
