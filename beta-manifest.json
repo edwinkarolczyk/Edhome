@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 193,
-  "versionName": "0.8.0.1",
-  "changelog": "EDHOME 0.8.0.1 — Beta. Start integracji SUPLA Cloud: bezpieczny Personal Access Token w Android Keystore, połączenie HTTPS z API v3, odczyt kanałów i ich stanów oraz lokalny cache offline. Etap 0.8.0 jest tylko do odczytu — sterowanie urządzeniami i automatyczne podlewanie są jeszcze wyłączone. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.1/edhome-beta.apk",
-  "sha256": "d1cd99390f563b8b2a898af832e3fc4451425e0e4058e9337e410bd377fc9767"
+  "versionCode": 194,
+  "versionName": "0.8.0.2",
+  "changelog": "EDHOME 0.8.0.2 — Beta. Projekty: szacowany czas czynności wpisuje się teraz osobno jako godziny i minuty. Dla czynności projektu wartości poniżej 20 min są automatycznie podbijane do 20 min; maksimum pozostaje 10 h. Start/Stop i rozliczanie przepracowanego czasu pozostają bez zmian. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.2/edhome-beta.apk",
+  "sha256": "27fad75cd6b32ce87d20e91dea1ee1642a3d271a692e915d7447c1a2273c5d26"
 }
