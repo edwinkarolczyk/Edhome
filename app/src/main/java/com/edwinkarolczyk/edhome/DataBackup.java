@@ -285,6 +285,13 @@ final class DataBackup {
 
     static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json)
             throws Exception {
+        restoreJson(database, prefs, json, java.util.Collections.emptyMap());
+    }
+
+    static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,
+            Map<Long,String> archivedStorageThumbs) throws Exception {
+        if (archivedStorageThumbs == null)
+            archivedStorageThumbs = java.util.Collections.emptyMap();
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
             throw new IllegalArgumentException("Plik jest za duży (maks. 8 MB).");
         JSONObject root = new JSONObject(json);
@@ -1587,6 +1594,30 @@ final class DataBackup {
                         "Niedozwolony obraz miniatury w kopii.");
                 restoredStorageThumbs.put(id,jpeg);
             }
+        }
+
+        if (restoredStorageThumbs.size() + archivedStorageThumbs.size() > 200)
+            throw new IllegalArgumentException("Za dużo miniaturek w kopii.");
+        for (Map.Entry<Long,String> archived : archivedStorageThumbs.entrySet()) {
+            long id = archived.getKey() == null ? -1L : archived.getKey();
+            String jpeg = archived.getValue();
+            if (id <= 0 || !presentStorageIds.contains(id)
+                    || restoredStorageThumbs.containsKey(id)
+                    || jpeg == null || jpeg.length() > StorageThumbs.MAX_BASE64_CHARS)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa miniatura archiwalna rzeczy w kopii.");
+            byte[] bytes;
+            try {
+                bytes = android.util.Base64.decode(jpeg, android.util.Base64.NO_WRAP);
+            } catch (Exception invalid) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowe kodowanie miniatury archiwalnej.", invalid);
+            }
+            if (bytes.length < 4 || bytes.length > StorageThumbs.MAX_JPEG_BYTES
+                    || (bytes[0] & 255) != 255 || (bytes[1] & 255) != 216)
+                throw new IllegalArgumentException(
+                    "Niedozwolony obraz miniatury archiwalnej w kopii.");
+            restoredStorageThumbs.put(id, jpeg);
         }
 
         database.beginTransaction();
