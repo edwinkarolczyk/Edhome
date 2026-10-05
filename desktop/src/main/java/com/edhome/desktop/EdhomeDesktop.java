@@ -5005,11 +5005,19 @@ public final class EdhomeDesktop extends JFrame {
                 "EDHOME • połącz telefon przez QR", false);
             dialog[0] = window;
             window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+            window.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
+            window.setAlwaysOnTop(true);
             window.setContentPane(body);
             window.pack();
             window.setResizable(false);
             window.setLocationRelativeTo(this);
             window.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                    window.toFront();
+                    window.requestFocus();
+                    DesktopDiagnosticLog.event("QR_PAIRING_WINDOW_VISIBLE");
+                }
+
                 @Override public void windowClosed(java.awt.event.WindowEvent e) {
                     if (qrPairingSession == session) {
                         qrPairingSession.close();
