@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.84";
+    private static final String DESKTOP_VERSION = "0.7.0.85";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -593,8 +593,16 @@ public final class EdhomeDesktop extends JFrame {
         actions.setOpaque(false);
         JButton edit = compactActionButton("Edytuj");
         edit.addActionListener(e -> editDesktopProjectTask(task));
+        JButton up = compactActionButton("↑");
+        up.setToolTipText("Przesuń czynność wyżej");
+        up.addActionListener(e -> moveDesktopProjectTask(task,-1));
+        JButton down = compactActionButton("↓");
+        down.setToolTipText("Przesuń czynność niżej");
+        down.addActionListener(e -> moveDesktopProjectTask(task,1));
         JButton depsButton = compactActionButton("Zależności");
         depsButton.addActionListener(e -> showDesktopTaskDependencies(task));
+        actions.add(up);
+        actions.add(down);
         actions.add(edit);
         actions.add(depsButton);
         card.add(actions,BorderLayout.EAST);
@@ -609,6 +617,7 @@ public final class EdhomeDesktop extends JFrame {
         JsonObject row = newRowTemplate("tasks");
         if (row == null) return;
         row.addProperty("project_id",projectId);
+        row.addProperty("project_sort_order",desktopNextProjectSortOrder(projectId));
         JsonObject before = row.deepCopy();
         if (!editRow(row,cols(
                 "Nazwa","title",
@@ -663,12 +672,15 @@ public final class EdhomeDesktop extends JFrame {
         java.util.List<String> names = parseQuickTasks(area.getText(),true);
         if (names.isEmpty()) return;
         int added = 0;
+        long sortOrder=desktopNextProjectSortOrder(projectId);
         for (String name : names) {
             JsonObject task = newRowTemplate("tasks");
             task.addProperty("title",name);
             task.addProperty("project_id",projectId);
+            task.addProperty("project_sort_order",sortOrder);
             task.addProperty("duration_minutes",30);
             table("tasks").add(task);
+            sortOrder+=10L;
             added++;
         }
         if (added > 0) markDirty();
@@ -781,17 +793,40 @@ public final class EdhomeDesktop extends JFrame {
             if (longValue(task,"project_id") == projectId) out.add(task);
         }
         out.sort((a,b) -> {
-            int doneCompare = Integer.compare(intValue(a,"done"),intValue(b,"done"));
-            if (doneCompare != 0) return doneCompare;
-            String da = value(a,"due_date");
-            String db = value(b,"due_date");
-            if (da.isBlank() && !db.isBlank()) return 1;
-            if (!da.isBlank() && db.isBlank()) return -1;
-            int date = da.compareTo(db);
-            if (date != 0) return date;
-            return value(a,"title").compareToIgnoreCase(value(b,"title"));
+            int order=Long.compare(longValue(a,"project_sort_order"),
+                longValue(b,"project_sort_order"));
+            if(order!=0)return order;
+            return Long.compare(longValue(a,"id"),longValue(b,"id"));
         });
         return out;
+    }
+
+    private long desktopNextProjectSortOrder(long projectId) {
+        long max=0L;
+        for(JsonObject task:desktopProjectTasks(projectId))
+            max=Math.max(max,longValue(task,"project_sort_order"));
+        return max>=Long.MAX_VALUE-10L?Long.MAX_VALUE:max+10L;
+    }
+
+    private void moveDesktopProjectTask(JsonObject task,int delta) {
+        long projectId=longValue(task,"project_id");
+        if(projectId<=0 || delta==0)return;
+        java.util.List<JsonObject> tasks=desktopProjectTasks(projectId);
+        int index=-1;
+        long taskId=longValue(task,"id");
+        for(int i=0;i<tasks.size();i++)
+            if(longValue(tasks.get(i),"id")==taskId){index=i;break;}
+        int target=index+delta;
+        if(index<0 || target<0 || target>=tasks.size())return;
+        java.util.Collections.swap(tasks,index,target);
+        long order=10L;
+        for(JsonObject row:tasks) {
+            row.addProperty("project_sort_order",order);
+            order+=10L;
+        }
+        markDirty();
+        desktopProjectId=projectId;
+        showSection("Projekty");
     }
 
     private int desktopTaskWorkedMinutes(long taskId) {
@@ -6369,6 +6404,7 @@ public final class EdhomeDesktop extends JFrame {
             row.add("remind_time", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("reminder_lead_days", 0);
             row.add("project_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("project_sort_order", 0L);
             return row;
         }
         if ("projects".equals(tableName)) {

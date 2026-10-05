@@ -5090,7 +5090,7 @@ public final class MainActivity extends Activity {
         int count=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT id,title,done,due_date,duration_minutes FROM tasks "
-                    +"WHERE project_id=? ORDER BY done,due_date IS NULL,due_date,id",
+                    +"WHERE project_id=? ORDER BY project_sort_order,id",
                 new String[]{Long.toString(project.id)})) {
             while(c.moveToNext()) {
                 count++;
@@ -18158,7 +18158,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 44);
+            super(context, "edhome-beta-preview.db", null, 45);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -18171,7 +18171,8 @@ public final class MainActivity extends Activity {
                 + "assignee_id INTEGER, "
                 + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
                 + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0, "
-                + "project_id INTEGER)");
+                + "project_id INTEGER, "
+                + "project_sort_order INTEGER NOT NULL DEFAULT 0)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0, "
                 + "category TEXT NOT NULL DEFAULT 'other' CHECK(category IN "
@@ -18209,7 +18210,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 44) {
+            if (oldVersion < 1 || newVersion > 45) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -18449,6 +18450,13 @@ public final class MainActivity extends Activity {
             if(oldVersion < 44) {
                 ProjectPlanningStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_43_TO_44_PROJECT_PLANNING");
+            }
+            if(oldVersion < 45) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN "
+                    + "project_sort_order INTEGER NOT NULL DEFAULT 0");
+                database.execSQL("UPDATE tasks SET project_sort_order=id "
+                    + "WHERE project_id IS NOT NULL");
+                DiagnosticLog.event("DATABASE_MIGRATED_44_TO_45_PROJECT_TASK_ORDER");
             }
             if(newVersion >= 36) {
                 try {
@@ -18742,11 +18750,16 @@ public final class MainActivity extends Activity {
             else values.put("due_date", dueDate);
             values.put("repeat_rule", rule);
             values.put("repeat_every", every);
-            if(projectId==null) values.putNull("project_id");
-            else {
+            Long previousProjectId=id==null?null:taskProjectId(id);
+            if(projectId==null) {
+                values.putNull("project_id");
+                values.put("project_sort_order",0);
+            } else {
                 if(ProjectStore.find(getReadableDatabase(),projectId)==null)
                     throw new IllegalArgumentException("Projekt nie istnieje.");
                 values.put("project_id",projectId);
+                if(id==null || !java.util.Objects.equals(previousProjectId,projectId))
+                    values.put("project_sort_order",nextProjectSortOrder(projectId));
             }
             if (placeId == null) values.putNull("place_id");
             else {
@@ -18800,6 +18813,16 @@ public final class MainActivity extends Activity {
                     "SELECT project_id FROM tasks WHERE id=?",
                     new String[]{Long.toString(taskId)})) {
                 return c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
+            }
+        }
+
+        long nextProjectSortOrder(long projectId) {
+            try(Cursor c=getReadableDatabase().rawQuery(
+                    "SELECT COALESCE(MAX(project_sort_order),0) FROM tasks "
+                        + "WHERE project_id=?",
+                    new String[]{Long.toString(projectId)})) {
+                long current=c.moveToFirst()?Math.max(0L,c.getLong(0)):0L;
+                return current>=Long.MAX_VALUE-10L?Long.MAX_VALUE:current+10L;
             }
         }
 

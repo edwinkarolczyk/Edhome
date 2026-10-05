@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 44;
+    private static final int DB_VERSION = 45;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -44,7 +44,7 @@ final class DataBackup {
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days",
-            "project_id"},
+            "project_id", "project_sort_order"},
         {"project_resources", "id", "project_id", "target_kind", "target_id", "created_at"},
         {"project_costs", "id", "project_id", "name", "qty_milli", "unit",
             "unit_price_grosz", "status", "note", "created_at"},
@@ -576,6 +576,11 @@ final class DataBackup {
                         if(inputVersion < 40 && "tasks".equals(definition[0])
                                 && "project_id".equals(key)) {
                             values.putNull(key);
+                            continue;
+                        }
+                        if(inputVersion < 45 && "tasks".equals(definition[0])
+                                && "project_sort_order".equals(key)) {
+                            values.put(key,0);
                             continue;
                         }
                         if (inputVersion < 39
@@ -1458,6 +1463,10 @@ final class DataBackup {
                     "Czynność wskazuje nieistniejącego domownika.");
             Long taskProjectId=task.getAsLong("project_id");
             Long taskMinutes=task.getAsLong("duration_minutes");
+            Long taskSort=task.getAsLong("project_sort_order");
+            if(taskSort==null || taskSort<0)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa kolejność czynności projektu w kopii.");
             if(taskProjectId!=null && (taskMinutes==null || taskMinutes<20))
                 throw new IllegalArgumentException(
                     "Czynność projektowa musi mieć co najmniej 20 minut.");

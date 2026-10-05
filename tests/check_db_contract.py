@@ -131,6 +131,7 @@ planning44 = statements(section(planning_store, "static void create(SQLiteDataba
                                 "private static void requireMember").replace(
                                     "db.execSQL(", "database.execSQL("))
 step44 = planning44.copy()
+step45 = statements(section(upgrade, "if(oldVersion < 45)", "if(newVersion >= 36)"))
 step40 = statements(section(upgrade, "if(oldVersion < 40)", "if(oldVersion < 41)")) + project40
 step41 = statements(section(upgrade, "if(oldVersion < 41)", "if(oldVersion < 42)")) + project41
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
@@ -181,7 +182,7 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 44, "Database version and backup format differ"
+assert version == backup_version == 45, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42 + project43 + planning44)
@@ -273,6 +274,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step42)  # v41 to v42, profile użytkowników
     execute(db, step43)  # v42 to v43, sesje pracy w Projektach
     execute(db, step44)  # v43 to v44, dostępność i wymagania Projektów
+    execute(db, step45)  # v44 to v45, trwała kolejność czynności Projektów
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
@@ -393,6 +395,8 @@ assert '"task_rotation_members", "task_id", "member_id", "position"' in backup
 assert '"assignee_id", "assignee_name_snapshot"' in backup
 assert '"task_rotation_members".equals(definition[0])' in backup
 assert 'task_id ASC, position ASC' in backup
+assert '"project_sort_order"' in backup
+assert 'inputVersion < 45 && "tasks".equals(definition[0])' in backup
 # An already-upgraded v14 installation must preserve barcode links and inventory.
 existing14 = sqlite3.connect(":memory:")
 execute(existing14, legacy_create + audit + history + rotations + places + sibling_index
@@ -464,4 +468,4 @@ assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v43→v44: PASS; Projects/dependencies/work sessions, profiles, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v44→v45: PASS; Projects/order/dependencies/work sessions, profiles, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")

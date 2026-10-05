@@ -359,3 +359,16 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project dependency/capitalization contract: " + marker
 print("desktop editable dependencies + capitalization contract OK")
+
+# Persistent task order is synchronized and independent from dependencies.
+for marker in (
+    'project_sort_order',
+    'moveDesktopProjectTask',
+    'desktopNextProjectSortOrder',
+    'Przesuń czynność wyżej',
+    'Przesuń czynność niżej',
+    'java.util.Collections.swap',
+    'DESKTOP_VERSION = "0.7.0.85"'
+):
+    assert marker in desktop, "Missing Desktop project task-order contract: " + marker
+print("desktop persistent project task order contract OK")
