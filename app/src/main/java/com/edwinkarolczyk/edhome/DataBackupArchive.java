@@ -108,13 +108,19 @@ final class DataBackupArchive {
     static Created create(Context context, SQLiteDatabase database,
             SharedPreferences prefs) throws Exception {
         StorageOriginals.prune(context, database);
-        byte[] data = DataBackup.exportJson(database, prefs)
+        List<File> originalFiles = StorageOriginals.liveFiles(context, database);
+        Set<Long> originalIds = new HashSet<>();
+        for (File image : originalFiles) {
+            String name = image.getName();
+            originalIds.add(Long.parseLong(name.substring(0, name.length() - 4)));
+        }
+        byte[] data = DataBackup.exportJson(database, prefs, originalIds)
             .getBytes(StandardCharsets.UTF_8);
         List<Source> sources = new ArrayList<>();
         sources.add(new Source(DATA, data, null, "database"));
 
         int originals = 0;
-        for (File image : StorageOriginals.liveFiles(context, database)) {
+        for (File image : originalFiles) {
             sources.add(new Source(STORAGE_PREFIX + image.getName(),
                 null, image, "storage-original"));
             originals++;
