@@ -23,7 +23,7 @@ for start,stop,labels in (
     assert "vehicleCalendarDate(form" in chunk,start
     for label in labels: assert label in chunk,label
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84
-assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+|8\.\d+\.\d+)\.\d+'", gradle) is not None
+assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+|8\.\d+)\.\d+'", gradle) is not None
 assert "versionNameSuffix ''" in gradle
 assert 'suffix_match = re.search(' in script
 print("Vehicle OC, inspection, service and tyre dates use calendar; optional clear: PASS")
