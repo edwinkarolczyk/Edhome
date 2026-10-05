@@ -58,6 +58,13 @@ assert '"project_sort_order"' in backup
 assert 'project_sort_order INTEGER NOT NULL DEFAULT 0' in main
 assert 'DATABASE_MIGRATED_44_TO_45_PROJECT_TASK_ORDER' in main
 assert 'ORDER BY project_sort_order,id' in main
+assert 'if(hours==0)return rest+" min";' in main
+assert 'return hours+" h "+rest+" min";' in main
+assert '"20 min","30 min","45 min","1 h","1 h 30 min","2 h"' in main
+dependency_dialog=main.split("private void showProjectDependencyDialog",1)[1].split(
+    "private void showProjectBlockers",1)[0]
+assert '.setItems(labels.toArray(new String[0])' in dependency_dialog
+assert '.setMessage(' not in dependency_dialog
 
 # Minimalny kontrakt SQL zależności: brak self-loop i brak duplikatów.
 db = sqlite3.connect(":memory:")
