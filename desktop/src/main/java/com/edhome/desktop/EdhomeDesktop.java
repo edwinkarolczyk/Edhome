@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.82";
+    private static final String DESKTOP_VERSION = "0.7.0.83";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -92,7 +92,7 @@ public final class EdhomeDesktop extends JFrame {
         Preferences.userRoot().node("edhome/desktop-beta");
 
     private static final String[] NAV = {
-        "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
+        "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności", "Projekty",
         "Magazyn", "Pomieszczenia", "Mapa", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
         "Ogród", "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
     };
@@ -113,6 +113,7 @@ public final class EdhomeDesktop extends JFrame {
     private boolean connected;
     private boolean connecting;
     private String current = "Pulpit";
+    private long desktopProjectId;
     private QrPairingSession qrPairingSession;
     private TrayIcon trayIcon;
     private javax.swing.Timer reconnectTimer;
@@ -331,6 +332,7 @@ public final class EdhomeDesktop extends JFrame {
         if ("Czynności".equals(name)) return tablePage("Czynności", "tasks",
             cols("Nazwa","title","Typ","task_kind","Powtarzanie","repeat_rule",
                  "Co ile","repeat_every","Miejsce","place_id"));
+        if ("Projekty".equals(name)) return desktopProjects();
         if ("Magazyn".equals(name)) return tablePage("Magazyn", "storage_items",
             cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
                  "Miejsce","place_id","Wypożyczone","lent_to"));
@@ -359,6 +361,501 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
         if ("Skaner".equals(name)) return scanner();
         return settings();
+    }
+
+    private JComponent desktopProjects() {
+        JPanel page = page("Projekty • szybka edycja");
+        JPanel root = new JPanel(new BorderLayout(10,10));
+        root.setBackground(APP_BG);
+
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT,6,0));
+        toolbar.setBackground(APP_BG);
+        JButton addProject = actionButton("＋ Projekt");
+        JButton addSubproject = actionButton("＋ Podprojekt");
+        JButton editProject = actionButton("Edytuj projekt");
+        JButton addTask = actionButton("＋ Czynność");
+        JButton pasteTasks = actionButton("Wklej czynności");
+        toolbar.add(addProject);
+        toolbar.add(addSubproject);
+        toolbar.add(editProject);
+        toolbar.add(addTask);
+        toolbar.add(pasteTasks);
+        root.add(toolbar,BorderLayout.NORTH);
+
+        javax.swing.tree.DefaultMutableTreeNode treeRoot =
+            new javax.swing.tree.DefaultMutableTreeNode("Projekty");
+        java.util.Map<Long,javax.swing.tree.DefaultMutableTreeNode> nodes =
+            new java.util.LinkedHashMap<>();
+        java.util.Map<Long,JsonObject> rowsById = new java.util.LinkedHashMap<>();
+        for (JsonElement element : table("projects")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            long id = longValue(row,"id");
+            if (id <= 0) continue;
+            rowsById.put(id,row);
+            nodes.put(id,new javax.swing.tree.DefaultMutableTreeNode(
+                new DesktopProjectRef(row)));
+        }
+        for (java.util.Map.Entry<Long,javax.swing.tree.DefaultMutableTreeNode> entry
+                : nodes.entrySet()) {
+            JsonObject row = rowsById.get(entry.getKey());
+            long parent = longValue(row,"parent_id");
+            javax.swing.tree.DefaultMutableTreeNode parentNode = nodes.get(parent);
+            if (parentNode == null || parent == entry.getKey()) treeRoot.add(entry.getValue());
+            else parentNode.add(entry.getValue());
+        }
+
+        JTree tree = new JTree(treeRoot);
+        tree.setRootVisible(false);
+        tree.setShowsRootHandles(true);
+        tree.setBackground(APP_SURFACE);
+        tree.setForeground(APP_TEXT);
+        tree.setRowHeight(24);
+        tree.getSelectionModel().setSelectionMode(
+            javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
+
+        JPanel detail = new JPanel(new BorderLayout());
+        detail.setBackground(APP_BG);
+
+        java.util.function.Consumer<JsonObject> renderDetail = project -> {
+            detail.removeAll();
+            detail.add(desktopProjectDetail(project), BorderLayout.CENTER);
+            detail.revalidate();
+            detail.repaint();
+        };
+
+        tree.addTreeSelectionListener(e -> {
+            Object nodeObject = tree.getLastSelectedPathComponent();
+            if (!(nodeObject instanceof javax.swing.tree.DefaultMutableTreeNode)) return;
+            Object userObject =
+                ((javax.swing.tree.DefaultMutableTreeNode) nodeObject).getUserObject();
+            if (!(userObject instanceof DesktopProjectRef)) return;
+            JsonObject project = ((DesktopProjectRef) userObject).row;
+            desktopProjectId = longValue(project,"id");
+            renderDetail.accept(project);
+        });
+
+        if (desktopProjectId > 0 && nodes.containsKey(desktopProjectId)) {
+            javax.swing.tree.TreePath pathToSelect =
+                new javax.swing.tree.TreePath(nodes.get(desktopProjectId).getPath());
+            tree.setSelectionPath(pathToSelect);
+            tree.scrollPathToVisible(pathToSelect);
+        } else if (tree.getRowCount() > 0) {
+            tree.setSelectionRow(0);
+        } else {
+            renderDetail.accept(null);
+        }
+
+        JScrollPane treeScroll = new JScrollPane(tree);
+        treeScroll.setBorder(BorderFactory.createLineBorder(APP_SURFACE_2));
+        treeScroll.setPreferredSize(new Dimension(300,1));
+
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,treeScroll,detail);
+        split.setResizeWeight(0.28);
+        split.setDividerLocation(300);
+        split.setBorder(null);
+        root.add(split,BorderLayout.CENTER);
+
+        addProject.addActionListener(e -> showDesktopProjectEditor(null,null));
+        addSubproject.addActionListener(e -> {
+            JsonObject selected = desktopProjectById(desktopProjectId);
+            if (selected == null) {
+                JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt nadrzędny.");
+                return;
+            }
+            showDesktopProjectEditor(null,desktopProjectId);
+        });
+        editProject.addActionListener(e -> {
+            JsonObject selected = desktopProjectById(desktopProjectId);
+            if (selected == null) {
+                JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+                return;
+            }
+            showDesktopProjectEditor(selected,null);
+        });
+        addTask.addActionListener(e -> addDesktopProjectTask(desktopProjectId));
+        pasteTasks.addActionListener(e -> pasteDesktopProjectTasks(desktopProjectId));
+
+        page.add(root,BorderLayout.CENTER);
+        return page;
+    }
+
+    private JComponent desktopProjectDetail(JsonObject project) {
+        JPanel wrapper = new JPanel(new BorderLayout(0,10));
+        wrapper.setBackground(APP_BG);
+        if (project == null) {
+            JLabel empty = new JLabel(
+                "<html><b>Brak projektów.</b><br>Dodaj pierwszy projekt z paska u góry.</html>");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18,18,18,18));
+            wrapper.add(empty,BorderLayout.NORTH);
+            return wrapper;
+        }
+
+        long projectId = longValue(project,"id");
+        java.util.List<JsonObject> tasks = desktopProjectTasks(projectId);
+        int done = 0;
+        int planned = 0;
+        int remaining = 0;
+        for (JsonObject task : tasks) {
+            int duration = Math.max(20,intValue(task,"duration_minutes"));
+            planned += duration;
+            if (intValue(task,"done") != 0) {
+                done++;
+            } else {
+                int worked = desktopTaskWorkedMinutes(longValue(task,"id"));
+                remaining += Math.max(0,duration-worked);
+            }
+        }
+        int progress = tasks.isEmpty() ? 0 :
+            (int)Math.round(done * 100.0 / tasks.size());
+
+        JPanel head = new RoundedPanel(APP_SURFACE,18);
+        head.setLayout(new BorderLayout(10,4));
+        head.setBorder(new EmptyBorder(12,14,12,14));
+        JLabel title = new JLabel(value(project,"name"));
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD,20f));
+        head.add(title,BorderLayout.NORTH);
+        String due = value(project,"due_date");
+        String budget = value(project,"budget_grosz");
+        JLabel meta = new JLabel("<html>Status: <b>"
+            + html(friendlyValue("status",project))
+            + "</b> • Postęp: <b>" + progress + "%</b>"
+            + " • Czynności: <b>" + done + "/" + tasks.size() + "</b>"
+            + " • Pozostało: <b>" + formatMinutes(remaining) + "</b>"
+            + (due.isBlank() ? "" : " • Termin: <b>" + html(due) + "</b>")
+            + (budget.isBlank() ? "" : " • Budżet: <b>" + html(money(budget)) + "</b>")
+            + "</html>");
+        meta.setForeground(APP_MUTED);
+        head.add(meta,BorderLayout.CENTER);
+        wrapper.add(head,BorderLayout.NORTH);
+
+        JPanel list = new JPanel();
+        list.setBackground(APP_BG);
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        if (tasks.isEmpty()) {
+            JLabel empty = new JLabel("Brak czynności w tym projekcie.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18,8,18,8));
+            list.add(empty);
+        } else {
+            for (JsonObject task : tasks) {
+                list.add(desktopProjectTaskCard(task));
+                list.add(Box.createVerticalStrut(8));
+            }
+        }
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        wrapper.add(scroll,BorderLayout.CENTER);
+
+        JLabel hint = new JLabel(
+            "Desktop: szybka organizacja projektu • telefon: wykonanie, Start/Stop, skan i zdjęcia");
+        hint.setForeground(APP_MUTED);
+        wrapper.add(hint,BorderLayout.SOUTH);
+        return wrapper;
+    }
+
+    private JPanel desktopProjectTaskCard(JsonObject task) {
+        JPanel card = new RoundedPanel(APP_SURFACE,16);
+        card.setLayout(new BorderLayout(10,0));
+        card.setBorder(new EmptyBorder(9,11,9,11));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE,86));
+
+        JPanel text = new JPanel();
+        text.setOpaque(false);
+        text.setLayout(new BoxLayout(text,BoxLayout.Y_AXIS));
+        String titleText = value(task,"title");
+        JLabel title = new JLabel((intValue(task,"done") != 0 ? "✓ " : "• ") + titleText);
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD,14f));
+        text.add(title);
+
+        long taskId = longValue(task,"id");
+        int duration = Math.max(20,intValue(task,"duration_minutes"));
+        int worked = desktopTaskWorkedMinutes(taskId);
+        int left = intValue(task,"done") != 0 ? 0 : Math.max(0,duration-worked);
+        int deps = desktopDependencyCount(taskId);
+        String due = value(task,"due_date");
+        JLabel meta = new JLabel("Plan: " + formatMinutes(duration)
+            + " • Zrobiono: " + formatMinutes(worked)
+            + " • Zostało: " + formatMinutes(left)
+            + (deps > 0 ? " • Zależności: " + deps : "")
+            + (due.isBlank() ? "" : " • Termin: " + due));
+        meta.setForeground(APP_MUTED);
+        meta.setFont(meta.getFont().deriveFont(11f));
+        text.add(meta);
+        card.add(text,BorderLayout.CENTER);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT,5,8));
+        actions.setOpaque(false);
+        JButton edit = compactActionButton("Edytuj");
+        edit.addActionListener(e -> editDesktopProjectTask(task));
+        JButton depsButton = compactActionButton("Zależności");
+        depsButton.addActionListener(e -> showDesktopTaskDependencies(task));
+        actions.add(edit);
+        actions.add(depsButton);
+        card.add(actions,BorderLayout.EAST);
+        return card;
+    }
+
+    private void addDesktopProjectTask(long projectId) {
+        if (projectId <= 0 || desktopProjectById(projectId) == null) {
+            JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+            return;
+        }
+        JsonObject row = newRowTemplate("tasks");
+        if (row == null) return;
+        row.addProperty("project_id",projectId);
+        JsonObject before = row.deepCopy();
+        if (!editRow(row,cols(
+                "Nazwa","title",
+                "Czas [min]","duration_minutes",
+                "Termin","due_date",
+                "Priorytet","priority",
+                "Osoba","assignee_id"))) return;
+        if (intValue(row,"duration_minutes") < 20) {
+            restoreJsonObject(row,before);
+            JOptionPane.showMessageDialog(this,
+                "Czynność projektu musi mieć co najmniej 20 minut.",
+                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        table("tasks").add(row);
+        markDirty();
+        desktopProjectId = projectId;
+        showSection("Projekty");
+    }
+
+    private void editDesktopProjectTask(JsonObject task) {
+        JsonObject before = task.deepCopy();
+        if (!editRow(task,cols(
+                "Nazwa","title",
+                "Czas [min]","duration_minutes",
+                "Termin","due_date",
+                "Priorytet","priority",
+                "Osoba","assignee_id",
+                "Wykonane","done"))) return;
+        if (intValue(task,"duration_minutes") < 20) {
+            restoreJsonObject(task,before);
+            markDirty();
+            JOptionPane.showMessageDialog(this,
+                "Czynność projektu musi mieć co najmniej 20 minut.",
+                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+        }
+        showSection("Projekty");
+    }
+
+    private void pasteDesktopProjectTasks(long projectId) {
+        if (projectId <= 0 || desktopProjectById(projectId) == null) {
+            JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+            return;
+        }
+        JTextArea area = new JTextArea(14,48);
+        area.setLineWrap(false);
+        JScrollPane scroll = new JScrollPane(area);
+        int result = JOptionPane.showConfirmDialog(this,scroll,
+            "Wklej czynności • jedna linia = jedna czynność",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+        java.util.List<String> names = parseQuickTasks(area.getText(),true);
+        if (names.isEmpty()) return;
+        int added = 0;
+        for (String name : names) {
+            JsonObject task = newRowTemplate("tasks");
+            task.addProperty("title",name);
+            task.addProperty("project_id",projectId);
+            task.addProperty("duration_minutes",30);
+            table("tasks").add(task);
+            added++;
+        }
+        if (added > 0) markDirty();
+        desktopProjectId = projectId;
+        showSection("Projekty");
+        JOptionPane.showMessageDialog(this,
+            "Dodano czynności: " + added + ". Domyślny czas: 30 min.");
+    }
+
+    private void showDesktopProjectEditor(JsonObject existing,Long parentPreset) {
+        boolean isNew = existing == null;
+        JsonObject row = isNew ? newRowTemplate("projects") : existing;
+        if (row == null) return;
+        if (isNew && parentPreset != null)
+            row.addProperty("parent_id",parentPreset);
+        long id = longValue(row,"id");
+        if (!editRow(row,cols(
+                "Nazwa","name",
+                "Projekt nadrzędny","parent_id",
+                "Miejsce","place_id",
+                "Osoba","assignee_id",
+                "Status","status",
+                "Termin","due_date",
+                "Budżet [zł]","budget_grosz"))) return;
+        if (isNew) table("projects").add(row);
+        markDirty();
+        desktopProjectId = id;
+        showSection("Projekty");
+    }
+
+    private void validateDesktopProjectRow(JsonObject row) {
+        String name = value(row,"name").trim();
+        if (name.isBlank() || name.length() > 160)
+            throw new IllegalArgumentException("Podaj nazwę projektu 1–160 znaków.");
+        String status = value(row,"status");
+        if (!"active".equals(status) && !"paused".equals(status) && !"done".equals(status))
+            throw new IllegalArgumentException("Nieprawidłowy status projektu.");
+        String due = value(row,"due_date");
+        if (!due.isBlank()) try { LocalDate.parse(due); }
+        catch (Exception invalid) {
+            throw new IllegalArgumentException("Nieprawidłowy termin projektu.");
+        }
+        String budget = value(row,"budget_grosz");
+        if (!budget.isBlank() && Long.parseLong(budget) < 0)
+            throw new IllegalArgumentException("Budżet nie może być ujemny.");
+
+        long id = longValue(row,"id");
+        long parent = longValue(row,"parent_id");
+        if (parent <= 0) return;
+        if (parent == id)
+            throw new IllegalArgumentException("Projekt nie może być swoim projektem nadrzędnym.");
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        seen.add(id);
+        long cursor = parent;
+        for (int depth=0; depth<128 && cursor>0; depth++) {
+            if (!seen.add(cursor))
+                throw new IllegalArgumentException("Nie można utworzyć pętli w drzewie projektów.");
+            JsonObject parentRow = desktopProjectById(cursor);
+            if (parentRow == null)
+                throw new IllegalArgumentException("Projekt nadrzędny już nie istnieje.");
+            cursor = longValue(parentRow,"parent_id");
+        }
+    }
+
+    private JComboBox<Choice> projectParentCombo(JsonObject row,String selected) {
+        java.util.List<Choice> options = new ArrayList<>();
+        options.add(new Choice("","— projekt główny —"));
+        long ownId = longValue(row,"id");
+        for (JsonElement element : table("projects")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject candidate = element.getAsJsonObject();
+            long id = longValue(candidate,"id");
+            if (id <= 0 || id == ownId) continue;
+            options.add(new Choice(Long.toString(id),desktopProjectPath(candidate)));
+        }
+        JComboBox<Choice> combo = new JComboBox<>(options.toArray(new Choice[0]));
+        for (int i=0;i<options.size();i++)
+            if (options.get(i).value.equals(selected)) combo.setSelectedIndex(i);
+        return combo;
+    }
+
+    private String desktopProjectPath(JsonObject row) {
+        if (row == null) return "";
+        java.util.List<String> parts = new ArrayList<>();
+        JsonObject currentRow = row;
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        for (int depth=0; depth<64 && currentRow!=null; depth++) {
+            parts.add(0,value(currentRow,"name"));
+            long parent = longValue(currentRow,"parent_id");
+            if (parent <= 0 || !seen.add(parent)) break;
+            currentRow = desktopProjectById(parent);
+        }
+        return String.join(" / ",parts);
+    }
+
+    private JsonObject desktopProjectById(long id) {
+        if (id <= 0) return null;
+        for (JsonElement element : table("projects"))
+            if (element.isJsonObject()
+                    && longValue(element.getAsJsonObject(),"id") == id)
+                return element.getAsJsonObject();
+        return null;
+    }
+
+    private java.util.List<JsonObject> desktopProjectTasks(long projectId) {
+        java.util.List<JsonObject> out = new ArrayList<>();
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject task = element.getAsJsonObject();
+            if (longValue(task,"project_id") == projectId) out.add(task);
+        }
+        out.sort((a,b) -> {
+            int doneCompare = Integer.compare(intValue(a,"done"),intValue(b,"done"));
+            if (doneCompare != 0) return doneCompare;
+            String da = value(a,"due_date");
+            String db = value(b,"due_date");
+            if (da.isBlank() && !db.isBlank()) return 1;
+            if (!da.isBlank() && db.isBlank()) return -1;
+            int date = da.compareTo(db);
+            if (date != 0) return date;
+            return value(a,"title").compareToIgnoreCase(value(b,"title"));
+        });
+        return out;
+    }
+
+    private int desktopTaskWorkedMinutes(long taskId) {
+        int total = 0;
+        long now = System.currentTimeMillis();
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (longValue(row,"task_id") != taskId) continue;
+            String ended = value(row,"ended_at");
+            if (ended.isBlank()) {
+                long start = longValue(row,"started_at");
+                if (start > 0) total += (int)Math.max(0,(now-start)/60000L);
+            } else total += Math.max(0,intValue(row,"worked_minutes"));
+        }
+        return total;
+    }
+
+    private int desktopDependencyCount(long taskId) {
+        int count = 0;
+        for (JsonElement element : table("project_task_dependencies"))
+            if (element.isJsonObject()
+                    && longValue(element.getAsJsonObject(),"task_id") == taskId)
+                count++;
+        return count;
+    }
+
+    private void showDesktopTaskDependencies(JsonObject task) {
+        long taskId = longValue(task,"id");
+        java.util.List<String> lines = new ArrayList<>();
+        for (JsonElement element : table("project_task_dependencies")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject dep = element.getAsJsonObject();
+            if (longValue(dep,"task_id") != taskId) continue;
+            JsonObject other = scannerRowById("tasks",longValue(dep,"depends_on_task_id"));
+            lines.add(other == null ? "Nieznana czynność" : value(other,"title"));
+        }
+        JOptionPane.showMessageDialog(this,
+            lines.isEmpty()
+                ? "Ta czynność nie ma jeszcze zależności."
+                : "Ta czynność zależy od:\n• " + String.join("\n• ",lines)
+                    + "\n\nEdycja zależności będzie następnym krokiem Desktopu.",
+            "EDHOME Desktop • zależności",JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static String formatMinutes(int minutes) {
+        int safe = Math.max(0,minutes);
+        int h = safe / 60;
+        int m = safe % 60;
+        if (h <= 0) return m + " min";
+        if (m == 0) return h + " h";
+        return h + " h " + m + " min";
+    }
+
+    private static final class DesktopProjectRef {
+        final JsonObject row;
+        DesktopProjectRef(JsonObject row) { this.row=row; }
+        @Override public String toString() {
+            String name=value(row,"name");
+            String status=value(row,"status");
+            if ("done".equals(status)) return "✓ " + name;
+            if ("paused".equals(status)) return "Ⅱ " + name;
+            return name;
+        }
     }
 
     private JComponent garden() {
@@ -5759,6 +6256,19 @@ public final class EdhomeDesktop extends JFrame {
             row.add("waste_fraction", com.google.gson.JsonNull.INSTANCE);
             row.add("remind_time", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("reminder_lead_days", 0);
+            row.add("project_id", com.google.gson.JsonNull.INSTANCE);
+            return row;
+        }
+        if ("projects".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowy projekt");
+            row.add("parent_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("status", "active");
+            row.add("due_date", com.google.gson.JsonNull.INSTANCE);
+            row.add("budget_grosz", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("created_at", now);
             return row;
         }
         if ("pantry".equals(tableName)) {
@@ -6010,6 +6520,8 @@ public final class EdhomeDesktop extends JFrame {
         if (raw.isBlank()) return "—";
 
         if ("assignee_id".equals(key)) return referenceName("household_members", raw);
+        if ("parent_id".equals(key) && row.has("budget_grosz"))
+            return referenceName("projects", raw);
         if ("place_id".equals(key) || "parent_id".equals(key))
             return placePath(raw);
         if ("parent_box_id".equals(key)) return referenceName("storage_items", raw);
@@ -6072,6 +6584,7 @@ public final class EdhomeDesktop extends JFrame {
                 case "pending": return "Do potwierdzenia";
                 case "confirmed": return "Potwierdzone";
                 case "active": return "Aktywne";
+                case "paused": return "Wstrzymane";
                 case "done": return "Wykonane";
                 default: return raw;
             }
@@ -6085,7 +6598,7 @@ public final class EdhomeDesktop extends JFrame {
             }
         }
         if ("category".equals(key)) return friendlyValueStaticCategory(raw);
-        if ("amount_grosz".equals(key)) return money(raw);
+        if ("amount_grosz".equals(key) || "budget_grosz".equals(key)) return money(raw);
         if ("qty_milli".equals(key)) return milli(raw);
         if (key.endsWith("_at")) return timeValue(raw);
         return raw;
@@ -6202,6 +6715,9 @@ public final class EdhomeDesktop extends JFrame {
         try {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
                 applyEditor(row, entry.getKey(), entry.getValue());
+            if (row.has("budget_grosz") && row.has("parent_id")
+                    && row.has("status") && row.has("created_at"))
+                validateDesktopProjectRow(row);
             if(storageRow) {
                 if(storageRowLive&&!value(before,"kind").equals(value(row,"kind")))
                     throw new IllegalArgumentException(
@@ -6355,6 +6871,8 @@ public final class EdhomeDesktop extends JFrame {
 
         if ("assignee_id".equals(key))
             return referenceCombo("household_members", raw, true);
+        if ("parent_id".equals(key) && row.has("budget_grosz"))
+            return projectParentCombo(row,raw);
         if ("place_id".equals(key) || "parent_id".equals(key))
             return referenceCombo("places", raw, true);
         if ("parent_box_id".equals(key))
@@ -6368,7 +6886,7 @@ public final class EdhomeDesktop extends JFrame {
         }
 
         JTextField field = new JTextField();
-        if ("amount_grosz".equals(key)) {
+        if ("amount_grosz".equals(key) || "budget_grosz".equals(key)) {
             try {
                 field.setText(java.math.BigDecimal.valueOf(
                     Long.parseLong(raw), 2).toPlainString());
@@ -6388,6 +6906,10 @@ public final class EdhomeDesktop extends JFrame {
                 || "mounted".equals(key) || "current".equals(key)) {
             out.add(new Choice("0", "Nie"));
             out.add(new Choice("1", "Tak"));
+        } else if ("status".equals(key) && row.has("budget_grosz")) {
+            out.add(new Choice("active", "Aktywny"));
+            out.add(new Choice("paused", "Wstrzymany"));
+            out.add(new Choice("done", "Zakończony"));
         } else if ("priority".equals(key)) {
             out.add(new Choice("low", "Niski"));
             out.add(new Choice("normal", "Normalny"));
@@ -6457,7 +6979,11 @@ public final class EdhomeDesktop extends JFrame {
         }
 
         String text = ((JTextField) editor).getText().trim();
-        if ("amount_grosz".equals(key)) {
+        if ("amount_grosz".equals(key) || "budget_grosz".equals(key)) {
+            if (text.isBlank()) {
+                row.add(key, com.google.gson.JsonNull.INSTANCE);
+                return;
+            }
             long grosz = new java.math.BigDecimal(text.replace(',', '.'))
                 .multiply(java.math.BigDecimal.valueOf(100))
                 .longValueExact();

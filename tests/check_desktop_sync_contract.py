@@ -322,3 +322,27 @@ for marker in (
 
 assert 'DESKTOP_VERSION = "0.7.0.82"' in desktop
 print("desktop storage multi-select + batch move contract OK")
+
+# Desktop Projects v1: native tree + fast task creation on the shared Android model.
+for marker in (
+    '"Projekty"',
+    'desktopProjects()',
+    'DesktopProjectRef',
+    'JTree tree = new JTree',
+    '＋ Projekt',
+    '＋ Podprojekt',
+    '＋ Czynność',
+    'Wklej czynności',
+    'desktopProjectTaskCard',
+    'projectParentCombo',
+    'validateDesktopProjectRow',
+    'project_task_dependencies',
+    'project_task_work_sessions',
+    'Czynność projektu musi mieć co najmniej 20 minut.'
+):
+    assert marker in desktop, "Missing Desktop Projects v1 contract: " + marker
+
+assert 'row.add("project_id", com.google.gson.JsonNull.INSTANCE);' in desktop
+assert 'row.addProperty("project_id",projectId);' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.83"' in desktop
+print("desktop projects tree + fast task editor contract OK")
