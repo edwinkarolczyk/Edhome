@@ -58,6 +58,58 @@ assert user_dialog.count("lightDialogSpinnerAdapter(") == 3
 assert user_dialog.count("DialogContrast.BACKGROUND") == 3
 assert "themeSpinnerAdapter(" not in user_dialog
 
+def method(name):
+    marker = "private void " + name + "("
+    start = main.index(marker)
+    next_private = main.find("\n    private ", start + len(marker))
+    next_static = main.find("\n    private static ", start + len(marker))
+    candidates = [p for p in (next_private, next_static) if p >= 0]
+    end = min(candidates) if candidates else len(main)
+    return main[start:end]
+
+# Każdy poniższy dialog ma natywne białe tło i własny widok.
+# Musi jawnie przejść przez DialogContrast, niezależnie od aktywnego motywu ekranu.
+for name in (
+    "activateMember",
+    "showMemberPinEditor",
+    "gardenSeasonReport",
+    "showProductBarcodeActions",
+    "showQuickStorageSetup",
+    "beginStorageDropTarget",
+    "showStorageMoveOptions",
+    "selectStatementCsv",
+    "openPrivatePaycheck",
+    "showBudgetItemDialog",
+    "exportPrivatePaycheckDialog",
+    "privateBackupImportDialog",
+    "createSharedPaycheckGoal",
+    "allocateSharedPaycheckGoal",
+    "confirmShoppingReceipt",
+    "showPantrySearchDialog",
+    "showPantryProductMenu",
+    "manualPantryBarcode",
+    "showPantryDepositDialog",
+    "promptPantryNameSearch",
+    "showPantryPriceHistory",
+    "audit",
+    "runPhoneLanDiagnostics",
+    "showUpdateDownloadQrCodes",
+):
+    assert "lightDialogForm(" in method(name), name
+
+budget_dialog = method("showBudgetItemDialog")
+assert budget_dialog.count("lightDialogSpinnerAdapter(") == 4
+assert "themeSpinnerAdapter(" not in budget_dialog
+assert budget_dialog.count("DialogContrast.BACKGROUND") >= 1
+
+receipt_dialog = method("confirmShoppingReceipt")
+assert "lightDialogSpinnerAdapter(placeNames)" in receipt_dialog
+assert "themeSpinnerAdapter(placeNames)" not in receipt_dialog
+
+scanner_contents = method("showScannerStorageContents")
+assert "DialogContrast.TEXT" in scanner_contents
+assert "DialogContrast.LABEL" in scanner_contents
+
 checks = (
     ("private void editVehicleTyres(", "private void changeVehicleTyres("),
     ("private void changeVehicleTyres(", "private String vehicleDeadline("),

@@ -1450,6 +1450,7 @@ public final class MainActivity extends Activity {
         content.setPadding(dp(24),dp(14),dp(24),0);
         content.addView(text("Wpisz lokalny PIN profilu „"+memberName+"”.",14,false));
         content.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+        lightDialogForm(content);
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Przełącz użytkownika")
             .setView(content)
@@ -4137,6 +4138,7 @@ public final class MainActivity extends Activity {
         form.addView(text("PIN „"+memberName+"” pozostaje tylko na tym urządzeniu.",
             12,false));
 
+        lightDialogForm(form);
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle(hasMemberPin(memberId)?"Zmień PIN":"Ustaw PIN")
             .setView(form)
@@ -7272,6 +7274,7 @@ public final class MainActivity extends Activity {
         details.setTextIsSelectable(true);
         box.addView(details);
         scroll.addView(box);
+        lightDialogForm(scroll);
         new AlertDialog.Builder(this)
             .setTitle("Ogród • historia plonów")
             .setView(scroll)
@@ -8671,6 +8674,7 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             onPantryBarcode(barcode, "TAKE");
         });
+        lightDialogForm(actions);
         dialog.show();
     }
 
@@ -8954,17 +8958,21 @@ public final class MainActivity extends Activity {
         LinearLayout content=new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(12),dp(8),dp(12),dp(8));
-        content.addView(storageKindText(kind,name,20,true));
+        TextView storageHeading=storageKindText(kind,name,20,true);
+        storageHeading.setTextColor(DialogContrast.TEXT);
+        content.addView(storageHeading);
         String summary=things.size()+" "
             +(things.size()==1?"rzecz":"rzeczy");
         if("place".equals(kind))
             summary+=" • "+boxCount+" pudełek • "+subplaces+" podmiejsc";
-        content.addView(text(summary,13,false));
+        TextView summaryView=text(summary,13,false);
+        summaryView.setTextColor(DialogContrast.LABEL);
+        content.addView(summaryView);
 
         if(things.isEmpty()) {
             TextView empty=text("Brak rzeczy w tym "
                 +("box".equals(kind)?"pudełku.":"miejscu."),14,false);
-            empty.setTextColor(subdued);
+            empty.setTextColor(DialogContrast.LABEL);
             empty.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams emptyParams=
                 new LinearLayout.LayoutParams(-1,dp(90));
@@ -10831,6 +10839,7 @@ public final class MainActivity extends Activity {
             });
         }
 
+        lightDialogForm(actions);
         dialog.setOnDismissListener(d->{
             if(quickStorageSetupDialog==dialog) {
                 quickStorageSetupDialog=null;
@@ -11098,6 +11107,7 @@ public final class MainActivity extends Activity {
             state.setTextColor(accent);
             actions.addView(state);
         }
+        lightDialogForm(actions);
         dialog.setOnCancelListener(d->clearStorageDropTarget());
         dialog.show();
         DiagnosticLog.event("STORAGE_DROP_TARGET_WAITING",
@@ -11193,6 +11203,7 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             storageEditor(item.kind,item.id);
         });
+        lightDialogForm(actions);
         dialog.show();
     }
 
@@ -12529,6 +12540,7 @@ public final class MainActivity extends Activity {
         bank.setSingleLine(true);
         bank.setHint("Nazwa banku dla zwykłego CSV (mBank/Velo wykrywane automatycznie)");
         bank.setText(prefs.getString("paycheck_csv_bank_name",""));
+        lightDialogForm(bank);
         new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
             .setMessage("Do 10 plików naraz. Obsługiwane: zwykły CSV, tekstowy eksport "
                 + "mBanku, XLSX z tekstowym eksportem oraz tekstowy PDF VeloBanku. "
@@ -13256,6 +13268,7 @@ public final class MainActivity extends Activity {
             form.addView(confirmation);
         }
         final EditText again = confirmation;
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(first ? "Utwórz prywatny sejf" : "Otwórz prywatny sejf")
             .setView(form)
@@ -13412,12 +13425,12 @@ public final class MainActivity extends Activity {
         form.addView(name);
 
         Spinner kind = new Spinner(this);
-        kind.setAdapter(themeSpinnerAdapter(
+        kind.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList("Wydatek −", "Przychód +")));
         form.addView(kind);
 
         Spinner category = new Spinner(this);
-        category.setAdapter(themeSpinnerAdapter(
+        category.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
         form.addView(category);
 
@@ -13429,12 +13442,12 @@ public final class MainActivity extends Activity {
         form.addView(amount);
 
         Spinner amountMode = new Spinner(this);
-        amountMode.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+        amountMode.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Stała kwota", "Kwota zmienna / prognoza")));
         form.addView(amountMode);
 
         Spinner cycle = new Spinner(this);
-        cycle.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+        cycle.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Jednorazowo", "Co miesiąc", "Co 2 miesiące",
             "Co kwartał", "Co 6 miesięcy", "Co rok")));
         form.addView(cycle);
@@ -13454,6 +13467,10 @@ public final class MainActivity extends Activity {
             + "pusty. Rata: wybierz „Co miesiąc” i wpisz miesiąc ostatniej raty. "
             + "Plan sam nie księguje pieniędzy.", 13, false));
 
+        for (Spinner spinner : new Spinner[]{kind, category, amountMode, cycle})
+            spinner.setPopupBackgroundDrawable(
+                new android.graphics.drawable.ColorDrawable(DialogContrast.BACKGROUND));
+        lightDialogForm(form);
         final int[] cycles = {0, 1, 2, 3, 6, 12};
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(privateScope
@@ -13841,6 +13858,7 @@ public final class MainActivity extends Activity {
         EditText again = securePrivatePassword("Powtórz hasło kopii");
         form.addView(pass);
         form.addView(again);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Szyfrowana kopia PayCheck").setView(form)
             .setNegativeButton("Anuluj", null)
@@ -13910,6 +13928,7 @@ public final class MainActivity extends Activity {
         EditText archivePassword = securePrivatePassword("Hasło kopii");
         form.addView(vaultPassword);
         form.addView(archivePassword);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Przywróć prywatny PayCheck").setView(form)
             .setNegativeButton("Anuluj", null)
@@ -14036,6 +14055,7 @@ public final class MainActivity extends Activity {
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(amount);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Nowy wspólny cel")
             .setView(form).setNegativeButton("Anuluj", null)
@@ -14074,6 +14094,7 @@ public final class MainActivity extends Activity {
             + "\nOdkładanie nie księguje wydatku i nie zmienia salda.",
             15, false));
         form.addView(amount);
+        lightDialogForm(form);
         String operationId = java.util.UUID.randomUUID().toString();
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Potwierdź odłożenie na cel")
@@ -14404,12 +14425,15 @@ public final class MainActivity extends Activity {
         form.addView(text("Miejsce docelowe tej pozycji — potwierdź lub zmień",
             14, false));
         Spinner placeChoice = new Spinner(this);
-        placeChoice.setAdapter(themeSpinnerAdapter(placeNames));
+        placeChoice.setAdapter(lightDialogSpinnerAdapter(placeNames));
         if (preselectedPlace != null) {
             int placeIndex = placeIds.indexOf(preselectedPlace);
             if (placeIndex > 0) placeChoice.setSelection(placeIndex);
         }
         form.addView(placeChoice);
+        placeChoice.setPopupBackgroundDrawable(
+            new android.graphics.drawable.ColorDrawable(DialogContrast.BACKGROUND));
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Potwierdź przyjęcie")
             .setView(form)
@@ -14621,6 +14645,7 @@ public final class MainActivity extends Activity {
         search.setSingleLine(true);
         search.setText(pantrySearch);
         search.setHint("Nazwa produktu");
+        lightDialogForm(search);
         new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
             .setView(search)
             .setNegativeButton("Anuluj", null)
@@ -14708,6 +14733,7 @@ public final class MainActivity extends Activity {
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
+                    lightDialogForm(count);
                     new AlertDialog.Builder(this)
                         .setTitle(name + " • liczba opakowań")
                         .setView(count)
@@ -14852,6 +14878,7 @@ public final class MainActivity extends Activity {
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
+        lightDialogForm(input);
         new AlertDialog.Builder(this).setTitle("Wpisz kod kreskowy")
             .setView(input).setNegativeButton("Anuluj", null)
             .setNeutralButton("Wyciągnij / ilość", (d, w) -> onPantryBarcode(
@@ -15074,6 +15101,7 @@ public final class MainActivity extends Activity {
                     if(pack.depositGrosz>0)
                         money.setText(MoneyRules.format(pack.depositGrosz)
                             .replace(" zł",""));
+                    lightDialogForm(money);
                     new AlertDialog.Builder(this)
                         .setTitle("Kaucja za 1 opakowanie")
                         .setView(money).setNegativeButton("Anuluj",null)
@@ -15097,6 +15125,7 @@ public final class MainActivity extends Activity {
                     count.setSingleLine(true);
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setText(Integer.toString(pack.depositPending));
+                    lightDialogForm(count);
                     new AlertDialog.Builder(this)
                         .setTitle("Oddaj opakowania")
                         .setMessage("Masz do zwrotu: "+pack.depositPending
@@ -15301,6 +15330,7 @@ public final class MainActivity extends Activity {
         EditText query = new EditText(this);
         query.setSingleLine(true);
         query.setHint("np. proszek do prania, marka");
+        lightDialogForm(query);
         new AlertDialog.Builder(this).setTitle("Szukaj produktu po nazwie")
             .setMessage("Wyślij wpisaną frazę do katalogów Open Facts. "
                 + "Wybór podobnego produktu nie potwierdza jego zgodności z kodem — "
@@ -15705,6 +15735,7 @@ public final class MainActivity extends Activity {
         if (count == 0) entries.addView(text("Nie ma zapisanych cen.", 14, false));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(entries);
+        lightDialogForm(scroll);
         new AlertDialog.Builder(this).setTitle("Historia cen: " + productName)
             .setView(scroll).setPositiveButton("Zamknij", null).show();
     }
@@ -15812,6 +15843,7 @@ public final class MainActivity extends Activity {
                     amount.setText(Integer.toString(expected));
                     amount.setSelectAllOnFocus(true);
                     amount.requestFocus();
+                    lightDialogForm(amount);
                     new AlertDialog.Builder(this).setTitle("Faktyczna liczba sztuk")
                         .setView(amount).setNegativeButton("Anuluj", null)
                         .setPositiveButton("Dalej", (dialog, which) -> {
@@ -16211,6 +16243,7 @@ public final class MainActivity extends Activity {
                 reportView.setTextIsSelectable(true);
                 ScrollView scroll = new ScrollView(this);
                 scroll.addView(reportView);
+                lightDialogForm(scroll);
                 new AlertDialog.Builder(this)
                     .setTitle("Diagnostyka połączenia z PC")
                     .setView(scroll)
@@ -16907,6 +16940,7 @@ public final class MainActivity extends Activity {
                 +"urządzeniu. Instalację Beta nadal potwierdza Android.",
                 12,false));
 
+            lightDialogForm(form);
             new AlertDialog.Builder(this)
                 .setTitle("Pobierz EDHOME • QR")
                 .setView(form)
