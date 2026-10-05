@@ -2,8 +2,10 @@ package com.edwinkarolczyk.edhome;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.util.Base64;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -19,8 +21,10 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -36,25 +40,31 @@ final class DataBackupArchive {
     private static final String DATA = "data.json";
     private static final String MANIFEST = "manifest.json";
     private static final String STORAGE_PREFIX = "media/storage-originals/";
+    private static final String LEGACY_THUMB_PREFIX = "media/storage-thumbnails/";
     private static final String TILE_PREFIX = "media/tile-icons/";
 
     static final class Created {
         final File file;
         final int storageOriginals;
+        final int legacyThumbnails;
         final int tileImages;
-        Created(File file, int storageOriginals, int tileImages) {
+        Created(File file, int storageOriginals, int legacyThumbnails, int tileImages) {
             this.file = file;
             this.storageOriginals = storageOriginals;
+            this.legacyThumbnails = legacyThumbnails;
             this.tileImages = tileImages;
         }
     }
 
     static final class Restored {
         final int storageOriginals;
+        final int legacyThumbnails;
         final int regeneratedThumbnails;
         final int tileImages;
-        Restored(int storageOriginals, int regeneratedThumbnails, int tileImages) {
+        Restored(int storageOriginals, int legacyThumbnails,
+                int regeneratedThumbnails, int tileImages) {
             this.storageOriginals = storageOriginals;
+            this.legacyThumbnails = legacyThumbnails;
             this.regeneratedThumbnails = regeneratedThumbnails;
             this.tileImages = tileImages;
         }
@@ -83,11 +93,14 @@ final class DataBackupArchive {
         final String json;
         final List<String> paths;
         final int storageCount;
+        final int legacyThumbCount;
         final int tileCount;
-        Inspection(String json, List<String> paths, int storageCount, int tileCount) {
+        Inspection(String json, List<String> paths, int storageCount,
+                int legacyThumbCount, int tileCount) {
             this.json = json;
             this.paths = paths;
             this.storageCount = storageCount;
+            this.legacyThumbCount = legacyThumbCount;
             this.tileCount = tileCount;
         }
     }
@@ -114,10 +127,51 @@ final class DataBackupArchive {
             String name = image.getName();
             originalIds.add(Long.parseLong(name.substring(0, name.length() - 4)));
         }
-        byte[] data = DataBackup.exportJson(database, prefs, originalIds)
-            .getBytes(StandardCharsets.UTF_8);
+
+        Set<Long> validStorageIds = new HashSet<>();
+        try (Cursor cursor = database.rawQuery("SELECT id FROM storage_items", null)) {
+            while (cursor.moveToNext()) validStorageIds.add(cursor.getLong(0));
+        }
+
         List<Source> sources = new ArrayList<>();
-        sources.add(new Source(DATA, data, null, "database"));
+        Set<Long> omittedThumbnailIds = new HashSet<>();
+        int legacyThumbnails = 0;
+        for (Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
+            String key = entry.getKey();
+            if (!key.startsWith(StorageThumbs.PREFIX)
+                    || !(entry.getValue() instanceof String)) continue;
+            long id;
+            try {
+                id = Long.parseLong(key.substring(StorageThumbs.PREFIX.length()));
+            } catch (NumberFormatException invalid) {
+                continue;
+            }
+            if (!validStorageIds.contains(id)) continue;
+            String encoded = (String) entry.getValue();
+            if (encoded.length() > StorageThumbs.MAX_BASE64_CHARS)
+                throw new IllegalStateException("Nieprawidłowa miniatura magazynu.");
+            byte[] jpeg;
+            try {
+                jpeg = Base64.decode(encoded, Base64.NO_WRAP);
+            } catch (Exception invalid) {
+                throw new IllegalStateException("Nieprawidłowe kodowanie miniatury.", invalid);
+            }
+            if (jpeg.length < 4 || jpeg.length > StorageThumbs.MAX_JPEG_BYTES
+                    || (jpeg[0] & 255) != 255 || (jpeg[1] & 255) != 216)
+                throw new IllegalStateException("Nieprawidłowa miniatura magazynu.");
+            omittedThumbnailIds.add(id);
+            if (!originalIds.contains(id)) {
+                sources.add(new Source(LEGACY_THUMB_PREFIX + id + ".jpg",
+                    jpeg, null, "storage-thumbnail"));
+                legacyThumbnails++;
+            }
+        }
+        if (legacyThumbnails > 200)
+            throw new IllegalStateException("Za dużo miniaturek magazynu.");
+
+        byte[] data = DataBackup.exportJson(database, prefs, omittedThumbnailIds)
+            .getBytes(StandardCharsets.UTF_8);
+        sources.add(0, new Source(DATA, data, null, "database"));
 
         int originals = 0;
         for (File image : originalFiles) {
@@ -187,7 +241,7 @@ final class DataBackupArchive {
             if (archive.length() <= 0 || archive.length() > MAX_ARCHIVE_BYTES)
                 throw new IllegalStateException("Kopia ZIP ma nieprawidłowy rozmiar.");
             inspect(archive);
-            return new Created(archive, originals, tileImages);
+            return new Created(archive, originals, legacyThumbnails, tileImages);
         } catch (Exception error) {
             archive.delete();
             throw error;
@@ -291,7 +345,8 @@ final class DataBackupArchive {
                 new File(context.getFilesDir(), "edhome-custom-tile-icons"),
                 stageTiles, suffix);
             try {
-                DataBackup.restoreJson(database, prefs, inspection.json);
+                DataBackup.restoreJson(database, prefs, inspection.json,
+                    readArchivedThumbnails(archive, inspection.paths));
             } catch (Exception dataError) {
                 rollback(tileSwap);
                 tileSwap = null;
@@ -312,7 +367,8 @@ final class DataBackupArchive {
                 // data.json zawiera zweryfikowane miniatury jako zgodność dla starszych danych.
             }
             return new Restored(
-                inspection.storageCount, regenerated, inspection.tileCount);
+                inspection.storageCount, inspection.legacyThumbCount,
+                regenerated, inspection.tileCount);
         } finally {
             if (tileSwap != null) rollback(tileSwap);
             if (storageSwap != null) rollback(storageSwap);
@@ -354,7 +410,7 @@ final class DataBackupArchive {
             Set<String> expected = new HashSet<>();
             expected.add(MANIFEST);
             String json = null;
-            int storage = 0, tiles = 0;
+            int storage = 0, legacyThumbs = 0, tiles = 0;
             for (int i = 0; i < files.length(); i++) {
                 JSONObject item = files.getJSONObject(i);
                 String path = item.getString("path");
@@ -375,12 +431,14 @@ final class DataBackupArchive {
                     json = new String(readEntry(zip, entry, DataBackup.MAX_BYTES),
                         StandardCharsets.UTF_8);
                 } else if (path.startsWith(STORAGE_PREFIX)) storage++;
+                else if (path.startsWith(LEGACY_THUMB_PREFIX)) legacyThumbs++;
                 else if (path.startsWith(TILE_PREFIX)) tiles++;
             }
             if (!actual.equals(expected) || json == null)
                 throw new IllegalArgumentException("Kopia ZIP zawiera brakujące lub obce pliki.");
             validatePayloadNamesAgainstJson(json, expected);
-            return new Inspection(json, new ArrayList<>(expected), storage, tiles);
+            return new Inspection(
+                json, new ArrayList<>(expected), storage, legacyThumbs, tiles);
         }
     }
 
@@ -399,6 +457,12 @@ final class DataBackupArchive {
                 long id = Long.parseLong(name.substring(0, name.length() - 4));
                 if (!ids.contains(id))
                     throw new IllegalArgumentException("Zdjęcie wskazuje brakującą rzecz.");
+            } else if (path.startsWith(LEGACY_THUMB_PREFIX)) {
+                String name = path.substring(LEGACY_THUMB_PREFIX.length());
+                long id = Long.parseLong(name.substring(0, name.length() - 4));
+                if (!ids.contains(id))
+                    throw new IllegalArgumentException(
+                        "Miniatura wskazuje brakującą rzecz.");
             } else if (path.startsWith(TILE_PREFIX)) {
                 String name = path.substring(TILE_PREFIX.length());
                 String id = name.substring(0, name.length() - 4);
@@ -417,11 +481,34 @@ final class DataBackupArchive {
     private static boolean allowedPayload(String path) {
         if (DATA.equals(path)) return true;
         if (path.matches("media/storage-originals/[1-9][0-9]*\\.img")) return true;
+        if (path.matches("media/storage-thumbnails/[1-9][0-9]*\\.jpg")) return true;
         if (path.startsWith(TILE_PREFIX) && path.endsWith(".png")) {
             String id = path.substring(TILE_PREFIX.length(), path.length() - 4);
             return HomeTileCatalog.validTileId(id);
         }
         return false;
+    }
+
+    private static Map<Long,String> readArchivedThumbnails(
+            File archive, List<String> paths) throws Exception {
+        Map<Long,String> result = new HashMap<>();
+        try (ZipFile zip = new ZipFile(archive)) {
+            for (String path : paths) {
+                if (!path.startsWith(LEGACY_THUMB_PREFIX)) continue;
+                String name = path.substring(LEGACY_THUMB_PREFIX.length());
+                long id = Long.parseLong(name.substring(0, name.length() - 4));
+                if (result.containsKey(id))
+                    throw new IllegalArgumentException("Duplikat miniatury w kopii.");
+                ZipEntry entry = zip.getEntry(path);
+                byte[] jpeg = readEntry(zip, entry, StorageThumbs.MAX_JPEG_BYTES);
+                if (jpeg.length < 4
+                        || (jpeg[0] & 255) != 255 || (jpeg[1] & 255) != 216)
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowa miniatura archiwalna.");
+                result.put(id, Base64.encodeToString(jpeg, Base64.NO_WRAP));
+            }
+        }
+        return result;
     }
 
     private static void extractMedia(File archive, List<String> paths,
