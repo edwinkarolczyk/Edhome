@@ -47,6 +47,11 @@ assert 'canonicalId(row.get("depends_on_task_id"))' in desktop
 assert 'database.delete("project_task_dependencies"' in main
 assert 'project_task_work_sessions' in project
 assert 'PROJECT_MIN_TASK_MINUTES = 20' in main
+assert 'TaskRules.minutesFromParts' in main
+assert 'hoursBox.addView(text("Godziny",12,false))' in main
+assert 'minutesBox.addView(text("Minuty",12,false))' in main
+assert 'automatycznie ustawi na 20 min' in main
+assert '0,5 • 1 • 1,5' not in main
 assert 'PROJECT_WORK_STARTED' in main and 'PROJECT_WORK_STOPPED' in main
 assert 'ProjectStore.remainingMinutes' in main
 assert 'TimeSuggestions.proposeAvailability' in main

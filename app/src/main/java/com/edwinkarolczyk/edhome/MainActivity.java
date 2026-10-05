@@ -6114,17 +6114,44 @@ public final class MainActivity extends Activity {
         priority.setSelection(Math.max(0,
             java.util.Arrays.asList(TASK_PRIORITIES).indexOf(currentPlanning[0])));
         form.addView(priority);
-        form.addView(text("Szacowany czas wykonania (godziny)", 16, true));
-        EditText duration = new EditText(this);
-        duration.setSingleLine(true);
-        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
-            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        duration.setHint("Np. 0,5 • 1 • 1,5 • maks. 10 h");
-        duration.setText(TaskRules.hoursText(
-            Integer.parseInt(currentPlanning[1])));
-        duration.setTextColor(ink);
-        duration.setHintTextColor(subdued);
-        form.addView(duration);
+        form.addView(text("Szacowany czas wykonania", 16, true));
+        int currentDurationMinutes=Integer.parseInt(currentPlanning[1]);
+        LinearLayout durationRow=new LinearLayout(this);
+        durationRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        LinearLayout hoursBox=new LinearLayout(this);
+        hoursBox.setOrientation(LinearLayout.VERTICAL);
+        hoursBox.addView(text("Godziny",12,false));
+        EditText durationHours=new EditText(this);
+        durationHours.setSingleLine(true);
+        durationHours.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        durationHours.setHint("0");
+        durationHours.setText(String.valueOf(currentDurationMinutes/60));
+        durationHours.setTextColor(ink);
+        durationHours.setHintTextColor(subdued);
+        hoursBox.addView(durationHours);
+        LinearLayout.LayoutParams hoursParams=new LinearLayout.LayoutParams(
+            0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
+        hoursParams.setMarginEnd(dp(8));
+        durationRow.addView(hoursBox,hoursParams);
+
+        LinearLayout minutesBox=new LinearLayout(this);
+        minutesBox.setOrientation(LinearLayout.VERTICAL);
+        minutesBox.addView(text("Minuty",12,false));
+        EditText durationMinutes=new EditText(this);
+        durationMinutes.setSingleLine(true);
+        durationMinutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        durationMinutes.setHint("30");
+        durationMinutes.setText(String.valueOf(currentDurationMinutes%60));
+        durationMinutes.setTextColor(ink);
+        durationMinutes.setHintTextColor(subdued);
+        minutesBox.addView(durationMinutes);
+        durationRow.addView(minutesBox,new LinearLayout.LayoutParams(
+            0,LinearLayout.LayoutParams.WRAP_CONTENT,1f));
+        form.addView(durationRow);
+        form.addView(text("Wpisz osobno godziny i minuty. Czynność projektu ma "
+            +"minimum 20 min; krótszy czas EDHOME automatycznie ustawi na 20 min. "
+            +"Maksimum: 10 h.",12,false));
 
         EditText date = new EditText(this);
         date.setSingleLine(true);
@@ -6329,13 +6356,18 @@ public final class MainActivity extends Activity {
                 chosenProject.getSelectedItemPosition());
             int proposalMin=proposalProject==null
                 ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
-            Integer parsedMinutes=TaskRules.minutesFromHours(
-                duration.getText().toString(),proposalMin,MAX_TASK_MINUTES);
+            Integer parsedMinutes=TaskRules.minutesFromParts(
+                durationHours.getText().toString(),
+                durationMinutes.getText().toString(),
+                proposalMin,MAX_TASK_MINUTES,proposalProject!=null);
             if(parsedMinutes==null) {
-                duration.setError(proposalProject==null
-                    ?"Podaj czas w godzinach, maks. 10 h."
-                    :"Czynność projektowa: minimum 20 min, maksimum 10 h.");
+                durationMinutes.setError(
+                    "Podaj godziny 0–10 i minuty 0–59. Maksimum: 10 h.");
                 return;
+            }
+            if(proposalProject!=null&&parsedMinutes==PROJECT_MIN_TASK_MINUTES) {
+                durationHours.setText("0");
+                durationMinutes.setText(String.valueOf(PROJECT_MIN_TASK_MINUTES));
             }
             int minutes=parsedMinutes;
             java.util.List<TimeSuggestions.Option> candidates =
@@ -6393,14 +6425,19 @@ public final class MainActivity extends Activity {
                     chosenProject.getSelectedItemPosition());
                 int minimumDuration=selectedProjectId==null
                     ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
-                Integer parsedDurationMinutes = TaskRules.minutesFromHours(
-                    duration.getText().toString(),
-                    minimumDuration, MAX_TASK_MINUTES);
+                Integer parsedDurationMinutes = TaskRules.minutesFromParts(
+                    durationHours.getText().toString(),
+                    durationMinutes.getText().toString(),
+                    minimumDuration,MAX_TASK_MINUTES,selectedProjectId!=null);
                 if (parsedDurationMinutes == null) {
-                    duration.setError(selectedProjectId==null
-                        ?"Podaj czas w godzinach, maks. 10 h."
-                        :"Czynność projektowa: minimum 20 min, maksimum 10 h.");
+                    durationMinutes.setError(
+                        "Podaj godziny 0–10 i minuty 0–59. Maksimum: 10 h.");
                     return;
+                }
+                if(selectedProjectId!=null
+                        &&parsedDurationMinutes==PROJECT_MIN_TASK_MINUTES) {
+                    durationHours.setText("0");
+                    durationMinutes.setText(String.valueOf(PROJECT_MIN_TASK_MINUTES));
                 }
                 int estimatedMinutes = parsedDurationMinutes;
                 String selectedPriority = TASK_PRIORITIES[

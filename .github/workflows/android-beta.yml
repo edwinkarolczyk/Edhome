@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Start integracji SUPLA Cloud: bezpieczny Personal Access Token w Android Keystore, połączenie HTTPS z API v3, odczyt kanałów i ich stanów oraz lokalny cache offline. Etap 0.8.0 jest tylko do odczytu — sterowanie urządzeniami i automatyczne podlewanie są jeszcze wyłączone. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Projekty: szacowany czas czynności wpisuje się teraz osobno jako godziny i minuty. Dla czynności projektu wartości poniżej 20 min są automatycznie podbijane do 20 min; maksimum pozostaje 10 h. Start/Stop i rozliczanie przepracowanego czasu pozostają bez zmian. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
