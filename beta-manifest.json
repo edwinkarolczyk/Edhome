@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 197,
-  "versionName": "0.8.0.5",
-  "changelog": "EDHOME 0.8.0.5 — Beta. Kopia danych jest teraz zweryfikowanym ZIP-em: data.json + zachowane oryginalne zdjęcia Magazynu domowego + własne obrazy kafelków. Przywracanie sprawdza manifest i SHA-256, odtwarza pliki i regeneruje miniatury; starsze JSON-y nadal można importować. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.5/edhome-beta.apk",
-  "sha256": "fdca39cb637de3c8257df513aa6abef6fded49b97f5d10b3e076f0459498b406"
+  "versionCode": 198,
+  "versionName": "0.8.0.6",
+  "changelog": "EDHOME 0.8.0.6 — Beta. Poprawka kopii ZIP dla starszych zdjęć: miniatury istniejące przed wprowadzeniem oryginałów są przenoszone do osobnych plików w ZIP zamiast przepełniać data.json. Eksport podaje etap błędu (TWORZENIE/ZAPIS/WERYFIKACJA), a starsze JSON-y nadal można importować. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.6/edhome-beta.apk",
+  "sha256": "2f7e9575951ebab674fb4d04f7b90c373c3330e4e523f33b5facaeeeee9f761d"
 }
