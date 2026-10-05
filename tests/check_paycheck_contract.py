@@ -58,7 +58,7 @@ for token in ('Usuń wpis','deleteSharedPaycheckEntry(','PAYCHECK_SHARED_DELETED
               'PAYCHECK_SHARED_BULK_DELETED'):
     assert token in main, token
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
-assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+|8\.\d+\.\d+)\.\d+'", gradle) is not None
+assert __import__("re").search(r"versionName '0\.(?:6\.0|7\.\d+|8\.\d+)\.\d+'", gradle) is not None
 # Receipt and barcode commit must never automatically post to PayCheck.
 receipt=Path("app/src/main/java/com/edwinkarolczyk/edhome/ShoppingReceiptStore.java").read_text()
 barcode=Path("app/src/main/java/com/edwinkarolczyk/edhome/PantryBarcodeStore.java").read_text()
