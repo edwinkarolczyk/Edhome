@@ -1457,6 +1457,7 @@ public final class MainActivity extends Activity {
                 case "scanner": scannerHub(); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
+                case "supla": supla(); break;
                 case "updates": updates(); break;
                 case "updates_advanced": updatesAdvanced(); break;
                 case "backup": backup(); break;
@@ -16804,6 +16805,192 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    private void supla() {
+        header("SUPLA Cloud");
+        note("EDHOME 0.8 • etap 1: tylko odczyt. Aplikacja pobiera urządzenia, "
+            + "kanały i ich bieżący stan. Sterowanie oraz automatyczne podlewanie "
+            + "dodamy dopiero po ustabilizowaniu odczytu.");
+
+        String savedUrl = prefs.getString("supla_cloud_url", "");
+        boolean hasToken = SuplaSecretStore.hasToken(this);
+        int cached = SuplaCacheStore.channelCount(this);
+        long fetchedAt = SuplaCacheStore.fetchedAt(this);
+
+        LinearLayout status = card();
+        status.addView(text("Połączenie SUPLA Cloud", 18, true));
+        status.addView(text("Serwer: " + (savedUrl.isEmpty() ? "nie ustawiono" : savedUrl)
+            + "\nToken: " + (hasToken ? "zapisany bezpiecznie" : "brak")
+            + "\nKanały w cache: " + cached
+            + "\nOstatni odczyt: " + suplaFetchedAtLabel(fetchedAt), 13, false));
+
+        LinearLayout form = card();
+        form.addView(text("Dane połączenia", 17, true));
+        EditText server = new EditText(this);
+        server.setSingleLine(true);
+        server.setHint("https://svrXX.supla.org");
+        server.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        server.setText(savedUrl);
+        server.setTextColor(ink);
+        server.setHintTextColor(subdued);
+        form.addView(server, new LinearLayout.LayoutParams(-1, dp(54)));
+
+        EditText token = new EditText(this);
+        token.setSingleLine(true);
+        token.setHint(hasToken
+            ? "Token zapisany — pozostaw puste, aby go zachować"
+            : "Personal Access Token SUPLA");
+        token.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        token.setTextColor(ink);
+        token.setHintTextColor(subdued);
+        form.addView(token, new LinearLayout.LayoutParams(-1, dp(54)));
+
+        form.addView(text("Token jest szyfrowany kluczem z Android Keystore. "
+            + "Nie trafia do logów, synchronizacji ani backupu EDHOME.", 12, false));
+
+        smallButton(form, "Zapisz połączenie", () -> {
+            try {
+                suplaSaveConnection(server, token);
+                alert("Zapisano połączenie SUPLA Cloud.");
+                render();
+            } catch (Exception error) {
+                DiagnosticLog.error("SUPLA_SAVE", error);
+                alert(rootMessage(error));
+            }
+        });
+
+        smallButton(form, "Sprawdź i pobierz kanały", () -> {
+            final String normalized;
+            final String accessToken;
+            try {
+                normalized = suplaSaveConnection(server, token);
+                accessToken = SuplaSecretStore.loadToken(this);
+                if (accessToken.isEmpty())
+                    throw new IllegalStateException("Brak Personal Access Token SUPLA.");
+            } catch (Exception error) {
+                DiagnosticLog.error("SUPLA_CONNECT_PREPARE", error);
+                alert(rootMessage(error));
+                return;
+            }
+
+            DiagnosticLog.event("SUPLA_SYNC_STARTED");
+            new Thread(() -> {
+                try {
+                    SuplaCloudClient.Snapshot snapshot =
+                        SuplaCloudClient.fetchChannels(normalized, accessToken);
+                    SuplaCacheStore.save(this, snapshot);
+                    int count = snapshot.channels.length();
+                    DiagnosticLog.event("SUPLA_SYNC_OK", "channels=" + count);
+                    runOnUiThread(() -> {
+                        alert("Połączono z SUPLA Cloud. Pobrano kanały: " + count + ".");
+                        render();
+                    });
+                } catch (Exception error) {
+                    DiagnosticLog.error("SUPLA_SYNC_FAILED", error);
+                    String message = rootMessage(error);
+                    runOnUiThread(() -> alert("Nie udało się pobrać danych SUPLA:\n"
+                        + message));
+                }
+            }, "edhome-supla-read").start();
+        });
+
+        smallButton(form, "Usuń połączenie SUPLA z telefonu", () ->
+            new AlertDialog.Builder(this)
+                .setTitle("Usuń połączenie SUPLA?")
+                .setMessage("Usunięty zostanie lokalny token, adres serwera i cache SUPLA. "
+                    + "Konto oraz urządzenia w SUPLA Cloud nie zostaną zmienione.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton("Usuń", (dialog, which) -> {
+                    SuplaSecretStore.clear(this);
+                    SuplaCacheStore.clear(this);
+                    prefs.edit().remove("supla_cloud_url").apply();
+                    DiagnosticLog.event("SUPLA_CONNECTION_CLEARED");
+                    render();
+                }).show());
+
+        JSONObject cache = SuplaCacheStore.load(this);
+        JSONArray channels = cache.optJSONArray("channels");
+        title("Pobrane kanały");
+        if (channels == null || channels.length() == 0) {
+            note("Brak danych. Zapisz połączenie i użyj „Sprawdź i pobierz kanały”.");
+            return;
+        }
+
+        int limit = Math.min(channels.length(), 80);
+        for (int i = 0; i < limit; i++) {
+            JSONObject channel = channels.optJSONObject(i);
+            if (channel == null) continue;
+            LinearLayout item = card();
+            item.addView(text(suplaChannelLabel(channel), 16, true));
+            item.addView(text("ID kanału: " + channel.optLong("id", 0L)
+                + suplaFunctionLabel(channel)
+                + "\n" + suplaStateLabel(channel), 12, false));
+        }
+        if (channels.length() > limit)
+            note("Pokazano " + limit + " z " + channels.length()
+                + " kanałów. W kolejnych etapach dodamy filtrowanie i przypisania.");
+    }
+
+    private String suplaSaveConnection(EditText server, EditText token) throws Exception {
+        String normalized = SuplaCloudClient.normalizeBaseUrl(
+            server.getText().toString());
+        String enteredToken = token.getText().toString().trim();
+        if (!enteredToken.isEmpty()) {
+            SuplaSecretStore.saveToken(this, enteredToken);
+            token.setText("");
+            token.setHint("Token zapisany — pozostaw puste, aby go zachować");
+        } else if (!SuplaSecretStore.hasToken(this)) {
+            throw new IllegalArgumentException("Wklej Personal Access Token SUPLA.");
+        }
+        prefs.edit().putString("supla_cloud_url", normalized).apply();
+        DiagnosticLog.event("SUPLA_CONNECTION_SAVED");
+        return normalized;
+    }
+
+    private String suplaFetchedAtLabel(long millis) {
+        if (millis <= 0L) return "jeszcze nie pobierano";
+        return Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+    }
+
+    private String suplaChannelLabel(JSONObject channel) {
+        String caption = channel.optString("caption", "").trim();
+        if (caption.isEmpty()) caption = channel.optString("name", "").trim();
+        if (caption.isEmpty()) caption = "Kanał #" + channel.optLong("id", 0L);
+        return caption;
+    }
+
+    private String suplaFunctionLabel(JSONObject channel) {
+        String function = channel.optString("function", "").trim();
+        if (!function.isEmpty() && function.length() <= 80)
+            return " • " + function;
+        if (channel.has("functionId"))
+            return " • funkcja " + channel.optInt("functionId", 0);
+        return "";
+    }
+
+    private String suplaStateLabel(JSONObject channel) {
+        JSONObject state = channel.optJSONObject("state");
+        if (state == null) return "Stan: brak danych";
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (state.has("connected"))
+            values.add("połączony: " + (state.optBoolean("connected") ? "tak" : "nie"));
+        if (state.has("on")) values.add("stan: " + (state.optBoolean("on") ? "WŁ." : "WYŁ."));
+        if (state.has("temperature"))
+            values.add("temperatura: " + state.opt("temperature"));
+        if (state.has("humidity"))
+            values.add("wilgotność: " + state.opt("humidity"));
+        if (state.has("value")) values.add("wartość: " + state.opt("value"));
+        if (state.has("position")) values.add("pozycja: " + state.opt("position"));
+        if (values.isEmpty()) {
+            String compact = state.toString();
+            if (compact.length() > 180) compact = compact.substring(0, 180) + "…";
+            return "Stan: " + compact;
+        }
+        return "Stan: " + String.join(" • ", values);
+    }
+
     private void settings() {
         header("Ustawienia");
         note("Sekcje są zwijane. Zmiany widoku nie usuwają danych.");
@@ -17099,6 +17286,25 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("QUIET_HOURS_RESET");
             render();
         });
+
+        if(BetaUpdater.isBeta()){
+            LinearLayout suplaSettings=settingsAccordion("supla","SUPLA Cloud",
+                "Połączenie z chmurą SUPLA i odczyt urządzeń/kanałów.",false);
+            boolean suplaToken=SuplaSecretStore.hasToken(this);
+            String suplaUrl=prefs.getString("supla_cloud_url","");
+            int suplaChannels=SuplaCacheStore.channelCount(this);
+            suplaSettings.addView(text(
+                "Serwer: "+(suplaUrl.isEmpty()?"nie ustawiono":suplaUrl)
+                +"\nToken: "+(suplaToken?"zapisany bezpiecznie":"brak")
+                +"\nKanały w cache: "+suplaChannels
+                +"\nOstatni odczyt: "+suplaFetchedAtLabel(
+                    SuplaCacheStore.fetchedAt(this)),13,false));
+            smallButton(suplaSettings,"Otwórz SUPLA Cloud",()->go("supla"));
+            suplaSettings.addView(text(
+                "Etap 0.8.0 działa tylko w trybie odczytu. "
+                    +"Sterowanie i automatyczne podlewanie pozostają wyłączone.",
+                12,false));
+        }
 
         if(BetaUpdater.isBeta()){
             LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
