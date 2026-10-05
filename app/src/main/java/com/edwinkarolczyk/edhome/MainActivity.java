@@ -4780,8 +4780,12 @@ public final class MainActivity extends Activity {
     }
 
     private String projectTimeText(int minutes) {
-        if(minutes<=0)return "0 h";
-        return TaskRules.hoursText(minutes)+" h";
+        if(minutes<=0)return "0 min";
+        int hours=minutes/60;
+        int rest=minutes%60;
+        if(hours==0)return rest+" min";
+        if(rest==0)return hours+" h";
+        return hours+" h "+rest+" min";
     }
 
     private String projectPath(long id) {
@@ -5019,16 +5023,18 @@ public final class MainActivity extends Activity {
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         name.setHint("Nazwa czynności");
-        EditText hours=new EditText(this);
-        hours.setSingleLine(true);hours.setHint("Czas, np. 0,5 / 1 / 2,5 h");
-        hours.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
-            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        final int[] quickMinutes={20,30,45,60,90,120,180,240,360,480,600};
+        Spinner quickDuration=new Spinner(this);
+        quickDuration.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "20 min","30 min","45 min","1 h","1 h 30 min","2 h",
+            "3 h","4 h","6 h","8 h","10 h")));
+        quickDuration.setSelection(1);
         EditText due=new EditText(this);
         due.setSingleLine(true);due.setHint("Termin RRRR-MM-DD • opcjonalnie");
         EditText reminder=new EditText(this);
         reminder.setSingleLine(true);reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
         form.addView(text("Czynność",14,true));form.addView(name);
-        form.addView(text("Szacowany czas",14,true));form.addView(hours);
+        form.addView(text("Szacowany czas",14,true));form.addView(quickDuration);
         form.addView(text("Termin",14,true));form.addView(due);
         form.addView(text("Przypomnienie",14,true));form.addView(reminder);
         form.addView(text("Miejsce i wykonawca są dziedziczone z projektu. "
@@ -5038,13 +5044,9 @@ public final class MainActivity extends Activity {
             .setTitle("Szybkie dodawanie • "+project.name)
             .setView(form).setCancelable(false).create();
         Runnable save=()->{
-            Integer minutes=TaskRules.minutesFromHours(hours.getText().toString(),
-                PROJECT_MIN_TASK_MINUTES,MAX_TASK_MINUTES);
+            int minutes=quickMinutes[quickDuration.getSelectedItemPosition()];
             if(name.getText().toString().trim().isEmpty()) {
                 name.setError("Podaj nazwę.");return;
-            }
-            if(minutes==null) {
-                hours.setError("Czynność projektowa: minimum 20 min, maksimum 10 h.");return;
             }
             String dueValue=due.getText().toString().trim();
             String remind=reminder.getText().toString().trim();
@@ -5058,7 +5060,6 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("PROJECT_QUICK_TASK_ADDED",
                     "project="+project.id);
                 name.setText("");
-                hours.setText("");
                 due.setText("");
                 reminder.setText("");
                 name.requestFocus();
@@ -5268,8 +5269,9 @@ public final class MainActivity extends Activity {
                 boolean linked=existing.contains(candidate);
                 candidateIds.add(candidate);
                 remove.add(linked);
-                labels.add((linked?"✓ Usuń zależność: ":"＋ Wykonaj po: ")
+                labels.add((linked?"✓ ":"○ ")
                     +c.getString(1)+" • "+projectPath(c.getLong(3))
+                    +(linked?" • ustawiona":"")
                     +(c.getInt(2)!=0?" • wykonana":""));
             }
         }
@@ -5278,9 +5280,7 @@ public final class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("Zależności czynności")
-            .setMessage("Wybierz czynność, która ma być wykonana wcześniej. "
-                +"Ponowne kliknięcie istniejącej zależności ją usuwa.")
+            .setTitle("Ta czynność ma być wykonana po:")
             .setItems(labels.toArray(new String[0]),(d,which)->{
                 try {
                     long other=candidateIds.get(which);
