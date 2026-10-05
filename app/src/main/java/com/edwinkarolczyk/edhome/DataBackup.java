@@ -134,8 +134,8 @@ final class DataBackup {
     }
 
     /**
-     * ZIP backups may omit thumbnails when the exact original image is included separately.
-     * Legacy items without an original keep their thumbnail in data.json.
+     * Kopia ZIP może pominąć miniaturę, gdy osobno zawiera dokładny oryginał zdjęcia.
+     * Starsze rzeczy bez oryginału zachowują miniaturę w data.json.
      */
     static String exportJson(SQLiteDatabase database, SharedPreferences prefs,
             Set<Long> omitStorageThumbnailIds) throws Exception {
