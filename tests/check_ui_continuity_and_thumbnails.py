@@ -23,7 +23,9 @@ assert 'setView(form)' in main
 bank=main.split('private void configureBankNotifications()',1)[1].split('private void showBankNotificationHints()',1)[0]
 assert 'setMultiChoiceItems(names,selected' not in bank
 assert 'IMPORT_STORAGE_THUMBNAIL' in main
-assert 'StorageThumbs.compress(' in main and 'getContentResolver(),data.getData()' in main
+assert 'StorageThumbs.compress(' in main
+assert 'Uri selected=data.getData()' in main and 'getContentResolver(),selected' in main
+assert 'StorageOriginals.save(this,id,selected)' in main
 assert 'StorageThumbs.read(prefs,item.id)' in main
 assert 'StorageThumbs.key(item.id)' in main
 assert 'StorageThumbs.MAX_JPEG_BYTES' in backup
