@@ -125,8 +125,8 @@ assert 'new String[]{"storage_items","places"}' in backup
 assert 'MAX(CAST(row_key AS INTEGER)) FROM sync_records' in backup
 version_name=next(line.split("'")[1] for line in gradle.splitlines()
     if line.strip().startswith("versionName "))
-version_parts=version_name.split(".")
-assert version_parts[:3]==["0","7","4"] and int(version_parts[3]) >= 5
+version_tuple=tuple(int(part) for part in version_name.split("."))
+assert version_tuple >= (0,7,4,5)
 print("Storage QR tombstone identity + restore sequence reservation: PASS")
 
 # Idempotencja lokalizacji: ponowne wskazanie tego samego celu nie tworzy historii moved.
