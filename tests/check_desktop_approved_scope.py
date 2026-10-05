@@ -116,7 +116,8 @@ for marker in ("DesktopReportPdf", "printTableReport", "Kalendarz", "Czynności"
     assert marker in report + desktop, f"Missing report printing contract: {marker}"
 
 # Product direction remains explicit.
-assert "Desktop = APK 1:1" in readme
+assert "tym samym modelu danych i tych samych regułach domenowych" in readme
+assert "nie muszą mieć identycznego interfejsu" in readme
 assert "Zatwierdzony zakres Desktop" in readme
 
 print("EDHOME Desktop approved scope: PASS")
