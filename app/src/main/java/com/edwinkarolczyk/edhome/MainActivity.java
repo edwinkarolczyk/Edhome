@@ -18349,11 +18349,14 @@ public final class MainActivity extends Activity {
         if (request == EXPORT_DATA_BACKUP) {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
             DataBackupArchive.Created created = null;
+            String backupStage = "TWORZENIE";
             try {
                 created = DataBackupArchive.create(
                     this, db.getReadableDatabase(), prefs);
+                backupStage = "ZAPIS";
                 DataBackupArchive.writeToDocument(
                     this, data.getData(), created.file);
+                backupStage = "WERYFIKACJA";
                 if (!DataBackupArchive.verifyDocument(
                         this, data.getData(), created.file)) {
                     DiagnosticLog.event("DATA_BACKUP_VERIFY_FAILED");
@@ -18362,15 +18365,18 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("DATA_BACKUP_ZIP_EXPORTED",
                     "bytes=" + created.file.length()
                         + " originals=" + created.storageOriginals
+                        + " legacy_thumbs=" + created.legacyThumbnails
                         + " tile_images=" + created.tileImages
                         + " verified=true");
                 alert("Kopia ZIP zapisana i zweryfikowana. Oryginalne zdjęcia: "
-                    + created.storageOriginals + ". Obrazy kafelków: "
+                    + created.storageOriginals + ". Starsze miniatury: "
+                    + created.legacyThumbnails + ". Obrazy kafelków: "
                     + created.tileImages
                     + ". Prywatny sejf PayCheck wymaga osobnej kopii.");
             } catch (Exception error) {
-                DiagnosticLog.error("DATA_BACKUP_EXPORT", error);
+                DiagnosticLog.error("DATA_BACKUP_EXPORT_" + backupStage, error);
                 alert("Nie udało się zapisać i zweryfikować pełnej kopii ZIP. "
+                    + "Etap: " + backupStage + ". "
                     + "Nie usuwaj aplikacji na podstawie tego pliku.");
             } finally {
                 if (created != null && created.file != null) created.file.delete();
@@ -18426,7 +18432,9 @@ public final class MainActivity extends Activity {
                             render();
                             String media = restored == null ? ""
                                 : "\nOryginalne zdjęcia: " + restored.storageOriginals
-                                    + ", odtworzone miniatury: "
+                                    + ", starsze miniatury: "
+                                    + restored.legacyThumbnails
+                                    + ", odtworzone z oryginałów: "
                                     + restored.regeneratedThumbnails + ".";
                             alert((BetaUpdater.isBeta()
                                 ? "Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
