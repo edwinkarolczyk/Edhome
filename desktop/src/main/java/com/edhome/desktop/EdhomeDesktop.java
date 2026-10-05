@@ -5197,6 +5197,7 @@ public final class EdhomeDesktop extends JFrame {
         final JLabel status = new JLabel("Czekam na skan z telefonu…");
         if (trigger != null) trigger.setEnabled(false);
         try {
+            prepareWindowsPairingFirewall();
             QrPairingSession session = QrPairingSession.start(payload ->
                 SwingUtilities.invokeLater(() -> {
                     String pairedHost = LanClient.normalizeHost(payload.phoneIp);
@@ -5274,6 +5275,57 @@ public final class EdhomeDesktop extends JFrame {
                 "Nie można przygotować QR do połączenia:\n" + rootMessage(ex)
                     + "\nSprawdź, czy PC jest połączony z tą samą siecią co telefon.",
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void prepareWindowsPairingFirewall() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (!os.contains("win") || PREFS.getBoolean("pairFirewallReady", false)) return;
+
+        int answer = JOptionPane.showConfirmDialog(this,
+            "Aby telefon mógł połączyć się z tym komputerem przez QR, "
+                + "EDHOME musi zezwolić w Zaporze Windows na TCP 45824.\n"
+                + "Reguła będzie ograniczona do urządzeń z lokalnej podsieci.\n\n"
+                + "Windows może poprosić o zgodę administratora.",
+            "EDHOME • zezwolenie na połączenie telefonu",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) {
+            DesktopDiagnosticLog.event("PAIR_FIREWALL_SKIPPED");
+            return;
+        }
+
+        try {
+            String command =
+                "$p=Start-Process -FilePath 'netsh.exe' "
+                    + "-ArgumentList 'advfirewall firewall add rule "
+                    + "name=EDHOME_Desktop_QR_45824 dir=in action=allow "
+                    + "protocol=TCP localport=45824 profile=any remoteip=LocalSubnet' "
+                    + "-Verb RunAs -Wait -PassThru; exit $p.ExitCode";
+            Process process = new ProcessBuilder(
+                "powershell.exe", "-NoProfile", "-NonInteractive",
+                "-Command", command)
+                .redirectErrorStream(true)
+                .start();
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException(
+                    "Przekroczono czas oczekiwania na zgodę Zapory Windows.");
+            }
+            if (process.exitValue() != 0) {
+                throw new IOException(
+                    "Zapora Windows zwróciła kod " + process.exitValue() + ".");
+            }
+            PREFS.putBoolean("pairFirewallReady", true);
+            DesktopDiagnosticLog.event("PAIR_FIREWALL_READY",
+                "tcp=" + PAIR_PORT + " remote=LocalSubnet");
+        } catch (Exception error) {
+            DesktopDiagnosticLog.error("PAIR_FIREWALL_SETUP", error);
+            JOptionPane.showMessageDialog(this,
+                "Nie udało się automatycznie zezwolić na połączenie QR.\n"
+                    + "Możesz kontynuować, ale jeśli telefon nadal nie połączy się, "
+                    + "zezwól EDHOME w Zaporze Windows.\n\n"
+                    + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -8574,7 +8626,7 @@ public final class EdhomeDesktop extends JFrame {
 
             ServerSocket server = new ServerSocket();
             server.setReuseAddress(true);
-            server.bind(new InetSocketAddress(InetAddress.getByName(host), PAIR_PORT), 4);
+            server.bind(new InetSocketAddress(PAIR_PORT), 4);
             server.setSoTimeout(180000);
 
             QrPairingSession session =
