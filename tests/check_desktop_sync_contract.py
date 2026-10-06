@@ -444,3 +444,30 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project task-order contract: " + marker
 print("desktop persistent project task order contract OK")
+# Desktop-as-Hub v2: PC exposes local API, Android is the client.
+hub_server = (root / "desktop/src/main/java/com/edhome/desktop/DesktopHubServer.java").read_text(encoding="utf-8")
+hub_client = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DesktopHubSync.java").read_text(encoding="utf-8")
+for marker in (
+    "static final int PORT=45823",
+    "DISCOVERY_PORT=45822",
+    '"/status"', '"/state"', '"/snapshot"', '"/patch"', '"/resolve-phone"',
+    '"LAN_ONLY"', '"PAIRING_REQUIRED"', "X-EDHOME-SNAPSHOT-SHA256",
+):
+    assert marker in hub_server, "Missing Desktop Hub server contract: "+marker
+for marker in (
+    "POLL_SECONDS=60L",
+    "DataBackupArchive.create",
+    "SyncRecordStore.ensureAll",
+    "resolveDesktop", "resolvePhone",
+    "EDHOME_DISCOVER_V1",
+    '"active_member_id"',
+    "BuildConfig.VERSION_NAME",
+):
+    assert marker in hub_client, "Missing Android Hub client contract: "+marker
+assert 'stopService(new Intent(this,LanSyncService.class))' in main
+assert 'DesktopHubSync.ensureScheduled(this);' in main
+assert 'DesktopHubSync.pair(this,desktopId,desktopToken' in main
+assert 'API działa' in desktop
+assert 'hubFirewallReady' in desktop
+assert 'localport=45823' in desktop and 'localport=45822' in desktop
+print("desktop hub v2 API/client/discovery/first-backup/conflict contract OK")
