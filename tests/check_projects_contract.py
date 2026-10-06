@@ -53,6 +53,13 @@ assert 'minutesBox.addView(text("Minuty",12,false))' in main
 assert 'automatycznie ustawi na 20 min' in main
 assert '0,5 • 1 • 1,5' not in main
 assert 'PROJECT_WORK_STARTED' in main and 'PROJECT_WORK_STOPPED' in main
+assert 'bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted)' in main
+assert 'view.postDelayed(refresh[0],1000L);' in main
+assert 'projectTimeRed()' in main and 'projectTimeYellow()' in main and 'projectTimeGreen()' in main
+assert 'Czas przekroczony, praca nadal trwa.' in main
+assert 'Czas przekroczony, pomiar zatrzymany.' in main
+assert '?projectTimeRed():projectTimeGreen()' in main
+assert 'overrun>0?projectTimeYellow():projectTimeGreen()' in main
 assert 'ProjectStore.remainingMinutes' in main
 assert 'TimeSuggestions.proposeAvailability' in main
 assert 'ProjectPlanningStore.windows' in main
