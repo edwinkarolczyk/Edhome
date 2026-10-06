@@ -206,6 +206,19 @@ for marker in (
     assert marker in desktop, "Missing dirty-push DHCP recovery: " + marker
 print("desktop dirty-push DHCP recovery contract OK")
 
+# A successful PC -> phone patch must immediately catch up unrelated phone-side
+# edits before advancing the local phone cursor.
+for marker in (
+    'final long catchUpFromAt = Math.max(0L, phoneChangeCursorAt - 2000L);',
+    'SYNC_PUSH_CATCHUP_OK',
+    'remoteChanges += applyPhoneChanges(outgoing, batch.changes);',
+    'result.cursorUpdatedAt >= phoneChangeCursorAt',
+    'phoneChangeCursorUuid = result.cursorSyncUuid',
+    'remoteChanges=" + result.remoteChanges'
+):
+    assert marker in desktop, "Missing post-push phone catch-up: " + marker
+print("desktop post-push phone delta catch-up contract OK")
+
 # Phone LAN self-tests must never impersonate a real Desktop client.
 assert 'isThisDeviceAddress(InetAddress remote)' in server
 assert 'remote.isLoopbackAddress()' in server
@@ -379,7 +392,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.91"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.92"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
