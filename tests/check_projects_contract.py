@@ -10,6 +10,8 @@ backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").
 sync = (root / "app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 time = (root / "app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java").read_text(encoding="utf-8")
 desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").read_text(encoding="utf-8")
+work_notification = (root / "app/src/main/java/com/edwinkarolczyk/edhome/ProjectWorkNotification.java").read_text(encoding="utf-8")
+lan_service = (root / "app/src/main/java/com/edwinkarolczyk/edhome/LanSyncService.java").read_text(encoding="utf-8")
 
 # Projekty są warstwą nad wspólnymi Czynnościami i Magazynem.
 for marker in (
@@ -77,10 +79,31 @@ assert 'confirmDeleteProjectTask(taskId,taskName)' in project_tasks
 assert 'private void confirmDeleteProjectTask' in main
 assert 'ProjectWorkNotification.cancel(this,taskId);' in main
 assert 'PROJECT_TASK_DELETED' in main
+assert 'ProjectStore.displayTasks' in main
+assert 'showProjectBlockedDialog' in main
+assert '🔗 Czeka na: ' in main
+assert '▣ Brakuje: ' in main
+assert '↳ Po wykonaniu odblokuje ' in main
+assert 'openProjectTask(dependency.id)' in main
+assert 'pendingProjectTaskFocusId' in main
+assert 'applyProjectTaskIntent(getIntent(),false)' in main
+assert 'open_project_task_id' in main
+assert 'openDependencies' in project
+assert 'openDependentCount' in project
+assert 'static List<TaskItem> displayTasks' in project
+assert 'projectWorkBlockReason' in project
+assert 'Projekt „"+item.name+"” jest wstrzymany.' in project
+assert 'Nie można zakończyć projektu. Pozostało ' in project
+assert 'open_project_task_id' in work_notification
+assert 'open_project_id' in work_notification
+assert 'EDHOME • Projekt: ' in work_notification
+assert '"Otwórz czynność"' in work_notification
+assert '.setGroup(GROUP_ID)' in work_notification
+assert 'GROUP_ID = "edhome-lan-status"' in lan_service
 assert '"project_sort_order"' in backup
 assert 'project_sort_order INTEGER NOT NULL DEFAULT 0' in main
 assert 'DATABASE_MIGRATED_44_TO_45_PROJECT_TASK_ORDER' in main
-assert 'ORDER BY project_sort_order,id' in main
+assert 't.project_sort_order,t.id' in project
 assert 'if(hours==0)return rest+" min";' in main
 assert 'return hours+" h "+rest+" min";' in main
 assert '"20 min","30 min","45 min","1 h","1 h 30 min","2 h"' in main

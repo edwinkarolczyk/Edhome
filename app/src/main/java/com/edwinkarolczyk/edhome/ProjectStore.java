@@ -32,6 +32,27 @@ final class ProjectStore {
         }
     }
 
+    static final class TaskItem {
+        final long id;
+        final String title;
+        final boolean done;
+        final String dueDate;
+        final int durationMinutes;
+        TaskItem(long id,String title,boolean done,String dueDate,int durationMinutes) {
+            this.id=id;this.title=title;this.done=done;
+            this.dueDate=dueDate;this.durationMinutes=durationMinutes;
+        }
+    }
+
+    static final class TaskRef {
+        final long id;
+        final long projectId;
+        final String title;
+        TaskRef(long id,long projectId,String title) {
+            this.id=id;this.projectId=projectId;this.title=title;
+        }
+    }
+
     static final class Stats {
         final int tasks;
         final int doneTasks;
@@ -191,6 +212,22 @@ final class ProjectStore {
         boolean valid=false;
         for(String value:STATUSES)if(value.equals(status))valid=true;
         if(!valid)throw new IllegalArgumentException("Nieprawidłowy status projektu.");
+        if(find(db,id)==null)
+            throw new IllegalArgumentException("Projekt już nie istnieje.");
+        if("done".equals(status)) {
+            Set<Long> ids=descendantIds(db,id);
+            if(!ids.isEmpty()) {
+                try(Cursor c=db.rawQuery(
+                        "SELECT COUNT(*) FROM tasks WHERE done=0 AND project_id IN ("
+                            +inClause(ids)+")",args(ids))) {
+                    int open=c.moveToFirst()?c.getInt(0):0;
+                    if(open>0)
+                        throw new IllegalArgumentException(
+                            "Nie można zakończyć projektu. Pozostało "
+                                +open+" niewykonanych czynności.");
+                }
+            }
+        }
         ContentValues v=new ContentValues();v.put("status",status);
         if(db.update("projects",v,"id=?",new String[]{Long.toString(id)})!=1)
             throw new IllegalArgumentException("Projekt już nie istnieje.");
@@ -277,6 +314,36 @@ final class ProjectStore {
         return new Stats(tasks,done,overdue,totalMinutes,doneMinutes,planned,spent);
     }
 
+    static List<TaskItem> displayTasks(SQLiteDatabase db,long projectId) {
+        ArrayList<TaskItem> out=new ArrayList<>();
+        String ready=
+            "NOT EXISTS(SELECT 1 FROM project_task_dependencies d "
+                +"JOIN tasks req ON req.id=d.depends_on_task_id "
+                +"WHERE d.task_id=t.id AND req.done=0) "
+            +"AND NOT EXISTS(SELECT 1 FROM project_task_blockers b "
+                +"WHERE b.task_id=t.id AND b.hard=1 AND b.resolved=0)";
+        String sql=
+            "SELECT t.id,t.title,t.done,t.due_date,t.duration_minutes FROM tasks t "
+                +"WHERE t.project_id=? ORDER BY CASE "
+                +"WHEN t.done!=0 THEN 4 "
+                +"WHEN EXISTS(SELECT 1 FROM project_task_work_sessions s "
+                    +"WHERE s.task_id=t.id AND s.ended_at IS NULL) THEN 0 "
+                +"WHEN "+ready+" AND EXISTS("
+                    +"SELECT 1 FROM project_task_dependencies next "
+                    +"JOIN tasks waiter ON waiter.id=next.task_id "
+                    +"WHERE next.depends_on_task_id=t.id AND waiter.done=0) THEN 1 "
+                +"WHEN "+ready+" THEN 2 ELSE 3 END,"
+                +"CASE WHEN t.due_date IS NULL OR TRIM(t.due_date)='' "
+                    +"THEN 1 ELSE 0 END,"
+                +"t.due_date,t.project_sort_order,t.id";
+        try(Cursor c=db.rawQuery(sql,new String[]{Long.toString(projectId)})) {
+            while(c.moveToNext())
+                out.add(new TaskItem(c.getLong(0),c.getString(1),
+                    c.getInt(2)!=0,c.isNull(3)?"":c.getString(3),c.getInt(4)));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
     static Long activeWorkStartedAt(SQLiteDatabase db,long taskId) {
         try(Cursor c=db.rawQuery(
                 "SELECT started_at FROM project_task_work_sessions "
@@ -322,6 +389,9 @@ final class ProjectStore {
             if(c.getInt(0)!=0)
                 throw new IllegalArgumentException("Czynność jest już oznaczona jako wykonana.");
         }
+        String projectBlock=projectWorkBlockReason(db,taskId);
+        if(!projectBlock.isEmpty())
+            throw new IllegalArgumentException(projectBlock);
         if(openDependencyCount(db,taskId)>0)
             throw new IllegalArgumentException(
                 "Najpierw zakończ wcześniejsze czynności zależne.");
@@ -389,6 +459,33 @@ final class ProjectStore {
         }
     }
 
+    static TaskRef taskRef(SQLiteDatabase db,long taskId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT id,project_id,title FROM tasks "
+                    +"WHERE id=? AND project_id IS NOT NULL",
+                new String[]{Long.toString(taskId)})) {
+            return c.moveToFirst()
+                ?new TaskRef(c.getLong(0),c.getLong(1),c.getString(2)):null;
+        }
+    }
+
+    static String projectWorkBlockReason(SQLiteDatabase db,long taskId) {
+        Long projectId=taskProjectId(db,taskId);
+        HashSet<Long> seen=new HashSet<>();
+        while(projectId!=null) {
+            if(!seen.add(projectId))
+                throw new IllegalStateException("Wykryto pętlę w hierarchii projektów.");
+            Project item=find(db,projectId);
+            if(item==null)return "Projekt tej czynności już nie istnieje.";
+            if("paused".equals(item.status))
+                return "Projekt „"+item.name+"” jest wstrzymany.";
+            if("done".equals(item.status))
+                return "Projekt „"+item.name+"” jest zakończony.";
+            projectId=item.parentId;
+        }
+        return "";
+    }
+
     static long rootProjectId(SQLiteDatabase db,long projectId) {
         Project current=find(db,projectId);
         if(current==null)throw new IllegalArgumentException("Projekt nie istnieje.");
@@ -419,6 +516,31 @@ final class ProjectStore {
                 "SELECT COUNT(*) FROM project_task_dependencies d "
                     +"JOIN tasks t ON t.id=d.depends_on_task_id "
                     +"WHERE d.task_id=? AND t.done=0",
+                new String[]{Long.toString(taskId)})) {
+            return c.moveToFirst()?c.getInt(0):0;
+        }
+    }
+
+    static List<TaskRef> openDependencies(SQLiteDatabase db,long taskId) {
+        ArrayList<TaskRef> out=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT t.id,t.project_id,t.title "
+                    +"FROM project_task_dependencies d "
+                    +"JOIN tasks t ON t.id=d.depends_on_task_id "
+                    +"WHERE d.task_id=? AND t.done=0 "
+                    +"ORDER BY t.project_sort_order,t.id",
+                new String[]{Long.toString(taskId)})) {
+            while(c.moveToNext())
+                out.add(new TaskRef(c.getLong(0),c.getLong(1),c.getString(2)));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    static int openDependentCount(SQLiteDatabase db,long taskId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT COUNT(*) FROM project_task_dependencies d "
+                    +"JOIN tasks t ON t.id=d.task_id "
+                    +"WHERE d.depends_on_task_id=? AND t.done=0",
                 new String[]{Long.toString(taskId)})) {
             return c.moveToFirst()?c.getInt(0):0;
         }
@@ -479,7 +601,11 @@ final class ProjectStore {
                 "SELECT id FROM tasks WHERE done=0 AND project_id IN ("
                     +inClause(projects)+") ORDER BY duration_minutes DESC,id",
                 args(projects))) {
-            while(c.moveToNext())remaining.add(c.getLong(0));
+            while(c.moveToNext()) {
+                long taskId=c.getLong(0);
+                if(projectWorkBlockReason(db,taskId).isEmpty())
+                    remaining.add(taskId);
+            }
         }
         ArrayList<Long> ordered=new ArrayList<>();
         while(!remaining.isEmpty()) {

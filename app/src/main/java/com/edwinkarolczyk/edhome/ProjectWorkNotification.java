@@ -23,6 +23,7 @@ final class ProjectWorkNotification {
     static final String ACTION_STOP =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_STOP";
     private static final String CHANNEL_ID = "edhome-project-work";
+    private static final String GROUP_ID = "edhome-project-work";
     private static final String DATABASE = "edhome-beta-preview.db";
 
     private ProjectWorkNotification() { }
@@ -62,6 +63,20 @@ final class ProjectWorkNotification {
         return PendingIntent.getBroadcast(context,
             actionRequestCode(taskId, true), intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private static PendingIntent openAction(Context context,long projectId,
+            long taskId) {
+        Intent intent=new Intent(context,MainActivity.class)
+            .setAction("com.edwinkarolczyk.edhome.OPEN_PROJECT_TASK."+taskId)
+            .putExtra("open_project_id",projectId)
+            .putExtra("open_project_task_id",taskId)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                |Intent.FLAG_ACTIVITY_CLEAR_TOP
+                |Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        return PendingIntent.getActivity(context,
+            3100000+(int)(taskId%800000),intent,
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
     static boolean isActive(Context context, long taskId) {
@@ -126,22 +141,26 @@ final class ProjectWorkNotification {
         if (!file.isFile()) return;
 
         String title;
+        String projectName;
+        long projectId;
         int plannedMinutes;
         long activeStarted;
         int closedMinutes = 0;
         try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
                 file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY)) {
             try (Cursor task = database.rawQuery(
-                    "SELECT title,duration_minutes,done,project_id FROM tasks "
-                        + "WHERE id=?",
+                    "SELECT t.title,t.duration_minutes,t.done,t.project_id,p.name "
+                        +"FROM tasks t JOIN projects p ON p.id=t.project_id "
+                        +"WHERE t.id=?",
                     new String[]{Long.toString(taskId)})) {
-                if (!task.moveToFirst() || task.getInt(2) != 0
-                        || task.isNull(3)) {
+                if (!task.moveToFirst() || task.getInt(2) != 0) {
                     cancel(context, taskId);
                     return;
                 }
                 title = task.getString(0);
                 plannedMinutes = Math.max(1, task.getInt(1));
+                projectId = task.getLong(3);
+                projectName = task.getString(4);
             }
             try (Cursor active = database.rawQuery(
                     "SELECT started_at FROM project_task_work_sessions "
@@ -174,21 +193,20 @@ final class ProjectWorkNotification {
             CHANNEL_ID, "Aktywna praca nad projektem",
             NotificationManager.IMPORTANCE_LOW));
 
-        PendingIntent open = PendingIntent.getActivity(context,
-            3100000 + (int) (taskId % 800000),
-            new Intent(context, MainActivity.class).setFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent open=openAction(context,projectId,taskId);
 
         // Backdate the chronometer by already closed sessions so the system
         // chronometer shows total worked time, not only the newest Start.
         long chronometerBase = activeStarted - closedMinutes * 60000L;
 
+        String detail="● Praca trwa • "+title
+            +"\nPlan: "+formatMinutes(plannedMinutes)
+            +"\nDotknij, aby otworzyć tę czynność.";
         Notification notification = new Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle("● Praca trwa • " + title)
-            .setContentText("Plan: " + formatMinutes(plannedMinutes)
-                + " • ■ Stop zatrzyma pomiar")
+            .setContentTitle("EDHOME • Projekt: " + projectName)
+            .setContentText("● Praca trwa • " + title)
+            .setStyle(new Notification.BigTextStyle().bigText(detail))
             .setContentIntent(open)
             .setWhen(chronometerBase)
             .setUsesChronometer(true)
@@ -198,6 +216,9 @@ final class ProjectWorkNotification {
             .setAutoCancel(false)
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setGroup(GROUP_ID)
+            .addAction(android.R.drawable.ic_menu_view,
+                "Otwórz czynność", open)
             .addAction(android.R.drawable.ic_media_pause,
                 "■ Stop", stopAction(context, taskId))
             .build();

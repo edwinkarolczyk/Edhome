@@ -242,6 +242,13 @@ final class ProjectPlanningStore {
         return Collections.unmodifiableList(out);
     }
 
+    static List<Blocker> openHardBlockers(SQLiteDatabase db,long taskId){
+        ArrayList<Blocker> out=new ArrayList<>();
+        for(Blocker item:blockers(db,taskId))
+            if(item.hard&&!item.resolved)out.add(item);
+        return Collections.unmodifiableList(out);
+    }
+
     static long addBlocker(SQLiteDatabase db,long taskId,String kind,String rawLabel,
             boolean hard,String availableOn){
         requireProjectTask(db,taskId);

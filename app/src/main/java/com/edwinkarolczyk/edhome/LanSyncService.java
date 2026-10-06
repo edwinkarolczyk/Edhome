@@ -19,6 +19,7 @@ import android.os.Looper;
  */
 public final class LanSyncService extends Service {
     private static final String CHANNEL = "edhome-desktop-lan";
+    private static final String GROUP_ID = "edhome-lan-status";
     private static final int NOTIFICATION_ID = 1700042;
     private static final long WATCHDOG_MS = 5000L;
     private static volatile boolean ENDPOINT_RUNNING;
@@ -96,6 +97,7 @@ public final class LanSyncService extends Service {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setGroup(GROUP_ID)
             .build();
         startForeground(NOTIFICATION_ID, notification);
         lastNotificationState = "Serwer LAN uruchamia się • czeka na PC";
@@ -147,6 +149,7 @@ public final class LanSyncService extends Service {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setGroup(GROUP_ID)
             .build();
         manager.notify(NOTIFICATION_ID, notification);
     }

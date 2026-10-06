@@ -215,6 +215,7 @@ public final class MainActivity extends Activity {
         new java.util.ArrayDeque<>();
 
     private long selectedProjectId;
+    private long pendingProjectTaskFocusId;
     private Long taskEditorProjectPreset;
     private long selectedMemberId;
     private String membersReturnScreen = "tasks";
@@ -341,6 +342,7 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && getIntent() != null
                 && getIntent().getBooleanExtra("open_paycheck",false))
             screen="paycheck";
+        applyProjectTaskIntent(getIntent(),false);
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -520,6 +522,10 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if(applyProjectTaskIntent(intent,true)) {
+            handleNfcIntent(intent);
+            return;
+        }
         if (intent != null && intent.getBooleanExtra("open_timers", false))
             go("timers");
         if (intent != null && intent.getBooleanExtra("open_vehicles", false))
@@ -1403,6 +1409,43 @@ public final class MainActivity extends Activity {
         selectedProjectId=projectId;
         screenScrollY.put("projects",0);
         render();
+    }
+
+    private boolean applyProjectTaskIntent(Intent intent,boolean renderNow) {
+        if(intent==null)return false;
+        long taskId=intent.getLongExtra("open_project_task_id",0L);
+        long projectId=intent.getLongExtra("open_project_id",0L);
+        if(taskId>0L) {
+            ProjectStore.TaskRef ref=ProjectStore.taskRef(
+                db.getReadableDatabase(),taskId);
+            if(ref==null)return false;
+            projectId=ref.projectId;
+        }
+        if(projectId<=0L||ProjectStore.find(
+                db.getReadableDatabase(),projectId)==null)return false;
+        selectedProjectId=projectId;
+        pendingProjectTaskFocusId=taskId;
+        screenScrollY.put("projects",0);
+        screen="projects";
+        DiagnosticLog.event("PROJECT_TASK_OPEN_INTENT",
+            "project="+projectId+" task="+taskId);
+        if(renderNow&&root!=null)render();
+        return true;
+    }
+
+    private void openProjectTask(long taskId) {
+        ProjectStore.TaskRef ref=ProjectStore.taskRef(
+            db.getReadableDatabase(),taskId);
+        if(ref==null) {
+            alert("Ta czynność już nie istnieje.");
+            return;
+        }
+        if(!"projects".equals(screen)||selectedProjectId!=ref.projectId)
+            pushNavigationState();
+        selectedProjectId=ref.projectId;
+        pendingProjectTaskFocusId=taskId;
+        screenScrollY.put("projects",0);
+        navigateTo("projects",false);
     }
 
     private void projectBack(ProjectStore.Project project) {
@@ -5080,11 +5123,17 @@ public final class MainActivity extends Activity {
         String[] values={"active","paused","done"};
         new AlertDialog.Builder(this).setTitle("Status projektu")
             .setItems(labels,(d,which)->{
-                ProjectStore.setStatus(db.getWritableDatabase(),
-                    projectId,values[which]);
-                DiagnosticLog.event("PROJECT_STATUS_CHANGED",
-                    "id="+projectId+" status="+values[which]);
-                render();
+                try {
+                    ProjectStore.setStatus(db.getWritableDatabase(),
+                        projectId,values[which]);
+                    DiagnosticLog.event("PROJECT_STATUS_CHANGED",
+                        "id="+projectId+" status="+values[which]);
+                    render();
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zmienić statusu projektu."
+                        :error.getMessage());
+                }
             }).setNegativeButton("Anuluj",null).show();
     }
 
@@ -5184,160 +5233,251 @@ public final class MainActivity extends Activity {
     private void renderProjectTasks(ProjectStore.Project project) {
         title("Czynności");
         int count=0;
-        try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT id,title,done,due_date,duration_minutes FROM tasks "
-                    +"WHERE project_id=? ORDER BY project_sort_order,id",
-                new String[]{Long.toString(project.id)})) {
-            while(c.moveToNext()) {
-                count++;
-                final long taskId=c.getLong(0);
-                final String taskName=c.getString(1);
-                final boolean done=c.getInt(2)!=0;
-                final String due=c.isNull(3)?"":c.getString(3);
-                final int minutes=c.getInt(4);
-                final int worked=ProjectStore.workedMinutes(
-                    db.getReadableDatabase(),taskId,true);
-                final int remaining=Math.max(0,minutes-worked);
-                final int overrun=Math.max(0,worked-minutes);
-                final Long activeStarted=ProjectStore.activeWorkStartedAt(
+        for(ProjectStore.TaskItem item:ProjectStore.displayTasks(
+                db.getReadableDatabase(),project.id)) {
+            count++;
+            final long taskId=item.id;
+            final String taskName=item.title;
+            final boolean done=item.done;
+            final String due=item.dueDate;
+            final int minutes=item.durationMinutes;
+            final int worked=ProjectStore.workedMinutes(
+                db.getReadableDatabase(),taskId,true);
+            final int remaining=Math.max(0,minutes-worked);
+            final int overrun=Math.max(0,worked-minutes);
+            final Long activeStarted=ProjectStore.activeWorkStartedAt(
+                db.getReadableDatabase(),taskId);
+            final java.util.List<ProjectStore.TaskRef> openDependencies=
+                ProjectStore.openDependencies(db.getReadableDatabase(),taskId);
+            final int blockers=openDependencies.size();
+            final int dependencies=ProjectStore.dependencyIds(
+                db.getReadableDatabase(),taskId).size();
+            final java.util.List<ProjectPlanningStore.Blocker> openHardBlockers=
+                ProjectPlanningStore.openHardBlockers(
                     db.getReadableDatabase(),taskId);
-                final int blockers=ProjectStore.openDependencyCount(
-                    db.getReadableDatabase(),taskId);
-                final int dependencies=ProjectStore.dependencyIds(
-                    db.getReadableDatabase(),taskId).size();
-                final int hardRequirements=ProjectPlanningStore.openHardCount(
-                    db.getReadableDatabase(),taskId);
-                final int softRequirements=ProjectPlanningStore.openSoftCount(
-                    db.getReadableDatabase(),taskId);
-                final boolean completionBlocked=blockers>0||hardRequirements>0;
+            final int hardRequirements=openHardBlockers.size();
+            final int softRequirements=ProjectPlanningStore.openSoftCount(
+                db.getReadableDatabase(),taskId);
+            final int openRequirements=hardRequirements+softRequirements;
+            final int unlocks=ProjectStore.openDependentCount(
+                db.getReadableDatabase(),taskId);
+            final boolean completionBlocked=blockers>0||hardRequirements>0;
 
-                LinearLayout box=card();
-                CheckBox check=new CheckBox(this);
-                check.setText(taskName);
-                check.setTextColor(done?subdued:ink);
-                check.setChecked(done);
-                check.setEnabled(done||!completionBlocked);
-                if(completionBlocked&&!done)
-                    check.setContentDescription(taskName
-                        +". Zablokowane. Najpierw zakończ zależności i spełnij wymagania.");
-                box.addView(check);
-
-                String timeLine="Plan: "+projectTimeText(minutes)
-                    +" • wykonano: "+projectTimeText(worked)
-                    +" • zostało: "+projectTimeText(remaining);
-                if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
-                TextView projectTime=text(timeLine,12,false);
-                bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted);
-                box.addView(projectTime);
-                box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
-                        project.id,taskId)
-                    +(due.isEmpty()?"":" • termin "+due),12,false));
-
-                if(activeStarted!=null) {
-                    String started=Instant.ofEpochMilli(activeStarted)
-                        .atZone(ZoneId.systemDefault())
-                        .format(DateTimeFormatter.ofPattern("HH:mm"));
-                    box.addView(text("● Praca trwa od "+started,12,true));
-                }
-                if(dependencies>0)
-                    box.addView(text(blockers>0
-                        ?"Czeka na "+blockers+" wcześniejsze czynności"
-                        :"Zależności zakończone • można rozpocząć",12,false));
-                if(hardRequirements>0)
-                    box.addView(text("⛔ ZABLOKOWANE • niespełnione wymagania: "
-                        +hardRequirements,12,true));
-                else if(softRequirements>0)
-                    box.addView(text("⚠ Niespełnione zalecenia: "
-                        +softRequirements,12,false));
-                if(!done&&remaining>0&&!due.isEmpty()
-                        &&due.compareTo(LocalDate.now().toString())<0)
-                    box.addView(text("Termin minął • zostało "
-                        +projectTimeText(remaining)
-                        +" • planer może wyznaczyć nowy termin tylko dla reszty pracy.",
-                        12,true));
-                if(!done&&remaining==0)
-                    box.addView(text("Planowany czas wykorzystany. "
-                        +"Możesz oznaczyć czynność jako wykonaną albo dalej mierzyć "
-                        +"pracę jako przekroczenie.",12,false));
-
-                check.setOnCheckedChangeListener((v,value)->{
-                    if(value&&(ProjectStore.openDependencyCount(
-                            db.getReadableDatabase(),taskId)>0
-                            ||ProjectPlanningStore.openHardCount(
-                                db.getReadableDatabase(),taskId)>0)) {
-                        check.setChecked(false);
-                        alert("Nie można oznaczyć zablokowanej czynności jako wykonanej. "
-                            +"Najpierw zakończ zależności i spełnij wymagania.");
-                        return;
-                    }
-                    if(value&&ProjectStore.activeWorkStartedAt(
-                            db.getReadableDatabase(),taskId)!=null) {
-                        check.setChecked(false);
-                        alert("Najpierw zatrzymaj pomiar czasu tej czynności.");
-                        return;
-                    }
-                    if(value)db.completeTask(taskId);else db.reopenTask(taskId);
-                    ReminderReceiver.schedule(this);
-                    DiagnosticLog.event(value?"PROJECT_TASK_COMPLETED":
-                        "PROJECT_TASK_REOPENED","task="+taskId);
-                    render();
+            LinearLayout box=card();
+            if(taskId==pendingProjectTaskFocusId) {
+                box.setBackground(skin.panel(this,skin.tileTop,22));
+                box.setElevation(dp(6));
+                final LinearLayout focusBox=box;
+                focusBox.post(()->{
+                    if(pageScroll!=null)
+                        pageScroll.smoothScrollTo(0,
+                            Math.max(0,focusBox.getTop()-dp(88)));
                 });
-
-                LinearLayout work=compactActionRow();
-                if(!done) {
-                    if(activeStarted==null) {
-                        compactAction(work,"▶ Start",()->{
-                            try {
-                                ProjectStore.startWork(db.getWritableDatabase(),taskId);
-                                ProjectWorkNotification.showActive(this,taskId);
-                                DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
-                                render();
-                            } catch(Exception error) {
-                                alert(error.getMessage()==null
-                                    ?"Nie udało się rozpocząć pracy.":error.getMessage());
-                            }
-                        });
-                    } else {
-                        compactAction(work,"■ Stop",()->{
-                            try {
-                                int session=ProjectStore.stopWork(
-                                    db.getWritableDatabase(),taskId);
-                                ProjectWorkNotification.cancel(this,taskId);
-                                DiagnosticLog.event("PROJECT_WORK_STOPPED",
-                                    "task="+taskId+" minutes="+session);
-                                render();
-                            } catch(Exception error) {
-                                alert(error.getMessage()==null
-                                    ?"Nie udało się zatrzymać pracy.":error.getMessage());
-                            }
-                        });
-                    }
-                }
-                compactAction(work,"Czas",()->showProjectWorkHistory(taskId,taskName));
-                if(!done&&remaining>0&&!due.isEmpty()
-                        &&due.compareTo(LocalDate.now().toString())<0)
-                    compactAction(work,"↻ Termin",
-                        ()->showProjectPlanSuggestions(project.id));
-
-                LinearLayout actions=compactActionRow();
-                compactAction(actions,"Zależności",
-                    ()->showProjectDependencyDialog(taskId,project.id));
-                compactAction(actions,"Wymagania",
-                    ()->showProjectBlockers(taskId,taskName));
-                LinearLayout editRow=compactActionRow();
-                compactAction(editRow,"Edytuj",()->{
-                    try(Cursor row=db.getReadableDatabase().rawQuery(
-                            "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
-                            new String[]{Long.toString(taskId)})) {
-                        if(row.moveToFirst())
-                            editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
-                    }
-                });
-                compactAction(editRow,"Usuń",
-                    ()->confirmDeleteProjectTask(taskId,taskName));
+                pendingProjectTaskFocusId=0L;
             }
+
+            CheckBox check=new CheckBox(this);
+            check.setText(taskName);
+            check.setTextColor(done?subdued:ink);
+            check.setChecked(done);
+            check.setEnabled(done||!completionBlocked);
+            if(completionBlocked&&!done)
+                check.setContentDescription(taskName
+                    +". Zablokowane. Najpierw zakończ zależności i spełnij wymagania.");
+            box.addView(check);
+
+            String timeLine="Plan: "+projectTimeText(minutes)
+                +" • wykonano: "+projectTimeText(worked)
+                +" • zostało: "+projectTimeText(remaining);
+            if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
+            TextView projectTime=text(timeLine,12,false);
+            bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted);
+            box.addView(projectTime);
+            box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
+                    project.id,taskId)
+                +(due.isEmpty()?"":" • termin "+due),12,false));
+
+            if(activeStarted!=null) {
+                String started=Instant.ofEpochMilli(activeStarted)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("HH:mm"));
+                box.addView(text("● Praca trwa od "+started,12,true));
+            }
+
+            if(completionBlocked) {
+                String blockedText="⛔ ZABLOKOWANE";
+                if(blockers>0)blockedText+=" • zależności: "+blockers;
+                if(hardRequirements>0)
+                    blockedText+=" • wymagania: "+hardRequirements;
+                TextView blocked=text(blockedText,12,true);
+                blocked.setTextColor(projectTimeRed());
+                box.addView(blocked);
+                for(ProjectStore.TaskRef dependency:openDependencies)
+                    smallButton(box,"🔗 Czeka na: "+dependency.title,
+                        ()->openProjectTask(dependency.id));
+                for(ProjectPlanningStore.Blocker requirement:openHardBlockers)
+                    smallButton(box,"▣ Brakuje: "+requirement.label,
+                        ()->showProjectBlockerActions(requirement,taskName));
+            } else if(dependencies>0) {
+                box.addView(text("✓ Zależności zakończone • można rozpocząć",12,false));
+            }
+
+            if(unlocks>0&&!done) {
+                TextView unlock=text("↳ Po wykonaniu odblokuje "
+                    +unlocks+(unlocks==1?" czynność":" czynności"),12,true);
+                unlock.setTextColor(accent);
+                box.addView(unlock);
+            }
+            if(softRequirements>0)
+                box.addView(text("⚠ Niespełnione zalecenia: "
+                    +softRequirements,12,false));
+            if(!done&&remaining>0&&!due.isEmpty()
+                    &&due.compareTo(LocalDate.now().toString())<0)
+                box.addView(text("Termin minął • zostało "
+                    +projectTimeText(remaining)
+                    +" • planer może wyznaczyć nowy termin tylko dla reszty pracy.",
+                    12,true));
+            if(!done&&remaining==0)
+                box.addView(text("Planowany czas wykorzystany. "
+                    +"Możesz oznaczyć czynność jako wykonaną albo dalej mierzyć "
+                    +"pracę jako przekroczenie.",12,false));
+
+            check.setOnCheckedChangeListener((v,value)->{
+                if(value&&(ProjectStore.openDependencyCount(
+                        db.getReadableDatabase(),taskId)>0
+                        ||ProjectPlanningStore.openHardCount(
+                            db.getReadableDatabase(),taskId)>0)) {
+                    check.setChecked(false);
+                    showProjectBlockedDialog(taskId,taskName);
+                    return;
+                }
+                if(value&&ProjectStore.activeWorkStartedAt(
+                        db.getReadableDatabase(),taskId)!=null) {
+                    check.setChecked(false);
+                    alert("Najpierw zatrzymaj pomiar czasu tej czynności.");
+                    return;
+                }
+                if(value)db.completeTask(taskId);else db.reopenTask(taskId);
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event(value?"PROJECT_TASK_COMPLETED":
+                    "PROJECT_TASK_REOPENED","task="+taskId);
+                render();
+            });
+
+            LinearLayout work=compactActionRow();
+            if(!done) {
+                if(activeStarted==null) {
+                    compactAction(work,"▶ Start",()->{
+                        if(ProjectStore.openDependencyCount(
+                                db.getReadableDatabase(),taskId)>0
+                                ||ProjectPlanningStore.openHardCount(
+                                    db.getReadableDatabase(),taskId)>0) {
+                            showProjectBlockedDialog(taskId,taskName);
+                            return;
+                        }
+                        try {
+                            ProjectStore.startWork(db.getWritableDatabase(),taskId);
+                            ProjectWorkNotification.showActive(this,taskId);
+                            DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
+                            render();
+                        } catch(Exception error) {
+                            alert(error.getMessage()==null
+                                ?"Nie udało się rozpocząć pracy.":error.getMessage());
+                        }
+                    });
+                } else {
+                    compactAction(work,"■ Stop",()->{
+                        try {
+                            int session=ProjectStore.stopWork(
+                                db.getWritableDatabase(),taskId);
+                            ProjectWorkNotification.cancel(this,taskId);
+                            DiagnosticLog.event("PROJECT_WORK_STOPPED",
+                                "task="+taskId+" minutes="+session);
+                            render();
+                        } catch(Exception error) {
+                            alert(error.getMessage()==null
+                                ?"Nie udało się zatrzymać pracy.":error.getMessage());
+                        }
+                    });
+                }
+            }
+            compactAction(work,"Czas",()->showProjectWorkHistory(taskId,taskName));
+            if(!done&&remaining>0&&!due.isEmpty()
+                    &&due.compareTo(LocalDate.now().toString())<0)
+                compactAction(work,"↻ Termin",
+                    ()->showProjectPlanSuggestions(project.id));
+
+            LinearLayout actions=compactActionRow();
+            compactAction(actions,"Zależności"
+                    +(blockers>0?" ("+blockers+")":""),
+                ()->showProjectDependencyDialog(taskId,project.id));
+            compactAction(actions,"Wymagania"
+                    +(openRequirements>0?" ("+openRequirements+")":""),
+                ()->showProjectBlockers(taskId,taskName));
+            LinearLayout editRow=compactActionRow();
+            compactAction(editRow,"Edytuj",()->{
+                try(Cursor row=db.getReadableDatabase().rawQuery(
+                        "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
+                        new String[]{Long.toString(taskId)})) {
+                    if(row.moveToFirst())
+                        editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
+                }
+            });
+            compactAction(editRow,"Usuń",
+                ()->confirmDeleteProjectTask(taskId,taskName));
         }
         if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void showProjectBlockedDialog(long taskId,String taskName) {
+        java.util.List<ProjectStore.TaskRef> dependencies=
+            ProjectStore.openDependencies(db.getReadableDatabase(),taskId);
+        java.util.List<ProjectPlanningStore.Blocker> requirements=
+            ProjectPlanningStore.openHardBlockers(
+                db.getReadableDatabase(),taskId);
+        if(dependencies.isEmpty()&&requirements.isEmpty()) {
+            alert("Czynność nie ma już aktywnych blokad.");
+            return;
+        }
+
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20),dp(14),dp(20),dp(10));
+        TextView heading=text("Nie można rozpocząć czynności",20,true);
+        heading.setTextColor(projectTimeRed());
+        content.addView(heading);
+        content.addView(text(taskName,15,true));
+        content.addView(text(
+            "Najpierw zakończ poniższe zależności lub spełnij wymagania.",
+            13,false));
+
+        final AlertDialog[] holder=new AlertDialog[1];
+        for(ProjectStore.TaskRef dependency:dependencies)
+            smallButton(content,"🔗 Zależność: "+dependency.title,()->{
+                if(holder[0]!=null)holder[0].dismiss();
+                openProjectTask(dependency.id);
+            });
+        for(ProjectPlanningStore.Blocker requirement:requirements)
+            smallButton(content,"▣ Brakujące: "+requirement.label,()->{
+                if(holder[0]!=null)holder[0].dismiss();
+                showProjectBlockerActions(requirement,taskName);
+            });
+        if(!requirements.isEmpty())
+            smallButton(content,"Pokaż wszystkie wymagania",()->{
+                if(holder[0]!=null)holder[0].dismiss();
+                showProjectBlockers(taskId,taskName);
+            });
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setView(content)
+            .setNegativeButton("Zamknij",null)
+            .create();
+        holder[0]=dialog;
+        dialog.show();
+        if(dialog.getWindow()!=null)
+            dialog.getWindow().setBackgroundDrawable(rounded(surface));
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setAllCaps(false);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(ink);
     }
 
     private void confirmDeleteProjectTask(long taskId,String taskName) {
