@@ -47,7 +47,9 @@ for marker in (
 ):
     assert marker in src, f"Missing pairing/diagnostics stabilization: {marker}"
 
-for marker in ('hubFirewallReady','localport=45823','localport=45822','DesktopHubServer.PORT'):
+for marker in ('hubFirewallReady','HUB_FIREWALL_RULE_VERSION',
+               'hubFirewallRuleVersion','localport=45823','localport=45822',
+               '192.168.0.0/16','DesktopHubServer.PORT'):
     assert marker in src, f"Missing Desktop Hub/firewall contract: {marker}"
 
 print("EDHOME Desktop compact Settings + Hub QR/diagnostics: PASS")
