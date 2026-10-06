@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 223,
-  "versionName": "0.8.0.31",
-  "changelog": "EDHOME 0.8.0.31 — Beta RC. LAN/QR Android ↔ Desktop: Desktop nasłuchuje jawnie po IPv4 0.0.0.0:45824 i loguje każdy etap handshake; Android uruchamia serwer LAN przed parowaniem, próbuje wszystkie adresy z QR i nie pozwala innemu skanerowi przejąć wyniku. Zachowane Projekty z trwałym timerem powiadomień, backup/restore i Low RAM. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.31/edhome-beta.apk",
-  "sha256": "a32f986751007c64da983b24ccfd4060a9796a488f92acdc5644de33cc722d42"
+  "versionCode": 224,
+  "versionName": "0.8.0.32",
+  "changelog": "EDHOME 0.8.0.32 — Beta RC. LAN/QR Android ↔ Desktop: Desktop nasłuchuje jawnie po IPv4 0.0.0.0:45824 i loguje każdy etap handshake; Android uruchamia serwer LAN przed parowaniem, próbuje wszystkie adresy z QR i nie pozwala innemu skanerowi przejąć wyniku. Zachowane Projekty z trwałym timerem powiadomień, backup/restore i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.32/edhome-beta.apk",
+  "sha256": "f544b9624371b87ecc383a06bff2389b8e8b379a5f63ded2d4cec9b0733c6bef"
 }
