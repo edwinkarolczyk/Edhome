@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 213,
-  "versionName": "0.8.0.21",
-  "changelog": "EDHOME 0.8.0.21 — Beta. Stabilizacja LAN Android ↔ Desktop: jeden QR zawiera wszystkie lokalne adresy IPv4 PC, a Android automatycznie próbuje je kolejno. Lepsze parowanie przy wielu kartach sieciowych; main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.21/edhome-beta.apk",
-  "sha256": "55189f49defb82c8cbc3f77a9eee849344b101f8e7f8cd2f156e45eb7aafd6ba"
+  "versionCode": 214,
+  "versionName": "0.8.0.22",
+  "changelog": "EDHOME 0.8.0.22 — Beta. Stabilizacja kopii: restore v45 ponownie akceptuje kopie DB v44; test regresyjny obejmuje v44 → v45. LAN/Desktop po restore wymusza bezpieczne pełne pojednanie przy cofnięciu rewizji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.22/edhome-beta.apk",
+  "sha256": "7b5bacb788f0ebd799490e50aa8f60e814f30fc35f0fe079efba089033768f4b"
 }
