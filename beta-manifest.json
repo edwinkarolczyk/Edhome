@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 218,
-  "versionName": "0.8.0.26",
-  "changelog": "EDHOME 0.8.0.26 — Beta RC. Projekty: licznik Start/Stop odlicza czas na żywo; zielony oznacza pracę w planie, czerwony aktywne przekroczenie, żółty przekroczenie po zatrzymaniu. Zachowane LAN, backup/restore i Low RAM. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.26/edhome-beta.apk",
-  "sha256": "9a13f04776c57a769d23e1a8f02ba4789e2c1773ba89682ccc48effb328c64ca"
+  "versionCode": 219,
+  "versionName": "0.8.0.27",
+  "changelog": "EDHOME 0.8.0.27 — Beta RC. Projekty: Start bezpośrednio z przypomnienia, trwałe powiadomienie aktywnej pracy z systemowym chronometrem oraz Stop z powiadomienia. Aktywnego timera nie można zwykłym przesunięciem zamknąć; po Stop powiadomienie staje się zwykłe. Zachowane zielony/żółty/czerwony licznik, LAN, backup/restore i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.27/edhome-beta.apk",
+  "sha256": "40b97ae59b3abc5371d0444cf1f07646240bd5c1b4d8b96af761d8ea1353983d"
 }
