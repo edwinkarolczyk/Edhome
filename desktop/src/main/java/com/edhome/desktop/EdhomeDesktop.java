@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.90";
+    private static final String DESKTOP_VERSION = "0.7.0.91";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -7986,6 +7986,18 @@ public final class EdhomeDesktop extends JFrame {
         new SwingWorker<SyncWriteResult,Void>() {
             @Override protected SyncWriteResult doInBackground() throws Exception {
                 LanClient client = new LanClient(host, PORT, secret);
+                try {
+                    client.state();
+                } catch (Exception staleHost) {
+                    String discovered = LanClient.discover(secret, PORT);
+                    if (discovered == null || discovered.equals(host))
+                        throw staleHost;
+                    PREFS.put("phoneIp", discovered);
+                    DesktopDiagnosticLog.event("SYNC_PUSH_PHONE_REDISCOVERED",
+                        "host=" + discovered);
+                    client = new LanClient(discovered, PORT, secret);
+                    client.state();
+                }
                 if (patchPlan != null && patchPlan.operations > 0) {
                     try {
                         PatchResult patched = client.patch(patchPlan.payload);
