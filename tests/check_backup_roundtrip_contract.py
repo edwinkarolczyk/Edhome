@@ -112,6 +112,11 @@ for token in (
     'static void save(Context context, long itemId, Uri source)',
     'MAX_FILE_BYTES = 32L * 1024 * 1024',
     'regenerateThumbnails(',
+    'auxiliaryOrImageId',
+    'id + ".bak"',
+    'id + ".tmp"',
+    'validateImage(temporary)',
+    '!destination.exists() && backup.isFile()',
 ):
     assert token in originals, token
 for token in (
