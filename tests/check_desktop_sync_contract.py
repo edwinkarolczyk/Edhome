@@ -85,7 +85,7 @@ assert 'bind=0.0.0.0 port=' in server
 assert 'Diagnostyka połączenia z PC' in main
 assert 'lanTcpSelfTest("127.0.0.1")' in main
 assert 'Problem jest po stronie interfejsu/bindu Androida.' in main
-assert 'Kopiuj diagnostykę telefonu' in main
+assert 'Kopiuj diagnostykę połączenia Desktop' in main
 assert 'Kopiuj logi diagnostyczne' in main
 assert 'copyDiagnosticLogsFromSettings' in main
 assert 'PHONE_LAN_DIAGNOSTICS' in main
@@ -415,7 +415,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.97"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.98"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
@@ -459,6 +459,9 @@ for marker in (
     "EDHOME_DISCOVER_V1",
     '"active_member_id"',
     "BuildConfig.VERSION_NAME",
+    "HUB_HOST_UNREACHABLE",
+    "HUB_HOST_HTTP_REJECTED",
+    "static String diagnostics(Context context)",
 ):
     assert marker in hub_client, "Missing Android Hub client contract: "+marker
 assert 'stopService(new Intent(this,LanSyncService.class))' in main
