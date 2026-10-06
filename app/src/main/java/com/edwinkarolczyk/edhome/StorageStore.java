@@ -3,7 +3,10 @@ package com.edwinkarolczyk.edhome;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Local object/box inventory. Children inherit place from their box, never copy it. */
@@ -267,6 +270,90 @@ final class StorageStore {
                             "Rzecz lub pudełko wskazuje nieistniejące miejsce.");
                 }
             }
+        }
+    }
+
+
+    /**
+     * Zbiorczo wylicza lokalizacje bez zapytania SQL dla każdego kafelka.
+     * Galeria może dzięki temu przeszukać setki rzeczy po jednym odczycie
+     * storage_items i jednym odczycie places.
+     */
+    static Map<Long,String> locations(SQLiteDatabase db,List<Item> targets) {
+        Map<Long,Item> items=new HashMap<>();
+        try(Cursor cursor=db.rawQuery(
+                "SELECT id,name,kind,parent_box_id,place_id,lent_to FROM storage_items",
+                null)) {
+            while(cursor.moveToNext()) {
+                Item item=new Item(cursor.getLong(0),cursor.getString(1),
+                    cursor.getString(2),
+                    cursor.isNull(3)?null:cursor.getLong(3),
+                    cursor.isNull(4)?null:cursor.getLong(4),
+                    cursor.getString(5));
+                items.put(item.id,item);
+            }
+        }
+
+        Map<Long,PlaceNode> places=new HashMap<>();
+        try(Cursor cursor=db.rawQuery("SELECT id,name,parent_id FROM places",null)) {
+            while(cursor.moveToNext())
+                places.put(cursor.getLong(0),new PlaceNode(
+                    cursor.getString(1),
+                    cursor.isNull(2)?null:cursor.getLong(2)));
+        }
+
+        Map<Long,String> result=new HashMap<>();
+        if(targets==null)return result;
+        for(Item target:targets)
+            if(target!=null)
+                result.put(target.id,locationFromMaps(target,items,places));
+        return result;
+    }
+
+    private static String locationFromMaps(Item item,Map<Long,Item> items,
+            Map<Long,PlaceNode> places) {
+        if(item==null)return "Nie znaleziono";
+        StringBuilder path=new StringBuilder();
+        Set<Long> visited=new HashSet<>();
+        Item current=item;
+        for(int depth=0;current!=null&&depth<128;depth++) {
+            if(!visited.add(current.id))return "Błąd: cykl pudełek";
+            if(path.length()>0)path.insert(0," / ");
+            path.insert(0,current.name);
+            if(current.placeId!=null) {
+                String place=placePathFromMaps(current.placeId,places);
+                path.insert(0,place+" / ");
+                return path.toString();
+            }
+            if(current.boxId==null)return "Bez miejsca / "+path;
+            current=items.get(current.boxId);
+            if(current==null)return "Nieznana lokalizacja";
+        }
+        return "Nieznana lokalizacja";
+    }
+
+    private static String placePathFromMaps(long placeId,
+            Map<Long,PlaceNode> places) {
+        StringBuilder result=new StringBuilder();
+        Set<Long> seen=new HashSet<>();
+        Long id=placeId;
+        for(int depth=0;id!=null&&depth<128;depth++) {
+            if(!seen.add(id))return "Błąd: cykl miejsc";
+            PlaceNode node=places.get(id);
+            if(node==null)return "Nieznane miejsce";
+            if(result.length()>0)result.insert(0," / ");
+            result.insert(0,node.name);
+            id=node.parentId;
+        }
+        return id==null?result.toString():"Zbyt głęboka hierarchia miejsc";
+    }
+
+    private static final class PlaceNode {
+        final String name;
+        final Long parentId;
+        PlaceNode(String name,Long parentId) {
+            this.name=name;
+            this.parentId=parentId;
         }
     }
 
