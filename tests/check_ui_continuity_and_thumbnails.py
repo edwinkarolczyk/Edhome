@@ -47,8 +47,17 @@ assert 'STORAGE_THUMBNAILS_PRUNED_AFTER_SYNC' in service
 assert 'StorageThumbs.prune(' in service
 print("Storage thumbnail orphan cleanup after startup/sync PASS")
 
-# Jakość zdjęć magazynu: pełne zdjęcie z aparatu, 1024 px i rozsądny JPEG.
-assert 'static final int MAX_EDGE_PX=1024;' in thumb
+# Jakość + Low RAM: pełne zdjęcie zostaje jako oryginał, a miniatura ma
+# mały profil renderowania z downsamplingiem i ograniczonym cache.
+assert 'static final int MAX_EDGE_PX=384;' in thumb
+assert 'static final int LOW_RAM_EDGE_PX=256;' in thumb
+assert 'ActivityManager' in thumb and 'isLowRamDevice()' in thumb
+assert 'LruCache<Long,CachedBitmap>' in thumb
+assert 'sample.inSampleSize*=2' in thumb
+assert 'renderEdgePx' in thumb
+assert 'StorageThumbs.configure(this);' in main
+assert 'StorageThumbs.trimMemory(level);' in main
+assert 'THUMBNAIL_CACHE_TRIM' in thumb
 assert 'static final int MAX_JPEG_BYTES=256*1024;' in thumb
 assert 'static final int MAX_BASE64_CHARS=360000;' in thumb
 assert 'for(int quality:new int[]{92,88,84,80,76,72,68})' in thumb
@@ -63,7 +72,7 @@ assert 'data.getExtras().get("data")' not in main[
 manifest=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 assert 'androidx.core.content.FileProvider' in manifest
 assert '@xml/storage_file_paths' in manifest
-print("Storage thumbnails: full-resolution camera capture and 1024px quality PASS")
+print("Storage thumbnails: full-resolution original + 384/256px Low RAM cache PASS")
 
 # Podmiana oryginalnego zdjęcia musi zachować poprzedni plik aż do poprawnego
 # zainstalowania nowego oraz odtworzyć go po przerwanym/nieudanym zapisie.
