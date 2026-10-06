@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.93";
+    private static final String DESKTOP_VERSION = "0.7.0.94";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -4886,7 +4886,14 @@ public final class EdhomeDesktop extends JFrame {
                     long revision = get();
                     if (revision < 0) return; // starszy Android: pełna kontrola co 3 min
                     if (phoneRevision >= 0 && revision != phoneRevision) {
-                        pullChangesFromPhone(host, secret, revision);
+                        if (revision < phoneRevision) {
+                            DesktopDiagnosticLog.event("SYNC_PHONE_REVISION_REGRESSED",
+                                "from=" + phoneRevision + " to=" + revision);
+                            connection.setText("SYNC • wykryto przywrócenie kopii • pełne pojednanie…");
+                            pullFromPhone(host, secret, null, true);
+                        } else {
+                            pullChangesFromPhone(host, secret, revision);
+                        }
                     } else {
                         phoneRevision = revision;
                     }
@@ -4911,6 +4918,7 @@ public final class EdhomeDesktop extends JFrame {
         connecting = true;
         connection.setText("SYNC • pobieram zmiany z telefonu…");
         final JsonObject working = snapshot.deepCopy();
+        final long previousRevision = phoneRevision;
         final long startAt = Math.max(0L, phoneChangeCursorAt - 2000L);
         new SwingWorker<PhoneDeltaSyncResult,Void>() {
             @Override protected PhoneDeltaSyncResult doInBackground() throws Exception {
@@ -4944,6 +4952,15 @@ public final class EdhomeDesktop extends JFrame {
                 connecting = false;
                 try {
                     PhoneDeltaSyncResult result = get();
+                    if (result.applied == 0 && previousRevision >= 0
+                            && observedRevision != previousRevision) {
+                        DesktopDiagnosticLog.event("SYNC_PULL_EMPTY_REVISION_CHANGE",
+                            "from=" + previousRevision + " to=" + observedRevision);
+                        connection.setText(
+                            "SYNC • zmieniona rewizja bez delty • pełne pojednanie…");
+                        pullFromPhone(host, secret, null, true);
+                        return;
+                    }
                     snapshot = result.data;
                     syncedSnapshot = snapshot.deepCopy();
                     phoneRevision = result.revision;
