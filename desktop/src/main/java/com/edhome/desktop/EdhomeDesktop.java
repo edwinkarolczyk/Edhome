@@ -99,6 +99,9 @@ public final class EdhomeDesktop extends JFrame {
 
     private final JPanel content = new JPanel(new BorderLayout());
     private final JLabel connection = new JLabel("OFFLINE • lokalna kopia");
+    private final JLabel apiStatus = new JLabel("● API uruchamia się");
+    private DesktopHubServer hubServer;
+    private JsonObject hubCommittedSnapshot;
     private JsonObject snapshot;
     private JsonObject syncedSnapshot;
     private String snapshotHash = "";
@@ -269,6 +272,7 @@ public final class EdhomeDesktop extends JFrame {
         setContentPane(root);
 
         loadCache();
+        startHubApi();
         showSection("Pulpit");
         initTray();
         startReconnectLoop();
@@ -288,9 +292,330 @@ public final class EdhomeDesktop extends JFrame {
         title.setFont(title.getFont().deriveFont(Font.BOLD, 22f));
         connection.setForeground(APP_ACCENT);
         connection.setHorizontalAlignment(SwingConstants.RIGHT);
+        apiStatus.setForeground(APP_ACCENT);
+        apiStatus.setHorizontalAlignment(SwingConstants.RIGHT);
+        JPanel states=new JPanel();
+        states.setOpaque(false);
+        states.setLayout(new BoxLayout(states,BoxLayout.Y_AXIS));
+        apiStatus.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        connection.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        states.add(apiStatus);
+        states.add(connection);
         bar.add(title, BorderLayout.WEST);
-        bar.add(connection, BorderLayout.EAST);
+        bar.add(states, BorderLayout.EAST);
         return bar;
+    }
+
+    static java.util.List<String> localLanAddresses() {
+        return QrPairingSession.localAddresses();
+    }
+
+    private void startHubApi() {
+        try {
+            String desktopId=PREFS.get("hubDesktopId","").trim();
+            if(!desktopId.matches("[0-9a-fA-F-]{36}")) {
+                desktopId=DesktopHubServer.newDesktopId();
+                PREFS.put("hubDesktopId",desktopId);
+            }
+            String token=PREFS.get("hubToken","").trim();
+            if(!token.matches("[A-Za-z0-9_-]{20,128}")) {
+                token=DesktopHubServer.newToken();
+                PREFS.put("hubToken",token);
+            }
+            hubCommittedSnapshot=snapshot==null?null:snapshot.deepCopy();
+            final String id=desktopId;
+            final String secret=token;
+            hubServer=new DesktopHubServer(id,DESKTOP_VERSION,secret,
+                new DesktopHubServer.Host() {
+                    @Override public String snapshot() throws Exception {
+                        return onEdt(()->hubSnapshotJson());
+                    }
+                    @Override public String bootstrap(String incoming,
+                            DesktopHubServer.ClientInfo client) throws Exception {
+                        return onEdt(()->hubBootstrap(incoming,client));
+                    }
+                    @Override public String patch(String incoming,
+                            DesktopHubServer.ClientInfo client,boolean phoneWins)
+                            throws Exception {
+                        return onEdt(()->hubApplyPatch(incoming,client,phoneWins));
+                    }
+                    @Override public long revision() throws Exception {
+                        return onEdt(()->hubRevision());
+                    }
+                    @Override public boolean initialized() {
+                        return PREFS.getBoolean("hubInitialized",false);
+                    }
+                    @Override public void registered(DesktopHubServer.ClientInfo client) {
+                        SwingUtilities.invokeLater(()->{
+                            PREFS.putBoolean("hubMode",true);
+                            connected=true;
+                            apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
+                            apiStatus.setForeground(APP_ACCENT);
+                            connection.setText("ONLINE • "+client.userName
+                                +" • Android "+client.version);
+                            connection.setForeground(APP_ACCENT);
+                            updateTrayTooltip();
+                        });
+                    }
+                });
+            hubServer.start();
+            apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
+            apiStatus.setForeground(APP_ACCENT);
+            DesktopDiagnosticLog.event("HUB_API_STARTED",
+                "desktop="+id+" port="+DesktopHubServer.PORT);
+        } catch(Exception error) {
+            hubServer=null;
+            apiStatus.setText("● API NIE DZIAŁA");
+            apiStatus.setForeground(new Color(230,95,95));
+            DesktopDiagnosticLog.error("HUB_API_START",error);
+        }
+    }
+
+    private <T> T onEdt(Callable<T> work) throws Exception {
+        if(SwingUtilities.isEventDispatchThread())return work.call();
+        java.util.concurrent.FutureTask<T> task=
+            new java.util.concurrent.FutureTask<>(work);
+        SwingUtilities.invokeLater(task);
+        return task.get(20,TimeUnit.SECONDS);
+    }
+
+    private String hubSnapshotJson() throws Exception {
+        if(snapshot==null)throw new IOException("Desktop nie ma jeszcze lokalnej kopii danych.");
+        commitHubLocalMetadata();
+        return GSON.toJson(snapshot);
+    }
+
+    private long hubRevision() throws Exception {
+        if(snapshot==null)return 0L;
+        commitHubLocalMetadata();
+        long total=0L;
+        if(snapshot.has("syncRecords")&&snapshot.get("syncRecords").isJsonArray())
+            for(JsonElement element:snapshot.getAsJsonArray("syncRecords"))
+                if(element.isJsonObject())
+                    total+=Math.max(0L,longValue(element.getAsJsonObject(),"revision"));
+        return total;
+    }
+
+    private String hubBootstrap(String incoming,DesktopHubServer.ClientInfo client)
+            throws Exception {
+        JsonObject phone=JsonParser.parseString(incoming).getAsJsonObject();
+        validate(phone);
+        if(PREFS.getBoolean("hubInitialized",false))
+            return hubSnapshotJson();
+
+        JsonObject before=snapshot==null?null:snapshot.deepCopy();
+        saveFirstHubBackup(before,phone,client==null?"phone":client.deviceId);
+        snapshot=phone.deepCopy();
+        ensureDesktopSyncMetadata(snapshot);
+        hubCommittedSnapshot=snapshot.deepCopy();
+        syncedSnapshot=snapshot.deepCopy();
+        snapshotHash=rowSha256(snapshot);
+        dirty=false;
+        syncConflictPaused=false;
+        PREFS.putBoolean("hubInitialized",true);
+        PREFS.putBoolean("hubMode",true);
+        saveCache(snapshot);
+        savePcBackup(snapshot);
+        connected=true;
+        DesktopDiagnosticLog.event("HUB_BOOTSTRAP_ACCEPTED",
+            "device="+(client==null?"":client.deviceId));
+        showSection(current);
+        return GSON.toJson(snapshot);
+    }
+
+    private void saveFirstHubBackup(JsonObject before,JsonObject phone,String deviceId)
+            throws Exception {
+        if(PREFS.getBoolean("hubFirstBackupDone",false))return;
+        Path folder=PC_BACKUP_DIR.resolve("FirstSync");
+        Files.createDirectories(folder);
+        String stamp=DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
+            .withZone(ZoneId.systemDefault()).format(Instant.now());
+        String safe=deviceId==null?"phone":deviceId.replaceAll("[^A-Za-z0-9._-]","_");
+        if(before!=null)
+            Files.writeString(folder.resolve("EDHOME-before-hub-"+stamp+".json"),
+                GSON.toJson(before),StandardCharsets.UTF_8);
+        Files.writeString(folder.resolve("EDHOME-phone-first-"+safe+"-"+stamp+".json"),
+            GSON.toJson(phone),StandardCharsets.UTF_8);
+        PREFS.putBoolean("hubFirstBackupDone",true);
+        DesktopDiagnosticLog.event("HUB_FIRST_BACKUP_SAVED",
+            "folder="+folder.toAbsolutePath());
+    }
+
+    private static java.util.Map<String,JsonObject> allSyncMetaByRow(JsonObject root) {
+        java.util.Map<String,JsonObject> out=new java.util.LinkedHashMap<>();
+        if(root==null||!root.has("syncRecords")
+                ||!root.get("syncRecords").isJsonArray())return out;
+        for(JsonElement element:root.getAsJsonArray("syncRecords")) {
+            if(!element.isJsonObject())continue;
+            JsonObject meta=element.getAsJsonObject();
+            String table=value(meta,"table");
+            String key=value(meta,"rowKey");
+            if(!table.isBlank()&&!key.isBlank())
+                out.put(table+"\u0000"+key,meta);
+        }
+        return out;
+    }
+
+    private void commitHubLocalMetadata() throws Exception {
+        if(snapshot==null||!PREFS.getBoolean("hubMode",false))return;
+        ensureDesktopSyncMetadata(snapshot);
+        if(!snapshot.has("tables")||!snapshot.get("tables").isJsonObject()
+                ||!snapshot.has("syncRecords")
+                ||!snapshot.get("syncRecords").isJsonArray())return;
+        JsonObject tables=snapshot.getAsJsonObject("tables");
+        java.util.Map<String,JsonObject> meta=allSyncMetaByRow(snapshot);
+        java.util.HashSet<String> live=new java.util.HashSet<>();
+        long now=System.currentTimeMillis();
+        boolean changed=false;
+        for(String table:tables.keySet()) {
+            if(!tables.get(table).isJsonArray())continue;
+            for(JsonElement element:tables.getAsJsonArray(table)) {
+                if(!element.isJsonObject())continue;
+                JsonObject row=element.getAsJsonObject();
+                String rowKey=patchRowKey(table,row);
+                if(rowKey==null)continue;
+                String key=table+"\u0000"+rowKey;
+                live.add(key);
+                String hash=rowSha256(row);
+                JsonObject m=meta.get(key);
+                if(m==null)continue;
+                String oldHash=value(m,"rowHash");
+                boolean deleted=m.has("deletedAt")&&!m.get("deletedAt").isJsonNull();
+                if(deleted||!hash.equals(oldHash)) {
+                    long revision=Math.max(0L,longValue(m,"revision"))+1L;
+                    m.addProperty("revision",revision);
+                    m.addProperty("updatedAt",now);
+                    m.add("deletedAt",com.google.gson.JsonNull.INSTANCE);
+                    m.addProperty("rowHash",hash);
+                    changed=true;
+                } else if(longValue(m,"revision")==0L) {
+                    m.addProperty("revision",1L);
+                    m.addProperty("updatedAt",now);
+                    m.addProperty("rowHash",hash);
+                    changed=true;
+                }
+            }
+        }
+        for(Map.Entry<String,JsonObject> entry:meta.entrySet()) {
+            JsonObject m=entry.getValue();
+            boolean deleted=m.has("deletedAt")&&!m.get("deletedAt").isJsonNull();
+            if(!live.contains(entry.getKey())&&!deleted) {
+                m.addProperty("revision",Math.max(0L,longValue(m,"revision"))+1L);
+                m.addProperty("updatedAt",now);
+                m.addProperty("deletedAt",now);
+                m.addProperty("rowHash","DELETED");
+                changed=true;
+            }
+        }
+        if(changed) {
+            hubCommittedSnapshot=snapshot.deepCopy();
+            saveCache(snapshot);
+            DesktopDiagnosticLog.event("HUB_DESKTOP_METADATA_COMMITTED");
+        }
+    }
+
+    private String hubApplyPatch(String incoming,DesktopHubServer.ClientInfo client,
+            boolean phoneWins) throws Exception {
+        if(snapshot==null)throw new IOException("Brak danych Desktopu.");
+        commitHubLocalMetadata();
+        JsonObject patch=JsonParser.parseString(incoming).getAsJsonObject();
+        if(!"edhome-record-patch".equals(value(patch,"format"))
+                ||intValue(patch,"version")!=2
+                ||!patch.has("operations")||!patch.get("operations").isJsonArray())
+            throw new IllegalArgumentException("Nieobsługiwany patch synchronizacji.");
+        JsonArray operations=patch.getAsJsonArray("operations");
+        if(operations.size()<1||operations.size()>500)
+            throw new IllegalArgumentException("Patch ma nieprawidłową liczbę zmian.");
+
+        JsonObject tables=snapshot.getAsJsonObject("tables");
+        JsonArray metadata=snapshot.getAsJsonArray("syncRecords");
+        for(JsonElement element:operations) {
+            if(!element.isJsonObject())
+                throw new IllegalArgumentException("Nieprawidłowa operacja patcha.");
+            JsonObject op=element.getAsJsonObject();
+            String table=value(op,"table");
+            String rowKey=value(op,"rowKey");
+            String syncUuid=value(op,"syncUuid").toLowerCase(Locale.ROOT);
+            String action=value(op,"action");
+            long baseRevision=longValue(op,"baseRevision");
+            if(!tables.has(table)||!tables.get(table).isJsonArray()
+                    ||rowKey.isBlank()
+                    ||(!"upsert".equals(action)&&!"delete".equals(action)))
+                throw new IllegalArgumentException("Nieprawidłowa zmiana rekordu.");
+            JsonObject metaByUuid=null,metaByRow=null;
+            for(JsonElement mElement:metadata) {
+                if(!mElement.isJsonObject())continue;
+                JsonObject m=mElement.getAsJsonObject();
+                if(syncUuid.equalsIgnoreCase(value(m,"syncUuid")))metaByUuid=m;
+                if(table.equals(value(m,"table"))&&rowKey.equals(value(m,"rowKey")))
+                    metaByRow=m;
+            }
+            JsonArray rows=tables.getAsJsonArray(table);
+            int rowIndex=rowIndexByKey(table,rows,rowKey);
+            JsonObject meta=metaByUuid!=null?metaByUuid:metaByRow;
+            boolean liveMeta=meta!=null
+                &&(!meta.has("deletedAt")||meta.get("deletedAt").isJsonNull());
+            if(!phoneWins) {
+                if(baseRevision==0L) {
+                    if(rowIndex>=0||liveMeta)
+                        throw new DesktopHubServer.Conflict(table,rowKey,
+                            "Rekord już istnieje na Desktopie.");
+                    meta=null;
+                } else if(meta==null||!liveMeta
+                        ||longValue(meta,"revision")!=baseRevision
+                        ||(!syncUuid.isBlank()
+                            &&!syncUuid.equalsIgnoreCase(value(meta,"syncUuid")))) {
+                    throw new DesktopHubServer.Conflict(table,rowKey,
+                        "Ten sam rekord zmienił się na innym urządzeniu.");
+                }
+            }
+            long now=System.currentTimeMillis();
+            if(meta==null) {
+                meta=new JsonObject();
+                meta.addProperty("syncUuid",syncUuid.matches("[0-9a-f-]{36}")
+                    ?syncUuid:java.util.UUID.randomUUID().toString());
+                meta.addProperty("table",table);
+                meta.addProperty("rowKey",rowKey);
+                meta.addProperty("revision",0L);
+                metadata.add(meta);
+            }
+            if("delete".equals(action)) {
+                if(rowIndex>=0)rows.remove(rowIndex);
+                meta.addProperty("revision",Math.max(0L,longValue(meta,"revision"))+1L);
+                meta.addProperty("updatedAt",now);
+                meta.addProperty("deletedAt",now);
+                meta.addProperty("rowHash","DELETED");
+            } else {
+                if(!op.has("row")||!op.get("row").isJsonObject())
+                    throw new IllegalArgumentException("Brak danych rekordu.");
+                JsonObject row=op.getAsJsonObject("row");
+                if(!rowKey.equals(patchRowKey(table,row)))
+                    throw new IllegalArgumentException("Klucz rekordu nie pasuje.");
+                if(rowIndex>=0)rows.set(rowIndex,row.deepCopy());
+                else rows.add(row.deepCopy());
+                meta.addProperty("revision",Math.max(0L,longValue(meta,"revision"))+1L);
+                meta.addProperty("updatedAt",now);
+                meta.add("deletedAt",com.google.gson.JsonNull.INSTANCE);
+                meta.addProperty("rowHash",rowSha256(row));
+            }
+        }
+        validate(snapshot);
+        hubCommittedSnapshot=snapshot.deepCopy();
+        syncedSnapshot=snapshot.deepCopy();
+        snapshotHash=rowSha256(snapshot);
+        dirty=false;
+        syncConflictPaused=false;
+        PREFS.putBoolean("hubMode",true);
+        PREFS.putBoolean("hubInitialized",true);
+        saveCache(snapshot);
+        savePcBackup(snapshot);
+        connected=true;
+        DesktopDiagnosticLog.event(phoneWins
+            ?"HUB_CONFLICT_PHONE_WON":"HUB_PATCH_APPLIED",
+            "device="+(client==null?"":client.deviceId)
+                +" operations="+operations.size());
+        showSection(current);
+        return GSON.toJson(snapshot);
     }
 
     private JComponent sidebar() {
@@ -4947,6 +5272,25 @@ public final class EdhomeDesktop extends JFrame {
 
     private void startReconnectLoop() {
         reconnectTimer = new javax.swing.Timer(10000, e -> {
+            if(PREFS.getBoolean("hubMode",false)) {
+                if(hubServer!=null&&hubServer.isRunning()) {
+                    DesktopHubServer.ClientInfo phone=hubServer.newestClient();
+                    apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
+                    apiStatus.setForeground(APP_ACCENT);
+                    if(phone!=null&&System.currentTimeMillis()-phone.seenAt<180000L) {
+                        connected=true;
+                        connection.setText("ONLINE • "+phone.userName
+                            +" • Android "+phone.version);
+                        connection.setForeground(APP_ACCENT);
+                    } else {
+                        connected=false;
+                        connection.setText("API GOTOWE • czekam na telefon");
+                        connection.setForeground(APP_MUTED);
+                    }
+                    updateTrayTooltip();
+                }
+                return;
+            }
             if (connecting || autoSaving || editingDialog || stateChecking) return;
             if (dirty && PREFS.getBoolean("autoWrite", true)) {
                 if (!syncConflictPaused) saveChangesToPhone(null, true);
@@ -5191,6 +5535,11 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void scheduleAutoSave() {
+        if(PREFS.getBoolean("hubMode",false)) {
+            connection.setText("ZAPISANO LOKALNIE • telefon pobierze zmianę");
+            connection.setForeground(APP_ACCENT);
+            return;
+        }
         if (!PREFS.getBoolean("autoWrite", true) || autoSaveTimer == null) return;
         if (syncConflictPaused) {
             connection.setText("KONFLIKT • lokalne zmiany zachowane • synchronizacja wstrzymana");
@@ -5208,6 +5557,8 @@ public final class EdhomeDesktop extends JFrame {
         try {
             if (snapshot != null) {
                 ensureDesktopSyncMetadata(snapshot);
+                if(PREFS.getBoolean("hubMode",false))
+                    commitHubLocalMetadata();
                 saveCache(snapshot);
                 savePcBackup(snapshot);
             }
@@ -5296,6 +5647,7 @@ public final class EdhomeDesktop extends JFrame {
         if (reconnectTimer != null) reconnectTimer.stop();
         if (autoSaveTimer != null) autoSaveTimer.stop();
         if (qrPairingSession != null) qrPairingSession.close();
+        if (hubServer != null) hubServer.close();
         if (trayIcon != null) {
             try { SystemTray.getSystemTray().remove(trayIcon); }
             catch (Exception ignored) { }
@@ -5305,7 +5657,67 @@ public final class EdhomeDesktop extends JFrame {
         System.exit(0);
     }
 
+    private void showHubQrPairing(JLabel pairState,JButton trigger) {
+        if(trigger!=null)trigger.setEnabled(false);
+        try {
+            prepareWindowsPairingFirewall();
+            long openedAt=System.currentTimeMillis();
+            BufferedImage image=qrImage(hubServer.qrText(),320);
+            JLabel qr=new JLabel(new ImageIcon(image));
+            qr.setHorizontalAlignment(SwingConstants.CENTER);
+            JLabel status=new JLabel("Zeskanuj QR w EDHOME Android.");
+            status.setHorizontalAlignment(SwingConstants.CENTER);
+            JLabel info=new JLabel(
+                "<html><center>Telefon zapisze ID Desktopu i token. "
+                +"Po zmianie IP odnajdzie ten sam komputer automatycznie.<br>"
+                +"PC może być po kablu LAN, a telefon po Wi‑Fi.</center></html>");
+            info.setHorizontalAlignment(SwingConstants.CENTER);
+            JPanel body=new JPanel(new BorderLayout(10,10));
+            body.setBorder(new EmptyBorder(14,18,14,18));
+            body.add(info,BorderLayout.NORTH);
+            body.add(qr,BorderLayout.CENTER);
+            body.add(status,BorderLayout.SOUTH);
+            JDialog dialog=new JDialog(this,"EDHOME • połącz telefon",true);
+            dialog.setContentPane(body);
+            dialog.pack();
+            dialog.setLocationRelativeTo(this);
+            javax.swing.Timer watch=new javax.swing.Timer(800,null);
+            watch.addActionListener(e->{
+                DesktopHubServer.ClientInfo phone=hubServer.newestClient();
+                if(phone!=null&&phone.seenAt>=openedAt) {
+                    PREFS.putBoolean("hubMode",true);
+                    pairState.setText("Połączono • "+phone.userName
+                        +" • Android "+phone.version);
+                    pairState.setForeground(APP_ACCENT);
+                    status.setText("✓ Połączono. Synchronizacja działa przez API Desktopu.");
+                    watch.stop();
+                    javax.swing.Timer close=new javax.swing.Timer(900,x->dialog.dispose());
+                    close.setRepeats(false);
+                    close.start();
+                }
+            });
+            dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                    watch.stop();
+                    if(trigger!=null)trigger.setEnabled(true);
+                }
+            });
+            watch.start();
+            dialog.setVisible(true);
+        } catch(Exception error) {
+            DesktopDiagnosticLog.error("HUB_QR",error);
+            if(trigger!=null)trigger.setEnabled(true);
+            JOptionPane.showMessageDialog(this,
+                "Nie utworzono kodu QR:\n"+rootMessage(error),
+                "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void showQrPairing(JLabel pairState, JButton trigger) {
+        if(hubServer!=null&&hubServer.isRunning()) {
+            showHubQrPairing(pairState,trigger);
+            return;
+        }
         if (qrPairingSession != null) {
             qrPairingSession.close();
             qrPairingSession = null;
