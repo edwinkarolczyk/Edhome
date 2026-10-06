@@ -58,6 +58,10 @@ assert 'PROJECT_WORK_STARTED' in main and 'PROJECT_WORK_STOPPED' in main
 assert 'bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted)' in main
 assert 'view.postDelayed(refresh[0],1000L);' in main
 assert 'projectTimeRed()' in main and 'projectTimeYellow()' in main and 'projectTimeGreen()' in main
+assert 'addProjectTimeProgress(summary,stats);' in main
+assert 'addProjectTimeProgress(box,stats);' in main
+assert 'stats.activeWork?projectTimeRed():projectTimeYellow()' in main
+assert 'boolean timeOverrun()' in project and 'int timePct()' in project
 assert 'Czas przekroczony, praca nadal trwa.' in main
 assert 'Czas przekroczony, pomiar zatrzymany.' in main
 assert '?projectTimeRed():projectTimeGreen()' in main
@@ -72,7 +76,7 @@ project_tasks=main.split("private void renderProjectTasks",1)[1].split(
     "private int projectTimeGreen",1)[0]
 assert 'final boolean completionBlocked=blockers>0||hardRequirements>0;' in project_tasks
 assert 'check.setEnabled(done||!completionBlocked);' in project_tasks
-assert 'Nie można oznaczyć zablokowanej czynności jako wykonanej.' in project_tasks
+assert 'showProjectBlockedDialog(taskId,taskName);' in project_tasks
 assert 'ProjectStore.openDependencyCount' in project_tasks
 assert 'ProjectPlanningStore.openHardCount' in project_tasks
 assert 'confirmDeleteProjectTask(taskId,taskName)' in project_tasks
