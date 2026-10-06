@@ -5516,19 +5516,37 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmDeleteProjectTask(long taskId,String taskName) {
+        java.util.List<ProjectStore.TaskRef> dependents=
+            ProjectStore.openDependents(db.getReadableDatabase(),taskId);
+        StringBuilder message=new StringBuilder(taskName);
+        if(!dependents.isEmpty()) {
+            message.append("\n\nTa czynność jest wymagana przez:");
+            int shown=Math.min(5,dependents.size());
+            for(int i=0;i<shown;i++)
+                message.append("\n• ").append(dependents.get(i).title);
+            if(dependents.size()>shown)
+                message.append("\n• +").append(dependents.size()-shown)
+                    .append(" kolejnych");
+            message.append("\n\nUsunięcie zerwie ")
+                .append(dependents.size())
+                .append(dependents.size()==1
+                    ?" zależność.":" zależności.");
+        }
+        message.append("\n\nUsunięte zostaną też wymagania i zapis czasu pracy. "
+            +"Tej operacji nie można cofnąć.");
         new AlertDialog.Builder(this)
             .setTitle("Usunąć czynność projektu?")
-            .setMessage(taskName
-                +"\nUsunięte zostaną jej zależności, wymagania i zapis czasu pracy. "
-                +"Tej operacji nie można cofnąć.")
+            .setMessage(message.toString())
             .setNegativeButton("Anuluj",null)
-            .setPositiveButton("Usuń",(dialog,which)->{
-                ReminderReceiver.cancelTask(this,taskId);
-                ProjectWorkNotification.cancel(this,taskId);
-                db.deleteTask(taskId);
-                DiagnosticLog.event("PROJECT_TASK_DELETED","task="+taskId);
-                render();
-            }).show();
+            .setPositiveButton(dependents.isEmpty()?"Usuń":"Usuń mimo to",
+                (dialog,which)->{
+                    ReminderReceiver.cancelTask(this,taskId);
+                    ProjectWorkNotification.cancel(this,taskId);
+                    db.deleteTask(taskId);
+                    DiagnosticLog.event("PROJECT_TASK_DELETED",
+                        "task="+taskId+" broken_dependents="+dependents.size());
+                    render();
+                }).show();
     }
 
     private int projectTimeGreen() {
