@@ -202,8 +202,11 @@ for marker in ('"pantry".equals(tableName)', '"vehicles".equals(tableName)', '"p
 for marker in (
     'getMaximumWindowBounds()',
     'Math.min(940, usableScreen.height - 16)',
-    'setSize(initialWidth, initialHeight)'
+    'setSize(initialWidth, initialHeight)',
+    'setExtendedState(getExtendedState() | Frame.MAXIMIZED_BOTH)',
+    'WINDOW_MAXIMIZED_START'
 ):
-    assert marker in desktop, f"Missing adaptive taller-window contract: {marker}"
+    assert marker in desktop, f"Missing adaptive/maximized window contract: {marker}"
 assert 'setSize(1280, 800)' not in desktop
-print("EDHOME Desktop adaptive taller window: PASS")
+assert 'setUndecorated(true)' not in desktop
+print("EDHOME Desktop adaptive maximized window: PASS")
