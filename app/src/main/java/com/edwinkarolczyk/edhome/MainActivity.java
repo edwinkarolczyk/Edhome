@@ -2714,10 +2714,15 @@ public final class MainActivity extends Activity {
         if (homeShowcaseSlideDirection != 0) {
             int direction = homeShowcaseSlideDirection;
             homeShowcaseSlideDirection = 0;
-            tiles.setTranslationX(dp(42) * direction);
-            tiles.setAlpha(0.80f);
-            tiles.animate().translationX(0f).alpha(1f)
-                .setDuration(150L).start();
+            if(StorageThumbs.isLowRamDevice()) {
+                tiles.setTranslationX(0f);
+                tiles.setAlpha(1f);
+            } else {
+                tiles.setTranslationX(dp(42) * direction);
+                tiles.setAlpha(0.80f);
+                tiles.animate().translationX(0f).alpha(1f)
+                    .setDuration(150L).start();
+            }
         }
         addShowcasePageDots(showcasePageCount);
         if (!skin.showcase() || homeEditMode) {
@@ -3194,11 +3199,16 @@ public final class MainActivity extends Activity {
             int[] old = homeTileSlots.get(id);
             int[] target = homeTileSlots.get(visible.get(local));
             if (tile == null || old == null || target == null) continue;
-            tile.animate()
-                .translationX(target[0] - old[0])
-                .translationY(target[1] - old[1])
-                .setDuration(140)
-                .start();
+            if(StorageThumbs.isLowRamDevice()) {
+                tile.setTranslationX(target[0] - old[0]);
+                tile.setTranslationY(target[1] - old[1]);
+            } else {
+                tile.animate()
+                    .translationX(target[0] - old[0])
+                    .translationY(target[1] - old[1])
+                    .setDuration(140)
+                    .start();
+            }
         }
         draggedTile.setAlpha(0.34f);
         draggedTile.setScaleX(1.04f);
