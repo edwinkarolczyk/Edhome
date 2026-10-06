@@ -168,7 +168,7 @@ final class DesktopHubServer implements AutoCloseable {
             String[] parts=request.split(" ");
             if(parts.length<2){reply(peer,400,"{\"error\":\"BAD_REQUEST\"}",null);return;}
             String method=parts[0].toUpperCase(Locale.ROOT);
-            String path=parts[1].split("\?",2)[0];
+            String path=parts[1].split("\\?",2)[0];
             String supplied="";
             int contentLength=0;
             String deviceId="";
