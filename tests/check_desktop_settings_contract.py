@@ -20,7 +20,6 @@ for marker in (
     'oneClickDesktopUpdate(updateDesktop)',
     'hubServer.newestClient()',
     'DesktopHubServer.PORT',
-    'hubFirewallReady',
 ):
     assert marker in settings, f"Missing compact Desktop setting: {marker}"
 
@@ -48,4 +47,7 @@ for marker in (
 ):
     assert marker in src, f"Missing pairing/diagnostics stabilization: {marker}"
 
-print("EDHOME Desktop compact Settings + QR/diagnostics: PASS")
+for marker in ('hubFirewallReady','localport=45823','localport=45822','DesktopHubServer.PORT'):
+    assert marker in src, f"Missing Desktop Hub/firewall contract: {marker}"
+
+print("EDHOME Desktop compact Settings + Hub QR/diagnostics: PASS")
