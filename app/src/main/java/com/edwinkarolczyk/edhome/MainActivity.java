@@ -406,9 +406,16 @@ public final class MainActivity extends Activity {
 
     /** Post from background/NFC work only while this Activity can still own UI. */
     private void runOnLiveUi(Runnable action) {
+        runOnLiveUi(action,null);
+    }
+
+    private void runOnLiveUi(Runnable action,Runnable unavailable) {
         if (action == null) return;
         runOnUiThread(() -> {
-            if (isFinishing() || isDestroyed()) return;
+            if (isFinishing() || isDestroyed()) {
+                if(unavailable!=null)unavailable.run();
+                return;
+            }
             action.run();
         });
     }
@@ -17672,15 +17679,11 @@ public final class MainActivity extends Activity {
                 final String legacyJson=archive
                     ?null:DataBackupArchive.readLegacyJson(backupFile);
                 localCopy=null; // ownership passes to the confirmation dialog
-                runOnUiThread(() -> {
-                    if(isFinishing()||isDestroyed()) {
-                        backupFile.delete();
-                        return;
-                    }
+                runOnLiveUi(() -> {
                     hideDataBackupBusy();
                     showDataBackupRestoreConfirmation(
                         backupFile,archive,legacyJson);
-                });
+                },()->backupFile.delete());
             } catch(Exception error) {
                 if(localCopy!=null)localCopy.delete();
                 DiagnosticLog.error("DATA_BACKUP_READ",error);
