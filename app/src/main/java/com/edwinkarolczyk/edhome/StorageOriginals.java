@@ -123,21 +123,57 @@ final class StorageOriginals {
         try (Cursor cursor = database.rawQuery("SELECT id FROM storage_items", null)) {
             while (cursor.moveToNext()) live.add(cursor.getLong(0));
         }
+
         File directory = folder(context);
+        if (!directory.exists()) return 0;
+
+        // A process kill can happen after old .img -> .bak but before the new
+        // .tmp -> .img rename. Recover the last known-good image before cleanup.
+        for (Long id : live) {
+            File destination = new File(directory, id + ".img");
+            File backup = new File(directory, id + ".bak");
+            File temporary = new File(directory, id + ".tmp");
+
+            if (!destination.exists() && backup.isFile())
+                backup.renameTo(destination);
+
+            if (!destination.exists() && !backup.exists() && temporary.isFile()) {
+                try {
+                    validateImage(temporary);
+                    temporary.renameTo(destination);
+                } catch (Exception ignored) {
+                    // Invalid/incomplete temp stays isolated and is removed below.
+                }
+            }
+
+            if (destination.isFile()) {
+                if (backup.exists()) backup.delete();
+                if (temporary.exists()) temporary.delete();
+            }
+        }
+
         File[] files = directory.listFiles();
         if (files == null) return 0;
         int removed = 0;
         for (File image : files) {
             String name = image.getName();
-            long id = -1;
-            if (name.matches("[1-9][0-9]*\\.img")) {
-                try { id = Long.parseLong(name.substring(0, name.length() - 4)); }
-                catch (NumberFormatException ignored) { id = -1; }
-            }
-            if (id > 0 && live.contains(id)) continue;
+            long id = auxiliaryOrImageId(name);
+            boolean liveRecovery = id > 0 && live.contains(id)
+                && (name.endsWith(".img")
+                    || (!new File(directory, id + ".img").exists()
+                        && (name.endsWith(".bak") || name.endsWith(".tmp"))));
+            if (liveRecovery) continue;
             if (image.delete()) removed++;
         }
         return removed;
+    }
+
+    private static long auxiliaryOrImageId(String name) {
+        if (name == null || !name.matches("[1-9][0-9]*\\.(img|bak|tmp)"))
+            return -1L;
+        int dot = name.lastIndexOf('.');
+        try { return Long.parseLong(name.substring(0, dot)); }
+        catch (NumberFormatException ignored) { return -1L; }
     }
 
     static List<File> liveFiles(Context context, SQLiteDatabase database) {
