@@ -99,7 +99,8 @@ for token in (
     'NFC_SCANNER_TAG_ASSIGNED',
     'NFC_SCANNER_TARGET_CREATED',
     'private void showScannerStorageContents(String kind,long id,String name)',
-    'renderStorageGalleryGrid(grid,things,"")',
+    'StorageStore.locations(db.getReadableDatabase(),things)',
+    'renderStorageGalleryGrid(grid,things,contentsLocations,"")',
     'NFC_SCANNER_STORAGE_CONTENTS',
 ):
     assert token in main, "Central scanner storage/NFC flow missing: "+token
