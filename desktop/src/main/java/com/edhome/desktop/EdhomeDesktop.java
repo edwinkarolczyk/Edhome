@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.92";
+    private static final String DESKTOP_VERSION = "0.7.0.93";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -7976,7 +7976,6 @@ public final class EdhomeDesktop extends JFrame {
         final long generation = localEditGeneration;
         final RecordPatchPlan patchPlan = buildRecordPatch(baseline, outgoing);
         final String baseSnapshotSha = snapshotHash;
-        final long catchUpFromAt = Math.max(0L, phoneChangeCursorAt - 2000L);
 
         autoSaving = true;
         if (trigger != null) trigger.setEnabled(false);
@@ -8003,44 +8002,15 @@ public final class EdhomeDesktop extends JFrame {
                     try {
                         PatchResult patched = client.patch(patchPlan.payload);
                         applyPatchAck(outgoing, patched.results);
-
-                        long cursorAt = catchUpFromAt;
-                        String cursorUuid = "";
-                        int remoteChanges = 0;
-                        int batches = 0;
-                        while (true) {
-                            DeltaBatch batch = client.changes(cursorAt, cursorUuid);
-                            remoteChanges += applyPhoneChanges(outgoing, batch.changes);
-                            batches++;
-                            if (!batch.hasMore) {
-                                long finalRevision;
-                                try { finalRevision = client.state(); }
-                                catch (Exception ignored) { finalRevision = patched.revision; }
-                                DesktopDiagnosticLog.event("SYNC_PUSH_CATCHUP_OK",
-                                    "remoteChanges=" + remoteChanges);
-                                return new SyncWriteResult(outgoing, patched.sha256,
-                                    finalRevision, true, patchPlan.operations,
-                                    batch.cursorUpdatedAt, batch.cursorSyncUuid,
-                                    remoteChanges);
-                            }
-                            if (batch.cursorUpdatedAt < cursorAt
-                                    || (batch.cursorUpdatedAt == cursorAt
-                                        && batch.cursorSyncUuid.equals(cursorUuid)))
-                                throw new IOException(
-                                    "Telefon nie przesunął kursora zmian po zapisie z PC.");
-                            cursorAt = batch.cursorUpdatedAt;
-                            cursorUuid = batch.cursorSyncUuid;
-                            if (batches > 200)
-                                throw new IOException(
-                                    "Za dużo paczek zmian po zapisie z PC.");
-                        }
+                        return new SyncWriteResult(outgoing, patched.sha256,
+                            patched.revision, true, patchPlan.operations);
                     } catch (PatchUnsupportedException oldAndroid) {
                         // Kompatybilność: starszy Android nadal przyjmie bezpieczny snapshot.
                     }
                 }
                 SnapshotResult full = client.write(outgoing, baseSnapshotSha);
                 return new SyncWriteResult(full.data, full.sha256,
-                    full.revision, false, 0, -1L, "", 0);
+                    full.revision, false, 0);
             }
 
             @Override protected void done() {
@@ -8053,12 +8023,7 @@ public final class EdhomeDesktop extends JFrame {
                     syncedSnapshot = result.data.deepCopy();
                     snapshotHash = result.sha256;
                     phoneRevision = result.revision;
-                    if (result.patchUsed) {
-                        if (result.cursorUpdatedAt >= phoneChangeCursorAt) {
-                            phoneChangeCursorAt = result.cursorUpdatedAt;
-                            phoneChangeCursorUuid = result.cursorSyncUuid;
-                        }
-                    } else {
+                    if (!result.patchUsed) {
                         updatePhoneChangeCursorFromSnapshot(result.data);
                         lastFullReconcileAt = System.currentTimeMillis();
                     }
@@ -8076,14 +8041,22 @@ public final class EdhomeDesktop extends JFrame {
                     }
 
                     DesktopDiagnosticLog.event("SYNC_PUSH_OK",
-                        "patch=" + result.patchUsed + " operations=" + result.operations
-                            + " remoteChanges=" + result.remoteChanges);
+                        "patch=" + result.patchUsed + " operations=" + result.operations);
                     connection.setText(result.patchUsed
                         ? "ONLINE • zsynchronizowano " + result.operations
                             + (result.operations == 1 ? " zmianę" : " zmiany")
                         : "ONLINE • pełne pojednanie zakończone");
                     if (!automatic) showSection(current);
                     updateTrayTooltip();
+
+                    if (result.patchUsed && !dirty) {
+                        String catchUpHost = PREFS.get("phoneIp", host).trim();
+                        if (!catchUpHost.isBlank()) {
+                            DesktopDiagnosticLog.event("SYNC_PUSH_CATCHUP_START");
+                            SwingUtilities.invokeLater(() ->
+                                pullChangesFromPhone(catchUpHost, secret, result.revision));
+                        }
+                    }
                 } catch (Exception ex) {
                     DesktopDiagnosticLog.error("SYNC_PUSH", ex);
                     String message = rootMessage(ex);
@@ -8480,21 +8453,14 @@ public final class EdhomeDesktop extends JFrame {
         final long revision;
         final boolean patchUsed;
         final int operations;
-        final long cursorUpdatedAt;
-        final String cursorSyncUuid;
-        final int remoteChanges;
 
         SyncWriteResult(JsonObject data, String sha256, long revision,
-                boolean patchUsed, int operations, long cursorUpdatedAt,
-                String cursorSyncUuid, int remoteChanges) {
+                boolean patchUsed, int operations) {
             this.data = data;
             this.sha256 = sha256 == null ? "" : sha256;
             this.revision = revision;
             this.patchUsed = patchUsed;
             this.operations = operations;
-            this.cursorUpdatedAt = cursorUpdatedAt;
-            this.cursorSyncUuid = cursorSyncUuid == null ? "" : cursorSyncUuid;
-            this.remoteChanges = remoteChanges;
         }
     }
 
