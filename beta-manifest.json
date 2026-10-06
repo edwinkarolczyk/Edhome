@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 207,
-  "versionName": "0.8.0.15",
-  "changelog": "EDHOME 0.8.0.15 — Beta. Stabilizacja Magazynu: bezpieczna podmiana oryginalnego zdjęcia Rzeczy/Pudełka. Stare zdjęcie jest zachowane do czasu poprawnego zapisu nowego i odtwarzane po przerwanym lub nieudanym zapisie. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.15/edhome-beta.apk",
-  "sha256": "db32f9a4d6fc005f25c5adab6a4314e3c0a173b58f809a5f80ed996933abebcd"
+  "versionCode": 208,
+  "versionName": "0.8.0.16",
+  "changelog": "EDHOME 0.8.0.16 — Beta. Stabilizacja QR/NFC: jeśli tworzenie nowego obiektu z nieznanego taga NFC nie może dokończyć przypisania, świeżo utworzona Rzecz/Pudełko/Miejsce jest cofana zamiast zostawać jako sierota. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.16/edhome-beta.apk",
+  "sha256": "d2f2019935a255f8314f0b80b06bd789e15c4a30171d67706213852e9097de5b"
 }
