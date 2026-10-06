@@ -28,6 +28,14 @@ final class StorageStore {
             + "details TEXT NOT NULL, happened_at INTEGER NOT NULL)");
         db.execSQL("CREATE INDEX storage_items_box_idx "
             + "ON storage_items(parent_box_id)");
+        ensurePerformanceIndexes(db);
+    }
+
+    static void ensurePerformanceIndexes(SQLiteDatabase db) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS storage_items_kind_name_idx "
+            + "ON storage_items(kind,name COLLATE NOCASE,id)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS storage_items_place_idx "
+            + "ON storage_items(place_id)");
     }
 
     static final class Item {
