@@ -148,3 +148,16 @@ except sqlite3.IntegrityError:
 # Koszty Projektów pozostają osobnym rejestrem, a nie automatycznym księgowaniem PayCheck.
 assert "Koszty projektu nie są księgowane w PayCheck." in main
 print("Projects v1 contract: PASS")
+# Stabilizacja Android/Desktop: identyczne blokady, kolejność i bezpieczne usuwanie.
+assert 'openDependents' in project
+assert 'Ta czynność jest wymagana przez:' in main
+assert 'Usuń mimo to' in main
+for marker in (
+    'desktopProjectWorkBlockReason',
+    'desktopProjectTaskRank',
+    'deleteDesktopProjectTask',
+    'desktopOpenDependencyTitles',
+    'Najpierw zatrzymaj pomiar czasu tej czynności.',
+):
+    assert marker in desktop, "Missing Desktop project stabilization: "+marker
+print("projects Android/Desktop blocker/order/delete stabilization contract OK")
