@@ -1122,7 +1122,6 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void editDesktopProjectTask(JsonObject task) {
-        JsonObject before = task.deepCopy();
         if (!editRow(task,cols(
                 "Nazwa","title",
                 "Czas [min]","duration_minutes",
@@ -1130,38 +1129,6 @@ public final class EdhomeDesktop extends JFrame {
                 "Priorytet","priority",
                 "Osoba","assignee_id",
                 "Wykonane","done"))) return;
-        if (intValue(task,"duration_minutes") < 20) {
-            restoreJsonObject(task,before);
-            JOptionPane.showMessageDialog(this,
-                "Czynność projektu musi mieć co najmniej 20 minut.",
-                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
-            showSection("Projekty");
-            return;
-        }
-        boolean completing=intValue(before,"done")==0&&intValue(task,"done")!=0;
-        if(completing) {
-            long taskId=longValue(task,"id");
-            if(desktopActiveProjectWorkSession(taskId)!=null) {
-                restoreJsonObject(task,before);
-                JOptionPane.showMessageDialog(this,
-                    "Najpierw zatrzymaj pomiar czasu tej czynności.");
-                showSection("Projekty");
-                return;
-            }
-            java.util.List<String> waits=desktopOpenDependencyTitles(taskId);
-            String blocker=desktopHardBlockReason(taskId);
-            if(!waits.isEmpty()||!blocker.isBlank()) {
-                restoreJsonObject(task,before);
-                String message=!waits.isEmpty()
-                    ?"Nie można oznaczyć jako wykonane. Najpierw zakończ:\n• "
-                        +String.join("\n• ",waits)
-                    :blocker;
-                JOptionPane.showMessageDialog(this,message);
-                showSection("Projekty");
-                return;
-            }
-        }
-        markDirty();
         showSection("Projekty");
     }
 
@@ -7536,6 +7503,28 @@ public final class EdhomeDesktop extends JFrame {
                         "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
                 if(storageRowLive&&moved)
                     appendDesktopStorageMove(row,before);
+            }
+            boolean projectTask=row.has("project_id")
+                &&!value(row,"project_id").isBlank()
+                &&row.has("duration_minutes")&&row.has("done");
+            if(projectTask) {
+                if(intValue(row,"duration_minutes")<20)
+                    throw new IllegalArgumentException(
+                        "Czynność projektu musi mieć co najmniej 20 minut.");
+                boolean completing=intValue(before,"done")==0&&intValue(row,"done")!=0;
+                if(completing) {
+                    long taskId=longValue(row,"id");
+                    if(desktopActiveProjectWorkSession(taskId)!=null)
+                        throw new IllegalArgumentException(
+                            "Najpierw zatrzymaj pomiar czasu tej czynności.");
+                    java.util.List<String> waits=desktopOpenDependencyTitles(taskId);
+                    if(!waits.isEmpty())
+                        throw new IllegalArgumentException(
+                            "Najpierw zakończ: "+String.join(", ",waits)+".");
+                    String blocker=desktopHardBlockReason(taskId);
+                    if(!blocker.isBlank())
+                        throw new IllegalArgumentException(blocker);
+                }
             }
             markDirty();
             showSection(current);
