@@ -5221,7 +5221,9 @@ public final class MainActivity extends Activity {
                     +" • wykonano: "+projectTimeText(worked)
                     +" • zostało: "+projectTimeText(remaining);
                 if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
-                box.addView(text(timeLine,12,false));
+                TextView projectTime=text(timeLine,12,false);
+                bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted);
+                box.addView(projectTime);
                 box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
                         project.id,taskId)
                     +(due.isEmpty()?"":" • termin "+due),12,false));
@@ -5318,6 +5320,74 @@ public final class MainActivity extends Activity {
             }
         }
         if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private int projectTimeGreen() {
+        return skin.light ? 0xFF2E7D32 : 0xFF81C784;
+    }
+
+    private int projectTimeYellow() {
+        return skin.light ? 0xFFF9A825 : 0xFFFFD54F;
+    }
+
+    private int projectTimeRed() {
+        return skin.light ? 0xFFC62828 : 0xFFEF5350;
+    }
+
+    private static String projectLiveTimeText(long totalSeconds) {
+        long seconds=Math.max(0L,totalSeconds);
+        long hours=seconds/3600L;
+        long minutes=(seconds%3600L)/60L;
+        long rest=seconds%60L;
+        if(hours>0)return hours+" h "+minutes+" min "+rest+" s";
+        if(minutes>0)return minutes+" min "+rest+" s";
+        return rest+" s";
+    }
+
+    private void bindProjectTimeStatus(TextView view,long taskId,
+            int plannedMinutes,Long activeStarted) {
+        if(activeStarted==null) {
+            int worked=ProjectStore.workedMinutes(
+                db.getReadableDatabase(),taskId,false);
+            int overrun=Math.max(0,worked-plannedMinutes);
+            view.setTextColor(overrun>0?projectTimeYellow():projectTimeGreen());
+            view.setContentDescription(overrun>0
+                ?"Czas przekroczony, pomiar zatrzymany."
+                :"Czas w planie.");
+            return;
+        }
+
+        final Runnable[] refresh=new Runnable[1];
+        refresh[0]=()->{
+            if(view==null||!view.isAttachedToWindow()
+                    ||db==null||isFinishing()||isDestroyed())return;
+            Long started=ProjectStore.activeWorkStartedAt(
+                db.getReadableDatabase(),taskId);
+            if(started==null)return;
+
+            int closedMinutes=ProjectStore.workedMinutes(
+                db.getReadableDatabase(),taskId,false);
+            long activeSeconds=Math.max(0L,
+                (System.currentTimeMillis()-started)/1000L);
+            long workedSeconds=closedMinutes*60L+activeSeconds;
+            long plannedSeconds=Math.max(1,plannedMinutes)*60L;
+            long remainingSeconds=Math.max(0L,plannedSeconds-workedSeconds);
+            long overrunSeconds=Math.max(0L,workedSeconds-plannedSeconds);
+
+            String line="Plan: "+projectTimeText(plannedMinutes)
+                +" • wykonano: "+projectLiveTimeText(workedSeconds)
+                +" • zostało: "+projectLiveTimeText(remainingSeconds);
+            if(overrunSeconds>0)
+                line+=" • przekroczenie: "+projectLiveTimeText(overrunSeconds);
+            view.setText(line);
+            view.setTextColor(overrunSeconds>0
+                ?projectTimeRed():projectTimeGreen());
+            view.setContentDescription(overrunSeconds>0
+                ?"Czas przekroczony, praca nadal trwa."
+                :"Praca trwa w planowanym czasie.");
+            view.postDelayed(refresh[0],1000L);
+        };
+        view.post(refresh[0]);
     }
 
     private void showProjectWorkHistory(long taskId,String taskName) {
