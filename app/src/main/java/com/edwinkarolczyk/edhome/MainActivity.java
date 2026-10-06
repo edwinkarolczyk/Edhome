@@ -4964,6 +4964,7 @@ public final class MainActivity extends Activity {
         summary.addView(text(stats.doneTasks+" / "+stats.tasks+" czynności • "
             +projectTimeText(stats.doneMinutes)+" / "
             +projectTimeText(stats.totalMinutes),14,false));
+        addProjectTimeProgress(summary,stats);
         summary.addView(text("Pozostało: "+projectTimeText(stats.remainingMinutes())
             +(stats.overdueTasks>0?" • zaległe: "+stats.overdueTasks:""),14,false));
         summary.addView(text("Koszt planowany: "
@@ -5007,6 +5008,39 @@ public final class MainActivity extends Activity {
         renderProjectCosts(project.id);
     }
 
+    private void addProjectTimeProgress(LinearLayout box,ProjectStore.Stats stats) {
+        if(stats.totalMinutes<=0)return;
+        int color=projectTimeGreen();
+        String state="● Czas: OK";
+        if(stats.timeOverrun()) {
+            color=stats.activeWork?projectTimeRed():projectTimeYellow();
+            state=stats.activeWork
+                ?"● Czas: PRZEKROCZONY • PRACA TRWA"
+                :"● Czas: PRZEKROCZONY • STOP";
+        } else if(stats.activeWork) {
+            state="● Czas: OK • PRACA TRWA";
+        }
+        int pct=stats.timePct();
+        String label=state+" • "+pct+"% • "
+            +projectTimeText(stats.workedMinutes)+" / "
+            +projectTimeText(stats.totalMinutes);
+        if(stats.timeOverrun())
+            label+=" • +"+projectTimeText(stats.workedMinutes-stats.totalMinutes);
+        TextView time=text(label,12,true);
+        time.setTextColor(color);
+        box.addView(time);
+        android.widget.ProgressBar timeProgress=new android.widget.ProgressBar(
+            this,null,android.R.attr.progressBarStyleHorizontal);
+        timeProgress.setMax(100);
+        timeProgress.setProgress(Math.min(100,pct));
+        timeProgress.setProgressTintList(
+            android.content.res.ColorStateList.valueOf(color));
+        LinearLayout.LayoutParams timeParams=
+            new LinearLayout.LayoutParams(-1,dp(7));
+        timeParams.setMargins(0,dp(4),0,dp(3));
+        box.addView(timeProgress,timeParams);
+    }
+
     private void renderProjectSummaryCard(ProjectStore.Project project) {
         ProjectStore.Stats stats=ProjectStore.stats(
             db.getReadableDatabase(),project.id);
@@ -5015,6 +5049,7 @@ public final class MainActivity extends Activity {
         box.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
             +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",
             13,false));
+        addProjectTimeProgress(box,stats);
         box.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
             +(project.budgetGrosz==null?"":" / budżet "
                 +MoneyRules.format(project.budgetGrosz)),13,false));
