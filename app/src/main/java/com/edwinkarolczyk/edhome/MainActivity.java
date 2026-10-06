@@ -12225,7 +12225,7 @@ public final class MainActivity extends Activity {
                     catch(Exception error) { failure=error.getMessage(); }
                     byte[] pdf=output;
                     String problem=failure;
-                    runOnUiThread(()->{
+                    runOnLiveUi(()->{
                         if(pdf==null) {
                             alert("Nie wygenerowano PDF: "+problem);return;
                         }

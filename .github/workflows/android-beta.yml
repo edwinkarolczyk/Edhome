@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Android lifecycle i aktualizatora: callbacki UI są blokowane po zniszczeniu Activity, a BetaUpdater zamyka kolejkę i executor przy onDestroy. Eliminuje rzadkie crashe/dialogi po obrocie lub zamknięciu ekranu. Bez nowych funkcji. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Domknięcie stabilizacji Android lifecycle: także generowanie PDF etykiet QR wraca do UI wyłącznie przez ochronę żywej Activity; BetaUpdater zamyka pracę przy onDestroy. Bez nowych funkcji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
