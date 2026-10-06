@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 200,
-  "versionName": "0.8.0.8",
-  "changelog": "EDHOME 0.8.0.8 — Beta. Stabilizacja Android lifecycle: asynchroniczna instalacja i migracja grafik nie renderuje już zniszczonej Activity po obrocie, zamknięciu lub odtworzeniu ekranu. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.8/edhome-beta.apk",
-  "sha256": "48596a73f99d31a05046380295f3e00c45c9e29269b2ece9c07cd9214ba9efba"
+  "versionCode": 203,
+  "versionName": "0.8.0.11",
+  "changelog": "EDHOME 0.8.0.11 — Beta. Domknięcie stabilizacji Android lifecycle: także generowanie PDF etykiet QR wraca do UI wyłącznie przez ochronę żywej Activity; BetaUpdater zamyka pracę przy onDestroy. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.11/edhome-beta.apk",
+  "sha256": "97a468e6a6141d9f491b64f6a92532ceffdeaae510dce1d78f84a67b63696469"
 }
