@@ -63,7 +63,10 @@ assert 'go("home")' not in main
 assert "private void runOnLiveUi(Runnable action)" in main
 helper=main.split("private void runOnLiveUi(Runnable action)",1)[1].split(
     "@Override protected void onStart()",1)[0]
-assert "if (isFinishing() || isDestroyed()) return;" in helper
+assert "if (isFinishing() || isDestroyed()) {" in helper
+assert "if(unavailable!=null)unavailable.run();" in helper
+destroyed_guard=helper.split("if (isFinishing() || isDestroyed()) {",1)[1].split("}",1)[0]
+assert "return;" in destroyed_guard
 assert "runOnUiThread(() ->" in helper
 assert main.count("runOnUiThread(")==1
 assert main.count("runOnLiveUi(")>=19
