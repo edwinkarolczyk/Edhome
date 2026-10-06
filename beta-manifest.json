@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 219,
-  "versionName": "0.8.0.27",
-  "changelog": "EDHOME 0.8.0.27 — Beta RC. Projekty: Start bezpośrednio z przypomnienia, trwałe powiadomienie aktywnej pracy z systemowym chronometrem oraz Stop z powiadomienia. Aktywnego timera nie można zwykłym przesunięciem zamknąć; po Stop powiadomienie staje się zwykłe. Zachowane zielony/żółty/czerwony licznik, LAN, backup/restore i Low RAM. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.27/edhome-beta.apk",
-  "sha256": "40b97ae59b3abc5371d0444cf1f07646240bd5c1b4d8b96af761d8ea1353983d"
+  "versionCode": 220,
+  "versionName": "0.8.0.28",
+  "changelog": "EDHOME 0.8.0.28 — Beta RC. Projekty: Start bezpośrednio z przypomnienia, trwałe powiadomienie aktywnej pracy z systemowym chronometrem oraz Stop z powiadomienia. Aktywnego timera nie można zwykłym przesunięciem zamknąć; po Stop powiadomienie staje się zwykłe. Zachowane zielony/żółty/czerwony licznik, LAN, backup/restore i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.28/edhome-beta.apk",
+  "sha256": "adc2490ecc8c5e24f6a065123e8aec2086e30d75df98b0e328d6f3b96cd32f38"
 }
