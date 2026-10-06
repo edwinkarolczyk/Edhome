@@ -69,7 +69,8 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.98";
+    private static final String DESKTOP_VERSION = "0.7.0.99";
+    private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -367,6 +368,12 @@ public final class EdhomeDesktop extends JFrame {
             apiStatus.setForeground(APP_ACCENT);
             DesktopDiagnosticLog.event("HUB_API_STARTED",
                 "desktop="+id+" port="+DesktopHubServer.PORT);
+            String os=System.getProperty("os.name","").toLowerCase(Locale.ROOT);
+            if(os.contains("win")
+                    &&PREFS.getInt("hubFirewallRuleVersion",0)
+                        <HUB_FIREWALL_RULE_VERSION) {
+                SwingUtilities.invokeLater(()->prepareWindowsPairingFirewall(false));
+            }
         } catch(Exception error) {
             hubServer=null;
             apiStatus.setText("● API NIE DZIAŁA");
@@ -4932,7 +4939,8 @@ public final class EdhomeDesktop extends JFrame {
         boolean apiOnline = hubServer != null && hubServer.isRunning();
         boolean firewallReady = !System.getProperty("os.name","")
             .toLowerCase(Locale.ROOT).contains("win")
-            || PREFS.getBoolean("hubFirewallReady",false);
+            || PREFS.getInt("hubFirewallRuleVersion",0)
+                >=HUB_FIREWALL_RULE_VERSION;
         String stateText = !apiOnline
             ? "● API NIE DZIAŁA"
             : firewallReady
@@ -4984,6 +4992,7 @@ public final class EdhomeDesktop extends JFrame {
         qrPair.addActionListener(e -> showQrPairing(pairState, qrPair));
         repairHub.addActionListener(e -> {
             PREFS.putBoolean("hubFirewallReady",false);
+            PREFS.putInt("hubFirewallRuleVersion",0);
             boolean repaired=prepareWindowsPairingFirewall(true);
             if(repaired) {
                 apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
@@ -5024,8 +5033,9 @@ public final class EdhomeDesktop extends JFrame {
         return "EDHOME Desktop " + DESKTOP_VERSION + "\n"
             + "Hub API: " + (hubServer!=null&&hubServer.isRunning()
                 ?"DZIAŁA • TCP 45823 / UDP 45822":"NIE DZIAŁA") + "\n"
-            + "Zapora Hub: " + (PREFS.getBoolean("hubFirewallReady",false)
-                ?"REGUŁY USTAWIONE":"NIEPOTWIERDZONA") + "\n"
+            + "Zapora Hub: " + (PREFS.getInt("hubFirewallRuleVersion",0)
+                >=HUB_FIREWALL_RULE_VERSION
+                ?"REGUŁY V"+HUB_FIREWALL_RULE_VERSION+" USTAWIONE":"NIEPOTWIERDZONA") + "\n"
             + "Telefon Hub: " + (hubPhone==null?"brak":
                 hubPhone.userName+" • Android "+hubPhone.version
                     +" • "+hubPhone.address) + "\n"
@@ -5984,12 +5994,14 @@ public final class EdhomeDesktop extends JFrame {
     private boolean prepareWindowsPairingFirewall(boolean force) {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (!os.contains("win")) return true;
-        if (!force && PREFS.getBoolean("hubFirewallReady", false)) return true;
+        if (!force && PREFS.getInt("hubFirewallRuleVersion",0)
+                >=HUB_FIREWALL_RULE_VERSION) return true;
 
         int answer = JOptionPane.showConfirmDialog(this,
             "Aby telefon mógł połączyć się z API EDHOME Desktop, "
                 + "Zapora Windows musi zezwolić na TCP 45823 i lokalne wykrywanie UDP 45822.\n"
-                + "Reguły będą ograniczone do lokalnej podsieci.\n\n"
+                + "Reguły będą ograniczone do sieci prywatnych LAN "
+                + "(192.168.x.x / 10.x.x.x / 172.16–31.x.x).\n\n"
                 + "Windows poprosi o jedną zgodę administratora.",
             "EDHOME • zezwolenie na lokalny Hub",
             JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
@@ -6000,12 +6012,18 @@ public final class EdhomeDesktop extends JFrame {
 
         try {
             String script =
-                "$cmd='netsh advfirewall firewall add rule "
+                "$cmd='netsh advfirewall firewall delete rule "
+                    + "name=EDHOME_Hub_TCP_45823 >nul 2>&1"
+                    + " & netsh advfirewall firewall delete rule "
+                    + "name=EDHOME_Hub_UDP_45822 >nul 2>&1"
+                    + " & netsh advfirewall firewall add rule "
                     + "name=EDHOME_Hub_TCP_45823 dir=in action=allow protocol=TCP "
-                    + "localport=45823 profile=any remoteip=LocalSubnet"
+                    + "localport=45823 profile=any "
+                    + "remoteip=LocalSubnet,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
                     + " & netsh advfirewall firewall add rule "
                     + "name=EDHOME_Hub_UDP_45822 dir=in action=allow protocol=UDP "
-                    + "localport=45822 profile=any remoteip=LocalSubnet'; "
+                    + "localport=45822 profile=any "
+                    + "remoteip=LocalSubnet,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'; "
                     + "$p=Start-Process -FilePath 'cmd.exe' "
                     + "-ArgumentList '/c',$cmd -Verb RunAs -Wait -PassThru; "
                     + "exit $p.ExitCode";
@@ -6023,8 +6041,10 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IOException(
                     "Zapora Windows zwróciła kod " + process.exitValue() + ".");
             PREFS.putBoolean("hubFirewallReady", true);
+            PREFS.putInt("hubFirewallRuleVersion",HUB_FIREWALL_RULE_VERSION);
             DesktopDiagnosticLog.event("HUB_FIREWALL_READY",
-                "tcp=45823 udp=45822 remote=LocalSubnet");
+                "v="+HUB_FIREWALL_RULE_VERSION
+                    +" tcp=45823 udp=45822 remote=private-lan");
             return true;
         } catch (Exception error) {
             DesktopDiagnosticLog.error("HUB_FIREWALL_SETUP", error);
