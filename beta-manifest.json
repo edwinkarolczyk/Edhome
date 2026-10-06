@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 209,
-  "versionName": "0.8.0.17",
-  "changelog": "EDHOME 0.8.0.17 — Beta. Stabilizacja Skanera: błędny lub niepasujący kod podczas oczekującej operacji Magazynu kończy tę operację zamiast pozostawiać ukryty stan, który mógłby dokończyć późniejszy QR. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.17/edhome-beta.apk",
-  "sha256": "86f5601a4470e31ce6b5c3af3614af7f3d7009d0ed887c539de0a391357c28e5"
+  "versionCode": 210,
+  "versionName": "0.8.0.18",
+  "changelog": "EDHOME 0.8.0.18 — Beta. Stabilizacja Spiżarni: produkt ze stanem większym od zera lub nierozliczonymi opakowaniami kaucyjnymi nie może zostać usunięty. Kontrola działa w UI i w bazowej metodzie danych. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.18/edhome-beta.apk",
+  "sha256": "0ac7160757b566be364c7a96eb95290574fbf766a93677004256c190c0d9b56a"
 }
