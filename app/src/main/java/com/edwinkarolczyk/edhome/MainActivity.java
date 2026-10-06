@@ -9332,6 +9332,23 @@ public final class MainActivity extends Activity {
                     if("thing".equals(kind))showStorageThingDetails(id);
                     else showScannerStorageContents(kind,id,value);
                 } catch(Exception error) {
+                    if(id>0) {
+                        try {
+                            NfcLinkStore.clearTarget(
+                                db.getWritableDatabase(),kind,id);
+                            if("place".equals(kind))
+                                db.deletePlace(id);
+                            else
+                                StorageStore.remove(db.getWritableDatabase(),id);
+                            DiagnosticLog.event(
+                                "NFC_SCANNER_TARGET_CREATE_ROLLED_BACK",
+                                "kind="+kind+" id="+id);
+                        } catch(Exception cleanupError) {
+                            DiagnosticLog.error(
+                                "NFC_SCANNER_TARGET_CREATE_CLEANUP",
+                                cleanupError);
+                        }
+                    }
                     DiagnosticLog.error("NFC_SCANNER_TARGET_CREATE",error);
                     name.setError(error.getMessage()==null
                         ?"Nie udało się utworzyć obiektu.":error.getMessage());

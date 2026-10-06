@@ -68,4 +68,15 @@ for marker in (
     assert marker in main, "Scanner gallery routing missing: " + marker
 
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
+# Nieznany NFC -> nowy obiekt: jeśli przypisanie taga zawiedzie po utworzeniu,
+# świeży obiekt musi zostać cofnięty, aby nie zostawić sieroty w Magazynie/Miejscach.
+create_nfc=main.split("private void showScannerCreateNfcTarget(String uid,String kind)",1)[1].split(
+    "private java.util.List<StorageStore.Item> scannerStorageThings(",1)[0]
+assert 'if(id>0)' in create_nfc
+assert 'NfcLinkStore.clearTarget(' in create_nfc
+assert 'db.deletePlace(id);' in create_nfc
+assert 'StorageStore.remove(db.getWritableDatabase(),id);' in create_nfc
+assert 'NFC_SCANNER_TARGET_CREATE_ROLLED_BACK' in create_nfc
+assert create_nfc.index('NfcLinkStore.bind(') < create_nfc.index('NFC_SCANNER_TARGET_CREATE_ROLLED_BACK')
+
 print("Scanner recovery + central QR/NFC/product action routing: PASS")
