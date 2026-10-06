@@ -50,4 +50,14 @@ assert "long selectedPantryId, int quantity, int unitsPerScan" in scan
 assert "DB_VERSION = 45;" in backup
 assert '"units_per_scan"' in backup
 assert '"deposit_grosz", "deposit_pending"' in backup
+# Stabilizacja: produkt ze stanem lub nierozliczoną kaucją nie może zniknąć.
+delete_ui=main.split('else if ("Usuń produkt".equals(action))',1)[1].split(
+    'else if (details != null',1)[0]
+assert 'qty > 0 || pack.depositPending > 0' in delete_ui
+assert 'Najpierw ustaw stan na 0' in delete_ui
+delete_db=main.split('void deleteStock(long id)',1)[1].split('\n    }\n}',1)[0]
+assert 'SELECT p.qty,COALESCE(pp.deposit_pending,0)' in delete_db
+assert 'if (current.getInt(0) > 0 || current.getInt(1) > 0)' in delete_db
+assert 'Najpierw ustaw stan na 0 i rozlicz kaucję.' in delete_db
+
 print("Pantry multipack + deposit v39 contract: PASS")

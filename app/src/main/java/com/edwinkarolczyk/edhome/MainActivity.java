@@ -15284,14 +15284,26 @@ public final class MainActivity extends Activity {
                         alert("Najpierw zakończ lub anuluj remanent.");
                         return;
                     }
+                    if (qty > 0 || pack.depositPending > 0) {
+                        alert("Nie można usunąć produktu ze stanem lub "
+                            + "opakowaniami do zwrotu. Najpierw ustaw stan na 0 "
+                            + "i rozlicz kaucję.");
+                        return;
+                    }
                     new AlertDialog.Builder(this)
                         .setTitle("Usunąć produkt?")
                         .setMessage(name + " • " + qty + " opak.")
                         .setNegativeButton("Anuluj", null)
                         .setPositiveButton("Usuń", (d, w) -> {
-                            db.deleteStock(id);
-                            DiagnosticLog.event("PANTRY_PRODUCT_DELETED");
-                            render();
+                            try {
+                                db.deleteStock(id);
+                                DiagnosticLog.event("PANTRY_PRODUCT_DELETED");
+                                render();
+                            } catch (Exception problem) {
+                                alert(problem.getMessage() == null
+                                    ? "Nie usunięto produktu."
+                                    : problem.getMessage());
+                            }
                         }).show();
                 } else if (details != null && !details.imageUrl.isEmpty()) {
                     refreshPantryPhoto(details.imageUrl);
@@ -19875,10 +19887,21 @@ public final class MainActivity extends Activity {
 
         void deleteStock(long id) {
             if (openAuditId() != 0)
-                throw new IllegalStateException("An audit is open");
+                throw new IllegalStateException("Trwa remanent.");
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
             try {
+                try (Cursor current = database.rawQuery(
+                        "SELECT p.qty,COALESCE(pp.deposit_pending,0) "
+                            + "FROM pantry p LEFT JOIN pantry_packages pp "
+                            + "ON pp.pantry_id=p.id WHERE p.id=?",
+                        new String[]{Long.toString(id)})) {
+                    if (!current.moveToFirst())
+                        throw new IllegalArgumentException("Produkt nie istnieje.");
+                    if (current.getInt(0) > 0 || current.getInt(1) > 0)
+                        throw new IllegalStateException(
+                            "Najpierw ustaw stan na 0 i rozlicz kaucję.");
+                }
                 database.delete("pantry_barcodes", "pantry_id=?",
                     new String[]{Long.toString(id)});
                 database.delete("pantry_product_details", "pantry_id=?",
