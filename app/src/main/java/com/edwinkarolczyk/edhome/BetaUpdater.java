@@ -304,7 +304,19 @@ public final class BetaUpdater {
         }
         DiagnosticLog.event("UPDATE_AVAILABLE", "versionCode=" + code);
         // A changed digest must not reuse an APK downloaded for an old feed.
+        // Also cancel the previous DownloadManager job: otherwise an older APK
+        // can finish later and race with the corrected file using the same target.
         if (code == targetCode && !digest.equals(expectedHash)) {
+            if (activeDownload >= 0) {
+                try {
+                    DownloadManager manager = (DownloadManager)
+                        activity.getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (manager != null) manager.remove(activeDownload);
+                    DiagnosticLog.event("UPDATE_SUPERSEDED_DOWNLOAD_REMOVED");
+                } catch (Exception failure) {
+                    DiagnosticLog.error("UPDATE_SUPERSEDED_DOWNLOAD_REMOVE", failure);
+                }
+            }
             if (targetFile != null && targetFile.exists()) targetFile.delete();
             activeDownload = -1;
             targetCode = 0;
@@ -361,8 +373,20 @@ public final class BetaUpdater {
         }
         DownloadManager dm = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
         if (dm == null) return;
-        try (android.database.Cursor c = dm.query(new DownloadManager.Query().setFilterById(activeDownload))) {
-            if (c == null || !c.moveToFirst()) return;
+        try (android.database.Cursor c = dm.query(
+                new DownloadManager.Query().setFilterById(activeDownload))) {
+            if (c == null || !c.moveToFirst()) {
+                long missingId = activeDownload;
+                activeDownload = -1;
+                prefs.edit().remove("update_download_id").apply();
+                DiagnosticLog.event("UPDATE_DOWNLOAD_RECORD_MISSING",
+                    "id=" + missingId);
+                // The persisted DownloadManager id is stale (e.g. download
+                // history was cleared). Re-read the manifest and enqueue a
+                // fresh copy instead of waiting forever on a non-existent row.
+                check(manual);
+                return;
+            }
             int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
             if (status == DownloadManager.STATUS_SUCCESSFUL) {
                 activeDownload = -1;
