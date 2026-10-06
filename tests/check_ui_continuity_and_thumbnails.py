@@ -116,4 +116,7 @@ storage_screen=main.split("private void storage() {",1)[1].split(
 assert "static List<Item> listAll(SQLiteDatabase db)" in storage_store
 assert "StorageStore.listAll(db.getReadableDatabase())" in storage_screen
 assert 'SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id' not in storage_screen
-print("Storage performance: batch inventory load without N+1 queries PASS")
+assert "storage_items_kind_name_idx" in storage_store
+assert "storage_items_place_idx" in storage_store
+assert "StorageStore.ensurePerformanceIndexes(database);" in main
+print("Storage performance: batch inventory load + persistent indexes PASS")
