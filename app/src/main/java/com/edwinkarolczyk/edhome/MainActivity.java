@@ -373,7 +373,7 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("HOME_TILE_ART_BUNDLED_INSTALLED",
                     "count="+bundled);
             if(migrated>0||bundled>0){
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if(!isFinishing()&&!isDestroyed()&&("home".equals(screen)
                             ||"settings".equals(screen)))render();
                 });
@@ -389,7 +389,7 @@ public final class MainActivity extends Activity {
                         prefs.edit().putString("icon_style", "ai3d").commit();
                     DiagnosticLog.event("AI3D_BUNDLED_INSTALLED",
                         "count=100");
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if (!isFinishing() && !isDestroyed() && ("home".equals(screen)
                                 || "settings".equals(screen))) render();
                     });
@@ -398,6 +398,15 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("AI3D_BUNDLED_MISSING");
             }
         }, "edhome-bundled-3d-icons").start();
+    }
+
+    /** Post from background/NFC work only while this Activity can still own UI. */
+    private void runOnLiveUi(Runnable action) {
+        if (action == null) return;
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            action.run();
+        });
     }
 
     @Override protected void onStart() {
@@ -617,14 +626,14 @@ public final class MainActivity extends Activity {
         final String uid;
         try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
         catch(Exception error) {
-            runOnUiThread(() -> alert(error.getMessage()));
+            runOnLiveUi(() -> alert(error.getMessage()));
             return;
         }
         if(isRawNfcDuplicate(uid)) {
             DiagnosticLog.event("NFC_RAW_DUPLICATE_IGNORED");
             return;
         }
-        runOnUiThread(() -> {
+        runOnLiveUi(() -> {
             if("scanner".equals(screen)) {
                 scannerNfcStatus="✓ Odczytano NFC • "+NfcLinkStore.shortUid(uid);
                 DiagnosticLog.event("NFC_SCANNER_TAG_READ");
@@ -15727,7 +15736,7 @@ public final class MainActivity extends Activity {
             Exception failure = null;
             try {
                 report = PantryProductLookup.lookupDetailed(barcode,
-                    (catalogue, status) -> runOnUiThread(() -> {
+                    (catalogue, status) -> runOnLiveUi(() -> {
                         if (!cancelled.get() && loading.isShowing())
                             loading.setMessage("Przeszukuję katalogi Open Facts…\n"
                                 + catalogue + ": " + status);
@@ -15746,7 +15755,7 @@ public final class MainActivity extends Activity {
             }
             final PantryProductLookup.Report checked = report;
             final Exception problem = failure;
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 loading.dismiss();
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (problem != null || checked == null
@@ -15833,7 +15842,7 @@ public final class MainActivity extends Activity {
             Exception failure = null;
             try {
                 report = PantryProductLookup.searchByName(query,
-                    (catalogue, status) -> runOnUiThread(() -> {
+                    (catalogue, status) -> runOnLiveUi(() -> {
                         if (!cancelled.get() && loading.isShowing())
                             loading.setMessage(catalogue + ": " + status);
                     }));
@@ -15842,7 +15851,7 @@ public final class MainActivity extends Activity {
             }
             final PantryProductLookup.NameSearchReport checked = report;
             final Exception problem = failure;
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 loading.dismiss();
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (problem != null || checked == null) {
@@ -15908,7 +15917,7 @@ public final class MainActivity extends Activity {
                     PantryPackSuggestion.verified(candidate.unitsPerScan,
                         candidate.baseUnit, candidate.baseSizeMilli,
                         candidate.quantityLabel));
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 if (!isFinishing() && !isDestroyed())
                     showNewPantryProductDialog(scannedBarcode, operationId,
                         selected, sourceDetails + "\nDopasowano po nazwie; "
@@ -16027,7 +16036,7 @@ public final class MainActivity extends Activity {
             try {
                 byte[] data = PantryProductLookup.fetchImage(imageUrl);
                 PantryProductLookup.cache(this, imageUrl, data);
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if (!isFinishing() && !isDestroyed()) {
                         DiagnosticLog.event("PANTRY_OFF_PHOTO_CACHED");
                         if ("pantry".equals(screen)) render();
@@ -16035,7 +16044,7 @@ public final class MainActivity extends Activity {
                 });
             } catch (Exception problem) {
                 DiagnosticLog.error("PANTRY_OFF_PHOTO", problem);
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if (!isFinishing() && !isDestroyed())
                         alert("Nie udało się pobrać zdjęcia. Produkt nadal działa offline.");
                 });
@@ -16583,7 +16592,7 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.error("DESKTOP_QR_PAIR", error);
                 }
                 final String problem = failure;
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if (problem == null) {
                         DiagnosticLog.event("DESKTOP_QR_PAIRED");
                         alert("Połączono z EDHOME Desktop. Komputer pobiera dane z telefonu.");
@@ -16686,7 +16695,7 @@ public final class MainActivity extends Activity {
                 Thread.currentThread().interrupt();
             }
             final String report = buildPhoneLanDiagnosticsReport();
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 if (copyToClipboard) {
                     ClipboardManager clipboard = (ClipboardManager)
                         getSystemService(Context.CLIPBOARD_SERVICE);
@@ -16949,14 +16958,14 @@ public final class MainActivity extends Activity {
                     SuplaCacheStore.save(this, snapshot);
                     int count = snapshot.channels.length();
                     DiagnosticLog.event("SUPLA_SYNC_OK", "channels=" + count);
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         alert("Połączono z SUPLA Cloud. Pobrano kanały: " + count + ".");
                         render();
                     });
                 } catch (Exception error) {
                     DiagnosticLog.error("SUPLA_SYNC_FAILED", error);
                     String message = suplaErrorMessage(error);
-                    runOnUiThread(() -> alert("Nie udało się pobrać danych SUPLA:\n"
+                    runOnLiveUi(() -> alert("Nie udało się pobrać danych SUPLA:\n"
                         + message));
                 }
             }, "edhome-supla-read").start();
@@ -18066,7 +18075,7 @@ public final class MainActivity extends Activity {
                     try { TileCustomImage.importImage(this, tileId, chosen); }
                     catch (Exception problem) { failure = problem.getMessage(); }
                     final String error = failure;
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if (error != null) {
                             alert("Nie zapisano własnej ikony: " + error);
                             return;
@@ -18100,7 +18109,7 @@ public final class MainActivity extends Activity {
                         this,target,style,span,chosen);}
                     catch(Exception problem){failure=problem.getMessage();}
                     final String error=failure;
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if(error!=null){
                             alert("Nie zapisano grafiki kafelka: "+error);
                             return;
@@ -18129,7 +18138,7 @@ public final class MainActivity extends Activity {
                     catch (Exception invalid) { error = invalid.getMessage(); }
                     final int imported = count;
                     final String problem = error;
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if (imported == 100) {
                             prefs.edit().putString("icon_style", "ai3d")
                                 .putBoolean("icon_style_explicit", true).commit();

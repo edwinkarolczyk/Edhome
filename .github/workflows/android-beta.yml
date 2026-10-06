@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Android lifecycle: asynchroniczna instalacja i migracja grafik nie renderuje już zniszczonej Activity po obrocie, zamknięciu lub odtworzeniu ekranu. Bez nowych funkcji. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Android lifecycle: wszystkie callbacki z pracy w tle i NFC do głównego UI są blokowane po zniszczeniu Activity. Obejmuje m.in. QR/PDF, Desktop, diagnostykę LAN, SUPLA, Open Facts oraz import grafik. Bez nowych funkcji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
