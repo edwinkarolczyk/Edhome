@@ -8638,7 +8638,11 @@ public final class EdhomeDesktop extends JFrame {
         }
 
         String qrText() {
+            java.util.List<String> addresses = localAddresses();
+            String candidates = addresses.isEmpty()
+                ? host : String.join(",", addresses);
             return "edhome://desktop-pair?v=1&host=" + host
+                + "&hosts=" + candidates
                 + "&port=" + PAIR_PORT + "&nonce=" + nonce;
         }
 
