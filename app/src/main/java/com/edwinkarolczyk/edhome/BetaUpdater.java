@@ -63,6 +63,7 @@ public final class BetaUpdater {
         }
     };
     private boolean running;
+    private volatile boolean destroyed;
     private boolean checking;
     private boolean notifying;
     private boolean verifying;
@@ -154,7 +155,7 @@ public final class BetaUpdater {
     }
 
     public void start() {
-        if (running) return;
+        if (destroyed || running) return;
         running = true;
         handler.post(tick);
     }
@@ -164,7 +165,22 @@ public final class BetaUpdater {
         handler.removeCallbacks(tick);
     }
 
+    public void destroy() {
+        destroyed = true;
+        running = false;
+        handler.removeCallbacksAndMessages(null);
+        background.shutdownNow();
+    }
+
+    private void postUi(Runnable action) {
+        handler.post(() -> {
+            if (destroyed || activity.isFinishing() || activity.isDestroyed()) return;
+            action.run();
+        });
+    }
+
     public void check(boolean manual) {
+        if (destroyed) return;
         if (!isBeta()) {
             if (manual) openPlay();
             return;
@@ -189,7 +205,7 @@ public final class BetaUpdater {
             }
             JSONObject result = manifest;
             String failure = error;
-            handler.post(() -> {
+            postUi(() -> {
                 checking = false;
                 if (!running && !manual) return;
                 if (failure != null) {
@@ -364,6 +380,7 @@ public final class BetaUpdater {
     }
 
     private void inspectFile() {
+        if (destroyed) return;
         if (targetFile == null || !targetFile.exists() || verifying
                 || targetFile.equals(installerStartedFor)) return;
         verifying = true;
@@ -373,7 +390,7 @@ public final class BetaUpdater {
         background.execute(() -> {
             String rejection = verify(candidate, expected, requestedCode);
             boolean correct = rejection.isEmpty();
-            handler.post(() -> {
+            postUi(() -> {
                 verifying = false;
                 if (correct) {
                     if (candidate.equals(installerStartedFor)) return;
@@ -515,6 +532,7 @@ public final class BetaUpdater {
 
     /** Offline fallback for APK shared in chat or copied locally. Package signer is still checked. */
     public void importSelected(Uri picked) {
+        if (destroyed) return;
         if (!isBeta() || picked == null) return;
         File folder = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         if (folder == null) { inform("Brak miejsca na plik APK."); return; }
@@ -545,7 +563,7 @@ public final class BetaUpdater {
                 DiagnosticLog.error("UPDATE_LOCAL_IMPORT", failure);
             }
             boolean ok = copied;
-            handler.post(() -> {
+            postUi(() -> {
                 if (ok) inspectFile();
                 else {
                     candidate.delete();
@@ -581,7 +599,7 @@ public final class BetaUpdater {
     }
 
     private void inform(String message) {
-        if (activity.isFinishing() || (Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
+        if (destroyed || activity.isFinishing() || (Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
         new AlertDialog.Builder(activity).setMessage(message).setPositiveButton("OK", null).show();
     }
 }

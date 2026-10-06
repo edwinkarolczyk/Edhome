@@ -424,6 +424,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (updater != null) updater.destroy();
         disableNfcReaderMode();
         if (nfcAssignmentDialog != null) {
             nfcAssignmentDialog.dismiss();

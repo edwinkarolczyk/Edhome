@@ -21,10 +21,17 @@ for token in (
  "Cache-Control",
  "no-cache, no-store",
  "Pragma",
+ "public void destroy()",
+ "handler.removeCallbacksAndMessages(null);",
+ "background.shutdownNow();",
+ "if (destroyed || activity.isFinishing() || activity.isDestroyed()) return;",
 ):
  assert token in src, token
 assert src.count("check(false);")==1
 assert src.count("installerStartedFor = apk;")==1
+assert src.count("handler.post(() ->")==1
+assert src.count("postUi(() ->")>=3
+assert "if (updater != null) updater.destroy();" in main
 for token in (
     'QR Beta /\\nStable',
     'showUpdateDownloadQrCodes',
