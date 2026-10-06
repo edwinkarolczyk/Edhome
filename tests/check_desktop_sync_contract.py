@@ -43,6 +43,16 @@ assert 'String hostsText = uri.getQueryParameter("hosts");' in main
 assert 'for (String target : targets)' in main
 assert 'DESKTOP_QR_PAIR_TARGET' in main
 assert 'connection.setConnectTimeout(2200)' in main
+assert 'InetAddress.getByName("0.0.0.0"), PAIR_PORT' in desktop
+assert 'QR_PAIRING_LISTENING' in desktop
+assert 'QR_PAIRING_PEER' in desktop
+assert 'QR_PAIRING_ACCEPTED' in desktop
+assert 'QR_PAIRING_REJECTED' in desktop
+assert 'QR_PAIRING_TIMEOUT' in desktop
+assert 'DESKTOP_QR_PAIR_BEGIN' in main
+assert 'DESKTOP_QR_PAIR_ATTEMPT' in main
+assert 'DESKTOP_QR_PAIR_TARGET_FAILED' in main
+assert 'LanSyncService.ensureStarted(this);' in main
 
 manifest = (root / "app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
 assert 'android:usesCleartextTraffic="true"' in manifest
@@ -406,7 +416,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.95"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.96"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
