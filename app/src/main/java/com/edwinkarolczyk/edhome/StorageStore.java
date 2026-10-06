@@ -3,6 +3,7 @@ package com.edwinkarolczyk.edhome;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,6 +52,24 @@ final class StorageStore {
                     c.isNull(3)?null:c.getLong(3),
                     c.isNull(4)?null:c.getLong(4),c.getString(5)) : null;
         }
+    }
+
+    /**
+     * Zbiorczy odczyt do ekranów list/galerii. Nie wykonuj StorageStore.find()
+     * w pętli renderującej — przy setkach rzeczy tworzyłoby to N+1 zapytań SQLite.
+     */
+    static List<Item> listAll(SQLiteDatabase db) {
+        List<Item> items=new ArrayList<>();
+        try (Cursor c=db.rawQuery(
+                "SELECT id,name,kind,parent_box_id,place_id,lent_to "
+                    + "FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext())
+                items.add(new Item(c.getLong(0),c.getString(1),c.getString(2),
+                    c.isNull(3)?null:c.getLong(3),
+                    c.isNull(4)?null:c.getLong(4),c.getString(5)));
+        }
+        return items;
     }
 
     private static String validName(String name) {
