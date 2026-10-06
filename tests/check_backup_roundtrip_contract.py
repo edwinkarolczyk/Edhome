@@ -102,6 +102,8 @@ for token in (
     '"media/storage-originals/"',
     '"media/storage-thumbnails/"',
     'digestEntry(zip, entry)',
+    'verifiedPayloadBytes += digest.size',
+    'verifiedPayloadBytes > MAX_EXTRACTED_BYTES',
     'readArchivedThumbnails(archive, inspection.paths)',
     'DataBackup.restoreJson(database, prefs, inspection.json,',
 ):
