@@ -274,13 +274,13 @@ for marker in ('transferId()', 'clearIfTransferred(String expectedId)',
 # Current approved UX: one button saves Desktop diagnostics and only new
 # phone diagnostics to the Windows Desktop. The phone log is acknowledged
 # (and removed on Android) only after the PC file was written successfully.
-for marker in ('Pobierz logi telefonu + Desktop na Pulpit',
-               'saveAllDiagnosticsToDesktop',
-               'downloadPhoneDiagnostics',
-               'ackDiagnostics', 'X-EDHOME-DIAGNOSTICS-ID',
-               'Brak nowych logów diagnostycznych na telefonie',
-               'Log telefonu po udanym zapisie został usunięty z aplikacji.'):
-    assert marker in desktop, "Missing Desktop diagnostics UX: " + marker
+for marker in ('Zapisz diagnostykę Desktop na Pulpit',
+               'desktopDiagnosticsText()',
+               'diagnosticsDesktopFolder()',
+               'EDHOME-Desktop-diagnostyka-',
+               'Hub API:',
+               'Telefon Hub:'):
+    assert marker in desktop, "Missing Desktop Hub diagnostics UX: " + marker
 for marker in ('edhome-desktop.log', 'edhome-desktop.previous.log',
                'MAX_BYTES', 'readFullText()', 'readForClipboard()'):
     assert marker in desktop_log, "Missing Desktop rolling diagnostics log: " + marker
@@ -315,20 +315,17 @@ assert persist_idx - add_idx < 500, "Persistence must happen immediately after i
 print("desktop new-record local persistence contract OK")
 
 
-# Desktop settings: one click must export Desktop + Android diagnostics directly to Windows Desktop.
+# Desktop Hub settings: diagnostics are local to the Hub. Phone-side logs remain
+# available in Android diagnostics, while Desktop writes its own report to Windows Desktop.
 for marker in (
-    'Pobierz logi telefonu + Desktop na Pulpit',
-    'saveAllDiagnosticsToDesktop(',
+    'Zapisz diagnostykę Desktop na Pulpit',
     'diagnosticsDesktopFolder()',
-    'EDHOME-Desktop-diagnostyka-',
-    'EDHOME-Android-diagnostyka-',
-    'PHONE_DIAGNOSTICS_CLEARED'
+    'desktopDiagnosticsText()',
+    'HUB_API_STARTED',
+    'HUB_API_LISTENING'
 ):
-    assert marker in desktop, "Missing one-click diagnostics export contract: " + marker
-assert 'downloadAllLogs.addActionListener' in desktop
-assert 'Files.writeString(desktopTarget, desktopDiagnosticsText()' in desktop
-assert 'Files.writeString(phoneTarget, phone.text' in desktop
-print("desktop one-click diagnostics export contract OK")
+    assert marker in desktop + hub_server, "Missing Hub diagnostics contract: " + marker
+print("desktop hub diagnostics export contract OK")
 
 # Sync rejection diagnostics: preserve phone validation reason and stop retry loops.
 assert 'DESKTOP_SYNC_PATCH_REJECTED' in server
@@ -416,7 +413,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.96"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.97"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
