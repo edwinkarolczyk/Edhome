@@ -126,6 +126,7 @@ public final class MainActivity extends Activity {
     private String pendingStorageScannerKind;
     private AlertDialog storageScannerOperationDialog;
     private AlertDialog quickStorageSetupDialog;
+    private AlertDialog dataBackupBusyDialog;
     private TextView quickStorageSetupStatus;
     private String quickStorageSetupKind;
     private long quickStorageSetupId;
@@ -433,6 +434,10 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if(dataBackupBusyDialog!=null) {
+            dataBackupBusyDialog.dismiss();
+            dataBackupBusyDialog=null;
+        }
         if (updater != null) updater.destroy();
         disableNfcReaderMode();
         if (nfcAssignmentDialog != null) {
@@ -17609,6 +17614,8 @@ public final class MainActivity extends Activity {
 
 
     private void exportDataBackupAsync(Uri destination) {
+        showDataBackupBusy("Tworzenie kopii",
+            "EDHOME zapisuje i sprawdza kopię ZIP. Możesz bezpiecznie poczekać na wynik.");
         DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=export");
         new Thread(() -> {
             DataBackupArchive.Created created=null;
@@ -17645,11 +17652,16 @@ public final class MainActivity extends Activity {
                 if(created!=null&&created.file!=null)created.file.delete();
             }
             final String message=outcome;
-            runOnLiveUi(() -> alert(message));
+            runOnLiveUi(() -> {
+                hideDataBackupBusy();
+                alert(message);
+            });
         },"edhome-backup-export").start();
     }
 
     private void prepareDataBackupImportAsync(Uri source) {
+        showDataBackupBusy("Sprawdzanie kopii",
+            "EDHOME odczytuje plik i sprawdza format przed przywróceniem.");
         DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=prepare_restore");
         new Thread(() -> {
             java.io.File localCopy=null;
@@ -17665,14 +17677,17 @@ public final class MainActivity extends Activity {
                         backupFile.delete();
                         return;
                     }
+                    hideDataBackupBusy();
                     showDataBackupRestoreConfirmation(
                         backupFile,archive,legacyJson);
                 });
             } catch(Exception error) {
                 if(localCopy!=null)localCopy.delete();
                 DiagnosticLog.error("DATA_BACKUP_READ",error);
-                runOnLiveUi(() -> alert(
-                    "Nie można odczytać lub zweryfikować kopii danych."));
+                runOnLiveUi(() -> {
+                    hideDataBackupBusy();
+                    alert("Nie można odczytać lub zweryfikować kopii danych.");
+                });
             }
         },"edhome-backup-prepare").start();
     }
@@ -17688,8 +17703,11 @@ public final class MainActivity extends Activity {
                     +"Oryginalnych zdjęć nie ma w tym starszym formacie.")
             .setCancelable(false)
             .setNegativeButton("Anuluj",(dialog,which)->backupFile.delete())
-            .setPositiveButton("Przywróć",(dialog,which)->
-                restoreDataBackupAsync(backupFile,archive,legacyJson))
+            .setPositiveButton("Przywróć",(dialog,which)->{
+                showDataBackupBusy("Przywracanie kopii",
+                    "Nie edytuj danych do zakończenia przywracania.");
+                restoreDataBackupAsync(backupFile,archive,legacyJson);
+            })
             .show();
     }
 
@@ -17722,6 +17740,7 @@ public final class MainActivity extends Activity {
                     ?"DATA_BACKUP_ZIP_RESTORED":"DATA_BACKUP_RESTORED");
                 final DataBackupArchive.Restored restoredResult=restored;
                 runOnLiveUi(() -> {
+                    hideDataBackupBusy();
                     screen="home";
                     unlocked=BetaUpdater.isBeta();
                     render();
@@ -17738,13 +17757,35 @@ public final class MainActivity extends Activity {
                 });
             } catch(Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_RESTORE",error);
-                runOnLiveUi(() -> alert(
-                    "Nie udało się przywrócić kopii. "
-                    +"Uszkodzony ZIP lub niespójne dane zostały odrzucone."));
+                runOnLiveUi(() -> {
+                    hideDataBackupBusy();
+                    alert("Nie udało się przywrócić kopii. "
+                        +"Uszkodzony ZIP lub niespójne dane zostały odrzucone.");
+                });
             } finally {
                 backupFile.delete();
             }
         },"edhome-backup-restore").start();
+    }
+
+    private void showDataBackupBusy(String title,String message) {
+        if(dataBackupBusyDialog!=null) {
+            dataBackupBusyDialog.dismiss();
+            dataBackupBusyDialog=null;
+        }
+        dataBackupBusyDialog=new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setCancelable(false)
+            .create();
+        dataBackupBusyDialog.setCanceledOnTouchOutside(false);
+        dataBackupBusyDialog.show();
+    }
+
+    private void hideDataBackupBusy() {
+        if(dataBackupBusyDialog==null)return;
+        dataBackupBusyDialog.dismiss();
+        dataBackupBusyDialog=null;
     }
 
     private void backup() {
