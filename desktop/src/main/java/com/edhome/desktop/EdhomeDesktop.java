@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.95";
+    private static final String DESKTOP_VERSION = "0.7.0.96";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -8669,8 +8669,13 @@ public final class EdhomeDesktop extends JFrame {
 
             ServerSocket server = new ServerSocket();
             server.setReuseAddress(true);
-            server.bind(new InetSocketAddress(PAIR_PORT), 4);
+            // QR zawiera wyłącznie IPv4, więc słuchamy jawnie na 0.0.0.0.
+            // Unikamy zależności od domyślnego dual-stack/JVM na Windows.
+            server.bind(new InetSocketAddress(
+                InetAddress.getByName("0.0.0.0"), PAIR_PORT), 8);
             server.setSoTimeout(180000);
+            DesktopDiagnosticLog.event("QR_PAIRING_LISTENING",
+                "port=" + PAIR_PORT + " hosts=" + String.join(",", localAddresses()));
 
             QrPairingSession session =
                 new QrPairingSession(server, host, nonce, callback);
@@ -8696,9 +8701,13 @@ public final class EdhomeDesktop extends JFrame {
                     try (Socket peer = server.accept()) {
                         if (handle(peer)) return;
                     } catch (SocketTimeoutException timeout) {
+                        DesktopDiagnosticLog.event("QR_PAIRING_TIMEOUT");
                         return;
                     } catch (IOException error) {
-                        if (!closed) continue;
+                        if (!closed) {
+                            DesktopDiagnosticLog.error("QR_PAIRING_ACCEPT", error);
+                            continue;
+                        }
                         return;
                     }
                 }
@@ -8710,9 +8719,14 @@ public final class EdhomeDesktop extends JFrame {
         private boolean handle(Socket peer) throws IOException {
             peer.setSoTimeout(7000);
             InetAddress remote = peer.getInetAddress();
+            String remoteText = remote == null ? "brak" : remote.getHostAddress();
+            DesktopDiagnosticLog.event("QR_PAIRING_PEER",
+                "remote=" + remoteText);
             if (remote == null
                     || (!(remote instanceof Inet4Address))
                     || (!remote.isSiteLocalAddress() && !remote.isLoopbackAddress())) {
+                DesktopDiagnosticLog.event("QR_PAIRING_REJECTED",
+                    "reason=LAN_ONLY remote=" + remoteText);
                 reply(peer, 403, "{\"error\":\"LAN_ONLY\"}");
                 return false;
             }
@@ -8746,6 +8760,8 @@ public final class EdhomeDesktop extends JFrame {
             }
 
             if (!constantTimeEquals(nonce, suppliedNonce)) {
+                DesktopDiagnosticLog.event("QR_PAIRING_REJECTED",
+                    "reason=PAIR_NONCE remote=" + remoteText);
                 reply(peer, 401, "{\"error\":\"PAIR_NONCE\"}");
                 return false;
             }
@@ -8778,11 +8794,15 @@ public final class EdhomeDesktop extends JFrame {
             }
             if (!token.matches("[A-Za-z0-9_-]{10,128}")
                     || !version.matches("[A-Za-z0-9._-]{1,64}")) {
+                DesktopDiagnosticLog.event("QR_PAIRING_REJECTED",
+                    "reason=PAIR_DATA remote=" + remoteText);
                 reply(peer, 400, "{\"error\":\"PAIR_DATA\"}");
                 return false;
             }
 
             String phoneIp = remote.getHostAddress();
+            DesktopDiagnosticLog.event("QR_PAIRING_ACCEPTED",
+                "remote=" + phoneIp + " android=" + version);
             reply(peer, 200, "{\"ok\":true}");
             callback.accept(new PairPayload(phoneIp, token, version));
             return true;
