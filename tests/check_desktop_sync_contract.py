@@ -193,6 +193,19 @@ assert 'connected = false;' in desktop
 assert 'SwingUtilities.invokeLater(() -> autoConnectSaved(true))' in desktop
 print("desktop DHCP reconnect contract OK")
 
+# Dirty local edits must also recover after phone DHCP/IP changes.
+# The Desktop may not clear dirty state or require a fresh QR just because the
+# previously paired phone address stopped responding.
+for marker in (
+    'SYNC_PUSH_PHONE_REDISCOVERED',
+    'String discovered = LanClient.discover(secret, PORT);',
+    'PREFS.put("phoneIp", discovered);',
+    'client = new LanClient(discovered, PORT, secret);',
+    'client.state();'
+):
+    assert marker in desktop, "Missing dirty-push DHCP recovery: " + marker
+print("desktop dirty-push DHCP recovery contract OK")
+
 # Phone LAN self-tests must never impersonate a real Desktop client.
 assert 'isThisDeviceAddress(InetAddress remote)' in server
 assert 'remote.isLoopbackAddress()' in server
@@ -366,7 +379,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.90"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.91"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
