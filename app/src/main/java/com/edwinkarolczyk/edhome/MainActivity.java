@@ -17013,8 +17013,8 @@ public final class MainActivity extends Activity {
                     new java.util.ArrayList<>(pairHosts));
                 DiagnosticLog.event("DESKTOP_HUB_QR_PAIRED",
                     "desktop="+desktopId);
-                alert("Połączono z API EDHOME Desktop. "
-                    +"Telefon działa jako klient i synchronizuje dane w tle.");
+                alert("QR Desktopu zapisany. Sprawdzam teraz połączenie z API. "
+                    +"Stan zobaczysz w Desktop / Wi‑Fi.");
                 render();
                 return;
             }
@@ -17960,8 +17960,22 @@ public final class MainActivity extends Activity {
         if(DiagnosticLog.enabled()){
             smallButton(data,"Kopiuj logi diagnostyczne",
                 this::copyDiagnosticLogsFromSettings);
-            smallButton(data,"Kopiuj diagnostykę telefonu",
-                ()->runPhoneLanDiagnostics(true));
+            smallButton(data,"Kopiuj diagnostykę połączenia Desktop",()->{
+                new Thread(()->{
+                    final String report=DesktopHubSync.diagnostics(this);
+                    runOnLiveUi(()->{
+                        ClipboardManager clipboard=(ClipboardManager)
+                            getSystemService(Context.CLIPBOARD_SERVICE);
+                        if(clipboard!=null) {
+                            clipboard.setPrimaryClip(ClipData.newPlainText(
+                                "EDHOME diagnostyka Desktop Hub",report));
+                            DiagnosticLog.event("HUB_DIAGNOSTICS_COPIED");
+                            alert("Skopiowano diagnostykę połączenia Desktop. "
+                                +"Wklej ją do czatu.");
+                        } else alert("Schowek jest niedostępny.");
+                    });
+                },"edhome-hub-diagnostics").start();
+            });
             smallButton(data,"Otwórz pełną diagnostykę BETA",
                 ()->go("diagnostics"));
         }
