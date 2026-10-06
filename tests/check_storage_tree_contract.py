@@ -29,7 +29,8 @@ assert 'StorageStore.remove(db.getWritableDatabase(),item.id)' in ui
 assert 'StorageStore.returned(db.getWritableDatabase(),item.id)' in ui
 assert 'showStorageQr(item)' in ui
 assert 'storageEditor(item.kind,item.id)' in ui
-assert 'SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id' in ui
+assert 'StorageStore.listAll(db.getReadableDatabase())' in ui
+assert 'SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id' not in ui
 assert 'box.addView(text(("box".equals(item.kind)?' not in ui
 assert 'STORAGE_SHOW_THINGS_PREF = "storage_show_things"' in s
 assert 'STORAGE_SHOW_BOXES_PREF = "storage_show_boxes"' in s
