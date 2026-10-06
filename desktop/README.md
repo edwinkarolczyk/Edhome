@@ -37,9 +37,9 @@ Funkcja może mieć inną formę na PC i telefonie, jeżeli rezultat danych i re
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.7.0.96
+## Aktualny stan Desktop — 0.7.0.97
 
-Ustawienia Desktop są celowo uproszczone do trzech codziennych operacji: połączenie telefonu przez QR, sprawdzenie połączenia PC ↔ telefon oraz pobranie logów telefonu + Desktop na Pulpit. Dane adresu i token parowania pozostają zapisane wewnętrznie; użytkownik nie musi ich ręcznie edytować. Automatyczna synchronizacja w obie strony pozostaje aktywna. Przy pierwszym parowaniu QR na Windows Desktop może jednorazowo poprosić o zgodę UAC i dodać regułę TCP 45824 ograniczoną do lokalnej podsieci; listener parowania nasłuchuje na lokalnych interfejsach, aby poprawnie działać także przy kilku kartach sieciowych.
+Ustawienia Desktop są uproszczone do obsługi lokalnego Huba/API: połączenie telefonu przez QR, stan API, aktualizacja Desktop, diagnostyka Desktop i backup. Desktop słucha lokalnie na TCP 45823, a wykrywanie po zmianie adresu IP używa UDP 45822; telefon jest klientem API. PC może być podłączony kablem LAN, a telefon przez Wi‑Fi. Pierwsze parowanie zapisuje trwałe ID Desktopu i token, więc po zmianie IP telefon odnajduje ten sam komputer bez ponownego QR. Przy pierwszym połączeniu wykonywana jest kopia bezpieczeństwa przed scaleniem danych.
 
 Aktualna linia Desktop obsługuje:
 - QR parowania nasłuchuje jawnie po IPv4 na wszystkich lokalnych interfejsach i zapisuje diagnostykę LISTENING/PEER/ACCEPTED/REJECTED/TIMEOUT,
