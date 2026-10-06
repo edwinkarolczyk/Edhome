@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja kopii: restore v44 → v45, bezpieczne pełne pojednanie LAN/Desktop po cofnięciu danych oraz odzyskiwanie .bak/.tmp po przerwanym zapisie oryginalnego zdjęcia. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja backupu i aktualizacji: restore v44 → v45, odzyskiwanie zdjęć po przerwanym zapisie, pełne pojednanie Desktop po restore oraz naprawa zagubionych i zastąpionych pobrań aktualizacji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
