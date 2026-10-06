@@ -43,6 +43,8 @@ final class DesktopHubServer implements AutoCloseable {
         String bootstrap(String incoming,ClientInfo client) throws Exception;
         String patch(String incoming,ClientInfo client,boolean phoneWins)
             throws Exception;
+        String replace(String incoming,String baseSha,ClientInfo client)
+            throws Exception;
         long revision() throws Exception;
         boolean initialized();
         void registered(ClientInfo client);
@@ -173,6 +175,7 @@ final class DesktopHubServer implements AutoCloseable {
             String userId="";
             String userName="";
             String androidVersion="";
+            String baseSha="";
             int headerBytes=request.length();
             for(String line;(line=in.readLine())!=null&&!line.isEmpty();) {
                 headerBytes+=line.length();
@@ -189,6 +192,7 @@ final class DesktopHubServer implements AutoCloseable {
                 else if("x-edhome-user-id".equals(name))userId=value;
                 else if("x-edhome-user-name".equals(name))userName=value;
                 else if("x-edhome-android-version".equals(name))androidVersion=value;
+                else if("x-edhome-base-sha256".equals(name))baseSha=value;
             }
             if(!constantTimeEquals(token,supplied)) {
                 reply(peer,401,"{\"error\":\"PAIRING_REQUIRED\"}",null);
@@ -203,6 +207,14 @@ final class DesktopHubServer implements AutoCloseable {
                 clean(userName,120),clean(androidVersion,64),
                 remote.getHostAddress(),System.currentTimeMillis());
             if(!client.deviceId.isBlank()) {
+                ClientInfo previous=clients.get(client.deviceId);
+                if(previous!=null) {
+                    client=new ClientInfo(client.deviceId,
+                        client.userId.isBlank()?previous.userId:client.userId,
+                        client.userName.isBlank()?previous.userName:client.userName,
+                        client.version.isBlank()?previous.version:client.version,
+                        client.address,client.seenAt);
+                }
                 clients.put(client.deviceId,client);
                 host.registered(client);
             }
@@ -254,6 +266,20 @@ final class DesktopHubServer implements AutoCloseable {
             if("GET".equals(method)&&"/snapshot".equals(path)) {
                 String snapshot=host.snapshot();
                 reply(peer,200,snapshot,sha256(snapshot));
+                return;
+            }
+            if("POST".equals(method)&&"/snapshot".equals(path)) {
+                try {
+                    String snapshot=host.replace(body,baseSha,client);
+                    reply(peer,200,snapshot,sha256(snapshot));
+                } catch(Conflict conflict) {
+                    JsonObject error=new JsonObject();
+                    error.addProperty("error","CONFLICT");
+                    error.addProperty("table",conflict.table);
+                    error.addProperty("rowKey",conflict.rowKey);
+                    error.addProperty("message",conflict.getMessage());
+                    reply(peer,409,error.toString(),null);
+                }
                 return;
             }
             if("POST".equals(method)&&"/bootstrap".equals(path)) {
