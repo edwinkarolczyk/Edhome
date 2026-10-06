@@ -359,7 +359,7 @@ for table, fields in table_defs:
     assert columns == [col[0] for col in expected[table]], (
         "Backup columns do not match SQL schema: " + table)
 assert "database.beginTransaction();" in backup and "database.setTransactionSuccessful();" in backup
-for accepted in range(2,44):
+for accepted in range(2,45):
     assert ("inputVersion != "+str(accepted)) in backup
 assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
