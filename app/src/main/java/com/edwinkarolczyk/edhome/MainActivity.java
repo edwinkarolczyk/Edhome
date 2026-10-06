@@ -301,6 +301,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedState);
         DiagnosticLog.init(this);
         prefs = getSharedPreferences("edhome_beta_prefs", MODE_PRIVATE);
+        StorageThumbs.configure(this);
         ensureFloorPlanShellTileSeeded();
         ensureScannerTileSeeded();
         ensureStorageShortcutTilesSeeded();
@@ -421,6 +422,12 @@ public final class MainActivity extends Activity {
                 registerReceiver(desktopDataChangedReceiver, filter);
             desktopDataReceiverRegistered = true;
         }
+    }
+
+    @Override public void onTrimMemory(int level) {
+        StorageThumbs.trimMemory(level);
+        DiagnosticLog.event("MEMORY_TRIM","level="+level);
+        super.onTrimMemory(level);
     }
 
     @Override protected void onDestroy() {
