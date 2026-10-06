@@ -18785,6 +18785,13 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("DATABASE_CREATED");
         }
 
+        @Override public void onOpen(SQLiteDatabase database) {
+            super.onOpen(database);
+            // Indeksy wydajnościowe nie zmieniają modelu danych, więc można je
+            // bezpiecznie dołożyć także istniejącym bazom v45 bez migracji schematu.
+            StorageStore.ensurePerformanceIndexes(database);
+        }
+
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
             if (oldVersion < 1 || newVersion > 45) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
