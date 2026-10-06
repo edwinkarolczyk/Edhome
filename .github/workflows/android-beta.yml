@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta RC. Projekty: licznik Start/Stop odlicza czas na żywo; zielony oznacza pracę w planie, czerwony aktywne przekroczenie, żółty przekroczenie po zatrzymaniu. Zachowane LAN, backup/restore i Low RAM. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta RC. Projekty: Start bezpośrednio z przypomnienia, trwałe powiadomienie aktywnej pracy z systemowym chronometrem oraz Stop z powiadomienia. Aktywnego timera nie można zwykłym przesunięciem zamknąć; po Stop powiadomienie staje się zwykłe. Zachowane zielony/żółty/czerwony licznik, LAN, backup/restore i Low RAM. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
