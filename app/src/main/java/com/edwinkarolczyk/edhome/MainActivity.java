@@ -374,7 +374,7 @@ public final class MainActivity extends Activity {
                     "count="+bundled);
             if(migrated>0||bundled>0){
                 runOnUiThread(() -> {
-                    if(!isFinishing()&&("home".equals(screen)
+                    if(!isFinishing()&&!isDestroyed()&&("home".equals(screen)
                             ||"settings".equals(screen)))render();
                 });
             }
@@ -390,7 +390,7 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event("AI3D_BUNDLED_INSTALLED",
                         "count=100");
                     runOnUiThread(() -> {
-                        if (!isFinishing() && ("home".equals(screen)
+                        if (!isFinishing() && !isDestroyed() && ("home".equals(screen)
                                 || "settings".equals(screen))) render();
                     });
                 }

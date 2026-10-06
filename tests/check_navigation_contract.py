@@ -58,6 +58,10 @@ assert 'go("home")' not in back
 assert main.count("this::goHome") >= 3
 assert 'go("home")' not in main
 
+# Asynchroniczna instalacja/migracja grafik nie może renderować zniszczonej Activity.
+assert 'if(!isFinishing()&&!isDestroyed()&&("home".equals(screen)' in main
+assert 'if (!isFinishing() && !isDestroyed() && ("home".equals(screen)' in main
+
 # Start/Stop pracy nad czynnością nadal istnieją i nie są nawigacją.
 assert "ProjectStore.startWork" in main
 assert "ProjectStore.stopWork" in main
