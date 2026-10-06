@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 212,
-  "versionName": "0.8.0.20",
-  "changelog": "EDHOME 0.8.0.20 — Beta. Stabilizacja Pojazdów: przypomnienia OC i przeglądu ujednolicone na 08:00. Daty, wyprzedzenia i pozostałe dane pojazdów bez zmian. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.20/edhome-beta.apk",
-  "sha256": "dda23f4a586cc4cf297bd4af8f3f844c32d618c10b7acf6b0a3a7418cfda7cb9"
+  "versionCode": 213,
+  "versionName": "0.8.0.21",
+  "changelog": "EDHOME 0.8.0.21 — Beta. Stabilizacja LAN Android ↔ Desktop: jeden QR zawiera wszystkie lokalne adresy IPv4 PC, a Android automatycznie próbuje je kolejno. Lepsze parowanie przy wielu kartach sieciowych; main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.21/edhome-beta.apk",
+  "sha256": "55189f49defb82c8cbc3f77a9eee849344b101f8e7f8cd2f156e45eb7aafd6ba"
 }
