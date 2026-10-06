@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 205,
-  "versionName": "0.8.0.13",
-  "changelog": "EDHOME 0.8.0.13 — Beta. Korekta stabilizacji Magazynu: przywrócono usuwanie pustego Miejsca. Nadal zablokowane jest usuwanie Miejsca z podmiejscami, rzeczami/pudełkami lub kompletami opon; QR nie jest ponownie przydzielany. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.13/edhome-beta.apk",
-  "sha256": "048ab0d39f64f48e63403841b4dc051f67f1f977910f7efcd2a07012d8b4d85b"
+  "versionCode": 206,
+  "versionName": "0.8.0.14",
+  "changelog": "EDHOME 0.8.0.14 — Beta. Stabilizacja Miejsc: puste Miejsce nadal można usunąć. Gdy usunięcie jest zablokowane przez podmiejsca, rzeczy/pudełka lub opony, EDHOME proponuje bezpieczne przeniesienie całego Miejsca do innego miejsca nadrzędnego bez przepisywania zawartości i historii. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.14/edhome-beta.apk",
+  "sha256": "ffdb071d4fbebd54d956d04fd14568895707be874f26208b46c226ebea1c5f5e"
 }
