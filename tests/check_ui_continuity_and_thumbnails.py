@@ -97,3 +97,11 @@ assert 'countViewTree(root,4000)' in main
 assert 'renderMs>=40L' in main
 assert 'now-lastRenderPerfLogAt>=30000L' in main
 print("Performance diagnostics: render/heap/view-count/Low-RAM telemetry PASS")
+
+
+# Low RAM ogranicza koszt animatorów pulpitu, ale zachowuje ten sam układ docelowy.
+assert 'if(StorageThumbs.isLowRamDevice()) {' in main
+assert 'tiles.setTranslationX(0f);' in main
+assert 'tile.setTranslationX(target[0] - old[0]);' in main
+assert 'tile.setTranslationY(target[1] - old[1]);' in main
+print("Low RAM: reduced home animations PASS")
