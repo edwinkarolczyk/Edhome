@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.94";
+    private static final String DESKTOP_VERSION = "0.7.0.95";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -242,6 +242,10 @@ public final class EdhomeDesktop extends JFrame {
         int initialHeight = Math.max(680, Math.min(940, usableScreen.height - 16));
         setSize(initialWidth, initialHeight);
         setLocationRelativeTo(null);
+        // Desktop ma od razu wykorzystywać cały dostępny pulpit Windows.
+        // Zostawiamy ramkę systemową, pasek zadań i standardowe przyciski okna.
+        setExtendedState(getExtendedState() | Frame.MAXIMIZED_BOTH);
+        DesktopDiagnosticLog.event("WINDOW_MAXIMIZED_START");
 
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override public void windowClosing(java.awt.event.WindowEvent e) {
