@@ -16600,6 +16600,7 @@ public final class MainActivity extends Activity {
                 throw new IllegalArgumentException("Nieprawidłowy QR EDHOME Desktop.");
 
             String host = uri.getQueryParameter("host");
+            String hostsText = uri.getQueryParameter("hosts");
             String portText = uri.getQueryParameter("port");
             String nonce = uri.getQueryParameter("nonce");
             int port = Integer.parseInt(portText == null ? "" : portText);
@@ -16611,7 +16612,17 @@ public final class MainActivity extends Activity {
                 throw new IllegalArgumentException(
                     "QR nie wskazuje komputera w lokalnej sieci Wi‑Fi/LAN.");
 
-            final String target = host;
+            java.util.LinkedHashSet<String> pairHosts = new java.util.LinkedHashSet<>();
+            pairHosts.add(host);
+            if (hostsText != null && hostsText.length() <= 256) {
+                for (String candidate : hostsText.split(",")) {
+                    candidate = candidate.trim();
+                    if (isPrivateLanIpv4(candidate)) pairHosts.add(candidate);
+                }
+            }
+
+            final java.util.ArrayList<String> targets =
+                new java.util.ArrayList<>(pairHosts);
             final String pairNonce = nonce;
             new Thread(() -> {
                 String failure = null;
@@ -16622,29 +16633,47 @@ public final class MainActivity extends Activity {
                     String body = "token=" + token + "\nversion="
                         + BuildConfig.VERSION_NAME + "\n";
                     byte[] bytes = body.getBytes(StandardCharsets.US_ASCII);
-                    java.net.HttpURLConnection connection =
-                        (java.net.HttpURLConnection) new java.net.URL(
-                            "http://" + target + ":45824/pair").openConnection();
-                    try {
-                        connection.setConnectTimeout(4000);
-                        connection.setReadTimeout(6000);
-                        connection.setRequestMethod("POST");
-                        connection.setDoOutput(true);
-                        connection.setUseCaches(false);
-                        connection.setRequestProperty("Content-Type",
-                            "text/plain; charset=us-ascii");
-                        connection.setRequestProperty("X-EDHOME-NONCE", pairNonce);
-                        connection.setFixedLengthStreamingMode(bytes.length);
-                        try (OutputStream out = connection.getOutputStream()) {
-                            out.write(bytes);
-                            out.flush();
+                    Exception lastError = null;
+                    boolean paired = false;
+                    String pairedTarget = "";
+                    for (String target : targets) {
+                        java.net.HttpURLConnection connection = null;
+                        try {
+                            connection = (java.net.HttpURLConnection) new java.net.URL(
+                                "http://" + target + ":45824/pair").openConnection();
+                            connection.setConnectTimeout(2200);
+                            connection.setReadTimeout(4500);
+                            connection.setRequestMethod("POST");
+                            connection.setDoOutput(true);
+                            connection.setUseCaches(false);
+                            connection.setRequestProperty("Content-Type",
+                                "text/plain; charset=us-ascii");
+                            connection.setRequestProperty("X-EDHOME-NONCE", pairNonce);
+                            connection.setFixedLengthStreamingMode(bytes.length);
+                            try (OutputStream out = connection.getOutputStream()) {
+                                out.write(bytes);
+                                out.flush();
+                            }
+                            int code = connection.getResponseCode();
+                            if (code != 200)
+                                throw new java.io.IOException(
+                                    "PC odpowiedział HTTP " + code + ".");
+                            paired = true;
+                            pairedTarget = target;
+                            break;
+                        } catch (Exception error) {
+                            lastError = error;
+                        } finally {
+                            if (connection != null) connection.disconnect();
                         }
-                        int code = connection.getResponseCode();
-                        if (code != 200)
-                            throw new java.io.IOException("PC odpowiedział HTTP " + code + ".");
-                    } finally {
-                        connection.disconnect();
                     }
+                    if (!paired) {
+                        if (lastError != null) throw lastError;
+                        throw new java.io.IOException(
+                            "Brak osiągalnego adresu PC z kodu QR.");
+                    }
+                    DiagnosticLog.event("DESKTOP_QR_PAIR_TARGET",
+                        "host=" + pairedTarget);
                 } catch (Exception error) {
                     failure = error.getMessage();
                     if (failure == null || failure.trim().isEmpty())
