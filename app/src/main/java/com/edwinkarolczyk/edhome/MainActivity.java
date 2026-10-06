@@ -9828,16 +9828,8 @@ public final class MainActivity extends Activity {
         // One read-only tree: Miejsce → podmiejsce → pudełko → rzecz.
         // Collapsing hides descendants without changing database relations.
         java.util.List<PlaceEntry> places=readPlaces();
-        java.util.List<StorageStore.Item> items=new java.util.ArrayList<>();
-        try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
-                null)) {
-            while(c.moveToNext()){
-                StorageStore.Item item=StorageStore.find(
-                    db.getReadableDatabase(),c.getLong(0));
-                if(item!=null)items.add(item);
-            }
-        }
+        java.util.List<StorageStore.Item> items=
+            StorageStore.listAll(db.getReadableDatabase());
         if("thing".equals(storageTemporaryKind)) {
             storageThingsGallery(items);
             return;
