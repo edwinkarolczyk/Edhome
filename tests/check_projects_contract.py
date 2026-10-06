@@ -160,4 +160,9 @@ for marker in (
     'Najpierw zatrzymaj pomiar czasu tej czynności.',
 ):
     assert marker in desktop, "Missing Desktop project stabilization: "+marker
+assert 'desktopProjectDescendsFrom' in desktop
+assert 'Nie można zakończyć projektu. Pozostało ' in desktop
+assert 'hubEnsureSingleActiveProjectSession' in desktop
+assert 'Ta czynność ma już aktywny timer na innym urządzeniu.' in desktop
+assert 'JsonObject working=snapshot.deepCopy();' in desktop
 print("projects Android/Desktop blocker/order/delete stabilization contract OK")
