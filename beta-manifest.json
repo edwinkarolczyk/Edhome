@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 198,
-  "versionName": "0.8.0.6",
-  "changelog": "EDHOME 0.8.0.6 — Beta. Poprawka kopii ZIP dla starszych zdjęć: miniatury istniejące przed wprowadzeniem oryginałów są przenoszone do osobnych plików w ZIP zamiast przepełniać data.json. Eksport podaje etap błędu (TWORZENIE/ZAPIS/WERYFIKACJA), a starsze JSON-y nadal można importować. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.6/edhome-beta.apk",
-  "sha256": "2f7e9575951ebab674fb4d04f7b90c373c3330e4e523f33b5facaeeeee9f761d"
+  "versionCode": 199,
+  "versionName": "0.8.0.7",
+  "changelog": "EDHOME 0.8.0.7 — Beta. Stabilizacja kopii zapasowej: import ZIP ogranicza teraz także łączny faktycznie rozpakowany rozmiar danych podczas weryfikacji, chroniąc przed nadmiernie skompresowanym lub uszkodzonym archiwum. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.7/edhome-beta.apk",
+  "sha256": "abd0de74f10294f66945983cb356aa57ab0035ea96a883c1c3c5e3c6eca96e65"
 }
