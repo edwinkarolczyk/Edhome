@@ -25,6 +25,10 @@ for token in (
  "handler.removeCallbacksAndMessages(null);",
  "background.shutdownNow();",
  "if (destroyed || activity.isFinishing() || activity.isDestroyed()) return;",
+ "UPDATE_SUPERSEDED_DOWNLOAD_REMOVED",
+ "manager.remove(activeDownload)",
+ "UPDATE_DOWNLOAD_RECORD_MISSING",
+ "check(manual);",
 ):
  assert token in src, token
 assert src.count("check(false);")==1
