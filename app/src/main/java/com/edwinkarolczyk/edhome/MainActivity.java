@@ -114,6 +114,7 @@ public final class MainActivity extends Activity {
     private String scannerNfcStatus = "NFC gotowe";
     private String storageTemporaryKind;
     private String storageGallerySearch = "";
+    private int storageGalleryVisibleCount;
     private Long pendingStorageDestinationItemId;
     private AlertDialog storageDestinationNfcDialog;
     private String pendingStorageDropKind;
@@ -10013,10 +10014,16 @@ public final class MainActivity extends Activity {
         search.setHintTextColor(subdued);
         body.addView(search,new LinearLayout.LayoutParams(-1,-2));
 
+        final java.util.Map<Long,String> galleryLocations=
+            StorageStore.locations(db.getReadableDatabase(),things);
+        if(storageGalleryVisibleCount<=0)
+            storageGalleryVisibleCount=storageGalleryPageSize();
+
         LinearLayout grid=new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         body.addView(grid,new LinearLayout.LayoutParams(-1,-2));
-        renderStorageGalleryGrid(grid,things,storageGallerySearch);
+        renderStorageGalleryGrid(grid,things,galleryLocations,
+            storageGallerySearch);
 
         search.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence value,int start,
@@ -10024,7 +10031,9 @@ public final class MainActivity extends Activity {
             @Override public void onTextChanged(CharSequence value,int start,
                     int before,int count) {
                 storageGallerySearch=value==null?"":value.toString();
-                renderStorageGalleryGrid(grid,things,storageGallerySearch);
+                storageGalleryVisibleCount=storageGalleryPageSize();
+                renderStorageGalleryGrid(grid,things,galleryLocations,
+                    storageGallerySearch);
             }
             @Override public void afterTextChanged(android.text.Editable value) { }
         });
@@ -10040,13 +10049,18 @@ public final class MainActivity extends Activity {
             java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","").trim();
     }
 
+    private int storageGalleryPageSize() {
+        return StorageThumbs.isLowRamDevice()?30:60;
+    }
+
     private void renderStorageGalleryGrid(LinearLayout grid,
-            java.util.List<StorageStore.Item> things,String query) {
+            java.util.List<StorageStore.Item> things,
+            java.util.Map<Long,String> galleryLocations,String query) {
         grid.removeAllViews();
         String wanted=storageSearchKey(query);
         java.util.List<StorageStore.Item> filtered=new java.util.ArrayList<>();
         for(StorageStore.Item item:things) {
-            String location=StorageStore.location(db.getReadableDatabase(),item);
+            String location=galleryLocations.getOrDefault(item.id,"");
             String haystack=storageSearchKey(item.name+" "+location);
             if(wanted.isEmpty()||haystack.contains(wanted))filtered.add(item);
         }
@@ -10056,13 +10070,15 @@ public final class MainActivity extends Activity {
             grid.addView(empty,new LinearLayout.LayoutParams(-1,-2));
             return;
         }
-        for(int i=0;i<filtered.size();i+=3) {
+        int visible=Math.min(filtered.size(),Math.max(
+            storageGalleryPageSize(),storageGalleryVisibleCount));
+        for(int i=0;i<visible;i+=3) {
             LinearLayout row=new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             grid.addView(row,new LinearLayout.LayoutParams(-1,-2));
             for(int slot=0;slot<3;slot++) {
                 int index=i+slot;
-                if(index>=filtered.size()) {
+                if(index>=visible) {
                     View spacer=new View(this);
                     LinearLayout.LayoutParams empty=new LinearLayout.LayoutParams(
                         0,dp(1),1f);
@@ -10105,6 +10121,29 @@ public final class MainActivity extends Activity {
                 row.addView(tile,cell);
             }
         }
+        if(visible<filtered.size()) {
+            int remaining=filtered.size()-visible;
+            int batch=Math.min(storageGalleryPageSize(),remaining);
+            TextView more=text("Pokaż kolejne "+batch
+                +" • pozostało "+remaining,14,true);
+            more.setGravity(Gravity.CENTER);
+            more.setPadding(dp(10),dp(12),dp(10),dp(12));
+            more.setBackground(skin.panel(this,skin.tileTop,16));
+            more.setClickable(true);
+            more.setFocusable(true);
+            touchFeedback(more);
+            more.setOnClickListener(v->{
+                storageGalleryVisibleCount=Math.min(filtered.size(),
+                    visible+storageGalleryPageSize());
+                renderStorageGalleryGrid(grid,things,galleryLocations,query);
+            });
+            LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,-2);
+            mp.setMargins(dp(4),dp(6),dp(4),dp(10));
+            grid.addView(more,mp);
+        }
+        DiagnosticLog.event("STORAGE_GALLERY_BATCH",
+            "visible="+visible+" total="+filtered.size()
+                +" lowRam="+StorageThumbs.isLowRamDevice());
     }
 
     private void showStorageThingDetails(long itemId) {
