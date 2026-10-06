@@ -133,5 +133,16 @@ assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain suppor
 assert 'Map<Long,String> archivedStorageThumbs' in source
 assert 'restoredStorageThumbs.size() + archivedStorageThumbs.size() > 200' in source
 assert 'legacy_thumbs=' in main
-assert 'Etap: " + backupStage' in main
+assert '"Etap: "+backupStage' in main
+for token in (
+    'exportDataBackupAsync(data.getData());',
+    'prepareDataBackupImportAsync(data.getData());',
+    '"edhome-backup-export").start();',
+    '"edhome-backup-prepare").start();',
+    '"edhome-backup-restore").start();',
+    'showDataBackupRestoreConfirmation(',
+    'restoreDataBackupAsync(backupFile,archive,legacyJson)',
+    'DATA_BACKUP_BACKGROUND_STARTED',
+):
+    assert token in main, "Backup heavy I/O must stay off UI thread: "+token
 print("Backup: 49 domain tables + verified ZIP manifest/SHA-256, original storage media, thumbnail regeneration, legacy JSON and rollback contract PASS")
