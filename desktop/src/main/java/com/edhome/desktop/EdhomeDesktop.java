@@ -4930,12 +4930,18 @@ public final class EdhomeDesktop extends JFrame {
         DesktopHubServer.ClientInfo phone =
             hubServer == null ? null : hubServer.newestClient();
         boolean apiOnline = hubServer != null && hubServer.isRunning();
-        String stateText = apiOnline
-            ? "● API DZIAŁA • " + String.join(", ", localLanAddresses())
-                + ":" + DesktopHubServer.PORT
-            : "● API NIE DZIAŁA";
+        boolean firewallReady = !System.getProperty("os.name","")
+            .toLowerCase(Locale.ROOT).contains("win")
+            || PREFS.getBoolean("hubFirewallReady",false);
+        String stateText = !apiOnline
+            ? "● API NIE DZIAŁA"
+            : firewallReady
+                ? "● API DZIAŁA • " + String.join(", ", localLanAddresses())
+                    + ":" + DesktopHubServer.PORT
+                : "● API DZIAŁA LOKALNIE • zapora Windows niepotwierdzona";
         JLabel pairState = new JLabel(stateText);
-        pairState.setForeground(apiOnline ? APP_ACCENT : new Color(230,95,95));
+        pairState.setForeground(!apiOnline ? new Color(230,95,95)
+            : firewallReady ? APP_ACCENT : new Color(226,168,70));
         statusCard.add(pairState);
         if(phone!=null) {
             JLabel phoneState=new JLabel("Telefon: "
@@ -4949,13 +4955,15 @@ public final class EdhomeDesktop extends JFrame {
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(4, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(5, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
+        JButton repairHub = actionButton("Napraw połączenie telefonu / zaporę Windows");
         JButton updateDesktop = actionButton("Aktualizuj EDHOME Desktop — 1 klik");
         JButton copyDesktopLogs = actionButton("Zapisz diagnostykę Desktop na Pulpit");
         JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
+        actions.add(repairHub);
         actions.add(updateDesktop);
         actions.add(copyDesktopLogs);
         actions.add(openBackups);
@@ -4974,6 +4982,19 @@ public final class EdhomeDesktop extends JFrame {
         content.add(help);
 
         qrPair.addActionListener(e -> showQrPairing(pairState, qrPair));
+        repairHub.addActionListener(e -> {
+            PREFS.putBoolean("hubFirewallReady",false);
+            boolean repaired=prepareWindowsPairingFirewall(true);
+            if(repaired) {
+                apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
+                apiStatus.setForeground(APP_ACCENT);
+                JOptionPane.showMessageDialog(this,
+                    "Reguły Zapory Windows dla EDHOME zostały ustawione.\n"
+                        +"TCP 45823 i UDP 45822 są dozwolone w lokalnej podsieci.\n\n"
+                        +"Na telefonie użyj teraz „Synchronizuj teraz”.");
+            }
+            showSection("Ustawienia");
+        });
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         copyDesktopLogs.addActionListener(e -> {
             Path target=diagnosticsDesktopFolder().resolve(
@@ -5003,6 +5024,8 @@ public final class EdhomeDesktop extends JFrame {
         return "EDHOME Desktop " + DESKTOP_VERSION + "\n"
             + "Hub API: " + (hubServer!=null&&hubServer.isRunning()
                 ?"DZIAŁA • TCP 45823 / UDP 45822":"NIE DZIAŁA") + "\n"
+            + "Zapora Hub: " + (PREFS.getBoolean("hubFirewallReady",false)
+                ?"REGUŁY USTAWIONE":"NIEPOTWIERDZONA") + "\n"
             + "Telefon Hub: " + (hubPhone==null?"brak":
                 hubPhone.userName+" • Android "+hubPhone.version
                     +" • "+hubPhone.address) + "\n"
@@ -5954,9 +5977,14 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
-    private void prepareWindowsPairingFirewall() {
+    private boolean prepareWindowsPairingFirewall() {
+        return prepareWindowsPairingFirewall(false);
+    }
+
+    private boolean prepareWindowsPairingFirewall(boolean force) {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (!os.contains("win") || PREFS.getBoolean("hubFirewallReady", false)) return;
+        if (!os.contains("win")) return true;
+        if (!force && PREFS.getBoolean("hubFirewallReady", false)) return true;
 
         int answer = JOptionPane.showConfirmDialog(this,
             "Aby telefon mógł połączyć się z API EDHOME Desktop, "
@@ -5967,7 +5995,7 @@ public final class EdhomeDesktop extends JFrame {
             JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (answer != JOptionPane.YES_OPTION) {
             DesktopDiagnosticLog.event("HUB_FIREWALL_SKIPPED");
-            return;
+            return false;
         }
 
         try {
@@ -5997,6 +6025,7 @@ public final class EdhomeDesktop extends JFrame {
             PREFS.putBoolean("hubFirewallReady", true);
             DesktopDiagnosticLog.event("HUB_FIREWALL_READY",
                 "tcp=45823 udp=45822 remote=LocalSubnet");
+            return true;
         } catch (Exception error) {
             DesktopDiagnosticLog.error("HUB_FIREWALL_SETUP", error);
             JOptionPane.showMessageDialog(this,
@@ -6005,6 +6034,7 @@ public final class EdhomeDesktop extends JFrame {
                     + "zezwól EDHOME na sieci prywatnej.\n\n"
                     + rootMessage(error),
                 "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
+            return false;
         }
     }
 
