@@ -17608,6 +17608,145 @@ public final class MainActivity extends Activity {
     }
 
 
+    private void exportDataBackupAsync(Uri destination) {
+        DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=export");
+        new Thread(() -> {
+            DataBackupArchive.Created created=null;
+            String backupStage="TWORZENIE";
+            String outcome;
+            try {
+                created=DataBackupArchive.create(
+                    this,db.getReadableDatabase(),prefs);
+                backupStage="ZAPIS";
+                DataBackupArchive.writeToDocument(this,destination,created.file);
+                backupStage="WERYFIKACJA";
+                if(!DataBackupArchive.verifyDocument(
+                        this,destination,created.file)) {
+                    DiagnosticLog.event("DATA_BACKUP_VERIFY_FAILED");
+                    throw new IllegalStateException("BACKUP_READBACK_MISMATCH");
+                }
+                DiagnosticLog.event("DATA_BACKUP_ZIP_EXPORTED",
+                    "bytes="+created.file.length()
+                        +" originals="+created.storageOriginals
+                        +" legacy_thumbs="+created.legacyThumbnails
+                        +" tile_images="+created.tileImages
+                        +" verified=true");
+                outcome="Kopia ZIP zapisana i zweryfikowana. Oryginalne zdjęcia: "
+                    +created.storageOriginals+". Starsze miniatury: "
+                    +created.legacyThumbnails+". Obrazy kafelków: "
+                    +created.tileImages
+                    +". Prywatny sejf PayCheck wymaga osobnej kopii.";
+            } catch(Exception error) {
+                DiagnosticLog.error("DATA_BACKUP_EXPORT_"+backupStage,error);
+                outcome="Nie udało się zapisać i zweryfikować pełnej kopii ZIP. "
+                    +"Etap: "+backupStage+". "
+                    +"Nie usuwaj aplikacji na podstawie tego pliku.";
+            } finally {
+                if(created!=null&&created.file!=null)created.file.delete();
+            }
+            final String message=outcome;
+            runOnLiveUi(() -> alert(message));
+        },"edhome-backup-export").start();
+    }
+
+    private void prepareDataBackupImportAsync(Uri source) {
+        DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=prepare_restore");
+        new Thread(() -> {
+            java.io.File localCopy=null;
+            try {
+                localCopy=DataBackupArchive.copyFromDocument(this,source);
+                final java.io.File backupFile=localCopy;
+                final boolean archive=DataBackupArchive.isArchive(backupFile);
+                final String legacyJson=archive
+                    ?null:DataBackupArchive.readLegacyJson(backupFile);
+                localCopy=null; // ownership passes to the confirmation dialog
+                runOnUiThread(() -> {
+                    if(isFinishing()||isDestroyed()) {
+                        backupFile.delete();
+                        return;
+                    }
+                    showDataBackupRestoreConfirmation(
+                        backupFile,archive,legacyJson);
+                });
+            } catch(Exception error) {
+                if(localCopy!=null)localCopy.delete();
+                DiagnosticLog.error("DATA_BACKUP_READ",error);
+                runOnLiveUi(() -> alert(
+                    "Nie można odczytać lub zweryfikować kopii danych."));
+            }
+        },"edhome-backup-prepare").start();
+    }
+
+    private void showDataBackupRestoreConfirmation(java.io.File backupFile,
+            boolean archive,String legacyJson) {
+        new AlertDialog.Builder(this)
+            .setTitle("Zastąpić wszystkie dane?")
+            .setMessage(archive
+                ?"Przywrócenie ZIP nadpisze wspólne dane i obrazy użytkownika. "
+                    +"Manifest oraz sumy kontrolne zostaną sprawdzone przed zmianą."
+                :"To starsza kopia JSON. Przywrócenie nadpisze wspólne dane. "
+                    +"Oryginalnych zdjęć nie ma w tym starszym formacie.")
+            .setCancelable(false)
+            .setNegativeButton("Anuluj",(dialog,which)->backupFile.delete())
+            .setPositiveButton("Przywróć",(dialog,which)->
+                restoreDataBackupAsync(backupFile,archive,legacyJson))
+            .show();
+    }
+
+    private void restoreDataBackupAsync(java.io.File backupFile,
+            boolean archive,String legacyJson) {
+        DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=restore");
+        new Thread(() -> {
+            try {
+                DataBackupArchive.Restored restored=null;
+                if(archive) {
+                    restored=DataBackupArchive.restore(
+                        this,db.getWritableDatabase(),prefs,backupFile);
+                } else {
+                    DataBackup.restoreJson(
+                        db.getWritableDatabase(),prefs,legacyJson);
+                }
+                SharedPreferences.Editor reminderReset=prefs.edit();
+                for(String key:prefs.getAll().keySet()) {
+                    if(key.startsWith("reminder_fired_")
+                            ||key.startsWith("reminder_custom_day_")
+                            ||"reminder_legacy_day".equals(key)
+                            ||key.startsWith("vehicle_reminder_fired_")
+                            ||key.startsWith("timer_notified_"))
+                        reminderReset.remove(key);
+                }
+                reminderReset.apply();
+                ReminderReceiver.schedule(this);
+                DeviceTimerReceiver.scheduleAll(this);
+                DiagnosticLog.event(archive
+                    ?"DATA_BACKUP_ZIP_RESTORED":"DATA_BACKUP_RESTORED");
+                final DataBackupArchive.Restored restoredResult=restored;
+                runOnLiveUi(() -> {
+                    screen="home";
+                    unlocked=BetaUpdater.isBeta();
+                    render();
+                    String media=restoredResult==null?""
+                        :"\nOryginalne zdjęcia: "+restoredResult.storageOriginals
+                            +", starsze miniatury: "
+                            +restoredResult.legacyThumbnails
+                            +", odtworzone z oryginałów: "
+                            +restoredResult.regeneratedThumbnails+".";
+                    alert((BetaUpdater.isBeta()
+                        ?"Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
+                        :"Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.")
+                        +media);
+                });
+            } catch(Exception error) {
+                DiagnosticLog.error("DATA_BACKUP_RESTORE",error);
+                runOnLiveUi(() -> alert(
+                    "Nie udało się przywrócić kopii. "
+                    +"Uszkodzony ZIP lub niespójne dane zostały odrzucone."));
+            } finally {
+                backupFile.delete();
+            }
+        },"edhome-backup-restore").start();
+    }
+
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
         note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego oraz własne obrazy kafelków.");
@@ -18532,111 +18671,12 @@ public final class MainActivity extends Activity {
         }
         if (request == EXPORT_DATA_BACKUP) {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
-            DataBackupArchive.Created created = null;
-            String backupStage = "TWORZENIE";
-            try {
-                created = DataBackupArchive.create(
-                    this, db.getReadableDatabase(), prefs);
-                backupStage = "ZAPIS";
-                DataBackupArchive.writeToDocument(
-                    this, data.getData(), created.file);
-                backupStage = "WERYFIKACJA";
-                if (!DataBackupArchive.verifyDocument(
-                        this, data.getData(), created.file)) {
-                    DiagnosticLog.event("DATA_BACKUP_VERIFY_FAILED");
-                    throw new IllegalStateException("BACKUP_READBACK_MISMATCH");
-                }
-                DiagnosticLog.event("DATA_BACKUP_ZIP_EXPORTED",
-                    "bytes=" + created.file.length()
-                        + " originals=" + created.storageOriginals
-                        + " legacy_thumbs=" + created.legacyThumbnails
-                        + " tile_images=" + created.tileImages
-                        + " verified=true");
-                alert("Kopia ZIP zapisana i zweryfikowana. Oryginalne zdjęcia: "
-                    + created.storageOriginals + ". Starsze miniatury: "
-                    + created.legacyThumbnails + ". Obrazy kafelków: "
-                    + created.tileImages
-                    + ". Prywatny sejf PayCheck wymaga osobnej kopii.");
-            } catch (Exception error) {
-                DiagnosticLog.error("DATA_BACKUP_EXPORT_" + backupStage, error);
-                alert("Nie udało się zapisać i zweryfikować pełnej kopii ZIP. "
-                    + "Etap: " + backupStage + ". "
-                    + "Nie usuwaj aplikacji na podstawie tego pliku.");
-            } finally {
-                if (created != null && created.file != null) created.file.delete();
-            }
+            exportDataBackupAsync(data.getData());
             return;
         }
         if (request == IMPORT_DATA_BACKUP) {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
-            java.io.File localCopy = null;
-            try {
-                localCopy = DataBackupArchive.copyFromDocument(this, data.getData());
-                final java.io.File backupFile = localCopy;
-                final boolean archive = DataBackupArchive.isArchive(backupFile);
-                final String legacyJson = archive
-                    ? null : DataBackupArchive.readLegacyJson(backupFile);
-                new AlertDialog.Builder(this)
-                    .setTitle("Zastąpić wszystkie dane?")
-                    .setMessage(archive
-                        ? "Przywrócenie ZIP nadpisze wspólne dane i obrazy użytkownika. "
-                            + "Manifest oraz sumy kontrolne zostaną sprawdzone przed zmianą."
-                        : "To starsza kopia JSON. Przywrócenie nadpisze wspólne dane. "
-                            + "Oryginalnych zdjęć nie ma w tym starszym formacie.")
-                    .setCancelable(false)
-                    .setNegativeButton("Anuluj",
-                        (dialog, which) -> backupFile.delete())
-                    .setPositiveButton("Przywróć", (dialog, which) -> {
-                        try {
-                            DataBackupArchive.Restored restored = null;
-                            if (archive) {
-                                restored = DataBackupArchive.restore(
-                                    this, db.getWritableDatabase(), prefs, backupFile);
-                            } else {
-                                DataBackup.restoreJson(
-                                    db.getWritableDatabase(), prefs, legacyJson);
-                            }
-                            SharedPreferences.Editor reminderReset = prefs.edit();
-                            for (String key : prefs.getAll().keySet()) {
-                                if (key.startsWith("reminder_fired_")
-                                        || key.startsWith("reminder_custom_day_")
-                                        || "reminder_legacy_day".equals(key)
-                                        || key.startsWith("vehicle_reminder_fired_")
-                                        || key.startsWith("timer_notified_"))
-                                    reminderReset.remove(key);
-                            }
-                            reminderReset.apply();
-                            ReminderReceiver.schedule(this);
-                            DeviceTimerReceiver.scheduleAll(this);
-                            DiagnosticLog.event(archive
-                                ? "DATA_BACKUP_ZIP_RESTORED"
-                                : "DATA_BACKUP_RESTORED");
-                            screen = "home";
-                            unlocked = BetaUpdater.isBeta();
-                            render();
-                            String media = restored == null ? ""
-                                : "\nOryginalne zdjęcia: " + restored.storageOriginals
-                                    + ", starsze miniatury: "
-                                    + restored.legacyThumbnails
-                                    + ", odtworzone z oryginałów: "
-                                    + restored.regeneratedThumbnails + ".";
-                            alert((BetaUpdater.isBeta()
-                                ? "Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
-                                : "Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.")
-                                + media);
-                        } catch (Exception error) {
-                            DiagnosticLog.error("DATA_BACKUP_RESTORE", error);
-                            alert("Nie udało się przywrócić kopii. "
-                                + "Uszkodzony ZIP lub niespójne dane zostały odrzucone.");
-                        } finally {
-                            backupFile.delete();
-                        }
-                    }).show();
-            } catch (Exception error) {
-                if (localCopy != null) localCopy.delete();
-                DiagnosticLog.error("DATA_BACKUP_READ", error);
-                alert("Nie można odczytać lub zweryfikować kopii danych.");
-            }
+            prepareDataBackupImportAsync(data.getData());
             return;
         }
         if (request != EXPORT_DIAGNOSTICS || !DiagnosticLog.enabled()) return;
