@@ -108,6 +108,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
     }
 
     static void schedule(Context context) {
+        // Active Project timers are independent from the reminder toggle.
+        ProjectWorkNotification.restoreActive(context);
         // Vehicle opt-in is independent of the global task reminder switch.
         VehicleReminderReceiver.schedule(context);
         AlarmManager manager = (AlarmManager) context.getSystemService(
@@ -158,6 +160,16 @@ public final class ReminderReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         String action = intent.getAction();
+        if (ProjectWorkNotification.ACTION_START.equals(action)) {
+            ProjectWorkNotification.handleStartAction(
+                context, intent.getLongExtra("task_id", -1L));
+            return;
+        }
+        if (ProjectWorkNotification.ACTION_STOP.equals(action)) {
+            ProjectWorkNotification.handleStopAction(
+                context, intent.getLongExtra("task_id", -1L));
+            return;
+        }
         if (!ACTION_REMIND.equals(action) && !ACTION_TASK.equals(action)) {
             if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                     || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)
@@ -192,6 +204,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
         int waste = 0;
         String firedKey = null;
         String firedValue = null;
+        long singleTaskId = -1L;
+        String singleTaskTitle = "";
+        boolean singleProjectTask = false;
         boolean legacy = ACTION_REMIND.equals(action);
         try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
                 file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY)) {
@@ -221,7 +236,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 if (id < 0 || expected == null) return;
                 try (Cursor task = database.rawQuery(
                         "SELECT due_date,remind_time,reminder_lead_days,"
-                        + "task_kind FROM tasks WHERE id=? AND done=0",
+                        + "task_kind,title,project_id FROM tasks "
+                        + "WHERE id=? AND done=0",
                         new String[]{Long.toString(id)})) {
                     if (!task.moveToFirst() || task.isNull(0)
                             || task.isNull(1)) return;
@@ -239,6 +255,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     }
                     due = 1;
                     waste = "waste".equals(task.getString(3)) ? 1 : 0;
+                    singleTaskId = id;
+                    singleTaskTitle = task.isNull(4) ? "" : task.getString(4);
+                    singleProjectTask = !task.isNull(5);
                     firedKey = "reminder_fired_" + id;
                     firedValue = actual;
                 }
@@ -252,6 +271,17 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 today.toString()).apply();
             return;
         }
+        if (!legacy && singleProjectTask
+                && ProjectWorkNotification.isActive(context, singleTaskId)) {
+            ProjectWorkNotification.showActive(context, singleTaskId);
+            pref.edit().putString(firedKey, firedValue)
+                .putString("reminder_custom_day_" + singleTaskId,
+                    today.toString()).apply();
+            DiagnosticLog.event("REMINDER_PROJECT_ALREADY_ACTIVE",
+                "task=" + singleTaskId);
+            schedule(context);
+            return;
+        }
         NotificationManager notifications = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (notifications == null || !notifications.areNotificationsEnabled())
@@ -263,16 +293,26 @@ public final class ReminderReceiver extends BroadcastReceiver {
             new Intent(context, MainActivity.class).setFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(context, CHANNEL_ID)
+        Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle("EDHOME • czynności")
-            .setContentText(waste > 0
-                ? "Odpady do wystawienia: " + waste
-                    + " • pozostałe czynności: " + (due - waste)
-                : "Czynności do wykonania: " + due)
+            .setContentTitle(!legacy && singleProjectTask
+                && !singleTaskTitle.isEmpty()
+                    ? "EDHOME • " + singleTaskTitle
+                    : "EDHOME • czynności")
+            .setContentText(!legacy && singleProjectTask
+                ? "Czynność projektu • możesz uruchomić pomiar czasu"
+                : (waste > 0
+                    ? "Odpady do wystawienia: " + waste
+                        + " • pozostałe czynności: " + (due - waste)
+                    : "Czynności do wykonania: " + due))
             .setContentIntent(open)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .setAutoCancel(true).build();
+            .setAutoCancel(true);
+        if (!legacy && singleProjectTask)
+            builder.addAction(android.R.drawable.ic_media_play,
+                "▶ Start", ProjectWorkNotification.startAction(
+                    context, singleTaskId));
+        Notification notification = builder.build();
         int notificationId = legacy ? ALARM_ID
             : requestCode(intent.getLongExtra("task_id", -1L));
         notifications.notify(notificationId, notification);
