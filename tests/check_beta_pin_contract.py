@@ -4,6 +4,7 @@
 This complements Android compilation; actual device behaviour still needs validation.
 """
 from pathlib import Path
+import re
 source = Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 gradle = Path("app/build.gradle").read_text(encoding="utf-8")
 assert "beta {" in gradle and "buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'true'" in gradle
@@ -14,9 +15,14 @@ checks = (
     'if (BetaUpdater.isBeta()) unlocked = true;',
     'if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();',
     'else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();',
-    'unlocked = BetaUpdater.isBeta();\n                            render();',
 )
 for check in checks:
     assert check in source, "PIN-free Beta contract missing: " + check
+restore = source.split('private void restoreDataBackupAsync(',1)[1].split(
+    'private void showDataBackupBusy(',1)[0]
+restore_compact = re.sub(r'\\s+', '', restore)
+assert 'unlocked=BetaUpdater.isBeta();render();' in restore_compact, (
+    "PIN-free Beta restore must unlock before rendering"
+)
 assert 'prefs.edit().remove("pin_hash")' not in source, "Never destroy legacy PIN data."
 print("Beta PIN-free startup/background/restore contract: PASS; Stable PIN retained.")
