@@ -563,6 +563,21 @@ final class ProjectStore {
         }
     }
 
+    static List<TaskRef> openDependents(SQLiteDatabase db,long taskId) {
+        ArrayList<TaskRef> out=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT t.id,t.project_id,t.title "
+                    +"FROM project_task_dependencies d "
+                    +"JOIN tasks t ON t.id=d.task_id "
+                    +"WHERE d.depends_on_task_id=? AND t.done=0 "
+                    +"ORDER BY t.project_sort_order,t.id",
+                new String[]{Long.toString(taskId)})) {
+            while(c.moveToNext())
+                out.add(new TaskRef(c.getLong(0),c.getLong(1),c.getString(2)));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
     private static boolean reaches(SQLiteDatabase db,long start,long target) {
         ArrayList<Long> pending=new ArrayList<>();
         HashSet<Long> seen=new HashSet<>();
