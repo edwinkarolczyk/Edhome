@@ -14,6 +14,9 @@ for token in (
     "ACTION_TIMEZONE_CHANGED", "ACTION_TIME_CHANGED",
 ):
     assert token in tasks,token
+assert receiver.count("atTime(8, 0)") == 2
+assert "atTime(9, 0)" not in receiver
+assert "Powiadomienie przychodzi około 08:00 w wybranym dniu." in main
 for token in (
     "setAndAllowWhileIdle", "FLAG_NO_CREATE", "manager.cancel(existing)",
     "VehicleReminderRules.allowed(lead)", "occurrence.equals(",

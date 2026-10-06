@@ -65,7 +65,7 @@ public final class VehicleReminderReceiver extends BroadcastReceiver {
 
     private static LocalDateTime target(LocalDateTime now, String deadline, int lead,
             SharedPreferences pref) {
-        LocalDateTime proposed = LocalDate.parse(deadline).minusDays(lead).atTime(9, 0);
+        LocalDateTime proposed = LocalDate.parse(deadline).minusDays(lead).atTime(8, 0);
         if (!proposed.isAfter(now)) proposed = now.plusMinutes(1);
         return QuietHoursRules.nextAllowed(proposed,
             pref.getString("quiet_hours_start", QuietHoursRules.DEFAULT_START),
@@ -161,7 +161,7 @@ public final class VehicleReminderReceiver extends BroadcastReceiver {
                 || !expected.equals(fingerprint(deadline, lead))
                 || LocalDate.parse(deadline).isBefore(LocalDate.now())) return;
         LocalDateTime now = LocalDateTime.now();
-        if (LocalDate.parse(deadline).minusDays(lead).atTime(9, 0).isAfter(now)
+        if (LocalDate.parse(deadline).minusDays(lead).atTime(8, 0).isAfter(now)
                 || QuietHoursRules.isQuiet(now,
                     pref.getString("quiet_hours_start", QuietHoursRules.DEFAULT_START),
                     pref.getString("quiet_hours_end", QuietHoursRules.DEFAULT_END))) {

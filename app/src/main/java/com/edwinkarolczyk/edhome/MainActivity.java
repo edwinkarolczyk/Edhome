@@ -8388,7 +8388,7 @@ public final class MainActivity extends Activity {
         inspection.setSelection(VehicleReminderRules.index(
             vehicle.inspectionReminderLead));
         form.addView(inspection);
-        form.addView(text("Powiadomienie przychodzi około 09:00 w wybranym dniu. "
+        form.addView(text("Powiadomienie przychodzi około 08:00 w wybranym dniu. "
             + "Android może je opóźnić; godziny ciszy ustawisz w Ustawieniach. "
             + "Nie powstaje druga czynność ani wydatek PayCheck.", 13, false));
         lightDialogForm(form);
