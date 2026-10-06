@@ -20,7 +20,7 @@ for check in checks:
     assert check in source, "PIN-free Beta contract missing: " + check
 restore = source.split('private void restoreDataBackupAsync(',1)[1].split(
     'private void showDataBackupBusy(',1)[0]
-restore_compact = re.sub(r'\\s+', '', restore)
+restore_compact = re.sub(r'\s+', '', restore)
 assert 'unlocked=BetaUpdater.isBeta();render();' in restore_compact, (
     "PIN-free Beta restore must unlock before rendering"
 )
