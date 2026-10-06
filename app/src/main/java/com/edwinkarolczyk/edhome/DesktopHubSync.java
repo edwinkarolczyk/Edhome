@@ -365,15 +365,27 @@ final class DesktopHubSync {
             if(isPrivateLanIpv4(host.trim()))candidates.add(host.trim());
         for(String host:candidates) {
             try {
+                DiagnosticLog.event("HUB_HOST_CHECK","host="+host+" port="+PORT);
                 HttpResult status=request(context,prefs,host,"GET","/status",null,null);
-                if(status.code!=200)continue;
+                if(status.code!=200) {
+                    DiagnosticLog.event("HUB_HOST_HTTP_REJECTED",
+                        "host="+host+" code="+status.code);
+                    continue;
+                }
                 JSONObject body=new JSONObject(status.body);
-                if(prefs.getString(PREF_ID,"").equalsIgnoreCase(
-                        body.optString("desktopId",""))) {
+                String expected=prefs.getString(PREF_ID,"");
+                String actual=body.optString("desktopId","");
+                if(expected.equalsIgnoreCase(actual)) {
                     prefs.edit().putString(PREF_HOST,host).apply();
+                    DiagnosticLog.event("HUB_HOST_OK",
+                        "host="+host+" version="+body.optString("version","?"));
                     return host;
                 }
-            } catch(Exception ignored){}
+                DiagnosticLog.event("HUB_HOST_ID_MISMATCH","host="+host);
+            } catch(Exception problem) {
+                DiagnosticLog.event("HUB_HOST_UNREACHABLE",
+                    "host="+host+" type="+problem.getClass().getSimpleName());
+            }
         }
         String discovered=discover(prefs.getString(PREF_ID,""));
         if(discovered!=null) {
@@ -405,8 +417,59 @@ final class DesktopHubSync {
                         &&Integer.toString(PORT).equals(parts[2]))
                     return reply.getAddress().getHostAddress();
             }
-        } catch(Exception ignored){}
+        } catch(Exception problem) {
+            DiagnosticLog.event("HUB_DISCOVERY_FAILED",
+                "type="+problem.getClass().getSimpleName());
+        }
         return null;
+    }
+
+    static String diagnostics(Context context) {
+        SharedPreferences prefs=prefs(context);
+        StringBuilder out=new StringBuilder();
+        out.append("EDHOME Android ").append(BuildConfig.VERSION_NAME)
+            .append(" (").append(BuildConfig.VERSION_CODE).append(")\n");
+        out.append("Tryb: telefon = klient API Desktopu\n");
+        out.append("Sparowano: ").append(paired(context)?"TAK":"NIE").append("\n");
+        out.append("Desktop ID: ").append(prefs.getString(PREF_ID,"brak")).append("\n");
+        out.append("Zapamiętany host: ")
+            .append(prefs.getString(PREF_HOST,"brak")).append(":").append(PORT).append("\n");
+        out.append("Stan: ").append(prefs.getString(PREF_LAST_STATE,"brak")).append("\n");
+        out.append("Ostatnia synchronizacja: ")
+            .append(prefs.getLong(PREF_LAST_SYNC,0L)).append("\n");
+        if(!paired(context))return out.toString();
+        LinkedHashSet<String> candidates=new LinkedHashSet<>();
+        String saved=prefs.getString(PREF_HOST,"").trim();
+        if(isPrivateLanIpv4(saved))candidates.add(saved);
+        for(String candidate:prefs.getString(PREF_HOSTS,"").split(","))
+            if(isPrivateLanIpv4(candidate.trim()))candidates.add(candidate.trim());
+        for(String host:candidates) {
+            try {
+                long started=System.currentTimeMillis();
+                HttpResult result=request(context,prefs,host,"GET","/status",null,null);
+                long ms=System.currentTimeMillis()-started;
+                out.append("TCP/HTTP ").append(host).append(":").append(PORT)
+                    .append(" → HTTP ").append(result.code)
+                    .append(" • ").append(ms).append(" ms");
+                if(result.code==200) {
+                    JSONObject json=new JSONObject(result.body);
+                    out.append(" • Desktop ").append(json.optString("version","?"))
+                        .append(" • ID ")
+                        .append(prefs.getString(PREF_ID,"").equalsIgnoreCase(
+                            json.optString("desktopId",""))?"ZGODNE":"INNE");
+                }
+                out.append("\n");
+            } catch(Exception problem) {
+                out.append("TCP/HTTP ").append(host).append(":").append(PORT)
+                    .append(" → BRAK POŁĄCZENIA • ")
+                    .append(problem.getClass().getSimpleName()).append("\n");
+            }
+        }
+        String discovered=discover(prefs.getString(PREF_ID,""));
+        out.append("Discovery UDP ").append(DISCOVERY_PORT).append(": ")
+            .append(discovered==null?"BRAK ODPOWIEDZI":discovered).append("\n");
+        out.append("Token: zapisany, celowo nie jest pokazywany.");
+        return out.toString();
     }
 
     private static HttpResult request(Context context,SharedPreferences prefs,
