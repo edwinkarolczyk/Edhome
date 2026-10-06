@@ -8673,15 +8673,17 @@ public final class MainActivity extends Activity {
                 () -> showPlaceQr(entry));
         nfcTargetButton(box,"place",entry.id,entry.name);
         box.setOnLongClickListener(v -> {
-            String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz"};
+            String[] options = {"Edytuj", "Przenieś", "Dodaj miejsce wewnątrz",
+                "Usuń"};
             new AlertDialog.Builder(this)
                 .setTitle(db.placePath(entry.id))
                 .setItems(options, (dialog, choice) -> {
                     if (choice == 0 || choice == 1)
                         placeEditor(entry.id, entry.name, entry.kind,
                             entry.parent, entry.icon);
-                    else
+                    else if (choice == 2)
                         placeEditor(null, "", "", entry.id, "places");
+                    else confirmDeletePlace(entry, childCount);
                 }).show();
             return true;
         });
@@ -8692,11 +8694,26 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmDeletePlace(PlaceEntry entry, int childCount) {
-        // Miejsca są trwałymi identyfikatorami dla QR/NFC, historii i synchronizacji.
-        // Usuwanie przez UI jest celowo zablokowane. deletePlace() pozostaje wyłącznie
-        // do rollbacku świeżo utworzonego celu, gdy kreator nie może dokończyć operacji.
-        DiagnosticLog.event("PLACE_DELETE_BLOCKED");
-        alert("Miejsc nie usuwamy. Możesz zmienić nazwę albo przenieść miejsce.");
+        if (childCount > 0) {
+            alert("Najpierw przenieś lub usuń podmiejsca. "
+                + "Nie usuwamy całej gałęzi przypadkowo.");
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Usunąć miejsce?")
+            .setMessage(db.placePath(entry.id)
+                + "\nPrzypisane czynności pozostaną bez miejsca. "
+                + "QR tego miejsca przestanie działać i nie zostanie "
+                + "przydzielony nowemu miejscu. Historia wykonań zostanie zachowana.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Usuń", (dialog, which) -> {
+                if (!db.deletePlace(entry.id)) {
+                    alert("Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon. "
+                        + "Przenieś je najpierw.");
+                    return;
+                }
+                DiagnosticLog.event("PLACE_DELETED");
+                render();
+            }).show();
     }
 
     private void placeEditor(Long id, String name, String kind,

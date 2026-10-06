@@ -11,6 +11,7 @@ checks = (
     "return PlaceRules.canMove(parents, movingId, parentId);",
     "if (!canPlaceWithin(id, parentId))",
     "SELECT COUNT(*) FROM places WHERE parent_id=?",
+    "if (!db.deletePlace(entry.id))",
     "placeNames.add(db.placePath(places.getLong(0)));",
     "return placeId == null ? \"\" : placePath(placeId);",
     "placeEditor(null, \"\", \"\", entry.id, \"places\")",
@@ -20,16 +21,15 @@ checks = (
 for text in checks:
     assert text in main, "Missing place contract: " + text
 
-# Miejsca są trwałe dla QR/NFC i synchronizacji. UI nie może ich usuwać.
+# Puste Miejsce można usunąć, ale tylko po przejściu kontroli relacji.
 branch=main.split("private void renderPlaceBranch(",1)[1].split(
     "private void placeEditor(",1)[0]
-assert '"Usuń"' not in branch
-blocked=main.split("private void confirmDeletePlace(",1)[1].split(
+assert '"Usuń"' in branch
+delete_ui=main.split("private void confirmDeletePlace(",1)[1].split(
     "private void placeEditor(",1)[0]
-assert 'Miejsc nie usuwamy.' in blocked
-assert 'db.deletePlace(' not in blocked
-assert 'PLACE_DELETE_BLOCKED' in blocked
-# Niskopoziomowy rollback pozostaje dostępny tylko dla niedokończonego kreatora.
+assert 'if (!db.deletePlace(entry.id))' in delete_ui
+assert 'Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon.' in delete_ui
+assert 'QR tego miejsca przestanie działać' in delete_ui
 assert "boolean deletePlace(long id)" in main
 assert "PLACE_TYPES" not in main, "Fixed place-kind list must not return"
 assert 'inputVersion < 11 && "places".equals(definition[0])' in backup
