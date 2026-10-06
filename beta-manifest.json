@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 210,
-  "versionName": "0.8.0.18",
-  "changelog": "EDHOME 0.8.0.18 — Beta. Stabilizacja Spiżarni: produkt ze stanem większym od zera lub nierozliczonymi opakowaniami kaucyjnymi nie może zostać usunięty. Kontrola działa w UI i w bazowej metodzie danych. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.18/edhome-beta.apk",
-  "sha256": "0ac7160757b566be364c7a96eb95290574fbf766a93677004256c190c0d9b56a"
+  "versionCode": 211,
+  "versionName": "0.8.0.19",
+  "changelog": "EDHOME 0.8.0.19 — Beta. Stabilizacja Czynności: domyślne poranne przypomnienie ujednolicone na 08:00 w zwykłych i szybkich Czynnościach oraz presetach Czynności Ogrodu. Istniejące zapisane własne godziny pozostają bez zmian. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.19/edhome-beta.apk",
+  "sha256": "9d88dd30821cd578f53833fd1308f77313d07524732c4613c6db05e203aa00a9"
 }
