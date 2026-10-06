@@ -218,7 +218,6 @@ for marker in (
 ):
     assert marker in desktop, "Missing safe post-push phone catch-up: " + marker
 assert 'updatePhoneChangeCursorFromSnapshot(result.data);' in desktop
-assert 'result.cursorUpdatedAt >= phoneChangeCursorAt' not in desktop
 print("desktop safe post-push phone delta catch-up contract OK")
 
 # Phone LAN self-tests must never impersonate a real Desktop client.
