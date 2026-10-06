@@ -573,8 +573,11 @@ public final class EdhomeDesktop extends JFrame {
         if(operations.size()<1||operations.size()>500)
             throw new IllegalArgumentException("Patch ma nieprawidłową liczbę zmian.");
 
-        JsonObject tables=snapshot.getAsJsonObject("tables");
-        JsonArray metadata=snapshot.getAsJsonArray("syncRecords");
+        // Apply the whole phone patch to a detached copy. A late conflict or
+        // validation error must never leave half of a multi-record patch in RAM.
+        JsonObject working=snapshot.deepCopy();
+        JsonObject tables=working.getAsJsonObject("tables");
+        JsonArray metadata=working.getAsJsonArray("syncRecords");
         for(JsonElement element:operations) {
             if(!element.isJsonObject())
                 throw new IllegalArgumentException("Nieprawidłowa operacja patcha.");
@@ -637,6 +640,10 @@ public final class EdhomeDesktop extends JFrame {
                 JsonObject row=op.getAsJsonObject("row");
                 if(!rowKey.equals(patchRowKey(table,row)))
                     throw new IllegalArgumentException("Klucz rekordu nie pasuje.");
+                if("project_task_work_sessions".equals(table)
+                        &&value(row,"ended_at").isBlank())
+                    hubEnsureSingleActiveProjectSession(
+                        tables,metadata,row,rowKey,phoneWins,now);
                 if(rowIndex>=0)rows.set(rowIndex,row.deepCopy());
                 else rows.add(row.deepCopy());
                 meta.addProperty("revision",Math.max(0L,longValue(meta,"revision"))+1L);
@@ -645,10 +652,11 @@ public final class EdhomeDesktop extends JFrame {
                 meta.addProperty("rowHash",rowSha256(row));
             }
         }
-        validate(snapshot);
+        validate(working);
+        snapshot=working;
         hubCommittedSnapshot=snapshot.deepCopy();
         syncedSnapshot=snapshot.deepCopy();
-        snapshotHash=rowSha256(snapshot);
+        snapshotHash=hubRawSha256(GSON.toJson(snapshot));
         dirty=false;
         syncConflictPaused=false;
         PREFS.putBoolean("hubMode",true);
@@ -662,6 +670,50 @@ public final class EdhomeDesktop extends JFrame {
                 +" operations="+operations.size());
         showSection(current);
         return GSON.toJson(snapshot);
+    }
+
+    private void hubEnsureSingleActiveProjectSession(JsonObject tables,
+            JsonArray metadata,JsonObject incoming,String incomingRowKey,
+            boolean phoneWins,long now) throws Exception {
+        if(!tables.has("project_task_work_sessions")
+                ||!tables.get("project_task_work_sessions").isJsonArray())return;
+        long taskId=longValue(incoming,"task_id");
+        if(taskId<=0L)return;
+        JsonArray sessions=tables.getAsJsonArray("project_task_work_sessions");
+        for(int i=0;i<sessions.size();i++) {
+            JsonElement element=sessions.get(i);
+            if(!element.isJsonObject())continue;
+            JsonObject existing=element.getAsJsonObject();
+            if(longValue(existing,"task_id")!=taskId
+                    ||!value(existing,"ended_at").isBlank())continue;
+            String existingKey=patchRowKey("project_task_work_sessions",existing);
+            if(existingKey!=null&&existingKey.equals(incomingRowKey))continue;
+            if(!phoneWins)
+                throw new DesktopHubServer.Conflict(
+                    "project_task_work_sessions",incomingRowKey,
+                    "Ta czynność ma już aktywny timer na innym urządzeniu.");
+
+            long started=Math.max(0L,longValue(existing,"started_at"));
+            int minutes=(int)Math.max(1L,
+                Math.round(Math.max(0L,now-started)/60000.0));
+            existing.addProperty("ended_at",now);
+            existing.addProperty("worked_minutes",minutes);
+            if(existingKey==null)continue;
+            for(JsonElement metaElement:metadata) {
+                if(!metaElement.isJsonObject())continue;
+                JsonObject m=metaElement.getAsJsonObject();
+                if(!"project_task_work_sessions".equals(value(m,"table"))
+                        ||!existingKey.equals(value(m,"rowKey")))continue;
+                m.addProperty("revision",
+                    Math.max(0L,longValue(m,"revision"))+1L);
+                m.addProperty("updatedAt",now);
+                m.add("deletedAt",com.google.gson.JsonNull.INSTANCE);
+                m.addProperty("rowHash",rowSha256(existing));
+                break;
+            }
+            DesktopDiagnosticLog.event("HUB_PROJECT_TIMER_CONFLICT_RESOLVED",
+                "task="+taskId+" kept=phone closed="+existingKey);
+        }
     }
 
     private JComponent sidebar() {
