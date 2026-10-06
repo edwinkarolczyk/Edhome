@@ -206,18 +206,20 @@ for marker in (
     assert marker in desktop, "Missing dirty-push DHCP recovery: " + marker
 print("desktop dirty-push DHCP recovery contract OK")
 
-# A successful PC -> phone patch must immediately catch up unrelated phone-side
-# edits before advancing the local phone cursor.
+# A successful PC -> phone patch must be committed first. Only when there
+# are no newer local edits may Desktop start the normal phone delta pull.
+# The partial patch result must never advance the phone cursor by itself.
 for marker in (
-    'final long catchUpFromAt = Math.max(0L, phoneChangeCursorAt - 2000L);',
-    'SYNC_PUSH_CATCHUP_OK',
-    'remoteChanges += applyPhoneChanges(outgoing, batch.changes);',
-    'result.cursorUpdatedAt >= phoneChangeCursorAt',
-    'phoneChangeCursorUuid = result.cursorSyncUuid',
-    'remoteChanges=" + result.remoteChanges'
+    'if (result.patchUsed && !dirty)',
+    'SYNC_PUSH_CATCHUP_START',
+    'pullChangesFromPhone(catchUpHost, secret, result.revision)',
+    'if (!result.patchUsed) {',
+    'updatePhoneChangeCursorFromSnapshot(result.data);'
 ):
-    assert marker in desktop, "Missing post-push phone catch-up: " + marker
-print("desktop post-push phone delta catch-up contract OK")
+    assert marker in desktop, "Missing safe post-push phone catch-up: " + marker
+assert 'updatePhoneChangeCursorFromSnapshot(result.data);' in desktop
+assert 'result.cursorUpdatedAt >= phoneChangeCursorAt' not in desktop
+print("desktop safe post-push phone delta catch-up contract OK")
 
 # Phone LAN self-tests must never impersonate a real Desktop client.
 assert 'isThisDeviceAddress(InetAddress remote)' in server
@@ -392,7 +394,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.92"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.93"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
