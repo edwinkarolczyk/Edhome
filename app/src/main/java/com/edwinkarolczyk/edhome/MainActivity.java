@@ -5766,10 +5766,22 @@ public final class MainActivity extends Activity {
         EditText available=new EditText(this);
         available.setSingleLine(true);
         available.setHint("Najwcześniej od RRRR-MM-DD • opcjonalnie");
+        available.setFocusable(false);
+        available.setOnClickListener(v->{
+            java.time.LocalDate initial;
+            try { initial = java.time.LocalDate.parse(available.getText().toString()); }
+            catch (Exception ignored) { initial = java.time.LocalDate.now(); }
+            new DatePickerDialog(this,(picker,y,m,d)->
+                available.setText(java.time.LocalDate.of(y,m+1,d).toString()),
+                initial.getYear(),initial.getMonthValue()-1,
+                initial.getDayOfMonth()).show();
+        });
         form.addView(text("Rodzaj",13,true));form.addView(kind);
         form.addView(text("Wymaganie",13,true));form.addView(label);
         form.addView(text("Znaczenie",13,true));form.addView(strength);
         form.addView(text("Przewidywana dostępność",13,true));form.addView(available);
+        smallButton(form,"Wybierz datę",()->available.performClick());
+        smallButton(form,"Bez daty",()->available.setText(""));
         form.addView(text("Jeśli twardy bloker nie ma daty, planer nie zgaduje "
             +"terminu. Jeśli ma datę, planuje nie wcześniej niż od tej daty, "
             +"ale Start nadal wymaga oznaczenia blokera jako spełnionego.",
