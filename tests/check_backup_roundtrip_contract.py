@@ -145,4 +145,13 @@ for token in (
     'DATA_BACKUP_BACKGROUND_STARTED',
 ):
     assert token in main, "Backup heavy I/O must stay off UI thread: "+token
+for token in (
+    'private AlertDialog dataBackupBusyDialog;',
+    'showDataBackupBusy("Tworzenie kopii"',
+    'showDataBackupBusy("Sprawdzanie kopii"',
+    'showDataBackupBusy("Przywracanie kopii"',
+    '.setCancelable(false)',
+    'hideDataBackupBusy();',
+):
+    assert token in main, "Background restore must stay serialized behind modal: "+token
 print("Backup: 49 domain tables + verified ZIP manifest/SHA-256, original storage media, thumbnail regeneration, legacy JSON and rollback contract PASS")
