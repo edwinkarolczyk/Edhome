@@ -40,6 +40,8 @@ jobs:
           python tests/check_desktop_sync_contract.py
           python tests/check_storage_stabilization_gate.py
           python tests/check_desktop_settings_contract.py
+      - name: Desktop Hub API runtime smoke
+        run: gradle --no-daemon :desktop:test
       - name: Compile and install distribution
         run: gradle --no-daemon :desktop:clean :desktop:installDist
       - name: Build Windows app image
