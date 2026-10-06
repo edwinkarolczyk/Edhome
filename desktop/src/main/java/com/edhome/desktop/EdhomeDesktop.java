@@ -1670,6 +1670,21 @@ public final class EdhomeDesktop extends JFrame {
             throw new IllegalArgumentException("Budżet nie może być ujemny.");
 
         long id = longValue(row,"id");
+        if("done".equals(status) && id>0L) {
+            int open=0;
+            for(JsonElement element:table("tasks")) {
+                if(!element.isJsonObject())continue;
+                JsonObject task=element.getAsJsonObject();
+                if(intValue(task,"done")!=0)continue;
+                long taskProject=longValue(task,"project_id");
+                if(taskProject==id||desktopProjectDescendsFrom(taskProject,id))
+                    open++;
+            }
+            if(open>0)
+                throw new IllegalArgumentException(
+                    "Nie można zakończyć projektu. Pozostało "
+                        +open+" niewykonanych czynności.");
+        }
         long parent = longValue(row,"parent_id");
         if (parent <= 0) return;
         if (parent == id)
@@ -1685,6 +1700,21 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IllegalArgumentException("Projekt nadrzędny już nie istnieje.");
             cursor = longValue(parentRow,"parent_id");
         }
+    }
+
+    private boolean desktopProjectDescendsFrom(long candidate,long ancestor) {
+        if(candidate<=0L||ancestor<=0L||candidate==ancestor)return false;
+        java.util.HashSet<Long> seen=new java.util.HashSet<>();
+        long cursor=candidate;
+        for(int depth=0;depth<128&&cursor>0L;depth++) {
+            if(!seen.add(cursor))return false;
+            JsonObject project=desktopProjectById(cursor);
+            if(project==null)return false;
+            long parent=longValue(project,"parent_id");
+            if(parent==ancestor)return true;
+            cursor=parent;
+        }
+        return false;
     }
 
     private JComboBox<Choice> projectParentCombo(JsonObject row,String selected) {
