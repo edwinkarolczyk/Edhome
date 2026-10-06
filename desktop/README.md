@@ -37,7 +37,7 @@ Funkcja może mieć inną formę na PC i telefonie, jeżeli rezultat danych i re
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.7.0.98
+## Aktualny stan Desktop — 0.7.0.99
 
 Ustawienia Desktop są uproszczone do obsługi lokalnego Huba/API: połączenie telefonu przez QR, stan API, aktualizacja Desktop, diagnostyka Desktop i backup. Desktop słucha lokalnie na TCP 45823, a wykrywanie po zmianie adresu IP używa UDP 45822; telefon jest klientem API. PC może być podłączony kablem LAN, a telefon przez Wi‑Fi. Pierwsze parowanie zapisuje trwałe ID Desktopu i token, więc po zmianie IP telefon odnajduje ten sam komputer bez ponownego QR. Przy pierwszym połączeniu wykonywana jest kopia bezpieczeństwa przed scaleniem danych.
 
