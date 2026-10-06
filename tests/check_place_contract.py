@@ -30,6 +30,12 @@ delete_ui=main.split("private void confirmDeletePlace(",1)[1].split(
 assert 'if (!db.deletePlace(entry.id))' in delete_ui
 assert 'Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon.' in delete_ui
 assert 'QR tego miejsca przestanie działać' in delete_ui
+assert 'private void showPlaceDeleteBlocked(PlaceEntry entry, String reason)' in main
+blocked=main.split("private void showPlaceDeleteBlocked(",1)[1].split(
+    "private void confirmDeletePlace(",1)[0]
+assert '"Przenieś miejsce"' in blocked
+assert 'placeEditor(entry.id, entry.name, entry.kind' in blocked
+assert 'Podmiejsca, rzeczy, pudełka i historia pozostaną' in blocked
 assert "boolean deletePlace(long id)" in main
 assert "PLACE_TYPES" not in main, "Fixed place-kind list must not return"
 assert 'inputVersion < 11 && "places".equals(definition[0])' in backup

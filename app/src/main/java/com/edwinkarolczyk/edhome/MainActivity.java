@@ -8693,10 +8693,23 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void showPlaceDeleteBlocked(PlaceEntry entry, String reason) {
+        new AlertDialog.Builder(this)
+            .setTitle("Nie można usunąć miejsca")
+            .setMessage(reason + "\n\nMożesz przenieść całe miejsce do innego miejsca "
+                + "nadrzędnego. Podmiejsca, rzeczy, pudełka i historia pozostaną "
+                + "powiązane z tym miejscem.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Przenieś miejsce", (dialog, which) ->
+                placeEditor(entry.id, entry.name, entry.kind,
+                    entry.parent, entry.icon))
+            .show();
+    }
+
     private void confirmDeletePlace(PlaceEntry entry, int childCount) {
         if (childCount > 0) {
-            alert("Najpierw przenieś lub usuń podmiejsca. "
-                + "Nie usuwamy całej gałęzi przypadkowo.");
+            showPlaceDeleteBlocked(entry,
+                "Miejsce ma podmiejsca. Najpierw przenieś lub uporządkuj gałąź.");
             return;
         }
         new AlertDialog.Builder(this).setTitle("Usunąć miejsce?")
@@ -8707,8 +8720,8 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
-                    alert("Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon. "
-                        + "Przenieś je najpierw.");
+                    showPlaceDeleteBlocked(entry,
+                        "Miejsce zawiera rzeczy, pudełka albo komplety opon.");
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
