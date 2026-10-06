@@ -9,6 +9,8 @@ desktop = (root / "desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java")
 sync_store = (root / "app/src/main/java/com/edwinkarolczyk/edhome/SyncRecordStore.java").read_text(encoding="utf-8")
 desktop_log = (root / "desktop/src/main/java/com/edhome/desktop/DesktopDiagnosticLog.java").read_text(encoding="utf-8")
 phone_log = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DiagnosticLog.java").read_text(encoding="utf-8")
+hub_server = (root / "desktop/src/main/java/com/edhome/desktop/DesktopHubServer.java").read_text(encoding="utf-8")
+hub_client = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DesktopHubSync.java").read_text(encoding="utf-8")
 
 assert '"/snapshot"' in server
 assert '"X-EDHOME-TOKEN"' in desktop
@@ -442,8 +444,6 @@ for marker in (
     assert marker in desktop, "Missing Desktop project task-order contract: " + marker
 print("desktop persistent project task order contract OK")
 # Desktop-as-Hub v2: PC exposes local API, Android is the client.
-hub_server = (root / "desktop/src/main/java/com/edhome/desktop/DesktopHubServer.java").read_text(encoding="utf-8")
-hub_client = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DesktopHubSync.java").read_text(encoding="utf-8")
 for marker in (
     "static final int PORT=45823",
     "DISCOVERY_PORT=45822",
