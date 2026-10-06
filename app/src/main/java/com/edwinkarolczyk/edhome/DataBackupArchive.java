@@ -411,6 +411,7 @@ final class DataBackupArchive {
             expected.add(MANIFEST);
             String json = null;
             int storage = 0, legacyThumbs = 0, tiles = 0;
+            long verifiedPayloadBytes = 0;
             for (int i = 0; i < files.length(); i++) {
                 JSONObject item = files.getJSONObject(i);
                 String path = item.getString("path");
@@ -423,6 +424,9 @@ final class DataBackupArchive {
                 if (entry == null)
                     throw new IllegalArgumentException("Brakuje pliku w kopii: " + path);
                 DigestInfo digest = digestEntry(zip, entry);
+                verifiedPayloadBytes += digest.size;
+                if (verifiedPayloadBytes > MAX_EXTRACTED_BYTES)
+                    throw new IllegalArgumentException("Kopia po rozpakowaniu jest za duża.");
                 if (digest.size != bytes || !digest.sha256.equalsIgnoreCase(hash))
                     throw new IllegalArgumentException("Niezgodna suma kontrolna: " + path);
                 if (DATA.equals(path)) {
