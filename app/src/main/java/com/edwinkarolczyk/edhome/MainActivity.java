@@ -5209,12 +5209,17 @@ public final class MainActivity extends Activity {
                     db.getReadableDatabase(),taskId);
                 final int softRequirements=ProjectPlanningStore.openSoftCount(
                     db.getReadableDatabase(),taskId);
+                final boolean completionBlocked=blockers>0||hardRequirements>0;
 
                 LinearLayout box=card();
                 CheckBox check=new CheckBox(this);
                 check.setText(taskName);
                 check.setTextColor(done?subdued:ink);
                 check.setChecked(done);
+                check.setEnabled(done||!completionBlocked);
+                if(completionBlocked&&!done)
+                    check.setContentDescription(taskName
+                        +". Zablokowane. Najpierw zakończ zależności i spełnij wymagania.");
                 box.addView(check);
 
                 String timeLine="Plan: "+projectTimeText(minutes)
@@ -5256,6 +5261,15 @@ public final class MainActivity extends Activity {
                         +"pracę jako przekroczenie.",12,false));
 
                 check.setOnCheckedChangeListener((v,value)->{
+                    if(value&&(ProjectStore.openDependencyCount(
+                            db.getReadableDatabase(),taskId)>0
+                            ||ProjectPlanningStore.openHardCount(
+                                db.getReadableDatabase(),taskId)>0)) {
+                        check.setChecked(false);
+                        alert("Nie można oznaczyć zablokowanej czynności jako wykonanej. "
+                            +"Najpierw zakończ zależności i spełnij wymagania.");
+                        return;
+                    }
                     if(value&&ProjectStore.activeWorkStartedAt(
                             db.getReadableDatabase(),taskId)!=null) {
                         check.setChecked(false);
@@ -5319,9 +5333,27 @@ public final class MainActivity extends Activity {
                             editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
                     }
                 });
+                compactAction(editRow,"Usuń",
+                    ()->confirmDeleteProjectTask(taskId,taskName));
             }
         }
         if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void confirmDeleteProjectTask(long taskId,String taskName) {
+        new AlertDialog.Builder(this)
+            .setTitle("Usunąć czynność projektu?")
+            .setMessage(taskName
+                +"\nUsunięte zostaną jej zależności, wymagania i zapis czasu pracy. "
+                +"Tej operacji nie można cofnąć.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń",(dialog,which)->{
+                ReminderReceiver.cancelTask(this,taskId);
+                ProjectWorkNotification.cancel(this,taskId);
+                db.deleteTask(taskId);
+                DiagnosticLog.event("PROJECT_TASK_DELETED","task="+taskId);
+                render();
+            }).show();
     }
 
     private int projectTimeGreen() {

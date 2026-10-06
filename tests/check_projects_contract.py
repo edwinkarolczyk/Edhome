@@ -66,6 +66,17 @@ assert 'ProjectPlanningStore.windows' in main
 assert 'ProjectPlanningStore.startBlockReason' in project
 assert 'project_task_blockers' in main
 assert 'database.delete("project_task_work_sessions"' in main
+project_tasks=main.split("private void renderProjectTasks",1)[1].split(
+    "private int projectTimeGreen",1)[0]
+assert 'final boolean completionBlocked=blockers>0||hardRequirements>0;' in project_tasks
+assert 'check.setEnabled(done||!completionBlocked);' in project_tasks
+assert 'Nie można oznaczyć zablokowanej czynności jako wykonanej.' in project_tasks
+assert 'ProjectStore.openDependencyCount' in project_tasks
+assert 'ProjectPlanningStore.openHardCount' in project_tasks
+assert 'confirmDeleteProjectTask(taskId,taskName)' in project_tasks
+assert 'private void confirmDeleteProjectTask' in main
+assert 'ProjectWorkNotification.cancel(this,taskId);' in main
+assert 'PROJECT_TASK_DELETED' in main
 assert '"project_sort_order"' in backup
 assert 'project_sort_order INTEGER NOT NULL DEFAULT 0' in main
 assert 'DATABASE_MIGRATED_44_TO_45_PROJECT_TASK_ORDER' in main
