@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.97";
+    private static final String DESKTOP_VERSION = "0.7.0.98";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -5962,7 +5962,7 @@ public final class EdhomeDesktop extends JFrame {
             "Aby telefon mógł połączyć się z API EDHOME Desktop, "
                 + "Zapora Windows musi zezwolić na TCP 45823 i lokalne wykrywanie UDP 45822.\n"
                 + "Reguły będą ograniczone do lokalnej podsieci.\n\n"
-                + "Windows może poprosić o zgodę administratora.",
+                + "Windows poprosi o jedną zgodę administratora.",
             "EDHOME • zezwolenie na lokalny Hub",
             JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (answer != JOptionPane.YES_OPTION) {
@@ -5972,15 +5972,15 @@ public final class EdhomeDesktop extends JFrame {
 
         try {
             String script =
-                "$a=Start-Process -FilePath 'netsh.exe' -ArgumentList "
-                    + "'advfirewall firewall add rule name=EDHOME_Hub_TCP_45823 "
-                    + "dir=in action=allow protocol=TCP localport=45823 profile=any "
-                    + "remoteip=LocalSubnet' -Verb RunAs -Wait -PassThru; "
-                    + "if($a.ExitCode -ne 0){exit $a.ExitCode}; "
-                    + "$b=Start-Process -FilePath 'netsh.exe' -ArgumentList "
-                    + "'advfirewall firewall add rule name=EDHOME_Hub_UDP_45822 "
-                    + "dir=in action=allow protocol=UDP localport=45822 profile=any "
-                    + "remoteip=LocalSubnet' -Verb RunAs -Wait -PassThru; exit $b.ExitCode";
+                "$cmd='netsh advfirewall firewall add rule "
+                    + "name=EDHOME_Hub_TCP_45823 dir=in action=allow protocol=TCP "
+                    + "localport=45823 profile=any remoteip=LocalSubnet"
+                    + " & netsh advfirewall firewall add rule "
+                    + "name=EDHOME_Hub_UDP_45822 dir=in action=allow protocol=UDP "
+                    + "localport=45822 profile=any remoteip=LocalSubnet'; "
+                    + "$p=Start-Process -FilePath 'cmd.exe' "
+                    + "-ArgumentList '/c',$cmd -Verb RunAs -Wait -PassThru; "
+                    + "exit $p.ExitCode";
             Process process = new ProcessBuilder(
                 "powershell.exe", "-NoProfile", "-NonInteractive",
                 "-Command", script)
