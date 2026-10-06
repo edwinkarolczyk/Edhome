@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 203,
-  "versionName": "0.8.0.11",
-  "changelog": "EDHOME 0.8.0.11 — Beta. Domknięcie stabilizacji Android lifecycle: także generowanie PDF etykiet QR wraca do UI wyłącznie przez ochronę żywej Activity; BetaUpdater zamyka pracę przy onDestroy. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.11/edhome-beta.apk",
-  "sha256": "97a468e6a6141d9f491b64f6a92532ceffdeaae510dce1d78f84a67b63696469"
+  "versionCode": 205,
+  "versionName": "0.8.0.13",
+  "changelog": "EDHOME 0.8.0.13 — Beta. Korekta stabilizacji Magazynu: przywrócono usuwanie pustego Miejsca. Nadal zablokowane jest usuwanie Miejsca z podmiejscami, rzeczami/pudełkami lub kompletami opon; QR nie jest ponownie przydzielany. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.13/edhome-beta.apk",
+  "sha256": "048ab0d39f64f48e63403841b4dc051f67f1f977910f7efcd2a07012d8b4d85b"
 }
