@@ -76,6 +76,21 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 7. automatyczna synchronizacja Android ↔ Desktop w obie strony;
 8. migracja z ostatniej 0.6 bez utraty PayCheck, Pojazdów, Magazynu, NFC/QR ani ustawień panelu.
 
+## Backlog po stabilizacji — Pojazdy i maszyny
+
+To jest **kierunek do roadmapy, bez wdrażania podczas bieżącej stabilizacji**. Nie tworzyć osobnego modułu „Maszyny”; rozszerzyć istniejący moduł **Pojazdy** tak, aby obsługiwał także sprzęt z licznikiem motogodzin.
+
+- **Typ obiektu:** samochód, motocykl, quad, ciągnik, przyczepa, kosiarka, maszyna, inne. Rejestracja pozostaje opcjonalna; dla maszyn dodać numer seryjny / ewidencyjny.
+- **Rodzaj licznika:** kilometry, motogodziny, oba albo brak licznika. Nie wymuszać kilometrów dla maszyny.
+- **Czytelny zapis licznika:** grupowanie tysięcy spacją, np. `300 000 km`, `12 450 km`, `1 250 mtg`.
+- **Serwis:** gotowe typy m.in. olej silnikowy, filtr oleju, filtr powietrza, filtr paliwa, hydraulika, smarowanie, pasek/łańcuch, opony, serwis ogólny oraz własny typ.
+- **Interwał serwisowy:** wg kilometrów, motogodzin, czasu albo kombinacji, np. „co 15 000 km lub 12 miesięcy” / „co 500 mtg”.
+- **Przypomnienie o aktualizacji licznika:** tworzone przez istniejący moduł **Czynności**, np. „Sprawdź przebieg Golfa” co miesiąc albo „Sprawdź motogodziny kosiarki” co 2 tygodnie. Wykonanie czynności może otworzyć pole nowego odczytu i po zatwierdzeniu przeliczyć pozostały dystans/czas do serwisu. Brak wpisanego odczytu nie może tworzyć fikcyjnej wartości.
+- **Karta obiektu:** ostatni serwis, licznik przy wykonaniu, następny próg, ile zostało i najbliższy termin.
+- **Koszty:** zachować obecne powiązanie kosztu pojazdu/maszyny z PayCheck bez automatycznego podwójnego księgowania.
+- **Opony:** nie dublować kompletu jako zwykłej Rzeczy. Komplet pozostaje jednym rekordem pojazdu, ale może być widoczny w Magazynie przez wspólne `place_id`, np. „Opony zimowe — Golf → Garaż → Regał 2”.
+- **Warunek odbioru:** jeden obiekt może działać jako samochód z km albo maszyna z mtg bez osobnego modułu; przypomnienie licznika korzysta z Czynności, a serwis nie dubluje historii ani kosztów.
+
 ## Poza zakresem 0.7
 
 - automatyczne rozpoznawanie roślin/chorób ze zdjęcia;

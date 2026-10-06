@@ -28,7 +28,7 @@ assert '"Usuń"' in branch
 delete_ui=main.split("private void confirmDeletePlace(",1)[1].split(
     "private void placeEditor(",1)[0]
 assert 'if (!db.deletePlace(entry.id))' in delete_ui
-assert 'Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon.' in delete_ui
+assert 'Miejsce zawiera rzeczy, pudełka albo komplety opon.' in delete_ui
 assert 'QR tego miejsca przestanie działać' in delete_ui
 assert 'private void showPlaceDeleteBlocked(PlaceEntry entry, String reason)' in main
 blocked=main.split("private void showPlaceDeleteBlocked(",1)[1].split(
