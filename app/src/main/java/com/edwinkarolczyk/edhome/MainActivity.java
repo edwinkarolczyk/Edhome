@@ -330,8 +330,9 @@ public final class MainActivity extends Activity {
                 "count="+prunedStorageOriginals);
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         if (BetaUpdater.isBeta()) {
-            LanSyncServer.ensureToken(prefs);
-            LanSyncService.ensureStarted(this);
+            try { stopService(new Intent(this,LanSyncService.class)); }
+            catch(Exception ignored) { }
+            DesktopHubSync.ensureScheduled(this);
         }
         ReminderReceiver.schedule(this);
         DeviceTimerReceiver.scheduleAll(this);
@@ -499,7 +500,11 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
         refreshNfcReaderMode();
-        if (BetaUpdater.isBeta()) LanSyncService.ensureStarted(this);
+        if (BetaUpdater.isBeta()) {
+            try { stopService(new Intent(this,LanSyncService.class)); }
+            catch(Exception ignored) { }
+            DesktopHubSync.ensureScheduled(this);
+        }
         if (root != null && !unlocked) render();
         if (privateNeedsRender && root != null) {
             privateNeedsRender = false;
@@ -1577,6 +1582,7 @@ public final class MainActivity extends Activity {
                 scroll.scrollTo(0,Math.min(restoreScrollY,maxY));
             }
         });
+        if(BetaUpdater.isBeta())DesktopHubSync.kick(this);
     }
 
     private static int countViewTree(View view,int remaining) {
@@ -16983,9 +16989,37 @@ public final class MainActivity extends Activity {
         try {
             Uri uri = Uri.parse(raw);
             if (!"edhome".equalsIgnoreCase(uri.getScheme())
-                    || !"desktop-pair".equalsIgnoreCase(uri.getHost())
-                    || !"1".equals(uri.getQueryParameter("v")))
+                    || !"desktop-pair".equalsIgnoreCase(uri.getHost()))
                 throw new IllegalArgumentException("Nieprawidłowy QR EDHOME Desktop.");
+
+            String qrVersion=uri.getQueryParameter("v");
+            if("2".equals(qrVersion)) {
+                String host=uri.getQueryParameter("host");
+                String hostsText=uri.getQueryParameter("hosts");
+                String portText=uri.getQueryParameter("port");
+                String desktopId=uri.getQueryParameter("id");
+                String desktopToken=uri.getQueryParameter("token");
+                int port=Integer.parseInt(portText==null?"":portText);
+                if(port!=DesktopHubSync.PORT)
+                    throw new IllegalArgumentException("Nieprawidłowy port API Desktopu.");
+                java.util.LinkedHashSet<String> pairHosts=
+                    new java.util.LinkedHashSet<>();
+                if(isPrivateLanIpv4(host))pairHosts.add(host);
+                if(hostsText!=null&&hostsText.length()<=256)
+                    for(String candidate:hostsText.split(","))
+                        if(isPrivateLanIpv4(candidate.trim()))
+                            pairHosts.add(candidate.trim());
+                DesktopHubSync.pair(this,desktopId,desktopToken,
+                    new java.util.ArrayList<>(pairHosts));
+                DiagnosticLog.event("DESKTOP_HUB_QR_PAIRED",
+                    "desktop="+desktopId);
+                alert("Połączono z API EDHOME Desktop. "
+                    +"Telefon działa jako klient i synchronizuje dane w tle.");
+                render();
+                return;
+            }
+            if(!"1".equals(qrVersion))
+                throw new IllegalArgumentException("Nieobsługiwana wersja QR EDHOME Desktop.");
 
             String host = uri.getQueryParameter("host");
             String hostsText = uri.getQueryParameter("hosts");
@@ -17879,29 +17913,45 @@ public final class MainActivity extends Activity {
 
         if(BetaUpdater.isBeta()){
             LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
-                "Parowanie, stan połączenia i diagnostyka LAN.",false);
-            String ip=LanSyncServer.localAddress();
-            String token=prefs.getString(LanSyncServer.TOKEN_PREF,"");
-            String endpoint=ip==null?"Brak adresu Wi‑Fi/LAN":ip+":"+LanSyncServer.PORT;
-            desktop.addView(text("Adres: "+endpoint
-                +"\nKod parowania: "+token
-                +"\nSerwer LAN: "+(LanSyncService.endpointRunning()?"DZIAŁA":"NIE DZIAŁA")
-                +"\nPC: "+(LanSyncServer.isSyncing()?"SYNCHRONIZACJA":
-                    LanSyncServer.hasRecentClient()?"POŁĄCZONY":"NIEPOŁĄCZONY"),
-                13,false));
+                "Telefon jest klientem lokalnego API EDHOME Desktop.",false);
+            desktop.addView(text(DesktopHubSync.status(this),13,false));
             smallButton(desktop,"Skanuj QR z ekranu PC",this::scanDesktopPairQr);
-            smallButton(desktop,"Napraw / uruchom połączenie PC",()->{
-                LanSyncService.ensureStarted(this);
-                if(root!=null)root.postDelayed(()->render(),1800L);
+            smallButton(desktop,"Synchronizuj teraz",()->{
+                DesktopHubSync.kick(this);
+                alert("Synchronizacja uruchomiona. Jeśli PC jest wyłączony, "
+                    +"EDHOME nadrobi zmiany po jego powrocie.");
             });
-            smallButton(desktop,"Diagnostyka połączenia z PC",this::testPhoneLanServer);
-            smallButton(desktop,"Kopiuj adres i kod",()->{
-                ClipboardManager clipboard=(ClipboardManager)
-                    getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText(
-                    "EDHOME Desktop",endpoint+"\n"+token));
-                alert("Skopiowano dane połączenia EDHOME Desktop.");
-            });
+            String conflict=DesktopHubSync.conflict(this);
+            if(!conflict.isEmpty()) {
+                TextView warning=text("⚠ "+conflict,13,true);
+                warning.setTextColor(projectTimeYellow());
+                desktop.addView(warning);
+                smallButton(desktop,"Konflikt • zachowaj wersję telefonu",()->{
+                    DesktopHubSync.resolvePhone(this);
+                    alert("Wybrano wersję telefonu. EDHOME zastosuje ją przy połączeniu z PC.");
+                });
+                smallButton(desktop,"Konflikt • zachowaj wersję Desktop",()->{
+                    DesktopHubSync.resolveDesktop(this);
+                    alert("Wybrano wersję Desktop. EDHOME pobierze ją z PC.");
+                });
+            }
+            if(DesktopHubSync.paired(this))
+                smallButton(desktop,"Usuń parowanie z Desktopem",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć parowanie?")
+                        .setMessage("Dane pozostaną na telefonie. "
+                            +"Do ponownego połączenia potrzebny będzie QR z Desktopu.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            DesktopHubSync.clearPairing(this);
+                            DiagnosticLog.event("DESKTOP_HUB_UNPAIRED");
+                            render();
+                        }).show());
+            desktop.addView(text(
+                "PC może być podłączony kablem LAN, a telefon przez Wi‑Fi. "
+                    +"Po zmianie adresu IP telefon szuka tego samego Desktopu po jego ID. "
+                    +"Kontrola zmian odbywa się co około 60 s oraz po pracy w aplikacji.",
+                12,false));
         }
 
         LinearLayout data=settingsAccordion("data","Dane i diagnostyka",
