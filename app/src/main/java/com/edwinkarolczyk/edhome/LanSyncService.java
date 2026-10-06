@@ -108,6 +108,7 @@ public final class LanSyncService extends Service {
                 afterDataChange();
             },
             this::databaseRevision,
+            this::changesSince,
             this::applyRecordPatch);
         server.start();
         ENDPOINT_RUNNING = server.isRunning();
@@ -148,6 +149,12 @@ public final class LanSyncService extends Service {
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build();
         manager.notify(NOTIFICATION_ID, notification);
+    }
+
+    private String changesSince(long afterUpdatedAt, String afterUuid)
+            throws Exception {
+        return SyncRecordStore.exportChangesAfter(
+            db.getWritableDatabase(), afterUpdatedAt, afterUuid);
     }
 
     private String applyRecordPatch(String incoming) throws Exception {

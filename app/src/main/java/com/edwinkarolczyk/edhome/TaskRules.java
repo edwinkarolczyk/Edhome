@@ -59,6 +59,28 @@ final class TaskRules {
         }
     }
 
+    /** Parse separate whole-hour and minute fields into storage minutes. */
+    static Integer minutesFromParts(String hoursText, String minutesText,
+            int minMinutes, int maxMinutes, boolean clampMinimum) {
+        if (minMinutes < 1 || maxMinutes < minMinutes) return null;
+        String hoursValue = hoursText == null ? "" : hoursText.trim();
+        String minutesValue = minutesText == null ? "" : minutesText.trim();
+        if (hoursValue.isEmpty() && minutesValue.isEmpty()) return null;
+        int hours = 0;
+        int minutes = 0;
+        try {
+            if (!hoursValue.isEmpty()) hours = Integer.parseInt(hoursValue);
+            if (!minutesValue.isEmpty()) minutes = Integer.parseInt(minutesValue);
+        } catch (NumberFormatException error) {
+            return null;
+        }
+        if (hours < 0 || minutes < 0 || minutes > 59) return null;
+        long total = hours * 60L + minutes;
+        if (total > maxMinutes) return null;
+        if (total < minMinutes) return clampMinimum ? minMinutes : null;
+        return (int) total;
+    }
+
     static String validate(String title, String dueDate, String rule, int every) {
         if (title == null || title.trim().isEmpty() || title.trim().length() > 160)
             return "Podaj nazwę (maks. 160 znaków).";

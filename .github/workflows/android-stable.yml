@@ -1,0 +1,464 @@
+name: EDHOME Stable APK
+
+on:
+  push:
+    branches: [release/edhome-stable-0.8.0.14-20261006, main]
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "*.gradle"
+      - "gradle.properties"
+      - "gradle/**"
+      - "settings.gradle"
+      - ".github/workflows/android-stable.yml"
+      - ".github/scripts/**"
+      - "tests/**"
+  workflow_dispatch:
+
+concurrency:
+  group: edhome-stable-signing
+  cancel-in-progress: false
+
+jobs:
+  build-stable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android platform 35
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Verify update-channel scripts
+        run: python3 -m py_compile .github/scripts/publish_public_channel.py
+      - name: Task calendar recurrence regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/task-check"
+          javac -d "$RUNNER_TEMP/task-check" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TaskRules.java \
+            tests/task_rules/TaskRulesSmoke.java
+          java -cp "$RUNNER_TEMP/task-check" com.edwinkarolczyk.edhome.TaskRulesSmoke
+      - name: Time suggestion regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/time-suggestions"
+          javac -d "$RUNNER_TEMP/time-suggestions" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java \
+            tests/task_rules/TimeSuggestionsSmoke.java
+          java -cp "$RUNNER_TEMP/time-suggestions" \
+            com.edwinkarolczyk.edhome.TimeSuggestionsSmoke
+      - name: Offline shopping rules regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/shopping"
+          javac -d "$RUNNER_TEMP/shopping" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TextEntryRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/ShoppingRules.java \
+            tests/task_rules/ShoppingRulesSmoke.java
+          java -cp "$RUNNER_TEMP/shopping" \
+            com.edwinkarolczyk.edhome.ShoppingRulesSmoke
+      - name: Waste task recurrence regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/waste"
+          javac -d "$RUNNER_TEMP/waste" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TaskRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/WasteRules.java \
+            tests/task_rules/WasteRulesSmoke.java
+          java -cp "$RUNNER_TEMP/waste" \
+            com.edwinkarolczyk.edhome.WasteRulesSmoke
+      - name: Waste shared-task/notification contract
+        run: python3 tests/check_waste_contract.py
+      - name: Per-task reminder timing and quiet-hours regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/reminders"
+          javac -d "$RUNNER_TEMP/reminders" \
+            app/src/main/java/com/edwinkarolczyk/edhome/QuietHoursRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/ReminderRules.java \
+            tests/task_rules/ReminderRulesSmoke.java
+          java -cp "$RUNNER_TEMP/reminders" \
+            com.edwinkarolczyk.edhome.ReminderRulesSmoke
+      - name: Reminder receiver and backup contract
+        run: python3 tests/check_reminder_contract.py
+      - name: Hierarchical places regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/places"
+          javac -d "$RUNNER_TEMP/places" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PlaceRules.java \
+            tests/task_rules/PlaceRulesSmoke.java
+          java -cp "$RUNNER_TEMP/places" \
+            com.edwinkarolczyk.edhome.PlaceRulesSmoke
+      - name: Place hierarchy / task / backup contract
+        run: python3 tests/check_place_contract.py
+      - name: Appliance timer validation regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/appliance-timers"
+          javac -d "$RUNNER_TEMP/appliance-timers" \
+            app/src/main/java/com/edwinkarolczyk/edhome/DeviceTimerRules.java \
+            tests/task_rules/DeviceTimerRulesSmoke.java
+          java -cp "$RUNNER_TEMP/appliance-timers" \
+            com.edwinkarolczyk.edhome.DeviceTimerRulesSmoke
+      - name: Appliance timers / alarms / backup contract
+        run: python3 tests/check_device_timer_contract.py
+      - name: Recurring assignee rotation regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/rotation"
+          javac -d "$RUNNER_TEMP/rotation" \
+            app/src/main/java/com/edwinkarolczyk/edhome/RotationRules.java \
+            tests/task_rules/RotationRulesSmoke.java
+          java -cp "$RUNNER_TEMP/rotation" \
+            com.edwinkarolczyk.edhome.RotationRulesSmoke
+      - name: Rotation DB / history / backup contract
+        run: python3 tests/check_rotation_contract.py
+      - name: Vehicle rules validation and v25 calendar/backup integration
+        run: |
+          mkdir -p "$RUNNER_TEMP/vehicles"
+          javac -d "$RUNNER_TEMP/vehicles" \
+            app/src/main/java/com/edwinkarolczyk/edhome/VehicleRules.java \
+            tests/task_rules/VehicleRulesSmoke.java
+          java -cp "$RUNNER_TEMP/vehicles" \
+            com.edwinkarolczyk.edhome.VehicleRulesSmoke
+          python3 tests/check_vehicle_contract.py
+          python3 tests/check_vehicle_tyre_contract.py
+      - name: Vehicle OC policy history and renewal integrity
+        run: python3 tests/check_vehicle_policy_contract.py
+      - name: OC calendar date picker and year-minus-day regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/vehicle-policy-dates"
+          javac -d "$RUNNER_TEMP/vehicle-policy-dates" \
+            app/src/main/java/com/edwinkarolczyk/edhome/VehiclePolicyDates.java \
+            tests/task_rules/VehiclePolicyDatesSmoke.java
+          java -cp "$RUNNER_TEMP/vehicle-policy-dates" \
+            com.edwinkarolczyk.edhome.VehiclePolicyDatesSmoke
+          python3 tests/check_vehicle_policy_dates_contract.py
+      - name: Vehicle date picker and optional deadline clearing regression
+        run: python3 tests/check_vehicle_date_picker_contract.py
+      - name: Vehicle calendar future-deadline discovery regression
+        run: python3 tests/check_vehicle_calendar_visibility_contract.py
+      - name: Vehicle OC goal linking, v27 backup and ledger isolation
+        run: python3 tests/check_vehicle_policy_goal_contract.py
+      - name: Vehicle opt-in OC/inspection notification regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/vehicle-reminder-rules"
+          javac -d "$RUNNER_TEMP/vehicle-reminder-rules" \
+            app/src/main/java/com/edwinkarolczyk/edhome/VehicleReminderRules.java \
+            tests/task_rules/VehicleReminderRulesSmoke.java
+          java -cp "$RUNNER_TEMP/vehicle-reminder-rules" \
+            com.edwinkarolczyk.edhome.VehicleReminderRulesSmoke
+          python3 tests/check_vehicle_reminder_contract.py
+      - name: Vehicle cost and one shared PayCheck expense regression
+        run: python3 tests/check_vehicle_cost_contract.py
+      - name: Vehicle document register regression
+        run: python3 tests/check_vehicle_document_contract.py
+      - name: Per-vehicle collapsed state regression
+        run: python3 tests/check_vehicle_collapse_contract.py
+      - name: Pending shared PayCheck and one-time confirmation regression
+        run: python3 tests/check_paycheck_pending_contract.py
+      - name: Monthly PayCheck plan and confirmed-actuals regression
+        run: python3 tests/check_paycheck_monthly_budget_contract.py
+      - name: Opt-in bank notification parsing and privacy regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/bank-notifications"
+          javac -d "$RUNNER_TEMP/bank-notifications" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankNotificationRules.java \
+            tests/task_rules/BankNotificationRulesSmoke.java
+          java -cp "$RUNNER_TEMP/bank-notifications" \
+            com.edwinkarolczyk.edhome.BankNotificationRulesSmoke
+          python3 tests/check_bank_notification_contract.py
+          python3 tests/check_bank_auto_pending_contract.py
+      - name: Bank CSV parsing regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/bank-csv"
+          javac -d "$RUNNER_TEMP/bank-csv" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementCsv.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementMbank.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementVeloPdf.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementWorkbook.java \
+            tests/task_rules/BankStatementCsvSmoke.java \
+            tests/task_rules/BankStatementMbankSmoke.java \
+            tests/task_rules/BankStatementVeloPdfSmoke.java
+          java -cp "$RUNNER_TEMP/bank-csv" \
+            com.edwinkarolczyk.edhome.BankStatementCsvSmoke
+          java -cp "$RUNNER_TEMP/bank-csv" \
+            com.edwinkarolczyk.edhome.BankStatementMbankSmoke
+          java -cp "$RUNNER_TEMP/bank-csv" \
+            com.edwinkarolczyk.edhome.BankStatementVeloPdfSmoke
+          python3 tests/check_bank_statement_contract.py
+          python3 tests/check_bank_evidence_queue_contract.py
+      - name: PayCheck provenance and backup regression
+        run: python3 tests/check_paycheck_provenance_contract.py
+      - name: SQLite migration and backup contract
+        run: python3 tests/check_db_contract.py
+      - name: User profiles, local PIN and sync contract
+        run: python3 tests/check_user_profiles_contract.py
+      - name: Projects hierarchy, dependencies and planning contract
+        run: python3 tests/check_projects_contract.py
+      - name: Capitalized names and titles contract
+        run: python3 tests/check_text_entry_capitalization_contract.py
+      - name: Project availability, blockers and user-role contract
+        run: python3 tests/check_project_planning_contract.py
+      - name: Settings crash and bounded clipboard diagnostics regression
+        run: python3 tests/check_settings_diagnostics_contract.py
+      - name: Backup schema, ZIP media and roundtrip contract
+        run: python3 tests/check_backup_roundtrip_contract.py
+      - name: Beta without PIN contract
+        run: python3 tests/check_beta_pin_contract.py
+      - name: Nine-tile drop slots and saved order regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/home-tile-order"
+          javac -d "$RUNNER_TEMP/home-tile-order" \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileOrder.java \
+            tests/task_rules/HomeTileOrderSmoke.java
+          java -cp "$RUNNER_TEMP/home-tile-order" \
+            com.edwinkarolczyk.edhome.HomeTileOrderSmoke
+      - name: Unlimited home tile catalog and legacy migration
+        run: |
+          mkdir -p "$RUNNER_TEMP/home-tiles-v2"
+          javac -d "$RUNNER_TEMP/home-tiles-v2" \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileOrder.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileCatalog.java \
+            tests/task_rules/HomeTileCatalogSmoke.java
+          java -cp "$RUNNER_TEMP/home-tiles-v2" \
+            com.edwinkarolczyk.edhome.HomeTileCatalogSmoke
+      - name: Adaptive tile width and hold thresholds
+        run: |
+          mkdir -p "$RUNNER_TEMP/home-layout"
+          javac -d "$RUNNER_TEMP/home-layout" \
+            app/src/main/java/com/edwinkarolczyk/edhome/HomeTileLayout.java \
+            tests/task_rules/HomeTileLayoutSmoke.java
+          java -cp "$RUNNER_TEMP/home-layout" \
+            com.edwinkarolczyk.edhome.HomeTileLayoutSmoke
+          python3 tests/check_home_adaptive_contract.py
+      - name: Unique home tile targets including hidden tiles
+        run: python3 tests/check_home_tile_unique_contract.py
+      - name: Light dialog text, hints and spinner contrast regression
+        run: python3 tests/check_dialog_contrast_contract.py
+      - name: Navigation back-stack and context regression
+        run: python3 tests/check_navigation_contract.py
+      - name: AI 3D pack import and private vault password policy
+        run: python3 tests/check_ai_3d_pack_contract.py
+      - name: Four-theme UI-only and drag-edit contract
+        run: python3 tests/check_ui_refresh_contract.py
+      - name: Pantry barcode check digits
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-scan"
+          javac -d "$RUNNER_TEMP/pantry-scan" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryScanRules.java \
+            tests/task_rules/PantryScanRulesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-scan" \
+            com.edwinkarolczyk.edhome.PantryScanRulesSmoke
+      - name: Pantry Open Food Facts integration contract
+        run: python3 tests/check_pantry_off_contract.py
+      - name: Pantry category regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-categories"
+          javac -d "$RUNNER_TEMP/pantry-categories" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryCategories.java \
+            tests/task_rules/PantryCategoriesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-categories" \
+            com.edwinkarolczyk.edhome.PantryCategoriesSmoke
+      - name: Pantry category and backup contract
+        run: python3 tests/check_pantry_categories_contract.py
+      - name: Pantry package rules and backup contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-packages"
+          javac -d "$RUNNER_TEMP/pantry-packages" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryPackageRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryPackSuggestion.java \
+            tests/task_rules/PantryPackageRulesSmoke.java \
+            tests/task_rules/PantryPackSuggestionSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-packages" \
+            com.edwinkarolczyk.edhome.PantryPackageRulesSmoke
+          java -cp "$RUNNER_TEMP/pantry-packages" \
+            com.edwinkarolczyk.edhome.PantryPackSuggestionSmoke
+          python3 tests/check_pantry_packages_contract.py
+          python3 tests/check_pantry_multipack_deposit_contract.py
+      - name: Scanner failure recovery and duplicate suppression
+        run: python3 tests/check_scanner_recovery_contract.py
+      - name: Local UPC/EAN TAKE matching, idempotent stock and repeat consent
+        run: python3 tests/check_pantry_take_alias_contract.py
+      - name: 0.5 TAKE scanner stabilization A-B-A safety
+        run: python3 tests/check_pantry_stabilization_contract.py
+      - name: Continuous TAKE countdown and interruption regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-take"
+          javac -d "$RUNNER_TEMP/pantry-take" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryTakeCountdown.java \
+            tests/task_rules/PantryTakeCountdownSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-take" \
+            com.edwinkarolczyk.edhome.PantryTakeCountdownSmoke
+          python3 tests/check_pantry_take_contract.py
+      - name: Batch barcode scan state and integration contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-batch"
+          javac -d "$RUNNER_TEMP/pantry-batch" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryBatchSession.java \
+            tests/task_rules/PantryBatchSessionSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-batch" \
+            com.edwinkarolczyk.edhome.PantryBatchSessionSmoke
+          python3 tests/check_pantry_batch_contract.py
+      - name: Alternate UPC EAN GTIN lookup regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/pantry-lookup-codes"
+          javac -d "$RUNNER_TEMP/pantry-lookup-codes" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryScanRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/PantryLookupCodes.java \
+            tests/task_rules/PantryLookupCodesSmoke.java
+          java -cp "$RUNNER_TEMP/pantry-lookup-codes" \
+            com.edwinkarolczyk.edhome.PantryLookupCodesSmoke
+          python3 tests/check_pantry_sources_contract.py
+      - name: Pantry name search confirmation contract
+        run: python3 tests/check_pantry_name_search_contract.py
+      - name: Existing pantry product barcode contract
+        run: python3 tests/check_pantry_existing_code_contract.py
+      - name: Shopping destination and unit-total regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/shopping-total"
+          javac -d "$RUNNER_TEMP/shopping-total" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/TextEntryRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/ShoppingRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/ShoppingCostRules.java \
+            tests/task_rules/ShoppingCostRulesSmoke.java
+          java -cp "$RUNNER_TEMP/shopping-total" \
+            com.edwinkarolczyk.edhome.ShoppingCostRulesSmoke
+          python3 tests/check_shopping_places_contract.py
+      - name: Shopping backup historical ID regression
+        run: python3 tests/check_shopping_history_sequence_contract.py
+      - name: Shopping receipt inventory and backup contract
+        run: python3 tests/check_shopping_receipt_contract.py
+      - name: Purchase price history and SQLite v22
+        run: python3 tests/check_pantry_prices_contract.py
+      - name: UX viewport, bank picker and storage photo backup contract
+        run: python3 tests/check_ui_continuity_and_thumbnails.py
+      - name: Nested Magazyn tree and saved branch state
+        run: python3 tests/check_storage_tree_contract.py
+      - name: Storage gallery, quick add and NFC location contract
+        run: python3 tests/check_storage_gallery_quickadd_contract.py
+      - name: Storage object box QR and backup contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/edhome-storage-qr"
+          javac -d "$RUNNER_TEMP/edhome-storage-qr" \
+            app/src/main/java/com/edwinkarolczyk/edhome/StorageQr.java \
+            tests/task_rules/StorageQrSmoke.java
+          java -cp "$RUNNER_TEMP/edhome-storage-qr" \
+            com.edwinkarolczyk.edhome.StorageQrSmoke
+          python3 tests/check_storage_qr_contract.py
+      - name: Storage location and place deletion regression
+        run: python3 tests/check_storage_integrity_contract.py
+      - name: Storage Android-Desktop stabilization gate
+        run: python3 tests/check_storage_stabilization_gate.py
+      - name: NFC UID binding, Android reader and object lifecycle contract
+        run: python3 tests/check_nfc_contract.py
+      - name: PayCheck grosze and shared-only ledger contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/edhome-paycheck"
+          javac -d "$RUNNER_TEMP/edhome-paycheck" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            tests/task_rules/MoneyRulesSmoke.java
+          java -cp "$RUNNER_TEMP/edhome-paycheck" \
+            com.edwinkarolczyk.edhome.MoneyRulesSmoke
+          python3 tests/check_paycheck_contract.py
+      - name: PayCheck goals and backup contract
+        run: python3 tests/check_paycheck_goals_contract.py
+      - name: Private PayCheck crypto and privacy contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/private-paycheck"
+          javac -d "$RUNNER_TEMP/private-paycheck" app/src/main/java/com/edwinkarolczyk/edhome/PrivatePaycheckCrypto.java tests/task_rules/PrivatePaycheckCryptoSmoke.java
+          java -cp "$RUNNER_TEMP/private-paycheck" com.edwinkarolczyk.edhome.PrivatePaycheckCryptoSmoke
+          python3 tests/check_private_paycheck_contract.py
+          python3 tests/check_private_backup_contract.py
+      - name: Update installer single-flight and polling regression
+        run: python3 tests/check_updater_contract.py
+      - name: EDHOME 0.6 preserved-contract gate
+        run: python3 tests/check_0_6_release_gate.py
+      - name: Garden 0.7 catalog CSV regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/garden-catalog"
+          javac -d "$RUNNER_TEMP/garden-catalog" \
+            app/src/main/java/com/edwinkarolczyk/edhome/GardenCatalogCsv.java \
+            tests/task_rules/GardenCatalogCsvSmoke.java
+          java -cp "$RUNNER_TEMP/garden-catalog" \
+            com.edwinkarolczyk.edhome.GardenCatalogCsvSmoke
+      - name: Garden 0.7 foundation contract
+        run: python3 tests/check_garden_contract.py
+      - name: Garden 0.7 code-side acceptance gate
+        run: python3 tests/check_garden_release_gate.py
+      - name: Desktop Wi-Fi read-only sync contract
+        run: python3 tests/check_desktop_sync_contract.py
+      - name: SUPLA Cloud 0.8 read-only foundation
+        run: python3 tests/check_supla_cloud_contract.py
+      - name: Compile-check Beta and Stable
+        run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
+      - name: Verify actual bundled 100 AI 3D icon images
+        run: python3 tests/check_bundled_3d_assets.py
+      - name: Require persistent EDHOME signing key
+        env:
+          KEY_B64: ${{ secrets.EDHOME_BETA_KEYSTORE_B64 }}
+          KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEY_B64" || -z "$KEY_ALIAS" || -z "$STORE_PASSWORD" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Missing EDHOME signing secrets; refusing Stable release."
+            exit 1
+          fi
+          printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/edhome-stable.p12"
+          chmod 600 "$RUNNER_TEMP/edhome-stable.p12"
+          EXPECTED_SHA256="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
+          ACTUAL_SHA256=$(keytool -list -v -keystore "$RUNNER_TEMP/edhome-stable.p12" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" | awk '/SHA256:/{print $2; exit}')
+          [[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]] || { echo "::error::EDHOME signing certificate mismatch."; exit 1; }
+          echo "EDHOME_BETA_KEYSTORE_FILE=$RUNNER_TEMP/edhome-stable.p12" >> "$GITHUB_ENV"
+      - name: Stable identity and promoted feature contract
+        run: |
+          grep -Fq "versionCode 206" app/build.gradle
+          grep -Fq "versionName '0.8.0.14'" app/build.gradle
+          grep -Fq "manifestPlaceholders = [appLabel: 'EDHOME']" app/build.gradle
+          grep -Fq "signingConfig signingConfigs.betaRelease" app/build.gradle
+          grep -Fq "stableImplementation 'com.tom-roush:pdfbox-android:2.0.27.0'" app/build.gradle
+          grep -Fq 'android:name=".LanSyncService"' app/src/stable/AndroidManifest.xml
+          grep -Fq 'android:name=".BankNotificationListener"' app/src/stable/AndroidManifest.xml
+          grep -Fq 'android:name="com.edwinkarolczyk.edhome.StorageQrPdfProvider"' app/src/stable/AndroidManifest.xml
+          grep -Fq 'android.permission.INTERNET' app/src/stable/AndroidManifest.xml
+          ! grep -Fq 'UpdateApkProvider' app/src/stable/AndroidManifest.xml
+          ! grep -Fq 'REQUEST_INSTALL_PACKAGES' app/src/stable/AndroidManifest.xml
+          ! grep -Fq 'PROTOTYP' app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java
+      - name: Build signed Stable 0.8.0.14
+        env:
+          EDHOME_BETA_STORE_PASSWORD: ${{ secrets.EDHOME_BETA_STORE_PASSWORD }}
+          EDHOME_BETA_KEY_ALIAS: ${{ secrets.EDHOME_BETA_KEY_ALIAS }}
+          EDHOME_BETA_KEY_PASSWORD: ${{ secrets.EDHOME_BETA_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleStableRelease
+      - name: Verify Stable APK identity and certificate
+        run: |
+          APK="app/build/outputs/apk/stable/release/app-stable-release.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "^package: name='com.edwinkarolczyk.edhome' versionCode='206' versionName='0.8.0.14'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -Fq "application-label:'EDHOME'"
+          EXPECTED_SHA256="40:E8:EF:84:39:F2:67:76:A4:F4:95:E6:B3:95:1C:72:E8:75:9E:D9:0F:A2:6D:9A:47:6A:AC:0A:58:9A:A6:EE"
+          ACTUAL_SHA256=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print toupper($2); exit}' | sed 's/../&:/g;s/:$//')
+          [[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]] || { echo "::error::Stable APK has an unexpected certificate."; exit 1; }
+      - name: Upload signed Stable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EDHOME-0.8.0.14-Stable-signed-APK
+          path: app/build/outputs/apk/stable/release/app-stable-release.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/edhome-stable.p12"

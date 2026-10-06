@@ -14,8 +14,8 @@ android {
         applicationId 'com.edwinkarolczyk.edhome'
         minSdk 26
         targetSdk 35
-        versionCode 177
-        versionName '0.7.4.36'
+        versionCode 206
+        versionName '0.8.0.14'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
     }
@@ -39,8 +39,9 @@ android {
         stable {
             dimension 'channel'
             applicationId 'com.edwinkarolczyk.edhome'
-            versionNameSuffix '-prototype'
-            manifestPlaceholders = [appLabel: 'EDHOME Prototype']
+            versionNameSuffix ''
+            signingConfig signingConfigs.betaRelease
+            manifestPlaceholders = [appLabel: 'EDHOME']
             buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         }
         beta {
@@ -72,8 +73,9 @@ dependencies {
     // JourneyApps CaptureManager calls androidx.core.content.ContextCompat at runtime.
     // Explicitly package AndroidX Core in Beta; javac alone does not detect a missing runtime class.
     implementation 'androidx.core:core:1.13.1'
-    // Local text extraction for user-selected bank PDFs in Beta only.
+    // Local text extraction for user-selected bank PDFs.
     betaImplementation 'com.tom-roush:pdfbox-android:2.0.27.0'
+    stableImplementation 'com.tom-roush:pdfbox-android:2.0.27.0'
     // Stable only; beta uses a separate direct-update path with no Play dependency.
     stableImplementation 'com.google.android.play:app-update:2.1.0'
 }

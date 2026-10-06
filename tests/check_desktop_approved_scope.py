@@ -66,7 +66,7 @@ for marker in (
 
 # Future budget planner: plan is separate from real ledger and supports document-guided setup.
 for marker in (
-    "Budżet przyszły", "Importuj PDF / XLSX / CSV", "Rachunek cykliczny",
+    "Budżet miesiąca", "Importuj PDF / XLSX / CSV", "Rachunek cykliczny",
     "Rata / kredyt", "Dochód cykliczny", "Co 2 miesiące",
     "Kiedy ten cykl się kończy?", "Prognoza 12 miesięcy",
     "paycheck-budget-plan.json",
@@ -116,7 +116,8 @@ for marker in ("DesktopReportPdf", "printTableReport", "Kalendarz", "Czynności"
     assert marker in report + desktop, f"Missing report printing contract: {marker}"
 
 # Product direction remains explicit.
-assert "Desktop = APK 1:1" in readme
+assert "tym samym modelu danych i tych samych regułach domenowych" in readme
+assert "nie muszą mieć identycznego interfejsu" in readme
 assert "Zatwierdzony zakres Desktop" in readme
 
 print("EDHOME Desktop approved scope: PASS")

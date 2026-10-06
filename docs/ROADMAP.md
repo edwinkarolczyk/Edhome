@@ -76,6 +76,22 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 7. automatyczna synchronizacja Android ↔ Desktop w obie strony;
 8. migracja z ostatniej 0.6 bez utraty PayCheck, Pojazdów, Magazynu, NFC/QR ani ustawień panelu.
 
+## Backlog po stabilizacji — Pojazdy i maszyny
+
+To jest **kierunek do roadmapy, bez wdrażania podczas bieżącej stabilizacji**. Nie tworzyć osobnego modułu „Maszyny”; rozszerzyć istniejący moduł **Pojazdy** tak, aby obsługiwał także sprzęt z licznikiem motogodzin.
+
+- **Typ obiektu:** samochód, motocykl, quad, ciągnik, przyczepa, kosiarka, maszyna, inne. Rejestracja pozostaje opcjonalna; dla maszyn dodać numer seryjny / ewidencyjny.
+- **Rodzaj licznika:** kilometry, motogodziny, oba albo brak licznika. Nie wymuszać kilometrów dla maszyny.
+- **Czytelny zapis licznika:** grupowanie tysięcy spacją, np. `300 000 km`, `12 450 km`, `1 250 mtg`.
+- **Serwis:** gotowe typy m.in. olej silnikowy, filtr oleju, filtr powietrza, filtr paliwa, hydraulika, smarowanie, pasek/łańcuch, opony, serwis ogólny oraz własny typ.
+- **Interwał serwisowy:** wg kilometrów, motogodzin, czasu albo kombinacji, np. „co 15 000 km lub 12 miesięcy” / „co 500 mtg”. Każdy serwis zapisuje licznik wykonania i wylicza następny próg, np. olej wykonany przy `300 000 km` + interwał `15 000 km` = przypomnienie przy `315 000 km`; olej wykonany przy `1 200 mtg` + `250 mtg` = przypomnienie przy `1 450 mtg`.
+- **Przypomnienie progowe o serwisie:** EDHOME ma ostrzegać, gdy aktualny przebieg/motogodziny zbliżają się do progu serwisowego albo go przekroczą. Źródłem jest rzeczywisty zapis licznika, nie upływ czasu „na oko”. Dopuszczalny jest konfigurowalny wcześniejszy próg, np. 500 km / 20 mtg przed terminem.
+- **Przypomnienie o aktualizacji licznika:** tworzone przez istniejący moduł **Czynności**, np. „Sprawdź przebieg Golfa” co miesiąc albo „Sprawdź motogodziny kosiarki” co 2 tygodnie. Wykonanie czynności otwiera pole nowego odczytu; po zatwierdzeniu EDHOME aktualizuje licznik i od razu przelicza, które serwisy są OK, zbliżają się albo są po terminie. Brak wpisanego odczytu nie może tworzyć fikcyjnej wartości.
+- **Karta obiektu:** ostatni serwis, licznik przy wykonaniu, następny próg, ile zostało i najbliższy termin.
+- **Koszty:** zachować obecne powiązanie kosztu pojazdu/maszyny z PayCheck bez automatycznego podwójnego księgowania.
+- **Opony:** nie dublować kompletu jako zwykłej Rzeczy. Komplet pozostaje jednym rekordem pojazdu, ale może być widoczny w Magazynie przez wspólne `place_id`, np. „Opony zimowe — Golf → Garaż → Regał 2”.
+- **Warunek odbioru:** jeden obiekt może działać jako samochód z km albo maszyna z mtg bez osobnego modułu; przypomnienie licznika korzysta z Czynności, a serwis nie dubluje historii ani kosztów.
+
 ## Poza zakresem 0.7
 
 - automatyczne rozpoznawanie roślin/chorób ze zdjęcia;
@@ -257,6 +273,13 @@ Zob. [SPECYFIKACJA_CALOSC.md](SPECYFIKACJA_CALOSC.md#22-integracja-supla--cloud-
 
 **Decyzje Edwina 21.09.2026:** cena opcjonalna podczas oznaczania „kupione”; wszystkie ceny produktów widoczne na wspólnym tablecie bez danych kont/księgowości prywatnej; wartość całego zapasu dopiero w późniejszym etapie. **Otwarte:** szczegółowa metoda późniejszej wyceny stanu i zachowanie przy niepełnych danych. Nie zmieniać kodu, APK ani `main` w tym wątku bez wyraźnego osobnego polecenia.
 
+
+## Uzgodnione rozszerzenia Magazynu i bezpieczeństwa danych — roadmapa
+
+- **Coroczny remanent / inwentaryzacja:** prosty kreator Magazynu domowego i Spiżarni uruchamiany raz w roku. Przejście miejsce po miejscu, QR/NFC/ręczne potwierdzenie, statusy **znaleziono / brak / inne miejsce / do wyjaśnienia**, możliwość korekty faktycznej lokalizacji podczas skanu, snapshot stanu na dany rok oraz porównanie z poprzednim remanentem. W Spiżarni dodatkowo ilości, zgrzewki, kaucje, terminy ważności i braki.
+- **Temperatura / mróz:** Miejsce dostaje opcję **„Narażone na mróz”**, a Rzecz i Pudełko **„Chronić przed mrozem”**. Przy przenoszeniu EDHOME ostrzega także wtedy, gdy w pudełku znajduje się choć jedna rzecz wrażliwa. Po integracji SUPLA rozszerzyć to o rzeczywiste odczyty temperatury i alerty progowe.
+- **Pełna kopia użytkownika:** zwykła kopia EDHOME ma być paczką ZIP z `data.json` i zachowanymi oryginalnymi zdjęciami/obrazami użytkownika; miniatur nie traktować jako jedynego źródła, tylko regenerować je po przywróceniu z oryginałów. Każda paczka ma manifest rozmiarów i SHA-256 oraz obowiązkową weryfikację przed uznaniem kopii za poprawną. Starszy JSON pozostaje formatem importu zgodnościowego.
+- **Prywatność:** prywatny sejf PayCheck, PIN-y i sekrety integracji nie wchodzą automatycznie do zwykłego ZIP-a; zachowują osobne mechanizmy zabezpieczeń.
 
 ## EDHOME na komputerze — plan architektury (bez deklaracji działającej wersji PC)
 

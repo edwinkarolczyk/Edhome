@@ -18,6 +18,22 @@ final class TimeSuggestions {
         String shift(LocalDate date);
     }
 
+    interface WindowSource {
+        List<Window> windows(LocalDate date);
+    }
+
+    static final class Window {
+        final LocalTime start;
+        final LocalTime end;
+
+        Window(LocalTime start, LocalTime end) {
+            if (start == null || end == null || !start.isBefore(end))
+                throw new IllegalArgumentException("Invalid project availability window");
+            this.start = start;
+            this.end = end;
+        }
+    }
+
     static final class Option {
         final LocalDate date;
         final LocalTime start;
@@ -42,7 +58,7 @@ final class TimeSuggestions {
     static List<Option> propose(LocalDateTime now, int durationMinutes,
             ShiftSource source) {
         if (now == null || source == null || durationMinutes < 1
-                || durationMinutes > 480)
+                || durationMinutes > 600)
             throw new IllegalArgumentException("Invalid planning inputs");
         ArrayList<Option> options = new ArrayList<>();
         for (int day = 0; day <= 27 && options.size() < 3; day++) {
@@ -64,6 +80,40 @@ final class TimeSuggestions {
             }
         }
         return Collections.unmodifiableList(options);
+    }
+
+    static List<Option> proposeAvailability(LocalDateTime now,
+            int durationMinutes, WindowSource source) {
+        if (now == null || source == null || durationMinutes < 1
+                || durationMinutes > 600)
+            throw new IllegalArgumentException("Invalid planning inputs");
+        ArrayList<Option> options = new ArrayList<>();
+        for (int day = 0; day <= 27 && options.size() < 3; day++) {
+            LocalDate date = now.toLocalDate().plusDays(day);
+            List<Window> windows = source.windows(date);
+            if (windows == null || windows.isEmpty()) continue;
+            for (Window window : windows) {
+                LocalDateTime begin = date.atTime(window.start);
+                if (begin.isBefore(now)) begin = ceilQuarterHour(now);
+                LocalDateTime finish = begin.plusMinutes(durationMinutes);
+                LocalDateTime limit = date.atTime(window.end);
+                if (begin.isBefore(date.atTime(window.start))
+                        || finish.isAfter(limit) || !finish.isAfter(begin))
+                    continue;
+                options.add(new Option(date, begin.toLocalTime(),
+                    finish.toLocalTime()));
+                break;
+            }
+        }
+        return Collections.unmodifiableList(options);
+    }
+
+    private static LocalDateTime ceilQuarterHour(LocalDateTime value) {
+        LocalDateTime rounded=value.withSecond(0).withNano(0);
+        int remainder=rounded.getMinute()%15;
+        int add=remainder==0?0:15-remainder;
+        if(add==0&&(value.getSecond()>0||value.getNano()>0))add=15;
+        return rounded.plusMinutes(add);
     }
 
     private static boolean known(String shift) {

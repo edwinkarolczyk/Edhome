@@ -14,25 +14,20 @@ Sprzęt dostępny przy komputerze jest częścią funkcji Desktop. EDHOME PC ma 
 
 NFC nie jest tylko lokalnym dodatkiem PC. Powiązania tagów z rzeczami, pudełkami, miejscami, produktami i pojazdami są częścią synchronizowanych danych EDHOME.
 
-## Zasada nadrzędna: Desktop = APK 1:1
+## Zasada nadrzędna: wspólne dane, różna ergonomia
 
-EDHOME Desktop **nie jest uproszczonym dodatkiem do aplikacji Android**. Docelowo ma zapewniać pełną zgodność funkcjonalną z aktualną wersją EDHOME Beta APK.
+Android i Desktop pracują na **tym samym modelu danych i tych samych regułach domenowych**, ale nie muszą mieć identycznego interfejsu.
 
-Każda funkcja dostępna użytkownikowi w APK powinna mieć odpowiednik w Desktopie:
-- te same moduły,
-- te same operacje na danych,
-- te same pola i reguły walidacji,
-- te same zależności między modułami,
+Desktop jest centrum szybkiego tworzenia i porządkowania: obsługuje klawiaturę, mysz, zaznaczanie wielu rekordów, operacje zbiorcze, drzewka, zależności i seryjne dodawanie. Android pozostaje interfejsem terenowym: skanowanie QR/NFC, zdjęcia, szybkie przenoszenie, Start/Stop pracy, potwierdzenia i powiadomienia.
+
+Oba interfejsy muszą zachowywać:
 - ten sam stan danych po synchronizacji,
-- te same możliwości dodawania, edycji, usuwania, potwierdzania i przeglądania historii.
+- te same reguły walidacji i bezpieczeństwa,
+- zgodne zależności między modułami,
+- ochronę przed konfliktami równoczesnej edycji,
+- pełną historię i identyfikatory rekordów.
 
-Jeżeli funkcja zależy od telefonu, aparatu, Androida lub systemowych powiadomień, Desktop ma dostać **równoważny sposób wykonania tej samej czynności**, a nie pominięcie funkcji.
-
-Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME, dopóki nie zostanie:
-1. obsłużona przez synchronizację Android ↔ PC,
-2. udostępniona w interfejsie Desktop,
-3. zabezpieczona przed konfliktem równoczesnej edycji,
-4. sprawdzona testem zgodności APK ↔ Desktop.
+Funkcja może mieć inną formę na PC i telefonie, jeżeli rezultat danych i reguły biznesowe pozostają zgodne.
 
 ## Instalacja Windows
 
@@ -42,9 +37,9 @@ Nowa funkcja dodawana do APK nie jest uznawana za domkniętą dla całego EDHOME
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.7.0.79
+## Aktualny stan Desktop — 0.7.0.89
 
-Ustawienia Desktop są celowo uproszczone do trzech codziennych operacji: połączenie telefonu przez QR, sprawdzenie połączenia PC ↔ telefon oraz pobranie logów telefonu + Desktop na Pulpit. Dane adresu i token parowania pozostają zapisane wewnętrznie; użytkownik nie musi ich ręcznie edytować. Automatyczna synchronizacja w obie strony pozostaje aktywna.
+Ustawienia Desktop są celowo uproszczone do trzech codziennych operacji: połączenie telefonu przez QR, sprawdzenie połączenia PC ↔ telefon oraz pobranie logów telefonu + Desktop na Pulpit. Dane adresu i token parowania pozostają zapisane wewnętrznie; użytkownik nie musi ich ręcznie edytować. Automatyczna synchronizacja w obie strony pozostaje aktywna. Przy pierwszym parowaniu QR na Windows Desktop może jednorazowo poprosić o zgodę UAC i dodać regułę TCP 45824 ograniczoną do lokalnej podsieci; listener parowania nasłuchuje na lokalnych interfejsach, aby poprawnie działać także przy kilku kartach sieciowych.
 
 Aktualna linia Desktop obsługuje:
 - osobny interfejs Windows,

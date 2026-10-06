@@ -1,6 +1,6 @@
 # EDHOME — Idea by Edwin
 
-> **Linia rozwojowa: `0.6.0` (0.6.0.19 w przygotowaniu, versionCode 84, SQLite v33).** Wcześniejsze wydania 0.5.0 `.4` i `.5` obejmują kafelki bez limitu z edycją celu/nazwy/ikony/koloru/rozmiaru/pozycji, szyfrowany prywatny sejf i osobną zaszyfrowaną kopię PayCheck oraz opcjonalne ceny i historię zakupów w spiżarni. Prywatne finanse nie trafiają do zwykłego JSON; test kopii prywatnej i migracji na telefonie nadal wymagany. `main` bez zmian. Nowa beta staje się dostępna dopiero po pozytywnym CI i publikacji. Automatyczne podpisane APK i manifest: GitHub Releases / gałąź `beta`.
+> **Stable: EDHOME 0.8.0.14** (`versionCode 206`), promowana z `beta` `bb5e4edcb67e` po pełnym CI Stable. Oficjalna aplikacja ma nazwę **EDHOME**, zachowuje PIN i podpis; Beta pozostaje oddzielnym kanałem rozwoju.
 
 **Podpis APK:** EDHOME Beta korzysta teraz ze stałego certyfikatu zweryfikowanego przez GitHub Actions przy wydaniu 0.1.4-beta.1. Nie aktualizuje to wstecz debugowych instalacji z innym podpisem. **Przed usunięciem starej instalacji sprawdź kopię danych.** [Konfiguracja podpisu i zasady odzyskiwania](docs/AKTUALIZACJE_PODPIS_I_ODZYSKIWANIE.md).
 

@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.79";
+    private static final String DESKTOP_VERSION = "0.7.0.89";
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
@@ -81,6 +81,8 @@ public final class EdhomeDesktop extends JFrame {
         + "desktop-beta-latest/EDHOME-Desktop-Beta-Windows.zip";
     private static final Path CACHE = Path.of(System.getProperty("user.home"),
         ".edhome", "desktop-cache.json");
+    private static final Path PC_BACKUP_DIR = Path.of(
+        System.getProperty("user.home"), "EDHOME", "Backup");
     private static final Path INSTANCE_LOCK_PATH = Path.of(
         System.getProperty("user.home"), ".edhome", "desktop-instance.lock");
     private static FileChannel instanceLockChannel;
@@ -90,7 +92,7 @@ public final class EdhomeDesktop extends JFrame {
         Preferences.userRoot().node("edhome/desktop-beta");
 
     private static final String[] NAV = {
-        "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności",
+        "Pulpit", "Dzisiaj", "Kalendarz", "Zadania", "Czynności", "Projekty",
         "Magazyn", "Pomieszczenia", "Mapa", "Spiżarnia", "Zakupy", "PayCheck", "Pojazdy",
         "Ogród", "Odpady", "Timery", "Energia", "SUPLA", "Miejsca", "Skaner", "Ustawienia"
     };
@@ -101,6 +103,8 @@ public final class EdhomeDesktop extends JFrame {
     private JsonObject syncedSnapshot;
     private String snapshotHash = "";
     private long phoneRevision = -1L;
+    private long phoneChangeCursorAt;
+    private String phoneChangeCursorUuid = "";
     private long lastFullReconcileAt;
     private long localEditGeneration;
     private boolean stateChecking;
@@ -109,6 +113,7 @@ public final class EdhomeDesktop extends JFrame {
     private boolean connected;
     private boolean connecting;
     private String current = "Pulpit";
+    private long desktopProjectId;
     private QrPairingSession qrPairingSession;
     private TrayIcon trayIcon;
     private javax.swing.Timer reconnectTimer;
@@ -199,9 +204,36 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    /** Czyści stary zapis typu 192.168.x.x:45823 i nigdy nie uznaje
+     * własnego adresu komputera za adres telefonu. */
+    private static String sanitizedPhoneHost() {
+        String raw = PREFS.get("phoneIp", "").trim();
+        if (raw.isBlank()) return "";
+        try {
+            String normalized = LanClient.normalizeHost(raw);
+            if (QrPairingSession.localAddresses().contains(normalized)) {
+                PREFS.remove("phoneIp");
+                DesktopDiagnosticLog.event("PHONE_IP_SELF_REJECTED",
+                    "host=" + normalized);
+                return "";
+            }
+            if (!normalized.equals(raw)) {
+                PREFS.put("phoneIp", normalized);
+                DesktopDiagnosticLog.event("PHONE_IP_NORMALIZED",
+                    "host=" + normalized);
+            }
+            return normalized;
+        } catch (Exception error) {
+            PREFS.remove("phoneIp");
+            DesktopDiagnosticLog.error("PHONE_IP_INVALID_SAVED", error);
+            return "";
+        }
+    }
+
     private EdhomeDesktop() {
         super("EDHOME Desktop Beta " + DESKTOP_VERSION);
         DesktopDiagnosticLog.event("WINDOW_CREATED");
+        sanitizedPhoneHost();
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(1050, 680));
         Rectangle usableScreen = GraphicsEnvironment.getLocalGraphicsEnvironment()
@@ -327,6 +359,7 @@ public final class EdhomeDesktop extends JFrame {
         if ("Czynności".equals(name)) return tablePage("Czynności", "tasks",
             cols("Nazwa","title","Typ","task_kind","Powtarzanie","repeat_rule",
                  "Co ile","repeat_every","Miejsce","place_id"));
+        if ("Projekty".equals(name)) return desktopProjects();
         if ("Magazyn".equals(name)) return tablePage("Magazyn", "storage_items",
             cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
                  "Miejsce","place_id","Wypożyczone","lent_to"));
@@ -355,6 +388,1057 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
         if ("Skaner".equals(name)) return scanner();
         return settings();
+    }
+
+    private JComponent desktopProjects() {
+        JPanel page = page("Projekty • szybka edycja");
+        JPanel root = new JPanel(new BorderLayout(10,10));
+        root.setBackground(APP_BG);
+
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT,6,0));
+        toolbar.setBackground(APP_BG);
+        JButton addProject = actionButton("＋ Projekt");
+        JButton addSubproject = actionButton("＋ Podprojekt");
+        JButton editProject = actionButton("Edytuj projekt");
+        JButton addTask = actionButton("＋ Czynność");
+        JButton pasteTasks = actionButton("Wklej czynności");
+        toolbar.add(addProject);
+        toolbar.add(addSubproject);
+        toolbar.add(editProject);
+        toolbar.add(addTask);
+        toolbar.add(pasteTasks);
+        root.add(toolbar,BorderLayout.NORTH);
+
+        javax.swing.tree.DefaultMutableTreeNode treeRoot =
+            new javax.swing.tree.DefaultMutableTreeNode("Projekty");
+        java.util.Map<Long,javax.swing.tree.DefaultMutableTreeNode> nodes =
+            new java.util.LinkedHashMap<>();
+        java.util.Map<Long,JsonObject> rowsById = new java.util.LinkedHashMap<>();
+        for (JsonElement element : table("projects")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            long id = longValue(row,"id");
+            if (id <= 0) continue;
+            rowsById.put(id,row);
+            nodes.put(id,new javax.swing.tree.DefaultMutableTreeNode(
+                new DesktopProjectRef(row)));
+        }
+        for (java.util.Map.Entry<Long,javax.swing.tree.DefaultMutableTreeNode> entry
+                : nodes.entrySet()) {
+            JsonObject row = rowsById.get(entry.getKey());
+            long parent = longValue(row,"parent_id");
+            javax.swing.tree.DefaultMutableTreeNode parentNode = nodes.get(parent);
+            if (parentNode == null || parent == entry.getKey()) treeRoot.add(entry.getValue());
+            else parentNode.add(entry.getValue());
+        }
+
+        JTree tree = new JTree(treeRoot);
+        tree.setRootVisible(false);
+        tree.setShowsRootHandles(true);
+        tree.setBackground(APP_SURFACE);
+        tree.setForeground(APP_TEXT);
+        tree.setRowHeight(24);
+        tree.getSelectionModel().setSelectionMode(
+            javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
+
+        JPanel detail = new JPanel(new BorderLayout());
+        detail.setBackground(APP_BG);
+
+        java.util.function.Consumer<JsonObject> renderDetail = project -> {
+            detail.removeAll();
+            detail.add(desktopProjectDetail(project), BorderLayout.CENTER);
+            detail.revalidate();
+            detail.repaint();
+        };
+
+        tree.addTreeSelectionListener(e -> {
+            Object nodeObject = tree.getLastSelectedPathComponent();
+            if (!(nodeObject instanceof javax.swing.tree.DefaultMutableTreeNode)) return;
+            Object userObject =
+                ((javax.swing.tree.DefaultMutableTreeNode) nodeObject).getUserObject();
+            if (!(userObject instanceof DesktopProjectRef)) return;
+            JsonObject project = ((DesktopProjectRef) userObject).row;
+            desktopProjectId = longValue(project,"id");
+            renderDetail.accept(project);
+        });
+
+        if (desktopProjectId > 0 && nodes.containsKey(desktopProjectId)) {
+            javax.swing.tree.TreePath pathToSelect =
+                new javax.swing.tree.TreePath(nodes.get(desktopProjectId).getPath());
+            tree.setSelectionPath(pathToSelect);
+            tree.scrollPathToVisible(pathToSelect);
+        } else if (tree.getRowCount() > 0) {
+            tree.setSelectionRow(0);
+        } else {
+            renderDetail.accept(null);
+        }
+
+        JScrollPane treeScroll = new JScrollPane(tree);
+        treeScroll.setBorder(BorderFactory.createLineBorder(APP_SURFACE_2));
+        treeScroll.setPreferredSize(new Dimension(300,1));
+
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,treeScroll,detail);
+        split.setResizeWeight(0.28);
+        split.setDividerLocation(300);
+        split.setBorder(null);
+        root.add(split,BorderLayout.CENTER);
+
+        addProject.addActionListener(e -> showDesktopProjectEditor(null,null));
+        addSubproject.addActionListener(e -> {
+            JsonObject selected = desktopProjectById(desktopProjectId);
+            if (selected == null) {
+                JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt nadrzędny.");
+                return;
+            }
+            showDesktopProjectEditor(null,desktopProjectId);
+        });
+        editProject.addActionListener(e -> {
+            JsonObject selected = desktopProjectById(desktopProjectId);
+            if (selected == null) {
+                JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+                return;
+            }
+            showDesktopProjectEditor(selected,null);
+        });
+        addTask.addActionListener(e -> addDesktopProjectTask(desktopProjectId));
+        pasteTasks.addActionListener(e -> pasteDesktopProjectTasks(desktopProjectId));
+
+        page.add(root,BorderLayout.CENTER);
+        return page;
+    }
+
+    private JComponent desktopProjectDetail(JsonObject project) {
+        JPanel wrapper = new JPanel(new BorderLayout(0,10));
+        wrapper.setBackground(APP_BG);
+        if (project == null) {
+            JLabel empty = new JLabel(
+                "<html><b>Brak projektów.</b><br>Dodaj pierwszy projekt z paska u góry.</html>");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18,18,18,18));
+            wrapper.add(empty,BorderLayout.NORTH);
+            return wrapper;
+        }
+
+        long projectId = longValue(project,"id");
+        java.util.List<JsonObject> tasks = desktopProjectTasks(projectId);
+        int done = 0;
+        int planned = 0;
+        int remaining = 0;
+        for (JsonObject task : tasks) {
+            int duration = Math.max(20,intValue(task,"duration_minutes"));
+            planned += duration;
+            if (intValue(task,"done") != 0) {
+                done++;
+            } else {
+                int worked = desktopTaskWorkedMinutes(longValue(task,"id"));
+                remaining += Math.max(0,duration-worked);
+            }
+        }
+        int progress = tasks.isEmpty() ? 0 :
+            (int)Math.round(done * 100.0 / tasks.size());
+
+        JPanel head = new RoundedPanel(APP_SURFACE,18);
+        head.setLayout(new BorderLayout(10,4));
+        head.setBorder(new EmptyBorder(12,14,12,14));
+        JLabel title = new JLabel(value(project,"name"));
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD,20f));
+        head.add(title,BorderLayout.NORTH);
+        String due = value(project,"due_date");
+        String budget = value(project,"budget_grosz");
+        JLabel meta = new JLabel("<html>Status: <b>"
+            + html(friendlyValue("status",project))
+            + "</b> • Postęp: <b>" + progress + "%</b>"
+            + " • Czynności: <b>" + done + "/" + tasks.size() + "</b>"
+            + " • Pozostało: <b>" + formatMinutes(remaining) + "</b>"
+            + (due.isBlank() ? "" : " • Termin: <b>" + html(due) + "</b>")
+            + (budget.isBlank() ? "" : " • Budżet: <b>" + html(money(budget)) + "</b>")
+            + "</html>");
+        meta.setForeground(APP_MUTED);
+        head.add(meta,BorderLayout.CENTER);
+
+        java.util.List<JsonObject> selectedTasks = new ArrayList<>();
+        java.util.List<JCheckBox> selectors = new ArrayList<>();
+        JLabel selection = new JLabel("Zaznaczone: 0");
+        selection.setForeground(APP_ACCENT);
+
+        JPanel batchBar = new JPanel(new FlowLayout(FlowLayout.LEFT,6,0));
+        batchBar.setBackground(APP_BG);
+        JButton selectAll = actionButton("Zaznacz wszystkie");
+        JButton clearSelection = actionButton("Wyczyść");
+        JButton batchEdit = actionButton("Edytuj zaznaczone");
+        batchBar.add(selection);
+        batchBar.add(selectAll);
+        batchBar.add(clearSelection);
+        batchBar.add(batchEdit);
+
+        JPanel north = new JPanel(new BorderLayout(0,8));
+        north.setBackground(APP_BG);
+        north.add(head,BorderLayout.NORTH);
+        north.add(batchBar,BorderLayout.SOUTH);
+        wrapper.add(north,BorderLayout.NORTH);
+
+        JPanel list = new JPanel();
+        list.setBackground(APP_BG);
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        if (tasks.isEmpty()) {
+            JLabel empty = new JLabel("Brak czynności w tym projekcie.");
+            empty.setForeground(APP_MUTED);
+            empty.setBorder(new EmptyBorder(18,8,18,8));
+            list.add(empty);
+        } else {
+            for (JsonObject task : tasks) {
+                JPanel row = new JPanel(new BorderLayout(8,0));
+                row.setOpaque(false);
+                JCheckBox selector = new JCheckBox();
+                selector.setOpaque(false);
+                selector.setToolTipText("Zaznacz czynność do edycji zbiorczej");
+                selector.addActionListener(e -> {
+                    if (selector.isSelected()) {
+                        if (!selectedTasks.contains(task)) selectedTasks.add(task);
+                    } else selectedTasks.remove(task);
+                    selection.setText("Zaznaczone: " + selectedTasks.size());
+                });
+                selectors.add(selector);
+                row.add(selector,BorderLayout.WEST);
+                row.add(desktopProjectTaskCard(task),BorderLayout.CENTER);
+                list.add(row);
+                list.add(Box.createVerticalStrut(8));
+            }
+        }
+
+        selectAll.addActionListener(e -> {
+            selectedTasks.clear();
+            selectedTasks.addAll(tasks);
+            for (JCheckBox selector : selectors) selector.setSelected(true);
+            selection.setText("Zaznaczone: " + selectedTasks.size());
+        });
+        clearSelection.addActionListener(e -> {
+            selectedTasks.clear();
+            for (JCheckBox selector : selectors) selector.setSelected(false);
+            selection.setText("Zaznaczone: 0");
+        });
+        batchEdit.addActionListener(e ->
+            showDesktopProjectBatchEdit(projectId,new ArrayList<>(selectedTasks)));
+
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(APP_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        wrapper.add(scroll,BorderLayout.CENTER);
+
+        JLabel hint = new JLabel(
+            "Desktop: szybka organizacja projektu • telefon: wykonanie, Start/Stop, skan i zdjęcia");
+        hint.setForeground(APP_MUTED);
+        wrapper.add(hint,BorderLayout.SOUTH);
+        return wrapper;
+    }
+
+    private void showDesktopProjectBatchEdit(long currentProjectId,
+            java.util.List<JsonObject> selected) {
+        if (selected == null || selected.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zaznacz co najmniej jedną czynność.");
+            return;
+        }
+
+        JCheckBox changeAssignee = new JCheckBox("Zmień wykonawcę");
+        JComboBox<Choice> assignee = referenceCombo("household_members","",true);
+        assignee.setEnabled(false);
+        changeAssignee.addActionListener(e -> assignee.setEnabled(changeAssignee.isSelected()));
+
+        JCheckBox changeDue = new JCheckBox("Zmień termin");
+        JTextField due = new JTextField(12);
+        due.setToolTipText("RRRR-MM-DD albo puste = bez terminu");
+        due.setEnabled(false);
+        changeDue.addActionListener(e -> due.setEnabled(changeDue.isSelected()));
+
+        JCheckBox changePriority = new JCheckBox("Zmień priorytet");
+        JComboBox<Choice> priority = new JComboBox<>(new Choice[]{
+            new Choice("low","Niski"),
+            new Choice("normal","Normalny"),
+            new Choice("high","Wysoki"),
+            new Choice("urgent","Pilny")
+        });
+        priority.setEnabled(false);
+        changePriority.addActionListener(e ->
+            priority.setEnabled(changePriority.isSelected()));
+
+        JCheckBox moveProject = new JCheckBox("Przenieś do projektu / podprojektu");
+        JComboBox<Choice> targetProject =
+            desktopProjectBatchTargetCombo(currentProjectId);
+        targetProject.setEnabled(false);
+        moveProject.addActionListener(e ->
+            targetProject.setEnabled(moveProject.isSelected()));
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(new EmptyBorder(8,8,8,8));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(5,5,5,5);
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.weightx = 1;
+        int y=0;
+
+        g.gridx=0;g.gridy=y;g.gridwidth=2;
+        form.add(new JLabel("Zaznaczone czynności: " + selected.size()),g);
+        y++;
+
+        g.gridwidth=1;g.gridx=0;g.gridy=y;form.add(changeAssignee,g);
+        g.gridx=1;form.add(assignee,g);y++;
+        g.gridx=0;g.gridy=y;form.add(changeDue,g);
+        g.gridx=1;form.add(due,g);y++;
+        g.gridx=0;g.gridy=y;form.add(changePriority,g);
+        g.gridx=1;form.add(priority,g);y++;
+        g.gridx=0;g.gridy=y;form.add(moveProject,g);
+        g.gridx=1;form.add(targetProject,g);
+
+        int result = JOptionPane.showConfirmDialog(this,form,
+            "EDHOME Desktop • edycja zbiorcza czynności",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+        if (!changeAssignee.isSelected() && !changeDue.isSelected()
+                && !changePriority.isSelected() && !moveProject.isSelected()) {
+            JOptionPane.showMessageDialog(this,
+                "Nie wybrano żadnej zmiany.");
+            return;
+        }
+
+        String dueValue = due.getText().trim();
+        if (changeDue.isSelected() && !dueValue.isBlank()) {
+            try { LocalDate.parse(dueValue); }
+            catch (Exception invalid) {
+                JOptionPane.showMessageDialog(this,
+                    "Nieprawidłowy termin. Użyj formatu RRRR-MM-DD.",
+                    "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
+        Choice assigneeValue = (Choice)assignee.getSelectedItem();
+        Choice priorityValue = (Choice)priority.getSelectedItem();
+        Choice projectValue = (Choice)targetProject.getSelectedItem();
+        long targetId = moveProject.isSelected() && projectValue != null
+            && !projectValue.value.isBlank()
+            ? Long.parseLong(projectValue.value) : currentProjectId;
+
+        if (moveProject.isSelected()
+                && desktopProjectRootId(targetId)
+                    != desktopProjectRootId(currentProjectId)) {
+            JOptionPane.showMessageDialog(this,
+                "Czynności można przenosić zbiorczo tylko w obrębie "
+                    + "tego samego projektu głównego. Dzięki temu zależności pozostają poprawne.",
+                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        java.util.Map<JsonObject,JsonObject> before = new java.util.LinkedHashMap<>();
+        try {
+            long nextOrder = moveProject.isSelected()
+                ? desktopNextProjectSortOrder(targetId) : 0L;
+            for (JsonObject task : selected) {
+                before.put(task,task.deepCopy());
+                if (changeAssignee.isSelected()) {
+                    String value = assigneeValue == null ? "" : assigneeValue.value;
+                    if (value.isBlank())
+                        task.add("assignee_id",com.google.gson.JsonNull.INSTANCE);
+                    else task.addProperty("assignee_id",Long.parseLong(value));
+                }
+                if (changeDue.isSelected()) {
+                    if (dueValue.isBlank())
+                        task.add("due_date",com.google.gson.JsonNull.INSTANCE);
+                    else task.addProperty("due_date",dueValue);
+                }
+                if (changePriority.isSelected() && priorityValue != null)
+                    task.addProperty("priority",priorityValue.value);
+                if (moveProject.isSelected()) {
+                    task.addProperty("project_id",targetId);
+                    task.addProperty("project_sort_order",nextOrder);
+                    nextOrder += 10L;
+                }
+            }
+            markDirty();
+            desktopProjectId = moveProject.isSelected() ? targetId : currentProjectId;
+            showSection("Projekty");
+            JOptionPane.showMessageDialog(this,
+                "Zmieniono czynności: " + selected.size()
+                    + ". Zapisano lokalnie; synchronizacja wyśle tylko zmienione rekordy.");
+        } catch (Exception error) {
+            for (java.util.Map.Entry<JsonObject,JsonObject> entry : before.entrySet())
+                restoreJsonObject(entry.getKey(),entry.getValue());
+            JOptionPane.showMessageDialog(this,
+                "Nie wykonano edycji zbiorczej:\n" + rootMessage(error),
+                "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private JComboBox<Choice> desktopProjectBatchTargetCombo(long projectId) {
+        java.util.List<Choice> options = new ArrayList<>();
+        long rootId = desktopProjectRootId(projectId);
+        for (JsonElement element : table("projects")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject project = element.getAsJsonObject();
+            long id = longValue(project,"id");
+            if (id <= 0 || desktopProjectRootId(id) != rootId) continue;
+            options.add(new Choice(Long.toString(id),desktopProjectPath(project)));
+        }
+        options.sort((a,b) -> a.label.compareToIgnoreCase(b.label));
+        JComboBox<Choice> combo = new JComboBox<>(options.toArray(new Choice[0]));
+        for (int i=0;i<options.size();i++)
+            if (Long.toString(projectId).equals(options.get(i).value))
+                combo.setSelectedIndex(i);
+        return combo;
+    }
+
+    private JPanel desktopProjectTaskCard(JsonObject task) {
+        long taskId = longValue(task,"id");
+        int duration = Math.max(20,intValue(task,"duration_minutes"));
+        boolean done = intValue(task,"done") != 0;
+        JsonObject activeSession = desktopActiveProjectWorkSession(taskId);
+
+        JPanel card = new RoundedPanel(APP_SURFACE,16);
+        card.setLayout(new BorderLayout(10,0));
+        card.setBorder(new EmptyBorder(9,11,9,11));
+        card.setMaximumSize(new Dimension(
+            Integer.MAX_VALUE,activeSession == null ? 86 : 108));
+
+        JPanel text = new JPanel();
+        text.setOpaque(false);
+        text.setLayout(new BoxLayout(text,BoxLayout.Y_AXIS));
+        String titleText = value(task,"title");
+        JLabel title = new JLabel((done ? "✓ " : "• ") + titleText);
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD,14f));
+        text.add(title);
+
+        int worked = desktopTaskWorkedMinutes(taskId);
+        int left = done ? 0 : Math.max(0,duration-worked);
+        int deps = desktopDependencyCount(taskId);
+        String due = value(task,"due_date");
+        JLabel meta = new JLabel("Plan: " + formatMinutes(duration)
+            + " • Zrobiono: " + formatMinutes(worked)
+            + " • Zostało: " + formatMinutes(left)
+            + (deps > 0 ? " • Zależności: " + deps : "")
+            + (due.isBlank() ? "" : " • Termin: " + due));
+        meta.setForeground(APP_MUTED);
+        meta.setFont(meta.getFont().deriveFont(11f));
+        text.add(meta);
+
+        if (activeSession != null) {
+            JLabel clock = new JLabel();
+            clock.setForeground(APP_ACCENT);
+            clock.setFont(clock.getFont().deriveFont(Font.BOLD,14f));
+            text.add(Box.createVerticalStrut(3));
+            text.add(clock);
+            bindDesktopProjectClock(clock,taskId,duration);
+        }
+        card.add(text,BorderLayout.CENTER);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT,5,8));
+        actions.setOpaque(false);
+
+        if (activeSession != null) {
+            JButton stop = compactActionButton("■ Stop");
+            stop.setToolTipText("Zatrzymaj pomiar czasu");
+            stop.addActionListener(e -> stopDesktopProjectWork(task));
+            actions.add(stop);
+        } else if (!done) {
+            JButton startTime = compactActionButton("▶ Start czasu");
+            startTime.setToolTipText("Uruchom pomiar czasu tej czynności");
+            startTime.addActionListener(e -> startDesktopProjectWork(task));
+            actions.add(startTime);
+        }
+
+        JButton edit = compactActionButton("Edytuj");
+        edit.addActionListener(e -> editDesktopProjectTask(task));
+        JButton up = compactActionButton("↑");
+        up.setToolTipText("Przesuń czynność wyżej");
+        up.addActionListener(e -> moveDesktopProjectTask(task,-1));
+        JButton down = compactActionButton("↓");
+        down.setToolTipText("Przesuń czynność niżej");
+        down.addActionListener(e -> moveDesktopProjectTask(task,1));
+        JButton depsButton = compactActionButton("Zależności");
+        depsButton.addActionListener(e -> showDesktopTaskDependencies(task));
+        actions.add(up);
+        actions.add(down);
+        actions.add(edit);
+        actions.add(depsButton);
+        card.add(actions,BorderLayout.EAST);
+        return card;
+    }
+
+    private JsonObject desktopTaskById(long taskId) {
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject task = element.getAsJsonObject();
+            if (longValue(task,"id") == taskId) return task;
+        }
+        return null;
+    }
+
+    private JsonObject desktopActiveProjectWorkSession(long taskId) {
+        JsonObject newest = null;
+        long newestStarted = Long.MIN_VALUE;
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (longValue(row,"task_id") != taskId
+                    || !value(row,"ended_at").isBlank()) continue;
+            long started = longValue(row,"started_at");
+            if (started >= newestStarted) {
+                newestStarted = started;
+                newest = row;
+            }
+        }
+        return newest;
+    }
+
+    private long desktopClosedWorkedSeconds(long taskId) {
+        long seconds = 0L;
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (longValue(row,"task_id") != taskId
+                    || value(row,"ended_at").isBlank()) continue;
+            seconds += Math.max(0L,longValue(row,"worked_minutes")) * 60L;
+        }
+        return seconds;
+    }
+
+    private static String desktopProjectClockText(long seconds) {
+        long safe = Math.max(0L,seconds);
+        long hours = safe / 3600L;
+        long minutes = (safe % 3600L) / 60L;
+        long rest = safe % 60L;
+        return String.format(Locale.ROOT,"%02d:%02d:%02d",
+            hours,minutes,rest);
+    }
+
+    private void updateDesktopProjectClock(JLabel clock,long taskId,int plannedMinutes) {
+        JsonObject active = desktopActiveProjectWorkSession(taskId);
+        if (active == null) {
+            clock.setText("Pomiar zatrzymany");
+            return;
+        }
+        long started = longValue(active,"started_at");
+        long elapsed = Math.max(0L,
+            (System.currentTimeMillis()-started)/1000L);
+        long worked = desktopClosedWorkedSeconds(taskId)+elapsed;
+        long planned = Math.max(0L,(long)plannedMinutes)*60L;
+        long delta = planned-worked;
+        if (delta >= 0L)
+            clock.setText("● Pozostało " + desktopProjectClockText(delta)
+                + "   •   Trwa " + desktopProjectClockText(elapsed));
+        else
+            clock.setText("● Ponad plan +" + desktopProjectClockText(-delta)
+                + "   •   Trwa " + desktopProjectClockText(elapsed));
+    }
+
+    private void bindDesktopProjectClock(JLabel clock,long taskId,int plannedMinutes) {
+        updateDesktopProjectClock(clock,taskId,plannedMinutes);
+        javax.swing.Timer timer = new javax.swing.Timer(1000,null);
+        timer.addActionListener(e -> {
+            if (!clock.isShowing() || !"Projekty".equals(current)) {
+                timer.stop();
+                return;
+            }
+            updateDesktopProjectClock(clock,taskId,plannedMinutes);
+        });
+        timer.setInitialDelay(1000);
+        timer.start();
+    }
+
+    private int desktopOpenDependencyCount(long taskId) {
+        int open = 0;
+        for (JsonElement element : table("project_task_dependencies")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            if (longValue(link,"task_id") != taskId) continue;
+            JsonObject dependency = desktopTaskById(
+                longValue(link,"depends_on_task_id"));
+            if (dependency != null && intValue(dependency,"done") == 0) open++;
+        }
+        return open;
+    }
+
+    private String desktopHardBlockReason(long taskId) {
+        java.util.List<String> labels = new ArrayList<>();
+        int total = 0;
+        for (JsonElement element : table("project_task_blockers")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject blocker = element.getAsJsonObject();
+            if (longValue(blocker,"task_id") != taskId
+                    || intValue(blocker,"hard") != 1
+                    || intValue(blocker,"resolved") != 0) continue;
+            total++;
+            if (labels.size() < 3) {
+                String label = value(blocker,"label").trim();
+                labels.add(label.isBlank() ? "wymaganie" : label);
+            }
+        }
+        if (total == 0) return "";
+        return "Czynność jest zablokowana. Czeka na: "
+            + String.join(", ",labels)
+            + (total > labels.size() ? " (+" + (total-labels.size()) + ")" : "")
+            + ".";
+    }
+
+    private void startDesktopProjectWork(JsonObject task) {
+        long taskId = longValue(task,"id");
+        if (taskId <= 0 || desktopTaskById(taskId) == null) {
+            JOptionPane.showMessageDialog(this,"Czynność już nie istnieje.");
+            return;
+        }
+        if (intValue(task,"done") != 0) {
+            JOptionPane.showMessageDialog(this,
+                "Czynność jest już oznaczona jako wykonana.");
+            return;
+        }
+        if (desktopActiveProjectWorkSession(taskId) != null) {
+            JOptionPane.showMessageDialog(this,
+                "Ta czynność ma już uruchomiony pomiar czasu.");
+            showSection("Projekty");
+            return;
+        }
+        int openDependencies = desktopOpenDependencyCount(taskId);
+        if (openDependencies > 0) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zakończ wcześniejsze czynności zależne: "
+                    + openDependencies + ".");
+            return;
+        }
+        String blocker = desktopHardBlockReason(taskId);
+        if (!blocker.isBlank()) {
+            JOptionPane.showMessageDialog(this,blocker);
+            return;
+        }
+
+        JsonObject session = new JsonObject();
+        session.addProperty("id",nextId("project_task_work_sessions"));
+        session.addProperty("task_id",taskId);
+        session.addProperty("started_at",System.currentTimeMillis());
+        session.add("ended_at",com.google.gson.JsonNull.INSTANCE);
+        session.add("worked_minutes",com.google.gson.JsonNull.INSTANCE);
+        table("project_task_work_sessions").add(session);
+        markDirty();
+        DesktopDiagnosticLog.event("PROJECT_WORK_STARTED_DESKTOP",
+            "task="+taskId);
+        showSection("Projekty");
+    }
+
+    private void stopDesktopProjectWork(JsonObject task) {
+        long taskId = longValue(task,"id");
+        JsonObject session = desktopActiveProjectWorkSession(taskId);
+        if (session == null) {
+            JOptionPane.showMessageDialog(this,
+                "Ta czynność nie ma aktywnego pomiaru czasu.");
+            showSection("Projekty");
+            return;
+        }
+        long ended = System.currentTimeMillis();
+        long started = longValue(session,"started_at");
+        int minutes = (int)Math.max(1L,
+            Math.round(Math.max(0L,ended-started)/60000.0));
+        session.addProperty("ended_at",ended);
+        session.addProperty("worked_minutes",minutes);
+        markDirty();
+        DesktopDiagnosticLog.event("PROJECT_WORK_STOPPED_DESKTOP",
+            "task="+taskId+" minutes="+minutes);
+        showSection("Projekty");
+    }
+
+    private void addDesktopProjectTask(long projectId) {
+        if (projectId <= 0 || desktopProjectById(projectId) == null) {
+            JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+            return;
+        }
+        JsonObject row = newRowTemplate("tasks");
+        if (row == null) return;
+        row.addProperty("project_id",projectId);
+        row.addProperty("project_sort_order",desktopNextProjectSortOrder(projectId));
+        JsonObject before = row.deepCopy();
+        if (!editRow(row,cols(
+                "Nazwa","title",
+                "Czas [min]","duration_minutes",
+                "Termin","due_date",
+                "Priorytet","priority",
+                "Osoba","assignee_id"))) return;
+        if (intValue(row,"duration_minutes") < 20) {
+            restoreJsonObject(row,before);
+            JOptionPane.showMessageDialog(this,
+                "Czynność projektu musi mieć co najmniej 20 minut.",
+                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        table("tasks").add(row);
+        markDirty();
+        desktopProjectId = projectId;
+        showSection("Projekty");
+    }
+
+    private void editDesktopProjectTask(JsonObject task) {
+        JsonObject before = task.deepCopy();
+        if (!editRow(task,cols(
+                "Nazwa","title",
+                "Czas [min]","duration_minutes",
+                "Termin","due_date",
+                "Priorytet","priority",
+                "Osoba","assignee_id",
+                "Wykonane","done"))) return;
+        if (intValue(task,"duration_minutes") < 20) {
+            restoreJsonObject(task,before);
+            markDirty();
+            JOptionPane.showMessageDialog(this,
+                "Czynność projektu musi mieć co najmniej 20 minut.",
+                "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+        }
+        showSection("Projekty");
+    }
+
+    private void pasteDesktopProjectTasks(long projectId) {
+        if (projectId <= 0 || desktopProjectById(projectId) == null) {
+            JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+            return;
+        }
+        JTextArea area = new JTextArea(14,48);
+        area.setLineWrap(false);
+        JScrollPane scroll = new JScrollPane(area);
+        int result = JOptionPane.showConfirmDialog(this,scroll,
+            "Wklej czynności • jedna linia = jedna czynność",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+        java.util.List<String> names = parseQuickTasks(area.getText(),true);
+        if (names.isEmpty()) return;
+        int added = 0;
+        long sortOrder=desktopNextProjectSortOrder(projectId);
+        for (String name : names) {
+            JsonObject task = newRowTemplate("tasks");
+            task.addProperty("title",name);
+            task.addProperty("project_id",projectId);
+            task.addProperty("project_sort_order",sortOrder);
+            task.addProperty("duration_minutes",30);
+            table("tasks").add(task);
+            sortOrder+=10L;
+            added++;
+        }
+        if (added > 0) markDirty();
+        desktopProjectId = projectId;
+        showSection("Projekty");
+        JOptionPane.showMessageDialog(this,
+            "Dodano czynności: " + added + ". Domyślny czas: 30 min.");
+    }
+
+    private void showDesktopProjectEditor(JsonObject existing,Long parentPreset) {
+        boolean isNew = existing == null;
+        JsonObject row = isNew ? newRowTemplate("projects") : existing;
+        if (row == null) return;
+        if (isNew && parentPreset != null)
+            row.addProperty("parent_id",parentPreset);
+        long id = longValue(row,"id");
+        if (!editRow(row,cols(
+                "Nazwa","name",
+                "Projekt nadrzędny","parent_id",
+                "Miejsce","place_id",
+                "Osoba","assignee_id",
+                "Status","status",
+                "Termin","due_date",
+                "Budżet [zł]","budget_grosz"))) return;
+        if (isNew) table("projects").add(row);
+        markDirty();
+        desktopProjectId = id;
+        showSection("Projekty");
+    }
+
+    private void validateDesktopProjectRow(JsonObject row) {
+        String name = value(row,"name").trim();
+        if (name.isBlank() || name.length() > 160)
+            throw new IllegalArgumentException("Podaj nazwę projektu 1–160 znaków.");
+        String status = value(row,"status");
+        if (!"active".equals(status) && !"paused".equals(status) && !"done".equals(status))
+            throw new IllegalArgumentException("Nieprawidłowy status projektu.");
+        String due = value(row,"due_date");
+        if (!due.isBlank()) try { LocalDate.parse(due); }
+        catch (Exception invalid) {
+            throw new IllegalArgumentException("Nieprawidłowy termin projektu.");
+        }
+        String budget = value(row,"budget_grosz");
+        if (!budget.isBlank() && Long.parseLong(budget) < 0)
+            throw new IllegalArgumentException("Budżet nie może być ujemny.");
+
+        long id = longValue(row,"id");
+        long parent = longValue(row,"parent_id");
+        if (parent <= 0) return;
+        if (parent == id)
+            throw new IllegalArgumentException("Projekt nie może być swoim projektem nadrzędnym.");
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        seen.add(id);
+        long cursor = parent;
+        for (int depth=0; depth<128 && cursor>0; depth++) {
+            if (!seen.add(cursor))
+                throw new IllegalArgumentException("Nie można utworzyć pętli w drzewie projektów.");
+            JsonObject parentRow = desktopProjectById(cursor);
+            if (parentRow == null)
+                throw new IllegalArgumentException("Projekt nadrzędny już nie istnieje.");
+            cursor = longValue(parentRow,"parent_id");
+        }
+    }
+
+    private JComboBox<Choice> projectParentCombo(JsonObject row,String selected) {
+        java.util.List<Choice> options = new ArrayList<>();
+        options.add(new Choice("","— projekt główny —"));
+        long ownId = longValue(row,"id");
+        for (JsonElement element : table("projects")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject candidate = element.getAsJsonObject();
+            long id = longValue(candidate,"id");
+            if (id <= 0 || id == ownId) continue;
+            options.add(new Choice(Long.toString(id),desktopProjectPath(candidate)));
+        }
+        JComboBox<Choice> combo = new JComboBox<>(options.toArray(new Choice[0]));
+        for (int i=0;i<options.size();i++)
+            if (options.get(i).value.equals(selected)) combo.setSelectedIndex(i);
+        return combo;
+    }
+
+    private String desktopProjectPath(JsonObject row) {
+        if (row == null) return "";
+        java.util.List<String> parts = new ArrayList<>();
+        JsonObject currentRow = row;
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        for (int depth=0; depth<64 && currentRow!=null; depth++) {
+            parts.add(0,value(currentRow,"name"));
+            long parent = longValue(currentRow,"parent_id");
+            if (parent <= 0 || !seen.add(parent)) break;
+            currentRow = desktopProjectById(parent);
+        }
+        return String.join(" / ",parts);
+    }
+
+    private JsonObject desktopProjectById(long id) {
+        if (id <= 0) return null;
+        for (JsonElement element : table("projects"))
+            if (element.isJsonObject()
+                    && longValue(element.getAsJsonObject(),"id") == id)
+                return element.getAsJsonObject();
+        return null;
+    }
+
+    private java.util.List<JsonObject> desktopProjectTasks(long projectId) {
+        java.util.List<JsonObject> out = new ArrayList<>();
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject task = element.getAsJsonObject();
+            if (longValue(task,"project_id") == projectId) out.add(task);
+        }
+        out.sort((a,b) -> {
+            int order=Long.compare(longValue(a,"project_sort_order"),
+                longValue(b,"project_sort_order"));
+            if(order!=0)return order;
+            return Long.compare(longValue(a,"id"),longValue(b,"id"));
+        });
+        return out;
+    }
+
+    private long desktopNextProjectSortOrder(long projectId) {
+        long max=0L;
+        for(JsonObject task:desktopProjectTasks(projectId))
+            max=Math.max(max,longValue(task,"project_sort_order"));
+        return max>=Long.MAX_VALUE-10L?Long.MAX_VALUE:max+10L;
+    }
+
+    private void moveDesktopProjectTask(JsonObject task,int delta) {
+        long projectId=longValue(task,"project_id");
+        if(projectId<=0 || delta==0)return;
+        java.util.List<JsonObject> tasks=desktopProjectTasks(projectId);
+        int index=-1;
+        long taskId=longValue(task,"id");
+        for(int i=0;i<tasks.size();i++)
+            if(longValue(tasks.get(i),"id")==taskId){index=i;break;}
+        int target=index+delta;
+        if(index<0 || target<0 || target>=tasks.size())return;
+        java.util.Collections.swap(tasks,index,target);
+        long order=10L;
+        for(JsonObject row:tasks) {
+            row.addProperty("project_sort_order",order);
+            order+=10L;
+        }
+        markDirty();
+        desktopProjectId=projectId;
+        showSection("Projekty");
+    }
+
+    private int desktopTaskWorkedMinutes(long taskId) {
+        int total = 0;
+        long now = System.currentTimeMillis();
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (longValue(row,"task_id") != taskId) continue;
+            String ended = value(row,"ended_at");
+            if (ended.isBlank()) {
+                long start = longValue(row,"started_at");
+                if (start > 0) total += (int)Math.max(0,(now-start)/60000L);
+            } else total += Math.max(0,intValue(row,"worked_minutes"));
+        }
+        return total;
+    }
+
+    private int desktopDependencyCount(long taskId) {
+        int count = 0;
+        for (JsonElement element : table("project_task_dependencies"))
+            if (element.isJsonObject()
+                    && longValue(element.getAsJsonObject(),"task_id") == taskId)
+                count++;
+        return count;
+    }
+
+    private void showDesktopTaskDependencies(JsonObject task) {
+        long taskId = longValue(task,"id");
+        long projectId = longValue(task,"project_id");
+        if (taskId <= 0 || projectId <= 0) {
+            JOptionPane.showMessageDialog(this,
+                "Zależności można ustawiać tylko dla czynności projektu.");
+            return;
+        }
+
+        long rootProjectId = desktopProjectRootId(projectId);
+        if (rootProjectId <= 0) {
+            JOptionPane.showMessageDialog(this,
+                "Nie można ustalić projektu głównego tej czynności.");
+            return;
+        }
+
+        java.util.Set<Long> current = desktopDependencyIds(taskId);
+        java.util.LinkedHashMap<Long,JCheckBox> choices = new java.util.LinkedHashMap<>();
+        JPanel list = new JPanel();
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        list.setBorder(new EmptyBorder(8,8,8,8));
+
+        for (JsonElement element : table("tasks")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject candidate = element.getAsJsonObject();
+            long candidateId = longValue(candidate,"id");
+            long candidateProject = longValue(candidate,"project_id");
+            if (candidateId <= 0 || candidateId == taskId || candidateProject <= 0)
+                continue;
+            if (desktopProjectRootId(candidateProject) != rootProjectId) continue;
+
+            JsonObject project = desktopProjectById(candidateProject);
+            String projectPath = project == null ? "Projekt" : desktopProjectPath(project);
+            JCheckBox box = new JCheckBox(projectPath + "  •  "
+                + value(candidate,"title"));
+            box.setSelected(current.contains(candidateId));
+            box.setToolTipText(intValue(candidate,"done") != 0
+                ? "Czynność wykonana" : "Czynność do wykonania");
+            choices.put(candidateId,box);
+            list.add(box);
+        }
+
+        if (choices.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "W tym projekcie głównym nie ma innych czynności, "
+                    + "które można ustawić jako poprzednik.");
+            return;
+        }
+
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setPreferredSize(new Dimension(560,Math.min(430,
+            Math.max(180,choices.size()*32+24))));
+        int result = JOptionPane.showConfirmDialog(this,scroll,
+            "„" + value(task,"title") + "” • zależy od",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        java.util.LinkedHashSet<Long> desired = new java.util.LinkedHashSet<>();
+        for (java.util.Map.Entry<Long,JCheckBox> entry : choices.entrySet())
+            if (entry.getValue().isSelected()) desired.add(entry.getKey());
+
+        try {
+            for (Long dependency : desired) {
+                if (desktopDependencyReaches(
+                        dependency,taskId,taskId,desired,new java.util.HashSet<>()))
+                    throw new IllegalArgumentException(
+                        "Ta zmiana utworzyłaby pętlę zależności.");
+            }
+
+            JsonArray links = table("project_task_dependencies");
+            java.util.Set<Long> existing = new java.util.HashSet<>();
+            for (int i=links.size()-1; i>=0; i--) {
+                JsonElement element = links.get(i);
+                if (!element.isJsonObject()) continue;
+                JsonObject link = element.getAsJsonObject();
+                if (longValue(link,"task_id") != taskId) continue;
+                long dependency = longValue(link,"depends_on_task_id");
+                if (!desired.contains(dependency)) links.remove(i);
+                else existing.add(dependency);
+            }
+
+            long now = System.currentTimeMillis();
+            for (Long dependency : desired) {
+                if (existing.contains(dependency)) continue;
+                JsonObject link = new JsonObject();
+                link.addProperty("task_id",taskId);
+                link.addProperty("depends_on_task_id",dependency);
+                link.addProperty("created_at",now++);
+                links.add(link);
+            }
+            markDirty();
+            showSection("Projekty");
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie zapisano zależności:\n" + rootMessage(error),
+                "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private java.util.Set<Long> desktopDependencyIds(long taskId) {
+        java.util.LinkedHashSet<Long> out = new java.util.LinkedHashSet<>();
+        for (JsonElement element : table("project_task_dependencies")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject link = element.getAsJsonObject();
+            if (longValue(link,"task_id") == taskId)
+                out.add(longValue(link,"depends_on_task_id"));
+        }
+        return out;
+    }
+
+    private boolean desktopDependencyReaches(long start,long target,
+            long editedTask,java.util.Set<Long> editedDependencies,
+            java.util.Set<Long> seen) {
+        if (start == target) return true;
+        if (!seen.add(start)) return false;
+        java.util.Set<Long> next = start == editedTask
+            ? editedDependencies : desktopDependencyIds(start);
+        for (Long dependency : next)
+            if (desktopDependencyReaches(
+                    dependency,target,editedTask,editedDependencies,seen))
+                return true;
+        return false;
+    }
+
+    private long desktopProjectRootId(long projectId) {
+        long current = projectId;
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        for (int depth=0; depth<128 && current>0; depth++) {
+            if (!seen.add(current)) return 0L;
+            JsonObject project = desktopProjectById(current);
+            if (project == null) return 0L;
+            long parent = longValue(project,"parent_id");
+            if (parent <= 0) return current;
+            current = parent;
+        }
+        return 0L;
+    }
+
+    private static final class DesktopProjectRef {
+        final JsonObject row;
+        DesktopProjectRef(JsonObject row) { this.row=row; }
+        @Override public String toString() {
+            String name=value(row,"name");
+            String status=value(row,"status");
+            if ("done".equals(status)) return "✓ " + name;
+            if ("paused".equals(status)) return "Ⅱ " + name;
+            return name;
+        }
     }
 
     private JComponent garden() {
@@ -759,7 +1843,7 @@ public final class EdhomeDesktop extends JFrame {
         buttons.setOpaque(false);
         JButton importBank = actionButton("＋ Import banku");
         JButton queue = actionButton("Banki i potwierdzenia");
-        JButton futureBudget = actionButton("Budżet przyszły");
+        JButton futureBudget = actionButton("Budżet miesiąca");
         JButton analysis = actionButton("Analiza 12 mies.");
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
@@ -3290,7 +4374,7 @@ public final class EdhomeDesktop extends JFrame {
         statusCard.add(title);
         statusCard.add(Box.createVerticalStrut(6));
 
-        String savedHost = PREFS.get("phoneIp", "").trim();
+        String savedHost = sanitizedPhoneHost();
         String savedToken = PREFS.get("token", "").trim();
         String stateText;
         if (savedHost.isBlank() || savedToken.isBlank())
@@ -3305,15 +4389,19 @@ public final class EdhomeDesktop extends JFrame {
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(3, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(5, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
         JButton diagnose = actionButton("Sprawdź połączenie PC ↔ telefon");
+        JButton updateDesktop = actionButton("Aktualizuj EDHOME Desktop — 1 klik");
         JButton downloadAllLogs =
             actionButton("Pobierz logi telefonu + Desktop na Pulpit");
+        JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
         actions.add(diagnose);
+        actions.add(updateDesktop);
         actions.add(downloadAllLogs);
+        actions.add(openBackups);
         content.add(actions);
         content.add(Box.createVerticalStrut(12));
 
@@ -3323,7 +4411,9 @@ public final class EdhomeDesktop extends JFrame {
           + "zeskanuj kod z ekranu komputera.<br><br>"
           + "<b>Logi:</b> jednym kliknięciem zapisujesz diagnostykę Desktopu "
           + "oraz nowe logi telefonu na Pulpicie. Log telefonu jest usuwany "
-          + "z aplikacji dopiero po potwierdzonym zapisie na PC.</html>");
+          + "z aplikacji dopiero po potwierdzonym zapisie na PC.<br><br>"
+          + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie "
+          + "w folderze EDHOME\\Backup oraz utrzymuje dzienne kopie.</html>");
         help.setForeground(APP_MUTED);
         content.add(help);
 
@@ -3331,16 +4421,18 @@ public final class EdhomeDesktop extends JFrame {
         diagnose.addActionListener(e -> diagnosePhoneConnection(
             PREFS.get("phoneIp", "").trim(),
             PREFS.get("token", "").trim(), diagnose));
+        updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
         downloadAllLogs.addActionListener(e -> saveAllDiagnosticsToDesktop(
             PREFS.get("phoneIp", "").trim(),
             PREFS.get("token", "").trim(), downloadAllLogs));
+        openBackups.addActionListener(e -> openPcBackupFolder());
 
         page.add(content, BorderLayout.NORTH);
         return page;
     }
 
     private String desktopDiagnosticsText() {
-        String host = PREFS.get("phoneIp", "").trim();
+        String host = sanitizedPhoneHost();
         return "EDHOME Desktop " + DESKTOP_VERSION + "\n"
             + "System: " + System.getProperty("os.name") + " "
                 + System.getProperty("os.version") + "\n"
@@ -3715,6 +4807,7 @@ public final class EdhomeDesktop extends JFrame {
                     snapshotHash = result.sha256;
                     syncedSnapshot = snapshot.deepCopy();
                     phoneRevision = result.revision;
+                    updatePhoneChangeCursorFromSnapshot(snapshot);
                     lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
                     syncConflictPaused = false;
@@ -3722,6 +4815,7 @@ public final class EdhomeDesktop extends JFrame {
                     DesktopDiagnosticLog.event("SYNC_PULL_OK");
                     validate(snapshot);
                     saveCache(snapshot);
+                    savePcBackup(snapshot);
                     connection.setText("ONLINE • Android "
                         + str(snapshot,"sourceVersion",""));
                     connection.setForeground(APP_ACCENT);
@@ -3776,7 +4870,7 @@ public final class EdhomeDesktop extends JFrame {
         if (host.isBlank() || secret.isBlank()) return;
 
         long now = System.currentTimeMillis();
-        if (lastFullReconcileAt > 0 && now - lastFullReconcileAt >= 180000L) {
+        if (lastFullReconcileAt > 0 && now - lastFullReconcileAt >= 1800000L) {
             pullFromPhone(host, secret, null, true);
             return;
         }
@@ -3792,8 +4886,7 @@ public final class EdhomeDesktop extends JFrame {
                     long revision = get();
                     if (revision < 0) return; // starszy Android: pełna kontrola co 3 min
                     if (phoneRevision >= 0 && revision != phoneRevision) {
-                        phoneRevision = revision;
-                        pullFromPhone(host, secret, null, true);
+                        pullChangesFromPhone(host, secret, revision);
                     } else {
                         phoneRevision = revision;
                     }
@@ -3806,6 +4899,169 @@ public final class EdhomeDesktop extends JFrame {
                 }
             }
         }.execute();
+    }
+
+    private void pullChangesFromPhone(String host, String secret,
+            long observedRevision) {
+        if (connecting || dirty || autoSaving) return;
+        if (snapshot == null || syncedSnapshot == null) {
+            pullFromPhone(host, secret, null, true);
+            return;
+        }
+        connecting = true;
+        connection.setText("SYNC • pobieram zmiany z telefonu…");
+        final JsonObject working = snapshot.deepCopy();
+        final long startAt = Math.max(0L, phoneChangeCursorAt - 2000L);
+        new SwingWorker<PhoneDeltaSyncResult,Void>() {
+            @Override protected PhoneDeltaSyncResult doInBackground() throws Exception {
+                LanClient client = new LanClient(host, PORT, secret);
+                long cursorAt = startAt;
+                String cursorUuid = "";
+                int applied = 0;
+                int batches = 0;
+                while (true) {
+                    DeltaBatch batch = client.changes(cursorAt, cursorUuid);
+                    applied += applyPhoneChanges(working, batch.changes);
+                    batches++;
+                    if (!batch.hasMore) {
+                        long finalRevision;
+                        try { finalRevision = client.state(); }
+                        catch (Exception ignored) { finalRevision = observedRevision; }
+                        return new PhoneDeltaSyncResult(working, finalRevision,
+                            applied, batch.cursorUpdatedAt, batch.cursorSyncUuid);
+                    }
+                    if (batch.cursorUpdatedAt < cursorAt
+                            || (batch.cursorUpdatedAt == cursorAt
+                                && batch.cursorSyncUuid.equals(cursorUuid)))
+                        throw new IOException("Telefon nie przesunął kursora zmian.");
+                    cursorAt = batch.cursorUpdatedAt;
+                    cursorUuid = batch.cursorSyncUuid;
+                    if (batches > 200)
+                        throw new IOException("Za dużo paczek zmian — wymagane pełne pojednanie.");
+                }
+            }
+            @Override protected void done() {
+                connecting = false;
+                try {
+                    PhoneDeltaSyncResult result = get();
+                    snapshot = result.data;
+                    syncedSnapshot = snapshot.deepCopy();
+                    phoneRevision = result.revision;
+                    if (result.cursorUpdatedAt >= phoneChangeCursorAt) {
+                        phoneChangeCursorAt = result.cursorUpdatedAt;
+                        phoneChangeCursorUuid = result.cursorSyncUuid;
+                    }
+                    connected = true;
+                    syncConflictPaused = false;
+                    dirty = false;
+                    saveCache(snapshot);
+                    savePcBackup(snapshot);
+                    DesktopDiagnosticLog.event("SYNC_PULL_DELTA_OK",
+                        "changes=" + result.applied);
+                    connection.setText(result.applied == 0
+                        ? "ONLINE • dane aktualne"
+                        : "ONLINE • pobrano " + result.applied
+                            + (result.applied == 1 ? " zmianę" : " zmian"));
+                    showSection(current);
+                    updateTrayTooltip();
+                } catch (Exception error) {
+                    DesktopDiagnosticLog.error("SYNC_PULL_DELTA", error);
+                    connection.setText("SYNC • pełne pojednanie awaryjne…");
+                    pullFromPhone(host, secret, null, true);
+                }
+            }
+        }.execute();
+    }
+
+    private static int applyPhoneChanges(JsonObject root, JsonArray changes)
+            throws Exception {
+        if (root == null || !root.has("tables") || !root.get("tables").isJsonObject()
+                || !root.has("syncRecords") || !root.get("syncRecords").isJsonArray())
+            throw new IOException("Brak metadanych synchronizacji w lokalnej kopii.");
+        JsonObject tables = root.getAsJsonObject("tables");
+        JsonArray metadata = root.getAsJsonArray("syncRecords");
+        int applied = 0;
+        for (JsonElement element : changes) {
+            if (!element.isJsonObject())
+                throw new IOException("Nieprawidłowa zmiana z telefonu.");
+            JsonObject change = element.getAsJsonObject();
+            if (!change.has("meta") || !change.get("meta").isJsonObject())
+                throw new IOException("Zmiana z telefonu nie ma metadanych.");
+            JsonObject remoteMeta = change.getAsJsonObject("meta");
+            String uuid = value(remoteMeta, "syncUuid").toLowerCase(Locale.ROOT);
+            String tableName = value(remoteMeta, "table");
+            String rowKey = value(remoteMeta, "rowKey");
+            long remoteRevision = longValue(remoteMeta, "revision");
+            if (!uuid.matches("[0-9a-f-]{36}") || remoteRevision < 1L
+                    || !tables.has(tableName) || !tables.get(tableName).isJsonArray())
+                throw new IOException("Nieprawidłowa metadana zmiany z telefonu.");
+            int metaIndex = syncMetaIndexByUuid(metadata, uuid);
+            if (metaIndex >= 0) {
+                JsonObject localMeta = metadata.get(metaIndex).getAsJsonObject();
+                long localRevision = longValue(localMeta, "revision");
+                if (localRevision > remoteRevision) continue;
+                if (localRevision == remoteRevision
+                        && value(localMeta, "rowHash").equals(value(remoteMeta, "rowHash")))
+                    continue;
+            }
+            JsonArray rows = tables.getAsJsonArray(tableName);
+            int rowIndex = rowIndexByKey(tableName, rows, rowKey);
+            boolean deleted = remoteMeta.has("deletedAt")
+                && !remoteMeta.get("deletedAt").isJsonNull();
+            if (deleted) {
+                if (rowIndex >= 0) rows.remove(rowIndex);
+            } else {
+                if (!change.has("row") || !change.get("row").isJsonObject())
+                    throw new IOException("Zmiana rekordu nie zawiera danych.");
+                JsonObject row = change.getAsJsonObject("row");
+                if (!rowKey.equals(patchRowKey(tableName, row)))
+                    throw new IOException("Klucz zmiany nie pasuje do rekordu.");
+                if (rowIndex >= 0) rows.set(rowIndex, row.deepCopy());
+                else rows.add(row.deepCopy());
+            }
+            if (metaIndex >= 0) metadata.set(metaIndex, remoteMeta.deepCopy());
+            else metadata.add(remoteMeta.deepCopy());
+            applied++;
+        }
+        return applied;
+    }
+
+    private static int syncMetaIndexByUuid(JsonArray metadata, String uuid) {
+        for (int i = 0; i < metadata.size(); i++) {
+            JsonElement element = metadata.get(i);
+            if (!element.isJsonObject()) continue;
+            if (uuid.equalsIgnoreCase(value(element.getAsJsonObject(), "syncUuid"))) return i;
+        }
+        return -1;
+    }
+
+    private static int rowIndexByKey(String tableName, JsonArray rows, String rowKey) {
+        for (int i = 0; i < rows.size(); i++) {
+            JsonElement element = rows.get(i);
+            if (!element.isJsonObject()) continue;
+            if (rowKey.equals(patchRowKey(tableName, element.getAsJsonObject()))) return i;
+        }
+        return -1;
+    }
+
+    private void updatePhoneChangeCursorFromSnapshot(JsonObject root) {
+        long bestAt = 0L;
+        String bestUuid = "";
+        if (root != null && root.has("syncRecords")
+                && root.get("syncRecords").isJsonArray()) {
+            for (JsonElement element : root.getAsJsonArray("syncRecords")) {
+                if (!element.isJsonObject()) continue;
+                JsonObject meta = element.getAsJsonObject();
+                long at = longValue(meta, "updatedAt");
+                String uuid = value(meta, "syncUuid").toLowerCase(Locale.ROOT);
+                if (at > bestAt || (at == bestAt && uuid.compareTo(bestUuid) > 0)) {
+                    bestAt = at;
+                    bestUuid = uuid;
+                }
+            }
+        }
+        phoneChangeCursorAt = bestAt;
+        phoneChangeCursorUuid = bestUuid;
     }
 
     private void startAutoSaveLoop() {
@@ -3836,6 +5092,7 @@ public final class EdhomeDesktop extends JFrame {
             if (snapshot != null) {
                 ensureDesktopSyncMetadata(snapshot);
                 saveCache(snapshot);
+                savePcBackup(snapshot);
             }
         } catch (Exception error) {
             DesktopDiagnosticLog.error("LOCAL_CACHE_SAVE", error);
@@ -3940,25 +5197,33 @@ public final class EdhomeDesktop extends JFrame {
         final JLabel status = new JLabel("Czekam na skan z telefonu…");
         if (trigger != null) trigger.setEnabled(false);
         try {
+            prepareWindowsPairingFirewall();
             QrPairingSession session = QrPairingSession.start(payload ->
                 SwingUtilities.invokeLater(() -> {
-                    PREFS.put("phoneIp", payload.phoneIp);
+                    String pairedHost = LanClient.normalizeHost(payload.phoneIp);
+                    if (QrPairingSession.localAddresses().contains(pairedHost)) {
+                        status.setText("Odrzucono błędny adres telefonu — wskazuje ten komputer.");
+                        DesktopDiagnosticLog.event("QR_PAIRING_SELF_IP_REJECTED",
+                            "host=" + pairedHost);
+                        return;
+                    }
+                    PREFS.put("phoneIp", pairedHost);
                     PREFS.put("token", payload.token);
                     PREFS.putBoolean("autoConnect", true);
                     PREFS.putBoolean("autoWrite", true);
                     pairState.setText("Połączono z Androidem " + payload.version
-                        + " • " + payload.phoneIp + ":" + PORT);
+                        + " • " + pairedHost + ":" + PORT);
                     pairState.setForeground(APP_ACCENT);
                     status.setText("Połączono z Androidem " + payload.version + ".");
                     DesktopDiagnosticLog.event("QR_PAIRING_OK",
-                        "host=" + payload.phoneIp + " android=" + payload.version);
+                        "host=" + pairedHost + " android=" + payload.version);
                     if (dialog[0] != null) dialog[0].dispose();
                     if (qrPairingSession != null) {
                         qrPairingSession.close();
                         qrPairingSession = null;
                     }
                     if (trigger != null) trigger.setEnabled(true);
-                    pullFromPhone(payload.phoneIp, payload.token, null);
+                    pullFromPhone(pairedHost, payload.token, null);
                 }));
             qrPairingSession = session;
 
@@ -3981,11 +5246,19 @@ public final class EdhomeDesktop extends JFrame {
                 "EDHOME • połącz telefon przez QR", false);
             dialog[0] = window;
             window.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+            window.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
+            window.setAlwaysOnTop(true);
             window.setContentPane(body);
             window.pack();
             window.setResizable(false);
             window.setLocationRelativeTo(this);
             window.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                    window.toFront();
+                    window.requestFocus();
+                    DesktopDiagnosticLog.event("QR_PAIRING_WINDOW_VISIBLE");
+                }
+
                 @Override public void windowClosed(java.awt.event.WindowEvent e) {
                     if (qrPairingSession == session) {
                         qrPairingSession.close();
@@ -4002,6 +5275,57 @@ public final class EdhomeDesktop extends JFrame {
                 "Nie można przygotować QR do połączenia:\n" + rootMessage(ex)
                     + "\nSprawdź, czy PC jest połączony z tą samą siecią co telefon.",
                 "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void prepareWindowsPairingFirewall() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (!os.contains("win") || PREFS.getBoolean("pairFirewallReady", false)) return;
+
+        int answer = JOptionPane.showConfirmDialog(this,
+            "Aby telefon mógł połączyć się z tym komputerem przez QR, "
+                + "EDHOME musi zezwolić w Zaporze Windows na TCP 45824.\n"
+                + "Reguła będzie ograniczona do urządzeń z lokalnej podsieci.\n\n"
+                + "Windows może poprosić o zgodę administratora.",
+            "EDHOME • zezwolenie na połączenie telefonu",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) {
+            DesktopDiagnosticLog.event("PAIR_FIREWALL_SKIPPED");
+            return;
+        }
+
+        try {
+            String command =
+                "$p=Start-Process -FilePath 'netsh.exe' "
+                    + "-ArgumentList 'advfirewall firewall add rule "
+                    + "name=EDHOME_Desktop_QR_45824 dir=in action=allow "
+                    + "protocol=TCP localport=45824 profile=any remoteip=LocalSubnet' "
+                    + "-Verb RunAs -Wait -PassThru; exit $p.ExitCode";
+            Process process = new ProcessBuilder(
+                "powershell.exe", "-NoProfile", "-NonInteractive",
+                "-Command", command)
+                .redirectErrorStream(true)
+                .start();
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException(
+                    "Przekroczono czas oczekiwania na zgodę Zapory Windows.");
+            }
+            if (process.exitValue() != 0) {
+                throw new IOException(
+                    "Zapora Windows zwróciła kod " + process.exitValue() + ".");
+            }
+            PREFS.putBoolean("pairFirewallReady", true);
+            DesktopDiagnosticLog.event("PAIR_FIREWALL_READY",
+                "tcp=" + PAIR_PORT + " remote=LocalSubnet");
+        } catch (Exception error) {
+            DesktopDiagnosticLog.error("PAIR_FIREWALL_SETUP", error);
+            JOptionPane.showMessageDialog(this,
+                "Nie udało się automatycznie zezwolić na połączenie QR.\n"
+                    + "Możesz kontynuować, ale jeśli telefon nadal nie połączy się, "
+                    + "zezwól EDHOME w Zaporze Windows.\n\n"
+                    + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -4336,6 +5660,13 @@ public final class EdhomeDesktop extends JFrame {
             String tableName) {
         JPanel page = page(title);
 
+        boolean storageBatch = "storage_items".equals(tableName);
+        java.util.List<JsonObject> selectedRows = new ArrayList<>();
+        java.util.List<JCheckBox> selectors = new ArrayList<>();
+        JLabel selectedCount = new JLabel(storageBatch
+            ? "Zaznaczone: 0" : "");
+        selectedCount.setForeground(APP_ACCENT);
+
         JPanel list = new JPanel();
         list.setBackground(APP_BG);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
@@ -4347,7 +5678,26 @@ public final class EdhomeDesktop extends JFrame {
         } else {
             for (JsonElement el : rows) {
                 if (!el.isJsonObject()) continue;
-                list.add(recordCard(el.getAsJsonObject(), columns, tableName));
+                JsonObject row = el.getAsJsonObject();
+                if (storageBatch) {
+                    JPanel selectable = new JPanel(new BorderLayout(8, 0));
+                    selectable.setOpaque(false);
+                    JCheckBox selector = new JCheckBox();
+                    selector.setOpaque(false);
+                    selector.setToolTipText("Zaznacz do operacji zbiorczej");
+                    selector.addActionListener(e -> {
+                        if (selector.isSelected()) {
+                            if (!selectedRows.contains(row)) selectedRows.add(row);
+                        } else selectedRows.remove(row);
+                        selectedCount.setText("Zaznaczone: " + selectedRows.size());
+                    });
+                    selectors.add(selector);
+                    selectable.add(selector, BorderLayout.WEST);
+                    selectable.add(recordCard(row, columns, tableName), BorderLayout.CENTER);
+                    list.add(selectable);
+                } else {
+                    list.add(recordCard(row, columns, tableName));
+                }
                 list.add(Box.createVerticalStrut(10));
             }
         }
@@ -4360,9 +5710,14 @@ public final class EdhomeDesktop extends JFrame {
 
         JPanel footer = new JPanel(new BorderLayout(8, 0));
         footer.setBackground(APP_BG);
+        JPanel footerInfo = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        footerInfo.setOpaque(false);
         JLabel count = new JLabel("Pozycji: " + rows.size()
             + "  •  widok użytkowy — bez technicznych ID");
         count.setForeground(APP_MUTED);
+        footerInfo.add(count);
+        if (storageBatch) footerInfo.add(selectedCount);
+
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         actions.setBackground(APP_BG);
         JButton reload = actionButton("↻ Pobierz z telefonu");
@@ -4382,6 +5737,27 @@ public final class EdhomeDesktop extends JFrame {
             paste.addActionListener(e -> showQuickTaskBulkPaste());
             actions.add(paste);
         }
+        if (storageBatch) {
+            JButton selectAll = actionButton("Zaznacz wszystko");
+            selectAll.addActionListener(e -> {
+                for (JCheckBox selector : selectors) selector.setSelected(true);
+                selectedRows.clear();
+                for (JsonElement element : rows)
+                    if (element.isJsonObject()) selectedRows.add(element.getAsJsonObject());
+                selectedCount.setText("Zaznaczone: " + selectedRows.size());
+            });
+            JButton clear = actionButton("Wyczyść");
+            clear.addActionListener(e -> {
+                for (JCheckBox selector : selectors) selector.setSelected(false);
+                selectedRows.clear();
+                selectedCount.setText("Zaznaczone: 0");
+            });
+            JButton moveSelected = actionButton("⇄ Przenieś zaznaczone");
+            moveSelected.addActionListener(e -> showBatchStorageMove(selectedRows));
+            actions.add(selectAll);
+            actions.add(clear);
+            actions.add(moveSelected);
+        }
         if ("storage_items".equals(tableName) || "places".equals(tableName)) {
             JButton labels = actionButton("▣ Etykiety QR");
             labels.addActionListener(e -> showBulkQrLabels(tableName, rows));
@@ -4394,10 +5770,138 @@ public final class EdhomeDesktop extends JFrame {
         }
         actions.add(reload);
         actions.add(save);
-        footer.add(count, BorderLayout.WEST);
+        footer.add(footerInfo, BorderLayout.WEST);
         footer.add(actions, BorderLayout.EAST);
         page.add(footer, BorderLayout.SOUTH);
         return page;
+    }
+
+    private void showBatchStorageMove(java.util.List<JsonObject> selectedRows) {
+        if (selectedRows == null || selectedRows.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zaznacz co najmniej jedną rzecz albo pudełko.");
+            return;
+        }
+
+        java.util.List<JsonObject> selected = new ArrayList<>(selectedRows);
+        boolean allThings = true;
+        for (JsonObject row : selected) {
+            if (!"thing".equals(value(row, "kind"))) allThings = false;
+            if (!value(row, "lent_to").isBlank()) {
+                JOptionPane.showMessageDialog(this,
+                    "W zaznaczeniu znajduje się wypożyczona rzecz: "
+                        + value(row, "name")
+                        + ".\nNajpierw odnotuj jej zwrot.",
+                    "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
+        java.util.List<Choice> modes = new ArrayList<>();
+        modes.add(new Choice("place", "Przenieś do miejsca"));
+        if (allThings) modes.add(new Choice("box", "Włóż do pudełka"));
+        modes.add(new Choice("none", "Usuń przypisanie lokalizacji"));
+
+        JComboBox<Choice> mode = new JComboBox<>(modes.toArray(new Choice[0]));
+        JPanel form = new JPanel(new GridLayout(0, 1, 6, 6));
+        form.add(new JLabel("Zaznaczono: " + selected.size()));
+        form.add(new JLabel("Operacja:"));
+        form.add(mode);
+
+        int first = JOptionPane.showConfirmDialog(this, form,
+            "EDHOME Desktop • operacja zbiorcza",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (first != JOptionPane.OK_OPTION) return;
+
+        Choice chosenMode = (Choice) mode.getSelectedItem();
+        if (chosenMode == null) return;
+
+        Choice destination = new Choice("", "—");
+        if ("place".equals(chosenMode.value)) {
+            JComboBox<Choice> places = referenceCombo("places", "", false);
+            if (places.getItemCount() == 0) {
+                JOptionPane.showMessageDialog(this, "Nie ma żadnego miejsca docelowego.");
+                return;
+            }
+            int result = JOptionPane.showConfirmDialog(this, places,
+                "Wybierz miejsce dla " + selected.size() + " pozycji",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (result != JOptionPane.OK_OPTION) return;
+            destination = (Choice) places.getSelectedItem();
+        } else if ("box".equals(chosenMode.value)) {
+            JComboBox<Choice> boxes = storageBatchBoxCombo();
+            if (boxes.getItemCount() == 0) {
+                JOptionPane.showMessageDialog(this, "Nie ma żadnego pudełka docelowego.");
+                return;
+            }
+            int result = JOptionPane.showConfirmDialog(this, boxes,
+                "Wybierz pudełko dla " + selected.size() + " rzeczy",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (result != JOptionPane.OK_OPTION) return;
+            destination = (Choice) boxes.getSelectedItem();
+        }
+
+        String destinationText = "none".equals(chosenMode.value)
+            ? "bez lokalizacji" : destination == null ? "—" : destination.label;
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Zmienić lokalizację " + selected.size() + " pozycji na:\n"
+                + destinationText + "?",
+            "EDHOME Desktop • potwierdź operację zbiorczą",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        java.util.Map<JsonObject,JsonObject> before =
+            new java.util.LinkedHashMap<>();
+        try {
+            for (JsonObject row : selected) {
+                before.put(row, row.deepCopy());
+                if ("place".equals(chosenMode.value)) {
+                    row.add("parent_box_id", com.google.gson.JsonNull.INSTANCE);
+                    row.addProperty("place_id", Long.parseLong(destination.value));
+                } else if ("box".equals(chosenMode.value)) {
+                    row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+                    row.addProperty("parent_box_id", Long.parseLong(destination.value));
+                } else {
+                    row.add("parent_box_id", com.google.gson.JsonNull.INSTANCE);
+                    row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+                }
+                validateDesktopStorageRow(row);
+            }
+
+            for (JsonObject row : selected) {
+                JsonObject old = before.get(row);
+                boolean moved = !value(old, "parent_box_id").equals(
+                        value(row, "parent_box_id"))
+                    || !value(old, "place_id").equals(value(row, "place_id"));
+                if (moved) appendDesktopStorageMove(row, old);
+            }
+            markDirty();
+            showSection("Magazyn");
+            JOptionPane.showMessageDialog(this,
+                "Zmieniono lokalizację " + selected.size()
+                    + (selected.size() == 1 ? " pozycji." : " pozycji.")
+                    + "\nZmiany zapisano lokalnie i trafią do telefonu przez synchronizację.");
+        } catch (Exception error) {
+            for (java.util.Map.Entry<JsonObject,JsonObject> entry : before.entrySet())
+                restoreJsonObject(entry.getKey(), entry.getValue());
+            JOptionPane.showMessageDialog(this,
+                "Nie wykonano operacji zbiorczej:\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private JComboBox<Choice> storageBatchBoxCombo() {
+        java.util.List<Choice> options = new ArrayList<>();
+        for (JsonElement element : table("storage_items")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject row = element.getAsJsonObject();
+            if (!"box".equals(value(row, "kind"))) continue;
+            String id = value(row, "id");
+            if (id.isBlank()) continue;
+            String name = value(row, "name");
+            options.add(new Choice(id, name.isBlank() ? "Pudełko #" + id : name));
+        }
+        return new JComboBox<>(options.toArray(new Choice[0]));
     }
 
     private JPanel recordCard(JsonObject row, String[][] columns, String tableName) {
@@ -5358,6 +6862,7 @@ public final class EdhomeDesktop extends JFrame {
             }
             task = task.trim();
             if (task.isEmpty()) continue;
+            task = capitalizeLabel(task);
             if (task.length() > 160) task = task.substring(0, 160).trim();
             out.add(task);
         }
@@ -5405,6 +6910,20 @@ public final class EdhomeDesktop extends JFrame {
             row.add("waste_fraction", com.google.gson.JsonNull.INSTANCE);
             row.add("remind_time", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("reminder_lead_days", 0);
+            row.add("project_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("project_sort_order", 0L);
+            return row;
+        }
+        if ("projects".equals(tableName)) {
+            row.addProperty("id", id);
+            row.addProperty("name", "Nowy projekt");
+            row.add("parent_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("place_id", com.google.gson.JsonNull.INSTANCE);
+            row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("status", "active");
+            row.add("due_date", com.google.gson.JsonNull.INSTANCE);
+            row.add("budget_grosz", com.google.gson.JsonNull.INSTANCE);
+            row.addProperty("created_at", now);
             return row;
         }
         if ("pantry".equals(tableName)) {
@@ -5509,6 +7028,10 @@ public final class EdhomeDesktop extends JFrame {
         try {
             if ("tasks".equals(tableName)) {
                 removeRowsByLong("task_rotation_members", "task_id", id);
+                removeRowsByLong("project_task_dependencies", "task_id", id);
+                removeRowsByLong("project_task_dependencies", "depends_on_task_id", id);
+                removeRowsByLong("project_task_work_sessions", "task_id", id);
+                removeRowsByLong("project_task_blockers", "task_id", id);
                 table("tasks").remove(row);
             } else if ("pantry".equals(tableName)) {
                 if (hasOpenAuditSession())
@@ -5652,6 +7175,8 @@ public final class EdhomeDesktop extends JFrame {
         if (raw.isBlank()) return "—";
 
         if ("assignee_id".equals(key)) return referenceName("household_members", raw);
+        if ("parent_id".equals(key) && row.has("budget_grosz"))
+            return referenceName("projects", raw);
         if ("place_id".equals(key) || "parent_id".equals(key))
             return placePath(raw);
         if ("parent_box_id".equals(key)) return referenceName("storage_items", raw);
@@ -5714,6 +7239,7 @@ public final class EdhomeDesktop extends JFrame {
                 case "pending": return "Do potwierdzenia";
                 case "confirmed": return "Potwierdzone";
                 case "active": return "Aktywne";
+                case "paused": return "Wstrzymane";
                 case "done": return "Wykonane";
                 default: return raw;
             }
@@ -5727,7 +7253,7 @@ public final class EdhomeDesktop extends JFrame {
             }
         }
         if ("category".equals(key)) return friendlyValueStaticCategory(raw);
-        if ("amount_grosz".equals(key)) return money(raw);
+        if ("amount_grosz".equals(key) || "budget_grosz".equals(key)) return money(raw);
         if ("qty_milli".equals(key)) return milli(raw);
         if (key.endsWith("_at")) return timeValue(raw);
         return raw;
@@ -5844,6 +7370,9 @@ public final class EdhomeDesktop extends JFrame {
         try {
             for (Map.Entry<String,JComponent> entry : editors.entrySet())
                 applyEditor(row, entry.getKey(), entry.getValue());
+            if (row.has("budget_grosz") && row.has("parent_id")
+                    && row.has("status") && row.has("created_at"))
+                validateDesktopProjectRow(row);
             if(storageRow) {
                 if(storageRowLive&&!value(before,"kind").equals(value(row,"kind")))
                     throw new IllegalArgumentException(
@@ -5997,6 +7526,8 @@ public final class EdhomeDesktop extends JFrame {
 
         if ("assignee_id".equals(key))
             return referenceCombo("household_members", raw, true);
+        if ("parent_id".equals(key) && row.has("budget_grosz"))
+            return projectParentCombo(row,raw);
         if ("place_id".equals(key) || "parent_id".equals(key))
             return referenceCombo("places", raw, true);
         if ("parent_box_id".equals(key))
@@ -6010,7 +7541,7 @@ public final class EdhomeDesktop extends JFrame {
         }
 
         JTextField field = new JTextField();
-        if ("amount_grosz".equals(key)) {
+        if ("amount_grosz".equals(key) || "budget_grosz".equals(key)) {
             try {
                 field.setText(java.math.BigDecimal.valueOf(
                     Long.parseLong(raw), 2).toPlainString());
@@ -6030,6 +7561,10 @@ public final class EdhomeDesktop extends JFrame {
                 || "mounted".equals(key) || "current".equals(key)) {
             out.add(new Choice("0", "Nie"));
             out.add(new Choice("1", "Tak"));
+        } else if ("status".equals(key) && row.has("budget_grosz")) {
+            out.add(new Choice("active", "Aktywny"));
+            out.add(new Choice("paused", "Wstrzymany"));
+            out.add(new Choice("done", "Zakończony"));
         } else if ("priority".equals(key)) {
             out.add(new Choice("low", "Niski"));
             out.add(new Choice("normal", "Normalny"));
@@ -6099,7 +7634,11 @@ public final class EdhomeDesktop extends JFrame {
         }
 
         String text = ((JTextField) editor).getText().trim();
-        if ("amount_grosz".equals(key)) {
+        if ("amount_grosz".equals(key) || "budget_grosz".equals(key)) {
+            if (text.isBlank()) {
+                row.add(key, com.google.gson.JsonNull.INSTANCE);
+                return;
+            }
             long grosz = new java.math.BigDecimal(text.replace(',', '.'))
                 .multiply(java.math.BigDecimal.valueOf(100))
                 .longValueExact();
@@ -6120,8 +7659,28 @@ public final class EdhomeDesktop extends JFrame {
         } else {
             if (text.isBlank() && (key.endsWith("_date") || key.endsWith("_until")))
                 row.add(key, com.google.gson.JsonNull.INSTANCE);
-            else row.addProperty(key, text);
+            else row.addProperty(key, shouldCapitalizeDesktopField(key)
+                ? capitalizeLabel(text) : text);
         }
+    }
+
+    private static boolean shouldCapitalizeDesktopField(String key) {
+        return "name".equals(key) || "title".equals(key)
+            || "display_name".equals(key) || "label".equals(key);
+    }
+
+    private static String capitalizeLabel(String raw) {
+        if (raw == null) return "";
+        String text = raw.trim();
+        if (text.isEmpty()) return text;
+        for (int i=0; i<text.length(); i++) {
+            char ch=text.charAt(i);
+            if (!Character.isLetter(ch)) continue;
+            char upper=Character.toUpperCase(ch);
+            if (upper==ch) return text;
+            return text.substring(0,i)+upper+text.substring(i+1);
+        }
+        return text;
     }
 
     private static boolean isNumericKey(String key) {
@@ -6225,6 +7784,67 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    private static synchronized void savePcBackup(JsonObject data) {
+        if (data == null) return;
+        try {
+            Files.createDirectories(PC_BACKUP_DIR);
+            String json = GSON.toJson(data);
+            writeBackupFile(PC_BACKUP_DIR.resolve("EDHOME-PC-latest.json"), json);
+            String day = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+            Path daily = PC_BACKUP_DIR.resolve("EDHOME-PC-" + day + ".json");
+            boolean refreshDaily = !Files.isRegularFile(daily);
+            if (!refreshDaily) {
+                try {
+                    refreshDaily = System.currentTimeMillis()
+                        - Files.getLastModifiedTime(daily).toMillis() >= 15 * 60 * 1000L;
+                } catch (IOException ignored) { refreshDaily = true; }
+            }
+            if (refreshDaily) writeBackupFile(daily, json);
+            try (java.util.stream.Stream<Path> stream = Files.list(PC_BACKUP_DIR)) {
+                java.util.List<Path> dailyFiles = stream.filter(Files::isRegularFile)
+                    .filter(file -> file.getFileName().toString()
+                        .matches("EDHOME-PC-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.json"))
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .collect(java.util.stream.Collectors.toList());
+                for (int i = 30; i < dailyFiles.size(); i++) Files.deleteIfExists(dailyFiles.get(i));
+            }
+        } catch (Exception error) {
+            DesktopDiagnosticLog.error("PC_BACKUP_SAVE", error);
+        }
+    }
+
+    private static void writeBackupFile(Path target, String content) throws IOException {
+        Path temp = Files.createTempFile(PC_BACKUP_DIR, target.getFileName().toString() + ".", ".tmp");
+        boolean committed = false;
+        try {
+            Files.writeString(temp, content, StandardCharsets.UTF_8,
+                StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            try {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicUnavailable) {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            committed = true;
+        } finally {
+            if (!committed) try { Files.deleteIfExists(temp); } catch (IOException ignored) { }
+        }
+    }
+
+    private void openPcBackupFolder() {
+        try {
+            Files.createDirectories(PC_BACKUP_DIR);
+            if (!Desktop.isDesktopSupported())
+                throw new IOException("System nie obsługuje otwierania folderów.");
+            Desktop.getDesktop().open(PC_BACKUP_DIR.toFile());
+        } catch (Exception error) {
+            JOptionPane.showMessageDialog(this,
+                "Nie można otworzyć folderu backupu:\n" + PC_BACKUP_DIR.toAbsolutePath()
+                    + "\n\n" + rootMessage(error),
+                "EDHOME Desktop", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private static void validate(JsonObject root) {
         if (!"edhome-data-backup".equals(str(root,"format",""))
                 || !root.has("tables") || !root.get("tables").isJsonObject())
@@ -6291,11 +7911,13 @@ public final class EdhomeDesktop extends JFrame {
                     snapshotHash = result.sha256;
                     syncedSnapshot = snapshot.deepCopy();
                     phoneRevision = result.revision;
+                    updatePhoneChangeCursorFromSnapshot(snapshot);
                     lastFullReconcileAt = System.currentTimeMillis();
                     connected = true;
                     dirty = false;
                     validate(snapshot);
                     saveCache(snapshot);
+                    savePcBackup(snapshot);
                     connection.setText("ONLINE • EDYCJA • Android "
                         + str(snapshot,"sourceVersion",""));
                     showSection(current);
@@ -6389,6 +8011,7 @@ public final class EdhomeDesktop extends JFrame {
                     syncedSnapshot = result.data.deepCopy();
                     snapshotHash = result.sha256;
                     phoneRevision = result.revision;
+                    updatePhoneChangeCursorFromSnapshot(result.data);
                     if (!result.patchUsed)
                         lastFullReconcileAt = System.currentTimeMillis();
 
@@ -6396,6 +8019,7 @@ public final class EdhomeDesktop extends JFrame {
                         snapshot = result.data.deepCopy();
                         dirty = false;
                         saveCache(snapshot);
+                        savePcBackup(snapshot);
                     } else {
                         // Użytkownik zdążył zrobić kolejne zmiany w czasie synchronizacji.
                         dirty = true;
@@ -6639,6 +8263,9 @@ public final class EdhomeDesktop extends JFrame {
             if ("task_rotation_members".equals(table))
                 return canonicalId(row.get("task_id")) + ":"
                     + canonicalId(row.get("member_id"));
+            if ("project_task_dependencies".equals(table))
+                return canonicalId(row.get("task_id")) + ":"
+                    + canonicalId(row.get("depends_on_task_id"));
             if ("pantry_packages".equals(table))
                 return canonicalId(row.get("pantry_id"));
             return canonicalId(row.get("id"));
@@ -6911,6 +8538,39 @@ public final class EdhomeDesktop extends JFrame {
         }
     }
 
+    private static final class DeltaBatch {
+        final JsonArray changes;
+        final boolean hasMore;
+        final long cursorUpdatedAt;
+        final String cursorSyncUuid;
+        DeltaBatch(JsonArray changes, boolean hasMore, long cursorUpdatedAt, String cursorSyncUuid) {
+            this.changes = changes == null ? new JsonArray() : changes;
+            this.hasMore = hasMore;
+            this.cursorUpdatedAt = cursorUpdatedAt;
+            this.cursorSyncUuid = cursorSyncUuid == null ? "" : cursorSyncUuid;
+        }
+    }
+
+    private static final class PhoneDeltaSyncResult {
+        final JsonObject data;
+        final long revision;
+        final int applied;
+        final long cursorUpdatedAt;
+        final String cursorSyncUuid;
+        PhoneDeltaSyncResult(JsonObject data, long revision, int applied,
+                long cursorUpdatedAt, String cursorSyncUuid) {
+            this.data = data;
+            this.revision = revision;
+            this.applied = applied;
+            this.cursorUpdatedAt = cursorUpdatedAt;
+            this.cursorSyncUuid = cursorSyncUuid == null ? "" : cursorSyncUuid;
+        }
+    }
+
+    private static final class DeltaUnsupportedException extends IOException {
+        DeltaUnsupportedException() { super("Telefon ma starszą wersję synchronizacji telefon → PC."); }
+    }
+
     private static final class PatchResult {
         final String sha256;
         final long revision;
@@ -6966,7 +8626,7 @@ public final class EdhomeDesktop extends JFrame {
 
             ServerSocket server = new ServerSocket();
             server.setReuseAddress(true);
-            server.bind(new InetSocketAddress(InetAddress.getByName(host), PAIR_PORT), 4);
+            server.bind(new InetSocketAddress(PAIR_PORT), 4);
             server.setSoTimeout(180000);
 
             QrPairingSession session =
@@ -7249,6 +8909,32 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IOException("Telefon odpowiedział HTTP " + response.statusCode() + ".");
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             return root.has("revision") ? root.get("revision").getAsLong() : -1L;
+        }
+
+        DeltaBatch changes(long afterUpdatedAt, String afterUuid) throws Exception {
+            String safeUuid = afterUuid == null ? "" : afterUuid.toLowerCase(Locale.ROOT);
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("http://" + host + ":" + port + "/changes?after="
+                        + afterUpdatedAt + "&uuid=" + safeUuid))
+                .timeout(Duration.ofSeconds(15))
+                .header("X-EDHOME-TOKEN", token)
+                .header("Accept", "application/json")
+                .GET().build();
+            HttpResponse<String> response =
+                http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 404) throw new DeltaUnsupportedException();
+            if (response.statusCode() == 401) throw new IOException("Nieprawidłowy kod parowania.");
+            if (response.statusCode() != 200)
+                throw new IOException("Telefon odrzucił pobranie zmian: HTTP " + response.statusCode() + ".");
+            JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
+            JsonArray changes = body.has("changes") && body.get("changes").isJsonArray()
+                ? body.getAsJsonArray("changes") : new JsonArray();
+            boolean hasMore = body.has("hasMore") && body.get("hasMore").getAsBoolean();
+            long cursorAt = body.has("cursorUpdatedAt")
+                ? body.get("cursorUpdatedAt").getAsLong() : afterUpdatedAt;
+            String cursorUuid = body.has("cursorSyncUuid")
+                ? body.get("cursorSyncUuid").getAsString() : safeUuid;
+            return new DeltaBatch(changes, hasMore, cursorAt, cursorUuid);
         }
 
         PatchResult patch(JsonObject patch) throws Exception {

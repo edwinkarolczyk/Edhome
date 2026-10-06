@@ -9,10 +9,12 @@ from pathlib import Path
 ctx=runpy.run_path("tests/check_db_contract.py")
 db=ctx["fresh"]
 source=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
+archive=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackupArchive.java").read_text(encoding="utf-8")
+originals=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageOriginals.java").read_text(encoding="utf-8")
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==40
+assert len(manifest)==49
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
@@ -63,6 +65,7 @@ VALUES(1,?,'csv','EDHOME TEST','expense',649,'2026-09-25',
 content={}
 for table,columns in manifest.items():
     order=("task_id,position" if table=="task_rotation_members"
+           else "task_id,depends_on_task_id" if table=="project_task_dependencies"
            else "pantry_id" if table=="pantry_packages" else "id")
     found=db.execute('SELECT '+",".join(columns)+' FROM "'+table+'" ORDER BY '+order).fetchall()
     content[table]=[dict(zip(columns,row)) for row in found]
@@ -92,7 +95,38 @@ for table in manifest:
 restore=source.split("database.beginTransaction();",1)[1]
 assert restore.index("if (!restored.commit())")<restore.index(
     "database.setTransactionSuccessful()")<restore.index("database.endTransaction()")
-assert 'if (!verifyDataBackupDocument(data.getData(), bytes))' in main
-assert 'MessageDigest.isEqual(expectedHash, actualHash.digest())' in main
-assert '"wt"' in main and 'DATA_BACKUP_VERIFY_FAILED' in main
-print("Backup: 40 domain tables including Garden season history/harvests, NFC links and bank evidence queue; numeric/nullability, JSON roundtrip and rollback PASS")
+for token in (
+    'ZipOutputStream',
+    '"edhome-backup-archive"',
+    '"manifest.json"',
+    '"media/storage-originals/"',
+    '"media/storage-thumbnails/"',
+    'digestEntry(zip, entry)',
+    'verifiedPayloadBytes += digest.size',
+    'verifiedPayloadBytes > MAX_EXTRACTED_BYTES',
+    'readArchivedThumbnails(archive, inspection.paths)',
+    'DataBackup.restoreJson(database, prefs, inspection.json,',
+):
+    assert token in archive, token
+for token in (
+    'static void save(Context context, long itemId, Uri source)',
+    'MAX_FILE_BYTES = 32L * 1024 * 1024',
+    'regenerateThumbnails(',
+):
+    assert token in originals, token
+for token in (
+    'DataBackupArchive.create(',
+    'DataBackupArchive.verifyDocument(',
+    'DataBackupArchive.restore(',
+    'StorageOriginals.save(this,id,file)',
+    'StorageOriginals.save(this,id,selected)',
+    'setType("application/zip")',
+    'DATA_BACKUP_ZIP_EXPORTED',
+):
+    assert token in main, token
+assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain supported"
+assert 'Map<Long,String> archivedStorageThumbs' in source
+assert 'restoredStorageThumbs.size() + archivedStorageThumbs.size() > 200' in source
+assert 'legacy_thumbs=' in main
+assert 'Etap: " + backupStage' in main
+print("Backup: 49 domain tables + verified ZIP manifest/SHA-256, original storage media, thumbnail regeneration, legacy JSON and rollback contract PASS")

@@ -62,6 +62,27 @@ public final class TaskRulesSmoke {
             "Zero hours must be rejected");
         valid(TaskRules.minutesFromHours("8,1", 1, 480) == null,
             "Task duration must stay within eight hours");
-        System.out.println("TaskRulesSmoke: 25 checks passed");
+        valid(Integer.valueOf(20).equals(
+            TaskRules.minutesFromParts("0", "5", 20, 600, true)),
+            "Project duration below 20 minutes must clamp to 20");
+        valid(Integer.valueOf(20).equals(
+            TaskRules.minutesFromParts("0", "19", 20, 600, true)),
+            "Project duration 19 minutes must clamp to 20");
+        valid(Integer.valueOf(20).equals(
+            TaskRules.minutesFromParts("0", "20", 20, 600, true)),
+            "Project duration 20 minutes must stay unchanged");
+        valid(Integer.valueOf(90).equals(
+            TaskRules.minutesFromParts("1", "30", 20, 600, true)),
+            "Separate hour and minute fields must sum correctly");
+        valid(Integer.valueOf(600).equals(
+            TaskRules.minutesFromParts("10", "0", 20, 600, true)),
+            "Ten hours must be accepted");
+        valid(TaskRules.minutesFromParts("10", "1", 20, 600, true) == null,
+            "Duration above ten hours must be rejected");
+        valid(TaskRules.minutesFromParts("0", "60", 20, 600, true) == null,
+            "Minute field must stay within 0-59");
+        valid(TaskRules.minutesFromParts("", "", 20, 600, true) == null,
+            "Both duration fields cannot be empty");
+        System.out.println("TaskRulesSmoke: 33 checks passed");
     }
 }

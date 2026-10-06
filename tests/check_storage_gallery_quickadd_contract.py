@@ -183,7 +183,7 @@ for marker in (
     '＋ Nowe pudełko',
     '＋ Nowe miejsce',
     'Utwórz i zacznij zdjęcia',
-    'private void quickThingBatchCommitPhoto()',
+    'private void quickThingBatchCommitPhoto(java.io.File originalFile)',
     'String name="Rzecz "+quickThingBatchCounter;',
     'StorageStore.create(',
     'Dodać jeszcze?',
@@ -207,11 +207,12 @@ assert 'showQuickThingBatchTargetChooser();' in start_batch
 assert 'takeQuickThingBatchDraftPhoto();' not in start_batch
 
 commit_photo = quick_thing[
-    quick_thing.index('private void quickThingBatchCommitPhoto()'):
+    quick_thing.index('private void quickThingBatchCommitPhoto(java.io.File originalFile)'):
     quick_thing.index('private void showQuickThingBatchAfterPhoto')
 ]
 assert 'String name="Rzecz "+quickThingBatchCounter;' in commit_photo
 assert 'StorageStore.create' in commit_photo
+assert 'StorageOriginals.save(this,id,originalFile);' in commit_photo
 assert 'quickThingBatchCounter++;' in commit_photo
 assert 'StorageThumbs.key(id)' in commit_photo
 

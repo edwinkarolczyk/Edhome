@@ -95,8 +95,15 @@ assert 'DesktopHardwareScanner' in desktop
 assert '"nfc_links"' in desktop
 assert 'DATABASE_MIGRATED_34_TO_35_NFC_LINKS' in main
 backup = (root / "app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
-assert 'DB_VERSION = 39' in backup
+assert 'DB_VERSION = 45' in backup
 assert '{"nfc_links"' in backup
+assert '{"user_profiles"' in backup
+assert '{"project_task_work_sessions"' in backup
+assert 'removeRowsByLong("project_task_work_sessions", "task_id", id)' in desktop
+assert 'removeRowsByLong("project_task_blockers", "task_id", id)' in desktop
+assert '{"member_shift_hours"' in backup
+assert '{"member_project_windows"' in backup
+assert '{"project_task_blockers"' in backup
 
 # Incremental record sync v2 + backward-compatible v1.
 assert '"/patch"' in server
@@ -111,7 +118,7 @@ assert 'buildRecordPatch' in desktop
 assert 'baseRowSha256' in desktop
 assert 'PatchUnsupportedException' in desktop
 assert 'new javax.swing.Timer(1500' in desktop
-assert '180000L' in desktop
+assert '1800000L' in desktop
 assert 'ZAPISANO LOKALNIE' in desktop
 assert 'localAddresses()' in desktop
 assert 'LinkedHashSet<String> prefixes' in desktop
@@ -122,6 +129,28 @@ assert 'diagnosePhoneConnection' in desktop
 assert 'TCP ' in desktop and 'BRAK POŁĄCZENIA' in desktop
 assert 'Automatyczne szukanie telefonu' in desktop
 print("desktop incremental sync contract OK")
+
+# Android -> Desktop incremental pull + automatic PC backup.
+for marker in (
+    '"/changes"', 'ChangesProvider', 'DESKTOP_SYNC_CHANGES_SENT',
+    'exportChangesAfter', 'cursorUpdatedAt', 'cursorSyncUuid'
+):
+    assert marker in (server + service + sync_store), "Missing phone->PC delta contract: " + marker
+
+for marker in (
+    'pullChangesFromPhone', 'client.changes(', 'applyPhoneChanges',
+    'SYNC_PULL_DELTA_OK', 'phoneChangeCursorAt', '1800000L'
+):
+    assert marker in desktop, "Missing Desktop delta pull contract: " + marker
+
+for marker in (
+    'PC_BACKUP_DIR', 'EDHOME-PC-latest.json', 'EDHOME-PC-',
+    'savePcBackup(snapshot)', 'Otwórz backup EDHOME na PC',
+    'openPcBackupFolder'
+):
+    assert marker in desktop, "Missing PC backup contract: " + marker
+
+print("desktop phone delta pull + PC backup contract OK")
 
 # Hardening: direct SQLite patching, UUID identity, revisions and tombstones.
 patch_handler = server.split('if ("POST".equals(method) && "/patch".equals(path))',1)[1].split(
@@ -144,6 +173,8 @@ assert 'SyncRecordStore.create(database)' in main
 assert 'syncRecords' in backup
 assert 'SyncRecordStore.restoreMetadata' in backup
 assert 'payload.addProperty("version", 2)' in desktop
+assert '"project_task_dependencies".equals(table)' in desktop
+assert 'canonicalId(row.get("depends_on_task_id"))' in desktop
 assert 'syncUuid' in desktop and 'baseRevision' in desktop and 'rowKey' in desktop
 assert 'ensureDesktopSyncMetadata' in desktop
 assert 'applyPatchAck' in desktop
@@ -275,3 +306,86 @@ print("desktop storage QR/NFC kind identity immutable OK")
 assert 'if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())' in desktop
 assert 'Najpierw odnotuj zwrot wypożyczonej rzeczy.' in desktop
 print("desktop storage lent-item move guard OK")
+
+# Desktop-first bulk workflow: multi-select + safe batch storage move.
+for marker in (
+    'Zaznacz wszystko',
+    'Wyczyść',
+    'Przenieś zaznaczone',
+    'showBatchStorageMove',
+    'storageBatchBoxCombo',
+    'Zaznaczone: ',
+    'appendDesktopStorageMove(row, old)',
+    'validateDesktopStorageRow(row);'
+):
+    assert marker in desktop, "Missing Desktop storage batch-edit contract: " + marker
+
+assert 'DESKTOP_VERSION = "0.7.0.' in desktop
+print("desktop storage multi-select + batch move contract OK")
+
+# Desktop Projects v1: native tree + fast task creation on the shared Android model.
+for marker in (
+    '"Projekty"',
+    'desktopProjects()',
+    'DesktopProjectRef',
+    'JTree tree = new JTree',
+    '＋ Projekt',
+    '＋ Podprojekt',
+    '＋ Czynność',
+    'Wklej czynności',
+    'desktopProjectTaskCard',
+    'projectParentCombo',
+    'validateDesktopProjectRow',
+    'project_task_dependencies',
+    'project_task_work_sessions',
+    'Czynność projektu musi mieć co najmniej 20 minut.'
+):
+    assert marker in desktop, "Missing Desktop Projects v1 contract: " + marker
+
+assert 'row.add("project_id", com.google.gson.JsonNull.INSTANCE);' in desktop
+assert 'row.addProperty("project_id",projectId);' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.' in desktop
+print("desktop projects tree + fast task editor contract OK")
+
+# Desktop Projects: multi-select and safe batch editing.
+for marker in (
+    'Zaznacz wszystkie',
+    'Edytuj zaznaczone',
+    'showDesktopProjectBatchEdit',
+    'Zmień wykonawcę',
+    'Zmień termin',
+    'Zmień priorytet',
+    'Przenieś do projektu / podprojektu',
+    'desktopProjectBatchTargetCombo',
+    'samego projektu głównego'
+):
+    assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
+
+assert 'DESKTOP_VERSION = "0.7.0.89"' in desktop
+print("desktop project multi-select + batch edit contract OK")
+
+# Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
+for marker in (
+    'showDesktopTaskDependencies',
+    'desktopDependencyReaches',
+    'desktopProjectRootId',
+    'Ta zmiana utworzyłaby pętlę zależności.',
+    'shouldCapitalizeDesktopField',
+    'capitalizeLabel(task)',
+    'DESKTOP_VERSION = "0.7.0.'
+):
+    assert marker in desktop, "Missing Desktop project dependency/capitalization contract: " + marker
+print("desktop editable dependencies + capitalization contract OK")
+
+# Persistent task order is synchronized and independent from dependencies.
+for marker in (
+    'project_sort_order',
+    'moveDesktopProjectTask',
+    'desktopNextProjectSortOrder',
+    'Przesuń czynność wyżej',
+    'Przesuń czynność niżej',
+    'java.util.Collections.swap',
+    'DESKTOP_VERSION = "0.7.0.'
+):
+    assert marker in desktop, "Missing Desktop project task-order contract: " + marker
+print("desktop persistent project task order contract OK")

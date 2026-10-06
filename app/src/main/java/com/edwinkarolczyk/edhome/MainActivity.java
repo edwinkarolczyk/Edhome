@@ -56,6 +56,9 @@ import android.widget.HorizontalScrollView;
 import android.view.Gravity;
 import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -76,6 +79,7 @@ import javax.crypto.spec.PBEKeySpec;
 
 /** Small, deliberately local-only EDHOME beta preview. */
 public final class MainActivity extends Activity {
+    private static boolean releaseFeaturesEnabled() { return true; }
     private static final int EXPORT_DIAGNOSTICS = 1210;
     private static final int IMPORT_BETA_APK = 1211;
     private static final int EXPORT_DATA_BACKUP = 1212;
@@ -172,7 +176,49 @@ public final class MainActivity extends Activity {
     private String calendarView = "month";
     private String tasksFilter = "all";
     private int tasksPage;
+
+    private static final int NAV_HISTORY_LIMIT=48;
+    private static final class NavState {
+        final String screen;
+        final int scrollY;
+        final long selectedProjectId;
+        final long selectedMemberId;
+        final String membersReturnScreen;
+        final String tasksFilter;
+        final int tasksPage;
+        final String pantrySearch;
+        final int pantryPage;
+        final String pantryCategoryFilter;
+        final String calendarMonth;
+        final String calendarDay;
+        final String calendarView;
+
+        NavState(String screen,int scrollY,long selectedProjectId,
+                long selectedMemberId,String membersReturnScreen,
+                String tasksFilter,int tasksPage,String pantrySearch,
+                int pantryPage,String pantryCategoryFilter,
+                String calendarMonth,String calendarDay,String calendarView) {
+            this.screen=screen;this.scrollY=scrollY;
+            this.selectedProjectId=selectedProjectId;
+            this.selectedMemberId=selectedMemberId;
+            this.membersReturnScreen=membersReturnScreen;
+            this.tasksFilter=tasksFilter;this.tasksPage=tasksPage;
+            this.pantrySearch=pantrySearch;this.pantryPage=pantryPage;
+            this.pantryCategoryFilter=pantryCategoryFilter;
+            this.calendarMonth=calendarMonth;this.calendarDay=calendarDay;
+            this.calendarView=calendarView;
+        }
+    }
+    private final java.util.ArrayDeque<NavState> navigationHistory=
+        new java.util.ArrayDeque<>();
+
+    private long selectedProjectId;
+    private Long taskEditorProjectPreset;
     private long selectedMemberId;
+    private String membersReturnScreen = "tasks";
+    private static final String ACTIVE_MEMBER_PREF = "active_member_id";
+    private static final String MEMBER_PIN_SALT_PREFIX = "member_pin_salt_";
+    private static final String MEMBER_PIN_HASH_PREFIX = "member_pin_hash_";
     private String pantrySearch = "";
     private int pantryPage;
     private String pantryCategoryFilter = "";
@@ -183,7 +229,7 @@ public final class MainActivity extends Activity {
     private boolean centralScannerCameraPending;
     private boolean desktopPairQrCameraPending;
     private static final String[] HOME_TILE_IDS = {
-        "tasks", "calendar", "places", "pantry", "audit",
+        "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today"
     };
     private static final String[] SHIFT_VALUES = {
@@ -202,7 +248,8 @@ public final class MainActivity extends Activity {
         "Niski", "Normalny", "Wysoki", "Pilny"
     };
     private static final int MIN_TASK_MINUTES = 1;
-    private static final int MAX_TASK_MINUTES = 480;
+    private static final int PROJECT_MIN_TASK_MINUTES = 20;
+    private static final int MAX_TASK_MINUTES = 600;
     private int bg, surface, ink, subdued, accent;
     private UiSkin skin;
     private boolean homeEditMode;
@@ -259,18 +306,26 @@ public final class MainActivity extends Activity {
         ensureScannerTileSeeded();
         ensureStorageShortcutTilesSeeded();
         ensureGardenTileSeeded();
+        ensureProjectsTileSeeded();
         // Beta DEV is deliberately PIN-free; never clear an old PIN or user data.
         unlocked = BetaUpdater.isBeta();
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        UserProfileStore.ensureAll(db.getWritableDatabase());
+        ensureActiveMember();
         int prunedStorageThumbs=StorageThumbs.prune(
             prefs,db.getWritableDatabase());
         if(prunedStorageThumbs>0)
             DiagnosticLog.event("STORAGE_THUMBNAILS_PRUNED",
                 "count="+prunedStorageThumbs);
+        int prunedStorageOriginals=StorageOriginals.prune(
+            this,db.getWritableDatabase());
+        if(prunedStorageOriginals>0)
+            DiagnosticLog.event("STORAGE_ORIGINALS_PRUNED",
+                "count="+prunedStorageOriginals);
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-        if (BetaUpdater.isBeta()) {
+        if (releaseFeaturesEnabled() && (BetaUpdater.isBeta() || unlocked)) {
             LanSyncServer.ensureToken(prefs);
             LanSyncService.ensureStarted(this);
         }
@@ -280,7 +335,7 @@ public final class MainActivity extends Activity {
             screen = "timers";
         if (getIntent() != null && getIntent().getBooleanExtra("open_vehicles", false))
             screen = "vehicles";
-        if (BetaUpdater.isBeta() && getIntent() != null
+        if (releaseFeaturesEnabled() && getIntent() != null
                 && getIntent().getBooleanExtra("open_paycheck",false))
             screen="paycheck";
         updater = new BetaUpdater(this);
@@ -319,8 +374,8 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.event("HOME_TILE_ART_BUNDLED_INSTALLED",
                     "count="+bundled);
             if(migrated>0||bundled>0){
-                runOnUiThread(() -> {
-                    if(!isFinishing()&&("home".equals(screen)
+                runOnLiveUi(() -> {
+                    if(!isFinishing()&&!isDestroyed()&&("home".equals(screen)
                             ||"settings".equals(screen)))render();
                 });
             }
@@ -335,8 +390,8 @@ public final class MainActivity extends Activity {
                         prefs.edit().putString("icon_style", "ai3d").commit();
                     DiagnosticLog.event("AI3D_BUNDLED_INSTALLED",
                         "count=100");
-                    runOnUiThread(() -> {
-                        if (!isFinishing() && ("home".equals(screen)
+                    runOnLiveUi(() -> {
+                        if (!isFinishing() && !isDestroyed() && ("home".equals(screen)
                                 || "settings".equals(screen))) render();
                     });
                 }
@@ -346,9 +401,18 @@ public final class MainActivity extends Activity {
         }, "edhome-bundled-3d-icons").start();
     }
 
+    /** Post from background/NFC work only while this Activity can still own UI. */
+    private void runOnLiveUi(Runnable action) {
+        if (action == null) return;
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            action.run();
+        });
+    }
+
     @Override protected void onStart() {
         super.onStart();
-        if (BetaUpdater.isBeta() && !desktopDataReceiverRegistered) {
+        if (releaseFeaturesEnabled() && !desktopDataReceiverRegistered) {
             IntentFilter filter = new IntentFilter(
                 "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -361,6 +425,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (updater != null) updater.destroy();
         disableNfcReaderMode();
         if (nfcAssignmentDialog != null) {
             nfcAssignmentDialog.dismiss();
@@ -412,14 +477,15 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
         refreshNfcReaderMode();
-        if (BetaUpdater.isBeta()) LanSyncService.ensureStarted(this);
+        if (releaseFeaturesEnabled() && (BetaUpdater.isBeta() || unlocked))
+            LanSyncService.ensureStarted(this);
         if (root != null && !unlocked) render();
         if (privateNeedsRender && root != null) {
             privateNeedsRender = false;
             render();
         }
         if (unlocked && updater != null) updater.start();
-        if (BetaUpdater.isBeta() && bankNotificationPermissionGranted()
+        if (releaseFeaturesEnabled() && bankNotificationPermissionGranted()
                 && BankNotificationHints.enabled(this)
                 && !BankNotificationListener.isConnected()) {
             try {
@@ -439,7 +505,7 @@ public final class MainActivity extends Activity {
             go("timers");
         if (intent != null && intent.getBooleanExtra("open_vehicles", false))
             go("vehicles");
-        if (BetaUpdater.isBeta() && intent != null
+        if (releaseFeaturesEnabled() && intent != null
                 && intent.getBooleanExtra("open_paycheck",false))
             go("paycheck");
         handleNfcIntent(intent);
@@ -563,14 +629,14 @@ public final class MainActivity extends Activity {
         final String uid;
         try { uid=NfcLinkStore.uid(tag==null?null:tag.getId()); }
         catch(Exception error) {
-            runOnUiThread(() -> alert(error.getMessage()));
+            runOnLiveUi(() -> alert(error.getMessage()));
             return;
         }
         if(isRawNfcDuplicate(uid)) {
             DiagnosticLog.event("NFC_RAW_DUPLICATE_IGNORED");
             return;
         }
-        runOnUiThread(() -> {
+        runOnLiveUi(() -> {
             if("scanner".equals(screen)) {
                 scannerNfcStatus="✓ Odczytano NFC • "+NfcLinkStore.shortUid(uid);
                 DiagnosticLog.event("NFC_SCANNER_TAG_READ");
@@ -995,17 +1061,11 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (unlocked && "paycheck_private".equals(screen)) go("paycheck");
-        else if (unlocked && "updates_advanced".equals(screen)) go("updates");
-        else if (unlocked && "places".equals(screen)) go("home");
-        else if (unlocked && "storage".equals(screen)) go("places");
-        else if (unlocked && "shopping".equals(screen)) go("pantry");
-        else if (unlocked && "waste".equals(screen)) go("tasks");
-        else if (unlocked && "member_schedule".equals(screen)) go("members");
-        else if (unlocked && ("task_history".equals(screen)
-                || "members".equals(screen))) go("tasks");
-        else if (unlocked && !"home".equals(screen)) go("home");
-        else super.onBackPressed();
+        if(unlocked&&(!"home".equals(screen)||!navigationHistory.isEmpty())) {
+            goBack();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private int dp(float d) {
@@ -1186,6 +1246,8 @@ public final class MainActivity extends Activity {
         input.setTextSize(18);
         input.setSingleLine(true);
         if (number) input.setInputType(2 | 16);
+        else input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         body.addView(input, new LinearLayout.LayoutParams(-1, -2));
         return input;
     }
@@ -1210,14 +1272,52 @@ public final class MainActivity extends Activity {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(accent);
     }
 
-    private void go(String destination) {
+    private void saveCurrentViewport() {
+        if(pageScroll!=null&&screen.equals(renderedScreen))
+            screenScrollY.put(screen,pageScroll.getScrollY());
+    }
+
+    private NavState currentNavState() {
+        saveCurrentViewport();
+        return new NavState(screen,screenScrollY.getOrDefault(screen,0),
+            selectedProjectId,selectedMemberId,membersReturnScreen,
+            tasksFilter,tasksPage,pantrySearch,pantryPage,pantryCategoryFilter,
+            calendarMonth,calendarDay,calendarView);
+    }
+
+    private void pushNavigationState() {
+        NavState state=currentNavState();
+        navigationHistory.addLast(state);
+        while(navigationHistory.size()>NAV_HISTORY_LIMIT)
+            navigationHistory.removeFirst();
+    }
+
+    private void applyNavigationState(NavState state) {
+        selectedProjectId=state.selectedProjectId;
+        selectedMemberId=state.selectedMemberId;
+        membersReturnScreen=state.membersReturnScreen;
+        tasksFilter=state.tasksFilter;
+        tasksPage=state.tasksPage;
+        pantrySearch=state.pantrySearch;
+        pantryPage=state.pantryPage;
+        pantryCategoryFilter=state.pantryCategoryFilter;
+        calendarMonth=state.calendarMonth;
+        calendarDay=state.calendarDay;
+        calendarView=state.calendarView;
+        screenScrollY.put(state.screen,state.scrollY);
+        navigateTo(state.screen,false);
+    }
+
+    private void navigateTo(String destination,boolean rememberCurrent) {
+        if(destination==null||destination.trim().isEmpty())destination="home";
+        if(rememberCurrent&&!destination.equals(screen))
+            pushNavigationState();
+
         if (!"paycheck_private".equals(destination)
                 && privatePaycheckSession != null) {
             privatePaycheckSession.lock();
             privatePaycheckSession = null;
         }
-        if (pageScroll != null && screen.equals(renderedScreen))
-            screenScrollY.put(screen,pageScroll.getScrollY());
         if (!"storage".equals(destination)) storageTemporaryKind=null;
         screen = destination;
         if (!"home".equals(destination)) homeEditMode = false;
@@ -1232,6 +1332,69 @@ public final class MainActivity extends Activity {
             scannerNfcArmed=false;
             refreshNfcReaderMode();
         }
+        render();
+    }
+
+    private void go(String destination) {
+        navigateTo(destination,true);
+    }
+
+    private void goHome() {
+        navigationHistory.clear();
+        selectedProjectId=0L;
+        navigateTo("home",false);
+    }
+
+    private void goBack() {
+        if(!navigationHistory.isEmpty()) {
+            NavState previous=navigationHistory.removeLast();
+            DiagnosticLog.event("NAV_BACK",
+                "from="+screen+" to="+previous.screen);
+            applyNavigationState(previous);
+            return;
+        }
+        if("projects".equals(screen)&&selectedProjectId>0L) {
+            ProjectStore.Project current=ProjectStore.find(
+                db.getReadableDatabase(),selectedProjectId);
+            selectedProjectId=current==null||current.parentId==null
+                ?0L:current.parentId;
+            screenScrollY.put("projects",0);
+            render();
+            return;
+        }
+        String fallback;
+        if("paycheck_private".equals(screen))fallback="paycheck";
+        else if("updates_advanced".equals(screen))fallback="updates";
+        else if("storage".equals(screen))fallback="places";
+        else if("shopping".equals(screen))fallback="pantry";
+        else if("waste".equals(screen))fallback="tasks";
+        else if("member_schedule".equals(screen))fallback="member_profile";
+        else if("member_profile".equals(screen))fallback="members";
+        else if("members".equals(screen))fallback=membersReturnScreen;
+        else if("task_history".equals(screen))fallback="tasks";
+        else fallback="home";
+        DiagnosticLog.event("NAV_BACK_FALLBACK",
+            "from="+screen+" to="+fallback);
+        navigateTo(fallback,false);
+    }
+
+    private void openProject(long projectId) {
+        if(!"projects".equals(screen)||selectedProjectId!=projectId)
+            pushNavigationState();
+        selectedProjectId=projectId;
+        screenScrollY.put("projects",0);
+        render();
+    }
+
+    private void projectBack(ProjectStore.Project project) {
+        if(!navigationHistory.isEmpty()
+                &&"projects".equals(navigationHistory.peekLast().screen)) {
+            goBack();
+            return;
+        }
+        selectedProjectId=project==null||project.parentId==null
+            ?0L:project.parentId;
+        screenScrollY.put("projects",0);
         render();
     }
 
@@ -1294,9 +1457,11 @@ public final class MainActivity extends Activity {
         else {
             switch (screen) {
                 case "tasks": tasks(); break;
+                case "projects": projects(); break;
                 case "timers": timers(); break;
                 case "waste": waste(); break;
                 case "members": members(); break;
+                case "member_profile": memberProfile(); break;
                 case "member_schedule": memberSchedule(); break;
                 case "task_history": taskHistoryScreen(); break;
                 case "pantry": pantry(); break;
@@ -1312,6 +1477,7 @@ public final class MainActivity extends Activity {
                 case "scanner": scannerHub(); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
+                case "supla": supla(); break;
                 case "updates": updates(); break;
                 case "updates_advanced": updatesAdvanced(); break;
                 case "backup": backup(); break;
@@ -1346,8 +1512,123 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private long activeMemberId() {
+        if(prefs==null||db==null)return 0L;
+        long id=prefs.getLong(ACTIVE_MEMBER_PREF,0L);
+        return id>0&&!db.memberName(id).isEmpty()?id:0L;
+    }
+
+    private String activeMemberName() {
+        long id=activeMemberId();
+        return id==0L?"":db.memberName(id);
+    }
+
+    private void ensureActiveMember() {
+        if(activeMemberId()!=0L)return;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM household_members ORDER BY id LIMIT 1",null)) {
+            if(c.moveToFirst())
+                prefs.edit().putLong(ACTIVE_MEMBER_PREF,c.getLong(0)).apply();
+            else
+                prefs.edit().remove(ACTIVE_MEMBER_PREF).apply();
+        }
+    }
+
+    private void setActiveMember(long memberId) {
+        if(memberId<=0L||db.memberName(memberId).isEmpty())
+            throw new IllegalArgumentException("Użytkownik nie istnieje.");
+        prefs.edit().putLong(ACTIVE_MEMBER_PREF,memberId).apply();
+        DiagnosticLog.event("ACTIVE_USER_CHANGED","member="+memberId);
+    }
+
+    private String memberPinSaltKey(long memberId) {
+        return MEMBER_PIN_SALT_PREFIX+memberId;
+    }
+
+    private String memberPinHashKey(long memberId) {
+        return MEMBER_PIN_HASH_PREFIX+memberId;
+    }
+
+    private boolean hasMemberPin(long memberId) {
+        return prefs.contains(memberPinSaltKey(memberId))
+            &&prefs.contains(memberPinHashKey(memberId));
+    }
+
+    private void saveMemberPin(long memberId,String pin) throws Exception {
+        if(pin==null||!pin.matches("[0-9]{5,8}"))
+            throw new IllegalArgumentException("PIN użytkownika musi mieć 5–8 cyfr.");
+        byte[] saltBytes=new byte[16];
+        new SecureRandom().nextBytes(saltBytes);
+        String salt=Base64.encodeToString(saltBytes,Base64.NO_WRAP);
+        String hash=Base64.encodeToString(derivedPin(pin,salt),Base64.NO_WRAP);
+        if(!prefs.edit().putString(memberPinSaltKey(memberId),salt)
+                .putString(memberPinHashKey(memberId),hash).commit())
+            throw new IllegalStateException("Nie udało się zapisać PIN-u użytkownika.");
+    }
+
+    private boolean verifyMemberPin(long memberId,String pin) {
+        try {
+            if(!hasMemberPin(memberId))return true;
+            byte[] expected=Base64.decode(
+                prefs.getString(memberPinHashKey(memberId),""),
+                Base64.NO_WRAP);
+            byte[] actual=derivedPin(pin,
+                prefs.getString(memberPinSaltKey(memberId),""));
+            return MessageDigest.isEqual(expected,actual);
+        } catch(Exception error) {
+            DiagnosticLog.error("USER_PIN_VERIFY",error);
+            return false;
+        }
+    }
+
+    private void clearMemberPin(long memberId) {
+        prefs.edit().remove(memberPinSaltKey(memberId))
+            .remove(memberPinHashKey(memberId)).apply();
+    }
+
+    private void activateMember(long memberId,String memberName) {
+        if(!hasMemberPin(memberId)) {
+            setActiveMember(memberId);
+            render();
+            return;
+        }
+        EditText pin=new EditText(this);
+        pin.setHint("PIN 5–8 cyfr");
+        pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin.setTextColor(ink);
+        pin.setHintTextColor(subdued);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24),dp(14),dp(24),0);
+        content.addView(text("Wpisz lokalny PIN profilu „"+memberName+"”.",14,false));
+        content.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+        lightDialogForm(content);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Przełącz użytkownika")
+            .setView(content)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Przełącz",null)
+            .create();
+        dialog.setOnShowListener(ignored->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                if(!verifyMemberPin(memberId,pin.getText().toString())) {
+                    pin.setText("");
+                    pin.setError("Nieprawidłowy PIN.");
+                    DiagnosticLog.event("USER_PIN_UNLOCK_FAILED",
+                        "member="+memberId);
+                    return;
+                }
+                setActiveMember(memberId);
+                DiagnosticLog.event("USER_PIN_UNLOCK_OK","member="+memberId);
+                dialog.dismiss();
+                render();
+            }));
+        dialog.show();
+    }
+
     private void setupPin() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
         note("Pierwsze uruchomienie. Ustaw lokalny PIN 4–8 cyfr.");
         EditText a = field("PIN", true);
         EditText b = field("Powtórz PIN", true);
@@ -1368,18 +1649,22 @@ public final class MainActivity extends Activity {
                     .putString("pin_hash", Base64.encodeToString(hash, Base64.NO_WRAP))
                     .apply();
                 unlocked = true;
+                if (releaseFeaturesEnabled()) {
+                    LanSyncServer.ensureToken(prefs);
+                    LanSyncService.ensureStarted(this);
+                }
                 DiagnosticLog.event("PIN_SETUP_OK");
-                go("home");
+                goHome();
             } catch (Exception error) {
                 DiagnosticLog.error("PIN_SETUP", error);
                 alert("Błąd zabezpieczenia PIN. Spróbuj ponownie.");
             }
         });
-        note("To tylko prototyp blokady. Brak odzyskiwania PIN i kopii danych — używaj danych testowych.");
+        note("Zachowaj PIN w bezpiecznym miejscu i wykonuj regularne kopie danych.");
     }
 
     private void unlockPin() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        title(BuildConfig.DIAGNOSTICS_ENABLED ? "EDHOME  •  BETA" : "EDHOME");
         note("Odblokuj lokalną instalację.");
         EditText input = field("PIN", true);
         button("Odblokuj", () -> {
@@ -1389,8 +1674,12 @@ public final class MainActivity extends Activity {
                     prefs.getString("pin_salt", ""));
                 if (MessageDigest.isEqual(expected, actual)) {
                     unlocked = true;
+                    if (releaseFeaturesEnabled()) {
+                        LanSyncServer.ensureToken(prefs);
+                        LanSyncService.ensureStarted(this);
+                    }
                     DiagnosticLog.event("PIN_UNLOCK_OK");
-                    go("home");
+                    goHome();
                 } else {
                     DiagnosticLog.event("PIN_UNLOCK_FAILED");
                     input.setText("");
@@ -1493,13 +1782,12 @@ public final class MainActivity extends Activity {
             bellParams.setMargins(0, 0, dp(7), 0);
             row.addView(bell, bellParams);
         } else {
-            TextView appTitle = text("EDHOME  •  "
-                + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
-                21, true);
+            TextView appTitle = text(BuildConfig.DIAGNOSTICS_ENABLED
+                ? "EDHOME  •  BETA" : "EDHOME", 21, true);
             row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         }
 
-        if (BetaUpdater.isBeta()) {
+        if (releaseFeaturesEnabled()) {
             TextView badge = text("", structuredInterfaceShell() ? 13 : 13, true);
             badge.setGravity(Gravity.CENTER);
             badge.setPadding(0, 0, 0, 0);
@@ -1836,7 +2124,7 @@ public final class MainActivity extends Activity {
         nav.setElevation(dp(10));
 
         nav.addView(showcaseNavItem("⌂","Start","home".equals(screen),
-            ()->go("home")),new LinearLayout.LayoutParams(0,dp(58),1f));
+            this::goHome),new LinearLayout.LayoutParams(0,dp(58),1f));
 
         if(HOME_INTERFACE_CONCEPT5.equals(homeInterfaceMode()))
             nav.addView(showcaseNavItem("◇","Magazyn","storage".equals(screen),
@@ -1880,7 +2168,7 @@ public final class MainActivity extends Activity {
         nav.setElevation(dp(10));
 
         nav.addView(showcaseNavItem("⌂", "Start", "home".equals(screen),
-            () -> go("home")), new LinearLayout.LayoutParams(0, dp(58), 1f));
+            this::goHome), new LinearLayout.LayoutParams(0, dp(58), 1f));
         nav.addView(showcaseNavItem("✓", "Zadania", "tasks".equals(screen),
             () -> go("tasks")), new LinearLayout.LayoutParams(0, dp(58), 1f));
 
@@ -1918,7 +2206,7 @@ public final class MainActivity extends Activity {
                 if (which == 0) {
                     if ("home".equals(screen)) showAddTileDialog();
                     else {
-                        go("home");
+                        goHome();
                         root.postDelayed(this::showAddTileDialog, 140L);
                     }
                 } else if (which == 1) go("tasks");
@@ -1931,7 +2219,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showShowcaseMore() {
-        final String[] labels = BetaUpdater.isBeta()
+        final String[] labels = releaseFeaturesEnabled()
             ? new String[]{"Skaner", "Aktualizacje", "Kopia danych",
                 "Ustawienia", "Diagnostyka"}
             : new String[]{"Skaner", "Aktualizacje", "Kopia danych", "Ustawienia"};
@@ -1958,11 +2246,11 @@ public final class MainActivity extends Activity {
         label.setGravity(Gravity.CENTER_VERTICAL);
         label.setPadding(0, 0, dp(6), 0);
         bar.addView(label, new LinearLayout.LayoutParams(0, dp(36), 1f));
-        TextView back = text("← Start", 12, true);
+        TextView back = text("← Cofnij", 12, true);
         back.setGravity(Gravity.CENTER);
         back.setPadding(dp(7), 0, dp(7), 0);
         back.setBackground(skin.panel(this, surface, 17));
-        back.setOnClickListener(v -> go("home"));
+        back.setOnClickListener(v -> goBack());
         back.setClickable(true);
         back.setFocusable(true);
         touchFeedback(back);
@@ -2475,7 +2763,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> order = HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            BetaUpdater.isBeta());
+            releaseFeaturesEnabled());
         boolean present = false;
         for (String tileId : order) {
             String target = prefs.getString("tile_target_" + tileId,
@@ -2499,7 +2787,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> order = HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            BetaUpdater.isBeta());
+            releaseFeaturesEnabled());
         if (!order.contains("garden")) order.add("garden");
         SharedPreferences.Editor edit=prefs.edit()
             .putBoolean("garden_tile_seeded_v1",true)
@@ -2507,12 +2795,29 @@ public final class MainActivity extends Activity {
         if(edit.commit()) DiagnosticLog.event("GARDEN_TILE_SEEDED");
     }
 
+    private void ensureProjectsTileSeeded() {
+        if (prefs.getBoolean("projects_tile_seeded_v1", false)) return;
+        java.util.List<String> order = HomeTileCatalog.canonical(
+            prefs.getString(HomeTileCatalog.ORDER_KEY, null),
+            prefs.getString("home_tile_order", ""),
+            releaseFeaturesEnabled());
+        if (!order.contains("projects")) {
+            int tasksAt=order.indexOf("tasks");
+            order.add(tasksAt<0?0:tasksAt+1,"projects");
+        }
+        boolean ok=prefs.edit()
+            .putBoolean("projects_tile_seeded_v1",true)
+            .putString(HomeTileCatalog.ORDER_KEY,HomeTileCatalog.encode(order))
+            .commit();
+        if(ok)DiagnosticLog.event("PROJECTS_TILE_SEEDED");
+    }
+
     private void ensureScannerTileSeeded() {
         if (prefs.getBoolean("scanner_tile_seeded_v1", false)) return;
         java.util.List<String> order = HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            BetaUpdater.isBeta());
+            releaseFeaturesEnabled());
         boolean present = false;
         for (String tileId : order) {
             String target = prefs.getString("tile_target_" + tileId,
@@ -2540,7 +2845,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> order = HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            BetaUpdater.isBeta());
+            releaseFeaturesEnabled());
         int insertAt = order.indexOf("storage");
         insertAt = insertAt < 0 ? order.size() : insertAt + 1;
         if (!order.contains("storage_things")) {
@@ -2559,7 +2864,7 @@ public final class MainActivity extends Activity {
     private String homeTileTarget(String id) {
         String target = prefs.getString("tile_target_" + id,
             HomeTileCatalog.defaultTarget(id));
-        return HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+        return HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
             ? target : "tasks";
     }
 
@@ -2611,7 +2916,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> names = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+            if (!HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
                     || homeTargetAlreadyAdded(target,null))
                 continue;
             targets.add(target);
@@ -3278,7 +3583,7 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> targetLabels = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+            if (!HomeTileCatalog.validTarget(target, releaseFeaturesEnabled())
                     || (!target.equals(homeTileTarget(id))
                         && homeTargetAlreadyAdded(target,id)))continue;
             targets.add(target);
@@ -3604,7 +3909,7 @@ public final class MainActivity extends Activity {
         return HomeTileCatalog.canonical(
             prefs.getString(HomeTileCatalog.ORDER_KEY, null),
             prefs.getString("home_tile_order", ""),
-            BetaUpdater.isBeta());
+            releaseFeaturesEnabled());
     }
 
     private java.util.List<String> hiddenHomeTiles() {
@@ -3667,139 +3972,566 @@ public final class MainActivity extends Activity {
     }
 
     private void members() {
-        header("Domownicy • wykonawcy czynności");
-        note("Lokalna lista wykonawców. Możesz pozostawić czynność bez osoby. "
-            + "Grafik i wyjątki ustawiasz osobno dla każdej osoby.");
-        EditText person = field("Imię lub nazwa osoby", false);
-        person.setSingleLine(true);
-        button("+ Dodaj domownika", () -> {
-            try {
-                if (!db.addMember(person.getText().toString())) {
-                    person.setError("Ta osoba jest już na liście.");
-                    return;
-                }
-                DiagnosticLog.event("MEMBER_ADDED");
-                render();
-            } catch (IllegalArgumentException error) {
-                person.setError("Podaj nazwę osoby (1–80 znaków).");
-            }
-        });
-        int count = 0;
-        try (Cursor people = db.getReadableDatabase().rawQuery(
-                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",
-                null)) {
-            while (people.moveToNext()) {
+        header("Użytkownicy • profile domowników");
+        note("Profile wykorzystują istniejących domowników, więc przypisane czynności "
+            +"i grafiki pozostają bez zmian. Imię, rola, avatar i kolor synchronizują "
+            +"się z EDHOME Desktop. PIN profilu zostaje tylko na tym urządzeniu.");
+
+        button("+ Dodaj użytkownika",this::showAddUserDialog);
+
+        UserProfileStore.ensureAll(db.getWritableDatabase());
+        long active=activeMemberId();
+        int count=0;
+        try(Cursor people=UserProfileStore.list(db.getReadableDatabase())) {
+            while(people.moveToNext()) {
                 count++;
-                long memberId = people.getLong(0);
-                String memberName = people.getString(1);
-                LinearLayout memberCard = card();
-                memberCard.addView(text(memberName, 18, true));
-                smallButton(memberCard, "Grafik i wyjątki →", () -> {
-                    selectedMemberId = memberId;
+                long memberId=people.getLong(0);
+                String memberName=people.getString(1);
+                String role=people.getString(2);
+                String avatar=people.getString(3);
+                String color=people.getString(4);
+
+                LinearLayout memberCard=card();
+                TextView who=text((active==memberId?"● ":"")
+                    +avatar+"  "+memberName,18,true);
+                try{who.setTextColor(Color.parseColor(color));}
+                catch(Exception ignored){who.setTextColor(ink);}
+                memberCard.addView(who);
+                memberCard.addView(text(UserProfileStore.roleLabel(role)
+                    +" • PIN: "+(hasMemberPin(memberId)
+                        ?"ustawiony na tym urządzeniu":"brak")
+                    +(active==memberId?" • AKTYWNY PROFIL":""),13,false));
+
+                smallButton(memberCard,"Profil i ustawienia →",()->{
+                    selectedMemberId=memberId;
+                    go("member_profile");
+                });
+                if(active!=memberId)
+                    smallButton(memberCard,"Ustaw jako aktywny",()->
+                        activateMember(memberId,memberName));
+                smallButton(memberCard,"Grafik i wyjątki →",()->{
+                    selectedMemberId=memberId;
                     go("member_schedule");
                 });
-                smallButton(memberCard, "Usuń domownika", () ->
+                smallButton(memberCard,"Usuń użytkownika",()->
                     new AlertDialog.Builder(this)
-                        .setTitle("Usunąć domownika?")
-                        .setMessage("Czynności przypisane do " + memberName
-                            + " pozostaną, ale bez wykonawcy.")
-                        .setNegativeButton("Anuluj", null)
-                        .setPositiveButton("Usuń", (dialog, which) -> {
+                        .setTitle("Usunąć użytkownika?")
+                        .setMessage("Czynności przypisane do "+memberName
+                            +" pozostaną, ale bez wykonawcy. Profil, lokalny PIN "
+                            +"i grafik tej osoby zostaną usunięte.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(dialog,which)->{
+                            clearMemberPin(memberId);
                             db.deleteMember(memberId);
-                            DiagnosticLog.event("MEMBER_REMOVED");
+                            if(activeMemberId()==0L)ensureActiveMember();
+                            DiagnosticLog.event("USER_PROFILE_REMOVED",
+                                "member="+memberId);
                             render();
                         }).show());
             }
         }
-        if (count == 0) note("Nie ma jeszcze domowników. Dodaj osobę, aby móc "
-            + "wybierać wykonawcę w formularzu czynności.");
-        button("← Czynności", () -> go("tasks"));
+        if(count==0)
+            note("Nie ma jeszcze użytkowników. Pierwszy utworzony profil "
+                +"zostanie administratorem.");
+        button("← Cofnij",this::goBack);
+    }
+
+    private void showAddUserDialog() {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(22),dp(8),dp(22),0);
+
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        name.setHint("Imię / nazwa profilu");
+        name.setTextColor(ink);
+        name.setHintTextColor(subdued);
+        form.addView(name,new LinearLayout.LayoutParams(-1,dp(54)));
+
+        form.addView(text("Avatar",13,true));
+        Spinner avatar=new Spinner(this);
+        avatar.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(UserProfileStore.AVATARS)));
+        avatar.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+            DialogContrast.BACKGROUND));
+        form.addView(avatar,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        form.addView(text("Kolor profilu",13,true));
+        Spinner color=new Spinner(this);
+        color.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(UserProfileStore.COLOR_LABELS)));
+        color.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+            DialogContrast.BACKGROUND));
+        form.addView(color,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        form.addView(text("Rola",13,true));
+        Spinner role=new Spinner(this);
+        role.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(UserProfileStore.ROLE_LABELS)));
+        role.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+            DialogContrast.BACKGROUND));
+        boolean first=UserProfileStore.count(db.getReadableDatabase())==0;
+        role.setSelection(first?0:1);
+        form.addView(role,new LinearLayout.LayoutParams(-1,dp(52)));
+
+        EditText pin=new EditText(this);
+        pin.setSingleLine(true);
+        pin.setHint("PIN opcjonalny • 5–8 cyfr");
+        pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin.setTextColor(ink);
+        pin.setHintTextColor(subdued);
+        form.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+
+        EditText repeat=new EditText(this);
+        repeat.setSingleLine(true);
+        repeat.setHint("Powtórz PIN");
+        repeat.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        repeat.setTextColor(ink);
+        repeat.setHintTextColor(subdued);
+        form.addView(repeat,new LinearLayout.LayoutParams(-1,dp(54)));
+        form.addView(text("PIN jest lokalny dla tego telefonu i nie trafia "
+            +"do synchronizacji ani kopii danych.",12,false));
+        lightDialogForm(form);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Dodaj użytkownika")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null)
+            .create();
+        dialog.setOnShowListener(ignored->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String clean=name.getText().toString().trim();
+                String one=pin.getText().toString();
+                String two=repeat.getText().toString();
+                if(clean.isEmpty()||clean.length()>80) {
+                    name.setError("Podaj imię / nazwę (1–80 znaków).");
+                    return;
+                }
+                if(!one.isEmpty()&&!one.matches("[0-9]{5,8}")) {
+                    pin.setError("PIN musi mieć 5–8 cyfr.");
+                    return;
+                }
+                if(!one.equals(two)) {
+                    repeat.setError("PIN-y nie są identyczne.");
+                    return;
+                }
+                int roleIndex=Math.max(0,role.getSelectedItemPosition());
+                int avatarIndex=Math.max(0,avatar.getSelectedItemPosition());
+                int colorIndex=Math.max(0,color.getSelectedItemPosition());
+                String selectedRole=UserProfileStore.ROLES[
+                    Math.min(roleIndex,UserProfileStore.ROLES.length-1)];
+                String selectedAvatar=UserProfileStore.AVATARS[
+                    Math.min(avatarIndex,UserProfileStore.AVATARS.length-1)];
+                String selectedColor=UserProfileStore.COLORS[
+                    Math.min(colorIndex,UserProfileStore.COLORS.length-1)];
+                try {
+                    long memberId=UserProfileStore.add(db.getWritableDatabase(),
+                        clean,selectedRole,selectedAvatar,selectedColor);
+                    if(memberId<0L) {
+                        name.setError("Użytkownik o tej nazwie już istnieje.");
+                        return;
+                    }
+                    try {
+                        if(!one.isEmpty())saveMemberPin(memberId,one);
+                    } catch(Exception pinError) {
+                        db.deleteMember(memberId);
+                        throw pinError;
+                    }
+                    if(activeMemberId()==0L)setActiveMember(memberId);
+                    selectedMemberId=memberId;
+                    DiagnosticLog.event("USER_PROFILE_ADDED",
+                        "member="+memberId+" role="+selectedRole);
+                    dialog.dismiss();
+                    go("member_profile");
+                } catch(Exception error) {
+                    DiagnosticLog.error("USER_PROFILE_ADD",error);
+                    alert(error.getMessage()==null
+                        ?"Nie udało się utworzyć użytkownika.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void memberProfile() {
+        UserProfileStore.ensureAll(db.getWritableDatabase());
+        try(Cursor profile=UserProfileStore.one(
+                db.getReadableDatabase(),selectedMemberId)) {
+            if(!profile.moveToFirst()) {
+                go("members");
+                return;
+            }
+            final long memberId=profile.getLong(0);
+            final String currentName=profile.getString(1);
+            final String currentRole=profile.getString(2);
+            final String currentAvatar=profile.getString(3);
+            final String currentColor=profile.getString(4);
+
+            header(currentAvatar+"  "+currentName+" • profil");
+            note((activeMemberId()==memberId?"Aktywny profil • ":"")
+                +UserProfileStore.roleLabel(currentRole)
+                +" • PIN "+(hasMemberPin(memberId)?"włączony":"wyłączony"));
+
+            LinearLayout data=card();
+            data.addView(text("Dane profilu",18,true));
+            EditText name=new EditText(this);
+            name.setSingleLine(true);
+            name.setText(currentName);
+            name.setTextColor(ink);
+            data.addView(name,new LinearLayout.LayoutParams(-1,dp(54)));
+
+            data.addView(text("Avatar",13,true));
+            Spinner avatar=new Spinner(this);
+            avatar.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(UserProfileStore.AVATARS)));
+            avatar.setSelection(Math.max(0,java.util.Arrays.asList(
+                UserProfileStore.AVATARS).indexOf(currentAvatar)));
+            data.addView(avatar,new LinearLayout.LayoutParams(-1,dp(52)));
+
+            data.addView(text("Kolor",13,true));
+            Spinner color=new Spinner(this);
+            color.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(UserProfileStore.COLOR_LABELS)));
+            color.setSelection(Math.max(0,java.util.Arrays.asList(
+                UserProfileStore.COLORS).indexOf(currentColor)));
+            data.addView(color,new LinearLayout.LayoutParams(-1,dp(52)));
+
+            data.addView(text("Rola",13,true));
+            Spinner role=new Spinner(this);
+            role.setAdapter(themeSpinnerAdapter(
+                java.util.Arrays.asList(UserProfileStore.ROLE_LABELS)));
+            role.setSelection(UserProfileStore.ROLE_ADMIN.equals(currentRole)?0:1);
+            data.addView(role,new LinearLayout.LayoutParams(-1,dp(52)));
+
+            smallButton(data,"Zapisz profil",()->{
+                int ai=Math.max(0,avatar.getSelectedItemPosition());
+                int ci=Math.max(0,color.getSelectedItemPosition());
+                int ri=Math.max(0,role.getSelectedItemPosition());
+                try {
+                    boolean saved=UserProfileStore.update(db.getWritableDatabase(),
+                        memberId,name.getText().toString(),
+                        UserProfileStore.ROLES[Math.min(ri,
+                            UserProfileStore.ROLES.length-1)],
+                        UserProfileStore.AVATARS[Math.min(ai,
+                            UserProfileStore.AVATARS.length-1)],
+                        UserProfileStore.COLORS[Math.min(ci,
+                            UserProfileStore.COLORS.length-1)]);
+                    if(!saved) {
+                        name.setError("Taka nazwa użytkownika już istnieje.");
+                        return;
+                    }
+                    DiagnosticLog.event("USER_PROFILE_UPDATED",
+                        "member="+memberId);
+                    render();
+                } catch(Exception error) {
+                    String problem=error.getMessage()==null
+                        ?"Nie udało się zapisać profilu.":error.getMessage();
+                    if(problem.startsWith("Najpierw ustaw innego użytkownika"))
+                        alert(problem);
+                    else name.setError(problem);
+                }
+            });
+
+            LinearLayout access=card();
+            access.addView(text("Dostęp na tym urządzeniu",18,true));
+            if(activeMemberId()!=memberId)
+                smallButton(access,"Ustaw jako aktywny profil",
+                    ()->activateMember(memberId,currentName));
+            else
+                access.addView(text("✓ To jest aktywny profil.",14,true));
+            smallButton(access,hasMemberPin(memberId)
+                ?"Zmień PIN profilu":"Ustaw PIN profilu",
+                ()->showMemberPinEditor(memberId,currentName));
+            if(hasMemberPin(memberId))
+                smallButton(access,"Usuń PIN profilu",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć PIN?")
+                        .setMessage("Profil będzie można przełączać bez PIN-u "
+                            +"na tym urządzeniu.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(d,w)->{
+                            clearMemberPin(memberId);
+                            DiagnosticLog.event("USER_PIN_REMOVED",
+                                "member="+memberId);
+                            render();
+                        }).show());
+
+            LinearLayout schedule=card();
+            schedule.addView(text("Praca i dostępność",18,true));
+            schedule.addView(text("Dotychczasowy grafik tej osoby został zachowany.",
+                13,false));
+            smallButton(schedule,"Grafik pracy i wyjątki →",()->{
+                selectedMemberId=memberId;
+                go("member_schedule");
+            });
+
+            LinearLayout next=card();
+            next.addView(text("Kolejne ustawienia profilu",18,true));
+            next.addView(text("Przygotowane pod: powiadomienia, prywatność, "
+                +"PayCheck, kalendarz/zadania i osobny układ kafelków. "
+                +"Na tym etapie role są zapisywane, ale nie blokują jeszcze modułów.",
+                13,false));
+
+            button("← Cofnij",this::goBack);
+        }
+    }
+
+    private void showMemberPinEditor(long memberId,String memberName) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(22),dp(8),dp(22),0);
+        EditText pin=new EditText(this);
+        pin.setSingleLine(true);
+        pin.setHint("Nowy PIN • 5–8 cyfr");
+        pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin.setTextColor(ink);
+        pin.setHintTextColor(subdued);
+        form.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
+        EditText repeat=new EditText(this);
+        repeat.setSingleLine(true);
+        repeat.setHint("Powtórz PIN");
+        repeat.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        repeat.setTextColor(ink);
+        repeat.setHintTextColor(subdued);
+        form.addView(repeat,new LinearLayout.LayoutParams(-1,dp(54)));
+        form.addView(text("PIN „"+memberName+"” pozostaje tylko na tym urządzeniu.",
+            12,false));
+
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(hasMemberPin(memberId)?"Zmień PIN":"Ustaw PIN")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",null)
+            .create();
+        dialog.setOnShowListener(ignored->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String one=pin.getText().toString();
+                String two=repeat.getText().toString();
+                if(!one.matches("[0-9]{5,8}")) {
+                    pin.setError("PIN musi mieć 5–8 cyfr.");
+                    return;
+                }
+                if(!one.equals(two)) {
+                    repeat.setError("PIN-y nie są identyczne.");
+                    return;
+                }
+                try {
+                    saveMemberPin(memberId,one);
+                    DiagnosticLog.event("USER_PIN_SAVED","member="+memberId);
+                    dialog.dismiss();
+                    render();
+                } catch(Exception error) {
+                    pin.setError("Nie udało się zapisać PIN-u.");
+                    DiagnosticLog.error("USER_PIN_SAVE",error);
+                }
+            }));
+        dialog.show();
+    }
+
+    private String[] memberShiftLabels(long memberId) {
+        ProjectPlanningStore.ShiftHours first=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,"morning");
+        ProjectPlanningStore.ShiftHours second=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,"afternoon");
+        ProjectPlanningStore.ShiftHours third=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,"night");
+        return new String[]{
+            "Nie ustawiono","Wolne",
+            "I zmiana • "+first.label(),
+            "II zmiana • "+second.label(),
+            "III zmiana • "+third.label()
+        };
+    }
+
+    private void showMemberShiftHoursEditor(long memberId,String shift,String title) {
+        ProjectPlanningStore.ShiftHours current=ProjectPlanningStore.shiftHours(
+            db.getReadableDatabase(),memberId,shift);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20),dp(8),dp(20),0);
+        form.addView(text("Godziny pracy tej zmiany. Dla zmiany nocnej koniec "
+            +"może być wcześniejszy od początku, np. 22:00–06:00.",13,false));
+        EditText start=new EditText(this);
+        start.setSingleLine(true);start.setHint("Od HH:mm");start.setText(current.start);
+        EditText end=new EditText(this);
+        end.setSingleLine(true);end.setHint("Do HH:mm");end.setText(current.end);
+        form.addView(start);form.addView(end);
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(title+" • godziny pracy")
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    ProjectPlanningStore.setShiftHours(db.getWritableDatabase(),
+                        memberId,shift,start.getText().toString(),end.getText().toString());
+                    DiagnosticLog.event("MEMBER_SHIFT_HOURS_SAVED",
+                        "member="+memberId+" shift="+shift);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    start.setError(error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void showProjectAvailabilityEditor(long memberId,String shift,String title) {
+        java.util.List<TimeSuggestions.Window> current=
+            ProjectPlanningStore.windows(db.getReadableDatabase(),memberId,shift);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20),dp(8),dp(20),0);
+        form.addView(text("To nie jest czas pracy zawodowej, tylko godziny, "
+            +"w których EDHOME może proponować projekty. Możesz ustawić dwa okna. "
+            +"Zostaw oba puste, aby dla tego rodzaju dnia niczego nie planować.",
+            13,false));
+        EditText start1=new EditText(this);start1.setSingleLine(true);start1.setHint("Okno 1 • od HH:mm");
+        EditText end1=new EditText(this);end1.setSingleLine(true);end1.setHint("Okno 1 • do HH:mm");
+        EditText start2=new EditText(this);start2.setSingleLine(true);start2.setHint("Okno 2 • od HH:mm");
+        EditText end2=new EditText(this);end2.setSingleLine(true);end2.setHint("Okno 2 • do HH:mm");
+        if(current.size()>0){start1.setText(current.get(0).start.toString());end1.setText(current.get(0).end.toString());}
+        if(current.size()>1){start2.setText(current.get(1).start.toString());end2.setText(current.get(1).end.toString());}
+        form.addView(start1);form.addView(end1);form.addView(start2);form.addView(end2);
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(title+" • czas na projekty")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Domyślne",(d,w)->{
+                ProjectPlanningStore.resetWindows(db.getWritableDatabase(),memberId,shift);
+                DiagnosticLog.event("MEMBER_PROJECT_WINDOWS_RESET",
+                    "member="+memberId+" shift="+shift);
+                render();
+            })
+            .setPositiveButton("Zapisz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    ProjectPlanningStore.setWindows(db.getWritableDatabase(),memberId,shift,
+                        start1.getText().toString(),end1.getText().toString(),
+                        start2.getText().toString(),end2.getText().toString());
+                    DiagnosticLog.event("MEMBER_PROJECT_WINDOWS_SAVED",
+                        "member="+memberId+" shift="+shift);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    start1.setError(error.getMessage());
+                }
+            }));
+        dialog.show();
     }
 
     private void memberSchedule() {
-        String name = db.memberName(selectedMemberId);
-        if (name.isEmpty()) {
-            go("members");
-            return;
+        String name=db.memberName(selectedMemberId);
+        if(name.isEmpty()){go("members");return;}
+        header("Grafik i dostępność • "+name);
+        note("Grafik pracy oraz czas na projekty są oddzielne. Planer używa "
+            +"rodzaju zmiany z danego dnia, a następnie szuka miejsca wyłącznie "
+            +"w ustawionych oknach projektowych.");
+        button("← Cofnij",this::goBack);
+
+        LinearLayout hours=card();
+        hours.addView(text("Godziny zmian",18,true));
+        for(int i=0;i<3;i++){
+            final String shift=ProjectPlanningStore.SHIFT_CODES[i];
+            final String title=ProjectPlanningStore.SHIFT_NAMES[i];
+            ProjectPlanningStore.ShiftHours value=ProjectPlanningStore.shiftHours(
+                db.getReadableDatabase(),selectedMemberId,shift);
+            smallButton(hours,title+" • "+value.label()+" →",
+                ()->showMemberShiftHoursEditor(selectedMemberId,shift,title));
         }
-        header("Grafik pracy • " + name);
-        note("Lokalny grafik pon.–niedz. Puste dni są nieustalone, "
-            + "a nie automatycznie wolne. Zmiana nocna kończy się następnego dnia.");
-        button("← Domownicy", () -> go("members"));
-        for (int day = 1; day <= 7; day++) {
-            final int weekday = day;
-            LinearLayout shiftCard = card();
-            shiftCard.addView(text(WEEKDAY_LABELS[day - 1], 17, true));
-            Spinner chosenShift = new Spinner(this);
+
+        LinearLayout availability=card();
+        availability.addView(text("Kiedy mogę robić projekty",18,true));
+        availability.addView(text("Ustawialne osobno dla I/II/III zmiany i dnia "
+            +"wolnego. Dwa okna pozwalają np. rozdzielić popołudnie na 16–18 i 20–22.",
+            13,false));
+        for(int i=0;i<ProjectPlanningStore.SHIFT_CODES.length;i++){
+            final String shift=ProjectPlanningStore.SHIFT_CODES[i];
+            final String title=ProjectPlanningStore.SHIFT_NAMES[i];
+            String summary=ProjectPlanningStore.windowsSummary(
+                db.getReadableDatabase(),selectedMemberId,shift);
+            smallButton(availability,title+" • "+summary+" →",
+                ()->showProjectAvailabilityEditor(selectedMemberId,shift,title));
+        }
+
+        String[] dynamicShiftLabels=memberShiftLabels(selectedMemberId);
+        title("Grafik tygodniowy");
+        for(int day=1;day<=7;day++){
+            final int weekday=day;
+            LinearLayout shiftCard=card();
+            shiftCard.addView(text(WEEKDAY_LABELS[day-1],17,true));
+            Spinner chosenShift=new Spinner(this);
             chosenShift.setAdapter(themeSpinnerAdapter(
-                java.util.Arrays.asList(SHIFT_LABELS)));
-            String configured = db.weeklyShift(selectedMemberId, weekday);
-            chosenShift.setSelection(Math.max(0, java.util.Arrays.asList(
+                java.util.Arrays.asList(dynamicShiftLabels)));
+            String configured=db.weeklyShift(selectedMemberId,weekday);
+            chosenShift.setSelection(Math.max(0,java.util.Arrays.asList(
                 SHIFT_VALUES).indexOf(configured)));
             shiftCard.addView(chosenShift);
-            smallButton(shiftCard, "Zapisz dzień", () -> {
-                db.setWeeklyShift(selectedMemberId, weekday,
+            smallButton(shiftCard,"Zapisz dzień",()->{
+                db.setWeeklyShift(selectedMemberId,weekday,
                     SHIFT_VALUES[chosenShift.getSelectedItemPosition()]);
                 DiagnosticLog.event("MEMBER_WEEKLY_SHIFT_SAVED");
                 render();
             });
         }
 
-        LinearLayout exception = card();
-        exception.addView(text("Wyjątek na konkretny dzień", 18, true));
+        LinearLayout exception=card();
+        exception.addView(text("Wyjątek na konkretny dzień",18,true));
         exception.addView(text("Nadpisuje tygodniowy grafik tylko dla tej daty. "
-            + "„Nie ustawiono” usuwa wyjątek i przywraca grafik tygodniowy.",
-            13, false));
-        EditText selectedDate = new EditText(this);
-        selectedDate.setSingleLine(true);
-        selectedDate.setFocusable(false);
-        selectedDate.setText(LocalDate.now().toString());
-        selectedDate.setTextColor(ink);
-        selectedDate.setOnClickListener(v -> {
-            LocalDate initial = LocalDate.parse(selectedDate.getText().toString());
-            new DatePickerDialog(this, (view, year, month, day) ->
-                selectedDate.setText(LocalDate.of(
-                    year, month + 1, day).toString()),
-                initial.getYear(), initial.getMonthValue() - 1,
-                initial.getDayOfMonth()).show();
+            +"Możesz np. oznaczyć urlop/dzień wolny bez zmiany całego tygodnia.",
+            13,false));
+        EditText selectedDate=new EditText(this);
+        selectedDate.setSingleLine(true);selectedDate.setFocusable(false);
+        selectedDate.setText(LocalDate.now().toString());selectedDate.setTextColor(ink);
+        selectedDate.setOnClickListener(v->{
+            LocalDate initial=LocalDate.parse(selectedDate.getText().toString());
+            new DatePickerDialog(this,(view,year,month,day)->
+                selectedDate.setText(LocalDate.of(year,month+1,day).toString()),
+                initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth()).show();
         });
         exception.addView(selectedDate);
-        smallButton(exception, "Wybierz datę", () -> selectedDate.performClick());
-        Spinner exceptionShift = new Spinner(this);
+        smallButton(exception,"Wybierz datę",()->selectedDate.performClick());
+        Spinner exceptionShift=new Spinner(this);
         exceptionShift.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList(SHIFT_LABELS)));
+            java.util.Arrays.asList(dynamicShiftLabels)));
         exception.addView(exceptionShift);
-        smallButton(exception, "Zapisz wyjątek / usuń wyjątek", () -> {
-            String date = selectedDate.getText().toString();
-            db.setShiftException(selectedMemberId, date,
+        smallButton(exception,"Zapisz wyjątek / usuń wyjątek",()->{
+            db.setShiftException(selectedMemberId,selectedDate.getText().toString(),
                 SHIFT_VALUES[exceptionShift.getSelectedItemPosition()]);
             DiagnosticLog.event("MEMBER_SHIFT_EXCEPTION_SAVED");
             render();
         });
-        LinearLayout saved = card();
-        saved.addView(text("Zapisane wyjątki", 18, true));
-        int exceptions = 0;
-        try (Cursor c = db.getReadableDatabase().rawQuery(
+
+        LinearLayout saved=card();
+        saved.addView(text("Zapisane wyjątki",18,true));
+        int exceptions=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT date,shift FROM member_shift_exceptions "
-                + "WHERE member_id=? ORDER BY date ASC",
-                new String[]{Long.toString(selectedMemberId)})) {
-            while (c.moveToNext()) {
+                    +"WHERE member_id=? ORDER BY date ASC",
+                new String[]{Long.toString(selectedMemberId)})){
+            while(c.moveToNext()){
                 exceptions++;
-                String date = c.getString(0);
-                String shift = c.getString(1);
-                saved.addView(text(date + " • " + SHIFT_LABELS[
-                    Math.max(0, java.util.Arrays.asList(SHIFT_VALUES)
-                        .indexOf(shift))], 15, false));
-                smallButton(saved, "Usuń wyjątek " + date, () -> {
-                    db.setShiftException(selectedMemberId, date, "unset");
+                String date=c.getString(0),shift=c.getString(1);
+                int idx=Math.max(0,java.util.Arrays.asList(SHIFT_VALUES).indexOf(shift));
+                saved.addView(text(date+" • "+dynamicShiftLabels[idx],15,false));
+                smallButton(saved,"Usuń wyjątek "+date,()->{
+                    db.setShiftException(selectedMemberId,date,"unset");
                     DiagnosticLog.event("MEMBER_SHIFT_EXCEPTION_REMOVED");
                     render();
                 });
             }
         }
-        if (exceptions == 0)
-            saved.addView(text("Brak wyjątków. Każda data korzysta z grafiku "
-                + "tygodniowego lub jest nieustalona.", 13, false));
+        if(exceptions==0)
+            saved.addView(text("Brak wyjątków. Każda data korzysta z grafiku tygodniowego.",
+                13,false));
     }
 
     private void waste() {
@@ -4075,6 +4807,939 @@ public final class MainActivity extends Activity {
             + finished + " • Historia na ekranie: " + past);
     }
 
+    private String projectTimeText(int minutes) {
+        if(minutes<=0)return "0 min";
+        int hours=minutes/60;
+        int rest=minutes%60;
+        if(hours==0)return rest+" min";
+        if(rest==0)return hours+" h";
+        return hours+" h "+rest+" min";
+    }
+
+    private String projectPath(long id) {
+        java.util.ArrayList<String> names=new java.util.ArrayList<>();
+        java.util.HashSet<Long> seen=new java.util.HashSet<>();
+        Long cursor=id;
+        for(int depth=0;cursor!=null&&depth<128;depth++) {
+            if(!seen.add(cursor))break;
+            ProjectStore.Project item=ProjectStore.find(
+                db.getReadableDatabase(),cursor);
+            if(item==null)break;
+            names.add(0,item.name);
+            cursor=item.parentId;
+        }
+        return android.text.TextUtils.join(" → ",names);
+    }
+
+    private void projects() {
+        if(selectedProjectId<=0) {
+            header("Projekty");
+            note("Projekt może zawierać podprojekty, Czynności, Rzeczy/Pudełka "
+                +"oraz własne koszty. PayCheck pozostaje niezależny.");
+            button("+ Nowy projekt",()->showProjectEditor(null));
+            java.util.List<ProjectStore.Project> roots=
+                ProjectStore.children(db.getReadableDatabase(),null);
+            if(roots.isEmpty()) {
+                note("Brak projektów. Dodaj pierwszy, np. „Remont domu”.");
+                return;
+            }
+            for(ProjectStore.Project project:roots)
+                renderProjectSummaryCard(project);
+            return;
+        }
+
+        ProjectStore.Project project=ProjectStore.find(
+            db.getReadableDatabase(),selectedProjectId);
+        if(project==null) {
+            selectedProjectId=0;
+            render();
+            return;
+        }
+        header(project.name);
+        button(project.parentId==null?"← Wszystkie projekty":"← Projekt nadrzędny",
+            ()->projectBack(project));
+        note(projectPath(project.id));
+
+        ProjectStore.Stats stats=ProjectStore.stats(
+            db.getReadableDatabase(),project.id);
+        LinearLayout summary=card();
+        summary.addView(text("Postęp: "+stats.progressPct()+"%",22,true));
+        android.widget.ProgressBar progress=new android.widget.ProgressBar(
+            this,null,android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(stats.progressPct());
+        summary.addView(progress,new LinearLayout.LayoutParams(-1,dp(10)));
+        summary.addView(text(stats.doneTasks+" / "+stats.tasks+" czynności • "
+            +projectTimeText(stats.doneMinutes)+" / "
+            +projectTimeText(stats.totalMinutes),14,false));
+        summary.addView(text("Pozostało: "+projectTimeText(stats.remainingMinutes())
+            +(stats.overdueTasks>0?" • zaległe: "+stats.overdueTasks:""),14,false));
+        summary.addView(text("Koszt planowany: "
+            +MoneyRules.format(stats.plannedCostGrosz)
+            +" • kupiono/zapłacono: "+MoneyRules.format(stats.spentCostGrosz),
+            14,false));
+        if(project.budgetGrosz!=null)
+            summary.addView(text("Budżet projektu: "
+                +MoneyRules.format(project.budgetGrosz),14,false));
+        summary.addView(text("Status: "
+            +("done".equals(project.status)?"Zakończony":
+                "paused".equals(project.status)?"Wstrzymany":"W trakcie"),
+            13,false));
+        smallButton(summary,"Zmień status",()->showProjectStatusDialog(project.id));
+
+        LinearLayout actions=compactActionRow();
+        compactAction(actions,"+ Podprojekt",()->showProjectEditor(project.id));
+        compactAction(actions,"+ Czynności seryjnie",
+            ()->showProjectQuickTasks(project.id));
+        LinearLayout actions2=compactActionRow();
+        compactAction(actions2,"+ Rzecz / Pudełko",
+            ()->showProjectResourcePicker(project.id));
+        compactAction(actions2,"+ Koszt / zakup",
+            ()->showProjectCostDialog(project.id));
+        button("Zaproponuj terminy projektu",()->showProjectPlanSuggestions(project.id));
+        button("+ Pełna czynność",()->{
+            taskEditorProjectPreset=project.id;
+            editTask(null,"","","once",1);
+        });
+
+        java.util.List<ProjectStore.Project> children=
+            ProjectStore.children(db.getReadableDatabase(),project.id);
+        if(!children.isEmpty()) {
+            title("Podprojekty");
+            for(ProjectStore.Project child:children)
+                renderProjectSummaryCard(child);
+        }
+
+        renderProjectTasks(project);
+        renderProjectResources(project.id);
+        renderProjectCosts(project.id);
+    }
+
+    private void renderProjectSummaryCard(ProjectStore.Project project) {
+        ProjectStore.Stats stats=ProjectStore.stats(
+            db.getReadableDatabase(),project.id);
+        LinearLayout box=card();
+        box.addView(text(project.name,19,true));
+        box.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
+            +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",
+            13,false));
+        box.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
+            +(project.budgetGrosz==null?"":" / budżet "
+                +MoneyRules.format(project.budgetGrosz)),13,false));
+        box.setClickable(true);
+        box.setFocusable(true);
+        touchFeedback(box);
+        box.setOnClickListener(v->openProject(project.id));
+    }
+
+    private void showProjectEditor(Long parentId) {
+        ProjectStore.Project parent=parentId==null?null:
+            ProjectStore.find(db.getReadableDatabase(),parentId);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        name.setHint(parent==null?"Nazwa projektu":"Nazwa podprojektu");
+        form.addView(text("Nazwa",14,true));
+        form.addView(name);
+
+        EditText due=new EditText(this);
+        due.setSingleLine(true);
+        due.setHint("RRRR-MM-DD • opcjonalnie");
+        due.setFocusable(false);
+        due.setOnClickListener(v->{
+            java.time.LocalDate initial=java.time.LocalDate.now();
+            new DatePickerDialog(this,(picker,y,m,d)->
+                due.setText(java.time.LocalDate.of(y,m+1,d).toString()),
+                initial.getYear(),initial.getMonthValue()-1,
+                initial.getDayOfMonth()).show();
+        });
+        form.addView(text("Termin projektu",14,true));
+        form.addView(due);
+        smallButton(form,"Wybierz termin",()->due.performClick());
+
+        EditText budget=new EditText(this);
+        budget.setSingleLine(true);
+        budget.setHint("Budżet PLN • opcjonalnie");
+        budget.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(text("Budżet projektu",14,true));
+        form.addView(budget);
+
+        java.util.ArrayList<Long> placeIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> placeNames=new java.util.ArrayList<>();
+        placeIds.add(null);placeNames.add("Bez miejsca");
+        for(PlaceEntry place:readPlaces()) {
+            placeIds.add(place.id);placeNames.add(db.placePath(place.id));
+        }
+        Spinner place=new Spinner(this);
+        place.setAdapter(lightDialogSpinnerAdapter(placeNames));
+        if(parent!=null&&parent.placeId!=null)
+            for(int i=1;i<placeIds.size();i++)
+                if(parent.placeId.equals(placeIds.get(i)))place.setSelection(i);
+        form.addView(text("Domyślne miejsce",14,true));form.addView(place);
+
+        java.util.ArrayList<Long> memberIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> memberNames=new java.util.ArrayList<>();
+        memberIds.add(null);memberNames.add("Bez wykonawcy");
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                memberIds.add(c.getLong(0));memberNames.add(c.getString(1));
+            }
+        }
+        Spinner member=new Spinner(this);
+        member.setAdapter(lightDialogSpinnerAdapter(memberNames));
+        if(parent!=null&&parent.assigneeId!=null)
+            for(int i=1;i<memberIds.size();i++)
+                if(parent.assigneeId.equals(memberIds.get(i)))member.setSelection(i);
+        form.addView(text("Domyślny wykonawca",14,true));form.addView(member);
+        lightDialogForm(form);
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(parent==null?"Nowy projekt":"Nowy podprojekt")
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Utwórz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    Long budgetGrosz=budget.getText().toString().trim().isEmpty()
+                        ?null:MoneyRules.parse(budget.getText().toString());
+                    long id=ProjectStore.addProject(db.getWritableDatabase(),
+                        name.getText().toString(),parentId,
+                        placeIds.get(place.getSelectedItemPosition()),
+                        memberIds.get(member.getSelectedItemPosition()),
+                        due.getText().toString(),budgetGrosz);
+                    DiagnosticLog.event("PROJECT_CREATED","id="+id);
+                    dialog.dismiss();
+                    selectedProjectId=id;
+                    render();
+                } catch(Exception error) {
+                    name.setError(error.getMessage()==null
+                        ?"Nie udało się utworzyć projektu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void showProjectStatusDialog(long projectId) {
+        String[] labels={"W trakcie","Wstrzymany","Zakończony"};
+        String[] values={"active","paused","done"};
+        new AlertDialog.Builder(this).setTitle("Status projektu")
+            .setItems(labels,(d,which)->{
+                ProjectStore.setStatus(db.getWritableDatabase(),
+                    projectId,values[which]);
+                DiagnosticLog.event("PROJECT_STATUS_CHANGED",
+                    "id="+projectId+" status="+values[which]);
+                render();
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void showProjectQuickTasks(long projectId) {
+        ProjectStore.Project project=ProjectStore.find(
+            db.getReadableDatabase(),projectId);
+        if(project==null)return;
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        name.setHint("Nazwa czynności");
+        final int[] quickMinutes={20,30,45,60,90,120,180,240,360,480,600};
+        Spinner quickDuration=new Spinner(this);
+        quickDuration.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "20 min","30 min","45 min","1 h","1 h 30 min","2 h",
+            "3 h","4 h","6 h","8 h","10 h")));
+        quickDuration.setSelection(1);
+        EditText due=new EditText(this);
+        due.setSingleLine(true);
+        due.setHint("Termin • dotknij, aby wybrać datę");
+        due.setFocusable(false);
+        due.setClickable(true);
+        due.setTextColor(ink);
+        due.setHintTextColor(subdued);
+        due.setOnClickListener(v->{
+            LocalDate initial;
+            try { initial=LocalDate.parse(due.getText().toString().trim()); }
+            catch(Exception ignored) { initial=LocalDate.now(); }
+            new DatePickerDialog(this,(picker,year,month,day)->
+                due.setText(LocalDate.of(year,month+1,day).toString()),
+                initial.getYear(),initial.getMonthValue()-1,
+                initial.getDayOfMonth()).show();
+        });
+        EditText reminder=new EditText(this);
+        reminder.setSingleLine(true);
+        reminder.setText("19:00");
+        reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
+        reminder.setTextColor(ink);
+        reminder.setHintTextColor(subdued);
+        form.addView(text("Czynność",14,true));form.addView(name);
+        form.addView(text("Szacowany czas",14,true));form.addView(quickDuration);
+        form.addView(text("Termin",14,true));form.addView(due);
+        form.addView(text("Przypomnienie",14,true));form.addView(reminder);
+        form.addView(text("Miejsce i wykonawca są dziedziczone z projektu. "
+            +"Pełny formularz pozwala je zmienić.",12,false));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Szybkie dodawanie • "+project.name)
+            .setView(form).setCancelable(false).create();
+        Runnable save=()->{
+            int minutes=quickMinutes[quickDuration.getSelectedItemPosition()];
+            if(name.getText().toString().trim().isEmpty()) {
+                name.setError("Podaj nazwę.");return;
+            }
+            String dueValue=due.getText().toString().trim();
+            String remind=reminder.getText().toString().trim();
+            String custom=dueValue.isEmpty()||remind.isEmpty()?null:remind;
+            try {
+                db.saveTask(null,name.getText().toString().trim(),dueValue,
+                    "once",1,project.placeId,"normal",minutes,
+                    project.assigneeId,custom,0,new java.util.ArrayList<>(),
+                    project.id);
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event("PROJECT_QUICK_TASK_ADDED",
+                    "project="+project.id);
+                name.setText("");
+                due.setText("");
+                reminder.setText("19:00");
+                name.requestFocus();
+            } catch(Exception error) {
+                alert(error.getMessage()==null?"Nie zapisano czynności.":error.getMessage());
+            }
+        };
+        smallButton(form,"＋ Zapisz i dodaj następną",save);
+        smallButton(form,"✓ Zapisz i zakończ",()->{
+            int before=db.openTasks();
+            save.run();
+            if(db.openTasks()>before) {
+                dialog.dismiss();
+                render();
+            }
+        });
+        smallButton(form,"Pełny formularz",()->{
+            dialog.dismiss();
+            taskEditorProjectPreset=project.id;
+            editTask(null,"","","once",1);
+        });
+        smallButton(form,"Zakończ",()->{dialog.dismiss();render();});
+        lightDialogForm(form);
+        dialog.show();
+    }
+
+    private void renderProjectTasks(ProjectStore.Project project) {
+        title("Czynności");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,title,done,due_date,duration_minutes FROM tasks "
+                    +"WHERE project_id=? ORDER BY project_sort_order,id",
+                new String[]{Long.toString(project.id)})) {
+            while(c.moveToNext()) {
+                count++;
+                final long taskId=c.getLong(0);
+                final String taskName=c.getString(1);
+                final boolean done=c.getInt(2)!=0;
+                final String due=c.isNull(3)?"":c.getString(3);
+                final int minutes=c.getInt(4);
+                final int worked=ProjectStore.workedMinutes(
+                    db.getReadableDatabase(),taskId,true);
+                final int remaining=Math.max(0,minutes-worked);
+                final int overrun=Math.max(0,worked-minutes);
+                final Long activeStarted=ProjectStore.activeWorkStartedAt(
+                    db.getReadableDatabase(),taskId);
+                final int blockers=ProjectStore.openDependencyCount(
+                    db.getReadableDatabase(),taskId);
+                final int dependencies=ProjectStore.dependencyIds(
+                    db.getReadableDatabase(),taskId).size();
+                final int hardRequirements=ProjectPlanningStore.openHardCount(
+                    db.getReadableDatabase(),taskId);
+                final int softRequirements=ProjectPlanningStore.openSoftCount(
+                    db.getReadableDatabase(),taskId);
+
+                LinearLayout box=card();
+                CheckBox check=new CheckBox(this);
+                check.setText(taskName);
+                check.setTextColor(done?subdued:ink);
+                check.setChecked(done);
+                box.addView(check);
+
+                String timeLine="Plan: "+projectTimeText(minutes)
+                    +" • wykonano: "+projectTimeText(worked)
+                    +" • zostało: "+projectTimeText(remaining);
+                if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
+                box.addView(text(timeLine,12,false));
+                box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
+                        project.id,taskId)
+                    +(due.isEmpty()?"":" • termin "+due),12,false));
+
+                if(activeStarted!=null) {
+                    String started=Instant.ofEpochMilli(activeStarted)
+                        .atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("HH:mm"));
+                    box.addView(text("● Praca trwa od "+started,12,true));
+                }
+                if(dependencies>0)
+                    box.addView(text(blockers>0
+                        ?"Czeka na "+blockers+" wcześniejsze czynności"
+                        :"Zależności zakończone • można rozpocząć",12,false));
+                if(hardRequirements>0)
+                    box.addView(text("⛔ ZABLOKOWANE • niespełnione wymagania: "
+                        +hardRequirements,12,true));
+                else if(softRequirements>0)
+                    box.addView(text("⚠ Niespełnione zalecenia: "
+                        +softRequirements,12,false));
+                if(!done&&remaining>0&&!due.isEmpty()
+                        &&due.compareTo(LocalDate.now().toString())<0)
+                    box.addView(text("Termin minął • zostało "
+                        +projectTimeText(remaining)
+                        +" • planer może wyznaczyć nowy termin tylko dla reszty pracy.",
+                        12,true));
+                if(!done&&remaining==0)
+                    box.addView(text("Planowany czas wykorzystany. "
+                        +"Możesz oznaczyć czynność jako wykonaną albo dalej mierzyć "
+                        +"pracę jako przekroczenie.",12,false));
+
+                check.setOnCheckedChangeListener((v,value)->{
+                    if(value&&ProjectStore.activeWorkStartedAt(
+                            db.getReadableDatabase(),taskId)!=null) {
+                        check.setChecked(false);
+                        alert("Najpierw zatrzymaj pomiar czasu tej czynności.");
+                        return;
+                    }
+                    if(value)db.completeTask(taskId);else db.reopenTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event(value?"PROJECT_TASK_COMPLETED":
+                        "PROJECT_TASK_REOPENED","task="+taskId);
+                    render();
+                });
+
+                LinearLayout work=compactActionRow();
+                if(!done) {
+                    if(activeStarted==null) {
+                        compactAction(work,"▶ Start",()->{
+                            try {
+                                ProjectStore.startWork(db.getWritableDatabase(),taskId);
+                                DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
+                                render();
+                            } catch(Exception error) {
+                                alert(error.getMessage()==null
+                                    ?"Nie udało się rozpocząć pracy.":error.getMessage());
+                            }
+                        });
+                    } else {
+                        compactAction(work,"■ Stop",()->{
+                            try {
+                                int session=ProjectStore.stopWork(
+                                    db.getWritableDatabase(),taskId);
+                                DiagnosticLog.event("PROJECT_WORK_STOPPED",
+                                    "task="+taskId+" minutes="+session);
+                                render();
+                            } catch(Exception error) {
+                                alert(error.getMessage()==null
+                                    ?"Nie udało się zatrzymać pracy.":error.getMessage());
+                            }
+                        });
+                    }
+                }
+                compactAction(work,"Czas",()->showProjectWorkHistory(taskId,taskName));
+                if(!done&&remaining>0&&!due.isEmpty()
+                        &&due.compareTo(LocalDate.now().toString())<0)
+                    compactAction(work,"↻ Termin",
+                        ()->showProjectPlanSuggestions(project.id));
+
+                LinearLayout actions=compactActionRow();
+                compactAction(actions,"Zależności",
+                    ()->showProjectDependencyDialog(taskId,project.id));
+                compactAction(actions,"Wymagania",
+                    ()->showProjectBlockers(taskId,taskName));
+                LinearLayout editRow=compactActionRow();
+                compactAction(editRow,"Edytuj",()->{
+                    try(Cursor row=db.getReadableDatabase().rawQuery(
+                            "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
+                            new String[]{Long.toString(taskId)})) {
+                        if(row.moveToFirst())
+                            editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
+                    }
+                });
+            }
+        }
+        if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void showProjectWorkHistory(long taskId,String taskName) {
+        StringBuilder history=new StringBuilder();
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT started_at,ended_at,worked_minutes "
+                    +"FROM project_task_work_sessions WHERE task_id=? ORDER BY id DESC LIMIT 100",
+                new String[]{Long.toString(taskId)})) {
+            while(c.moveToNext()) {
+                count++;
+                String started=Instant.ofEpochMilli(c.getLong(0))
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                history.append(started);
+                if(c.isNull(1))history.append(" • trwa");
+                else history.append(" • ").append(projectTimeText(c.getInt(2)));
+                history.append("\n");
+            }
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Czas pracy • "+taskName)
+            .setMessage(count==0?"Brak zapisanych sesji pracy.":history.toString())
+            .setPositiveButton("OK",null).show();
+    }
+
+    private void showProjectDependencyDialog(long taskId,long projectId) {
+        long rootProject=ProjectStore.rootProjectId(
+            db.getReadableDatabase(),projectId);
+        java.util.Set<Long> projectIds=ProjectStore.descendantIds(
+            db.getReadableDatabase(),rootProject);
+        java.util.HashSet<Long> existing=new java.util.HashSet<>(
+            ProjectStore.dependencyIds(db.getReadableDatabase(),taskId));
+        java.util.ArrayList<Long> candidateIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        java.util.ArrayList<Boolean> remove=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,title,done,project_id FROM tasks "
+                    +"WHERE project_id IS NOT NULL ORDER BY done,title COLLATE NOCASE,id",
+                null)) {
+            while(c.moveToNext()) {
+                long candidate=c.getLong(0);
+                if(candidate==taskId||!projectIds.contains(c.getLong(3)))continue;
+                boolean linked=existing.contains(candidate);
+                candidateIds.add(candidate);
+                remove.add(linked);
+                labels.add((linked?"✓ ":"○ ")
+                    +c.getString(1)+" • "+projectPath(c.getLong(3))
+                    +(linked?" • ustawiona":"")
+                    +(c.getInt(2)!=0?" • wykonana":""));
+            }
+        }
+        if(labels.isEmpty()) {
+            alert("Brak innych czynności w tym projekcie.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Ta czynność ma być wykonana po:")
+            .setItems(labels.toArray(new String[0]),(d,which)->{
+                try {
+                    long other=candidateIds.get(which);
+                    if(remove.get(which))
+                        ProjectStore.removeDependency(
+                            db.getWritableDatabase(),taskId,other);
+                    else
+                        ProjectStore.addDependency(
+                            db.getWritableDatabase(),taskId,other);
+                    DiagnosticLog.event(remove.get(which)
+                        ?"PROJECT_DEPENDENCY_REMOVED":"PROJECT_DEPENDENCY_ADDED",
+                        "task="+taskId+" other="+other);
+                    render();
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zmienić zależności.":error.getMessage());
+                }
+            })
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showProjectBlockers(long taskId,String taskName) {
+        java.util.List<ProjectPlanningStore.Blocker> items=
+            ProjectPlanningStore.blockers(db.getReadableDatabase(),taskId);
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        for(ProjectPlanningStore.Blocker item:items) {
+            String state=item.resolved?"✓":
+                item.hard?"⛔":"⚠";
+            labels.add(state+" "+ProjectPlanningStore.kindLabel(item.kind)
+                +" • "+item.label
+                +(item.availableOn.isEmpty()?"":" • od "+item.availableOn));
+        }
+        AlertDialog.Builder builder=new AlertDialog.Builder(this)
+            .setTitle("Wymagania • "+taskName)
+            .setMessage(items.isEmpty()
+                ?"Brak wymagań. Dodaj zakup, dostawę, przygotowanie, zasób "
+                    +"lub decyzję, bez której czynność nie powinna ruszyć."
+                :"⛔ twarde blokuje Start • ⚠ miękkie tylko ostrzega.")
+            .setNegativeButton("Zamknij",null)
+            .setPositiveButton("+ Dodaj",(d,w)->
+                showAddProjectBlockerDialog(taskId,taskName));
+        if(!items.isEmpty())builder.setItems(labels.toArray(new String[0]),(d,which)->
+            showProjectBlockerActions(items.get(which),taskName));
+        builder.show();
+    }
+
+    private void showProjectBlockerActions(ProjectPlanningStore.Blocker item,
+            String taskName) {
+        String[] options=item.resolved
+            ?new String[]{"Oznacz ponownie jako oczekujące","Usuń wymaganie"}
+            :new String[]{"Oznacz jako spełnione","Usuń wymaganie"};
+        new AlertDialog.Builder(this)
+            .setTitle(item.label)
+            .setMessage((item.hard?"Twardy bloker":"Miękkie ostrzeżenie")
+                +(item.availableOn.isEmpty()?"":" • najwcześniej "+item.availableOn))
+            .setItems(options,(d,which)->{
+                if(which==0) {
+                    ProjectPlanningStore.setResolved(db.getWritableDatabase(),
+                        item.id,!item.resolved);
+                    DiagnosticLog.event(item.resolved
+                        ?"PROJECT_BLOCKER_REOPENED":"PROJECT_BLOCKER_RESOLVED",
+                        "id="+item.id);
+                } else {
+                    ProjectPlanningStore.deleteBlocker(db.getWritableDatabase(),item.id);
+                    DiagnosticLog.event("PROJECT_BLOCKER_DELETED","id="+item.id);
+                }
+                render();
+            })
+            .setNegativeButton("Anuluj",null).show();
+    }
+
+    private void showAddProjectBlockerDialog(long taskId,String taskName) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20),dp(8),dp(20),0);
+        Spinner kind=new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(ProjectPlanningStore.BLOCKER_LABELS)));
+        EditText label=new EditText(this);
+        label.setSingleLine(true);label.setHint("Co musi być gotowe?");
+        Spinner strength=new Spinner(this);
+        strength.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(
+                "Twarde • blokuje Start","Miękkie • tylko ostrzega")));
+        EditText available=new EditText(this);
+        available.setSingleLine(true);
+        available.setHint("Najwcześniej od RRRR-MM-DD • opcjonalnie");
+        form.addView(text("Rodzaj",13,true));form.addView(kind);
+        form.addView(text("Wymaganie",13,true));form.addView(label);
+        form.addView(text("Znaczenie",13,true));form.addView(strength);
+        form.addView(text("Przewidywana dostępność",13,true));form.addView(available);
+        form.addView(text("Jeśli twardy bloker nie ma daty, planer nie zgaduje "
+            +"terminu. Jeśli ma datę, planuje nie wcześniej niż od tej daty, "
+            +"ale Start nadal wymaga oznaczenia blokera jako spełnionego.",
+            12,false));
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Nowe wymaganie • "+taskName)
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dodaj",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    int index=kind.getSelectedItemPosition();
+                    ProjectPlanningStore.addBlocker(db.getWritableDatabase(),taskId,
+                        ProjectPlanningStore.BLOCKER_KINDS[index],
+                        label.getText().toString(),
+                        strength.getSelectedItemPosition()==0,
+                        available.getText().toString());
+                    DiagnosticLog.event("PROJECT_BLOCKER_ADDED","task="+taskId);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    label.setError(error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+
+    private void showProjectResourcePicker(long projectId) {
+        java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+        java.util.ArrayList<String> kinds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,kind FROM storage_items "
+                    +"WHERE kind IN ('thing','box') ORDER BY kind,name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) {
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),c.getLong(0));
+                if(item==null)continue;
+                ids.add(item.id);kinds.add(item.kind);
+                labels.add(("box".equals(item.kind)?"Pudełko: ":"Rzecz: ")
+                    +item.name+" • "+StorageStore.location(
+                        db.getReadableDatabase(),item));
+            }
+        }
+        if(labels.isEmpty()) {alert("Brak Rzeczy i Pudełek w Magazynie.");return;}
+        new AlertDialog.Builder(this).setTitle("Dodaj zasób do projektu")
+            .setItems(labels.toArray(new String[0]),(d,which)->{
+                ProjectStore.addResource(db.getWritableDatabase(),projectId,
+                    kinds.get(which),ids.get(which));
+                DiagnosticLog.event("PROJECT_RESOURCE_ADDED",
+                    "project="+projectId);
+                render();
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void renderProjectResources(long projectId) {
+        title("Rzeczy i Pudełka");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,target_kind,target_id FROM project_resources "
+                    +"WHERE project_id=? ORDER BY id",
+                new String[]{Long.toString(projectId)})) {
+            while(c.moveToNext()) {
+                count++;
+                final long linkId=c.getLong(0);
+                String kind=c.getString(1);
+                long targetId=c.getLong(2);
+                StorageStore.Item item=StorageStore.find(
+                    db.getReadableDatabase(),targetId);
+                LinearLayout box=card();
+                box.addView(storageKindText(kind,
+                    item==null?"Usunięty zasób":
+                        ("box".equals(kind)?"Pudełko • ":"Rzecz • ")+item.name,
+                    16,true));
+                if(item!=null)box.addView(text(
+                    StorageStore.location(db.getReadableDatabase(),item),12,false));
+                smallButton(box,"Usuń z projektu",()->{
+                    db.getWritableDatabase().delete("project_resources","id=?",
+                        new String[]{Long.toString(linkId)});
+                    render();
+                });
+            }
+        }
+        if(count==0)note("Brak przypisanych Rzeczy/Pudełek.");
+    }
+
+    private long parseProjectQtyMilli(String value) {
+        try {
+            java.math.BigDecimal q=new java.math.BigDecimal(
+                value.trim().replace(',','.'));
+            long milli=q.multiply(java.math.BigDecimal.valueOf(1000))
+                .setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();
+            if(milli<=0)throw new Exception();
+            return milli;
+        } catch(Exception invalid) {
+            throw new IllegalArgumentException("Podaj poprawną ilość, np. 1 / 2,5.");
+        }
+    }
+
+    private void showProjectCostDialog(long projectId) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        EditText name=new EditText(this);name.setHint("Np. Płytki");
+        EditText qty=new EditText(this);qty.setHint("Ilość");qty.setText("1");
+        EditText unit=new EditText(this);unit.setHint("Jednostka");unit.setText("szt.");
+        EditText price=new EditText(this);price.setHint("Cena za 1 w PLN");
+        qty.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        Spinner status=new Spinner(this);
+        status.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList("Planowane","Kupione","Zapłacone")));
+        EditText note=new EditText(this);note.setHint("Notatka • opcjonalnie");
+        form.addView(text("Nazwa",13,true));form.addView(name);
+        form.addView(text("Ilość",13,true));form.addView(qty);
+        form.addView(text("Jednostka",13,true));form.addView(unit);
+        form.addView(text("Cena jednostkowa",13,true));form.addView(price);
+        form.addView(text("Status",13,true));form.addView(status);
+        form.addView(note);lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Koszt / zakup projektu").setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Dodaj",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    long priceGrosz=MoneyRules.parse(price.getText().toString());
+                    String[] values={"planned","bought","paid"};
+                    ProjectStore.addCost(db.getWritableDatabase(),projectId,
+                        name.getText().toString(),parseProjectQtyMilli(
+                            qty.getText().toString()),unit.getText().toString(),
+                        priceGrosz,values[status.getSelectedItemPosition()],
+                        note.getText().toString());
+                    DiagnosticLog.event("PROJECT_COST_ADDED",
+                        "project="+projectId);
+                    dialog.dismiss();render();
+                } catch(Exception error) {
+                    name.setError(error.getMessage()==null
+                        ?"Nie dodano kosztu.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
+    private void renderProjectCosts(long projectId) {
+        title("Koszty i zakupy");
+        int count=0;
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT id,name,qty_milli,unit,unit_price_grosz,status,note "
+                    +"FROM project_costs WHERE project_id=? ORDER BY id",
+                new String[]{Long.toString(projectId)})) {
+            while(c.moveToNext()) {
+                count++;
+                final long costId=c.getLong(0);
+                String name=c.getString(1);
+                long qty=c.getLong(2);
+                String unit=c.getString(3);
+                long price=c.getLong(4);
+                String status=c.getString(5);
+                String noteValue=c.getString(6);
+                long total=Math.round(qty*price/1000.0);
+                LinearLayout box=card();
+                box.addView(text(name,16,true));
+                box.addView(text(java.math.BigDecimal.valueOf(qty)
+                    .divide(java.math.BigDecimal.valueOf(1000))
+                    .stripTrailingZeros().toPlainString()
+                    +" "+unit+" × "+MoneyRules.format(price)
+                    +" = "+MoneyRules.format(total),13,false));
+                box.addView(text(("planned".equals(status)?"Planowane":
+                    "bought".equals(status)?"Kupione":"Zapłacone")
+                    +(noteValue.isEmpty()?"":" • "+noteValue),12,false));
+                smallButton(box,"Następny status",()->{
+                    String next="planned".equals(status)?"bought":
+                        "bought".equals(status)?"paid":"planned";
+                    ProjectStore.setCostStatus(db.getWritableDatabase(),costId,next);
+                    render();
+                });
+                smallButton(box,"Usuń",()->{
+                    db.getWritableDatabase().delete("project_costs","id=?",
+                        new String[]{Long.toString(costId)});
+                    render();
+                });
+            }
+        }
+        if(count==0)note("Brak kosztów. Koszty projektu nie są księgowane w PayCheck.");
+    }
+
+    private void showProjectPlanSuggestions(long projectId) {
+        ProjectStore.Project project=ProjectStore.find(
+            db.getReadableDatabase(),projectId);
+        if(project==null)return;
+        java.util.LinkedHashMap<Long,String> suggestions=new java.util.LinkedHashMap<>();
+        java.util.HashMap<Long,java.time.LocalDateTime> plannedEnds=
+            new java.util.HashMap<>();
+        java.util.HashMap<Long,java.time.LocalDateTime> memberCursors=
+            new java.util.HashMap<>();
+        java.util.ArrayList<String> lines=new java.util.ArrayList<>();
+        java.time.LocalDateTime now=java.time.LocalDateTime.now();
+
+        for(Long taskId:ProjectStore.openTaskIdsForPlanning(
+                db.getReadableDatabase(),projectId)) {
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT title,duration_minutes,assignee_id,project_id "
+                        +"FROM tasks WHERE id=? AND done=0",
+                    new String[]{Long.toString(taskId)})) {
+                if(!c.moveToFirst())continue;
+                String taskName=c.getString(0);
+                int plannedMinutes=c.getInt(1);
+                int minutes=ProjectStore.remainingMinutes(
+                    db.getReadableDatabase(),taskId,plannedMinutes);
+                long taskProject=c.getLong(3);
+                ProjectStore.Project owningProject=ProjectStore.find(
+                    db.getReadableDatabase(),taskProject);
+                Long member=c.isNull(2)
+                    ?(owningProject==null?project.assigneeId:owningProject.assigneeId)
+                    :Long.valueOf(c.getLong(2));
+                String prefix=projectPath(taskProject)+" → "+taskName;
+                if(minutes<=0) {
+                    lines.add("• "+prefix
+                        +" — planowany czas wykorzystany; oznacz wykonanie albo "
+                        +"kontynuuj pomiar jako przekroczenie");
+                    continue;
+                }
+                if(member==null) {
+                    lines.add("• "+prefix+" — brak wykonawcy");
+                    continue;
+                }
+                if(ProjectPlanningStore.hasUndatedHardBlocker(
+                        db.getReadableDatabase(),taskId)) {
+                    lines.add("• "+prefix+" — "
+                        +ProjectPlanningStore.startBlockReason(
+                            db.getReadableDatabase(),taskId));
+                    continue;
+                }
+
+                java.time.LocalDateTime cursor=memberCursors.containsKey(member)
+                    ?memberCursors.get(member):now;
+                java.time.LocalDate notBefore=ProjectPlanningStore.planningNotBefore(
+                    db.getReadableDatabase(),taskId);
+                if(notBefore!=null) {
+                    java.time.LocalDateTime gate=notBefore.atStartOfDay();
+                    if(gate.isAfter(cursor))cursor=gate;
+                }
+
+                boolean blockedOutsidePlan=false;
+                for(Long dependency:ProjectStore.dependencyIds(
+                        db.getReadableDatabase(),taskId)) {
+                    java.time.LocalDateTime plannedEnd=plannedEnds.get(dependency);
+                    if(plannedEnd!=null) {
+                        if(plannedEnd.isAfter(cursor))cursor=plannedEnd;
+                        continue;
+                    }
+                    try(Cursor dep=db.getReadableDatabase().rawQuery(
+                            "SELECT done,due_date FROM tasks WHERE id=?",
+                            new String[]{Long.toString(dependency)})) {
+                        if(!dep.moveToFirst()||dep.getInt(0)!=0)continue;
+                        if(dep.isNull(1)||dep.getString(1).trim().isEmpty()) {
+                            blockedOutsidePlan=true;break;
+                        }
+                        java.time.LocalDateTime after=java.time.LocalDate
+                            .parse(dep.getString(1)).plusDays(1).atStartOfDay();
+                        if(after.isAfter(cursor))cursor=after;
+                    }
+                }
+                if(blockedOutsidePlan) {
+                    lines.add("• "+prefix
+                        +" — czeka na wcześniejszą czynność bez terminu");
+                    continue;
+                }
+
+                final long plannerMember=member;
+                java.util.List<TimeSuggestions.Option> options=
+                    TimeSuggestions.proposeAvailability(cursor,minutes,
+                        day->ProjectPlanningStore.windows(db.getReadableDatabase(),
+                            plannerMember,db.effectiveShift(
+                                plannerMember,day.toString())));
+                if(options.isEmpty()) {
+                    lines.add("• "+prefix
+                        +" — brak dostępnego okna projektowego w 28 dniach");
+                    continue;
+                }
+                TimeSuggestions.Option chosen=options.get(0);
+                suggestions.put(taskId,chosen.date.toString());
+                java.time.LocalDateTime chosenEnd=chosen.date.atTime(chosen.end);
+                plannedEnds.put(taskId,chosenEnd);
+                memberCursors.put(member,chosenEnd);
+                lines.add("• "+prefix+" — "+chosen.date+" • "
+                    +chosen.start+"–"+chosen.end+" • zostało "
+                    +projectTimeText(minutes));
+            }
+        }
+        if(lines.isEmpty()) {
+            alert("Brak otwartych czynności do zaplanowania.");return;
+        }
+        String message=android.text.TextUtils.join("\n",lines);
+        new AlertDialog.Builder(this).setTitle("Propozycja planu projektu")
+            .setMessage(message+"\n\nPlan używa pozostałego czasu po Start/Stop, "
+                +"grafiku użytkownika, ustawionych okien projektowych, zależności "
+                +"oraz twardych wymagań. Nie zmienia terminów bez Twojej akceptacji.")
+            .setNegativeButton("Zostaw bez zmian",null)
+            .setPositiveButton("Ustaw proponowane daty",(d,w)->{
+                SQLiteDatabase database=db.getWritableDatabase();
+                database.beginTransaction();
+                try {
+                    for(java.util.Map.Entry<Long,String> item:suggestions.entrySet()) {
+                        ContentValues values=new ContentValues();
+                        values.put("due_date",item.getValue());
+                        database.update("tasks",values,"id=? AND done=0",
+                            new String[]{Long.toString(item.getKey())});
+                    }
+                    database.setTransactionSuccessful();
+                } finally {database.endTransaction();}
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event("PROJECT_PLAN_APPLIED",
+                    "project="+projectId+" tasks="+suggestions.size());
+                render();
+            }).show();
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
 
@@ -4083,7 +5748,10 @@ public final class MainActivity extends Activity {
         compactAction(row1, "◷ Minutniki", () -> go("timers"));
         LinearLayout row2 = compactActionRow();
         compactAction(row2, "♻ Odpady", () -> go("waste"));
-        compactAction(row2, "♙ Domownicy", () -> go("members"));
+        compactAction(row2, "♙ Użytkownicy", () -> {
+            membersReturnScreen="tasks";
+            go("members");
+        });
         LinearLayout row3 = compactActionRow();
         compactAction(row3, "+ Nowa czynność",
             () -> editTask(null, "", "", "once", 1));
@@ -4488,17 +6156,44 @@ public final class MainActivity extends Activity {
         priority.setSelection(Math.max(0,
             java.util.Arrays.asList(TASK_PRIORITIES).indexOf(currentPlanning[0])));
         form.addView(priority);
-        form.addView(text("Szacowany czas wykonania (godziny)", 16, true));
-        EditText duration = new EditText(this);
-        duration.setSingleLine(true);
-        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
-            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        duration.setHint("Np. 0,5 • 1 • 1,5 • maks. 8 h");
-        duration.setText(TaskRules.hoursText(
-            Integer.parseInt(currentPlanning[1])));
-        duration.setTextColor(ink);
-        duration.setHintTextColor(subdued);
-        form.addView(duration);
+        form.addView(text("Szacowany czas wykonania", 16, true));
+        int currentDurationMinutes=Integer.parseInt(currentPlanning[1]);
+        LinearLayout durationRow=new LinearLayout(this);
+        durationRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        LinearLayout hoursBox=new LinearLayout(this);
+        hoursBox.setOrientation(LinearLayout.VERTICAL);
+        hoursBox.addView(text("Godziny",12,false));
+        EditText durationHours=new EditText(this);
+        durationHours.setSingleLine(true);
+        durationHours.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        durationHours.setHint("0");
+        durationHours.setText(String.valueOf(currentDurationMinutes/60));
+        durationHours.setTextColor(ink);
+        durationHours.setHintTextColor(subdued);
+        hoursBox.addView(durationHours);
+        LinearLayout.LayoutParams hoursParams=new LinearLayout.LayoutParams(
+            0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
+        hoursParams.setMarginEnd(dp(8));
+        durationRow.addView(hoursBox,hoursParams);
+
+        LinearLayout minutesBox=new LinearLayout(this);
+        minutesBox.setOrientation(LinearLayout.VERTICAL);
+        minutesBox.addView(text("Minuty",12,false));
+        EditText durationMinutes=new EditText(this);
+        durationMinutes.setSingleLine(true);
+        durationMinutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        durationMinutes.setHint("30");
+        durationMinutes.setText(String.valueOf(currentDurationMinutes%60));
+        durationMinutes.setTextColor(ink);
+        durationMinutes.setHintTextColor(subdued);
+        minutesBox.addView(durationMinutes);
+        durationRow.addView(minutesBox,new LinearLayout.LayoutParams(
+            0,LinearLayout.LayoutParams.WRAP_CONTENT,1f));
+        form.addView(durationRow);
+        form.addView(text("Wpisz osobno godziny i minuty. Czynność projektu ma "
+            +"minimum 20 min; krótszy czas EDHOME automatycznie ustawi na 20 min. "
+            +"Maksimum: 10 h.",12,false));
 
         EditText date = new EditText(this);
         date.setSingleLine(true);
@@ -4576,6 +6271,29 @@ public final class MainActivity extends Activity {
         form.addView(chosenPlace);
         form.addView(text("Miejsca dodasz w module Miejsca. "
             + "Czynności bez miejsca działają normalnie.", 12, false));
+
+        form.addView(text("Projekt (opcjonalnie)",15,true));
+        java.util.ArrayList<Long> projectIds=new java.util.ArrayList<>();
+        java.util.ArrayList<String> projectNames=new java.util.ArrayList<>();
+        projectIds.add(null);
+        projectNames.add("Bez projektu");
+        try(Cursor projects=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM projects ORDER BY name COLLATE NOCASE,id",null)) {
+            while(projects.moveToNext()) {
+                projectIds.add(projects.getLong(0));
+                projectNames.add(projects.getString(1));
+            }
+        }
+        Spinner chosenProject=new Spinner(this);
+        chosenProject.setAdapter(themeSpinnerAdapter(projectNames));
+        Long initialProject=id==null?taskEditorProjectPreset:db.taskProjectId(id);
+        taskEditorProjectPreset=null;
+        if(initialProject!=null)
+            for(int i=1;i<projectIds.size();i++)
+                if(initialProject.equals(projectIds.get(i))) {
+                    chosenProject.setSelection(i); break;
+                }
+        form.addView(chosenProject);
 
         form.addView(text("Wykonawca (opcjonalnie)", 15, true));
         java.util.ArrayList<Long> memberIds = new java.util.ArrayList<>();
@@ -4676,21 +6394,32 @@ public final class MainActivity extends Activity {
                     + "nie wyznaczam fikcyjnych wolnych terminów.", 13, false));
                 return;
             }
-            int minutes;
-            try {
-                minutes = Integer.parseInt(
-                    duration.getText().toString().trim());
-            } catch (NumberFormatException error) {
-                duration.setError("Podaj czas od 1 do 480 minut.");
+            Long proposalProject=projectIds.get(
+                chosenProject.getSelectedItemPosition());
+            int proposalMin=proposalProject==null
+                ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
+            Integer parsedMinutes=TaskRules.minutesFromParts(
+                durationHours.getText().toString(),
+                durationMinutes.getText().toString(),
+                proposalMin,MAX_TASK_MINUTES,proposalProject!=null);
+            if(parsedMinutes==null) {
+                durationMinutes.setError(
+                    "Podaj godziny 0–10 i minuty 0–59. Maksimum: 10 h.");
                 return;
             }
-            if (minutes < MIN_TASK_MINUTES || minutes > MAX_TASK_MINUTES) {
-                duration.setError("Podaj czas od 1 do 480 minut.");
-                return;
+            if(proposalProject!=null&&parsedMinutes==PROJECT_MIN_TASK_MINUTES) {
+                durationHours.setText("0");
+                durationMinutes.setText(String.valueOf(PROJECT_MIN_TASK_MINUTES));
             }
+            int minutes=parsedMinutes;
             java.util.List<TimeSuggestions.Option> candidates =
-                TimeSuggestions.propose(java.time.LocalDateTime.now(), minutes,
-                    day -> db.effectiveShift(chosen, day.toString()));
+                proposalProject==null
+                    ?TimeSuggestions.propose(java.time.LocalDateTime.now(),minutes,
+                        day->db.effectiveShift(chosen,day.toString()))
+                    :TimeSuggestions.proposeAvailability(
+                        java.time.LocalDateTime.now(),minutes,
+                        day->ProjectPlanningStore.windows(db.getReadableDatabase(),
+                            chosen,db.effectiveShift(chosen,day.toString())));
             if (candidates.isEmpty()) {
                 proposals.addView(text("Brak potwierdzonych okien w grafiku "
                     + "tej osoby przez 28 dni. Ustaw dni pracy/wolne i wyjątki "
@@ -4734,13 +6463,23 @@ public final class MainActivity extends Activity {
                         return;
                     }
                 }
-                Integer parsedDurationMinutes = TaskRules.minutesFromHours(
-                    duration.getText().toString(),
-                    MIN_TASK_MINUTES, MAX_TASK_MINUTES);
+                Long selectedProjectId=projectIds.get(
+                    chosenProject.getSelectedItemPosition());
+                int minimumDuration=selectedProjectId==null
+                    ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
+                Integer parsedDurationMinutes = TaskRules.minutesFromParts(
+                    durationHours.getText().toString(),
+                    durationMinutes.getText().toString(),
+                    minimumDuration,MAX_TASK_MINUTES,selectedProjectId!=null);
                 if (parsedDurationMinutes == null) {
-                    duration.setError("Podaj czas w godzinach, np. 0,5 / 1 / 1,5 "
-                        + "(maks. 8 h).");
+                    durationMinutes.setError(
+                        "Podaj godziny 0–10 i minuty 0–59. Maksimum: 10 h.");
                     return;
+                }
+                if(selectedProjectId!=null
+                        &&parsedDurationMinutes==PROJECT_MIN_TASK_MINUTES) {
+                    durationHours.setText("0");
+                    durationMinutes.setText(String.valueOf(PROJECT_MIN_TASK_MINUTES));
                 }
                 int estimatedMinutes = parsedDurationMinutes;
                 String selectedPriority = TASK_PRIORITIES[
@@ -4780,7 +6519,8 @@ public final class MainActivity extends Activity {
                     placeIds.get(chosenPlace.getSelectedItemPosition()),
                     selectedPriority, estimatedMinutes,
                     selectedAssignee, customTime, leadDays,
-                    new java.util.ArrayList<>(rotationIds));
+                    new java.util.ArrayList<>(rotationIds),
+                    selectedProjectId);
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
                 dialog.dismiss();
@@ -4825,7 +6565,7 @@ public final class MainActivity extends Activity {
 
     private void taskHistoryScreen() {
         title("Historia wykonanych czynności");
-        button("← Czynności", () -> go("tasks"));
+        button("← Cofnij", this::goBack);
         note("Ostatnie 100 wykonań. Historia zostaje również po usunięciu czynności z listy.");
         int count = 0;
         try (Cursor c = db.getReadableDatabase().rawQuery(
@@ -4932,7 +6672,7 @@ public final class MainActivity extends Activity {
         TextView home = text("☰", 22, true);
         home.setGravity(Gravity.CENTER);
         home.setContentDescription("Wróć do Start");
-        home.setOnClickListener(v -> go("home"));
+        home.setOnClickListener(v -> goHome());
         touchFeedback(home);
         toolbar.addView(home, new LinearLayout.LayoutParams(dp(42), dp(40)));
 
@@ -6008,6 +7748,7 @@ public final class MainActivity extends Activity {
         details.setTextIsSelectable(true);
         box.addView(details);
         scroll.addView(box);
+        lightDialogForm(scroll);
         new AlertDialog.Builder(this)
             .setTitle("Ogród • historia plonów")
             .setView(scroll)
@@ -6936,7 +8677,7 @@ public final class MainActivity extends Activity {
             placeEditor(null, "", "", entry.id, "places"));
         taskAction(actions, "Edytuj", () -> placeEditor(entry.id,
             entry.name, entry.kind, entry.parent, entry.icon));
-        if (BetaUpdater.isBeta())
+        if (releaseFeaturesEnabled())
             smallButton(box,"QR i etykieta miejsca",
                 () -> showPlaceQr(entry));
         nfcTargetButton(box,"place",entry.id,entry.name);
@@ -6961,10 +8702,23 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void showPlaceDeleteBlocked(PlaceEntry entry, String reason) {
+        new AlertDialog.Builder(this)
+            .setTitle("Nie można usunąć miejsca")
+            .setMessage(reason + "\n\nMożesz przenieść całe miejsce do innego miejsca "
+                + "nadrzędnego. Podmiejsca, rzeczy, pudełka i historia pozostaną "
+                + "powiązane z tym miejscem.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Przenieś miejsce", (dialog, which) ->
+                placeEditor(entry.id, entry.name, entry.kind,
+                    entry.parent, entry.icon))
+            .show();
+    }
+
     private void confirmDeletePlace(PlaceEntry entry, int childCount) {
         if (childCount > 0) {
-            alert("Najpierw przenieś lub usuń podmiejsca. "
-                + "Nie usuwamy całej gałęzi przypadkowo.");
+            showPlaceDeleteBlocked(entry,
+                "Miejsce ma podmiejsca. Najpierw przenieś lub uporządkuj gałąź.");
             return;
         }
         new AlertDialog.Builder(this).setTitle("Usunąć miejsce?")
@@ -6975,8 +8729,8 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Usuń", (dialog, which) -> {
                 if (!db.deletePlace(entry.id)) {
-                    alert("Miejsce ma podmiejsca, rzeczy/pudełka albo komplety opon. "
-                        + "Przenieś je najpierw.");
+                    showPlaceDeleteBlocked(entry,
+                        "Miejsce zawiera rzeczy, pudełka albo komplety opon.");
                     return;
                 }
                 DiagnosticLog.event("PLACE_DELETED");
@@ -6992,6 +8746,8 @@ public final class MainActivity extends Activity {
         layout.addView(text("Nazwa miejsca • dowolna, Twoja", 16, true));
         EditText input = new EditText(this);
         input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         input.setText(name);
         input.setTextColor(ink);
         input.setHintTextColor(subdued);
@@ -7407,6 +9163,7 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             onPantryBarcode(barcode, "TAKE");
         });
+        lightDialogForm(actions);
         dialog.show();
     }
 
@@ -7690,17 +9447,21 @@ public final class MainActivity extends Activity {
         LinearLayout content=new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(12),dp(8),dp(12),dp(8));
-        content.addView(storageKindText(kind,name,20,true));
+        TextView storageHeading=storageKindText(kind,name,20,true);
+        storageHeading.setTextColor(DialogContrast.TEXT);
+        content.addView(storageHeading);
         String summary=things.size()+" "
             +(things.size()==1?"rzecz":"rzeczy");
         if("place".equals(kind))
             summary+=" • "+boxCount+" pudełek • "+subplaces+" podmiejsc";
-        content.addView(text(summary,13,false));
+        TextView summaryView=text(summary,13,false);
+        summaryView.setTextColor(DialogContrast.LABEL);
+        content.addView(summaryView);
 
         if(things.isEmpty()) {
             TextView empty=text("Brak rzeczy w tym "
                 +("box".equals(kind)?"pudełku.":"miejscu."),14,false);
-            empty.setTextColor(subdued);
+            empty.setTextColor(DialogContrast.LABEL);
             empty.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams emptyParams=
                 new LinearLayout.LayoutParams(-1,dp(90));
@@ -7970,7 +9731,7 @@ public final class MainActivity extends Activity {
         }
         if(showPlaces)
             button("⚡ Szybko dodaj miejsce", this::quickAddPlace);
-        if (BetaUpdater.isBeta()) {
+        if (releaseFeaturesEnabled()) {
             LinearLayout qrTools=compactActionRow();
             compactAction(qrTools,"▣ Drukuj wybrane etykiety QR / PDF",
                 this::selectBulkQrLabels);
@@ -7978,7 +9739,7 @@ public final class MainActivity extends Activity {
                 this::showQrHistory);
         }
         button("▣ Skaner EDHOME • QR / NFC / kody", () -> go("scanner"));
-        if(showPlaces)button("← Miejsca", () -> go("places"));
+        if(showPlaces)button("← Cofnij", this::goBack);
         // One read-only tree: Miejsce → podmiejsce → pudełko → rzecz.
         // Collapsing hides descendants without changing database relations.
         java.util.List<PlaceEntry> places=readPlaces();
@@ -8474,7 +10235,7 @@ public final class MainActivity extends Activity {
         hp.setMargins(0,0,dp(4),0);
         row.addView(heading,hp);
 
-        if(BetaUpdater.isBeta()&&storageActionVisible("place","qr"))
+        if(releaseFeaturesEnabled()&&storageActionVisible("place","qr"))
             storagePlaceHeaderAction(row,"QR / etykieta",
                 ()->showPlaceQr(place));
         if(storageActionVisible("place","nfc"))
@@ -8634,6 +10395,7 @@ public final class MainActivity extends Activity {
                     .setPositiveButton("Usuń",(dialog,which)->{
                         try{
                             StorageStore.remove(db.getWritableDatabase(),item.id);
+                            StorageOriginals.delete(this,item.id);
                             prefs.edit().remove(StorageThumbs.key(item.id)).apply();
                             DiagnosticLog.event("STORAGE_REMOVED");render();
                         }catch(Exception error){alert(error.getMessage());}
@@ -8695,7 +10457,7 @@ public final class MainActivity extends Activity {
             actions.add(()->showNfcTargetMenu(
                 body,item.kind,item.id,item.name));
         }
-        if(BetaUpdater.isBeta()&&storageActionVisible(item.kind,"print")) {
+        if(releaseFeaturesEnabled()&&storageActionVisible(item.kind,"print")) {
             labels.add("Drukuj etykietę / PDF / Udostępnij");
             actions.add(()->selectQrLabelFormat(
                 java.util.Collections.singletonList(qrLabel(item))));
@@ -9220,7 +10982,7 @@ public final class MainActivity extends Activity {
     }
 
     /** Every successful photo creates the next automatically named Thing. */
-    private void quickThingBatchCommitPhoto() {
+    private void quickThingBatchCommitPhoto(java.io.File originalFile) {
         if(!quickThingBatchActive||quickThingBatchPendingThumbnail==null)return;
         if(quickThingBatchTargetKind==null||quickThingBatchTargetId==null) {
             quickThingBatchPendingThumbnail=null;
@@ -9238,7 +11000,9 @@ public final class MainActivity extends Activity {
             String thumbnail=quickThingBatchPendingThumbnail;
             id=StorageStore.create(
                 db.getWritableDatabase(),name,"thing",box,place);
+            StorageOriginals.save(this,id,originalFile);
             if(!prefs.edit().putString(StorageThumbs.key(id),thumbnail).commit()) {
+                StorageOriginals.delete(this,id);
                 StorageStore.remove(db.getWritableDatabase(),id);
                 throw new IllegalStateException("Nie zapisano zdjęcia rzeczy.");
             }
@@ -9257,6 +11021,7 @@ public final class MainActivity extends Activity {
             if(id>0) {
                 try {
                     prefs.edit().remove(StorageThumbs.key(id)).apply();
+                    StorageOriginals.delete(this,id);
                     StorageStore.remove(db.getWritableDatabase(),id);
                 } catch(Exception ignored) { }
             }
@@ -9567,6 +11332,7 @@ public final class MainActivity extends Activity {
             });
         }
 
+        lightDialogForm(actions);
         dialog.setOnDismissListener(d->{
             if(quickStorageSetupDialog==dialog) {
                 quickStorageSetupDialog=null;
@@ -9834,6 +11600,7 @@ public final class MainActivity extends Activity {
             state.setTextColor(accent);
             actions.addView(state);
         }
+        lightDialogForm(actions);
         dialog.setOnCancelListener(d->clearStorageDropTarget());
         dialog.show();
         DiagnosticLog.event("STORAGE_DROP_TARGET_WAITING",
@@ -9929,6 +11696,7 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             storageEditor(item.kind,item.id);
         });
+        lightDialogForm(actions);
         dialog.show();
     }
 
@@ -10461,7 +12229,7 @@ public final class MainActivity extends Activity {
 
     private void selectQrLabelFormat(
             java.util.List<StorageQrLabels.Label> selected) {
-        if(!BetaUpdater.isBeta())return;
+        if(!releaseFeaturesEnabled())return;
         String[] formats=StorageQrLabels.FORMATS.clone();
         if(selected.size()==1) formats[3]="A4 — wybór zbiorczy";
         new AlertDialog.Builder(this).setTitle(
@@ -10479,7 +12247,7 @@ public final class MainActivity extends Activity {
                     catch(Exception error) { failure=error.getMessage(); }
                     byte[] pdf=output;
                     String problem=failure;
-                    runOnUiThread(()->{
+                    runOnLiveUi(()->{
                         if(pdf==null) {
                             alert("Nie wygenerowano PDF: "+problem);return;
                         }
@@ -10582,7 +12350,7 @@ public final class MainActivity extends Activity {
                 .setMessage("Identyfikator rzeczy pozostaje ten sam po przeniesieniu. "
                     +"QR działa na tym urządzeniu; synchronizacja w kolejnym etapie.")
                 .setView(picture).setNegativeButton("Zamknij",null);
-            if(BetaUpdater.isBeta())preview.setNeutralButton(
+            if(releaseFeaturesEnabled())preview.setNeutralButton(
                 "Kopiuj kod",(d,w)->{
                     ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE))
                         .setPrimaryClip(ClipData.newPlainText("EDHOME QR",payload));
@@ -10619,6 +12387,7 @@ public final class MainActivity extends Activity {
             + "saldo liczy tylko potwierdzone operacje.");
         title("Saldo potwierdzone wspólne: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
+        sharedMonthlyBudgetBlock();
         Spinner kind=new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList("Wydatek −","Przychód +")));
@@ -10665,7 +12434,7 @@ public final class MainActivity extends Activity {
                     }
                 }).show();
         });
-        if (BetaUpdater.isBeta()) {
+        if (releaseFeaturesEnabled()) {
             button("Powiadomienia bankowe • wybierz aplikacje",
                 this::configureBankNotifications);
             note("Nowe powiadomienia automatycznie trafiają do kolejki "
@@ -10676,7 +12445,7 @@ public final class MainActivity extends Activity {
             showBankNotificationHints();
         }
         button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
-        if(BetaUpdater.isBeta()) {
+        if(releaseFeaturesEnabled()) {
             int bankOpen=BankEvidenceStore.list(
                 db.getReadableDatabase(),"open").size();
             int bankMatched=BankEvidenceStore.list(
@@ -10760,7 +12529,7 @@ public final class MainActivity extends Activity {
     }
 
     private void configureBankNotifications() {
-        if(!BetaUpdater.isBeta())return;
+        if(!releaseFeaturesEnabled())return;
         Intent launcher=new Intent(Intent.ACTION_MAIN);
         launcher.addCategory(Intent.CATEGORY_LAUNCHER);
         java.util.Map<String,String> available=new java.util.TreeMap<>();
@@ -11177,7 +12946,7 @@ public final class MainActivity extends Activity {
      * Stable operation ID guarantees retry cannot create the same draft twice.
      */
     private void assignBankHintToShared(BankNotificationHints.Entry signal) {
-        if(!BetaUpdater.isBeta())return;
+        if(!releaseFeaturesEnabled())return;
         if(BankNotificationHints.alreadyHandled(this,signal.key)) {
             BankNotificationHints.remove(this,signal.key);
             render();
@@ -11264,6 +13033,7 @@ public final class MainActivity extends Activity {
         bank.setSingleLine(true);
         bank.setHint("Nazwa banku dla zwykłego CSV (mBank/Velo wykrywane automatycznie)");
         bank.setText(prefs.getString("paycheck_csv_bank_name",""));
+        lightDialogForm(bank);
         new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
             .setMessage("Do 10 plików naraz. Obsługiwane: zwykły CSV, tekstowy eksport "
                 + "mBanku, XLSX z tekstowym eksportem oraz tekstowy PDF VeloBanku. "
@@ -11293,7 +13063,7 @@ public final class MainActivity extends Activity {
     }
 
     private void bankImportDiag(String state,int files,int rows) {
-        if(!BetaUpdater.isBeta()||prefs==null)return;
+        if(!releaseFeaturesEnabled()||prefs==null)return;
         prefs.edit().putString("bank_import_diag_state",state)
             .putInt("bank_import_diag_files",Math.max(0,files))
             .putInt("bank_import_diag_rows",Math.max(0,rows))
@@ -11710,8 +13480,12 @@ public final class MainActivity extends Activity {
                         statement.evidenceKey,statement.date);
                     if("MATCHED".equals(outcome)){
                         DiagnosticLog.event("PAYCHECK_CSV_MATCHED");
-                        render();
-                        showStatementEntries(rows,bank);
+                        Runnable done=()->{
+                            render();
+                            showStatementEntries(rows,bank);
+                        };
+                        if(!offerSharedBudgetMatch(operationId,done))
+                            done.run();
                     }else if("ALREADY_MATCHED".equals(outcome))
                         alert("Ten wpis jest już uzgodniony.");
                     else alert("Nie uzgodniono: ta transakcja "
@@ -11742,14 +13516,115 @@ public final class MainActivity extends Activity {
                     if ("CONFIRMED".equals(result)) {
                         if(hintKey!=null)BankNotificationHints.remove(this,hintKey);
                         DiagnosticLog.event("PAYCHECK_SHARED_CONFIRMED");
+                        if(!offerSharedBudgetMatch(operationId,this::render))
+                            render();
+                    } else {
+                        alert("Operacja już potwierdzona lub nie istnieje.");
+                        render();
                     }
-                    else alert("Operacja już potwierdzona lub nie istnieje.");
-                    render();
                 } catch (Exception error) {
                     DiagnosticLog.error("PAYCHECK_CONFIRM", error);
                     alert("Nie udało się potwierdzić. Saldo pozostało bez zmian.");
                 }
             }).show();
+    }
+
+    private boolean offerSharedBudgetMatch(String operationId,
+            Runnable done) {
+        try (Cursor tx = db.getReadableDatabase().rawQuery(
+                "SELECT kind,category,amount_grosz,created_at,statement_date,status "
+                + "FROM paycheck_transactions "
+                + "WHERE scope='shared' AND operation_id=?",
+                new String[]{operationId})) {
+            if (!tx.moveToFirst() || !"confirmed".equals(tx.getString(5)))
+                return false;
+            YearMonth month=PaycheckMonthlyBudget.transactionMonth(
+                tx.getLong(3),tx.isNull(4)?null:tx.getString(4));
+            java.util.List<PaycheckMonthlyBudget.Item> items=
+                PaycheckMonthlyBudget.load(prefs);
+            PaycheckMonthlyBudget.Item candidate=
+                PaycheckMonthlyBudget.suggest(items,month,
+                    tx.getString(0),tx.getString(1),tx.getLong(2));
+            if(candidate==null)return false;
+            new AlertDialog.Builder(this)
+                .setTitle("Pasuje do Budżetu miesiąca")
+                .setMessage(MoneyRules.format(tx.getLong(2))
+                    +" wygląda jak „"+candidate.name+"”.\n\n"
+                    +"Plan: "+MoneyRules.format(candidate.amountGrosz)
+                    +" • "+budgetMonthLabel(month)
+                    +"\n\nPrzypisać tę potwierdzoną transakcję? "
+                    +"Nie zmieni to salda drugi raz.")
+                .setNegativeButton("Nie, zostaw poza planem",(d,w)->done.run())
+                .setPositiveButton("Tak, przypisz",(d,w)->{
+                    try {
+                        PaycheckMonthlyBudget.match(
+                            prefs,candidate.id,operationId);
+                        DiagnosticLog.event(
+                            "PAYCHECK_SHARED_BUDGET_MATCHED");
+                    } catch(Exception error) {
+                        DiagnosticLog.error(
+                            "PAYCHECK_SHARED_BUDGET_MATCH",error);
+                        alert("Transakcja została potwierdzona, ale nie "
+                            +"przypisano jej do budżetu.");
+                    }
+                    done.run();
+                }).show();
+            return true;
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_SUGGEST",error);
+            return false;
+        }
+    }
+
+    private boolean offerPrivateBudgetMatch(String operationId,
+            Runnable done) {
+        if(privatePaycheckSession==null
+                || !privatePaycheckSession.active())return false;
+        try {
+            PrivatePaycheckVault.Entry tx=null;
+            java.util.List<PrivatePaycheckVault.Entry> entries=
+                PrivatePaycheckVault.entries(this,privatePaycheckSession);
+            for(PrivatePaycheckVault.Entry entry:entries)
+                if(operationId.equals(entry.operationId)) {
+                    tx=entry;break;
+                }
+            if(tx==null || !"confirmed".equals(tx.status))return false;
+            YearMonth month=YearMonth.from(
+                Instant.ofEpochMilli(tx.createdAt)
+                    .atZone(ZoneId.systemDefault()).toLocalDate());
+            java.util.List<PaycheckMonthlyBudget.Item> items=
+                PrivatePaycheckVault.budgetItems(
+                    this,privatePaycheckSession);
+            PaycheckMonthlyBudget.Item candidate=
+                PaycheckMonthlyBudget.suggest(items,month,
+                    tx.kind,tx.category,tx.amountGrosz);
+            if(candidate==null)return false;
+            final PrivatePaycheckVault.Entry chosenTx=tx;
+            new AlertDialog.Builder(this)
+                .setTitle("Pasuje do prywatnego budżetu")
+                .setMessage(MoneyRules.format(chosenTx.amountGrosz)
+                    +" wygląda jak „"+candidate.name+"”.\n\n"
+                    +"Plan: "+MoneyRules.format(candidate.amountGrosz)
+                    +" • "+budgetMonthLabel(month)
+                    +"\n\nPrzypisać tę potwierdzoną transakcję?")
+                .setNegativeButton("Nie, zostaw poza planem",(d,w)->done.run())
+                .setPositiveButton("Tak, przypisz",(d,w)->{
+                    try {
+                        PrivatePaycheckVault.matchBudgetOperation(
+                            this,privatePaycheckSession,
+                            candidate.id,operationId);
+                        DiagnosticLog.event(
+                            "PAYCHECK_PRIVATE_BUDGET_MATCHED");
+                    } catch(Exception error) {
+                        alert("Transakcja została potwierdzona, ale nie "
+                            +"przypisano jej do prywatnego budżetu.");
+                    }
+                    done.run();
+                }).show();
+            return true;
+        } catch(Exception error) {
+            return false;
+        }
     }
 
     private void deleteSharedPaycheckEntriesBulk() {
@@ -11808,6 +13683,8 @@ public final class MainActivity extends Activity {
                 try {
                     int removed=PaycheckStore.deleteMany(
                         db.getWritableDatabase(),selected);
+                    for(String operationId:selected)
+                        PaycheckMonthlyBudget.unmatch(prefs,operationId);
                     DiagnosticLog.event("PAYCHECK_SHARED_BULK_DELETED");
                     render();
                     alert("Usunięto wpisów PayCheck: "+removed+".");
@@ -11831,6 +13708,7 @@ public final class MainActivity extends Activity {
                     String result=PaycheckStore.delete(
                         db.getWritableDatabase(),operationId);
                     if("DELETED".equals(result)) {
+                        PaycheckMonthlyBudget.unmatch(prefs,operationId);
                         DiagnosticLog.event("PAYCHECK_SHARED_DELETED");
                         render();
                     } else alert("Wpis już nie istnieje.");
@@ -11883,6 +13761,7 @@ public final class MainActivity extends Activity {
             form.addView(confirmation);
         }
         final EditText again = confirmation;
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(first ? "Utwórz prywatny sejf" : "Otwórz prywatny sejf")
             .setView(form)
@@ -11938,6 +13817,309 @@ public final class MainActivity extends Activity {
                 android.view.WindowManager.LayoutParams.FLAG_SECURE);
     }
 
+    private String budgetMonthLabel(YearMonth month) {
+        String name = month.getMonth().getDisplayName(
+            TextStyle.FULL_STANDALONE, new Locale("pl", "PL"));
+        if (!name.isEmpty())
+            name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        return name + " " + month.getYear();
+    }
+
+    private void sharedMonthlyBudgetBlock() {
+        final YearMonth month = YearMonth.now();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> items =
+                PaycheckMonthlyBudget.load(prefs);
+            PaycheckMonthlyBudget.Totals plan =
+                PaycheckMonthlyBudget.planned(items, month);
+            PaycheckMonthlyBudget.Totals confirmed =
+                PaycheckMonthlyBudget.sharedActual(
+                    db.getReadableDatabase(), month, "confirmed");
+            PaycheckMonthlyBudget.Totals pending =
+                PaycheckMonthlyBudget.sharedActual(
+                    db.getReadableDatabase(), month, "pending");
+            title("Budżet miesiąca • wspólny • " + budgetMonthLabel(month));
+            note("Planowane wpływy: " + MoneyRules.format(plan.income)
+                + " • planowane wydatki: " + MoneyRules.format(plan.expense)
+                + " • plan zostaje: " + MoneyRules.format(plan.net()));
+            note("Potwierdzone transakcje: wpływy "
+                + MoneyRules.format(confirmed.income) + " • wydatki "
+                + MoneyRules.format(confirmed.expense) + " • faktycznie "
+                + MoneyRules.format(confirmed.net()) + ".");
+            if (!pending.empty())
+                note("Czeka na sprawdzenie: wpływy "
+                    + MoneyRules.format(pending.income) + " • wydatki "
+                    + MoneyRules.format(pending.expense)
+                    + ". Te kwoty NIE są jeszcze wykonaniem budżetu.");
+            note("Plan nie zmienia salda. Budżet jest wykonany dopiero przez "
+                + "transakcje potwierdzone po sprawdzeniu banku / wyciągu. "
+                + "Pozycja może mieć stałą kwotę albo zmienną prognozę.");
+            button("📅 Dodaj pozycję planu miesiąca",
+                () -> showBudgetItemDialog(false));
+            button("📋 Pozycje planu • " + items.size(),
+                () -> showBudgetItemsDialog(false));
+        } catch (Exception error) {
+            DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_READ", error);
+            note("Nie udało się odczytać miesięcznego planu PayCheck.");
+        }
+    }
+
+    private void privateMonthlyBudgetBlock(
+            java.util.List<PrivatePaycheckVault.Entry> entries) {
+        final YearMonth month = YearMonth.now();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> items =
+                PrivatePaycheckVault.budgetItems(this, privatePaycheckSession);
+            PaycheckMonthlyBudget.Totals plan =
+                PaycheckMonthlyBudget.planned(items, month);
+            PaycheckMonthlyBudget.Totals confirmed =
+                PaycheckMonthlyBudget.privateActual(entries, month, "confirmed");
+            PaycheckMonthlyBudget.Totals pending =
+                PaycheckMonthlyBudget.privateActual(entries, month, "pending");
+            title("Budżet miesiąca • prywatny • " + budgetMonthLabel(month));
+            note("Planowane wpływy: " + MoneyRules.format(plan.income)
+                + " • planowane wydatki: " + MoneyRules.format(plan.expense)
+                + " • plan zostaje: " + MoneyRules.format(plan.net()));
+            note("Potwierdzone prywatne: wpływy "
+                + MoneyRules.format(confirmed.income) + " • wydatki "
+                + MoneyRules.format(confirmed.expense) + " • faktycznie "
+                + MoneyRules.format(confirmed.net()) + ".");
+            if (!pending.empty())
+                note("Prywatne do sprawdzenia: wpływy "
+                    + MoneyRules.format(pending.income) + " • wydatki "
+                    + MoneyRules.format(pending.expense)
+                    + ". Bez wpływu na wykonanie budżetu.");
+            note("Prywatny plan jest szyfrowany w sejfie. Tak samo jak we "
+                + "wspólnym PayCheck, dopiero potwierdzona transakcja jest "
+                + "traktowana jako rzeczywisty wpływ albo wydatek.");
+            button("📅 Dodaj prywatną pozycję planu",
+                () -> showBudgetItemDialog(true));
+            button("📋 Prywatne pozycje planu • " + items.size(),
+                () -> showBudgetItemsDialog(true));
+        } catch (Exception error) {
+            DiagnosticLog.event("PAYCHECK_PRIVATE_BUDGET_READ_FAILED");
+            note("Nie udało się odczytać prywatnego planu miesiąca.");
+        }
+    }
+
+    private void showBudgetItemDialog(boolean privateScope) {
+        if (privateScope && (privatePaycheckSession == null
+                || !privatePaycheckSession.active())) {
+            alert("Odblokuj najpierw prywatny sejf.");
+            return;
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(12), dp(18), dp(12));
+
+        EditText name = new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa, np. Prąd / Pensja / Netflix");
+        form.addView(name);
+
+        Spinner kind = new Spinner(this);
+        kind.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList("Wydatek −", "Przychód +")));
+        form.addView(kind);
+
+        Spinner category = new Spinner(this);
+        category.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        form.addView(category);
+
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota planowana w PLN");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        form.addView(amount);
+
+        Spinner amountMode = new Spinner(this);
+        amountMode.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "Stała kwota", "Kwota zmienna / prognoza")));
+        form.addView(amountMode);
+
+        Spinner cycle = new Spinner(this);
+        cycle.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "Jednorazowo", "Co miesiąc", "Co 2 miesiące",
+            "Co kwartał", "Co 6 miesięcy", "Co rok")));
+        form.addView(cycle);
+
+        EditText start = new EditText(this);
+        start.setSingleLine(true);
+        start.setHint("Start YYYY-MM");
+        start.setText(YearMonth.now().toString());
+        form.addView(start);
+
+        EditText end = new EditText(this);
+        end.setSingleLine(true);
+        end.setHint("Koniec YYYY-MM • puste = bez końca");
+        form.addView(end);
+
+        form.addView(text("Stała opłata: wybierz „Co miesiąc” i zostaw koniec "
+            + "pusty. Rata: wybierz „Co miesiąc” i wpisz miesiąc ostatniej raty. "
+            + "Plan sam nie księguje pieniędzy.", 13, false));
+
+        for (Spinner spinner : new Spinner[]{kind, category, amountMode, cycle})
+            spinner.setPopupBackgroundDrawable(
+                new android.graphics.drawable.ColorDrawable(DialogContrast.BACKGROUND));
+        lightDialogForm(form);
+        final int[] cycles = {0, 1, 2, 3, 6, 12};
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(privateScope
+                ? "Nowa prywatna pozycja budżetu"
+                : "Nowa pozycja budżetu")
+            .setView(form)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zapisz plan", null)
+            .create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    try {
+                        long grosz = MoneyRules.parse(
+                            amount.getText().toString());
+                        String itemName = name.getText().toString().trim();
+                        String itemKind = kind.getSelectedItemPosition() == 1
+                            ? "income" : "expense";
+                        String itemCategory = MoneyRules.CATEGORIES[
+                            category.getSelectedItemPosition()];
+                        String mode = amountMode.getSelectedItemPosition() == 1
+                            ? "estimate" : "fixed";
+                        PaycheckMonthlyBudget.Item item =
+                            PaycheckMonthlyBudget.newItem(
+                                itemName, itemKind, itemCategory, grosz, mode,
+                                start.getText().toString().trim(),
+                                end.getText().toString().trim(),
+                                cycles[cycle.getSelectedItemPosition()]);
+                        if (privateScope) {
+                            String result = PrivatePaycheckVault.addBudgetItem(
+                                this, privatePaycheckSession, item);
+                            if (!"COMMITTED".equals(result))
+                                throw new IllegalStateException(
+                                    "Ta pozycja już istnieje.");
+                            DiagnosticLog.event(
+                                "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
+                        } else {
+                            PaycheckMonthlyBudget.add(prefs, item);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
+                        }
+                        dialog.dismiss();
+                        render();
+                    } catch (IllegalArgumentException error) {
+                        amount.setError(error.getMessage());
+                    } catch (Exception error) {
+                        DiagnosticLog.error(
+                            privateScope
+                                ? "PAYCHECK_PRIVATE_BUDGET_ADD"
+                                : "PAYCHECK_SHARED_BUDGET_ADD",
+                            error);
+                        alert("Nie zapisano pozycji budżetu.");
+                    }
+                }));
+        dialog.show();
+        if (privateScope && dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    private void showBudgetItemsDialog(boolean privateScope) {
+        try {
+            final java.util.List<PaycheckMonthlyBudget.Item> items =
+                privateScope
+                    ? PrivatePaycheckVault.budgetItems(
+                        this, privatePaycheckSession)
+                    : PaycheckMonthlyBudget.load(prefs);
+            if (items.isEmpty()) {
+                alert("Brak pozycji planu.");
+                return;
+            }
+            String[] labels = new String[items.size()];
+            YearMonth shownMonth=YearMonth.now();
+            java.util.List<PrivatePaycheckVault.Entry> privateEntries=
+                privateScope
+                    ? PrivatePaycheckVault.entries(
+                        this,privatePaycheckSession)
+                    : java.util.Collections.emptyList();
+            for (int i = 0; i < items.size(); i++) {
+                PaycheckMonthlyBudget.Item item = items.get(i);
+                String range = item.startMonth
+                    + (item.endMonth == null || item.endMonth.isBlank()
+                        ? "" : " → " + item.endMonth);
+                boolean thisMonth=!PaycheckMonthlyBudget.activeFor(
+                    java.util.Collections.singletonList(item),
+                    shownMonth).isEmpty();
+                long actual=thisMonth
+                    ?(privateScope
+                        ?PaycheckMonthlyBudget.privateMatchedActual(
+                            privateEntries,item,shownMonth)
+                        :PaycheckMonthlyBudget.sharedMatchedActual(
+                            db.getReadableDatabase(),item,shownMonth))
+                    :0L;
+                String realization="";
+                if(thisMonth) {
+                    realization=actual==0L
+                        ?"\n"+budgetMonthLabel(shownMonth)+" • oczekuje"
+                        :"\n"+budgetMonthLabel(shownMonth)+" • wykonano "
+                            +MoneyRules.format(actual)
+                            +(actual==item.amountGrosz
+                                ?" ✓"
+                                :" • plan "+MoneyRules.format(item.amountGrosz));
+                }
+                labels[i] = PaycheckMonthlyBudget.itemLabel(item)
+                    + " • " + range + realization;
+            }
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(privateScope
+                    ? "Prywatny plan PayCheck"
+                    : "Plan PayCheck")
+                .setItems(labels, (d, which) ->
+                    confirmBudgetItemDelete(privateScope, items.get(which)))
+                .setNegativeButton("Zamknij", null)
+                .create();
+            dialog.show();
+            if (privateScope && dialog.getWindow() != null)
+                dialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        } catch (Exception error) {
+            if (!privateScope)
+                DiagnosticLog.error("PAYCHECK_BUDGET_LIST", error);
+            alert("Nie udało się otworzyć planu budżetu.");
+        }
+    }
+
+    private void confirmBudgetItemDelete(boolean privateScope,
+            PaycheckMonthlyBudget.Item item) {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Usunąć pozycję planu?")
+            .setMessage(PaycheckMonthlyBudget.itemLabel(item)
+                + "\n\nUsuwamy tylko plan. Żadna transakcja PayCheck "
+                + "nie zostanie usunięta ani zmieniona.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Usuń z planu", (d,w) -> {
+                try {
+                    boolean removed = privateScope
+                        ? PrivatePaycheckVault.deleteBudgetItem(
+                            this, privatePaycheckSession, item.id)
+                        : PaycheckMonthlyBudget.delete(prefs, item.id);
+                    if (removed) {
+                        DiagnosticLog.event(privateScope
+                            ? "PAYCHECK_PRIVATE_BUDGET_ITEM_DELETED"
+                            : "PAYCHECK_SHARED_BUDGET_ITEM_DELETED");
+                        render();
+                    }
+                } catch (Exception error) {
+                    alert("Nie udało się usunąć pozycji planu.");
+                }
+            })
+            .create();
+        dialog.show();
+        if (privateScope && dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
     private void privatePaycheck() {
         if (privatePaycheckSession == null || !privatePaycheckSession.active()) {
             go("paycheck");
@@ -11977,6 +14159,7 @@ public final class MainActivity extends Activity {
             return;
         }
         title("Saldo prywatne: " + MoneyRules.format(balance));
+        privateMonthlyBudgetBlock(entries);
         if(pendingPrivateBankHintKey!=null) {
             for(BankNotificationHints.Entry hint:BankNotificationHints.list(this))
                 if(hint.key.equals(pendingPrivateBankHintKey)) {
@@ -12039,8 +14222,11 @@ public final class MainActivity extends Activity {
                         String status = PrivatePaycheckVault.add(
                             this, privatePaycheckSession, operationId,
                             type, group, grosz, description);
-                        if ("COMMITTED".equals(status)) render();
-                        else alert("Ta prywatna operacja była już zapisana.");
+                        if ("COMMITTED".equals(status)) {
+                            if(!offerPrivateBudgetMatch(
+                                    operationId,this::render))
+                                render();
+                        } else alert("Ta prywatna operacja była już zapisana.");
                     } catch (Exception error) {
                         alert("Nie zapisano prywatnej transakcji.");
                     }
@@ -12081,7 +14267,11 @@ public final class MainActivity extends Activity {
                                         &&privatePaycheckSession.active()
                                         &&PrivatePaycheckVault.confirmPending(
                                             this,privatePaycheckSession,
-                                            entry.operationId))render();
+                                            entry.operationId)) {
+                                    if(!offerPrivateBudgetMatch(
+                                            entry.operationId,this::render))
+                                        render();
+                                }
                             }catch(Exception error){
                                 alert("Nie potwierdzono prywatnego wpisu.");
                             }
@@ -12161,6 +14351,7 @@ public final class MainActivity extends Activity {
         EditText again = securePrivatePassword("Powtórz hasło kopii");
         form.addView(pass);
         form.addView(again);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Szyfrowana kopia PayCheck").setView(form)
             .setNegativeButton("Anuluj", null)
@@ -12230,6 +14421,7 @@ public final class MainActivity extends Activity {
         EditText archivePassword = securePrivatePassword("Hasło kopii");
         form.addView(vaultPassword);
         form.addView(archivePassword);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Przywróć prywatny PayCheck").setView(form)
             .setNegativeButton("Anuluj", null)
@@ -12264,7 +14456,7 @@ public final class MainActivity extends Activity {
                     archivePassword.getText().clear();
                     dialog.dismiss();
                     DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORTED");
-                    alert("Import zakończony. Nowe prywatne transakcje: " + imported
+                    alert("Import zakończony. Nowe prywatne wpisy/plany: " + imported
                         + ". Pozostałe operacje nie zostały nadpisane.");
                 } catch (Exception error) {
                     DiagnosticLog.event("PAYCHECK_PRIVATE_BACKUP_IMPORT_REJECTED");
@@ -12356,6 +14548,7 @@ public final class MainActivity extends Activity {
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(amount);
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Nowy wspólny cel")
             .setView(form).setNegativeButton("Anuluj", null)
@@ -12394,6 +14587,7 @@ public final class MainActivity extends Activity {
             + "\nOdkładanie nie księguje wydatku i nie zmienia salda.",
             15, false));
         form.addView(amount);
+        lightDialogForm(form);
         String operationId = java.util.UUID.randomUUID().toString();
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Potwierdź odłożenie na cel")
@@ -12432,7 +14626,7 @@ public final class MainActivity extends Activity {
             + "dopiero osobny przycisk Przyjmij dopisuje wybrane opakowania "
             + "do wskazanego produktu w spiżarni. Cena zakupu jest opcjonalna; "
             + "nie księgujemy jej automatycznie w PayCheck.");
-        button("← Spiżarnia", () -> go("pantry"));
+        button("← Cofnij", this::goBack);
         EditText item = field("Co kupić?", false);
         EditText quantity = field("Ilość (opcjonalnie, np. 1,5)", false);
         quantity.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -12724,12 +14918,15 @@ public final class MainActivity extends Activity {
         form.addView(text("Miejsce docelowe tej pozycji — potwierdź lub zmień",
             14, false));
         Spinner placeChoice = new Spinner(this);
-        placeChoice.setAdapter(themeSpinnerAdapter(placeNames));
+        placeChoice.setAdapter(lightDialogSpinnerAdapter(placeNames));
         if (preselectedPlace != null) {
             int placeIndex = placeIds.indexOf(preselectedPlace);
             if (placeIndex > 0) placeChoice.setSelection(placeIndex);
         }
         form.addView(placeChoice);
+        placeChoice.setPopupBackgroundDrawable(
+            new android.graphics.drawable.ColorDrawable(DialogContrast.BACKGROUND));
+        lightDialogForm(form);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Potwierdź przyjęcie")
             .setView(form)
@@ -12941,6 +15138,7 @@ public final class MainActivity extends Activity {
         search.setSingleLine(true);
         search.setText(pantrySearch);
         search.setHint("Nazwa produktu");
+        lightDialogForm(search);
         new AlertDialog.Builder(this).setTitle("Wyszukaj produkt")
             .setView(search)
             .setNegativeButton("Anuluj", null)
@@ -13028,6 +15226,7 @@ public final class MainActivity extends Activity {
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
+                    lightDialogForm(count);
                     new AlertDialog.Builder(this)
                         .setTitle(name + " • liczba opakowań")
                         .setView(count)
@@ -13172,6 +15371,7 @@ public final class MainActivity extends Activity {
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
+        lightDialogForm(input);
         new AlertDialog.Builder(this).setTitle("Wpisz kod kreskowy")
             .setView(input).setNegativeButton("Anuluj", null)
             .setNeutralButton("Wyciągnij / ilość", (d, w) -> onPantryBarcode(
@@ -13394,6 +15594,7 @@ public final class MainActivity extends Activity {
                     if(pack.depositGrosz>0)
                         money.setText(MoneyRules.format(pack.depositGrosz)
                             .replace(" zł",""));
+                    lightDialogForm(money);
                     new AlertDialog.Builder(this)
                         .setTitle("Kaucja za 1 opakowanie")
                         .setView(money).setNegativeButton("Anuluj",null)
@@ -13417,6 +15618,7 @@ public final class MainActivity extends Activity {
                     count.setSingleLine(true);
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setText(Integer.toString(pack.depositPending));
+                    lightDialogForm(count);
                     new AlertDialog.Builder(this)
                         .setTitle("Oddaj opakowania")
                         .setMessage("Masz do zwrotu: "+pack.depositPending
@@ -13557,7 +15759,7 @@ public final class MainActivity extends Activity {
             Exception failure = null;
             try {
                 report = PantryProductLookup.lookupDetailed(barcode,
-                    (catalogue, status) -> runOnUiThread(() -> {
+                    (catalogue, status) -> runOnLiveUi(() -> {
                         if (!cancelled.get() && loading.isShowing())
                             loading.setMessage("Przeszukuję katalogi Open Facts…\n"
                                 + catalogue + ": " + status);
@@ -13576,7 +15778,7 @@ public final class MainActivity extends Activity {
             }
             final PantryProductLookup.Report checked = report;
             final Exception problem = failure;
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 loading.dismiss();
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (problem != null || checked == null
@@ -13621,6 +15823,7 @@ public final class MainActivity extends Activity {
         EditText query = new EditText(this);
         query.setSingleLine(true);
         query.setHint("np. proszek do prania, marka");
+        lightDialogForm(query);
         new AlertDialog.Builder(this).setTitle("Szukaj produktu po nazwie")
             .setMessage("Wyślij wpisaną frazę do katalogów Open Facts. "
                 + "Wybór podobnego produktu nie potwierdza jego zgodności z kodem — "
@@ -13662,7 +15865,7 @@ public final class MainActivity extends Activity {
             Exception failure = null;
             try {
                 report = PantryProductLookup.searchByName(query,
-                    (catalogue, status) -> runOnUiThread(() -> {
+                    (catalogue, status) -> runOnLiveUi(() -> {
                         if (!cancelled.get() && loading.isShowing())
                             loading.setMessage(catalogue + ": " + status);
                     }));
@@ -13671,7 +15874,7 @@ public final class MainActivity extends Activity {
             }
             final PantryProductLookup.NameSearchReport checked = report;
             final Exception problem = failure;
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 loading.dismiss();
                 if (cancelled.get() || isFinishing() || isDestroyed()) return;
                 if (problem != null || checked == null) {
@@ -13737,7 +15940,7 @@ public final class MainActivity extends Activity {
                     PantryPackSuggestion.verified(candidate.unitsPerScan,
                         candidate.baseUnit, candidate.baseSizeMilli,
                         candidate.quantityLabel));
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 if (!isFinishing() && !isDestroyed())
                     showNewPantryProductDialog(scannedBarcode, operationId,
                         selected, sourceDetails + "\nDopasowano po nazwie; "
@@ -13856,7 +16059,7 @@ public final class MainActivity extends Activity {
             try {
                 byte[] data = PantryProductLookup.fetchImage(imageUrl);
                 PantryProductLookup.cache(this, imageUrl, data);
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if (!isFinishing() && !isDestroyed()) {
                         DiagnosticLog.event("PANTRY_OFF_PHOTO_CACHED");
                         if ("pantry".equals(screen)) render();
@@ -13864,7 +16067,7 @@ public final class MainActivity extends Activity {
                 });
             } catch (Exception problem) {
                 DiagnosticLog.error("PANTRY_OFF_PHOTO", problem);
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if (!isFinishing() && !isDestroyed())
                         alert("Nie udało się pobrać zdjęcia. Produkt nadal działa offline.");
                 });
@@ -14025,6 +16228,7 @@ public final class MainActivity extends Activity {
         if (count == 0) entries.addView(text("Nie ma zapisanych cen.", 14, false));
         ScrollView scroll = new ScrollView(this);
         scroll.addView(entries);
+        lightDialogForm(scroll);
         new AlertDialog.Builder(this).setTitle("Historia cen: " + productName)
             .setView(scroll).setPositiveButton("Zamknij", null).show();
     }
@@ -14132,6 +16336,7 @@ public final class MainActivity extends Activity {
                     amount.setText(Integer.toString(expected));
                     amount.setSelectAllOnFocus(true);
                     amount.requestFocus();
+                    lightDialogForm(amount);
                     new AlertDialog.Builder(this).setTitle("Faktyczna liczba sztuk")
                         .setView(amount).setNegativeButton("Anuluj", null)
                         .setPositiveButton("Dalej", (dialog, which) -> {
@@ -14410,7 +16615,7 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.error("DESKTOP_QR_PAIR", error);
                 }
                 final String problem = failure;
-                runOnUiThread(() -> {
+                runOnLiveUi(() -> {
                     if (problem == null) {
                         DiagnosticLog.event("DESKTOP_QR_PAIRED");
                         alert("Połączono z EDHOME Desktop. Komputer pobiera dane z telefonu.");
@@ -14513,7 +16718,7 @@ public final class MainActivity extends Activity {
                 Thread.currentThread().interrupt();
             }
             final String report = buildPhoneLanDiagnosticsReport();
-            runOnUiThread(() -> {
+            runOnLiveUi(() -> {
                 if (copyToClipboard) {
                     ClipboardManager clipboard = (ClipboardManager)
                         getSystemService(Context.CLIPBOARD_SERVICE);
@@ -14531,6 +16736,7 @@ public final class MainActivity extends Activity {
                 reportView.setTextIsSelectable(true);
                 ScrollView scroll = new ScrollView(this);
                 scroll.addView(reportView);
+                lightDialogForm(scroll);
                 new AlertDialog.Builder(this)
                     .setTitle("Diagnostyka połączenia z PC")
                     .setView(scroll)
@@ -14698,6 +16904,200 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    private void supla() {
+        header("SUPLA Cloud");
+        note("EDHOME 0.8 • etap 1: tylko odczyt. Aplikacja pobiera urządzenia, "
+            + "kanały i ich bieżący stan. Sterowanie oraz automatyczne podlewanie "
+            + "dodamy dopiero po ustabilizowaniu odczytu.");
+
+        String savedUrl = prefs.getString("supla_cloud_url", "");
+        boolean hasToken = SuplaSecretStore.hasToken(this);
+        int cached = SuplaCacheStore.channelCount(this);
+        long fetchedAt = SuplaCacheStore.fetchedAt(this);
+
+        LinearLayout status = card();
+        status.addView(text("Połączenie SUPLA Cloud", 18, true));
+        status.addView(text("Serwer: " + (savedUrl.isEmpty() ? "nie ustawiono" : savedUrl)
+            + "\nToken: " + (hasToken ? "zapisany bezpiecznie" : "brak")
+            + "\nKanały w cache: " + cached
+            + "\nOstatni odczyt: " + suplaFetchedAtLabel(fetchedAt), 13, false));
+
+        LinearLayout form = card();
+        form.addView(text("Dane połączenia", 17, true));
+        EditText server = new EditText(this);
+        server.setSingleLine(true);
+        server.setHint("https://svrXX.supla.org");
+        server.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        server.setText(savedUrl);
+        server.setTextColor(ink);
+        server.setHintTextColor(subdued);
+        form.addView(server, new LinearLayout.LayoutParams(-1, dp(54)));
+
+        EditText token = new EditText(this);
+        token.setSingleLine(true);
+        token.setHint(hasToken
+            ? "Token zapisany — pozostaw puste, aby go zachować"
+            : "Personal Access Token SUPLA");
+        token.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        token.setTextColor(ink);
+        token.setHintTextColor(subdued);
+        form.addView(token, new LinearLayout.LayoutParams(-1, dp(54)));
+
+        form.addView(text("Token jest szyfrowany kluczem z Android Keystore. "
+            + "Nie trafia do logów, synchronizacji ani backupu EDHOME.", 12, false));
+
+        smallButton(form, "Zapisz połączenie", () -> {
+            try {
+                suplaSaveConnection(server, token);
+                alert("Zapisano połączenie SUPLA Cloud.");
+                render();
+            } catch (Exception error) {
+                DiagnosticLog.error("SUPLA_SAVE", error);
+                alert(suplaErrorMessage(error));
+            }
+        });
+
+        smallButton(form, "Sprawdź i pobierz kanały", () -> {
+            final String normalized;
+            final String accessToken;
+            try {
+                normalized = suplaSaveConnection(server, token);
+                accessToken = SuplaSecretStore.loadToken(this);
+                if (accessToken.isEmpty())
+                    throw new IllegalStateException("Brak Personal Access Token SUPLA.");
+            } catch (Exception error) {
+                DiagnosticLog.error("SUPLA_CONNECT_PREPARE", error);
+                alert(suplaErrorMessage(error));
+                return;
+            }
+
+            DiagnosticLog.event("SUPLA_SYNC_STARTED");
+            new Thread(() -> {
+                try {
+                    SuplaCloudClient.Snapshot snapshot =
+                        SuplaCloudClient.fetchChannels(normalized, accessToken);
+                    SuplaCacheStore.save(this, snapshot);
+                    int count = snapshot.channels.length();
+                    DiagnosticLog.event("SUPLA_SYNC_OK", "channels=" + count);
+                    runOnLiveUi(() -> {
+                        alert("Połączono z SUPLA Cloud. Pobrano kanały: " + count + ".");
+                        render();
+                    });
+                } catch (Exception error) {
+                    DiagnosticLog.error("SUPLA_SYNC_FAILED", error);
+                    String message = suplaErrorMessage(error);
+                    runOnLiveUi(() -> alert("Nie udało się pobrać danych SUPLA:\n"
+                        + message));
+                }
+            }, "edhome-supla-read").start();
+        });
+
+        smallButton(form, "Usuń połączenie SUPLA z telefonu", () ->
+            new AlertDialog.Builder(this)
+                .setTitle("Usuń połączenie SUPLA?")
+                .setMessage("Usunięty zostanie lokalny token, adres serwera i cache SUPLA. "
+                    + "Konto oraz urządzenia w SUPLA Cloud nie zostaną zmienione.")
+                .setNegativeButton("Anuluj", null)
+                .setPositiveButton("Usuń", (dialog, which) -> {
+                    SuplaSecretStore.clear(this);
+                    SuplaCacheStore.clear(this);
+                    prefs.edit().remove("supla_cloud_url").apply();
+                    DiagnosticLog.event("SUPLA_CONNECTION_CLEARED");
+                    render();
+                }).show());
+
+        JSONObject cache = SuplaCacheStore.load(this);
+        JSONArray channels = cache.optJSONArray("channels");
+        title("Pobrane kanały");
+        if (channels == null || channels.length() == 0) {
+            note("Brak danych. Zapisz połączenie i użyj „Sprawdź i pobierz kanały”.");
+            return;
+        }
+
+        int limit = Math.min(channels.length(), 80);
+        for (int i = 0; i < limit; i++) {
+            JSONObject channel = channels.optJSONObject(i);
+            if (channel == null) continue;
+            LinearLayout item = card();
+            item.addView(text(suplaChannelLabel(channel), 16, true));
+            item.addView(text("ID kanału: " + channel.optLong("id", 0L)
+                + suplaFunctionLabel(channel)
+                + "\n" + suplaStateLabel(channel), 12, false));
+        }
+        if (channels.length() > limit)
+            note("Pokazano " + limit + " z " + channels.length()
+                + " kanałów. W kolejnych etapach dodamy filtrowanie i przypisania.");
+    }
+
+    private String suplaSaveConnection(EditText server, EditText token) throws Exception {
+        String normalized = SuplaCloudClient.normalizeBaseUrl(
+            server.getText().toString());
+        String enteredToken = token.getText().toString().trim();
+        if (!enteredToken.isEmpty()) {
+            SuplaSecretStore.saveToken(this, enteredToken);
+            token.setText("");
+            token.setHint("Token zapisany — pozostaw puste, aby go zachować");
+        } else if (!SuplaSecretStore.hasToken(this)) {
+            throw new IllegalArgumentException("Wklej Personal Access Token SUPLA.");
+        }
+        prefs.edit().putString("supla_cloud_url", normalized).apply();
+        DiagnosticLog.event("SUPLA_CONNECTION_SAVED");
+        return normalized;
+    }
+
+    private static String suplaErrorMessage(Throwable error) {
+        if (error == null) return "Nieznany błąd SUPLA.";
+        String message = error.getMessage();
+        if (message == null || message.trim().isEmpty())
+            return error.getClass().getSimpleName();
+        return message.trim();
+    }
+
+    private String suplaFetchedAtLabel(long millis) {
+        if (millis <= 0L) return "jeszcze nie pobierano";
+        return Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+    }
+
+    private String suplaChannelLabel(JSONObject channel) {
+        String caption = channel.optString("caption", "").trim();
+        if (caption.isEmpty()) caption = channel.optString("name", "").trim();
+        if (caption.isEmpty()) caption = "Kanał #" + channel.optLong("id", 0L);
+        return caption;
+    }
+
+    private String suplaFunctionLabel(JSONObject channel) {
+        String function = channel.optString("function", "").trim();
+        if (!function.isEmpty() && function.length() <= 80)
+            return " • " + function;
+        if (channel.has("functionId"))
+            return " • funkcja " + channel.optInt("functionId", 0);
+        return "";
+    }
+
+    private String suplaStateLabel(JSONObject channel) {
+        JSONObject state = channel.optJSONObject("state");
+        if (state == null) return "Stan: brak danych";
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (state.has("connected"))
+            values.add("połączony: " + (state.optBoolean("connected") ? "tak" : "nie"));
+        if (state.has("on")) values.add("stan: " + (state.optBoolean("on") ? "WŁ." : "WYŁ."));
+        if (state.has("temperature"))
+            values.add("temperatura: " + state.opt("temperature"));
+        if (state.has("humidity"))
+            values.add("wilgotność: " + state.opt("humidity"));
+        if (state.has("value")) values.add("wartość: " + state.opt("value"));
+        if (state.has("position")) values.add("pozycja: " + state.opt("position"));
+        if (values.isEmpty()) {
+            String compact = state.toString();
+            if (compact.length() > 180) compact = compact.substring(0, 180) + "…";
+            return "Stan: " + compact;
+        }
+        return "Stan: " + String.join(" • ", values);
+    }
+
     private void settings() {
         header("Ustawienia");
         note("Sekcje są zwijane. Zmiany widoku nie usuwają danych.");
@@ -14718,6 +17118,18 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("HOUSEHOLD_RENAMED");
             alert("Zapisano nazwę gospodarstwa.");
         });
+
+        LinearLayout users=settingsAccordion("users","Użytkownicy",
+            "Profile, role, lokalny PIN i grafiki domowników.",false);
+        String activeUser=activeMemberName();
+        users.addView(text("Aktywny profil: "
+            +(activeUser.isEmpty()?"brak":activeUser),14,true));
+        smallButton(users,"Zarządzaj użytkownikami",()->{
+            membersReturnScreen="settings";
+            go("members");
+        });
+        users.addView(text("Dane profilu synchronizują się z Desktopem. "
+            +"PIN profilu pozostaje lokalnie na tym urządzeniu.",12,false));
 
         LinearLayout nfc=settingsAccordion("nfc","NFC",
             "Cała obsługa NFC: nasłuch, zachowanie po skanie i reguły typów.",true);
@@ -14982,7 +17394,26 @@ public final class MainActivity extends Activity {
             render();
         });
 
-        if(BetaUpdater.isBeta()){
+        if(releaseFeaturesEnabled()){
+            LinearLayout suplaSettings=settingsAccordion("supla","SUPLA Cloud",
+                "Połączenie z chmurą SUPLA i odczyt urządzeń/kanałów.",false);
+            boolean suplaToken=SuplaSecretStore.hasToken(this);
+            String suplaUrl=prefs.getString("supla_cloud_url","");
+            int suplaChannels=SuplaCacheStore.channelCount(this);
+            suplaSettings.addView(text(
+                "Serwer: "+(suplaUrl.isEmpty()?"nie ustawiono":suplaUrl)
+                +"\nToken: "+(suplaToken?"zapisany bezpiecznie":"brak")
+                +"\nKanały w cache: "+suplaChannels
+                +"\nOstatni odczyt: "+suplaFetchedAtLabel(
+                    SuplaCacheStore.fetchedAt(this)),13,false));
+            smallButton(suplaSettings,"Otwórz SUPLA Cloud",()->go("supla"));
+            suplaSettings.addView(text(
+                "Etap 0.8.0 działa tylko w trybie odczytu. "
+                    +"Sterowanie i automatyczne podlewanie pozostają wyłączone.",
+                12,false));
+        }
+
+        if(releaseFeaturesEnabled()){
             LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
                 "Parowanie, stan połączenia i diagnostyka LAN.",false);
             String ip=LanSyncServer.localAddress();
@@ -15027,40 +17458,43 @@ public final class MainActivity extends Activity {
 
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
-        note("Eksport zawiera czynności, miejsca i ich przypisania, spiżarnię, historię, bieżący remanent oraz ustawienia gospodarstwa.");
-        note("Nie zawiera PIN-u, dziennika diagnostycznego ani adresu aktualizacji. Plik JSON nie jest szyfrowany: przechowuj go prywatnie.");
-        note("Kopia umożliwia przeniesienie danych do nowej instalacji, ale nie omija wymogu tego samego podpisu APK przy zwykłej aktualizacji Androida.");
-        note("Prywatny sejf PayCheck nie jest częścią tej kopii. Wykonaj osobny, zaszyfrowany eksport po odblokowaniu sejfu.");
-        button("Eksportuj kopię danych (.json)", () -> {
+        note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego oraz własne obrazy kafelków.");
+        note("Miniatury pozostają w data.json dla zgodności. Po przywróceniu EDHOME odtwarza je z oryginałów, gdy oryginał jest dostępny.");
+        note("Starsze zdjęcia dodane przed tą zmianą mają w kopii dotychczasową miniaturę. Utraconej wcześniej pełnej jakości nie da się odtworzyć wstecz.");
+        note("Po utworzeniu kopia jest sprawdzana: manifest, rozmiar i SHA-256 każdego pliku oraz ponowny odczyt całego ZIP-u z wybranego miejsca.");
+        note("Kopia nie zawiera PIN-u, logów, sekretów SUPLA ani prywatnego sejfu PayCheck. Sejf ma osobny szyfrowany eksport.");
+        button("Eksportuj pełną kopię (.zip)", () -> {
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
-            save.setType("application/json");
-            save.putExtra(Intent.EXTRA_TITLE, "EDHOME-backup-v1-" + System.currentTimeMillis() + ".json");
+            save.setType("application/zip");
+            save.putExtra(Intent.EXTRA_TITLE,
+                "EDHOME-backup-" + System.currentTimeMillis() + ".zip");
             try { startActivityForResult(save, EXPORT_DATA_BACKUP); }
             catch (Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_PICKER", error);
                 alert("Nie można otworzyć wyboru miejsca zapisu.");
             }
         });
-        button("Przywróć kopię z pliku (.json)", () -> {
+        button("Przywróć kopię (.zip / starszy .json)", () -> {
             Intent open = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             open.addCategory(Intent.CATEGORY_OPENABLE);
-            open.setType("application/json");
+            open.setType("*/*");
+            open.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"application/zip","application/json","application/octet-stream"});
             try { startActivityForResult(open, IMPORT_DATA_BACKUP); }
             catch (Exception error) {
                 DiagnosticLog.error("DATA_RESTORE_PICKER", error);
                 alert("Nie można otworzyć wyboru kopii.");
             }
         });
-        note("Przywrócenie zastępuje CAŁĄ obecną spiżarnię, czynności i remanenty. Przed importem wykonaj eksport obecnego stanu.");
-        note("Przed aktualizacją sprawdź zapisany plik JSON. Poprzednie kopie 0.1.4–0.1.8 można zaimportować.");
+        note("Przywrócenie zastępuje wspólne dane EDHOME. Przed importem wykonaj świeżą kopię obecnego stanu.");
     }
 
     /** Update dashboard: no feed URL, SHA, manifest or developer text in primary UI. */
     private void updates() {
         title("EDHOME  •  " + (BetaUpdater.isBeta() ? "BETA" : "STABLE"));
         note("Aktualizacje aplikacji");
-        button("← Panel główny", () -> go("home"));
+        button("⌂ Panel główny", this::goHome);
         LinearLayout version = card();
         version.addView(text("Zainstalowana wersja", 15, false));
         version.addView(text(BuildConfig.VERSION_NAME, 29, true));
@@ -15121,6 +17555,8 @@ public final class MainActivity extends Activity {
             updateTile(tiles, "i", "Kanał\nStable", false, () ->
                 alert("Stable pobiera aktualizacje z Google Play. Dostępny jest przycisk Później."));
         }
+        updateTile(tiles, "▦", "QR Beta /\nStable", false,
+            this::showUpdateDownloadQrCodes);
         updateTile(tiles, "▣", "Kopia\ndanych", false, () -> go("backup"));
         updateTile(tiles, "⚙", "Opcje\nzaawansowane", false, () -> go("updates_advanced"));
         updateTile(tiles, "◉", "Status\nkanału", false, () ->
@@ -15138,13 +17574,95 @@ public final class MainActivity extends Activity {
                 + "\nversionCode: " + BuildConfig.VERSION_CODE));
         updateTile(tiles, "◷", "Co\nnowego", false, () ->
             alert("EDHOME " + BuildConfig.VERSION_NAME
-                + "\nUkład Start 3 × 3. Gdy jest więcej niż 9 kafelków, "
-                + "przesuwaj strony palcem w lewo lub prawo. "
-                + "Aktywna strona jest zaznaczona kropką."));
-        updateTile(tiles, "⌂", "Panel\ngłówny", false, () -> go("home"));
+                + "\nNajważniejsze zmiany względem Stable 0.7.4.36:"
+                + "\n• Projekty: hierarchia, zależności i planowanie czasu."
+                + "\n• Profile użytkowników i lokalne PIN-y."
+                + "\n• PayCheck: miesięczny budżet i potwierdzone wykonanie."
+                + "\n• Kopia ZIP z oryginalnymi mediami magazynu."
+                + "\n• SUPLA Cloud: bezpieczny odczyt urządzeń/kanałów."
+                + "\n• Dalsza stabilizacja Magazynu, synchronizacji i nawigacji."));
+        updateTile(tiles, "⌂", "Panel\ngłówny", false, this::goHome);
         note(BetaUpdater.isBeta()
             ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
             : "Stable: możesz wybrać Aktualizuj lub Później.");
+    }
+
+    private Bitmap updateDownloadQrBitmap(String value, int size)
+            throws Exception {
+        com.google.zxing.common.BitMatrix bits =
+            new com.google.zxing.MultiFormatWriter().encode(
+                value, com.google.zxing.BarcodeFormat.QR_CODE, size, size);
+        Bitmap bitmap=Bitmap.createBitmap(
+            size,size,Bitmap.Config.ARGB_8888);
+        for(int y=0;y<size;y++)
+            for(int x=0;x<size;x++)
+                bitmap.setPixel(x,y,bits.get(x,y)
+                    ?Color.BLACK:Color.WHITE);
+        return bitmap;
+    }
+
+    private void showUpdateDownloadQrCodes() {
+        String betaVersion=BuildConfig.VERSION_NAME
+            .replace("-prototype","");
+        String betaUrl="https://github.com/edwinkarolczyk/Edhome/"
+            +"releases/download/beta-v"+betaVersion+"/edhome-beta.apk";
+        String stableUrl="https://play.google.com/store/apps/details"
+            +"?id=com.edwinkarolczyk.edhome";
+        try {
+            LinearLayout form=new LinearLayout(this);
+            form.setOrientation(LinearLayout.VERTICAL);
+            form.setPadding(dp(14),dp(10),dp(14),dp(10));
+            form.addView(text("Zeskanuj drugim telefonem lub tabletem. "
+                +"Beta prowadzi bezpośrednio do podpisanego APK tej wersji, "
+                +"Stable do oficjalnego kanału Google Play.",13,false));
+
+            LinearLayout codes=new LinearLayout(this);
+            codes.setOrientation(LinearLayout.HORIZONTAL);
+            codes.setGravity(Gravity.CENTER);
+
+            LinearLayout beta=new LinearLayout(this);
+            beta.setOrientation(LinearLayout.VERTICAL);
+            beta.setGravity(Gravity.CENTER);
+            beta.addView(text("BETA "+betaVersion,14,true));
+            ImageView betaQr=new ImageView(this);
+            betaQr.setImageBitmap(updateDownloadQrBitmap(betaUrl,420));
+            betaQr.setAdjustViewBounds(true);
+            betaQr.setContentDescription("QR pobierania EDHOME Beta");
+            betaQr.setOnClickListener(v->startActivity(
+                new Intent(Intent.ACTION_VIEW,Uri.parse(betaUrl))));
+            beta.addView(betaQr,new LinearLayout.LayoutParams(
+                dp(145),dp(145)));
+
+            LinearLayout stable=new LinearLayout(this);
+            stable.setOrientation(LinearLayout.VERTICAL);
+            stable.setGravity(Gravity.CENTER);
+            stable.addView(text("STABLE",14,true));
+            ImageView stableQr=new ImageView(this);
+            stableQr.setImageBitmap(updateDownloadQrBitmap(stableUrl,420));
+            stableQr.setAdjustViewBounds(true);
+            stableQr.setContentDescription("QR pobierania EDHOME Stable");
+            stableQr.setOnClickListener(v->startActivity(
+                new Intent(Intent.ACTION_VIEW,Uri.parse(stableUrl))));
+            stable.addView(stableQr,new LinearLayout.LayoutParams(
+                dp(145),dp(145)));
+
+            codes.addView(beta,new LinearLayout.LayoutParams(0,-2,1f));
+            codes.addView(stable,new LinearLayout.LayoutParams(0,-2,1f));
+            form.addView(codes);
+            form.addView(text("Dotknij QR, aby otworzyć link również na tym "
+                +"urządzeniu. Instalację Beta nadal potwierdza Android.",
+                12,false));
+
+            lightDialogForm(form);
+            new AlertDialog.Builder(this)
+                .setTitle("Pobierz EDHOME • QR")
+                .setView(form)
+                .setNegativeButton("Zamknij",null)
+                .show();
+        } catch(Exception error) {
+            DiagnosticLog.error("UPDATE_DOWNLOAD_QR",error);
+            alert("Nie udało się utworzyć kodów QR.");
+        }
     }
 
     /** Three rounded tiles per row; the outer page owns vertical scrolling. */
@@ -15363,7 +17881,7 @@ public final class MainActivity extends Activity {
 
     private void updatesAdvanced() {
         title("Aktualizacje • opcje zaawansowane");
-        button("← Aktualizacje", () -> go("updates"));
+        button("← Cofnij", this::goBack);
         note("Zainstalowany versionCode: " + BuildConfig.VERSION_CODE);
         if (!BetaUpdater.isBeta()) {
             note("Stable używa wyłącznie Google Play.");
@@ -15377,7 +17895,7 @@ public final class MainActivity extends Activity {
             note("Źródło: " + updater.configuredFeed());
             note("Adres nie jest dowodem działania serwera. Sprawdź połączenie poniżej.");
             button("Sprawdź aktualizację i połączenie", () -> updater.check(true));
-            button("← Aktualizacje", () -> go("updates"));
+            button("← Cofnij", this::goBack);
             return;
         }
         note(updater.configuredFeed().isEmpty() ? "Kanał nie jest jeszcze skonfigurowany."
@@ -15410,7 +17928,7 @@ public final class MainActivity extends Activity {
     }
 
     private void diagnostics() {
-        if (!DiagnosticLog.enabled()) { go("home"); return; }
+        if (!DiagnosticLog.enabled()) { goHome(); return; }
         header("Diagnostyka • tylko BETA");
         note("Pliki w aplikacji: do 1 MB każdy (bieżący i poprzedni segment). "
             + "Wklejanie do czatu ma oddzielny limit znaków; pełny eksport .txt go nie ma.");
@@ -15584,7 +18102,7 @@ public final class MainActivity extends Activity {
                     try { TileCustomImage.importImage(this, tileId, chosen); }
                     catch (Exception problem) { failure = problem.getMessage(); }
                     final String error = failure;
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if (error != null) {
                             alert("Nie zapisano własnej ikony: " + error);
                             return;
@@ -15618,7 +18136,7 @@ public final class MainActivity extends Activity {
                         this,target,style,span,chosen);}
                     catch(Exception problem){failure=problem.getMessage();}
                     final String error=failure;
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if(error!=null){
                             alert("Nie zapisano grafiki kafelka: "+error);
                             return;
@@ -15647,7 +18165,7 @@ public final class MainActivity extends Activity {
                     catch (Exception invalid) { error = invalid.getMessage(); }
                     final int imported = count;
                     final String problem = error;
-                    runOnUiThread(() -> {
+                    runOnLiveUi(() -> {
                         if (imported == 100) {
                             prefs.edit().putString("icon_style", "ai3d")
                                 .putBoolean("icon_style_explicit", true).commit();
@@ -15762,13 +18280,16 @@ public final class MainActivity extends Activity {
                     quickThingBatchPendingThumbnail=StorageThumbs.compress(
                         getContentResolver(),photo);
                     DiagnosticLog.event("STORAGE_QUICK_BATCH_PHOTO_STAGED");
+                    quickThingBatchCommitPhoto(file);
                 } else if(result==RESULT_OK&&id>0) {
                     if(photo==null||file==null||!file.exists()||file.length()<4)
                         throw new IllegalArgumentException(
                             "Aparat nie zapisał pełnego zdjęcia. "
                             +"Spróbuj ponownie albo wybierz zdjęcie z galerii.");
-                    saveStorageThumbnail(id,StorageThumbs.compress(
-                        getContentResolver(),photo));
+                    String thumbnail=StorageThumbs.compress(
+                        getContentResolver(),photo);
+                    StorageOriginals.save(this,id,file);
+                    saveStorageThumbnail(id,thumbnail);
                     DiagnosticLog.event("STORAGE_THUMBNAIL_FULLRES_SAVED");
                 }
             } catch(Exception error) {
@@ -15784,8 +18305,7 @@ public final class MainActivity extends Activity {
             } finally {
                 if(file!=null&&file.exists())file.delete();
             }
-            if(quickDraft)quickThingBatchCommitPhoto();
-            else continueQuickThingBatchAfterPhoto(id);
+            if(!quickDraft)continueQuickThingBatchAfterPhoto(id);
             return;
         }
         if (request == IMPORT_STORAGE_THUMBNAIL) {
@@ -15793,8 +18313,11 @@ public final class MainActivity extends Activity {
             pendingStorageThumbnailId=0;
             if(result==RESULT_OK&&id>0&&data!=null&&data.getData()!=null) {
                 try {
-                    saveStorageThumbnail(id,StorageThumbs.compress(
-                        getContentResolver(),data.getData()));
+                    Uri selected=data.getData();
+                    String thumbnail=StorageThumbs.compress(
+                        getContentResolver(),selected);
+                    StorageOriginals.save(this,id,selected);
+                    saveStorageThumbnail(id,thumbnail);
                 }catch(Exception error) {
                     DiagnosticLog.event("STORAGE_THUMBNAIL_REJECTED");
                     alert(error instanceof IllegalArgumentException
@@ -15861,56 +18384,70 @@ public final class MainActivity extends Activity {
         }
         if (request == EXPORT_DATA_BACKUP) {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
+            DataBackupArchive.Created created = null;
+            String backupStage = "TWORZENIE";
             try {
-                String json = DataBackup.exportJson(db.getReadableDatabase(), prefs);
-                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-                try (OutputStream out = getContentResolver().openOutputStream(
-                        data.getData(), "wt")) {
-                    if (out == null) throw new IllegalStateException("Brak dostępu do pliku.");
-                    out.write(bytes);
-                    out.flush();
-                }
-                // A successful write alone does not prove that the document
-                // provider saved the COMPLETE file. Read it back first.
-                if (!verifyDataBackupDocument(data.getData(), bytes)) {
+                created = DataBackupArchive.create(
+                    this, db.getReadableDatabase(), prefs);
+                backupStage = "ZAPIS";
+                DataBackupArchive.writeToDocument(
+                    this, data.getData(), created.file);
+                backupStage = "WERYFIKACJA";
+                if (!DataBackupArchive.verifyDocument(
+                        this, data.getData(), created.file)) {
                     DiagnosticLog.event("DATA_BACKUP_VERIFY_FAILED");
                     throw new IllegalStateException("BACKUP_READBACK_MISMATCH");
                 }
-                DiagnosticLog.event("DATA_BACKUP_EXPORTED",
-                    "bytes=" + bytes.length + " verified=true");
-                alert("Zapisano i sprawdzono kopię danych. Zachowaj ją poza telefonem. Prywatny sejf PayCheck wymaga osobnej zaszyfrowanej kopii.");
+                DiagnosticLog.event("DATA_BACKUP_ZIP_EXPORTED",
+                    "bytes=" + created.file.length()
+                        + " originals=" + created.storageOriginals
+                        + " legacy_thumbs=" + created.legacyThumbnails
+                        + " tile_images=" + created.tileImages
+                        + " verified=true");
+                alert("Kopia ZIP zapisana i zweryfikowana. Oryginalne zdjęcia: "
+                    + created.storageOriginals + ". Starsze miniatury: "
+                    + created.legacyThumbnails + ". Obrazy kafelków: "
+                    + created.tileImages
+                    + ". Prywatny sejf PayCheck wymaga osobnej kopii.");
             } catch (Exception error) {
-                DiagnosticLog.error("DATA_BACKUP_EXPORT", error);
-                alert("Nie udało się zapisać i zweryfikować pełnej kopii. Wybrany plik może być niekompletny — nie używaj go do przywracania i nie usuwaj aplikacji.");
+                DiagnosticLog.error("DATA_BACKUP_EXPORT_" + backupStage, error);
+                alert("Nie udało się zapisać i zweryfikować pełnej kopii ZIP. "
+                    + "Etap: " + backupStage + ". "
+                    + "Nie usuwaj aplikacji na podstawie tego pliku.");
+            } finally {
+                if (created != null && created.file != null) created.file.delete();
             }
             return;
         }
         if (request == IMPORT_DATA_BACKUP) {
             if (result != RESULT_OK || data == null || data.getData() == null) return;
+            java.io.File localCopy = null;
             try {
-                byte[] bytes;
-                try (InputStream in = getContentResolver().openInputStream(data.getData());
-                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                    if (in == null) throw new IllegalStateException("Nie można odczytać pliku.");
-                    byte[] block = new byte[8192];
-                    int count;
-                    while ((count = in.read(block)) != -1) {
-                        if (out.size() + count > DataBackup.MAX_BYTES)
-                            throw new IllegalArgumentException("Kopia przekracza limit 8 MB.");
-                        out.write(block, 0, count);
-                    }
-                    bytes = out.toByteArray();
-                }
-                final String json = new String(bytes, StandardCharsets.UTF_8);
+                localCopy = DataBackupArchive.copyFromDocument(this, data.getData());
+                final java.io.File backupFile = localCopy;
+                final boolean archive = DataBackupArchive.isArchive(backupFile);
+                final String legacyJson = archive
+                    ? null : DataBackupArchive.readLegacyJson(backupFile);
                 new AlertDialog.Builder(this)
                     .setTitle("Zastąpić wszystkie dane?")
-                    .setMessage("Przywrócenie NADPISZE obecną spiżarnię, czynności i remanenty. Zachowa PIN nowej instalacji. Czy masz kopię bieżącego stanu?")
-                    .setNegativeButton("Anuluj", null)
+                    .setMessage(archive
+                        ? "Przywrócenie ZIP nadpisze wspólne dane i obrazy użytkownika. "
+                            + "Manifest oraz sumy kontrolne zostaną sprawdzone przed zmianą."
+                        : "To starsza kopia JSON. Przywrócenie nadpisze wspólne dane. "
+                            + "Oryginalnych zdjęć nie ma w tym starszym formacie.")
+                    .setCancelable(false)
+                    .setNegativeButton("Anuluj",
+                        (dialog, which) -> backupFile.delete())
                     .setPositiveButton("Przywróć", (dialog, which) -> {
                         try {
-                            DataBackup.restoreJson(db.getWritableDatabase(), prefs, json);
-                            // Imported IDs can refer to different tasks/occurrences.
-                            // Reset only reminder delivery receipts, never user settings.
+                            DataBackupArchive.Restored restored = null;
+                            if (archive) {
+                                restored = DataBackupArchive.restore(
+                                    this, db.getWritableDatabase(), prefs, backupFile);
+                            } else {
+                                DataBackup.restoreJson(
+                                    db.getWritableDatabase(), prefs, legacyJson);
+                            }
                             SharedPreferences.Editor reminderReset = prefs.edit();
                             for (String key : prefs.getAll().keySet()) {
                                 if (key.startsWith("reminder_fired_")
@@ -15923,21 +18460,34 @@ public final class MainActivity extends Activity {
                             reminderReset.apply();
                             ReminderReceiver.schedule(this);
                             DeviceTimerReceiver.scheduleAll(this);
-                            DiagnosticLog.event("DATA_BACKUP_RESTORED");
+                            DiagnosticLog.event(archive
+                                ? "DATA_BACKUP_ZIP_RESTORED"
+                                : "DATA_BACKUP_RESTORED");
                             screen = "home";
                             unlocked = BetaUpdater.isBeta();
                             render();
-                            alert(BetaUpdater.isBeta()
+                            String media = restored == null ? ""
+                                : "\nOryginalne zdjęcia: " + restored.storageOriginals
+                                    + ", starsze miniatury: "
+                                    + restored.legacyThumbnails
+                                    + ", odtworzone z oryginałów: "
+                                    + restored.regeneratedThumbnails + ".";
+                            alert((BetaUpdater.isBeta()
                                 ? "Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
-                                : "Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.");
+                                : "Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.")
+                                + media);
                         } catch (Exception error) {
                             DiagnosticLog.error("DATA_BACKUP_RESTORE", error);
-                            alert("Nie udało się przywrócić kopii. Dane bazy nie zostały nadpisane, jeśli walidacja lub transakcja zakończyła się błędem.");
+                            alert("Nie udało się przywrócić kopii. "
+                                + "Uszkodzony ZIP lub niespójne dane zostały odrzucone.");
+                        } finally {
+                            backupFile.delete();
                         }
                     }).show();
             } catch (Exception error) {
+                if (localCopy != null) localCopy.delete();
                 DiagnosticLog.error("DATA_BACKUP_READ", error);
-                alert("Nie można odczytać kopii danych.");
+                alert("Nie można odczytać lub zweryfikować kopii danych.");
             }
             return;
         }
@@ -15960,7 +18510,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 39);
+            super(context, "edhome-beta-preview.db", null, 45);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -15972,7 +18522,9 @@ public final class MainActivity extends Activity {
                 + "duration_minutes INTEGER NOT NULL DEFAULT 30, "
                 + "assignee_id INTEGER, "
                 + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
-                + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0)");
+                + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0, "
+                + "project_id INTEGER, "
+                + "project_sort_order INTEGER NOT NULL DEFAULT 0)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0, "
                 + "category TEXT NOT NULL DEFAULT 'other' CHECK(category IN "
@@ -15981,10 +18533,13 @@ public final class MainActivity extends Activity {
             addTaskHistory(database);
             addPlaces(database);
             addMembers(database);
+            UserProfileStore.create(database);
             addMemberSchedules(database);
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            ProjectStore.create(database);
+            ProjectPlanningStore.create(database);
             addNfcLinks(database);
             PaycheckStore.create(database);
             BankEvidenceStore.create(database);
@@ -16007,7 +18562,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 39) {
+            if (oldVersion < 1 || newVersion > 45) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -16225,6 +18780,35 @@ public final class MainActivity extends Activity {
                     + "deposit_pending INTEGER NOT NULL DEFAULT 0 "
                     + "CHECK(deposit_pending BETWEEN 0 AND 100000000)");
                 DiagnosticLog.event("DATABASE_MIGRATED_38_TO_39_PANTRY_PACKAGING");
+            }
+            if(oldVersion < 40) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN project_id INTEGER");
+                ProjectStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_39_TO_40_PROJECTS");
+            }
+            if(oldVersion < 41) {
+                ProjectStore.upgrade41(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_40_TO_41_PROJECT_DEPENDENCIES");
+            }
+            if(oldVersion < 42) {
+                UserProfileStore.create(database);
+                UserProfileStore.ensureAll(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_41_TO_42_USER_PROFILES");
+            }
+            if(oldVersion < 43) {
+                ProjectStore.upgrade43(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_42_TO_43_PROJECT_WORK_SESSIONS");
+            }
+            if(oldVersion < 44) {
+                ProjectPlanningStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_43_TO_44_PROJECT_PLANNING");
+            }
+            if(oldVersion < 45) {
+                database.execSQL("ALTER TABLE tasks ADD COLUMN "
+                    + "project_sort_order INTEGER NOT NULL DEFAULT 0");
+                database.execSQL("UPDATE tasks SET project_sort_order=id "
+                    + "WHERE project_id IS NOT NULL");
+                DiagnosticLog.event("DATABASE_MIGRATED_44_TO_45_PROJECT_TASK_ORDER");
             }
             if(newVersion >= 36) {
                 try {
@@ -16471,7 +19055,8 @@ public final class MainActivity extends Activity {
         void saveTask(Long id, String title, String dueDate, String rule, int every,
                 Long placeId, String priority, int durationMinutes,
                 Long assigneeId, String customTime, int reminderLeadDays,
-                java.util.List<Long> rotationMembers) {
+                java.util.List<Long> rotationMembers, Long projectId) {
+            title = TextEntryRules.capitalizeLabel(title);
             String error = TaskRules.validate(title, dueDate, rule, every);
             if (error != null) throw new IllegalArgumentException(error);
             if (id != null && isWasteTask(id) && dueDate.isEmpty())
@@ -16489,8 +19074,12 @@ public final class MainActivity extends Activity {
                     "Aktualny wykonawca musi należeć do rotacji.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
-            if (durationMinutes < MIN_TASK_MINUTES || durationMinutes > MAX_TASK_MINUTES)
-                throw new IllegalArgumentException("Czas musi wynosić 1–480 minut.");
+            int minimumMinutes=projectId==null
+                ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
+            if (durationMinutes < minimumMinutes || durationMinutes > MAX_TASK_MINUTES)
+                throw new IllegalArgumentException(projectId==null
+                    ?"Czas musi wynosić 1–600 minut."
+                    :"Czynność projektowa musi mieć 20–600 minut.");
             ContentValues values = new ContentValues();
             values.put("priority", priority);
             values.put("duration_minutes", durationMinutes);
@@ -16513,6 +19102,17 @@ public final class MainActivity extends Activity {
             else values.put("due_date", dueDate);
             values.put("repeat_rule", rule);
             values.put("repeat_every", every);
+            Long previousProjectId=id==null?null:taskProjectId(id);
+            if(projectId==null) {
+                values.putNull("project_id");
+                values.put("project_sort_order",0);
+            } else {
+                if(ProjectStore.find(getReadableDatabase(),projectId)==null)
+                    throw new IllegalArgumentException("Projekt nie istnieje.");
+                values.put("project_id",projectId);
+                if(id==null || !java.util.Objects.equals(previousProjectId,projectId))
+                    values.put("project_sort_order",nextProjectSortOrder(projectId));
+            }
             if (placeId == null) values.putNull("place_id");
             else {
                 try (Cursor c = getReadableDatabase().rawQuery(
@@ -16557,6 +19157,24 @@ public final class MainActivity extends Activity {
                 database.setTransactionSuccessful();
             } finally {
                 database.endTransaction();
+            }
+        }
+
+        Long taskProjectId(long taskId) {
+            try(Cursor c=getReadableDatabase().rawQuery(
+                    "SELECT project_id FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                return c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
+            }
+        }
+
+        long nextProjectSortOrder(long projectId) {
+            try(Cursor c=getReadableDatabase().rawQuery(
+                    "SELECT COALESCE(MAX(project_sort_order),0) FROM tasks "
+                        + "WHERE project_id=?",
+                    new String[]{Long.toString(projectId)})) {
+                long current=c.moveToFirst()?Math.max(0L,c.getLong(0)):0L;
+                return current>=Long.MAX_VALUE-10L?Long.MAX_VALUE:current+10L;
             }
         }
 
@@ -16625,6 +19243,8 @@ public final class MainActivity extends Activity {
         void completeTask(long id) {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
+            if(ProjectStore.activeWorkStartedAt(database,id)!=null)
+                ProjectStore.stopWork(database,id);
             try (Cursor cursor = database.rawQuery(
                     "SELECT title,done,due_date,repeat_rule,repeat_every,assignee_id "
                     + "FROM tasks WHERE id=?",
@@ -16691,6 +19311,13 @@ public final class MainActivity extends Activity {
             try {
                 database.delete("task_rotation_members", "task_id=?",
                     new String[]{Long.toString(id)});
+                database.delete("project_task_dependencies",
+                    "task_id=? OR depends_on_task_id=?",
+                    new String[]{Long.toString(id),Long.toString(id)});
+                database.delete("project_task_work_sessions", "task_id=?",
+                    new String[]{Long.toString(id)});
+                database.delete("project_task_blockers", "task_id=?",
+                    new String[]{Long.toString(id)});
                 database.delete("tasks", "id=?", new String[]{Long.toString(id)});
                 database.setTransactionSuccessful();
             } finally {
@@ -16751,13 +19378,9 @@ public final class MainActivity extends Activity {
         }
 
         boolean addMember(String name) {
-            String trimmed = name.trim();
-            if (trimmed.isEmpty() || trimmed.length() > 80)
-                throw new IllegalArgumentException("Nazwa osoby: 1–80 znaków.");
-            ContentValues values = new ContentValues();
-            values.put("name", trimmed);
-            return getWritableDatabase().insertWithOnConflict(
-                "household_members", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+            return UserProfileStore.add(getWritableDatabase(),name,
+                UserProfileStore.ROLE_MEMBER,UserProfileStore.DEFAULT_AVATAR,
+                UserProfileStore.DEFAULT_COLOR)!=-1L;
         }
 
         void deleteMember(long memberId) {
@@ -16822,8 +19445,12 @@ public final class MainActivity extends Activity {
                     new String[]{Long.toString(memberId)});
                 database.delete("member_shift_exceptions", "member_id=?",
                     new String[]{Long.toString(memberId)});
+                ProjectPlanningStore.deleteMemberConfig(database,memberId);
+                database.delete("user_profiles", "member_id=?",
+                    new String[]{Long.toString(memberId)});
                 database.delete("household_members", "id=?",
                     new String[]{Long.toString(memberId)});
+                UserProfileStore.ensureAll(database);
                 database.setTransactionSuccessful();
             } finally {
                 database.endTransaction();
@@ -16940,6 +19567,7 @@ public final class MainActivity extends Activity {
 
         boolean savePlace(Long id, String name, String kind,
                 Long parentId, String icon) {
+            name = TextEntryRules.capitalizeLabel(name);
             String error = PlaceRules.validateFields(name, kind, icon);
             if (error != null) throw new IllegalArgumentException(error);
             SQLiteDatabase database = getWritableDatabase();
@@ -17032,6 +19660,7 @@ public final class MainActivity extends Activity {
         }
 
         long startDeviceTimer(String type, String title, int minutes) {
+            title = TextEntryRules.capitalizeLabel(title);
             long now = System.currentTimeMillis();
             long end = DeviceTimerRules.endAt(now, minutes);
             if (!DeviceTimerRules.validType(type)
@@ -17108,6 +19737,7 @@ public final class MainActivity extends Activity {
         }
 
         void addStock(String name, String category, String unit, long milli) {
+            name = TextEntryRules.capitalizeLabel(name);
             if (!PantryPackageRules.valid(unit, milli))
                 throw new IllegalArgumentException("Nieprawidłowe opakowanie.");
             if (!PantryCategories.known(category))
@@ -17184,6 +19814,7 @@ public final class MainActivity extends Activity {
 
         boolean editStock(long id, String name, String category, String unit,
                           long milli) {
+            name = TextEntryRules.capitalizeLabel(name);
             if (!PantryCategories.known(category)
                     || !PantryPackageRules.valid(unit, milli))
                 throw new IllegalArgumentException("Nieprawidłowe dane opakowania.");
@@ -17208,6 +19839,7 @@ public final class MainActivity extends Activity {
         }
 
         boolean renameStock(long id, String name) {
+            name = TextEntryRules.capitalizeLabel(name);
             SQLiteDatabase database = getWritableDatabase();
             try (Cursor c = database.rawQuery(
                     "SELECT id FROM pantry WHERE name=? COLLATE NOCASE AND id!=? LIMIT 1",

@@ -15,9 +15,11 @@ for marker in (
     'page("Ustawienia • telefon i diagnostyka")',
     'actionButton("Połącz telefon przez QR")',
     'actionButton("Sprawdź połączenie PC ↔ telefon")',
+    'actionButton("Aktualizuj EDHOME Desktop — 1 klik")',
     'actionButton("Pobierz logi telefonu + Desktop na Pulpit")',
     'showQrPairing(pairState, qrPair)',
     'diagnosePhoneConnection(',
+    'oneClickDesktopUpdate(updateDesktop)',
     'saveAllDiagnosticsToDesktop(',
 ):
     assert marker in settings, f"Missing compact Desktop setting: {marker}"
@@ -26,7 +28,6 @@ for obsolete in (
     "Adres telefonu:", "Kod parowania:", "Pobierz ręcznie przez Wi‑Fi",
     "Wczytaj backup JSON", "Pobierz nowe logi z telefonu",
     "Kopiuj diagnostykę EDHOME Desktop", "Zapisz diagnostykę Desktop TXT",
-    "Aktualizuj EDHOME Desktop — 1 klik",
     "Uruchamiaj EDHOME Desktop razem z Windows",
     "Po starcie Windows uruchamiaj zminimalizowany do zasobnika",
     "Automatycznie pobieraj zmiany z telefonu w tle",
@@ -35,12 +36,15 @@ for obsolete in (
     assert obsolete not in settings, f"Old Settings clutter still visible: {obsolete}"
 
 for marker in (
-    'PREFS.put("phoneIp", payload.phoneIp)',
+    'PREFS.put("phoneIp", pairedHost)',
     'PREFS.put("token", payload.token)',
     'DesktopDiagnosticLog.event("QR_PAIRING_OK"',
-    'pullFromPhone(payload.phoneIp, payload.token, null)',
+    'pullFromPhone(pairedHost, payload.token, null)',
     'LanClient.discover(secret, PORT)',
     'ackDiagnostics(phone.id)',
+    'sanitizedPhoneHost()',
+    'PHONE_IP_SELF_REJECTED',
+    'QR_PAIRING_SELF_IP_REJECTED',
 ):
     assert marker in src, f"Missing pairing/diagnostics stabilization: {marker}"
 

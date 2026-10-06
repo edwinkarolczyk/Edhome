@@ -2,6 +2,7 @@
 """Beta installer must be single-flight, retryable and poll modestly."""
 from pathlib import Path
 src=Path("app/src/main/java/com/edwinkarolczyk/edhome/BetaUpdater.java").read_text(encoding="utf-8")
+main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 for token in (
  "AUTO_CHECK_MS = 15L * 60L * 1000L;",
  "now - lastAutomaticCheckMs >= AUTO_CHECK_MS",
@@ -14,8 +15,32 @@ for token in (
  "installerStartedFor = null;",
  "public void installReady()",
  "DiagnosticLog.event(\"UPDATE_INSTALLER_OPENED\")",
+ "edhome_ts=",
+ "conn.setUseCaches(false);",
+ "conn.setDefaultUseCaches(false);",
+ "Cache-Control",
+ "no-cache, no-store",
+ "Pragma",
+ "public void destroy()",
+ "handler.removeCallbacksAndMessages(null);",
+ "background.shutdownNow();",
+ "if (destroyed || activity.isFinishing() || activity.isDestroyed()) return;",
 ):
  assert token in src, token
 assert src.count("check(false);")==1
 assert src.count("installerStartedFor = apk;")==1
-print("Updater single-flight, explicit retry and throttle: PASS")
+assert src.count("handler.post(() ->")==1
+assert src.count("postUi(() ->")>=3
+assert "if (updater != null) updater.destroy();" in main
+for token in (
+    'QR Beta /\\nStable',
+    'showUpdateDownloadQrCodes',
+    'releases/download/beta-v',
+    'edhome-beta.apk',
+    'https://play.google.com/store/apps/details',
+    'id=com.edwinkarolczyk.edhome',
+    'QR pobierania EDHOME Beta',
+    'QR pobierania EDHOME Stable',
+):
+    assert token in main, token
+print("Updater single-flight, explicit retry, throttle and Beta/Stable QR: PASS")

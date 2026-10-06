@@ -51,9 +51,10 @@ final class StorageStore {
     }
 
     private static String validName(String name) {
-        if (name==null || name.trim().isEmpty() || name.trim().length()>160)
+        String clean=TextEntryRules.capitalizeLabel(name);
+        if (clean.isEmpty() || clean.length()>160)
             throw new IllegalArgumentException("Podaj nazwę 1–160 znaków.");
-        return name.trim();
+        return clean;
     }
 
     private static void validKindDestination(String kind, Long box, Long place) {

@@ -10,7 +10,7 @@ final class ShoppingRules {
     private ShoppingRules() { }
 
     static String validatedName(String raw) {
-        String name = raw == null ? "" : raw.trim();
+        String name = TextEntryRules.capitalizeLabel(raw);
         if (name.isEmpty() || name.length() > 160)
             throw new IllegalArgumentException("Nazwa: od 1 do 160 znaków.");
         return name;

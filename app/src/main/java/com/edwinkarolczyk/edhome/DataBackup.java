@@ -24,20 +24,35 @@ final class DataBackup {
     static final int MAX_BYTES = 8 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 39;
+    private static final int DB_VERSION = 45;
     private static final String[] HOME_TILE_IDS = {
-        "tasks", "calendar", "places", "pantry", "audit",
+        "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
     };
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
         {"places", "id", "name", "kind", "parent_id", "icon"},
         {"household_members", "id", "name"},
+        {"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"},
+        {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
+            "status", "due_date", "budget_grosz", "created_at"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
+        {"member_shift_hours", "id", "member_id", "shift", "start_time", "end_time"},
+        {"member_project_windows", "id", "member_id", "shift", "slot", "enabled",
+            "start_time", "end_time"},
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
-            "task_kind", "waste_fraction", "remind_time", "reminder_lead_days"},
+            "task_kind", "waste_fraction", "remind_time", "reminder_lead_days",
+            "project_id", "project_sort_order"},
+        {"project_resources", "id", "project_id", "target_kind", "target_id", "created_at"},
+        {"project_costs", "id", "project_id", "name", "qty_milli", "unit",
+            "unit_price_grosz", "status", "note", "created_at"},
+        {"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"},
+        {"project_task_work_sessions", "id", "task_id", "started_at",
+            "ended_at", "worked_minutes"},
+        {"project_task_blockers", "id", "task_id", "kind", "label", "hard",
+            "resolved", "available_on", "created_at"},
         {"task_rotation_members", "task_id", "member_id", "position"},
         {"pantry", "id", "name", "qty", "category"},
         {"shopping_items", "id", "name", "qty_milli", "unit", "checked",
@@ -115,6 +130,17 @@ final class DataBackup {
     private DataBackup() { }
 
     static String exportJson(SQLiteDatabase database, SharedPreferences prefs) throws Exception {
+        return exportJson(database, prefs, java.util.Collections.emptySet());
+    }
+
+    /**
+     * Kopia ZIP może pominąć miniaturę, gdy osobno zawiera dokładny oryginał zdjęcia.
+     * Starsze rzeczy bez oryginału zachowują miniaturę w data.json.
+     */
+    static String exportJson(SQLiteDatabase database, SharedPreferences prefs,
+            Set<Long> omitStorageThumbnailIds) throws Exception {
+        if (omitStorageThumbnailIds == null)
+            omitStorageThumbnailIds = java.util.Collections.emptySet();
         JSONObject result = new JSONObject();
         result.put("format", FORMAT);
         result.put("formatVersion", FORMAT_VERSION);
@@ -176,6 +202,8 @@ final class DataBackup {
             prefs.getBoolean("home_tile_full_art", true));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
+        settings.put("paycheckMonthlyBudget",
+            prefs.getString(PaycheckMonthlyBudget.PREF_KEY, "[]"));
         // Include user-selected small storage photos in the portable JSON backup.
         // Never export the original photo or its external content URI.
         JSONArray storageThumbs=new JSONArray();
@@ -191,7 +219,8 @@ final class DataBackup {
             long id;
             try{id=Long.parseLong(suffix);}
             catch(NumberFormatException invalid){continue;}
-            if(!validStorageIds.contains(id))continue;
+            if(!validStorageIds.contains(id)
+                    || omitStorageThumbnailIds.contains(id))continue;
             String data=(String)value.getValue();
             if(data.length()>StorageThumbs.MAX_BASE64_CHARS)throw new IllegalStateException(
                 "Nieprawidłowa miniatura magazynu.");
@@ -214,6 +243,8 @@ final class DataBackup {
                 JSONArray rows = new JSONArray();
                 String orderBy = "task_rotation_members".equals(definition[0])
                     ? "task_id ASC, position ASC"
+                    : "project_task_dependencies".equals(definition[0])
+                        ? "task_id ASC, depends_on_task_id ASC"
                     : "pantry_packages".equals(definition[0])
                         ? "pantry_id ASC" : "id ASC";
                 try (Cursor cursor = database.query(definition[0], columns,
@@ -254,13 +285,20 @@ final class DataBackup {
 
     static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json)
             throws Exception {
+        restoreJson(database, prefs, json, java.util.Collections.emptyMap());
+    }
+
+    static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,
+            Map<Long,String> archivedStorageThumbs) throws Exception {
+        if (archivedStorageThumbs == null)
+            archivedStorageThumbs = java.util.Collections.emptyMap();
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
             throw new IllegalArgumentException("Plik jest za duży (maks. 8 MB).");
         JSONObject root = new JSONObject(json);
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -338,6 +376,9 @@ final class DataBackup {
                         || ((Number) settings.get("pantryTakeDelaySeconds"))
                             .doubleValue() != takeDelaySeconds)))
             throw new IllegalArgumentException("Nieprawidłowy czas wyjmowania.");
+        String paycheckMonthlyBudget =
+            settings.optString("paycheckMonthlyBudget", "[]");
+        PaycheckMonthlyBudget.validateSerialized(paycheckMonthlyBudget);
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -462,6 +503,19 @@ final class DataBackup {
                 || (inputVersion < 37 && definition[0].startsWith("garden_"))
                 || (inputVersion < 38 && ("garden_events".equals(definition[0])
                     || "garden_harvests".equals(definition[0])))
+                || (inputVersion < 40 && ("projects".equals(definition[0])
+                    || "project_resources".equals(definition[0])
+                    || "project_costs".equals(definition[0])))
+                || (inputVersion < 41
+                    && "project_task_dependencies".equals(definition[0]))
+                || (inputVersion < 42
+                    && "user_profiles".equals(definition[0]))
+                || (inputVersion < 43
+                    && "project_task_work_sessions".equals(definition[0]))
+                || (inputVersion < 44
+                    && ("member_shift_hours".equals(definition[0])
+                        || "member_project_windows".equals(definition[0])
+                        || "project_task_blockers".equals(definition[0])))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -536,6 +590,16 @@ final class DataBackup {
                         if (inputVersion < 16 && "pantry".equals(definition[0])
                                 && "category".equals(key)) {
                             values.put(key, "other");
+                            continue;
+                        }
+                        if(inputVersion < 40 && "tasks".equals(definition[0])
+                                && "project_id".equals(key)) {
+                            values.putNull(key);
+                            continue;
+                        }
+                        if(inputVersion < 45 && "tasks".equals(definition[0])
+                                && "project_sort_order".equals(key)) {
+                            values.put(key,0);
                             continue;
                         }
                         if (inputVersion < 39
@@ -617,10 +681,14 @@ final class DataBackup {
                         if (!("completed_at".equals(key) || "counted_qty".equals(key)
                             || "due_date".equals(key) || "next_due_date".equals(key)
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
+                            || "project_id".equals(key) || "budget_grosz".equals(key)
                             || "qty_milli".equals(key) || "waste_fraction".equals(key)
                             || "remind_time".equals(key)
                              || "assignee_name_snapshot".equals(key)
                              || "acknowledged_at".equals(key)
+                             || "ended_at".equals(key)
+                             || "worked_minutes".equals(key)
+                             || "available_on".equals(key)
                             || "confirmed_at".equals(key)
                             || ("paycheck_transactions".equals(definition[0])
                                 && ("statement_key".equals(key)
@@ -663,6 +731,7 @@ final class DataBackup {
                     }
                 }
                 if (!"task_rotation_members".equals(definition[0])
+                        && !"project_task_dependencies".equals(definition[0])
                         && !"pantry_packages".equals(definition[0])) {
                     Long id = values.getAsLong("id");
                     if (id == null || id <= 0 || !ids.add(id))
@@ -1119,7 +1188,7 @@ final class DataBackup {
                     if (priority == null
                             || !java.util.Arrays.asList(
                                 "low", "normal", "high", "urgent").contains(priority)
-                            || minutes == null || minutes < 1 || minutes > 480)
+                            || minutes == null || minutes < 1 || minutes > 600)
                         throw new IllegalArgumentException(
                             "Nieprawidłowy priorytet lub czas czynności.");
                 }
@@ -1411,7 +1480,47 @@ final class DataBackup {
             if (assigneeId != null && !members.contains(assigneeId))
                 throw new IllegalArgumentException(
                     "Czynność wskazuje nieistniejącego domownika.");
+            Long taskProjectId=task.getAsLong("project_id");
+            Long taskMinutes=task.getAsLong("duration_minutes");
+            Long taskSort=task.getAsLong("project_sort_order");
+            if(taskSort==null || taskSort<0)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa kolejność czynności projektu w kopii.");
+            if(taskProjectId!=null && (taskMinutes==null || taskMinutes<20))
+                throw new IllegalArgumentException(
+                    "Czynność projektowa musi mieć co najmniej 20 minut.");
         }
+        Set<String> dependencyPairs = new HashSet<>();
+        for (ContentValues row : parsed.get("project_task_dependencies")) {
+            Long taskId = row.getAsLong("task_id");
+            Long dependsOn = row.getAsLong("depends_on_task_id");
+            Long created = row.getAsLong("created_at");
+            String pair = taskId + ":" + dependsOn;
+            if (taskId == null || dependsOn == null
+                    || taskId.equals(dependsOn)
+                    || !tasks.contains(taskId) || !tasks.contains(dependsOn)
+                    || created == null || created <= 0
+                    || !dependencyPairs.add(pair))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa zależność czynności projektu w kopii.");
+        }
+
+        Set<Long> activeWorkTasks = new HashSet<>();
+        for (ContentValues row : parsed.get("project_task_work_sessions")) {
+            Long taskId=row.getAsLong("task_id");
+            Long started=row.getAsLong("started_at");
+            Long ended=row.getAsLong("ended_at");
+            Long worked=row.getAsLong("worked_minutes");
+            if(taskId==null || !tasks.contains(taskId)
+                    || started==null || started<=0
+                    || (ended==null)!=(worked==null)
+                    || ended!=null && (ended<started || worked<1
+                        || worked>1000000)
+                    || ended==null && !activeWorkTasks.add(taskId))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa sesja pracy projektu w kopii.");
+        }
+
         Map<Long, Set<Long>> rotationMembers = new HashMap<>();
         Map<Long, Set<Long>> rotationPositions = new HashMap<>();
         for (ContentValues row : parsed.get("task_rotation_members")) {
@@ -1487,6 +1596,30 @@ final class DataBackup {
             }
         }
 
+        if (restoredStorageThumbs.size() + archivedStorageThumbs.size() > 200)
+            throw new IllegalArgumentException("Za dużo miniaturek w kopii.");
+        for (Map.Entry<Long,String> archived : archivedStorageThumbs.entrySet()) {
+            long id = archived.getKey() == null ? -1L : archived.getKey();
+            String jpeg = archived.getValue();
+            if (id <= 0 || !presentStorageIds.contains(id)
+                    || restoredStorageThumbs.containsKey(id)
+                    || jpeg == null || jpeg.length() > StorageThumbs.MAX_BASE64_CHARS)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa miniatura archiwalna rzeczy w kopii.");
+            byte[] bytes;
+            try {
+                bytes = android.util.Base64.decode(jpeg, android.util.Base64.NO_WRAP);
+            } catch (Exception invalid) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowe kodowanie miniatury archiwalnej.", invalid);
+            }
+            if (bytes.length < 4 || bytes.length > StorageThumbs.MAX_JPEG_BYTES
+                    || (bytes[0] & 255) != 255 || (bytes[1] & 255) != 216)
+                throw new IllegalArgumentException(
+                    "Niedozwolony obraz miniatury archiwalnej w kopii.");
+            restoredStorageThumbs.put(id, jpeg);
+        }
+
         database.beginTransaction();
         try {
             for (int i = TABLES.length - 1; i >= 0; i--)
@@ -1496,10 +1629,14 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            UserProfileStore.ensureAll(database);
+            UserProfileStore.assertIntegrity(database);
+            ProjectPlanningStore.assertIntegrity(database);
             StorageStore.assertIntegrity(database);
             NfcLinkStore.assertIntegrity(database);
             SyncRecordStore.restoreMetadata(database,
                 inputVersion >= 36 ? syncRecords : null);
+            SyncRecordStore.ensureAll(database);
             reserveQrIdentitySequences(database);
             // Deleted shopping rows intentionally leave receipt/price history.
             // After importing into a fresh database, AUTOINCREMENT would only
@@ -1529,6 +1666,7 @@ final class DataBackup {
                 .putInt(HomeTileLayout.PAGE_SLOTS_KEY, pageSlots)
                 .putBoolean("home_tile_full_art",fullTileArt)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
+                .putString(PaycheckMonthlyBudget.PREF_KEY, paycheckMonthlyBudget)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
                 .putString("quiet_hours_end", quietEnd);
@@ -1609,15 +1747,21 @@ final class DataBackup {
             || "checked".equals(column) || "qty_milli".equals(column)
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)
+            || "project_sort_order".equals(column)
             || "reminder_lead_days".equals(column)
             || "oc_reminder_lead".equals(column)
             || "inspection_reminder_lead".equals(column)
             || "start_at".equals(column) || "end_at".equals(column)
             || "acknowledged_at".equals(column)
-            || "task_id".equals(column)
+            || "task_id".equals(column) || "depends_on_task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
+            || "project_id".equals(column) || "target_id".equals(column)
+            || "budget_grosz".equals(column) || "unit_price_grosz".equals(column)
             || "member_id".equals(column) || "position".equals(column) || "weekday".equals(column)
-            || "started_at".equals(column) || "completed_at".equals(column)
+            || "slot".equals(column) || "enabled".equals(column)
+            || "hard".equals(column) || "resolved".equals(column)
+            || "started_at".equals(column) || "ended_at".equals(column)
+            || "worked_minutes".equals(column) || "completed_at".equals(column)
             || "session_id".equals(column) || "pantry_id".equals(column)
             || "expected_qty".equals(column) || "counted_qty".equals(column)
             || "old_qty".equals(column) || "new_qty".equals(column)
