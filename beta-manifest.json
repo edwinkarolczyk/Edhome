@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 211,
-  "versionName": "0.8.0.19",
-  "changelog": "EDHOME 0.8.0.19 — Beta. Stabilizacja Czynności: domyślne poranne przypomnienie ujednolicone na 08:00 w zwykłych i szybkich Czynnościach oraz presetach Czynności Ogrodu. Istniejące zapisane własne godziny pozostają bez zmian. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.19/edhome-beta.apk",
-  "sha256": "9d88dd30821cd578f53833fd1308f77313d07524732c4613c6db05e203aa00a9"
+  "versionCode": 212,
+  "versionName": "0.8.0.20",
+  "changelog": "EDHOME 0.8.0.20 — Beta. Stabilizacja Pojazdów: przypomnienia OC i przeglądu ujednolicone na 08:00. Daty, wyprzedzenia i pozostałe dane pojazdów bez zmian. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.20/edhome-beta.apk",
+  "sha256": "dda23f4a586cc4cf297bd4af8f3f844c32d618c10b7acf6b0a3a7418cfda7cb9"
 }
