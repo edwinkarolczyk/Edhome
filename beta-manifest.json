@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 217,
-  "versionName": "0.8.0.25",
-  "changelog": "EDHOME 0.8.0.25 — Beta RC kandydat do 1.0. Domknięto LAN Android ↔ Desktop, zweryfikowany backup/restore oraz Low RAM. Magazyn korzysta z batch-load bez N+1 i indeksów SQLite; miniatury/cache są ograniczane na urządzeniach z małą pamięcią. Pełna regresja #1705 zakończona sukcesem, podpis APK zweryfikowany. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.25/edhome-beta.apk",
-  "sha256": "73ee3724c03bc1ec84494756c0234cebd771f47d548cb4852f3957d2c2d42941"
+  "versionCode": 218,
+  "versionName": "0.8.0.26",
+  "changelog": "EDHOME 0.8.0.26 — Beta RC. Projekty: licznik Start/Stop odlicza czas na żywo; zielony oznacza pracę w planie, czerwony aktywne przekroczenie, żółty przekroczenie po zatrzymaniu. Zachowane LAN, backup/restore i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.26/edhome-beta.apk",
+  "sha256": "9a13f04776c57a769d23e1a8f02ba4789e2c1773ba89682ccc48effb328c64ca"
 }
