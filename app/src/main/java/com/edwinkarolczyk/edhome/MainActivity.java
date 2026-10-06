@@ -115,6 +115,7 @@ public final class MainActivity extends Activity {
     private String storageTemporaryKind;
     private String storageGallerySearch = "";
     private int storageGalleryVisibleCount;
+    private long lastRenderPerfLogAt;
     private Long pendingStorageDestinationItemId;
     private AlertDialog storageDestinationNfcDialog;
     private String pendingStorageDropKind;
@@ -1406,6 +1407,7 @@ public final class MainActivity extends Activity {
 
     private void render() {
         if (root == null || prefs == null) return;
+        final long renderStartedNs=System.nanoTime();
         // Save the old viewport BEFORE removing its views.
         if(pageScroll!=null && screen.equals(renderedScreen))
             screenScrollY.put(screen,pageScroll.getScrollY());
@@ -1498,6 +1500,21 @@ public final class MainActivity extends Activity {
         }
         applySemanticTextTree(root);
         renderedScreen=screen;
+        if(BuildConfig.DIAGNOSTICS_ENABLED) {
+            long renderMs=(System.nanoTime()-renderStartedNs)/1_000_000L;
+            long now=android.os.SystemClock.elapsedRealtime();
+            if(renderMs>=40L||now-lastRenderPerfLogAt>=30000L) {
+                Runtime runtime=Runtime.getRuntime();
+                long usedMb=(runtime.totalMemory()-runtime.freeMemory())/(1024L*1024L);
+                long maxMb=runtime.maxMemory()/(1024L*1024L);
+                int views=countViewTree(root,4000);
+                DiagnosticLog.event("UI_RENDER_PERF",
+                    "screen="+screen+" ms="+renderMs+" heapMb="+usedMb
+                        +"/"+maxMb+" views="+views+" lowRam="
+                        +StorageThumbs.isLowRamDevice());
+                lastRenderPerfLogAt=now;
+            }
+        }
         // post-layout restore; direct scrollTo before layout is silently lost.
         scroll.post(()->{
             if(pageScroll==scroll && restoreScreen.equals(screen)) {
@@ -1505,6 +1522,17 @@ public final class MainActivity extends Activity {
                 scroll.scrollTo(0,Math.min(restoreScrollY,maxY));
             }
         });
+    }
+
+    private static int countViewTree(View view,int remaining) {
+        if(view==null||remaining<=0)return 0;
+        int count=1;
+        if(view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group=(android.view.ViewGroup)view;
+            for(int i=0;i<group.getChildCount()&&count<remaining;i++)
+                count+=countViewTree(group.getChildAt(i),remaining-count);
+        }
+        return count;
     }
 
     private static byte[] derivedPin(String pin, String salt) throws Exception {
