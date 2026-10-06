@@ -71,8 +71,8 @@ assert 'FOREGROUND_SERVICE_CONNECTED_DEVICE' in manifest
 assert 'WATCHDOG_MS = 5000L' in service
 assert 'DESKTOP_SYNC_WATCHDOG_RESTART' in service
 assert 'endpointRunning()' in service
-assert 'Napraw / uruchom połączenie PC' in main
-assert 'Serwer LAN:' in main
+assert 'DesktopHubSync.ensureScheduled(this);' in main
+assert 'DesktopHubSync.status(this)' in main
 assert 'LAST_CONNECTION_ATTEMPT_AT' in server
 assert 'lastConnectionResult()' in server
 assert 'odrzucono: nieprawidłowy kod parowania' in server
@@ -139,7 +139,7 @@ assert 'localAddresses()' in desktop
 assert 'LinkedHashSet<String> prefixes' in desktop
 assert 'newFixedThreadPool(96)' in desktop
 assert 'ExecutorCompletionService<String>' in desktop
-assert 'Sprawdź połączenie PC ↔ telefon' in desktop
+assert 'API działa' in desktop
 assert 'diagnosePhoneConnection' in desktop
 assert 'TCP ' in desktop and 'BRAK POŁĄCZENIA' in desktop
 assert 'Automatyczne szukanie telefonu' in desktop
