@@ -14,13 +14,13 @@ settings = src[start:end]
 for marker in (
     'page("Ustawienia • telefon i diagnostyka")',
     'actionButton("Połącz telefon przez QR")',
-    'actionButton("Sprawdź połączenie PC ↔ telefon")',
     'actionButton("Aktualizuj EDHOME Desktop — 1 klik")',
-    'actionButton("Pobierz logi telefonu + Desktop na Pulpit")',
+    'actionButton("Zapisz diagnostykę Desktop na Pulpit")',
     'showQrPairing(pairState, qrPair)',
-    'diagnosePhoneConnection(',
     'oneClickDesktopUpdate(updateDesktop)',
-    'saveAllDiagnosticsToDesktop(',
+    'hubServer.newestClient()',
+    'DesktopHubServer.PORT',
+    'hubFirewallReady',
 ):
     assert marker in settings, f"Missing compact Desktop setting: {marker}"
 
