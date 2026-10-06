@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 208,
-  "versionName": "0.8.0.16",
-  "changelog": "EDHOME 0.8.0.16 — Beta. Stabilizacja QR/NFC: jeśli tworzenie nowego obiektu z nieznanego taga NFC nie może dokończyć przypisania, świeżo utworzona Rzecz/Pudełko/Miejsce jest cofana zamiast zostawać jako sierota. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.16/edhome-beta.apk",
-  "sha256": "d2f2019935a255f8314f0b80b06bd789e15c4a30171d67706213852e9097de5b"
+  "versionCode": 209,
+  "versionName": "0.8.0.17",
+  "changelog": "EDHOME 0.8.0.17 — Beta. Stabilizacja Skanera: błędny lub niepasujący kod podczas oczekującej operacji Magazynu kończy tę operację zamiast pozostawiać ukryty stan, który mógłby dokończyć późniejszy QR. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.17/edhome-beta.apk",
+  "sha256": "86f5601a4470e31ce6b5c3af3614af7f3d7009d0ed887c539de0a391357c28e5"
 }
