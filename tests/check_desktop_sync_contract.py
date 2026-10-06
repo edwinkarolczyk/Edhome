@@ -193,6 +193,19 @@ assert 'connected = false;' in desktop
 assert 'SwingUtilities.invokeLater(() -> autoConnectSaved(true))' in desktop
 print("desktop DHCP reconnect contract OK")
 
+# Restoring an older phone backup invalidates the previous delta timeline.
+# Revision regression or a changed revision with zero applicable delta must
+# trigger a full reconcile rather than accepting a stale Desktop image.
+for marker in (
+    'SYNC_PHONE_REVISION_REGRESSED',
+    'if (revision < phoneRevision)',
+    'SYNC_PULL_EMPTY_REVISION_CHANGE',
+    'result.applied == 0 && previousRevision >= 0',
+    'pullFromPhone(host, secret, null, true);'
+):
+    assert marker in desktop, "Missing post-restore full reconcile guard: " + marker
+print("desktop phone-restore reconcile contract OK")
+
 # Dirty local edits must also recover after phone DHCP/IP changes.
 # The Desktop may not clear dirty state or require a fresh QR just because the
 # previously paired phone address stopped responding.
@@ -393,7 +406,7 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.93"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.94"' in desktop
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
