@@ -73,6 +73,7 @@ final class DesktopHubSync {
         });
     private static final AtomicBoolean SCHEDULED=new AtomicBoolean();
     private static final AtomicBoolean SYNCING=new AtomicBoolean();
+    private static final AtomicBoolean KICK_PENDING=new AtomicBoolean();
 
     private DesktopHubSync(){}
 
@@ -86,7 +87,11 @@ final class DesktopHubSync {
 
     static void kick(Context context) {
         Context app=context.getApplicationContext();
-        EXEC.execute(()->syncQuietly(app));
+        if(!paired(app)||!KICK_PENDING.compareAndSet(false,true))return;
+        EXEC.schedule(()->{
+            KICK_PENDING.set(false);
+            syncQuietly(app);
+        },1200L,TimeUnit.MILLISECONDS);
     }
 
     static boolean paired(Context context) {
