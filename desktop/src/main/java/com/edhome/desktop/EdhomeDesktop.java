@@ -339,6 +339,10 @@ public final class EdhomeDesktop extends JFrame {
                             throws Exception {
                         return onEdt(()->hubApplyPatch(incoming,client,phoneWins));
                     }
+                    @Override public String replace(String incoming,String baseSha,
+                            DesktopHubServer.ClientInfo client) throws Exception {
+                        return onEdt(()->hubReplace(incoming,baseSha,client));
+                    }
                     @Override public long revision() throws Exception {
                         return onEdt(()->hubRevision());
                     }
@@ -512,6 +516,52 @@ public final class EdhomeDesktop extends JFrame {
             saveCache(snapshot);
             DesktopDiagnosticLog.event("HUB_DESKTOP_METADATA_COMMITTED");
         }
+    }
+
+    private String hubReplace(String incoming,String baseSha,
+            DesktopHubServer.ClientInfo client) throws Exception {
+        if(snapshot==null)throw new IOException("Brak danych Desktopu.");
+        commitHubLocalMetadata();
+        String current=GSON.toJson(snapshot);
+        String currentSha=MessageDigest.isEqual(
+            rowSha256(snapshot).getBytes(StandardCharsets.US_ASCII),
+            rowSha256(JsonParser.parseString(current).getAsJsonObject())
+                .getBytes(StandardCharsets.US_ASCII))
+            ? hubRawSha256(current) : hubRawSha256(current);
+        if(baseSha==null||baseSha.isBlank()
+                ||!MessageDigest.isEqual(
+                    currentSha.getBytes(StandardCharsets.US_ASCII),
+                    baseSha.toLowerCase(Locale.ROOT)
+                        .getBytes(StandardCharsets.US_ASCII)))
+            throw new DesktopHubServer.Conflict("settings","",
+                "Desktop ma nowsze dane niż baza telefonu.");
+        JsonObject incomingRoot=JsonParser.parseString(incoming).getAsJsonObject();
+        validate(incomingRoot);
+        snapshot=incomingRoot.deepCopy();
+        ensureDesktopSyncMetadata(snapshot);
+        hubCommittedSnapshot=snapshot.deepCopy();
+        syncedSnapshot=snapshot.deepCopy();
+        snapshotHash=hubRawSha256(GSON.toJson(snapshot));
+        dirty=false;
+        syncConflictPaused=false;
+        PREFS.putBoolean("hubMode",true);
+        PREFS.putBoolean("hubInitialized",true);
+        saveCache(snapshot);
+        savePcBackup(snapshot);
+        connected=true;
+        DesktopDiagnosticLog.event("HUB_FULL_SNAPSHOT_APPLIED",
+            "device="+(client==null?"":client.deviceId));
+        showSection(current);
+        return GSON.toJson(snapshot);
+    }
+
+    private static String hubRawSha256(String text) throws Exception {
+        byte[] digest=MessageDigest.getInstance("SHA-256")
+            .digest(text.getBytes(StandardCharsets.UTF_8));
+        StringBuilder out=new StringBuilder(64);
+        for(byte value:digest)
+            out.append(String.format(Locale.ROOT,"%02x",value&0xff));
+        return out.toString();
     }
 
     private String hubApplyPatch(String incoming,DesktopHubServer.ClientInfo client,
