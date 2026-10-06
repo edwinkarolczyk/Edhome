@@ -85,3 +85,15 @@ assert 'if (previousMoved && !backup.renameTo(destination))' in originals
 assert 'Stare zdjęcie zachowano.' in originals
 assert 'destination.exists() && !destination.delete()' not in originals
 print("Storage originals: crash-safe photo replacement with rollback PASS")
+
+
+# Diagnostyka wydajności nie może zniknąć: wolne rendery zapisują ekran,
+# czas, heap, liczbę widoków i profil Low RAM bez dodatkowej usługi w tle.
+assert 'final long renderStartedNs=System.nanoTime();' in main
+assert 'UI_RENDER_PERF' in main
+assert 'heapMb=' in main
+assert 'views=' in main
+assert 'countViewTree(root,4000)' in main
+assert 'renderMs>=40L' in main
+assert 'now-lastRenderPerfLogAt>=30000L' in main
+print("Performance diagnostics: render/heap/view-count/Low-RAM telemetry PASS")
