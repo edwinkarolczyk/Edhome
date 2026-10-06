@@ -5275,6 +5275,7 @@ public final class MainActivity extends Activity {
                         compactAction(work,"▶ Start",()->{
                             try {
                                 ProjectStore.startWork(db.getWritableDatabase(),taskId);
+                                ProjectWorkNotification.showActive(this,taskId);
                                 DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
                                 render();
                             } catch(Exception error) {
@@ -5287,6 +5288,7 @@ public final class MainActivity extends Activity {
                             try {
                                 int session=ProjectStore.stopWork(
                                     db.getWritableDatabase(),taskId);
+                                ProjectWorkNotification.cancel(this,taskId);
                                 DiagnosticLog.event("PROJECT_WORK_STOPPED",
                                     "task="+taskId+" minutes="+session);
                                 render();
