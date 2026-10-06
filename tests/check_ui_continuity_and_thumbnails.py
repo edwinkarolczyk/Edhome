@@ -105,3 +105,15 @@ assert 'tiles.setTranslationX(0f);' in main
 assert 'tile.setTranslationX(target[0] - old[0]);' in main
 assert 'tile.setTranslationY(target[1] - old[1]);' in main
 print("Low RAM: reduced home animations PASS")
+
+
+# Magazyn nie może wrócić do N+1: ekran pobiera wszystkie rekordy jednym
+# zapytaniem, a dopiero pojedyncze akcje/szczegóły korzystają z find().
+storage_store=(src/"StorageStore.java").read_text(encoding="utf-8")
+storage_screen=main.split("private void storage() {",1)[1].split(
+    "private boolean storageThingsVisible()",1)[0] if "private boolean storageThingsVisible()" in main else main.split(
+    "private void storage() {",1)[1].split("private void storageViewSwitcher()",1)[0]
+assert "static List<Item> listAll(SQLiteDatabase db)" in storage_store
+assert "StorageStore.listAll(db.getReadableDatabase())" in storage_screen
+assert 'SELECT id FROM storage_items ORDER BY kind,name COLLATE NOCASE,id' not in storage_screen
+print("Storage performance: batch inventory load without N+1 queries PASS")
