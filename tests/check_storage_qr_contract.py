@@ -65,7 +65,7 @@ expression=store.split('static void createTables(SQLiteDatabase db)',1)[1].split
 statements=[]
 for match in re.findall(r'db.execSQL\((.*?)\);',expression,re.S):
     statements.append(''.join(json.loads(x) for x in re.findall(r'"(?:\\.|[^"\\])*"',match)))
-assert len(statements)==3, "two tables and index"
+assert len(statements)==5, "two tables and three indexes"
 db=sqlite3.connect(":memory:")
 for sql in statements: db.execute(sql)
 db.execute("INSERT INTO storage_items(name,kind,created_at) VALUES ('Box','box',1)")
