@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 199,
-  "versionName": "0.8.0.7",
-  "changelog": "EDHOME 0.8.0.7 — Beta. Stabilizacja kopii zapasowej: import ZIP ogranicza teraz także łączny faktycznie rozpakowany rozmiar danych podczas weryfikacji, chroniąc przed nadmiernie skompresowanym lub uszkodzonym archiwum. Bez nowych funkcji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.7/edhome-beta.apk",
-  "sha256": "abd0de74f10294f66945983cb356aa57ab0035ea96a883c1c3c5e3c6eca96e65"
+  "versionCode": 200,
+  "versionName": "0.8.0.8",
+  "changelog": "EDHOME 0.8.0.8 — Beta. Stabilizacja Android lifecycle: asynchroniczna instalacja i migracja grafik nie renderuje już zniszczonej Activity po obrocie, zamknięciu lub odtworzeniu ekranu. Bez nowych funkcji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.8/edhome-beta.apk",
+  "sha256": "48596a73f99d31a05046380295f3e00c45c9e29269b2ece9c07cd9214ba9efba"
 }
