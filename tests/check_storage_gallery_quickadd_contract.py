@@ -50,6 +50,7 @@ assert 'for(int i=0;i<visible;i+=3)' in main
 assert 'Pokaż kolejne ' in main
 assert 'STORAGE_GALLERY_BATCH' in main
 assert 'StorageStore.locations(db.getReadableDatabase(),things)' in main
+assert 'renderStorageGalleryGrid(grid,things,\"\")' not in main
 assert 'static Map<Long,String> locations(SQLiteDatabase db,List<Item> targets)' in store
 assert 'SELECT id,name,kind,parent_box_id,place_id,lent_to FROM storage_items' in store
 assert 'SELECT id,name,parent_id FROM places' in store
