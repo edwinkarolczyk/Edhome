@@ -61,13 +61,18 @@ final class ProjectStore {
         final int doneMinutes;
         final long plannedCostGrosz;
         final long spentCostGrosz;
+        final int workedMinutes;
+        final boolean activeWork;
         Stats(int tasks,int doneTasks,int overdueTasks,int totalMinutes,
-                int doneMinutes,long plannedCostGrosz,long spentCostGrosz) {
+                int doneMinutes,long plannedCostGrosz,long spentCostGrosz,
+                int workedMinutes,boolean activeWork) {
             this.tasks=tasks; this.doneTasks=doneTasks;
             this.overdueTasks=overdueTasks; this.totalMinutes=totalMinutes;
             this.doneMinutes=doneMinutes;
             this.plannedCostGrosz=plannedCostGrosz;
             this.spentCostGrosz=spentCostGrosz;
+            this.workedMinutes=workedMinutes;
+            this.activeWork=activeWork;
         }
         int progressPct() {
             if(totalMinutes<=0)return tasks<=0?0:(doneTasks*100/tasks);
@@ -75,6 +80,11 @@ final class ProjectStore {
                 (int)Math.round(doneMinutes*100.0/totalMinutes)));
         }
         int remainingMinutes(){return Math.max(0,totalMinutes-doneMinutes);}
+        int timePct() {
+            if(totalMinutes<=0)return 0;
+            return Math.max(0,(int)Math.round(workedMinutes*100.0/totalMinutes));
+        }
+        boolean timeOverrun(){return totalMinutes>0&&workedMinutes>totalMinutes;}
     }
 
     private ProjectStore(){}
@@ -263,9 +273,10 @@ final class ProjectStore {
 
     static Stats stats(SQLiteDatabase db,long projectId) {
         Set<Long> ids=descendantIds(db,projectId);
-        if(ids.isEmpty())return new Stats(0,0,0,0,0,0,0);
+        if(ids.isEmpty())return new Stats(0,0,0,0,0,0,0,0,false);
         String in=inClause(ids);String[] a=args(ids);
         HashMap<Long,Integer> worked=new HashMap<>();
+        boolean activeWork=false;
         long now=System.currentTimeMillis();
         try(Cursor c=db.rawQuery(
                 "SELECT s.task_id,s.started_at,s.ended_at,s.worked_minutes "
@@ -274,6 +285,7 @@ final class ProjectStore {
             while(c.moveToNext()) {
                 int minutes;
                 if(c.isNull(2)) {
+                    activeWork=true;
                     long elapsed=Math.max(0L,now-c.getLong(1));
                     minutes=(int)Math.max(0L,elapsed/60000L);
                 } else minutes=Math.max(0,c.getInt(3));
@@ -282,6 +294,7 @@ final class ProjectStore {
             }
         }
         int tasks=0,done=0,overdue=0,totalMinutes=0,doneMinutes=0;
+        int workedMinutes=0;
         try(Cursor c=db.rawQuery(
                 "SELECT id,done,duration_minutes,due_date FROM tasks "
                     +"WHERE project_id IN ("+in+")",a)) {
@@ -290,12 +303,15 @@ final class ProjectStore {
                 tasks++;
                 long taskId=c.getLong(0);
                 int minutes=Math.max(1,c.getInt(2));
+                int taskWorked=worked.getOrDefault(taskId,0);
                 totalMinutes+=minutes;
                 if(c.getInt(1)!=0) {
                     done++;
                     doneMinutes+=minutes;
+                    workedMinutes+=Math.max(minutes,taskWorked);
                 } else {
-                    doneMinutes+=Math.min(minutes,worked.getOrDefault(taskId,0));
+                    doneMinutes+=Math.min(minutes,taskWorked);
+                    workedMinutes+=taskWorked;
                     if(!c.isNull(3)&&c.getString(3).compareTo(today)<0)overdue++;
                 }
             }
@@ -311,7 +327,8 @@ final class ProjectStore {
                     spent+=value;
             }
         }
-        return new Stats(tasks,done,overdue,totalMinutes,doneMinutes,planned,spent);
+        return new Stats(tasks,done,overdue,totalMinutes,doneMinutes,planned,spent,
+            workedMinutes,activeWork);
     }
 
     static List<TaskItem> displayTasks(SQLiteDatabase db,long projectId) {
