@@ -9542,7 +9542,9 @@ public final class MainActivity extends Activity {
             LinearLayout grid=new LinearLayout(this);
             grid.setOrientation(LinearLayout.VERTICAL);
             content.addView(grid,new LinearLayout.LayoutParams(-1,-2));
-            renderStorageGalleryGrid(grid,things,"");
+            java.util.Map<Long,String> contentsLocations=
+                StorageStore.locations(db.getReadableDatabase(),things);
+            renderStorageGalleryGrid(grid,things,contentsLocations,"");
         }
 
         ScrollView scroll=new ScrollView(this);
