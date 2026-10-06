@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 214,
-  "versionName": "0.8.0.22",
-  "changelog": "EDHOME 0.8.0.22 — Beta. Stabilizacja kopii: restore v45 ponownie akceptuje kopie DB v44; test regresyjny obejmuje v44 → v45. LAN/Desktop po restore wymusza bezpieczne pełne pojednanie przy cofnięciu rewizji. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.22/edhome-beta.apk",
-  "sha256": "7b5bacb788f0ebd799490e50aa8f60e814f30fc35f0fe079efba089033768f4b"
+  "versionCode": 215,
+  "versionName": "0.8.0.23",
+  "changelog": "EDHOME 0.8.0.23 — Beta. Stabilizacja kopii: restore v44 → v45, bezpieczne pełne pojednanie LAN/Desktop po cofnięciu danych oraz odzyskiwanie .bak/.tmp po przerwanym zapisie oryginalnego zdjęcia. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.23/edhome-beta.apk",
+  "sha256": "72dea30403fc5f8d391703b2b51603511864797effe88de4e6c20e2b8f1d5ed8"
 }
