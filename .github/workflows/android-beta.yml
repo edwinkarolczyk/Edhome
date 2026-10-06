@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Domknięcie stabilizacji Android lifecycle: także generowanie PDF etykiet QR wraca do UI wyłącznie przez ochronę żywej Activity; BetaUpdater zamyka pracę przy onDestroy. Bez nowych funkcji. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Magazynu: Miejsca są trwałymi identyfikatorami dla QR/NFC i synchronizacji, dlatego usuwanie Miejsca z UI jest zablokowane. Niskopoziomowy rollback świeżo utworzonego celu pozostaje bez zmian. Bez nowych funkcji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
