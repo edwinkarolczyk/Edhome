@@ -523,11 +523,7 @@ public final class EdhomeDesktop extends JFrame {
         if(snapshot==null)throw new IOException("Brak danych Desktopu.");
         commitHubLocalMetadata();
         String current=GSON.toJson(snapshot);
-        String currentSha=MessageDigest.isEqual(
-            rowSha256(snapshot).getBytes(StandardCharsets.US_ASCII),
-            rowSha256(JsonParser.parseString(current).getAsJsonObject())
-                .getBytes(StandardCharsets.US_ASCII))
-            ? hubRawSha256(current) : hubRawSha256(current);
+        String currentSha=hubRawSha256(current);
         if(baseSha==null||baseSha.isBlank()
                 ||!MessageDigest.isEqual(
                     currentSha.getBytes(StandardCharsets.US_ASCII),
@@ -4849,57 +4845,69 @@ public final class EdhomeDesktop extends JFrame {
         statusCard.add(title);
         statusCard.add(Box.createVerticalStrut(6));
 
-        String savedHost = sanitizedPhoneHost();
-        String savedToken = PREFS.get("token", "").trim();
-        String stateText;
-        if (savedHost.isBlank() || savedToken.isBlank())
-            stateText = "Nie sparowano telefonu • użyj kodu QR";
-        else if (connected)
-            stateText = "ONLINE • telefon połączony • " + savedHost + ":" + PORT;
-        else
-            stateText = "OFFLINE • sparowano • " + savedHost + ":" + PORT;
+        DesktopHubServer.ClientInfo phone =
+            hubServer == null ? null : hubServer.newestClient();
+        boolean apiOnline = hubServer != null && hubServer.isRunning();
+        String stateText = apiOnline
+            ? "● API DZIAŁA • " + String.join(", ", localLanAddresses())
+                + ":" + DesktopHubServer.PORT
+            : "● API NIE DZIAŁA";
         JLabel pairState = new JLabel(stateText);
-        pairState.setForeground(connected ? APP_ACCENT : APP_MUTED);
+        pairState.setForeground(apiOnline ? APP_ACCENT : new Color(230,95,95));
         statusCard.add(pairState);
+        if(phone!=null) {
+            JLabel phoneState=new JLabel("Telefon: "
+                +(phone.userName.isBlank()?"użytkownik":phone.userName)
+                +" • Android "+(phone.version.isBlank()?"?":phone.version)
+                +" • "+phone.address);
+            phoneState.setForeground(APP_MUTED);
+            statusCard.add(Box.createVerticalStrut(4));
+            statusCard.add(phoneState);
+        }
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(5, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(4, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
-        JButton diagnose = actionButton("Sprawdź połączenie PC ↔ telefon");
         JButton updateDesktop = actionButton("Aktualizuj EDHOME Desktop — 1 klik");
-        JButton downloadAllLogs =
-            actionButton("Pobierz logi telefonu + Desktop na Pulpit");
+        JButton copyDesktopLogs = actionButton("Zapisz diagnostykę Desktop na Pulpit");
         JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
-        actions.add(diagnose);
         actions.add(updateDesktop);
-        actions.add(downloadAllLogs);
+        actions.add(copyDesktopLogs);
         actions.add(openBackups);
         content.add(actions);
         content.add(Box.createVerticalStrut(12));
 
         JLabel help = new JLabel(
-            "<html><b>Połączenie:</b> PC i telefon muszą być w tej samej sieci "
-          + "Wi‑Fi/LAN. Kliknij „Połącz telefon przez QR”, a w EDHOME Android "
-          + "zeskanuj kod z ekranu komputera.<br><br>"
-          + "<b>Logi:</b> jednym kliknięciem zapisujesz diagnostykę Desktopu "
-          + "oraz nowe logi telefonu na Pulpicie. Log telefonu jest usuwany "
-          + "z aplikacji dopiero po potwierdzonym zapisie na PC.<br><br>"
+            "<html><b>Połączenie:</b> Desktop jest lokalnym Hubem/API. "
+          + "PC może być po kablu LAN, a telefon po Wi‑Fi. Jeden skan QR zapisuje "
+          + "ID Desktopu i token; po zmianie IP telefon odnajduje ten sam PC po ID.<br><br>"
+          + "<b>Synchronizacja:</b> telefon sprawdza stan co około 60 s i po zmianach. "
+          + "Przy pierwszym połączeniu wykonywany jest backup przed scaleniem.<br><br>"
           + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie "
-          + "w folderze EDHOME\\Backup oraz utrzymuje dzienne kopie.</html>");
+          + "w folderze EDHOME\\Backup.</html>");
         help.setForeground(APP_MUTED);
         content.add(help);
 
         qrPair.addActionListener(e -> showQrPairing(pairState, qrPair));
-        diagnose.addActionListener(e -> diagnosePhoneConnection(
-            PREFS.get("phoneIp", "").trim(),
-            PREFS.get("token", "").trim(), diagnose));
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
-        downloadAllLogs.addActionListener(e -> saveAllDiagnosticsToDesktop(
-            PREFS.get("phoneIp", "").trim(),
-            PREFS.get("token", "").trim(), downloadAllLogs));
+        copyDesktopLogs.addActionListener(e -> {
+            Path target=diagnosticsDesktopFolder().resolve(
+                "EDHOME-Desktop-diagnostyka-"
+                +DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
+                    .withZone(ZoneId.systemDefault()).format(Instant.now())+".txt");
+            try {
+                Files.writeString(target,desktopDiagnosticsText(),StandardCharsets.UTF_8);
+                JOptionPane.showMessageDialog(this,
+                    "Zapisano diagnostykę Desktop:\n"+target.toAbsolutePath());
+            } catch(Exception error) {
+                JOptionPane.showMessageDialog(this,
+                    "Nie zapisano diagnostyki:\n"+rootMessage(error),
+                    "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+            }
+        });
         openBackups.addActionListener(e -> openPcBackupFolder());
 
         page.add(content, BorderLayout.NORTH);
@@ -4908,7 +4916,14 @@ public final class EdhomeDesktop extends JFrame {
 
     private String desktopDiagnosticsText() {
         String host = sanitizedPhoneHost();
+        DesktopHubServer.ClientInfo hubPhone =
+            hubServer==null?null:hubServer.newestClient();
         return "EDHOME Desktop " + DESKTOP_VERSION + "\n"
+            + "Hub API: " + (hubServer!=null&&hubServer.isRunning()
+                ?"DZIAŁA • TCP 45823 / UDP 45822":"NIE DZIAŁA") + "\n"
+            + "Telefon Hub: " + (hubPhone==null?"brak":
+                hubPhone.userName+" • Android "+hubPhone.version
+                    +" • "+hubPhone.address) + "\n"
             + "System: " + System.getProperty("os.name") + " "
                 + System.getProperty("os.version") + "\n"
             + "Java: " + System.getProperty("java.version") + "\n"
@@ -5859,30 +5874,34 @@ public final class EdhomeDesktop extends JFrame {
 
     private void prepareWindowsPairingFirewall() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (!os.contains("win") || PREFS.getBoolean("pairFirewallReady", false)) return;
+        if (!os.contains("win") || PREFS.getBoolean("hubFirewallReady", false)) return;
 
         int answer = JOptionPane.showConfirmDialog(this,
-            "Aby telefon mógł połączyć się z tym komputerem przez QR, "
-                + "EDHOME musi zezwolić w Zaporze Windows na TCP 45824.\n"
-                + "Reguła będzie ograniczona do urządzeń z lokalnej podsieci.\n\n"
+            "Aby telefon mógł połączyć się z API EDHOME Desktop, "
+                + "Zapora Windows musi zezwolić na TCP 45823 i lokalne wykrywanie UDP 45822.\n"
+                + "Reguły będą ograniczone do lokalnej podsieci.\n\n"
                 + "Windows może poprosić o zgodę administratora.",
-            "EDHOME • zezwolenie na połączenie telefonu",
+            "EDHOME • zezwolenie na lokalny Hub",
             JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (answer != JOptionPane.YES_OPTION) {
-            DesktopDiagnosticLog.event("PAIR_FIREWALL_SKIPPED");
+            DesktopDiagnosticLog.event("HUB_FIREWALL_SKIPPED");
             return;
         }
 
         try {
-            String command =
-                "$p=Start-Process -FilePath 'netsh.exe' "
-                    + "-ArgumentList 'advfirewall firewall add rule "
-                    + "name=EDHOME_Desktop_QR_45824 dir=in action=allow "
-                    + "protocol=TCP localport=45824 profile=any remoteip=LocalSubnet' "
-                    + "-Verb RunAs -Wait -PassThru; exit $p.ExitCode";
+            String script =
+                "$a=Start-Process -FilePath 'netsh.exe' -ArgumentList "
+                    + "'advfirewall firewall add rule name=EDHOME_Hub_TCP_45823 "
+                    + "dir=in action=allow protocol=TCP localport=45823 profile=any "
+                    + "remoteip=LocalSubnet' -Verb RunAs -Wait -PassThru; "
+                    + "if($a.ExitCode -ne 0){exit $a.ExitCode}; "
+                    + "$b=Start-Process -FilePath 'netsh.exe' -ArgumentList "
+                    + "'advfirewall firewall add rule name=EDHOME_Hub_UDP_45822 "
+                    + "dir=in action=allow protocol=UDP localport=45822 profile=any "
+                    + "remoteip=LocalSubnet' -Verb RunAs -Wait -PassThru; exit $b.ExitCode";
             Process process = new ProcessBuilder(
                 "powershell.exe", "-NoProfile", "-NonInteractive",
-                "-Command", command)
+                "-Command", script)
                 .redirectErrorStream(true)
                 .start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) {
@@ -5890,19 +5909,18 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IOException(
                     "Przekroczono czas oczekiwania na zgodę Zapory Windows.");
             }
-            if (process.exitValue() != 0) {
+            if (process.exitValue() != 0)
                 throw new IOException(
                     "Zapora Windows zwróciła kod " + process.exitValue() + ".");
-            }
-            PREFS.putBoolean("pairFirewallReady", true);
-            DesktopDiagnosticLog.event("PAIR_FIREWALL_READY",
-                "tcp=" + PAIR_PORT + " remote=LocalSubnet");
+            PREFS.putBoolean("hubFirewallReady", true);
+            DesktopDiagnosticLog.event("HUB_FIREWALL_READY",
+                "tcp=45823 udp=45822 remote=LocalSubnet");
         } catch (Exception error) {
-            DesktopDiagnosticLog.error("PAIR_FIREWALL_SETUP", error);
+            DesktopDiagnosticLog.error("HUB_FIREWALL_SETUP", error);
             JOptionPane.showMessageDialog(this,
-                "Nie udało się automatycznie zezwolić na połączenie QR.\n"
-                    + "Możesz kontynuować, ale jeśli telefon nadal nie połączy się, "
-                    + "zezwól EDHOME w Zaporze Windows.\n\n"
+                "Nie udało się automatycznie ustawić Zapory Windows.\n"
+                    + "Możesz kontynuować, ale jeśli telefon nie zobaczy Desktopu, "
+                    + "zezwól EDHOME na sieci prywatnej.\n\n"
                     + rootMessage(error),
                 "EDHOME Desktop", JOptionPane.WARNING_MESSAGE);
         }
