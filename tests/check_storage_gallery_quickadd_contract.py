@@ -44,7 +44,15 @@ assert 'private void showStorageThingDetails(long itemId)' in main
 assert 'Przytrzymaj ' in main
 assert 'miniaturę około 0,4 s' in main
 assert 'bindStorageThumbnailPeek(tile,thumbnail)' in main
-assert 'for(int i=0;i<filtered.size();i+=3)' in main
+assert 'private int storageGalleryPageSize()' in main
+assert 'StorageThumbs.isLowRamDevice()?30:60' in main
+assert 'for(int i=0;i<visible;i+=3)' in main
+assert 'Pokaż kolejne ' in main
+assert 'STORAGE_GALLERY_BATCH' in main
+assert 'StorageStore.locations(db.getReadableDatabase(),things)' in main
+assert 'static Map<Long,String> locations(SQLiteDatabase db,List<Item> targets)' in store
+assert 'SELECT id,name,kind,parent_box_id,place_id,lent_to FROM storage_items' in store
+assert 'SELECT id,name,parent_id FROM places' in store
 assert 'for(int slot=0;slot<3;slot++)' in main
 assert 'if("thing".equals(storageTemporaryKind)) {' in main
 assert 'storageThingsGallery(items);\n            return;' in main
