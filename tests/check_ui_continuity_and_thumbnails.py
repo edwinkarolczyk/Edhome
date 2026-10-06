@@ -64,3 +64,15 @@ manifest=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 assert 'androidx.core.content.FileProvider' in manifest
 assert '@xml/storage_file_paths' in manifest
 print("Storage thumbnails: full-resolution camera capture and 1024px quality PASS")
+
+# Podmiana oryginalnego zdjęcia musi zachować poprzedni plik aż do poprawnego
+# zainstalowania nowego oraz odtworzyć go po przerwanym/nieudanym zapisie.
+originals=(src/"StorageOriginals.java").read_text(encoding="utf-8")
+assert 'File backup = new File(directory, itemId + ".bak");' in originals
+assert '!destination.exists() && backup.exists() && !backup.renameTo(destination)' in originals
+assert 'if (!destination.renameTo(backup))' in originals
+assert 'if (!temporary.renameTo(destination))' in originals
+assert 'if (previousMoved && !backup.renameTo(destination))' in originals
+assert 'Stare zdjęcie zachowano.' in originals
+assert 'destination.exists() && !destination.delete()' not in originals
+print("Storage originals: crash-safe photo replacement with rollback PASS")

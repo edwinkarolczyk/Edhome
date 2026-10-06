@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Miejsc: puste Miejsce nadal można usunąć. Gdy usunięcie jest zablokowane przez podmiejsca, rzeczy/pudełka lub opony, EDHOME proponuje bezpieczne przeniesienie całego Miejsca do innego miejsca nadrzędnego bez przepisywania zawartości i historii. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Magazynu: bezpieczna podmiana oryginalnego zdjęcia Rzeczy/Pudełka. Stare zdjęcie jest zachowane do czasu poprawnego zapisu nowego i odtwarzane po przerwanym lub nieudanym zapisie. Bez nowych funkcji. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

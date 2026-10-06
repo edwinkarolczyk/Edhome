@@ -56,7 +56,16 @@ final class StorageOriginals {
         if (!directory.exists() && !directory.mkdirs())
             throw new IllegalStateException("Nie utworzono katalogu zdjęć.");
         File temporary = new File(directory, itemId + ".tmp");
+        File backup = new File(directory, itemId + ".bak");
+
+        // Dokończ poprzednią przerwaną podmianę bez utraty ostatniego poprawnego zdjęcia.
+        if (!destination.exists() && backup.exists() && !backup.renameTo(destination))
+            throw new IllegalStateException("Nie przywrócono poprzedniego zdjęcia.");
+        if (destination.exists() && backup.exists() && !backup.delete())
+            throw new IllegalStateException("Nie usunięto starej kopii pomocniczej.");
+
         long size = 0;
+        boolean previousMoved = false;
         try {
             try (FileOutputStream output = new FileOutputStream(temporary)) {
                 byte[] buffer = new byte[8192];
@@ -72,12 +81,25 @@ final class StorageOriginals {
             }
             if (size < 4) throw new IllegalArgumentException("Zdjęcie jest puste.");
             validateImage(temporary);
-            if (destination.exists() && !destination.delete())
-                throw new IllegalStateException("Nie można zastąpić starego zdjęcia.");
-            if (!temporary.renameTo(destination))
-                throw new IllegalStateException("Nie zapisano oryginalnego zdjęcia.");
+
+            if (destination.exists()) {
+                if (!destination.renameTo(backup))
+                    throw new IllegalStateException(
+                        "Nie zabezpieczono starego zdjęcia przed podmianą.");
+                previousMoved = true;
+            }
+            if (!temporary.renameTo(destination)) {
+                if (previousMoved && !backup.renameTo(destination))
+                    throw new IllegalStateException(
+                        "Nie zapisano nowego ani nie przywrócono starego zdjęcia.");
+                throw new IllegalStateException(
+                    "Nie zapisano nowego zdjęcia. Stare zdjęcie zachowano.");
+            }
+            if (previousMoved && backup.exists()) backup.delete();
         } finally {
             if (temporary.exists()) temporary.delete();
+            if (!destination.exists() && backup.exists()) backup.renameTo(destination);
+            if (destination.exists() && backup.exists()) backup.delete();
         }
     }
 
