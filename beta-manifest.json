@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 217,
   "versionName": "0.8.0.25",
-  "changelog": "EDHOME 0.8.0.25 — Beta. Stabilizacja backupu i aktualizacji: restore v44 → v45, odzyskiwanie zdjęć po przerwanym zapisie, pełne pojednanie Desktop po restore oraz naprawa zagubionych i zastąpionych pobrań aktualizacji. Main bez zmian.",
+  "changelog": "EDHOME 0.8.0.25 — Beta RC kandydat do 1.0. Domknięto LAN Android ↔ Desktop, zweryfikowany backup/restore oraz Low RAM. Magazyn korzysta z batch-load bez N+1 i indeksów SQLite; miniatury/cache są ograniczane na urządzeniach z małą pamięcią. Pełna regresja #1705 zakończona sukcesem, podpis APK zweryfikowany. Main bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.25/edhome-beta.apk",
   "sha256": "73ee3724c03bc1ec84494756c0234cebd771f47d548cb4852f3957d2c2d42941"
 }
