@@ -2,7 +2,7 @@ plugins {
     id 'application'
 }
 
-version = '0.7.0.97'
+version = '0.7.0.98'
 
 java {
     toolchain {
