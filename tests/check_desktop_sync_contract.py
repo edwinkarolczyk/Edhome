@@ -448,7 +448,7 @@ for marker in (
     "static final int PORT=45823",
     "DISCOVERY_PORT=45822",
     '"/status"', '"/state"', '"/snapshot"', '"/patch"', '"/resolve-phone"',
-    '"LAN_ONLY"', '"PAIRING_REQUIRED"', "X-EDHOME-SNAPSHOT-SHA256",
+    "LAN_ONLY", "PAIRING_REQUIRED", "X-EDHOME-SNAPSHOT-SHA256",
 ):
     assert marker in hub_server, "Missing Desktop Hub server contract: "+marker
 for marker in (
