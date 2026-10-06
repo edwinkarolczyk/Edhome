@@ -3,6 +3,7 @@
 from pathlib import Path
 main = Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 receiver = Path("app/src/main/java/com/edwinkarolczyk/edhome/ReminderReceiver.java").read_text(encoding="utf-8")
+project_work = Path("app/src/main/java/com/edwinkarolczyk/edhome/ProjectWorkNotification.java").read_text(encoding="utf-8")
 backup = Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
 for expected in (
     'if (!pref.getBoolean("reminders_enabled", false)) return;',
@@ -35,4 +36,32 @@ assert '? "08:00" : savedReminder[0]' in main
 assert main.count('reminder.setText("08:00");') >= 2
 assert 'inputVersion < 10 && "tasks".equals(definition[0])' in backup
 assert 'ReminderRules.validTime(remindAt)' in backup
+
+# Project reminders can start work, then become a persistent stopwatch with Stop.
+for expected in (
+    'ProjectWorkNotification.ACTION_START.equals(action)',
+    'ProjectWorkNotification.ACTION_STOP.equals(action)',
+    '"▶ Start", ProjectWorkNotification.startAction(',
+    'ProjectWorkNotification.restoreActive(context)',
+):
+    assert expected in receiver, "Missing project reminder action: " + expected
+
+for expected in (
+    'setUsesChronometer(true)',
+    'setOngoing(true)',
+    'setAutoCancel(false)',
+    'Notification.FLAG_ONGOING_EVENT',
+    'Notification.FLAG_NO_CLEAR',
+    '"■ Stop", stopAction(context, taskId)',
+    'ProjectStore.startWork(database, taskId)',
+    'ProjectStore.stopWork(database, taskId)',
+    'PROJECT_WORK_STARTED_FROM_NOTIFICATION',
+    'PROJECT_WORK_STOPPED_FROM_NOTIFICATION',
+    'WHERE s.ended_at IS NULL AND t.done=0',
+):
+    assert expected in project_work, "Missing persistent project timer notification: " + expected
+
+assert 'ProjectWorkNotification.showActive(this,taskId);' in main
+assert 'ProjectWorkNotification.cancel(this,taskId);' in main
+print("Project reminder Start + persistent chronometer + Stop contract: PASS")
 print("Reminder opt-in, dedup, re-arm, SQLite/backup and quiet-hours contracts: PASS")
