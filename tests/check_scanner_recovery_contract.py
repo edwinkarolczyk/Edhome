@@ -67,6 +67,18 @@ for marker in (
 ):
     assert marker in main, "Scanner gallery routing missing: " + marker
 
+# Zły kod podczas oczekującej operacji Magazynu musi skasować stan
+# operacji przed routingiem do produktu, aby kolejny QR nie dokończył starej akcji.
+central=main.split("private void handleCentralScan(String raw)",1)[1].split(
+    "private void showProductBarcodeActions(",1)[0]
+assert 'if(pendingStorageDropKind!=null && pendingStorageDropId!=null)' in central
+assert 'clearStorageDropTarget();' in central
+assert 'if(pendingStorageDestinationItemId!=null)' in central
+assert 'pendingStorageDestinationItemId=null;' in central
+assert 'storageDestinationNfcDialog.dismiss();' in central
+assert central.index('if(pendingStorageDropKind!=null && pendingStorageDropId!=null)') < central.index('PantryScanRules.validBarcode(code)')
+assert central.index('if(pendingStorageDestinationItemId!=null)') < central.index('PantryScanRules.validBarcode(code)')
+
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
 # Nieznany NFC -> nowy obiekt: jeśli przypisanie taga zawiedzie po utworzeniu,
 # świeży obiekt musi zostać cofnięty, aby nie zostawić sieroty w Magazynie/Miejscach.

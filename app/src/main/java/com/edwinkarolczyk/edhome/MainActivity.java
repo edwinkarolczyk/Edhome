@@ -9106,6 +9106,23 @@ public final class MainActivity extends Activity {
             alert("Ta operacja oczekuje QR "+expected+". Spróbuj ponownie.");
             return;
         }
+        if(pendingStorageDropKind!=null && pendingStorageDropId!=null) {
+            String expected="box".equals(pendingStorageDropKind)
+                ?"rzeczy":"rzeczy albo pudełka";
+            clearStorageDropTarget();
+            alert("Ta operacja oczekuje QR "+expected+". Spróbuj ponownie.");
+            return;
+        }
+        if(pendingStorageDestinationItemId!=null) {
+            pendingStorageDestinationItemId=null;
+            if(storageDestinationNfcDialog!=null) {
+                storageDestinationNfcDialog.dismiss();
+                storageDestinationNfcDialog=null;
+            }
+            refreshNfcReaderMode();
+            alert("Ta operacja oczekuje QR pudełka albo miejsca. Spróbuj ponownie.");
+            return;
+        }
         if (PantryScanRules.validBarcode(code)) {
             showProductBarcodeActions(code);
             return;
