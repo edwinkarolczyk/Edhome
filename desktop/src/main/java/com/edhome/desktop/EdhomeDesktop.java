@@ -862,10 +862,13 @@ public final class EdhomeDesktop extends JFrame {
         down.addActionListener(e -> moveDesktopProjectTask(task,1));
         JButton depsButton = compactActionButton("Zależności");
         depsButton.addActionListener(e -> showDesktopTaskDependencies(task));
+        JButton delete = compactActionButton("Usuń");
+        delete.addActionListener(e -> deleteDesktopProjectTask(task));
         actions.add(up);
         actions.add(down);
         actions.add(edit);
         actions.add(depsButton);
+        actions.add(delete);
         card.add(actions,BorderLayout.EAST);
         return card;
     }
@@ -952,14 +955,31 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private int desktopOpenDependencyCount(long taskId) {
-        int open = 0;
+        return desktopOpenDependencyTitles(taskId).size();
+    }
+
+    private java.util.List<String> desktopOpenDependencyTitles(long taskId) {
+        java.util.List<String> titles=new ArrayList<>();
         for (JsonElement element : table("project_task_dependencies")) {
             if (!element.isJsonObject()) continue;
             JsonObject link = element.getAsJsonObject();
             if (longValue(link,"task_id") != taskId) continue;
             JsonObject dependency = desktopTaskById(
                 longValue(link,"depends_on_task_id"));
-            if (dependency != null && intValue(dependency,"done") == 0) open++;
+            if (dependency != null && intValue(dependency,"done") == 0)
+                titles.add(value(dependency,"title"));
+        }
+        return titles;
+    }
+
+    private int desktopOpenDependentCount(long taskId) {
+        int open=0;
+        for(JsonElement element:table("project_task_dependencies")) {
+            if(!element.isJsonObject())continue;
+            JsonObject link=element.getAsJsonObject();
+            if(longValue(link,"depends_on_task_id")!=taskId)continue;
+            JsonObject waiter=desktopTaskById(longValue(link,"task_id"));
+            if(waiter!=null&&intValue(waiter,"done")==0)open++;
         }
         return open;
     }
@@ -986,6 +1006,24 @@ public final class EdhomeDesktop extends JFrame {
             + ".";
     }
 
+    private String desktopProjectWorkBlockReason(JsonObject task) {
+        long projectId=longValue(task,"project_id");
+        java.util.HashSet<Long> seen=new java.util.HashSet<>();
+        while(projectId>0L) {
+            if(!seen.add(projectId))
+                return "Wykryto pętlę w hierarchii projektów.";
+            JsonObject project=desktopProjectById(projectId);
+            if(project==null)return "Projekt tej czynności już nie istnieje.";
+            String status=value(project,"status");
+            if("paused".equals(status))
+                return "Projekt „"+value(project,"name")+"” jest wstrzymany.";
+            if("done".equals(status))
+                return "Projekt „"+value(project,"name")+"” jest zakończony.";
+            projectId=longValue(project,"parent_id");
+        }
+        return "";
+    }
+
     private void startDesktopProjectWork(JsonObject task) {
         long taskId = longValue(task,"id");
         if (taskId <= 0 || desktopTaskById(taskId) == null) {
@@ -1003,11 +1041,15 @@ public final class EdhomeDesktop extends JFrame {
             showSection("Projekty");
             return;
         }
-        int openDependencies = desktopOpenDependencyCount(taskId);
-        if (openDependencies > 0) {
+        String projectBlock=desktopProjectWorkBlockReason(task);
+        if(!projectBlock.isBlank()) {
+            JOptionPane.showMessageDialog(this,projectBlock);
+            return;
+        }
+        java.util.List<String> dependencyTitles=desktopOpenDependencyTitles(taskId);
+        if (!dependencyTitles.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                "Najpierw zakończ wcześniejsze czynności zależne: "
-                    + openDependencies + ".");
+                "Najpierw zakończ:\n• "+String.join("\n• ",dependencyTitles));
             return;
         }
         String blocker = desktopHardBlockReason(taskId);
@@ -1090,11 +1132,80 @@ public final class EdhomeDesktop extends JFrame {
                 "Wykonane","done"))) return;
         if (intValue(task,"duration_minutes") < 20) {
             restoreJsonObject(task,before);
-            markDirty();
             JOptionPane.showMessageDialog(this,
                 "Czynność projektu musi mieć co najmniej 20 minut.",
                 "EDHOME Desktop",JOptionPane.WARNING_MESSAGE);
+            showSection("Projekty");
+            return;
         }
+        boolean completing=intValue(before,"done")==0&&intValue(task,"done")!=0;
+        if(completing) {
+            long taskId=longValue(task,"id");
+            if(desktopActiveProjectWorkSession(taskId)!=null) {
+                restoreJsonObject(task,before);
+                JOptionPane.showMessageDialog(this,
+                    "Najpierw zatrzymaj pomiar czasu tej czynności.");
+                showSection("Projekty");
+                return;
+            }
+            java.util.List<String> waits=desktopOpenDependencyTitles(taskId);
+            String blocker=desktopHardBlockReason(taskId);
+            if(!waits.isEmpty()||!blocker.isBlank()) {
+                restoreJsonObject(task,before);
+                String message=!waits.isEmpty()
+                    ?"Nie można oznaczyć jako wykonane. Najpierw zakończ:\n• "
+                        +String.join("\n• ",waits)
+                    :blocker;
+                JOptionPane.showMessageDialog(this,message);
+                showSection("Projekty");
+                return;
+            }
+        }
+        markDirty();
+        showSection("Projekty");
+    }
+
+    private void deleteDesktopProjectTask(JsonObject task) {
+        long taskId=longValue(task,"id");
+        java.util.List<String> dependents=new ArrayList<>();
+        for(JsonElement element:table("project_task_dependencies")) {
+            if(!element.isJsonObject())continue;
+            JsonObject link=element.getAsJsonObject();
+            if(longValue(link,"depends_on_task_id")!=taskId)continue;
+            JsonObject waiter=desktopTaskById(longValue(link,"task_id"));
+            if(waiter!=null&&intValue(waiter,"done")==0)
+                dependents.add(value(waiter,"title"));
+        }
+        StringBuilder message=new StringBuilder("Usunąć „")
+            .append(value(task,"title")).append("”?\n");
+        if(!dependents.isEmpty()) {
+            message.append("\nTa czynność jest wymagana przez:\n• ")
+                .append(String.join("\n• ",dependents))
+                .append("\n\nUsunięcie zerwie ")
+                .append(dependents.size())
+                .append(dependents.size()==1?" zależność.":" zależności.");
+        }
+        message.append("\n\nUsunięte zostaną też wymagania i zapis czasu.");
+        int choice=JOptionPane.showConfirmDialog(this,message.toString(),
+            "EDHOME Desktop • Projekty",JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        if(choice!=JOptionPane.YES_OPTION)return;
+        removeRowsByLong("project_task_work_sessions","task_id",taskId);
+        removeRowsByLong("project_task_blockers","task_id",taskId);
+        JsonArray links=table("project_task_dependencies");
+        for(int i=links.size()-1;i>=0;i--) {
+            if(!links.get(i).isJsonObject())continue;
+            JsonObject link=links.get(i).getAsJsonObject();
+            if(longValue(link,"task_id")==taskId
+                    ||longValue(link,"depends_on_task_id")==taskId)
+                links.remove(i);
+        }
+        JsonArray tasks=table("tasks");
+        for(int i=tasks.size()-1;i>=0;i--)
+            if(tasks.get(i).isJsonObject()
+                    &&longValue(tasks.get(i).getAsJsonObject(),"id")==taskId)
+                tasks.remove(i);
+        markDirty();
         showSection("Projekty");
     }
 
@@ -1226,6 +1337,17 @@ public final class EdhomeDesktop extends JFrame {
         return null;
     }
 
+    private int desktopProjectTaskRank(JsonObject task) {
+        if(intValue(task,"done")!=0)return 4;
+        long id=longValue(task,"id");
+        if(desktopActiveProjectWorkSession(id)!=null)return 0;
+        boolean ready=desktopOpenDependencyCount(id)==0
+            &&desktopHardBlockReason(id).isBlank();
+        if(ready&&desktopOpenDependentCount(id)>0)return 1;
+        if(ready)return 2;
+        return 3;
+    }
+
     private java.util.List<JsonObject> desktopProjectTasks(long projectId) {
         java.util.List<JsonObject> out = new ArrayList<>();
         for (JsonElement element : table("tasks")) {
@@ -1234,6 +1356,13 @@ public final class EdhomeDesktop extends JFrame {
             if (longValue(task,"project_id") == projectId) out.add(task);
         }
         out.sort((a,b) -> {
+            int rank=Integer.compare(desktopProjectTaskRank(a),
+                desktopProjectTaskRank(b));
+            if(rank!=0)return rank;
+            String ad=value(a,"due_date"),bd=value(b,"due_date");
+            if(ad.isBlank()!=bd.isBlank())return ad.isBlank()?1:-1;
+            int due=ad.compareTo(bd);
+            if(due!=0)return due;
             int order=Long.compare(longValue(a,"project_sort_order"),
                 longValue(b,"project_sort_order"));
             if(order!=0)return order;
