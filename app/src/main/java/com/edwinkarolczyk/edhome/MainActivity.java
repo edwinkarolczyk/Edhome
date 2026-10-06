@@ -16764,8 +16764,9 @@ public final class MainActivity extends Activity {
     }
 
     private void scanDesktopPairQr() {
-        if (desktopPairQrCameraPending || storageQrCameraPending
-                || pantrySingleCameraPending || pantryBatch.active()) return;
+        if (desktopPairQrCameraPending || centralScannerCameraPending
+                || storageQrCameraPending || pantrySingleCameraPending
+                || pantryBatch.active()) return;
         desktopPairQrCameraPending = true;
         try {
             IntentIntegrator qr = new IntentIntegrator(this);
@@ -16818,6 +16819,11 @@ public final class MainActivity extends Activity {
             final java.util.ArrayList<String> targets =
                 new java.util.ArrayList<>(pairHosts);
             final String pairNonce = nonce;
+            // Po udanym POST Desktop natychmiast pobiera dane z telefonu,
+            // więc serwer telefonu musi już słuchać na 45823.
+            LanSyncService.ensureStarted(this);
+            DiagnosticLog.event("DESKTOP_QR_PAIR_BEGIN",
+                "targets=" + android.text.TextUtils.join(",", targets));
             new Thread(() -> {
                 String failure = null;
                 try {
@@ -16833,6 +16839,8 @@ public final class MainActivity extends Activity {
                     for (String target : targets) {
                         java.net.HttpURLConnection connection = null;
                         try {
+                            DiagnosticLog.event("DESKTOP_QR_PAIR_ATTEMPT",
+                                "host=" + target);
                             connection = (java.net.HttpURLConnection) new java.net.URL(
                                 "http://" + target + ":45824/pair").openConnection();
                             connection.setConnectTimeout(2200);
@@ -16857,6 +16865,9 @@ public final class MainActivity extends Activity {
                             break;
                         } catch (Exception error) {
                             lastError = error;
+                            DiagnosticLog.event("DESKTOP_QR_PAIR_TARGET_FAILED",
+                                "host=" + target + " type="
+                                    + error.getClass().getSimpleName());
                         } finally {
                             if (connection != null) connection.disconnect();
                         }
@@ -18618,6 +18629,13 @@ public final class MainActivity extends Activity {
         }
         IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
         if (scan != null) {
+            // Skan uruchomiony jawnie z "Desktop / Wi-Fi" ma pierwszeństwo.
+            // Stary stan skanera centralnego nie może przejąć QR parowania.
+            if (desktopPairQrCameraPending) {
+                desktopPairQrCameraPending = false;
+                if (scan.getContents() != null) pairDesktopFromQr(scan.getContents());
+                return;
+            }
             if (centralScannerCameraPending) {
                 centralScannerCameraPending = false;
                 if (scan.getContents() != null) {
@@ -18635,11 +18653,6 @@ public final class MainActivity extends Activity {
                     if(pendingStorageScannerOperation!=null)
                         clearStorageScannerOperation();
                 }
-                return;
-            }
-            if (desktopPairQrCameraPending) {
-                desktopPairQrCameraPending = false;
-                if (scan.getContents() != null) pairDesktopFromQr(scan.getContents());
                 return;
             }
             if (storageQrCameraPending) {
