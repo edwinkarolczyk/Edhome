@@ -71,7 +71,7 @@ quick_tasks=main.split("private void showProjectQuickTasks",1)[1].split(
 assert 'due.setFocusable(false);' in quick_tasks
 assert 'new DatePickerDialog' in quick_tasks
 assert 'due.setHint("Termin • dotknij, aby wybrać datę")' in quick_tasks
-assert 'reminder.setText("19:00")' in quick_tasks
+assert 'reminder.setText("08:00")' in quick_tasks
 assert 'dueValue.isEmpty()||remind.isEmpty()?null:remind' in quick_tasks
 
 dependency_dialog=main.split("private void showProjectDependencyDialog",1)[1].split(

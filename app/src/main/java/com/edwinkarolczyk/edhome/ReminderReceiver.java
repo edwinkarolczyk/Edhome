@@ -21,7 +21,7 @@ import java.time.ZoneId;
 import java.util.Calendar;
 
 /**
- * Opt-in reminders. Legacy tasks use a daily inexact 09:00 alarm; tasks with
+ * Opt-in reminders. Legacy tasks use a daily inexact 08:00 alarm; tasks with
  * custom time get one inexact alarm per task/occurrence. No exact-alarm permission
  * or background network is required. A completed/edited task cannot send a
  * stale old alarm because both the ID and occurrence fingerprint are checked.
@@ -144,7 +144,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         }
         if (!pref.getBoolean("reminders_enabled", false)) return;
         Calendar next = Calendar.getInstance();
-        next.set(Calendar.HOUR_OF_DAY, 9);
+        next.set(Calendar.HOUR_OF_DAY, 8);
         next.set(Calendar.MINUTE, 0);
         next.set(Calendar.SECOND, 0);
         next.set(Calendar.MILLISECOND, 0);

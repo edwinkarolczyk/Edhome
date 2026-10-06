@@ -500,7 +500,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Spiżarni: produkt ze stanem większym od zera lub nierozliczonymi opakowaniami kaucyjnymi nie może zostać usunięty. Kontrola działa w UI i w bazowej metodzie danych. Bez nowych funkcji. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Stabilizacja Czynności: domyślne poranne przypomnienie ujednolicone na 08:00 w zwykłych i szybkich Czynnościach oraz presetach Czynności Ogrodu. Istniejące zapisane własne godziny pozostają bez zmian. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

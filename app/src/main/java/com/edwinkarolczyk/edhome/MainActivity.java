@@ -5066,7 +5066,7 @@ public final class MainActivity extends Activity {
         });
         EditText reminder=new EditText(this);
         reminder.setSingleLine(true);
-        reminder.setText("19:00");
+        reminder.setText("08:00");
         reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
         reminder.setTextColor(ink);
         reminder.setHintTextColor(subdued);
@@ -5098,7 +5098,7 @@ public final class MainActivity extends Activity {
                     "project="+project.id);
                 name.setText("");
                 due.setText("");
-                reminder.setText("19:00");
+                reminder.setText("08:00");
                 name.requestFocus();
             } catch(Exception error) {
                 alert(error.getMessage()==null?"Nie zapisano czynności.":error.getMessage());
@@ -6328,7 +6328,7 @@ public final class MainActivity extends Activity {
             memberIds, memberNames, chosenMember);
 
         form.addView(text("Przypomnienie dla tej czynności", 16, true));
-        form.addView(text("Standardowe: około 09:00 w dniu terminu lub dla "
+        form.addView(text("Standardowe: około 08:00 w dniu terminu lub dla "
             + "zaległych. Własne: wybrana godzina i wyprzedzenie. "
             + "Aktualna cisza: " + quietHoursStart() + "–" + quietHoursEnd()
             + ". Alert ustawiony po początku ciszy przesuwamy godzinę przed "
@@ -6338,14 +6338,14 @@ public final class MainActivity extends Activity {
             ? new String[]{"", "0"} : db.taskReminder(id);
         Spinner reminderMode = new Spinner(this);
         reminderMode.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
-            "Standardowo ok. 09:00", "Moja godzina i wyprzedzenie")));
+            "Standardowo ok. 08:00", "Moja godzina i wyprzedzenie")));
         reminderMode.setSelection(savedReminder[0].isEmpty() ? 0 : 1);
         form.addView(reminderMode);
         EditText reminderHour = new EditText(this);
         reminderHour.setSingleLine(true);
         reminderHour.setFocusable(false);
         reminderHour.setText(savedReminder[0].isEmpty()
-            ? "19:00" : savedReminder[0]);
+            ? "08:00" : savedReminder[0]);
         reminderHour.setTextColor(ink);
         reminderHour.setOnClickListener(v -> {
             java.time.LocalTime initial = java.time.LocalTime.parse(
@@ -7614,8 +7614,8 @@ public final class MainActivity extends Activity {
         form.addView(text("Powiadomienie",14,true));
         Spinner reminder=new Spinner(this);
         java.util.List<String> reminderLabels=java.util.Arrays.asList(
-            "Bez powiadomienia","09:00 w dniu terminu","09:00 dzień wcześniej",
-            "09:00 trzy dni wcześniej","18:00 dzień wcześniej");
+            "Bez powiadomienia","08:00 w dniu terminu","08:00 dzień wcześniej",
+            "08:00 trzy dni wcześniej","18:00 dzień wcześniej");
         reminder.setAdapter(lightDialogSpinnerAdapter(reminderLabels));
         form.addView(reminder);
 
@@ -7644,9 +7644,9 @@ public final class MainActivity extends Activity {
                     String remindTime=null;
                     int lead=0;
                     switch(reminder.getSelectedItemPosition()) {
-                        case 1: remindTime="09:00"; lead=0; break;
-                        case 2: remindTime="09:00"; lead=1; break;
-                        case 3: remindTime="09:00"; lead=3; break;
+                        case 1: remindTime="08:00"; lead=0; break;
+                        case 2: remindTime="08:00"; lead=1; break;
+                        case 3: remindTime="08:00"; lead=3; break;
                         case 4: remindTime="18:00"; lead=1; break;
                         default: break;
                     }
@@ -7679,9 +7679,9 @@ public final class MainActivity extends Activity {
     private void gardenScheduleDialog(long plantingId,String label) {
         java.util.List<String> options=java.util.Arrays.asList(
             "Bez powiadomienia",
-            "09:00 w dniu terminu",
-            "09:00 dzień wcześniej",
-            "09:00 trzy dni wcześniej",
+            "08:00 w dniu terminu",
+            "08:00 dzień wcześniej",
+            "08:00 trzy dni wcześniej",
             "18:00 dzień wcześniej");
         Spinner reminder=new Spinner(this);
         reminder.setAdapter(lightDialogSpinnerAdapter(options));
@@ -7700,9 +7700,9 @@ public final class MainActivity extends Activity {
                 try{
                     String time=null; int lead=0;
                     switch(reminder.getSelectedItemPosition()){
-                        case 1: time="09:00"; lead=0; break;
-                        case 2: time="09:00"; lead=1; break;
-                        case 3: time="09:00"; lead=3; break;
+                        case 1: time="08:00"; lead=0; break;
+                        case 2: time="08:00"; lead=1; break;
+                        case 3: time="08:00"; lead=3; break;
                         case 4: time="18:00"; lead=1; break;
                         default: break;
                     }

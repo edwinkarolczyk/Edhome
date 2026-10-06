@@ -28,6 +28,11 @@ for expected in (
 ):
     assert expected in main, "Missing reminder persistence contract: " + expected
 assert '"remind_time", "reminder_lead_days"' in backup
+assert 'next.set(Calendar.HOUR_OF_DAY, 8);' in receiver
+assert 'daily inexact 08:00 alarm' in receiver
+assert 'Standardowo ok. 08:00' in main
+assert '? "08:00" : savedReminder[0]' in main
+assert main.count('reminder.setText("08:00");') >= 2
 assert 'inputVersion < 10 && "tasks".equals(definition[0])' in backup
 assert 'ReminderRules.validTime(remindAt)' in backup
 print("Reminder opt-in, dedup, re-arm, SQLite/backup and quiet-hours contracts: PASS")
