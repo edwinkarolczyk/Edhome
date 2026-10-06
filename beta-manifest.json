@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 215,
-  "versionName": "0.8.0.23",
-  "changelog": "EDHOME 0.8.0.23 — Beta. Stabilizacja kopii: restore v44 → v45, bezpieczne pełne pojednanie LAN/Desktop po cofnięciu danych oraz odzyskiwanie .bak/.tmp po przerwanym zapisie oryginalnego zdjęcia. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.23/edhome-beta.apk",
-  "sha256": "72dea30403fc5f8d391703b2b51603511864797effe88de4e6c20e2b8f1d5ed8"
+  "versionCode": 216,
+  "versionName": "0.8.0.24",
+  "changelog": "EDHOME 0.8.0.24 — Beta. Stabilizacja backupu i aktualizacji: restore v44 → v45, odzyskiwanie zdjęć po przerwanym zapisie, pełne pojednanie Desktop po restore oraz naprawa zagubionych i zastąpionych pobrań aktualizacji. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.24/edhome-beta.apk",
+  "sha256": "b7495408d30ce9bed7eba7ae60d82b99a34c91896f6eb5ca041c588a2a216ec0"
 }
