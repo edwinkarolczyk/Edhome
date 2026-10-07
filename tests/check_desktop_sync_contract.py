@@ -422,9 +422,9 @@ assert 'reason=initialized_without_snapshot' in desktop
 assert 'POŁĄCZONO • Android ' in desktop
 assert 'return PREFS.getBoolean("hubInitialized",false)' in desktop
 assert '&& snapshot!=null;' in desktop
-assert 'boolean initialized=host.initialized();' in hub
-assert 'initialized?host.snapshot():""' in hub
-assert 'protocolVersion' in hub
+assert 'boolean initialized=host.initialized();' in hub_server
+assert 'initialized?host.snapshot():""' in hub_server
+assert 'protocolVersion' in hub_server
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
