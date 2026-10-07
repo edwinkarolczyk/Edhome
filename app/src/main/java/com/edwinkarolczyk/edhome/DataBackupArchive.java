@@ -42,17 +42,22 @@ final class DataBackupArchive {
     private static final String STORAGE_PREFIX = "media/storage-originals/";
     private static final String LEGACY_THUMB_PREFIX = "media/storage-thumbnails/";
     private static final String TILE_PREFIX = "media/tile-icons/";
+    private static final String BUDGET_ATTACHMENT_PREFIX =
+        "media/paycheck-budget-attachments/";
 
     static final class Created {
         final File file;
         final int storageOriginals;
         final int legacyThumbnails;
         final int tileImages;
-        Created(File file, int storageOriginals, int legacyThumbnails, int tileImages) {
+        final int paycheckAttachments;
+        Created(File file, int storageOriginals, int legacyThumbnails,
+                int tileImages, int paycheckAttachments) {
             this.file = file;
             this.storageOriginals = storageOriginals;
             this.legacyThumbnails = legacyThumbnails;
             this.tileImages = tileImages;
+            this.paycheckAttachments = paycheckAttachments;
         }
     }
 
@@ -61,12 +66,15 @@ final class DataBackupArchive {
         final int legacyThumbnails;
         final int regeneratedThumbnails;
         final int tileImages;
+        final int paycheckAttachments;
         Restored(int storageOriginals, int legacyThumbnails,
-                int regeneratedThumbnails, int tileImages) {
+                int regeneratedThumbnails, int tileImages,
+                int paycheckAttachments) {
             this.storageOriginals = storageOriginals;
             this.legacyThumbnails = legacyThumbnails;
             this.regeneratedThumbnails = regeneratedThumbnails;
             this.tileImages = tileImages;
+            this.paycheckAttachments = paycheckAttachments;
         }
     }
 
@@ -95,13 +103,16 @@ final class DataBackupArchive {
         final int storageCount;
         final int legacyThumbCount;
         final int tileCount;
+        final int paycheckAttachmentCount;
         Inspection(String json, List<String> paths, int storageCount,
-                int legacyThumbCount, int tileCount) {
+                int legacyThumbCount, int tileCount,
+                int paycheckAttachmentCount) {
             this.json = json;
             this.paths = paths;
             this.storageCount = storageCount;
             this.legacyThumbCount = legacyThumbCount;
             this.tileCount = tileCount;
+            this.paycheckAttachmentCount = paycheckAttachmentCount;
         }
     }
 
@@ -198,6 +209,15 @@ final class DataBackupArchive {
             }
         }
 
+        int paycheckAttachments = 0;
+        for (File attachment :
+                PaycheckBudgetAttachmentStore.liveFiles(context,prefs)) {
+            sources.add(new Source(
+                BUDGET_ATTACHMENT_PREFIX + attachment.getName(),
+                null,attachment,"paycheck-budget-attachment"));
+            paycheckAttachments++;
+        }
+
         JSONObject manifest = new JSONObject();
         manifest.put("format", FORMAT);
         manifest.put("formatVersion", FORMAT_VERSION);
@@ -241,7 +261,8 @@ final class DataBackupArchive {
             if (archive.length() <= 0 || archive.length() > MAX_ARCHIVE_BYTES)
                 throw new IllegalStateException("Kopia ZIP ma nieprawidłowy rozmiar.");
             inspect(archive);
-            return new Created(archive, originals, legacyThumbnails, tileImages);
+            return new Created(archive, originals, legacyThumbnails,
+                tileImages, paycheckAttachments);
         } catch (Exception error) {
             archive.delete();
             throw error;
@@ -331,23 +352,33 @@ final class DataBackupArchive {
         File stageRoot = new File(context.getFilesDir(), ".edhome-restore-" + suffix);
         File stageStorage = new File(stageRoot, StorageOriginals.DIRECTORY);
         File stageTiles = new File(stageRoot, "edhome-custom-tile-icons");
+        File stageBudget = new File(stageRoot,
+            PaycheckBudgetAttachmentStore.DIRECTORY);
         deleteTree(stageRoot);
-        if (!stageStorage.mkdirs() || !stageTiles.mkdirs())
+        if (!stageStorage.mkdirs() || !stageTiles.mkdirs()
+                || !stageBudget.mkdirs())
             throw new IllegalStateException("Nie przygotowano przywracania plików.");
 
         DirectorySwap storageSwap = null;
         DirectorySwap tileSwap = null;
+        DirectorySwap budgetSwap = null;
         try {
-            extractMedia(archive, inspection.paths, stageStorage, stageTiles);
+            extractMedia(archive, inspection.paths,
+                stageStorage, stageTiles, stageBudget);
             storageSwap = installDirectory(
                 StorageOriginals.folder(context), stageStorage, suffix);
             tileSwap = installDirectory(
                 new File(context.getFilesDir(), "edhome-custom-tile-icons"),
                 stageTiles, suffix);
+            budgetSwap = installDirectory(
+                PaycheckBudgetAttachmentStore.folder(context),
+                stageBudget,suffix);
             try {
                 DataBackup.restoreJson(database, prefs, inspection.json,
                     readArchivedThumbnails(archive, inspection.paths));
             } catch (Exception dataError) {
+                rollback(budgetSwap);
+                budgetSwap = null;
                 rollback(tileSwap);
                 tileSwap = null;
                 rollback(storageSwap);
@@ -358,6 +389,8 @@ final class DataBackupArchive {
             storageSwap = null;
             forgetPrevious(tileSwap);
             tileSwap = null;
+            forgetPrevious(budgetSwap);
+            budgetSwap = null;
             StorageOriginals.prune(context, database);
             int regenerated = 0;
             try {
@@ -366,10 +399,13 @@ final class DataBackupArchive {
             } catch (Exception ignored) {
                 // data.json zawiera zweryfikowane miniatury jako zgodność dla starszych danych.
             }
+            PaycheckBudgetAttachmentStore.prune(context,prefs);
             return new Restored(
                 inspection.storageCount, inspection.legacyThumbCount,
-                regenerated, inspection.tileCount);
+                regenerated, inspection.tileCount,
+                inspection.paycheckAttachmentCount);
         } finally {
+            if (budgetSwap != null) rollback(budgetSwap);
             if (tileSwap != null) rollback(tileSwap);
             if (storageSwap != null) rollback(storageSwap);
             deleteTree(stageRoot);
@@ -410,7 +446,8 @@ final class DataBackupArchive {
             Set<String> expected = new HashSet<>();
             expected.add(MANIFEST);
             String json = null;
-            int storage = 0, legacyThumbs = 0, tiles = 0;
+            int storage = 0, legacyThumbs = 0, tiles = 0,
+                paycheckAttachments = 0;
             long verifiedPayloadBytes = 0;
             for (int i = 0; i < files.length(); i++) {
                 JSONObject item = files.getJSONObject(i);
@@ -437,12 +474,14 @@ final class DataBackupArchive {
                 } else if (path.startsWith(STORAGE_PREFIX)) storage++;
                 else if (path.startsWith(LEGACY_THUMB_PREFIX)) legacyThumbs++;
                 else if (path.startsWith(TILE_PREFIX)) tiles++;
+                else if (path.startsWith(BUDGET_ATTACHMENT_PREFIX))
+                    paycheckAttachments++;
             }
             if (!actual.equals(expected) || json == null)
                 throw new IllegalArgumentException("Kopia ZIP zawiera brakujące lub obce pliki.");
             validatePayloadNamesAgainstJson(json, expected);
-            return new Inspection(
-                json, new ArrayList<>(expected), storage, legacyThumbs, tiles);
+            return new Inspection(json,new ArrayList<>(expected),
+                storage,legacyThumbs,tiles,paycheckAttachments);
         }
     }
 
@@ -472,7 +511,30 @@ final class DataBackupArchive {
                 String id = name.substring(0, name.length() - 4);
                 if (!HomeTileCatalog.validTileId(id))
                     throw new IllegalArgumentException("Nieprawidłowa ikona kafelka.");
+            } else if (path.startsWith(BUDGET_ATTACHMENT_PREFIX)) {
+                String name=path.substring(BUDGET_ATTACHMENT_PREFIX.length());
+                String raw=root.getJSONObject("settings").optString(
+                    "paycheckBudgetAttachments","[]");
+                JSONArray attachments=new JSONArray(raw);
+                boolean found=false;
+                for (int i=0;i<attachments.length();i++)
+                    if (name.equals(attachments.getJSONObject(i)
+                            .optString("fileName"))) {
+                        found=true;break;
+                    }
+                if (!found)
+                    throw new IllegalArgumentException(
+                        "Załącznik wskazuje brakującą pozycję metadanych.");
             }
+        }
+        String rawAttachments=root.getJSONObject("settings").optString(
+            "paycheckBudgetAttachments","[]");
+        JSONArray attachmentMeta=new JSONArray(rawAttachments);
+        for (int i=0;i<attachmentMeta.length();i++) {
+            String name=attachmentMeta.getJSONObject(i).getString("fileName");
+            if (!paths.contains(BUDGET_ATTACHMENT_PREFIX+name))
+                throw new IllegalArgumentException(
+                    "Brakuje pliku załącznika budżetu.");
         }
     }
 
@@ -490,6 +552,9 @@ final class DataBackupArchive {
             String id = path.substring(TILE_PREFIX.length(), path.length() - 4);
             return HomeTileCatalog.validTileId(id);
         }
+        if (path.matches(
+                "media/paycheck-budget-attachments/[0-9a-fA-F-]{36}\\.(?:pdf|img)"))
+            return true;
         return false;
     }
 
@@ -516,16 +581,26 @@ final class DataBackupArchive {
     }
 
     private static void extractMedia(File archive, List<String> paths,
-            File stageStorage, File stageTiles) throws Exception {
+            File stageStorage, File stageTiles, File stageBudget)
+            throws Exception {
         try (ZipFile zip = new ZipFile(archive)) {
             byte[] buffer = new byte[8192];
             for (String path : paths) {
-                if (!(path.startsWith(STORAGE_PREFIX) || path.startsWith(TILE_PREFIX)))
+                if (!(path.startsWith(STORAGE_PREFIX)
+                        || path.startsWith(TILE_PREFIX)
+                        || path.startsWith(BUDGET_ATTACHMENT_PREFIX)))
                     continue;
                 ZipEntry entry = zip.getEntry(path);
-                File destination = path.startsWith(STORAGE_PREFIX)
-                    ? new File(stageStorage, path.substring(STORAGE_PREFIX.length()))
-                    : new File(stageTiles, path.substring(TILE_PREFIX.length()));
+                File destination;
+                if (path.startsWith(STORAGE_PREFIX))
+                    destination = new File(stageStorage,
+                        path.substring(STORAGE_PREFIX.length()));
+                else if (path.startsWith(TILE_PREFIX))
+                    destination = new File(stageTiles,
+                        path.substring(TILE_PREFIX.length()));
+                else
+                    destination = new File(stageBudget,
+                        path.substring(BUDGET_ATTACHMENT_PREFIX.length()));
                 try (InputStream input = zip.getInputStream(entry);
                      FileOutputStream output = new FileOutputStream(destination)) {
                     int count;
@@ -534,9 +609,16 @@ final class DataBackupArchive {
                         written += count;
                         if (written > StorageOriginals.MAX_FILE_BYTES
                                 && path.startsWith(STORAGE_PREFIX))
-                            throw new IllegalArgumentException("Zdjęcie w kopii jest za duże.");
-                        if (written > 8L * 1024 * 1024 && path.startsWith(TILE_PREFIX))
-                            throw new IllegalArgumentException("Ikona w kopii jest za duża.");
+                            throw new IllegalArgumentException(
+                                "Zdjęcie w kopii jest za duże.");
+                        if (written > 8L * 1024 * 1024
+                                && path.startsWith(TILE_PREFIX))
+                            throw new IllegalArgumentException(
+                                "Ikona w kopii jest za duża.");
+                        if (written > PaycheckBudgetAttachmentStore.MAX_FILE_BYTES
+                                && path.startsWith(BUDGET_ATTACHMENT_PREFIX))
+                            throw new IllegalArgumentException(
+                                "Załącznik budżetu w kopii jest za duży.");
                         output.write(buffer, 0, count);
                     }
                 }
