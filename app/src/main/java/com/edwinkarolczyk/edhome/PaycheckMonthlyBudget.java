@@ -57,6 +57,8 @@ final class PaycheckMonthlyBudget {
         final Map<String, Long> amountChanges = new LinkedHashMap<>();
         final Map<String, Long> balanceAdjustmentsGrosz = new LinkedHashMap<>();
         final Map<String, String> adjustmentReasons = new LinkedHashMap<>();
+        final Map<String, Long> creditApplicationsGrosz = new LinkedHashMap<>();
+        final Map<String, Long> creditApplicationCreatedAt = new LinkedHashMap<>();
     }
 
     static final class Totals {
@@ -69,6 +71,26 @@ final class PaycheckMonthlyBudget {
 
         boolean empty() {
             return income == 0L && expense == 0L;
+        }
+    }
+
+    static final class Arrear {
+        final YearMonth sourceMonth;
+        final long amountGrosz;
+
+        Arrear(YearMonth sourceMonth, long amountGrosz) {
+            this.sourceMonth = sourceMonth;
+            this.amountGrosz = amountGrosz;
+        }
+    }
+
+    static final class Credit {
+        final YearMonth sourceMonth;
+        final long amountGrosz;
+
+        Credit(YearMonth sourceMonth, long amountGrosz) {
+            this.sourceMonth = sourceMonth;
+            this.amountGrosz = amountGrosz;
         }
     }
 
@@ -296,36 +318,112 @@ final class PaycheckMonthlyBudget {
     }
 
     /**
-     * Positive value = niedopłata carried into the selected month.
-     * Negative value = nadpłata/credit available to reduce later occurrences.
-     * Optional items intentionally never create arrears.
+     * Zaległości są liczone osobno per miesiąc źródłowy.
+     * Nadpłata nigdy nie kompensuje ich automatycznie.
      */
-    static long sharedCarryBefore(SQLiteDatabase db, Item item, YearMonth month) {
-        if (item.optional || !"expense".equals(item.kind)) return 0L;
+    static List<Arrear> sharedArrearsBefore(SQLiteDatabase db, Item item,
+            YearMonth month) {
+        List<Arrear> result = new ArrayList<>();
+        if (item.optional || !"expense".equals(item.kind)) return result;
         YearMonth cursor = YearMonth.parse(item.startMonth);
-        if (!cursor.isBefore(month)) {
-            Long adjustment = item.balanceAdjustmentsGrosz.get(month.toString());
-            return adjustment == null ? 0L : -adjustment;
-        }
-        long balance = 0L;
         int guard = 0;
         while (cursor.isBefore(month) && guard++ < 600) {
             if (occurs(item,cursor)) {
-                balance = Math.addExact(balance,
-                    plannedAmount(item,cursor)
-                    - sharedMatchedActual(db,item,cursor));
+                long planned = plannedAmount(item,cursor);
+                long actual = sharedMatchedActual(db,item,cursor);
+                long closed = item.balanceAdjustmentsGrosz.getOrDefault(
+                    cursor.toString(),0L);
+                long missing = planned - actual - closed;
+                if (missing > 0L) result.add(new Arrear(cursor,missing));
             }
-            Long adjustment =
-                item.balanceAdjustmentsGrosz.get(cursor.toString());
-            if (adjustment != null)
-                balance = Math.subtractExact(balance, adjustment);
             cursor = cursor.plusMonths(1);
         }
-        Long currentAdjustment =
-            item.balanceAdjustmentsGrosz.get(month.toString());
-        if (currentAdjustment != null)
-            balance = Math.subtractExact(balance,currentAdjustment);
-        return balance;
+        return result;
+    }
+
+    static long sharedCarryBefore(SQLiteDatabase db, Item item, YearMonth month) {
+        long total = 0L;
+        for (Arrear arrear : sharedArrearsBefore(db,item,month))
+            total = Math.addExact(total,arrear.amountGrosz);
+        return total;
+    }
+
+    static List<Credit> sharedCreditsBefore(SQLiteDatabase db, Item item,
+            YearMonth month) {
+        List<Credit> result = new ArrayList<>();
+        if (item.optional || !"expense".equals(item.kind)) return result;
+        YearMonth cursor = YearMonth.parse(item.startMonth);
+        int guard = 0;
+        while (cursor.isBefore(month) && guard++ < 600) {
+            if (occurs(item,cursor)) {
+                long extra = sharedMatchedActual(db,item,cursor)
+                    - plannedAmount(item,cursor);
+                if (extra > 0L) {
+                    long used = creditAppliedFrom(item,cursor);
+                    long available = extra - used;
+                    if (available > 0L)
+                        result.add(new Credit(cursor,available));
+                }
+            }
+            cursor = cursor.plusMonths(1);
+        }
+        return result;
+    }
+
+    static long sharedCreditBefore(SQLiteDatabase db, Item item, YearMonth month) {
+        long total = 0L;
+        for (Credit credit : sharedCreditsBefore(db,item,month))
+            total = Math.addExact(total,credit.amountGrosz);
+        return total;
+    }
+
+    static long creditAppliedTo(Item item, YearMonth targetMonth) {
+        long total = 0L;
+        String suffix = "|" + targetMonth;
+        for (Map.Entry<String,Long> entry
+                : item.creditApplicationsGrosz.entrySet())
+            if (entry.getKey().endsWith(suffix))
+                total = Math.addExact(total,entry.getValue());
+        return total;
+    }
+
+    private static long creditAppliedFrom(Item item, YearMonth sourceMonth) {
+        long total = 0L;
+        String prefix = sourceMonth + "|";
+        for (Map.Entry<String,Long> entry
+                : item.creditApplicationsGrosz.entrySet())
+            if (entry.getKey().startsWith(prefix))
+                total = Math.addExact(total,entry.getValue());
+        return total;
+    }
+
+    static void applyCredit(SharedPreferences prefs, SQLiteDatabase db,
+            String itemId, YearMonth sourceMonth, YearMonth targetMonth,
+            long amountGrosz) throws Exception {
+        validateAmount(amountGrosz);
+        if (!sourceMonth.isBefore(targetMonth))
+            throw new IllegalArgumentException(
+                "Nadpłatę można odliczyć tylko w późniejszym miesiącu.");
+        List<Item> items = load(prefs);
+        Item target = find(items,itemId);
+        long available = 0L;
+        for (Credit credit : sharedCreditsBefore(db,target,targetMonth))
+            if (credit.sourceMonth.equals(sourceMonth))
+                available = credit.amountGrosz;
+        if (amountGrosz > available)
+            throw new IllegalArgumentException(
+                "Kwota odliczenia przekracza dostępną nadpłatę.");
+        long planned = plannedAmount(target,targetMonth);
+        long alreadyApplied = creditAppliedTo(target,targetMonth);
+        if (amountGrosz > planned - alreadyApplied)
+            throw new IllegalArgumentException(
+                "Odliczenie nie może przekroczyć pozostałego planu tego miesiąca.");
+        String key = sourceMonth + "|" + targetMonth;
+        target.creditApplicationsGrosz.put(key,
+            Math.addExact(target.creditApplicationsGrosz.getOrDefault(key,0L),
+                amountGrosz));
+        target.creditApplicationCreatedAt.put(key,System.currentTimeMillis());
+        save(prefs,items);
     }
 
     static void closeArrears(SharedPreferences prefs, String itemId,
@@ -578,6 +676,10 @@ final class PaycheckMonthlyBudget {
         json.put("amountChanges", amounts(item.amountChanges));
         json.put("balanceAdjustmentsGrosz",
             amounts(item.balanceAdjustmentsGrosz));
+        json.put("creditApplicationsGrosz",
+            amounts(item.creditApplicationsGrosz));
+        json.put("creditApplicationCreatedAt",
+            amountsAllowZero(item.creditApplicationCreatedAt));
         JSONObject reasons = new JSONObject();
         for (Map.Entry<String, String> entry : item.adjustmentReasons.entrySet())
             reasons.put(entry.getKey(),entry.getValue());
@@ -626,6 +728,10 @@ final class PaycheckMonthlyBudget {
         readAmounts(json.optJSONObject("amountChanges"), item.amountChanges);
         readAmounts(json.optJSONObject("balanceAdjustmentsGrosz"),
             item.balanceAdjustmentsGrosz);
+        readAmounts(json.optJSONObject("creditApplicationsGrosz"),
+            item.creditApplicationsGrosz);
+        readAmountsAllowZero(json.optJSONObject("creditApplicationCreatedAt"),
+            item.creditApplicationCreatedAt);
         JSONObject reasons = json.optJSONObject("adjustmentReasons");
         if (reasons != null) {
             java.util.Iterator<String> reasonKeys = reasons.keys();
@@ -722,6 +828,9 @@ final class PaycheckMonthlyBudget {
         validateAmountMap(item.monthAmountOverrides);
         validateAmountMap(item.amountChanges);
         validateAmountMap(item.balanceAdjustmentsGrosz);
+        validateCreditApplications(item.creditApplicationsGrosz);
+        validateCreditApplicationTimes(item.creditApplicationsGrosz,
+            item.creditApplicationCreatedAt);
         if (item.adjustmentReasons.size() > 600)
             throw new IllegalArgumentException("Za dużo korekt budżetu.");
         for (Map.Entry<String, String> reason : item.adjustmentReasons.entrySet()) {
@@ -829,6 +938,61 @@ final class PaycheckMonthlyBudget {
                 throw new IllegalArgumentException("Nieprawidłowy miesiąc zmiany kwoty.");
             }
             validateAmount(entry.getValue() == null ? -1L : entry.getValue());
+        }
+    }
+
+    private static JSONObject amountsAllowZero(
+            Map<String,Long> values) throws Exception {
+        JSONObject json = new JSONObject();
+        for (Map.Entry<String,Long> entry : values.entrySet())
+            json.put(entry.getKey(),entry.getValue());
+        return json;
+    }
+
+    private static void readAmountsAllowZero(
+            JSONObject json, Map<String,Long> target) {
+        if (json == null) return;
+        java.util.Iterator<String> keys = json.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            target.put(key,json.optLong(key,0L));
+        }
+    }
+
+    private static void validateCreditApplications(Map<String,Long> values) {
+        if (values.size() > 1200)
+            throw new IllegalArgumentException("Za dużo odliczeń nadpłat.");
+        for (Map.Entry<String,Long> entry : values.entrySet()) {
+            String[] parts = entry.getKey().split("\\|",-1);
+            if (parts.length != 2)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowe odliczenie nadpłaty.");
+            try {
+                YearMonth source = YearMonth.parse(parts[0]);
+                YearMonth target = YearMonth.parse(parts[1]);
+                if (!source.isBefore(target))
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowy okres odliczenia nadpłaty.");
+            } catch (IllegalArgumentException known) {
+                throw known;
+            } catch (Exception invalid) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy miesiąc odliczenia nadpłaty.");
+            }
+            validateAmount(entry.getValue() == null ? -1L : entry.getValue());
+        }
+    }
+
+    private static void validateCreditApplicationTimes(
+            Map<String,Long> applications, Map<String,Long> times) {
+        if (times.size() != applications.size())
+            throw new IllegalArgumentException(
+                "Niepełna historia odliczeń nadpłat.");
+        for (Map.Entry<String,Long> time : times.entrySet()) {
+            if (!applications.containsKey(time.getKey())
+                    || time.getValue() == null || time.getValue() <= 0L)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa data odliczenia nadpłaty.");
         }
     }
 
