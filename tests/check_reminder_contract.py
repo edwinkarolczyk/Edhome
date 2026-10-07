@@ -13,7 +13,7 @@ for expected in (
     'if (!expected.equals(actual)',
     'ReminderRules.target(taskDue, time, lead,',
     'quietStart, quietEnd).isAfter(now)',
-    'manager.setAndAllowWhileIdle(',
+    'LegacyCompat.setAndAllowWhileIdle(manager,',
     'ReminderRules.nextAllowed(when,',
     'Intent.ACTION_BOOT_COMPLETED',
     'Intent.ACTION_MY_PACKAGE_REPLACED',
