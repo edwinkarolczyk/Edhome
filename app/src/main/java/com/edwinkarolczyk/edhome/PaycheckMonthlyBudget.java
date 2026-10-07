@@ -50,6 +50,7 @@ final class PaycheckMonthlyBudget {
         String creditAgreementNumber;
         String recipientId;
         boolean active;
+        String inactiveFromMonth;
         final List<String> matchedOperationIds = new ArrayList<>();
         final Map<String, Long> matchedAllocationsGrosz = new LinkedHashMap<>();
         final Set<String> skippedMonths = new HashSet<>();
@@ -152,6 +153,7 @@ final class PaycheckMonthlyBudget {
             ? "" : creditAgreementNumber.trim();
         item.recipientId = recipientId == null ? "" : recipientId.trim();
         item.active = true;
+        item.inactiveFromMonth = "";
         validate(item);
         return item;
     }
@@ -178,12 +180,15 @@ final class PaycheckMonthlyBudget {
     static boolean delete(SharedPreferences prefs, String id) throws Exception {
         List<Item> items = load(prefs);
         Item target = find(items,id);
-        if (!target.active) return false;
+        YearMonth from=YearMonth.now();
+        if (!target.active && target.inactiveFromMonth != null
+                && !target.inactiveFromMonth.isBlank()) return false;
         target.active = false;
+        target.inactiveFromMonth = from.toString();
         save(prefs,items);
-        PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
-            "ITEM_DEACTIVATED",plannedAmount(target,YearMonth.now()),
-            "Usunięto z bieżącego planu; historia pozostaje.");
+        PaycheckBudgetHistoryStore.append(prefs,target,from,
+            "ITEM_DEACTIVATED",plannedAmount(target,from),
+            "Usunięto od " + from + "; wcześniejsze miesiące pozostają w historii.");
         return true;
     }
 
@@ -644,8 +649,19 @@ final class PaycheckMonthlyBudget {
     static List<Item> activeFor(List<Item> items, YearMonth month) {
         List<Item> result = new ArrayList<>();
         for (Item item : items)
-            if (item.active && occurs(item, month)) result.add(item);
+            if (activeInMonth(item,month) && occurs(item,month)) result.add(item);
         return result;
+    }
+
+    private static boolean activeInMonth(Item item, YearMonth month) {
+        if (item.active) return true;
+        if (item.inactiveFromMonth == null || item.inactiveFromMonth.isBlank())
+            return false;
+        try {
+            return month.isBefore(YearMonth.parse(item.inactiveFromMonth));
+        } catch(Exception invalid) {
+            return false;
+        }
     }
 
     static Totals planned(List<Item> items, YearMonth month) {
@@ -823,6 +839,7 @@ final class PaycheckMonthlyBudget {
         json.put("creditAgreementNumber", item.creditAgreementNumber);
         json.put("recipientId", item.recipientId);
         json.put("active", item.active);
+        json.put("inactiveFromMonth", item.inactiveFromMonth);
         JSONArray matches = new JSONArray();
         for (String operationId : item.matchedOperationIds)
             matches.put(operationId);
@@ -878,6 +895,8 @@ final class PaycheckMonthlyBudget {
             json.optString("creditAgreementNumber", "").trim();
         item.recipientId = json.optString("recipientId", "").trim();
         item.active = !json.has("active") || json.getBoolean("active");
+        item.inactiveFromMonth =
+            json.optString("inactiveFromMonth","").trim();
         JSONArray matches = json.optJSONArray("matches");
         if (matches != null) {
             if (matches.length() > MAX_MATCHES_PER_ITEM)
@@ -987,8 +1006,16 @@ final class PaycheckMonthlyBudget {
                 || item.creditAgreementNumber.length() > 80
                 || item.recipientId == null
                 || (!item.recipientId.isBlank()
-                    && !item.recipientId.matches("[0-9a-fA-F-]{36}")))
+                    && !item.recipientId.matches("[0-9a-fA-F-]{36}"))
+                || item.inactiveFromMonth == null)
             throw new IllegalArgumentException("Nieprawidłowa pozycja planu PayCheck.");
+        if (!item.inactiveFromMonth.isBlank()) {
+            try { YearMonth.parse(item.inactiveFromMonth); }
+            catch(Exception invalid) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy miesiąc wyłączenia pozycji.");
+            }
+        }
         if (!item.creditAgreementNumber.isBlank()
                 && (!"expense".equals(item.kind)
                     || !"loans".equals(item.category)))
