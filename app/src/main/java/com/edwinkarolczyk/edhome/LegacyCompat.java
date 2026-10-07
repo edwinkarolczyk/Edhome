@@ -54,6 +54,7 @@ final class LegacyCompat {
         else context.startService(intent);
     }
 
+    @android.annotation.TargetApi(23)
     private static final class Api23 {
         static void setAndAllowWhileIdle(AlarmManager manager, int type,
                 long triggerAtMillis, PendingIntent operation) {
@@ -61,12 +62,14 @@ final class LegacyCompat {
         }
     }
 
+    @android.annotation.TargetApi(24)
     private static final class Api24 {
         static boolean notificationsEnabled(NotificationManager manager) {
             return manager.areNotificationsEnabled();
         }
     }
 
+    @android.annotation.TargetApi(26)
     private static final class Api26 {
         static void ensureChannel(NotificationManager manager, String id, String name,
                 int importance, String description, boolean privateVisibility,
