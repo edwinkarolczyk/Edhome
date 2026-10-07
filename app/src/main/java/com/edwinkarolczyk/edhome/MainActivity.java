@@ -14455,11 +14455,12 @@ public final class MainActivity extends Activity {
             java.util.List<PaycheckMonthlyBudget.Item> activeItems =
                 PaycheckMonthlyBudget.activeFor(items, month);
             activeItems.sort((a,b) -> {
-                int ad = a.dueDay <= 0 ? 99 : a.dueDay;
-                int bd = b.dueDay <= 0 ? 99 : b.dueDay;
-                int byDay = Integer.compare(ad, bd);
+                int ad = budgetSortDay(a,month);
+                int bd = budgetSortDay(b,month);
+                int byDay = Integer.compare(ad,bd);
                 return byDay != 0 ? byDay
-                    : a.name.compareToIgnoreCase(b.name);
+                    : budgetItemDisplayName(a)
+                        .compareToIgnoreCase(budgetItemDisplayName(b));
             });
 
             expandedBudgetDetailsView = null;
@@ -14497,8 +14498,8 @@ public final class MainActivity extends Activity {
                 if (byMonth != 0) return byMonth;
                 PaycheckMonthlyBudget.Item ai = arrearItems.get(left);
                 PaycheckMonthlyBudget.Item bi = arrearItems.get(right);
-                int ad = ai.dueDay <= 0 ? 99 : ai.dueDay;
-                int bd = bi.dueDay <= 0 ? 99 : bi.dueDay;
+                int ad = budgetSortDay(ai,a.sourceMonth);
+                int bd = budgetSortDay(bi,b.sourceMonth);
                 return Integer.compare(ad,bd);
             });
 
@@ -14526,6 +14527,36 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private int budgetSortDay(PaycheckMonthlyBudget.Item item,
+            YearMonth month) {
+        java.time.LocalDate planned =
+            PaycheckMonthlyBudget.plannedPaymentDate(item,month);
+        if (planned != null) return planned.getDayOfMonth();
+        return item.dueDay <= 0 ? 99 : item.dueDay;
+    }
+
+    private String budgetItemDisplayName(PaycheckMonthlyBudget.Item item) {
+        if (item == null) return "";
+        if (item.recipientId == null || item.recipientId.isBlank())
+            return item.name;
+        try {
+            String recipient = PaycheckRecipientStore.name(
+                PaycheckRecipientStore.load(prefs),item.recipientId);
+            if (recipient.isBlank()
+                    || recipient.equalsIgnoreCase(item.name))
+                return item.name;
+            return recipient + " • " + item.name;
+        } catch(Exception ignored) {
+            return item.name;
+        }
+    }
+
+    private String budgetDateLabel(java.time.LocalDate date) {
+        if (date == null) return "—";
+        return String.format(java.util.Locale.ROOT,"%02d.%02d",
+            date.getDayOfMonth(),date.getMonthValue());
+    }
+
     private void budgetItemCard(PaycheckMonthlyBudget.Item item,
             YearMonth month) {
         boolean scheduledThisMonth = !PaycheckMonthlyBudget.activeFor(
@@ -14540,18 +14571,22 @@ public final class MainActivity extends Activity {
         long dueTotal = Math.max(0L,planned-appliedCredit);
         long balanceAfter = dueTotal-actual;
 
-        String due = item.dueDay > 0
-            ? String.format(java.util.Locale.ROOT, "%02d.%02d",
-                Math.min(item.dueDay, month.lengthOfMonth()),
-                month.getMonthValue())
-            : "—";
+        java.time.LocalDate plannedDate =
+            PaycheckMonthlyBudget.plannedPaymentDate(item,month);
+        java.time.LocalDate invoiceDate =
+            PaycheckMonthlyBudget.invoiceDueDate(item,month);
+        String due = budgetDateLabel(plannedDate);
         String type;
         if (item.installment) {
             int position = PaycheckMonthlyBudget.installmentPosition(item, month);
             int total = PaycheckMonthlyBudget.installmentTotal(item);
-            boolean last = scheduledThisMonth && total > 0 && position == total;
+            int includingCurrent = total > 0
+                ? Math.max(0,total-position+1) : 0;
+            String tail = includingCurrent == 1
+                ? " • ⚠ ostatnia"
+                : (includingCurrent == 2 ? " • ⚠ ostatnie 2" : "");
             type = total > 0
-                ? "Rata " + position + "/" + total + (last ? " • ⚠ ostatnia" : "")
+                ? "Rata " + position + "/" + total + tail
                 : "Rata";
         } else if (item.cycleMonths == 0) {
             type = "1×";
@@ -14596,7 +14631,7 @@ public final class MainActivity extends Activity {
             new LinearLayout.LayoutParams(-1,-2);
         body.addView(box,boxParams);
 
-        String prefix = due + "  " + item.name + "  "
+        String prefix = due + "  " + budgetItemDisplayName(item) + "  "
             + MoneyRules.format(dueTotal) + "  [" + type + "]  ";
         android.text.SpannableString summary =
             new android.text.SpannableString(prefix + status);
@@ -14622,12 +14657,24 @@ public final class MainActivity extends Activity {
         details.setVisibility(expanded ? View.VISIBLE : View.GONE);
         if (expanded) expandedBudgetDetailsView = details;
 
+        if (item.recipientId != null && !item.recipientId.isBlank()) {
+            try {
+                String recipientName = PaycheckRecipientStore.name(
+                    PaycheckRecipientStore.load(prefs),item.recipientId);
+                if (!recipientName.isBlank())
+                    details.addView(text("Odbiorca: " + recipientName,13,false));
+            } catch(Exception ignored) { }
+        }
+        details.addView(text("Zobowiązanie: " + item.name,13,false));
         details.addView(text("Kategoria: "
             + MoneyRules.categoryLabel(item.category),13,false));
         if (item.creditAgreementNumber != null
                 && !item.creditAgreementNumber.isBlank())
             details.addView(text("Nr umowy kredytowej: "
                 + item.creditAgreementNumber,13,false));
+        if (invoiceDate != null)
+            details.addView(text("Termin faktury: " + invoiceDate
+                + " • planowana zapłata: " + plannedDate,13,false));
         details.addView(text("Plan tego miesiąca: " + MoneyRules.format(planned)
             + " • zapłacono/potwierdzono: " + MoneyRules.format(actual),
             13,false));
@@ -14646,9 +14693,23 @@ public final class MainActivity extends Activity {
             int position = PaycheckMonthlyBudget.installmentPosition(item,month);
             int total = PaycheckMonthlyBudget.installmentTotal(item);
             int left = total > 0 ? Math.max(0,total-position) : 0;
+            long totalPlanned =
+                PaycheckMonthlyBudget.installmentTotalPlanned(item);
+            long totalPaid =
+                PaycheckMonthlyBudget.sharedMatchedActualAll(
+                    db.getReadableDatabase(),item);
+            long totalLeft = Math.max(0L,totalPlanned-totalPaid);
+            java.time.YearMonth end =
+                PaycheckMonthlyBudget.installmentEndMonth(item);
             details.addView(text(total > 0
                 ? "Rata " + position + "/" + total + " • zostało " + left
+                    + " • koniec " + (end == null ? "—" : end)
                 : "Rata",13,false));
+            details.addView(text("Zobowiązanie łącznie: "
+                + MoneyRules.format(totalPlanned)
+                + " • zapłacono: " + MoneyRules.format(totalPaid)
+                + " • pozostało: " + MoneyRules.format(totalLeft),
+                13,false));
         }
 
         LinearLayout actions = new LinearLayout(this);
@@ -14717,12 +14778,11 @@ public final class MainActivity extends Activity {
             java.time.format.TextStyle.SHORT_STANDALONE,
             new java.util.Locale("pl","PL")).toUpperCase(
                 new java.util.Locale("pl","PL"));
-        String due = item.dueDay > 0
-            ? String.format(java.util.Locale.ROOT,"%02d.%02d",
-                Math.min(item.dueDay,arrear.sourceMonth.lengthOfMonth()),
-                arrear.sourceMonth.getMonthValue())
-            : "—";
-        String prefix = due + "  Niedopłata " + item.name + " z "
+        String due = budgetDateLabel(
+            PaycheckMonthlyBudget.plannedPaymentDate(
+                item,arrear.sourceMonth));
+        String prefix = due + "  Niedopłata "
+            + budgetItemDisplayName(item) + " z "
             + monthLabel + " " + arrear.sourceMonth.getYear() + "  "
             + MoneyRules.format(arrear.amountGrosz) + "  ";
         String status = "ZALEGŁE";
