@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.content.ComponentName;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import android.os.Build;
 import java.lang.ref.WeakReference;
 
 /** Beta-only manifest entry. System permission + explicit app allowlist
@@ -36,8 +37,9 @@ public final class BankNotificationListener extends NotificationListenerService 
         // app update. Ask the framework to bind us again; no foreground
         // service or permanent notification is required.
         try {
-            requestRebind(new ComponentName(this,
-                BankNotificationListener.class));
+            if (Build.VERSION.SDK_INT >= 24)
+                Api24.requestRebind(new ComponentName(this,
+                    BankNotificationListener.class));
         } catch (RuntimeException ignored) {
             // The system may be shutting down or the permission may be gone.
         }
@@ -73,6 +75,13 @@ public final class BankNotificationListener extends NotificationListenerService 
             // Android can revoke permission or disconnect during the query.
             // Do not log bank notification contents or alter ledger entries.
             DiagnosticLog.error("BANK_NOTIFICATION_RECHECK",disconnected);
+        }
+    }
+
+    @android.annotation.TargetApi(24)
+    private static final class Api24 {
+        static void requestRebind(ComponentName component) {
+            NotificationListenerService.requestRebind(component);
         }
     }
 
