@@ -13970,42 +13970,135 @@ public final class MainActivity extends Activity {
                 new String[]{operationId})) {
             if (!tx.moveToFirst() || !"confirmed".equals(tx.getString(5)))
                 return false;
-            YearMonth month=PaycheckMonthlyBudget.transactionMonth(
+
+            final String kind = tx.getString(0);
+            final String category = tx.getString(1);
+            final long txAmount = tx.getLong(2);
+            final YearMonth month = PaycheckMonthlyBudget.transactionMonth(
                 tx.getLong(3),tx.isNull(4)?null:tx.getString(4));
-            java.util.List<PaycheckMonthlyBudget.Item> items=
+            final java.util.List<PaycheckMonthlyBudget.Item> items =
                 PaycheckMonthlyBudget.load(prefs);
-            PaycheckMonthlyBudget.Item candidate=
+
+            final PaycheckMonthlyBudget.Item candidate =
                 PaycheckMonthlyBudget.suggest(items,month,
-                    tx.getString(0),tx.getString(1),tx.getLong(2));
-            if(candidate==null)return false;
+                    kind,category,txAmount);
+            final PaycheckMonthlyBudget.Item[] pair =
+                budgetSplitPair(items,month,kind,txAmount);
+
+            if (candidate == null && pair == null) return false;
+
+            java.util.List<String> choices = new java.util.ArrayList<>();
+            java.util.List<Integer> actions = new java.util.ArrayList<>();
+            if (candidate != null) {
+                choices.add("Przypisz całość → " + candidate.name
+                    + " • " + MoneyRules.format(
+                        PaycheckMonthlyBudget.plannedAmount(candidate,month)));
+                actions.add(1);
+            }
+            if (pair != null) {
+                choices.add("Podziel → " + pair[0].name + " + " + pair[1].name
+                    + " • razem "
+                    + MoneyRules.format(
+                        PaycheckMonthlyBudget.plannedAmount(pair[0],month)
+                        + PaycheckMonthlyBudget.plannedAmount(pair[1],month)));
+                actions.add(2);
+            }
+            choices.add("Nie, zostaw poza planem");
+            actions.add(0);
+
             new AlertDialog.Builder(this)
                 .setTitle("Pasuje do Budżetu miesiąca")
-                .setMessage(MoneyRules.format(tx.getLong(2))
-                    +" wygląda jak „"+candidate.name+"”.\n\n"
-                    +"Plan: "+MoneyRules.format(candidate.amountGrosz)
-                    +" • "+budgetMonthLabel(month)
-                    +"\n\nPrzypisać tę potwierdzoną transakcję? "
-                    +"Nie zmieni to salda drugi raz.")
-                .setNegativeButton("Nie, zostaw poza planem",(d,w)->done.run())
-                .setPositiveButton("Tak, przypisz",(d,w)->{
+                .setMessage(MoneyRules.format(txAmount)
+                    + " • " + budgetMonthLabel(month)
+                    + "\n\nMożesz przypisać całą płatność albo — jeśli suma "
+                    + "pasuje — rozdzielić ją na dwie pozycje planu. "
+                    + "Nie zmieni to salda drugi raz.")
+                .setItems(choices.toArray(new String[0]),(d,index)->{
+                    int action=actions.get(index);
+                    if(action==0) {
+                        done.run();
+                        return;
+                    }
                     try {
-                        PaycheckMonthlyBudget.match(
-                            prefs,candidate.id,operationId);
-                        DiagnosticLog.event(
-                            "PAYCHECK_SHARED_BUDGET_MATCHED");
+                        if(action==1) {
+                            PaycheckMonthlyBudget.match(
+                                prefs,candidate.id,operationId);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_MATCHED");
+                        } else {
+                            long first = PaycheckMonthlyBudget.plannedAmount(
+                                pair[0],month);
+                            long second = txAmount - first;
+                            if(first < 1 || second < 1)
+                                throw new IllegalArgumentException(
+                                    "Nie można podzielić tej kwoty.");
+                            PaycheckMonthlyBudget.allocateMatch(
+                                prefs,pair[0].id,operationId,first);
+                            PaycheckMonthlyBudget.allocateMatch(
+                                prefs,pair[1].id,operationId,second);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_SPLIT_MATCHED");
+                        }
                     } catch(Exception error) {
                         DiagnosticLog.error(
                             "PAYCHECK_SHARED_BUDGET_MATCH",error);
                         alert("Transakcja została potwierdzona, ale nie "
-                            +"przypisano jej do budżetu.");
+                            + "przypisano jej do budżetu.");
                     }
                     done.run();
-                }).show();
+                })
+                .setNegativeButton("Anuluj",(d,w)->done.run())
+                .show();
             return true;
         } catch(Exception error) {
             DiagnosticLog.error("PAYCHECK_BUDGET_SUGGEST",error);
             return false;
         }
+    }
+
+    private PaycheckMonthlyBudget.Item[] budgetSplitPair(
+            java.util.List<PaycheckMonthlyBudget.Item> items,
+            YearMonth month, String kind, long transactionAmount) {
+        java.util.List<PaycheckMonthlyBudget.Item> candidates =
+            new java.util.ArrayList<>();
+        for (PaycheckMonthlyBudget.Item item
+                : PaycheckMonthlyBudget.activeFor(items,month)) {
+            if (!kind.equals(item.kind)) continue;
+            long already = PaycheckMonthlyBudget.sharedMatchedActual(
+                db.getReadableDatabase(),item,month);
+            if (already > 0) continue;
+            candidates.add(item);
+        }
+
+        PaycheckMonthlyBudget.Item[] best = null;
+        long bestDiff = Long.MAX_VALUE;
+        boolean tied = false;
+        for (int i=0;i<candidates.size();i++) {
+            long first = PaycheckMonthlyBudget.plannedAmount(
+                candidates.get(i),month);
+            for (int j=i+1;j<candidates.size();j++) {
+                long second = PaycheckMonthlyBudget.plannedAmount(
+                    candidates.get(j),month);
+                long sum;
+                try {
+                    sum = Math.addExact(first,second);
+                } catch (ArithmeticException overflow) {
+                    continue;
+                }
+                long diff = Math.abs(sum-transactionAmount);
+                long tolerance = Math.max(100L,transactionAmount*2L/100L);
+                if (diff > tolerance) continue;
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    best = new PaycheckMonthlyBudget.Item[]{
+                        candidates.get(i),candidates.get(j)};
+                    tied = false;
+                } else if (diff == bestDiff) {
+                    tied = true;
+                }
+            }
+        }
+        return tied ? null : best;
     }
 
     private boolean offerPrivateBudgetMatch(String operationId,
