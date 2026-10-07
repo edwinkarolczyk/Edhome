@@ -111,6 +111,12 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 24. **Przypomnienia:** domyślnie 3 dni przed planowaną zapłatą i w dniu zapłaty; po rozliczeniu wyłączyć dalsze przypomnienia.
 25. **Załącznik:** opcjonalne zdjęcie/PDF faktury ukryte w rozwinięciu pozycji; nie zaśmieca głównej listy.
 
+### Stan wdrożenia Budżetu miesiąca
+
+- **0.8.0.40 / P0:** zwarta lista, jeden rozwinięty wpis, kolory statusów, wpływy osobno, zaległości jako osobne wiersze, nadpłata tylko za zgodą, historia ręcznych zamknięć i zakres zamknięcia cyklu.
+- **0.8.0.41 / P1 — kandydat w CI:** trwała kartoteka odbiorców (odbiorca ≠ zobowiązanie), pełny postęp rat z wyliczaniem drugiego parametru, suma/zapłacono/pozostało oraz osobny termin faktury i planowana data zapłaty według reguły wcześniejszej daty z: 10. dzień miesiąca / termin faktury.
+- **Dalej:** przypomnienia 3 dni przed + w dniu zapłaty oraz lokalne zdjęcie/PDF faktury w rozwinięciu.
+
 ### Kolejność wdrożenia Budżetu miesiąca
 
 - **P0 — prawidłowe rozliczenia i UX listy:** punkty 2–8, 11–18.
