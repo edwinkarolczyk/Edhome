@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 232,
-  "versionName": "0.8.0.40",
-  "changelog": "EDHOME 0.8.0.40 — Budżet miesiąca P0. Roadmapa zawiera obowiązujący kontrakt 25/25. Bieżący przepływ korzysta z jednego PayCheck; dane starego prywatnego sejfu pozostają zachowane, ale nie są eksponowane w głównym UX. Budżet ma zwartą listę bez kafelków, tylko jedną rozwiniętą pozycję naraz, wpływy nad wydatkami, zielony/czerwony/żółty/niebieski status, zaległości jako osobne czerwone wiersze z miesiącem źródłowym, nadpłaty niewykorzystywane automatycznie oraz jawne odliczenie nadpłaty po potwierdzeniu. Ręczne zamknięcie zapisuje powód i datę; cykliczne pozwala zamknąć tylko miesiąc, cały cykl albo pokryć pozycję nadpłatą. Main/Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.40/edhome-beta.apk",
-  "sha256": "1b06353cbbb004775cb18e8734d9df3d99c9303b5ef9b1c0ee397fff421f4000"
+  "versionCode": 233,
+  "versionName": "0.8.0.41",
+  "changelog": "EDHOME 0.8.0.41 — Beta. Desktop działa jako lokalny Hub/API na TCP 45823, discovery po UDP 45822; Android jest klientem, parowanie QR zapisuje ID Desktopu i token, telefon automatycznie ponawia połączenie i pokazuje diagnostykę hosta. Zachowane Projekty z blokadami zależności, jednym timerem tej samej czynności, backupem przed pierwszym scaleniem, konfliktami Telefon/Desktop i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.41/edhome-beta.apk",
+  "sha256": "7384dd88d82887a2644186404216bf07b695f2538ac0b9ba8712f8530c5d1b9d"
 }
