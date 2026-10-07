@@ -2,7 +2,6 @@ package com.edwinkarolczyk.edhome;
 
 import android.Manifest;
 import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -35,18 +34,14 @@ final class BankReceiptNotifier {
         NotificationManager manager=(NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if(manager==null)return null;
-        NotificationChannel channel=new NotificationChannel(CHANNEL,
+        LegacyCompat.ensureChannel(manager, CHANNEL,
             "PayCheck • odebrane powiadomienia bankowe",
-            NotificationManager.IMPORTANCE_DEFAULT);
-        channel.setDescription(
-            "Potwierdza odbiór sygnału z wybranego banku; nie potwierdza księgowania.");
-        channel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
-        manager.createNotificationChannel(channel);
-        if(!manager.areNotificationsEnabled())return null;
-        NotificationChannel configured=manager.getNotificationChannel(CHANNEL);
-        return configured!=null
-            &&configured.getImportance()==NotificationManager.IMPORTANCE_NONE
-            ?null:manager;
+            NotificationManager.IMPORTANCE_DEFAULT,
+            "Potwierdza odbiór sygnału z wybranego banku; nie potwierdza księgowania.",
+            true, true, false);
+        if(!LegacyCompat.notificationsEnabled(manager)
+                ||!LegacyCompat.channelEnabled(manager, CHANNEL))return null;
+        return manager;
     }
 
     private static String bankLabel(Context context,String source) {
@@ -65,7 +60,7 @@ final class BankReceiptNotifier {
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
                 |Intent.FLAG_ACTIVITY_SINGLE_TOP);
         return PendingIntent.getActivity(context,requestCode,open,
-            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            PendingIntent.FLAG_UPDATE_CURRENT|LegacyCompat.immutableFlag());
     }
 
     static void show(Context context,BankNotificationHints.Entry entry) {
@@ -77,12 +72,12 @@ final class BankReceiptNotifier {
             String amount=MoneyRules.format(entry.amount);
             String title="EDHOME • zapisano "
                 +("income".equals(entry.kind)?"wpływ ":"wydatek ")+amount;
-            Notification publicView=new Notification.Builder(context,CHANNEL)
+            Notification publicView=LegacyCompat.notificationBuilder(context,CHANNEL)
                 .setSmallIcon(R.drawable.ic_edhome)
                 .setContentTitle("EDHOME • nowy sygnał bankowy")
                 .setContentText("Otwórz PayCheck, aby sprawdzić sugestię.")
                 .build();
-            Notification notice=new Notification.Builder(context,CHANNEL)
+            Notification notice=LegacyCompat.notificationBuilder(context,CHANNEL)
                 .setSmallIcon(R.drawable.ic_edhome)
                 .setContentTitle(title)
                 .setContentText(bank+" • do potwierdzenia w PayCheck")
@@ -111,12 +106,12 @@ final class BankReceiptNotifier {
             String body=recognized
                 ?bank+" • powiadomienie odebrane i zapisane do PayCheck"
                 :bank+" • powiadomienie odebrane, ale bez jednoznacznej transakcji";
-            Notification publicView=new Notification.Builder(context,CHANNEL)
+            Notification publicView=LegacyCompat.notificationBuilder(context,CHANNEL)
                 .setSmallIcon(R.drawable.ic_edhome)
                 .setContentTitle("EDHOME • test nasłuchu banku")
                 .setContentText("Otwórz PayCheck, aby zobaczyć wynik testu.")
                 .build();
-            Notification notice=new Notification.Builder(context,CHANNEL)
+            Notification notice=LegacyCompat.notificationBuilder(context,CHANNEL)
                 .setSmallIcon(R.drawable.ic_edhome)
                 .setContentTitle(title)
                 .setContentText(body)
