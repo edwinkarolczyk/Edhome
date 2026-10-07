@@ -15605,8 +15605,11 @@ public final class MainActivity extends Activity {
                             } else if (installmentSource[0] == 2) {
                                 // Liczba rat jest tylko wyliczonym polem UI.
                                 count = 0;
-                                YearMonth startForInstallment = YearMonth.parse(
-                                    startMonth.getText().toString().trim());
+                                YearMonth startForInstallment =
+                                    invoiceDue == null
+                                    ? YearMonth.parse(
+                                        startMonth.getText().toString().trim())
+                                    : YearMonth.from(invoiceDue);
                                 YearMonth endForInstallment = YearMonth.parse(end);
                                 long derivedCount = java.time.temporal.ChronoUnit.MONTHS
                                     .between(startForInstallment,endForInstallment) + 1L;
