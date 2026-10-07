@@ -428,11 +428,9 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && !desktopDataReceiverRegistered) {
             IntentFilter filter = new IntentFilter(
                 "com.edwinkarolczyk.edhome.DESKTOP_DATA_CHANGED");
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                registerReceiver(desktopDataChangedReceiver, filter,
-                    Context.RECEIVER_NOT_EXPORTED);
-            else
-                registerReceiver(desktopDataChangedReceiver, filter);
+            androidx.core.content.ContextCompat.registerReceiver(
+                this, desktopDataChangedReceiver, filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
             desktopDataReceiverRegistered = true;
         }
     }
@@ -513,7 +511,8 @@ public final class MainActivity extends Activity {
         if (unlocked && updater != null) updater.start();
         if (BetaUpdater.isBeta() && bankNotificationPermissionGranted()
                 && BankNotificationHints.enabled(this)
-                && !BankNotificationListener.isConnected()) {
+                && !BankNotificationListener.isConnected()
+                && Build.VERSION.SDK_INT >= 24) {
             try {
                 android.service.notification.NotificationListenerService
                     .requestRebind(new ComponentName(this,
@@ -1116,9 +1115,10 @@ public final class MainActivity extends Activity {
     }
 
     private void touchFeedback(View view) {
-        view.setForeground(new RippleDrawable(
-            ColorStateList.valueOf(skin.light ? 0x22000000 : 0x44FFFFFF),
-            null, skin.panel(this, Color.WHITE, 26)));
+        if (Build.VERSION.SDK_INT >= 23)
+            view.setForeground(new RippleDrawable(
+                ColorStateList.valueOf(skin.light ? 0x22000000 : 0x44FFFFFF),
+                null, skin.panel(this, Color.WHITE, 26)));
     }
 
     private int semanticTextColor(String kind) {
@@ -3125,8 +3125,9 @@ public final class MainActivity extends Activity {
         homeDragDropped = false;
         homeDragFinishQueued = false;
         ClipData data = ClipData.newPlainText("edhome-home-tile", id);
-        boolean started = tile.startDragAndDrop(data,
-            new View.DragShadowBuilder(tile), null, 0);
+        boolean started = Build.VERSION.SDK_INT >= 24
+            ? tile.startDragAndDrop(data, new View.DragShadowBuilder(tile), null, 0)
+            : tile.startDrag(data, new View.DragShadowBuilder(tile), null, 0);
         if (started) {
             tile.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             previewHomeTilePlacement(homeDragTargetIndex);
@@ -7406,7 +7407,6 @@ public final class MainActivity extends Activity {
         int weeks = "week".equals(calendarView) ? 1
             : (first.getDayOfWeek().getValue() - 1
                 + month.lengthOfMonth() + 6) / 7;
-        if (!"day".equals(calendarView) && !"agenda".equals(calendarView))
         for (int week = 0; week < weeks; week++) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
@@ -14176,8 +14176,11 @@ public final class MainActivity extends Activity {
         password.setHint("Hasło prywatnego sejfu");
         password.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        password.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
-        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        if (Build.VERSION.SDK_INT >= 26) {
+            password.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+            password.setImeOptions(
+                android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        }
         form.addView(password);
         EditText confirmation = null;
         if (first) {
@@ -14186,8 +14189,11 @@ public final class MainActivity extends Activity {
             confirmation.setHint("Powtórz hasło");
             confirmation.setInputType(android.text.InputType.TYPE_CLASS_TEXT
                 | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-            confirmation.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
-            confirmation.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+            if (Build.VERSION.SDK_INT >= 26) {
+                confirmation.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+                confirmation.setImeOptions(
+                    android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+            }
             form.addView(confirmation);
         }
         final EditText again = confirmation;
@@ -14762,8 +14768,11 @@ public final class MainActivity extends Activity {
         input.setHint(hint);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
-        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        if (Build.VERSION.SDK_INT >= 26) {
+            input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+            input.setImeOptions(
+                android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        }
         return input;
     }
 
