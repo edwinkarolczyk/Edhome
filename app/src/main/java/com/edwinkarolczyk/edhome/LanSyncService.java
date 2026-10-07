@@ -1,7 +1,6 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -57,7 +56,7 @@ public final class LanSyncService extends Service {
         if (!BetaUpdater.isBeta()) return;
         try {
             Intent intent = new Intent(context, LanSyncService.class);
-            context.startForegroundService(intent);
+            LegacyCompat.startForegroundService(context, intent);
         } catch (RuntimeException error) {
             DiagnosticLog.error("DESKTOP_SYNC_SERVICE_START", error);
         }
@@ -72,24 +71,18 @@ public final class LanSyncService extends Service {
 
         NotificationManager manager = (NotificationManager)
             getSystemService(NOTIFICATION_SERVICE);
-        if (manager != null) {
-            NotificationChannel channel = new NotificationChannel(
-                CHANNEL, "EDHOME Desktop • sieć lokalna",
-                NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription(
-                "Utrzymuje lokalne połączenie EDHOME Android ↔ Desktop.");
-            channel.setShowBadge(false);
-            channel.setSound(null, null);
-            channel.enableVibration(false);
-            manager.createNotificationChannel(channel);
-        }
+        LegacyCompat.ensureChannel(manager, CHANNEL,
+            "EDHOME Desktop • sieć lokalna",
+            NotificationManager.IMPORTANCE_LOW,
+            "Utrzymuje lokalne połączenie EDHOME Android ↔ Desktop.",
+            true, false, true);
 
         Intent open = new Intent(this, MainActivity.class)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pending = PendingIntent.getActivity(this, 0, open,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(this, CHANNEL)
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        Notification notification = LegacyCompat.notificationBuilder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME Desktop")
             .setContentText("Serwer LAN uruchamia się • czeka na PC")
@@ -140,8 +133,8 @@ public final class LanSyncService extends Service {
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pending = PendingIntent.getActivity(this, 0, open,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(this, CHANNEL)
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        Notification notification = LegacyCompat.notificationBuilder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME Desktop")
             .setContentText(state)
