@@ -14674,7 +14674,7 @@ public final class MainActivity extends Activity {
         LinearLayout lifecycle = new LinearLayout(this);
         lifecycle.setOrientation(LinearLayout.HORIZONTAL);
         if (item.cycleMonths > 0)
-            lifecycle.addView(budgetInlineButton("Zakończ cykl",
+            lifecycle.addView(budgetInlineButton("Zamknij / cykl",
                 () -> endBudgetCycle(item,month)),
                 new LinearLayout.LayoutParams(0,dp(40),1f));
         lifecycle.addView(budgetInlineButton("Usuń / korekta",
@@ -14859,50 +14859,186 @@ public final class MainActivity extends Activity {
     }
 
     private void showCloseBudgetArrearsDialog(
-            PaycheckMonthlyBudget.Item item, YearMonth month, long carry) {
-        EditText reason = new EditText(this);
-        reason.setSingleLine(false);
-        reason.setHint("Powód zamknięcia zaległości");
-        lightDialogForm(reason);
-        new AlertDialog.Builder(this)
-            .setTitle("Zamknąć zaległość • " + MoneyRules.format(carry))
-            .setMessage("Transakcje PayCheck pozostają bez zmian. "
-                + "W historii budżetu zostanie korekta z podanym powodem.")
-            .setView(reason)
+            PaycheckMonthlyBudget.Item item, YearMonth sourceMonth,
+            long amountGrosz) {
+        final String[] reasons = {
+            "Anulowana faktura",
+            "Rozliczone inaczej",
+            "Błędnie dodane",
+            "Umorzone",
+            "Pokryte poza PayCheck",
+            "Inne"
+        };
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(12),dp(18),dp(12));
+        Spinner reasonType = new Spinner(this);
+        reasonType.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(reasons)));
+        form.addView(reasonType);
+        EditText detail = new EditText(this);
+        detail.setSingleLine(false);
+        detail.setHint("Dodatkowy opis (wymagany dla „Inne”)");
+        detail.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(120)});
+        form.addView(detail);
+        reasonType.setPopupBackgroundDrawable(
+            new android.graphics.drawable.ColorDrawable(
+                DialogContrast.BACKGROUND));
+        lightDialogForm(form);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Zamknąć zaległość • "
+                + MoneyRules.format(amountGrosz))
+            .setMessage("Miesiąc źródłowy: "
+                + budgetMonthLabel(sourceMonth)
+                + "\nTransakcje PayCheck pozostaną bez zmian. "
+                + "Data i powód zamknięcia zostaną zachowane w historii.")
+            .setView(form)
             .setNegativeButton("Anuluj",null)
-            .setPositiveButton("Zamknij",(d,w)->{
-                try {
-                    PaycheckMonthlyBudget.closeArrears(
-                        prefs,item.id,month,carry,
-                        reason.getText().toString());
-                    DiagnosticLog.event("PAYCHECK_BUDGET_ARREARS_CLOSED");
-                    render();
-                } catch(Exception error) {
-                    alert(error.getMessage()==null
-                        ? "Nie zamknięto zaległości." : error.getMessage());
-                }
-            })
-            .show();
+            .setPositiveButton("Zamknij",null)
+            .create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String base = reasons[reasonType.getSelectedItemPosition()];
+                    String extra = detail.getText().toString().trim();
+                    if ("Inne".equals(base) && extra.isEmpty()) {
+                        detail.setError("Podaj powód zamknięcia.");
+                        return;
+                    }
+                    String reason = "Inne".equals(base)
+                        ? extra
+                        : (extra.isEmpty() ? base : base + " • " + extra);
+                    try {
+                        PaycheckMonthlyBudget.closeArrears(
+                            prefs,item.id,sourceMonth,amountGrosz,reason);
+                        DiagnosticLog.event(
+                            "PAYCHECK_BUDGET_ARREARS_CLOSED");
+                        dialog.dismiss();
+                        render();
+                    } catch(Exception error) {
+                        alert(error.getMessage()==null
+                            ? "Nie zamknięto zaległości."
+                            : error.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
+    private void showBudgetCloseOccurrenceReasonDialog(
+            PaycheckMonthlyBudget.Item item, YearMonth month) {
+        final String[] reasons = {
+            "Anulowana faktura",
+            "Rozliczone inaczej",
+            "Błędnie dodane",
+            "Umorzone",
+            "Nie dotyczy tego miesiąca",
+            "Inne"
+        };
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(12),dp(18),dp(12));
+        Spinner reasonType = new Spinner(this);
+        reasonType.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(reasons)));
+        form.addView(reasonType);
+        EditText detail = new EditText(this);
+        detail.setSingleLine(false);
+        detail.setHint("Dodatkowy opis (wymagany dla „Inne”)");
+        detail.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(120)});
+        form.addView(detail);
+        reasonType.setPopupBackgroundDrawable(
+            new android.graphics.drawable.ColorDrawable(
+                DialogContrast.BACKGROUND));
+        lightDialogForm(form);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Zamknąć tylko " + budgetMonthLabel(month) + "?")
+            .setMessage(item.name
+                + "\nBrak potwierdzonej płatności. "
+                + "Data i powód zostaną zachowane w historii.")
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zamknij ten miesiąc",null)
+            .create();
+        dialog.setOnShowListener(d ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String base = reasons[reasonType.getSelectedItemPosition()];
+                    String extra = detail.getText().toString().trim();
+                    if ("Inne".equals(base) && extra.isEmpty()) {
+                        detail.setError("Podaj powód zamknięcia.");
+                        return;
+                    }
+                    String reason = "Inne".equals(base)
+                        ? extra
+                        : (extra.isEmpty() ? base : base + " • " + extra);
+                    try {
+                        PaycheckMonthlyBudget.closeOccurrence(
+                            prefs,item.id,month,reason);
+                        DiagnosticLog.event(
+                            "PAYCHECK_BUDGET_OCCURRENCE_CLOSED");
+                        dialog.dismiss();
+                        render();
+                    } catch(Exception error) {
+                        alert(error.getMessage()==null
+                            ? "Nie zamknięto pozycji."
+                            : error.getMessage());
+                    }
+                }));
+        dialog.show();
     }
 
     private void endBudgetCycle(
             PaycheckMonthlyBudget.Item item, YearMonth month) {
+        String[] options = {
+            "Tylko " + budgetMonthLabel(month),
+            "Zakończ cały cykl na " + budgetMonthLabel(month),
+            "Pokryj tę pozycję nadpłatą"
+        };
         new AlertDialog.Builder(this)
-            .setTitle("Zakończyć cykl?")
-            .setMessage(item.name + "\nOstatni miesiąc: "
-                + budgetMonthLabel(month)
-                + "\n\nIstniejące transakcje i historia pozostaną bez zmian.")
-            .setNegativeButton("Anuluj",null)
-            .setPositiveButton("Zakończ cykl",(d,w)->{
-                try {
-                    PaycheckMonthlyBudget.endCycleAt(prefs,item.id,month);
-                    DiagnosticLog.event("PAYCHECK_BUDGET_CYCLE_ENDED");
-                    render();
-                } catch(Exception error) {
-                    alert(error.getMessage()==null
-                        ? "Nie zakończono cyklu." : error.getMessage());
+            .setTitle("Co chcesz zamknąć?")
+            .setMessage(item.name
+                + "\nWybór dotyczy planu. Potwierdzone transakcje "
+                + "PayCheck i historia pozostają bez zmian.")
+            .setItems(options,(d,which) -> {
+                if (which == 0) {
+                    showBudgetCloseOccurrenceReasonDialog(item,month);
+                    return;
                 }
+                if (which == 2) {
+                    if (PaycheckMonthlyBudget.sharedCreditBefore(
+                            db.getReadableDatabase(),item,month) <= 0L) {
+                        alert("Brak dostępnej nadpłaty z wcześniejszych miesięcy.");
+                        return;
+                    }
+                    showApplyBudgetCreditDialog(item,month);
+                    return;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("Zakończyć cały cykl?")
+                    .setMessage("Ostatni miesiąc cyklu: "
+                        + budgetMonthLabel(month)
+                        + "\nIstniejące transakcje i historia zostaną zachowane.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Zakończ cykl",(confirm,w) -> {
+                        try {
+                            PaycheckMonthlyBudget.endCycleAt(
+                                prefs,item.id,month);
+                            DiagnosticLog.event(
+                                "PAYCHECK_BUDGET_CYCLE_ENDED");
+                            render();
+                        } catch(Exception error) {
+                            alert(error.getMessage()==null
+                                ? "Nie zakończono cyklu."
+                                : error.getMessage());
+                        }
+                    })
+                    .show();
             })
+            .setNegativeButton("Anuluj",null)
             .show();
     }
 
@@ -14982,23 +15118,7 @@ public final class MainActivity extends Activity {
 
     private void closeBudgetOptional(
             PaycheckMonthlyBudget.Item item, YearMonth month) {
-        new AlertDialog.Builder(this)
-            .setTitle("Zamknąć bez realizacji?")
-            .setMessage(item.name + "\n" + budgetMonthLabel(month)
-                + "\n\nNie będzie oznaczona jako zaległość.")
-            .setNegativeButton("Anuluj", null)
-            .setPositiveButton("Zamknij", (d,w) -> {
-                try {
-                    PaycheckMonthlyBudget.closeOptionalForMonth(
-                        prefs,item.id,month);
-                    DiagnosticLog.event("PAYCHECK_BUDGET_OPTIONAL_CLOSED");
-                    render();
-                } catch (Exception error) {
-                    alert(error.getMessage() == null
-                        ? "Nie zamknięto pozycji." : error.getMessage());
-                }
-            })
-            .show();
+        showBudgetCloseOccurrenceReasonDialog(item,month);
     }
 
     private void privateMonthlyBudgetBlock(
