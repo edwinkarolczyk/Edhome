@@ -111,6 +111,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         ProjectWorkNotification.restoreActive(context);
         // Vehicle opt-in is independent of the global task reminder switch.
         VehicleReminderReceiver.schedule(context);
+        BudgetReminderReceiver.schedule(context);
         AlarmManager manager = (AlarmManager) context.getSystemService(
             Context.ALARM_SERVICE);
         if (manager == null) return;
