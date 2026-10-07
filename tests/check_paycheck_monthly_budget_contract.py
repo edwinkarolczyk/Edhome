@@ -34,8 +34,19 @@ for token in (
     'static int installmentPosition(',
     'static int installmentTotal(',
     'static long sharedCarryBefore(',
+    'static List<Arrear> sharedArrearsBefore(',
+    'static List<Credit> sharedCreditsBefore(',
+    'static long sharedCreditBefore(',
+    'static long creditAppliedTo(',
+    'static void applyCredit(',
     'static void closeArrears(',
+    'static void closeOccurrence(',
     'static void endCycleAt(',
+    'creditApplicationsGrosz',
+    'creditApplicationCreatedAt',
+    'closedMonths',
+    'closedMonthReasons',
+    'closedMonthCreatedAt',
     'balanceAdjustmentsGrosz',
     'adjustmentReasons',
     'boolean optional;',
@@ -63,15 +74,18 @@ for token in (
     'Bieżący miesiąc',
     'NIEZAPŁACONE',
     'ZAPŁACONE',
-    'OPCJONALNY',
+    'OPCJONALNE',
     'NIEDOPŁATA',
     'NADPŁATA',
-    'ZALEGŁOŚĆ',
+    'ZALEGŁE',
     'Z poprzednich miesięcy: zaległości',
     'Zamknij zaległość',
-    'Zakończ cykl',
-    '! OSTATNIA',
-    'showCloseBudgetArrearsDialog(item,month,carry)',
+    'Zamknij / cykl',
+    'Co chcesz zamknąć?',
+    'Pokryj tę pozycję nadpłatą',
+    '⚠ ostatnia',
+    'budgetArrearRow(',
+    'showApplyBudgetCreditDialog(',
     'PaycheckMonthlyBudget.sharedCarryBefore(',
     'budgetItemCard(item, month)',
     'showBudgetAmountChangeDialog(item, month)',
@@ -94,15 +108,29 @@ for token in (
     'PaycheckMonthlyBudget.allocateMatch(',
     'privateMonthlyBudgetBlock(entries);',
     'Prywatny plan jest szyfrowany w sejfie.',
+    'Dane istniejącego prywatnego sejfu',
     'transakcje potwierdzone po sprawdzeniu banku / wyciągu',
     'Pasuje do Budżetu miesiąca',
+    'Niedopłata " + item.name + " z ',
+    'Nadpłata nie jest używana automatycznie.',
+    'expandedBudgetItemId',
+    'expandedBudgetDetailsView',
+    'Color.rgb(251,192,45)',
 ):
     assert token in main, "Missing Android monthly budget UI: " + token
+
+budget_method = main.split('private void budgetItemCard(',1)[1].split(
+    'private void budgetArrearRow(',1)[0]
+assert 'LinearLayout box = card();' not in budget_method
+assert 'LinearLayout box = new LinearLayout(this);' in budget_method
+assert 'if (expandedBudgetDetailsView != null' in budget_method
 
 assert "PaycheckStore.add" not in budget
 assert "INSERT INTO paycheck_transactions" not in budget
 assert "UPDATE paycheck_transactions" not in budget
 assert "DELETE FROM paycheck_transactions" not in budget
+assert 'sharedCreditBefore(' in budget
+assert 'applyCredit(' in budget
 
 for token in (
     "private_paycheck_budget_items",
