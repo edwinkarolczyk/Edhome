@@ -23,6 +23,11 @@ final class PaycheckRecipientStore {
         String id;
         String name;
         boolean active;
+        String defaultCategory;
+        int defaultDueDay;
+        long defaultAmountGrosz;
+        int usageCount;
+        long lastUsedAt;
     }
 
     private PaycheckRecipientStore() { }
@@ -43,6 +48,65 @@ final class PaycheckRecipientStore {
         return recipient == null ? "" : recipient.name;
     }
 
+    static Recipient findByName(List<Recipient> recipients, String rawName) {
+        String key = normalized(rawName == null ? "" : rawName);
+        if (key.isEmpty()) return null;
+        for (Recipient recipient : recipients)
+            if (normalized(recipient.name).equals(key)) return recipient;
+        return null;
+    }
+
+    static java.util.List<String> suggestions(SharedPreferences prefs)
+            throws Exception {
+        java.util.LinkedHashSet<String> values = new java.util.LinkedHashSet<>();
+        java.util.List<Recipient> existing = load(prefs);
+        existing.sort((a,b)->{
+            int byUse = Integer.compare(b.usageCount,a.usageCount);
+            if (byUse != 0) return byUse;
+            return a.name.compareToIgnoreCase(b.name);
+        });
+        for (Recipient recipient : existing)
+            if (recipient.active) values.add(recipient.name);
+        for (String common : new String[]{
+                "TAURON","Wodociągi","Podatek","Internet",
+                "Telefon","Bank / kredyt"})
+            values.add(common);
+        return new java.util.ArrayList<>(values);
+    }
+
+    static Recipient updateTemplate(SharedPreferences prefs, String id,
+            String category, int dueDay, long amountGrosz) throws Exception {
+        if (dueDay < 0 || dueDay > 31 || amountGrosz < 0
+                || amountGrosz > MoneyRules.MAX_GROSZ)
+            throw new IllegalArgumentException("Nieprawidłowy szablon odbiorcy.");
+        if (category == null) category = "";
+        if (!category.isEmpty()) {
+            boolean known=false;
+            for (String value:MoneyRules.CATEGORIES)
+                if (value.equals(category)) { known=true; break; }
+            if (!known)
+                throw new IllegalArgumentException("Nieprawidłowa kategoria odbiorcy.");
+        }
+        java.util.List<Recipient> recipients=load(prefs);
+        Recipient recipient=find(recipients,id);
+        if (recipient==null)
+            throw new IllegalArgumentException("Odbiorca już nie istnieje.");
+        recipient.defaultCategory=category;
+        recipient.defaultDueDay=dueDay;
+        recipient.defaultAmountGrosz=amountGrosz;
+        save(prefs,recipients);
+        return recipient;
+    }
+
+    static boolean deactivate(SharedPreferences prefs, String id) throws Exception {
+        java.util.List<Recipient> recipients=load(prefs);
+        Recipient recipient=find(recipients,id);
+        if (recipient==null || !recipient.active) return false;
+        recipient.active=false;
+        save(prefs,recipients);
+        return true;
+    }
+
     static Recipient getOrCreate(SharedPreferences prefs, String rawName)
             throws Exception {
         String name = rawName == null ? "" : rawName.trim();
@@ -55,10 +119,10 @@ final class PaycheckRecipientStore {
         String key = normalized(name);
         for (Recipient existing : recipients)
             if (normalized(existing.name).equals(key)) {
-                if (!existing.active) {
-                    existing.active = true;
-                    save(prefs,recipients);
-                }
+                existing.active = true;
+                existing.usageCount = Math.min(1_000_000,existing.usageCount+1);
+                existing.lastUsedAt = System.currentTimeMillis();
+                save(prefs,recipients);
                 return existing;
             }
         if (recipients.size() >= MAX_RECIPIENTS)
@@ -67,6 +131,11 @@ final class PaycheckRecipientStore {
         recipient.id = UUID.randomUUID().toString();
         recipient.name = name;
         recipient.active = true;
+        recipient.defaultCategory = "";
+        recipient.defaultDueDay = 0;
+        recipient.defaultAmountGrosz = 0L;
+        recipient.usageCount = 1;
+        recipient.lastUsedAt = System.currentTimeMillis();
         recipients.add(recipient);
         save(prefs,recipients);
         return recipient;
@@ -101,6 +170,11 @@ final class PaycheckRecipientStore {
             recipient.id = json.getString("id");
             recipient.name = json.getString("name").trim();
             recipient.active = !json.has("active") || json.getBoolean("active");
+            recipient.defaultCategory = json.optString("defaultCategory","");
+            recipient.defaultDueDay = json.optInt("defaultDueDay",0);
+            recipient.defaultAmountGrosz = json.optLong("defaultAmountGrosz",0L);
+            recipient.usageCount = json.optInt("usageCount",0);
+            recipient.lastUsedAt = json.optLong("lastUsedAt",0L);
             validate(recipient);
             if (!ids.add(recipient.id) || !names.add(normalized(recipient.name)))
                 throw new IllegalArgumentException("Powtórzony odbiorca PayCheck.");
@@ -117,6 +191,11 @@ final class PaycheckRecipientStore {
             json.put("id",recipient.id);
             json.put("name",recipient.name);
             json.put("active",recipient.active);
+            json.put("defaultCategory",recipient.defaultCategory);
+            json.put("defaultDueDay",recipient.defaultDueDay);
+            json.put("defaultAmountGrosz",recipient.defaultAmountGrosz);
+            json.put("usageCount",recipient.usageCount);
+            json.put("lastUsedAt",recipient.lastUsedAt);
             array.put(json);
         }
         return array.toString();
@@ -132,8 +211,21 @@ final class PaycheckRecipientStore {
         if (recipient == null || recipient.id == null
                 || !recipient.id.matches("[0-9a-fA-F-]{36}")
                 || recipient.name == null || recipient.name.trim().isEmpty()
-                || recipient.name.length() > 80)
+                || recipient.name.length() > 80
+                || recipient.defaultCategory == null
+                || recipient.defaultDueDay < 0 || recipient.defaultDueDay > 31
+                || recipient.defaultAmountGrosz < 0
+                || recipient.defaultAmountGrosz > MoneyRules.MAX_GROSZ
+                || recipient.usageCount < 0 || recipient.usageCount > 1_000_000
+                || recipient.lastUsedAt < 0L)
             throw new IllegalArgumentException("Nieprawidłowy odbiorca PayCheck.");
+        if (!recipient.defaultCategory.isEmpty()) {
+            boolean known=false;
+            for (String value:MoneyRules.CATEGORIES)
+                if (value.equals(recipient.defaultCategory)) { known=true; break; }
+            if (!known)
+                throw new IllegalArgumentException("Nieprawidłowa kategoria odbiorcy.");
+        }
     }
 
     private static String normalized(String value) {
