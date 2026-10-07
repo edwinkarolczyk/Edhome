@@ -36,7 +36,7 @@ final class DesktopHubServerRuntimeTest {
             assertEquals(200,ok.getResponseCode());
             String body=read(ok);
             assertTrue(body.contains("\"desktopId\":\""+DESKTOP_ID+"\""));
-            assertTrue(body.contains("\"version\":\"0.7.0.99\""));
+            assertTrue(body.contains("\"version\":\"0.7.0.100\""));
             assertTrue(body.contains("\"port\":"+DesktopHubServer.PORT));
             ok.disconnect();
 
@@ -56,7 +56,7 @@ final class DesktopHubServerRuntimeTest {
                 String text=new String(reply.getData(),reply.getOffset(),reply.getLength(),
                     StandardCharsets.US_ASCII);
                 assertEquals("EDHOME_DESKTOP_V1|"+DESKTOP_ID+"|"
-                    +DesktopHubServer.PORT+"|0.7.0.99",text);
+                    +DesktopHubServer.PORT+"|0.7.0.100",text);
             }
         }
     }
