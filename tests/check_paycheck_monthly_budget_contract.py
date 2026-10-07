@@ -60,6 +60,8 @@ for token in (
     'int dueDay;',
     'String creditAgreementNumber;',
     'String recipientId;',
+    'String inactiveFromMonth;',
+    'activeInMonth(item,month)',
     'invoiceDueDates',
     'plannedPaymentDates',
     'static YearMonth installmentEndMonth(',
@@ -227,6 +229,7 @@ for token in (
     assert token in history or token in budget, "Budget history contract missing: " + token
 
 assert 'target.active = false;' in budget
+assert 'target.inactiveFromMonth = from.toString();' in budget
 assert 'PaycheckBudgetHistoryStore.append(' in budget
 
 for token in (
@@ -241,7 +244,7 @@ for token in (
     assert token in recipients, "Recipient template contract missing: " + token
 
 for token in (
-    'minusDays(3)',
+    'today.plusDays(3)',
     'open_paycheck_budget',
     'sharedMatchedActual(',
     'PAYCHECK_BUDGET_REMINDER_DELIVERED',
