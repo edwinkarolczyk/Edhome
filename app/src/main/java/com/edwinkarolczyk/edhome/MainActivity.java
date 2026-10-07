@@ -174,6 +174,7 @@ public final class MainActivity extends Activity {
     };
     private String screen = "home";
     private String calendarMonth = YearMonth.now().toString();
+    private YearMonth paycheckBudgetMonth = YearMonth.now();
     private String calendarDay = LocalDate.now().toString();
     private String calendarView = "month";
     private String tasksFilter = "all";
@@ -13969,42 +13970,135 @@ public final class MainActivity extends Activity {
                 new String[]{operationId})) {
             if (!tx.moveToFirst() || !"confirmed".equals(tx.getString(5)))
                 return false;
-            YearMonth month=PaycheckMonthlyBudget.transactionMonth(
+
+            final String kind = tx.getString(0);
+            final String category = tx.getString(1);
+            final long txAmount = tx.getLong(2);
+            final YearMonth month = PaycheckMonthlyBudget.transactionMonth(
                 tx.getLong(3),tx.isNull(4)?null:tx.getString(4));
-            java.util.List<PaycheckMonthlyBudget.Item> items=
+            final java.util.List<PaycheckMonthlyBudget.Item> items =
                 PaycheckMonthlyBudget.load(prefs);
-            PaycheckMonthlyBudget.Item candidate=
+
+            final PaycheckMonthlyBudget.Item candidate =
                 PaycheckMonthlyBudget.suggest(items,month,
-                    tx.getString(0),tx.getString(1),tx.getLong(2));
-            if(candidate==null)return false;
+                    kind,category,txAmount);
+            final PaycheckMonthlyBudget.Item[] pair =
+                budgetSplitPair(items,month,kind,txAmount);
+
+            if (candidate == null && pair == null) return false;
+
+            java.util.List<String> choices = new java.util.ArrayList<>();
+            java.util.List<Integer> actions = new java.util.ArrayList<>();
+            if (candidate != null) {
+                choices.add("Przypisz całość → " + candidate.name
+                    + " • " + MoneyRules.format(
+                        PaycheckMonthlyBudget.plannedAmount(candidate,month)));
+                actions.add(1);
+            }
+            if (pair != null) {
+                choices.add("Podziel → " + pair[0].name + " + " + pair[1].name
+                    + " • razem "
+                    + MoneyRules.format(
+                        PaycheckMonthlyBudget.plannedAmount(pair[0],month)
+                        + PaycheckMonthlyBudget.plannedAmount(pair[1],month)));
+                actions.add(2);
+            }
+            choices.add("Nie, zostaw poza planem");
+            actions.add(0);
+
             new AlertDialog.Builder(this)
                 .setTitle("Pasuje do Budżetu miesiąca")
-                .setMessage(MoneyRules.format(tx.getLong(2))
-                    +" wygląda jak „"+candidate.name+"”.\n\n"
-                    +"Plan: "+MoneyRules.format(candidate.amountGrosz)
-                    +" • "+budgetMonthLabel(month)
-                    +"\n\nPrzypisać tę potwierdzoną transakcję? "
-                    +"Nie zmieni to salda drugi raz.")
-                .setNegativeButton("Nie, zostaw poza planem",(d,w)->done.run())
-                .setPositiveButton("Tak, przypisz",(d,w)->{
+                .setMessage(MoneyRules.format(txAmount)
+                    + " • " + budgetMonthLabel(month)
+                    + "\n\nMożesz przypisać całą płatność albo — jeśli suma "
+                    + "pasuje — rozdzielić ją na dwie pozycje planu. "
+                    + "Nie zmieni to salda drugi raz.")
+                .setItems(choices.toArray(new String[0]),(d,index)->{
+                    int action=actions.get(index);
+                    if(action==0) {
+                        done.run();
+                        return;
+                    }
                     try {
-                        PaycheckMonthlyBudget.match(
-                            prefs,candidate.id,operationId);
-                        DiagnosticLog.event(
-                            "PAYCHECK_SHARED_BUDGET_MATCHED");
+                        if(action==1) {
+                            PaycheckMonthlyBudget.match(
+                                prefs,candidate.id,operationId);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_MATCHED");
+                        } else {
+                            long first = PaycheckMonthlyBudget.plannedAmount(
+                                pair[0],month);
+                            long second = txAmount - first;
+                            if(first < 1 || second < 1)
+                                throw new IllegalArgumentException(
+                                    "Nie można podzielić tej kwoty.");
+                            PaycheckMonthlyBudget.allocateMatch(
+                                prefs,pair[0].id,operationId,first);
+                            PaycheckMonthlyBudget.allocateMatch(
+                                prefs,pair[1].id,operationId,second);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_SPLIT_MATCHED");
+                        }
                     } catch(Exception error) {
                         DiagnosticLog.error(
                             "PAYCHECK_SHARED_BUDGET_MATCH",error);
                         alert("Transakcja została potwierdzona, ale nie "
-                            +"przypisano jej do budżetu.");
+                            + "przypisano jej do budżetu.");
                     }
                     done.run();
-                }).show();
+                })
+                .setNegativeButton("Anuluj",(d,w)->done.run())
+                .show();
             return true;
         } catch(Exception error) {
             DiagnosticLog.error("PAYCHECK_BUDGET_SUGGEST",error);
             return false;
         }
+    }
+
+    private PaycheckMonthlyBudget.Item[] budgetSplitPair(
+            java.util.List<PaycheckMonthlyBudget.Item> items,
+            YearMonth month, String kind, long transactionAmount) {
+        java.util.List<PaycheckMonthlyBudget.Item> candidates =
+            new java.util.ArrayList<>();
+        for (PaycheckMonthlyBudget.Item item
+                : PaycheckMonthlyBudget.activeFor(items,month)) {
+            if (!kind.equals(item.kind)) continue;
+            long already = PaycheckMonthlyBudget.sharedMatchedActual(
+                db.getReadableDatabase(),item,month);
+            if (already > 0) continue;
+            candidates.add(item);
+        }
+
+        PaycheckMonthlyBudget.Item[] best = null;
+        long bestDiff = Long.MAX_VALUE;
+        boolean tied = false;
+        for (int i=0;i<candidates.size();i++) {
+            long first = PaycheckMonthlyBudget.plannedAmount(
+                candidates.get(i),month);
+            for (int j=i+1;j<candidates.size();j++) {
+                long second = PaycheckMonthlyBudget.plannedAmount(
+                    candidates.get(j),month);
+                long sum;
+                try {
+                    sum = Math.addExact(first,second);
+                } catch (ArithmeticException overflow) {
+                    continue;
+                }
+                long diff = Math.abs(sum-transactionAmount);
+                long tolerance = Math.max(100L,transactionAmount*2L/100L);
+                if (diff > tolerance) continue;
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    best = new PaycheckMonthlyBudget.Item[]{
+                        candidates.get(i),candidates.get(j)};
+                    tied = false;
+                } else if (diff == bestDiff) {
+                    tied = true;
+                }
+            }
+        }
+        return tied ? null : best;
     }
 
     private boolean offerPrivateBudgetMatch(String operationId,
@@ -14289,7 +14383,8 @@ public final class MainActivity extends Activity {
     }
 
     private void sharedMonthlyBudgetBlock() {
-        final YearMonth month = YearMonth.now();
+        final YearMonth month = paycheckBudgetMonth == null
+            ? YearMonth.now() : paycheckBudgetMonth;
         try {
             java.util.List<PaycheckMonthlyBudget.Item> items =
                 PaycheckMonthlyBudget.load(prefs);
@@ -14301,65 +14396,394 @@ public final class MainActivity extends Activity {
             PaycheckMonthlyBudget.Totals pending =
                 PaycheckMonthlyBudget.sharedActual(
                     db.getReadableDatabase(), month, "pending");
-            title("Budżet miesiąca • wspólny • " + budgetMonthLabel(month));
-            note("Planowane wpływy: " + MoneyRules.format(plan.income)
-                + " • planowane wydatki: " + MoneyRules.format(plan.expense)
-                + " • plan zostaje: " + MoneyRules.format(plan.net()));
-            note("Potwierdzone transakcje: wpływy "
+
+            title("Budżet miesiąca • " + budgetMonthLabel(month));
+            button("◀ Poprzedni", () -> {
+                paycheckBudgetMonth = month.minusMonths(1);
+                render();
+            });
+            button("Następny ▶", () -> {
+                paycheckBudgetMonth = month.plusMonths(1);
+                render();
+            });
+            if (!month.equals(YearMonth.now()))
+                button("Bieżący miesiąc", () -> {
+                    paycheckBudgetMonth = YearMonth.now();
+                    render();
+                });
+
+            note("Plan: wpływy " + MoneyRules.format(plan.income)
+                + " • wydatki " + MoneyRules.format(plan.expense)
+                + " • planowane saldo " + MoneyRules.format(plan.net()) + ".");
+            note("Faktycznie potwierdzone: wpływy "
                 + MoneyRules.format(confirmed.income) + " • wydatki "
-                + MoneyRules.format(confirmed.expense) + " • faktycznie "
-                + MoneyRules.format(confirmed.net()) + ".");
+                + MoneyRules.format(confirmed.expense)
+                + " • saldo " + MoneyRules.format(confirmed.net()) + ".");
+            long planVsActual = confirmed.net() - plan.net();
+            note("Różnica plan–fakt: "
+                + (planVsActual > 0 ? "+" : "")
+                + MoneyRules.format(planVsActual) + ".");
             if (!pending.empty())
-                note("Czeka na sprawdzenie: wpływy "
+                note("Do potwierdzenia: wpływy "
                     + MoneyRules.format(pending.income) + " • wydatki "
                     + MoneyRules.format(pending.expense)
-                    + ". Te kwoty NIE są jeszcze wykonaniem budżetu.");
-            note("Plan nie zmienia salda. Budżet jest wykonany dopiero przez "
-                + "transakcje potwierdzone po sprawdzeniu banku / wyciągu. "
-                + "Pozycja może mieć stałą kwotę albo zmienną prognozę.");
-            button("📅 Dodaj pozycję planu miesiąca",
-                () -> showBudgetItemDialog(false));
+                    + ". Nie zmieniają salda ani wykonania budżetu.");
+            long arrears = 0L;
+            long credit = 0L;
+            for (PaycheckMonthlyBudget.Item item : items) {
+                long carry = PaycheckMonthlyBudget.sharedCarryBefore(
+                    db.getReadableDatabase(),item,month);
+                if (carry > 0) arrears = Math.addExact(arrears,carry);
+                else if (carry < 0) credit = Math.addExact(credit,-carry);
+            }
+            if (arrears > 0 || credit > 0)
+                note("Z poprzednich miesięcy: zaległości "
+                    + MoneyRules.format(arrears) + " • nadpłaty "
+                    + MoneyRules.format(credit) + ".");
+            note("Pozycja planowana nie jest transakcją. Saldo zmienia dopiero "
+                + "potwierdzony wpis PayCheck.");
+
+            button("＋ Dodaj pozycję", () -> showBudgetItemDialog(false));
 
             java.util.List<PaycheckMonthlyBudget.Item> activeItems =
                 PaycheckMonthlyBudget.activeFor(items, month);
+            for (PaycheckMonthlyBudget.Item item : items) {
+                if (activeItems.contains(item)) continue;
+                if (PaycheckMonthlyBudget.sharedCarryBefore(
+                        db.getReadableDatabase(),item,month) > 0)
+                    activeItems.add(item);
+            }
+            activeItems.sort((a,b) -> {
+                int ad = a.dueDay <= 0 ? 99 : a.dueDay;
+                int bd = b.dueDay <= 0 ? 99 : b.dueDay;
+                int byDay = Integer.compare(ad, bd);
+                return byDay != 0 ? byDay
+                    : a.name.compareToIgnoreCase(b.name);
+            });
+
             int expenseCount = 0;
             for (PaycheckMonthlyBudget.Item item : activeItems)
                 if ("expense".equals(item.kind)) expenseCount++;
-            title("Planowane wydatki • " + expenseCount);
+            title("Wydatki • " + expenseCount);
             if (expenseCount == 0) {
-                note("Brak planowanych wydatków w tym miesiącu.");
+                note("Brak wydatków zaplanowanych na ten miesiąc.");
             } else {
-                for (PaycheckMonthlyBudget.Item item : activeItems) {
-                    if (!"expense".equals(item.kind)) continue;
-                    String categoryLabel = MoneyRules.categoryLabel(item.category);
-                    button(PaycheckMonthlyBudget.itemLabel(item)
-                            + " • " + categoryLabel,
-                        () -> showBudgetItemDetails(false, item));
-                }
+                for (PaycheckMonthlyBudget.Item item : activeItems)
+                    if ("expense".equals(item.kind))
+                        budgetItemCard(item, month);
             }
 
             int incomeCount = 0;
             for (PaycheckMonthlyBudget.Item item : activeItems)
                 if ("income".equals(item.kind)) incomeCount++;
-            title("Planowane wpływy • " + incomeCount);
+            title("Wpływy • " + incomeCount);
             if (incomeCount == 0) {
-                note("Brak planowanych wpływów w tym miesiącu.");
+                note("Brak wpływów zaplanowanych na ten miesiąc.");
             } else {
-                for (PaycheckMonthlyBudget.Item item : activeItems) {
-                    if (!"income".equals(item.kind)) continue;
-                    String categoryLabel = MoneyRules.categoryLabel(item.category);
-                    button(PaycheckMonthlyBudget.itemLabel(item)
-                            + " • " + categoryLabel,
-                        () -> showBudgetItemDetails(false, item));
-                }
+                for (PaycheckMonthlyBudget.Item item : activeItems)
+                    if ("income".equals(item.kind))
+                        budgetItemCard(item, month);
             }
 
             button("📋 Wszystkie pozycje planu • " + items.size(),
                 () -> showBudgetItemsDialog(false));
         } catch (Exception error) {
             DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_READ", error);
-            note("Nie udało się odczytać miesięcznego planu PayCheck.");
+            note("Nie udało się odczytać Budżetu miesiąca.");
         }
+    }
+
+    private void budgetItemCard(PaycheckMonthlyBudget.Item item,
+            YearMonth month) {
+        boolean scheduledThisMonth = !PaycheckMonthlyBudget.activeFor(
+            java.util.Collections.singletonList(item),month).isEmpty();
+        long planned = scheduledThisMonth
+            ? PaycheckMonthlyBudget.plannedAmount(item, month) : 0L;
+        long carry = PaycheckMonthlyBudget.sharedCarryBefore(
+            db.getReadableDatabase(),item,month);
+        long actual = PaycheckMonthlyBudget.sharedMatchedActual(
+            db.getReadableDatabase(), item, month);
+        long balanceAfter = item.optional
+            ? planned - actual
+            : carry + planned - actual;
+        long dueTotal = item.optional
+            ? planned
+            : Math.max(0L,carry + planned);
+
+        String due = item.dueDay > 0
+            ? String.format(java.util.Locale.ROOT, "%02d",
+                Math.min(item.dueDay, month.lengthOfMonth()))
+            : "—";
+        String type;
+        if (item.installment) {
+            int position = PaycheckMonthlyBudget.installmentPosition(item, month);
+            int total = PaycheckMonthlyBudget.installmentTotal(item);
+            boolean last = scheduledThisMonth && total > 0 && position == total;
+            type = total > 0
+                ? "RATA " + position + "/" + total + (last ? " ! OSTATNIA" : "")
+                : "RATA";
+        } else if (item.cycleMonths == 0) {
+            type = "1×";
+        } else {
+            type = "CYKL";
+        }
+
+        final String status;
+        final int statusColor;
+        if (!"expense".equals(item.kind)) {
+            if (actual >= planned && planned > 0) {
+                status = "ZREALIZOWANE";
+                statusColor = android.graphics.Color.rgb(56,142,60);
+            } else {
+                status = actual > 0
+                    ? "BRAKUJE " + MoneyRules.format(planned-actual)
+                    : "OCZEKUJE";
+                statusColor = android.graphics.Color.rgb(229,57,53);
+            }
+        } else if (item.optional && actual == 0) {
+            status = "OPCJONALNY";
+            statusColor = android.graphics.Color.rgb(30,136,229);
+        } else if (balanceAfter < 0) {
+            status = "NADPŁATA " + MoneyRules.format(-balanceAfter);
+            statusColor = android.graphics.Color.rgb(56,142,60);
+        } else if (balanceAfter == 0 && (planned > 0 || carry > 0)) {
+            status = "ZAPŁACONE";
+            statusColor = android.graphics.Color.rgb(56,142,60);
+        } else if (carry > 0 && planned == 0) {
+            status = "ZALEGŁOŚĆ " + MoneyRules.format(balanceAfter);
+            statusColor = android.graphics.Color.rgb(229,57,53);
+        } else if (actual > 0) {
+            status = "NIEDOPŁATA " + MoneyRules.format(balanceAfter);
+            statusColor = android.graphics.Color.rgb(229,57,53);
+        } else {
+            status = "NIEZAPŁACONE";
+            statusColor = android.graphics.Color.rgb(229,57,53);
+        }
+
+        LinearLayout box = card();
+        TextView line = text(due + " • " + item.name + " • "
+            + MoneyRules.format(dueTotal) + " • " + type + " • " + status,
+            14, true);
+        line.setSingleLine(true);
+        line.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        line.setTextColor(statusColor);
+        line.setPadding(dp(4), dp(6), dp(4), dp(6));
+        box.addView(line, new LinearLayout.LayoutParams(-1,-2));
+
+        LinearLayout details = new LinearLayout(this);
+        details.setOrientation(LinearLayout.VERTICAL);
+        details.setVisibility(View.GONE);
+        details.addView(text("Kategoria: "
+            + MoneyRules.categoryLabel(item.category), 13, false));
+        details.addView(text("Plan tego miesiąca: " + MoneyRules.format(planned)
+            + " • wykonano: " + MoneyRules.format(actual), 13, false));
+        if (!item.optional && "expense".equals(item.kind) && carry != 0) {
+            details.addView(text(carry > 0
+                ? "Zaległość z poprzednich miesięcy: " + MoneyRules.format(carry)
+                : "Nadpłata z poprzednich miesięcy: " + MoneyRules.format(-carry),
+                13, false));
+            details.addView(text("Do rozliczenia łącznie: "
+                + MoneyRules.format(dueTotal),13,false));
+        }
+        if (item.optional)
+            details.addView(text("Wydatek opcjonalny • brak realizacji nie jest zaległością.",
+                13, false));
+        if (item.installment)
+            details.addView(text("Rata • " + type.replace("RATA ","")
+                + (item.endMonth == null || item.endMonth.isBlank()
+                    ? "" : " • koniec " + item.endMonth), 13, false));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.addView(budgetInlineButton("Zmień kwotę",
+            () -> showBudgetAmountChangeDialog(item, month)),
+            new LinearLayout.LayoutParams(0, dp(40), 1f));
+        if (item.optional) {
+            actions.addView(budgetInlineButton("Przenieś →",
+                () -> moveBudgetOptional(item, month)),
+                new LinearLayout.LayoutParams(0, dp(40), 1f));
+            actions.addView(budgetInlineButton("Zamknij",
+                () -> closeBudgetOptional(item, month)),
+                new LinearLayout.LayoutParams(0, dp(40), 1f));
+        } else if ("expense".equals(item.kind) && carry > 0) {
+            actions.addView(budgetInlineButton("Zamknij zaległość",
+                () -> showCloseBudgetArrearsDialog(item,month,carry)),
+                new LinearLayout.LayoutParams(0, dp(40), 1f));
+        }
+        details.addView(actions, new LinearLayout.LayoutParams(-1,-2));
+
+        LinearLayout lifecycle = new LinearLayout(this);
+        lifecycle.setOrientation(LinearLayout.HORIZONTAL);
+        if (item.cycleMonths > 0)
+            lifecycle.addView(budgetInlineButton("Zakończ cykl",
+                () -> endBudgetCycle(item,month)),
+                new LinearLayout.LayoutParams(0, dp(40), 1f));
+        lifecycle.addView(budgetInlineButton("Usuń z planu",
+            () -> confirmBudgetItemDelete(false,item)),
+            new LinearLayout.LayoutParams(0, dp(40), 1f));
+        details.addView(lifecycle, new LinearLayout.LayoutParams(-1,-2));
+
+        box.addView(details, new LinearLayout.LayoutParams(-1,-2));
+        line.setOnClickListener(v -> details.setVisibility(
+            details.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
+        touchFeedback(line);
+    }
+
+    private Button budgetInlineButton(String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setTextSize(12);
+        button.setTextColor(skin.accentInk);
+        button.setBackground(skin.pill(this, accent));
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setOnClickListener(v -> action.run());
+        touchFeedback(button);
+        return button;
+    }
+
+    private void showCloseBudgetArrearsDialog(
+            PaycheckMonthlyBudget.Item item, YearMonth month, long carry) {
+        EditText reason = new EditText(this);
+        reason.setSingleLine(false);
+        reason.setHint("Powód zamknięcia zaległości");
+        lightDialogForm(reason);
+        new AlertDialog.Builder(this)
+            .setTitle("Zamknąć zaległość • " + MoneyRules.format(carry))
+            .setMessage("Transakcje PayCheck pozostają bez zmian. "
+                + "W historii budżetu zostanie korekta z podanym powodem.")
+            .setView(reason)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zamknij",(d,w)->{
+                try {
+                    PaycheckMonthlyBudget.closeArrears(
+                        prefs,item.id,month,carry,
+                        reason.getText().toString());
+                    DiagnosticLog.event("PAYCHECK_BUDGET_ARREARS_CLOSED");
+                    render();
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ? "Nie zamknięto zaległości." : error.getMessage());
+                }
+            })
+            .show();
+    }
+
+    private void endBudgetCycle(
+            PaycheckMonthlyBudget.Item item, YearMonth month) {
+        new AlertDialog.Builder(this)
+            .setTitle("Zakończyć cykl?")
+            .setMessage(item.name + "\nOstatni miesiąc: "
+                + budgetMonthLabel(month)
+                + "\n\nIstniejące transakcje i historia pozostaną bez zmian.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zakończ cykl",(d,w)->{
+                try {
+                    PaycheckMonthlyBudget.endCycleAt(prefs,item.id,month);
+                    DiagnosticLog.event("PAYCHECK_BUDGET_CYCLE_ENDED");
+                    render();
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ? "Nie zakończono cyklu." : error.getMessage());
+                }
+            })
+            .show();
+    }
+
+    private void showBudgetAmountChangeDialog(
+            PaycheckMonthlyBudget.Item item, YearMonth month) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Nowa kwota w PLN");
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        input.setText(MoneyRules.format(
+            PaycheckMonthlyBudget.plannedAmount(item, month))
+            .replace(" zł","").replace(" ",""));
+        lightDialogForm(input);
+        new AlertDialog.Builder(this)
+            .setTitle("Zmień kwotę • " + item.name)
+            .setView(input)
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Dalej", (d,w) -> {
+                final long grosz;
+                try {
+                    grosz = MoneyRules.parse(input.getText().toString());
+                } catch (Exception invalid) {
+                    alert("Nieprawidłowa kwota.");
+                    return;
+                }
+                String label = budgetMonthLabel(month);
+                new AlertDialog.Builder(this)
+                    .setTitle("Od kiedy zmienić?")
+                    .setItems(new String[]{
+                        "Tylko " + label,
+                        "Od " + label + " na stałe"
+                    }, (choice, which) -> {
+                        try {
+                            if (which == 0)
+                                PaycheckMonthlyBudget.changeAmountForMonth(
+                                    prefs,item.id,month,grosz);
+                            else
+                                PaycheckMonthlyBudget.changeAmountFromMonth(
+                                    prefs,item.id,month,grosz);
+                            DiagnosticLog.event(
+                                which == 0
+                                    ? "PAYCHECK_BUDGET_AMOUNT_MONTH"
+                                    : "PAYCHECK_BUDGET_AMOUNT_FROM_MONTH");
+                            render();
+                        } catch (Exception error) {
+                            alert("Nie zapisano zmiany kwoty.");
+                        }
+                    })
+                    .setNegativeButton("Anuluj", null)
+                    .show();
+            })
+            .show();
+    }
+
+    private void moveBudgetOptional(
+            PaycheckMonthlyBudget.Item item, YearMonth month) {
+        new AlertDialog.Builder(this)
+            .setTitle("Przenieść na następny miesiąc?")
+            .setMessage(item.name + "\n" + budgetMonthLabel(month)
+                + " → " + budgetMonthLabel(month.plusMonths(1))
+                + "\n\nPozycja nadal będzie opcjonalna i nie stanie się zaległością.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Przenieś", (d,w) -> {
+                try {
+                    PaycheckMonthlyBudget.moveOptionalToNextMonth(
+                        prefs,item.id,month);
+                    DiagnosticLog.event("PAYCHECK_BUDGET_OPTIONAL_MOVED");
+                    render();
+                } catch (Exception error) {
+                    alert(error.getMessage() == null
+                        ? "Nie przeniesiono pozycji." : error.getMessage());
+                }
+            })
+            .show();
+    }
+
+    private void closeBudgetOptional(
+            PaycheckMonthlyBudget.Item item, YearMonth month) {
+        new AlertDialog.Builder(this)
+            .setTitle("Zamknąć bez realizacji?")
+            .setMessage(item.name + "\n" + budgetMonthLabel(month)
+                + "\n\nNie będzie oznaczona jako zaległość.")
+            .setNegativeButton("Anuluj", null)
+            .setPositiveButton("Zamknij", (d,w) -> {
+                try {
+                    PaycheckMonthlyBudget.closeOptionalForMonth(
+                        prefs,item.id,month);
+                    DiagnosticLog.event("PAYCHECK_BUDGET_OPTIONAL_CLOSED");
+                    render();
+                } catch (Exception error) {
+                    alert(error.getMessage() == null
+                        ? "Nie zamknięto pozycji." : error.getMessage());
+                }
+            })
+            .show();
     }
 
     private void privateMonthlyBudgetBlock(
@@ -14406,13 +14830,14 @@ public final class MainActivity extends Activity {
             alert("Odblokuj najpierw prywatny sejf.");
             return;
         }
+
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(12), dp(18), dp(12));
 
         EditText name = new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Nazwa, np. Prąd / Pensja / Netflix");
+        name.setHint("Nazwa, np. Prąd / Rata TV / Netflix");
         form.addView(name);
 
         Spinner kind = new Spinner(this);
@@ -14432,6 +14857,17 @@ public final class MainActivity extends Activity {
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(amount);
 
+        EditText dueDay = new EditText(this);
+        dueDay.setSingleLine(true);
+        dueDay.setHint("Termin płatności • dzień 1–31 (opcjonalnie)");
+        dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(dueDay);
+
+        Spinner planType = new Spinner(this);
+        planType.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "Jednorazowy", "Cykliczny", "Rata")));
+        form.addView(planType);
+
         Spinner amountMode = new Spinner(this);
         amountMode.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Stała kwota", "Kwota zmienna / prognoza")));
@@ -14439,38 +14875,108 @@ public final class MainActivity extends Activity {
 
         Spinner cycle = new Spinner(this);
         cycle.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
-            "Jednorazowo", "Co miesiąc", "Co 2 miesiące",
+            "Co miesiąc", "Co 2 miesiące",
             "Co kwartał", "Co 6 miesięcy", "Co rok")));
         form.addView(cycle);
 
-        EditText start = new EditText(this);
-        start.setSingleLine(true);
-        start.setHint("Start YYYY-MM");
-        start.setText(YearMonth.now().toString());
-        form.addView(start);
+        EditText startMonth = new EditText(this);
+        startMonth.setSingleLine(true);
+        startMonth.setHint("Start YYYY-MM");
+        startMonth.setText((paycheckBudgetMonth == null
+            ? YearMonth.now() : paycheckBudgetMonth).toString());
+        form.addView(startMonth);
 
-        EditText end = new EditText(this);
-        end.setSingleLine(true);
-        end.setHint("Koniec YYYY-MM • puste = bez końca");
-        form.addView(end);
+        EditText endMonth = new EditText(this);
+        endMonth.setSingleLine(true);
+        endMonth.setHint("Koniec YYYY-MM • dla rat zamiast liczby rat");
+        form.addView(endMonth);
 
-        form.addView(text("Stała opłata: wybierz „Co miesiąc” i zostaw koniec "
-            + "pusty. Rata: wybierz „Co miesiąc” i wpisz miesiąc ostatniej raty. "
-            + "Plan sam nie księguje pieniędzy.", 13, false));
+        EditText installmentCount = new EditText(this);
+        installmentCount.setSingleLine(true);
+        installmentCount.setHint("Liczba rat, np. 12");
+        installmentCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(installmentCount);
 
-        for (Spinner spinner : new Spinner[]{kind, category, amountMode, cycle})
+        android.widget.CheckBox optional = new android.widget.CheckBox(this);
+        optional.setText("Wydatek opcjonalny • niebieski • można przenieść");
+        optional.setTextColor(DialogContrast.TEXT);
+        form.addView(optional);
+
+        TextView rule = text(
+            "Rata: podaj ALBO liczbę rat, ALBO miesiąc końca. "
+            + "Jedno pole automatycznie blokuje drugie. "
+            + "Pozycja planowana nie zmienia salda PayCheck.",
+            13, false);
+        form.addView(rule);
+
+        final boolean[] changing = {false};
+        android.text.TextWatcher countWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
+                if (changing[0]) return;
+                changing[0] = true;
+                boolean has = s != null && s.toString().trim().length() > 0;
+                endMonth.setEnabled(!has);
+                if (has) endMonth.setText("");
+                changing[0] = false;
+            }
+            @Override public void afterTextChanged(android.text.Editable e) { }
+        };
+        android.text.TextWatcher endWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
+                if (changing[0]) return;
+                changing[0] = true;
+                boolean has = s != null && s.toString().trim().length() > 0;
+                installmentCount.setEnabled(!has);
+                if (has) installmentCount.setText("");
+                changing[0] = false;
+            }
+            @Override public void afterTextChanged(android.text.Editable e) { }
+        };
+        installmentCount.addTextChangedListener(countWatcher);
+        endMonth.addTextChangedListener(endWatcher);
+
+        planType.setOnItemSelectedListener(
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> parent, View view,
+                        int position, long id) {
+                    boolean recurring = position == 1;
+                    boolean installment = position == 2;
+                    cycle.setVisibility(recurring ? View.VISIBLE : View.GONE);
+                    installmentCount.setVisibility(
+                        installment ? View.VISIBLE : View.GONE);
+                    endMonth.setVisibility(
+                        position == 0 ? View.GONE : View.VISIBLE);
+                    if (installment) {
+                        kind.setSelection(0);
+                        kind.setEnabled(false);
+                    } else {
+                        kind.setEnabled(true);
+                    }
+                }
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> parent) { }
+            });
+
+        for (Spinner spinner : new Spinner[]{
+                kind, category, planType, amountMode, cycle})
             spinner.setPopupBackgroundDrawable(
-                new android.graphics.drawable.ColorDrawable(DialogContrast.BACKGROUND));
+                new android.graphics.drawable.ColorDrawable(
+                    DialogContrast.BACKGROUND));
         lightDialogForm(form);
-        final int[] cycles = {0, 1, 2, 3, 6, 12};
+
+        final int[] cycles = {1, 2, 3, 6, 12};
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(privateScope
-                ? "Nowa prywatna pozycja budżetu"
-                : "Nowa pozycja budżetu")
+                ? "Nowa prywatna pozycja Budżetu miesiąca"
+                : "Nowa pozycja Budżetu miesiąca")
             .setView(form)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz plan", null)
             .create();
+
         dialog.setOnShowListener(d ->
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> {
@@ -14478,41 +14984,79 @@ public final class MainActivity extends Activity {
                         long grosz = MoneyRules.parse(
                             amount.getText().toString());
                         String itemName = name.getText().toString().trim();
-                        String itemKind = kind.getSelectedItemPosition() == 1
-                            ? "income" : "expense";
+                        int typePosition = planType.getSelectedItemPosition();
+                        String itemKind = typePosition == 2
+                            ? "expense"
+                            : (kind.getSelectedItemPosition() == 1
+                                ? "income" : "expense");
                         String itemCategory = MoneyRules.CATEGORIES[
                             category.getSelectedItemPosition()];
                         String mode = amountMode.getSelectedItemPosition() == 1
                             ? "estimate" : "fixed";
+
+                        int day = 0;
+                        String dayText = dueDay.getText().toString().trim();
+                        if (!dayText.isEmpty()) {
+                            day = Integer.parseInt(dayText);
+                            if (day < 1 || day > 31)
+                                throw new IllegalArgumentException(
+                                    "Termin musi być dniem 1–31.");
+                        }
+
+                        boolean isInstallment = typePosition == 2;
+                        int cycleMonths = typePosition == 0
+                            ? 0
+                            : (isInstallment
+                                ? 1
+                                : cycles[cycle.getSelectedItemPosition()]);
+                        String end = typePosition == 0
+                            ? ""
+                            : endMonth.getText().toString().trim();
+                        int count = 0;
+                        String countText =
+                            installmentCount.getText().toString().trim();
+                        if (isInstallment && !countText.isEmpty()) {
+                            count = Integer.parseInt(countText);
+                            if (count < 1 || count > 600)
+                                throw new IllegalArgumentException(
+                                    "Liczba rat musi mieścić się w zakresie 1–600.");
+                        }
+                        if (isInstallment && count == 0 && end.isEmpty())
+                            throw new IllegalArgumentException(
+                                "Dla rat podaj liczbę rat albo miesiąc końca.");
+
+                        boolean itemOptional =
+                            "expense".equals(itemKind) && optional.isChecked();
                         PaycheckMonthlyBudget.Item item =
                             PaycheckMonthlyBudget.newItem(
                                 itemName, itemKind, itemCategory, grosz, mode,
-                                start.getText().toString().trim(),
-                                end.getText().toString().trim(),
-                                cycles[cycle.getSelectedItemPosition()]);
+                                startMonth.getText().toString().trim(),
+                                end, cycleMonths, day, itemOptional,
+                                isInstallment, count);
                         if (privateScope) {
                             String result = PrivatePaycheckVault.addBudgetItem(
-                                this, privatePaycheckSession, item);
+                                this,privatePaycheckSession,item);
                             if (!"COMMITTED".equals(result))
                                 throw new IllegalStateException(
                                     "Ta pozycja już istnieje.");
                             DiagnosticLog.event(
                                 "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
                         } else {
-                            PaycheckMonthlyBudget.add(prefs, item);
+                            PaycheckMonthlyBudget.add(prefs,item);
                             DiagnosticLog.event(
                                 "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
                         }
                         dialog.dismiss();
                         render();
+                    } catch (NumberFormatException error) {
+                        alert("Sprawdź termin lub liczbę rat.");
                     } catch (IllegalArgumentException error) {
-                        amount.setError(error.getMessage());
+                        alert(error.getMessage() == null
+                            ? "Nieprawidłowa pozycja budżetu."
+                            : error.getMessage());
                     } catch (Exception error) {
-                        DiagnosticLog.error(
-                            privateScope
-                                ? "PAYCHECK_PRIVATE_BUDGET_ADD"
-                                : "PAYCHECK_SHARED_BUDGET_ADD",
-                            error);
+                        if (!privateScope)
+                            DiagnosticLog.error("PAYCHECK_SHARED_BUDGET_ADD",error);
                         alert("Nie zapisano pozycji budżetu.");
                     }
                 }));
@@ -14534,7 +15078,7 @@ public final class MainActivity extends Activity {
                 return;
             }
             String[] labels = new String[items.size()];
-            YearMonth shownMonth=YearMonth.now();
+            YearMonth shownMonth=paycheckBudgetMonth == null ? YearMonth.now() : paycheckBudgetMonth;
             java.util.List<PrivatePaycheckVault.Entry> privateEntries=
                 privateScope
                     ? PrivatePaycheckVault.entries(
@@ -14561,11 +15105,13 @@ public final class MainActivity extends Activity {
                         ?"\n"+budgetMonthLabel(shownMonth)+" • oczekuje"
                         :"\n"+budgetMonthLabel(shownMonth)+" • wykonano "
                             +MoneyRules.format(actual)
-                            +(actual==item.amountGrosz
+                            +(actual==PaycheckMonthlyBudget.plannedAmount(item,shownMonth)
                                 ?" ✓"
-                                :" • plan "+MoneyRules.format(item.amountGrosz));
+                                :" • plan "+MoneyRules.format(
+                                    PaycheckMonthlyBudget.plannedAmount(
+                                        item,shownMonth)));
                 }
-                labels[i] = PaycheckMonthlyBudget.itemLabel(item)
+                labels[i] = PaycheckMonthlyBudget.itemLabel(item,shownMonth)
                     + " • " + range + realization;
             }
             AlertDialog dialog = new AlertDialog.Builder(this)
