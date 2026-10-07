@@ -34,11 +34,12 @@ for phrase in ('bank_receipt_notifications_enabled', 'receiptEnabled(',
                '.putString(ROWS,result.toString()).commit()'):
     assert phrase in store, phrase
 for phrase in ('Manifest.permission.POST_NOTIFICATIONS',
-               'NotificationChannel', 'Notification.VISIBILITY_PRIVATE',
+               'LegacyCompat.ensureChannel(manager, CHANNEL,',
+               'Notification.VISIBILITY_PRIVATE',
                'setPublicVersion(publicView)', 'manager.notify(',
                'BankNotificationHints.receiptEnabled(context)',
                'NotificationManager.IMPORTANCE_DEFAULT',
-               'manager.areNotificationsEnabled()'):
+               'LegacyCompat.notificationsEnabled(manager)'):
     assert phrase in receipt, phrase
 for secret in ('notificationText', 'EXTRA_TEXT', 'EXTRA_BIG_TEXT',
                'PaycheckStore.confirm('):
