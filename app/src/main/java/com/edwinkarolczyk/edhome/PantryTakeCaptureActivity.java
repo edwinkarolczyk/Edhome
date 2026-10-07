@@ -137,9 +137,11 @@ public final class PantryTakeCaptureActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         resumed = true;
-        if (checkSelfPermission(Manifest.permission.CAMERA)
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION);
+            androidx.core.app.ActivityCompat.requestPermissions(
+                this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION);
             return;
         }
         startCamera();
