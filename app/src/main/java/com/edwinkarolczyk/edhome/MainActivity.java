@@ -14319,7 +14319,42 @@ public final class MainActivity extends Activity {
                 + "Pozycja może mieć stałą kwotę albo zmienną prognozę.");
             button("📅 Dodaj pozycję planu miesiąca",
                 () -> showBudgetItemDialog(false));
-            button("📋 Pozycje planu • " + items.size(),
+
+            java.util.List<PaycheckMonthlyBudget.Item> activeItems =
+                PaycheckMonthlyBudget.activeFor(items, month);
+            int expenseCount = 0;
+            for (PaycheckMonthlyBudget.Item item : activeItems)
+                if ("expense".equals(item.kind)) expenseCount++;
+            title("Planowane wydatki • " + expenseCount);
+            if (expenseCount == 0) {
+                note("Brak planowanych wydatków w tym miesiącu.");
+            } else {
+                for (PaycheckMonthlyBudget.Item item : activeItems) {
+                    if (!"expense".equals(item.kind)) continue;
+                    String categoryLabel = MoneyRules.categoryLabel(item.category);
+                    button(PaycheckMonthlyBudget.itemLabel(item)
+                            + " • " + categoryLabel,
+                        () -> showBudgetItemDetails(false, item));
+                }
+            }
+
+            int incomeCount = 0;
+            for (PaycheckMonthlyBudget.Item item : activeItems)
+                if ("income".equals(item.kind)) incomeCount++;
+            title("Planowane wpływy • " + incomeCount);
+            if (incomeCount == 0) {
+                note("Brak planowanych wpływów w tym miesiącu.");
+            } else {
+                for (PaycheckMonthlyBudget.Item item : activeItems) {
+                    if (!"income".equals(item.kind)) continue;
+                    String categoryLabel = MoneyRules.categoryLabel(item.category);
+                    button(PaycheckMonthlyBudget.itemLabel(item)
+                            + " • " + categoryLabel,
+                        () -> showBudgetItemDetails(false, item));
+                }
+            }
+
+            button("📋 Wszystkie pozycje planu • " + items.size(),
                 () -> showBudgetItemsDialog(false));
         } catch (Exception error) {
             DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_READ", error);
@@ -14550,6 +14585,37 @@ public final class MainActivity extends Activity {
                 DiagnosticLog.error("PAYCHECK_BUDGET_LIST", error);
             alert("Nie udało się otworzyć planu budżetu.");
         }
+    }
+
+    private void showBudgetItemDetails(boolean privateScope,
+            PaycheckMonthlyBudget.Item item) {
+        String cycle;
+        switch (item.cycleMonths) {
+            case 0: cycle = "Jednorazowo"; break;
+            case 1: cycle = "Co miesiąc"; break;
+            case 2: cycle = "Co 2 miesiące"; break;
+            case 3: cycle = "Co kwartał"; break;
+            case 6: cycle = "Co 6 miesięcy"; break;
+            case 12: cycle = "Co rok"; break;
+            default: cycle = "Cykl"; break;
+        }
+        String range = item.startMonth
+            + (item.endMonth == null || item.endMonth.isBlank()
+                ? " → bez końca" : " → " + item.endMonth);
+        String message = ("income".equals(item.kind) ? "Przychód: " : "Wydatek: ")
+            + MoneyRules.format(item.amountGrosz)
+            + "\nKategoria: " + MoneyRules.categoryLabel(item.category)
+            + "\nCykl: " + cycle
+            + "\nOkres: " + range
+            + "\nTryb kwoty: "
+            + ("estimate".equals(item.amountMode) ? "zmienna / prognoza" : "stała");
+        new AlertDialog.Builder(this)
+            .setTitle(item.name)
+            .setMessage(message)
+            .setNegativeButton("Zamknij", null)
+            .setPositiveButton("Usuń z planu",
+                (d,w) -> confirmBudgetItemDelete(privateScope,item))
+            .show();
     }
 
     private void confirmBudgetItemDelete(boolean privateScope,
