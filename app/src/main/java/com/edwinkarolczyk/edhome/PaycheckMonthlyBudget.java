@@ -134,6 +134,8 @@ final class PaycheckMonthlyBudget {
         for (Item item : items) {
             if (item.id.equals(itemId)) target = item;
             if (item.matchedOperationIds.remove(operationId)) changed = true;
+            if (item.matchedAllocationsGrosz.remove(operationId) != null)
+                changed = true;
         }
         if (target == null)
             throw new IllegalArgumentException("Pozycja budżetu już nie istnieje.");
@@ -141,6 +143,7 @@ final class PaycheckMonthlyBudget {
             if (target.matchedOperationIds.size() >= MAX_MATCHES_PER_ITEM)
                 throw new IllegalArgumentException("Za dużo realizacji tej pozycji budżetu.");
             target.matchedOperationIds.add(operationId);
+            target.matchedAllocationsGrosz.remove(operationId);
             changed = true;
         }
         if (changed) save(prefs, items);
