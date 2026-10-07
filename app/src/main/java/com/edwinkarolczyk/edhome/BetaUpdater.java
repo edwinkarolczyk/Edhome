@@ -246,7 +246,7 @@ public final class BetaUpdater {
             if (status == 404 || status == 410)
                 throw new java.io.FileNotFoundException("EDHOME channel not published");
             if (status != 200) throw new IllegalStateException("HTTP_" + status);
-            if (conn.getContentLengthLong() > MAX_MANIFEST) throw new IllegalStateException("MANIFEST_TOO_LARGE");
+            if (conn.getContentLength() > MAX_MANIFEST) throw new IllegalStateException("MANIFEST_TOO_LARGE");
             try (InputStream in = conn.getInputStream()) {
                 byte[] data = new byte[MAX_MANIFEST + 1];
                 int offset = 0, n;
