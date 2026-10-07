@@ -175,6 +175,8 @@ public final class MainActivity extends Activity {
     private String screen = "home";
     private String calendarMonth = YearMonth.now().toString();
     private YearMonth paycheckBudgetMonth = YearMonth.now();
+    private String expandedBudgetItemId;
+    private View expandedBudgetDetailsView;
     private String calendarDay = LocalDate.now().toString();
     private String calendarView = "month";
     private String tasksFilter = "all";
@@ -2979,7 +2981,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if ("paycheck_private".equals(target)) {
-            openPrivatePaycheck();
+            go("paycheck");
             return;
         }
         if ("tasks".equals(target) || "today".equals(target)) {
@@ -3011,7 +3013,8 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> names = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+            if ("paycheck_private".equals(target)
+                    || !HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
                     || homeTargetAlreadyAdded(target,null))
                 continue;
             targets.add(target);
@@ -3684,7 +3687,8 @@ public final class MainActivity extends Activity {
         java.util.List<String> targets = new java.util.ArrayList<>();
         java.util.List<String> targetLabels = new java.util.ArrayList<>();
         for (String target : HomeTileCatalog.TARGETS) {
-            if (!HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
+            if ("paycheck_private".equals(target)
+                    || !HomeTileCatalog.validTarget(target, BetaUpdater.isBeta())
                     || (!target.equals(homeTileTarget(id))
                         && homeTargetAlreadyAdded(target,id)))continue;
             targets.add(target);
@@ -12810,10 +12814,10 @@ public final class MainActivity extends Activity {
     }
 
     private void paycheck() {
-        header("PayCheck • wspólny budżet");
-        note("Wspólne finanse pozostają dostępne bez PIN-u Bety. "
-            + "Prywatne finanse mają osobny sejf z hasłem i szyfrowaniem.");
-        button("🔒 Prywatny sejf PayCheck", this::openPrivatePaycheck);
+        header("PayCheck • budżet");
+        note("Bieżący przepływ finansów korzysta z jednego PayCheck "
+            + "i jednego Budżetu miesiąca. Dane istniejącego prywatnego sejfu "
+            + "nie są usuwane, ale prywatny budżet jest na razie odłożony.");
         note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
             + "Nowe wpisy finansowe czekają na potwierdzenie; "
             + "saldo liczy tylko potwierdzone operacje.");
@@ -13307,9 +13311,8 @@ public final class MainActivity extends Activity {
             }
             if(ids.isEmpty()) {
                 int possibleStatementMatches=countRecentStatementMatches(signal);
-                entry.addView(text("Automatycznie dodano do kolejki • "
-                    +"wybierz, czy to wydatek wspólny, czy prywatny. "
-                    +"Saldo bez zmian.",13,false));
+                entry.addView(text("Automatycznie dodano do kolejki PayCheck. "
+                    +"Saldo pozostaje bez zmian do potwierdzenia.",13,false));
                 if(possibleStatementMatches>0) {
                     entry.addView(text("Uwaga: znaleziono "
                         +possibleStatementMatches
@@ -13323,13 +13326,8 @@ public final class MainActivity extends Activity {
                             render();
                         });
                 }
-                smallButton(entry,"WSPÓLNY • dodaj do oczekujących",
+                smallButton(entry,"Dodaj do oczekujących PayCheck",
                     ()->assignBankHintToShared(signal));
-                smallButton(entry,"PRYWATNY • otwórz sejf",
-                    ()->{
-                        pendingPrivateBankHintKey=signal.key;
-                        openPrivatePaycheck();
-                    });
             }
             else if(ids.size()==1)
                 smallButton(entry,"Sprawdź i potwierdź pasujący wpis",
