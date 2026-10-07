@@ -1393,7 +1393,7 @@ public final class MainActivity extends Activity {
             return;
         }
         String fallback;
-        if("paycheck_private".equals(screen))fallback="paycheck";
+        if("paycheck_private".equals(screen)||"paycheck_budget".equals(screen))fallback="paycheck";
         else if("updates_advanced".equals(screen))fallback="updates";
         else if("storage".equals(screen))fallback="places";
         else if("shopping".equals(screen))fallback="pantry";
@@ -1540,6 +1540,7 @@ public final class MainActivity extends Activity {
                 case "storage": storage(); break;
                 case "vehicles": vehicles(); break;
                 case "paycheck": paycheck(); break;
+                case "paycheck_budget": paycheckMonthlyBudget(); break;
                 case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
                 case "scanner": scannerHub(); break;
@@ -12817,7 +12818,7 @@ public final class MainActivity extends Activity {
             + "saldo liczy tylko potwierdzone operacje.");
         title("Saldo potwierdzone wspólne: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
-        sharedMonthlyBudgetBlock();
+        sharedMonthlyBudgetEntry();
         Spinner kind=new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList("Wydatek −","Przychód +")));
@@ -14259,6 +14260,32 @@ public final class MainActivity extends Activity {
         if (!name.isEmpty())
             name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
         return name + " " + month.getYear();
+    }
+
+    private void sharedMonthlyBudgetEntry() {
+        final YearMonth month = YearMonth.now();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> items =
+                PaycheckMonthlyBudget.load(prefs);
+            PaycheckMonthlyBudget.Totals plan =
+                PaycheckMonthlyBudget.planned(items, month);
+            title("Budżet miesiąca • " + budgetMonthLabel(month));
+            note("Plan: wpływy " + MoneyRules.format(plan.income)
+                + " • wydatki " + MoneyRules.format(plan.expense)
+                + " • zostaje " + MoneyRules.format(plan.net()) + ".");
+            button("📅 Wejdź do budżetu miesiąca • " + items.size()
+                + (items.size()==1 ? " pozycja" : " pozycji"),
+                () -> go("paycheck_budget"));
+        } catch (Exception error) {
+            DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_ENTRY", error);
+            button("📅 Wejdź do budżetu miesiąca",
+                () -> go("paycheck_budget"));
+        }
+    }
+
+    private void paycheckMonthlyBudget() {
+        header("PayCheck • Budżet miesiąca");
+        sharedMonthlyBudgetBlock();
     }
 
     private void sharedMonthlyBudgetBlock() {
