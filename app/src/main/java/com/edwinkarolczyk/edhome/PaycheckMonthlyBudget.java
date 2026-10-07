@@ -288,7 +288,7 @@ final class PaycheckMonthlyBudget {
      * Optional items intentionally never create arrears.
      */
     static long sharedCarryBefore(SQLiteDatabase db, Item item, YearMonth month) {
-        if (item.optional) return 0L;
+        if (item.optional || !"expense".equals(item.kind)) return 0L;
         YearMonth cursor = YearMonth.parse(item.startMonth);
         if (!cursor.isBefore(month)) {
             Long adjustment = item.balanceAdjustmentsGrosz.get(month.toString());
