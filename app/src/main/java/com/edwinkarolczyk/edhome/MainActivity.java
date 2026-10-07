@@ -14440,8 +14440,8 @@ public final class MainActivity extends Activity {
                 note("Z poprzednich miesięcy: zaległości "
                     + MoneyRules.format(arrears) + " • nadpłaty "
                     + MoneyRules.format(credit) + ".");
-            note("Pozycja planowana nie jest transakcją. Saldo zmienia dopiero "
-                + "potwierdzony wpis PayCheck.");
+            note("Pozycja planowana nie jest transakcją. Saldo zmieniają dopiero "
+                + "transakcje potwierdzone po sprawdzeniu banku / wyciągu.");
 
             button("＋ Dodaj pozycję", () -> showBudgetItemDialog(false));
 
