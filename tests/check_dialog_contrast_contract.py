@@ -98,7 +98,7 @@ for name in (
     assert "lightDialogForm(" in method(name), name
 
 budget_dialog = method("showBudgetItemDialog")
-assert budget_dialog.count("lightDialogSpinnerAdapter(") == 4
+assert budget_dialog.count("lightDialogSpinnerAdapter(") == 5
 assert "themeSpinnerAdapter(" not in budget_dialog
 assert budget_dialog.count("DialogContrast.BACKGROUND") >= 1
 
