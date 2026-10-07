@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Private money must not exist in unauthenticated Beta; shared ledger is explicit."""
+"""Current PayCheck uses one explicit shared ledger; money stays integer-grosz."""
 from pathlib import Path
 import sqlite3
 import json
@@ -12,7 +12,7 @@ backup=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 gradle=Path("app/build.gradle").read_text()
 for token in (
     'case "paycheck": paycheck(); break;',
-    'PayCheck • wspólny budżet',
+    'PayCheck • budżet',
     'PaycheckStore.sharedBalance(db.getReadableDatabase())',
     'PaycheckStore.add(',
     'new AlertDialog.Builder(this)',
