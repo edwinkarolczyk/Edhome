@@ -346,6 +346,16 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && getIntent() != null
                 && getIntent().getBooleanExtra("open_paycheck",false))
             screen="paycheck";
+        if (getIntent() != null
+                && getIntent().getBooleanExtra("open_paycheck_budget",false)) {
+            screen="paycheck_budget";
+            try {
+                String requestedMonth =
+                    getIntent().getStringExtra("budget_month");
+                if (requestedMonth != null)
+                    paycheckBudgetMonth = YearMonth.parse(requestedMonth);
+            } catch(Exception ignored) { }
+        }
         applyProjectTaskIntent(getIntent(),false);
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
@@ -540,6 +550,15 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && intent != null
                 && intent.getBooleanExtra("open_paycheck",false))
             go("paycheck");
+        if (intent != null
+                && intent.getBooleanExtra("open_paycheck_budget",false)) {
+            try {
+                String requestedMonth = intent.getStringExtra("budget_month");
+                if (requestedMonth != null)
+                    paycheckBudgetMonth = YearMonth.parse(requestedMonth);
+            } catch(Exception ignored) { }
+            go("paycheck_budget");
+        }
         handleNfcIntent(intent);
     }
 
@@ -14415,6 +14434,26 @@ public final class MainActivity extends Activity {
                     expandedBudgetDetailsView = null;
                     render();
                 });
+
+            boolean budgetReminders =
+                prefs.getBoolean("budget_reminders_enabled",true);
+            button(budgetReminders
+                    ? "🔔 Przypomnienia płatności: WŁ."
+                    : "🔕 Przypomnienia płatności: WYŁ.",
+                () -> {
+                    boolean enabled = !prefs.getBoolean(
+                        "budget_reminders_enabled",true);
+                    if (!prefs.edit().putBoolean(
+                            "budget_reminders_enabled",enabled).commit()) {
+                        alert("Nie zapisano ustawienia przypomnień.");
+                        return;
+                    }
+                    BudgetReminderReceiver.schedule(this);
+                    render();
+                });
+            note("Przypomnienia: 3 dni przed i w dniu planowanej zapłaty, "
+                + "domyślnie o 08:00. Po rozliczeniu są anulowane.");
+            BudgetReminderReceiver.schedule(this);
 
             note("Plan: wpływy " + MoneyRules.format(plan.income)
                 + " • wydatki " + MoneyRules.format(plan.expense)
