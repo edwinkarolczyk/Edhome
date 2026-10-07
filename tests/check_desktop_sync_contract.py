@@ -415,7 +415,16 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.99"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.100"' in desktop
+assert 'ANDROID_COMPAT_VERSION = "0.8.0.42"' in desktop
+assert 'repairHubInitializationState();' in desktop
+assert 'reason=initialized_without_snapshot' in desktop
+assert 'POŁĄCZONO • Android ' in desktop
+assert 'return PREFS.getBoolean("hubInitialized",false)' in desktop
+assert '&& snapshot!=null;' in desktop
+assert 'boolean initialized=host.initialized();' in hub
+assert 'initialized?host.snapshot():""' in hub
+assert 'protocolVersion' in hub
 print("desktop project multi-select + batch edit contract OK")
 
 # Desktop Projects v2: editable dependencies with cycle guard + capitalized labels.
