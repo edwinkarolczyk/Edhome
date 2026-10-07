@@ -14537,6 +14537,7 @@ public final class MainActivity extends Activity {
                 + "transakcje potwierdzone po sprawdzeniu banku / wyciągu.");
 
             button("＋ Dodaj pozycję", () -> showBudgetItemDialog(false));
+            button("👥 Odbiorcy / szablony", this::showBudgetRecipientsDialog);
 
             java.util.List<PaycheckMonthlyBudget.Item> activeItems =
                 PaycheckMonthlyBudget.activeFor(items, month);
@@ -15305,6 +15306,143 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void showBudgetRecipientsDialog() {
+        try {
+            java.util.List<PaycheckRecipientStore.Recipient> recipients =
+                PaycheckRecipientStore.load(prefs);
+            java.util.List<String> labels = new java.util.ArrayList<>();
+            java.util.List<PaycheckRecipientStore.Recipient> active =
+                new java.util.ArrayList<>();
+            for (PaycheckRecipientStore.Recipient recipient:recipients) {
+                if (!recipient.active) continue;
+                active.add(recipient);
+                StringBuilder label=new StringBuilder(recipient.name);
+                if (recipient.defaultAmountGrosz>0L)
+                    label.append(" • ").append(
+                        MoneyRules.format(recipient.defaultAmountGrosz));
+                if (recipient.defaultDueDay>0)
+                    label.append(" • ok. ").append(recipient.defaultDueDay).append(".");
+                if (recipient.defaultCategory!=null
+                        && !recipient.defaultCategory.isBlank())
+                    label.append(" • ").append(
+                        MoneyRules.categoryLabel(recipient.defaultCategory));
+                labels.add(label.toString());
+            }
+            labels.add("＋ Nowy odbiorca / szablon");
+            new AlertDialog.Builder(this)
+                .setTitle("Odbiorcy / szablony")
+                .setMessage("Odbiorca może mieć domyślną kategorię, kwotę "
+                    + "i planowany dzień zapłaty. Te dane są tylko podpowiedzią "
+                    + "przy nowym wydatku i można je zmienić.")
+                .setItems(labels.toArray(new String[0]),(d,which)->{
+                    if (which==active.size())
+                        showBudgetRecipientTemplateDialog(null);
+                    else showBudgetRecipientTemplateDialog(active.get(which));
+                })
+                .setNegativeButton("Zamknij",null)
+                .show();
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_RECIPIENT_LIST",error);
+            alert("Nie udało się otworzyć odbiorców.");
+        }
+    }
+
+    private void showBudgetRecipientTemplateDialog(
+            PaycheckRecipientStore.Recipient existing) {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(12),dp(18),dp(12));
+
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa odbiorcy");
+        name.setText(existing==null?"":existing.name);
+        name.setEnabled(existing==null);
+        form.addView(name);
+
+        Spinner category=new Spinner(this);
+        java.util.List<String> categoryLabels=new java.util.ArrayList<>();
+        categoryLabels.add("Bez domyślnej kategorii");
+        categoryLabels.addAll(java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS));
+        category.setAdapter(lightDialogSpinnerAdapter(categoryLabels));
+        if (existing!=null && existing.defaultCategory!=null
+                && !existing.defaultCategory.isBlank()) {
+            for (int i=0;i<MoneyRules.CATEGORIES.length;i++)
+                if (existing.defaultCategory.equals(MoneyRules.CATEGORIES[i])) {
+                    category.setSelection(i+1);
+                    break;
+                }
+        }
+        form.addView(category);
+
+        EditText amount=new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Domyślna kwota PLN • opcjonalnie");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        if (existing!=null && existing.defaultAmountGrosz>0L)
+            amount.setText(String.format(java.util.Locale.ROOT,"%.2f",
+                existing.defaultAmountGrosz/100.0));
+        form.addView(amount);
+
+        EditText dueDay=new EditText(this);
+        dueDay.setSingleLine(true);
+        dueDay.setHint("Domyślny dzień zapłaty 1–31 • opcjonalnie");
+        dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        if (existing!=null && existing.defaultDueDay>0)
+            dueDay.setText(Integer.toString(existing.defaultDueDay));
+        form.addView(dueDay);
+
+        lightDialogForm(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(existing==null?"Nowy odbiorca":"Szablon • "+existing.name)
+            .setView(form)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",null)
+            .create();
+        if (existing!=null)
+            dialog.setButton(AlertDialog.BUTTON_NEUTRAL,"Ukryj", (d,w)->{});
+        dialog.setOnShowListener(x->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    PaycheckRecipientStore.Recipient target=existing;
+                    if (target==null)
+                        target=PaycheckRecipientStore.getOrCreate(
+                            prefs,name.getText().toString().trim());
+                    String categoryValue=category.getSelectedItemPosition()<=0
+                        ? "" : MoneyRules.CATEGORIES[
+                            category.getSelectedItemPosition()-1];
+                    long amountGrosz=amount.getText().toString().trim().isEmpty()
+                        ?0L:MoneyRules.parse(amount.getText().toString());
+                    int day=dueDay.getText().toString().trim().isEmpty()
+                        ?0:Integer.parseInt(dueDay.getText().toString().trim());
+                    PaycheckRecipientStore.updateTemplate(
+                        prefs,target.id,categoryValue,day,amountGrosz);
+                    DiagnosticLog.event("PAYCHECK_RECIPIENT_TEMPLATE_SAVED");
+                    dialog.dismiss();
+                    showBudgetRecipientsDialog();
+                } catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie zapisano szablonu odbiorcy.":error.getMessage());
+                }
+            });
+            if (existing!=null) {
+                Button neutral=dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+                if (neutral!=null) neutral.setOnClickListener(v->{
+                    try {
+                        PaycheckRecipientStore.deactivate(prefs,existing.id);
+                        DiagnosticLog.event("PAYCHECK_RECIPIENT_HIDDEN");
+                        dialog.dismiss();
+                        showBudgetRecipientsDialog();
+                    } catch(Exception error) {
+                        alert("Nie udało się ukryć odbiorcy.");
+                    }
+                });
+            }
+        });
+        dialog.show();
+    }
+
     private void showBudgetItemDialog(boolean privateScope) {
         if (privateScope && (privatePaycheckSession == null
                 || !privatePaycheckSession.active())) {
@@ -15321,12 +15459,21 @@ public final class MainActivity extends Activity {
         name.setHint("Zobowiązanie, np. rachunek bieżący / rata");
         form.addView(name);
 
-        EditText recipient = new EditText(this);
+        android.widget.AutoCompleteTextView recipient =
+            new android.widget.AutoCompleteTextView(this);
         recipient.setSingleLine(true);
         recipient.setHint("Odbiorca, np. TAURON / bank (opcjonalnie)");
+        recipient.setThreshold(1);
         recipient.setFilters(new android.text.InputFilter[]{
             new android.text.InputFilter.LengthFilter(80)});
         recipient.setVisibility(privateScope ? View.GONE : View.VISIBLE);
+        if (!privateScope) {
+            try {
+                recipient.setAdapter(new android.widget.ArrayAdapter<String>(
+                    this,android.R.layout.simple_dropdown_item_1line,
+                    PaycheckRecipientStore.suggestions(prefs)));
+            } catch(Exception ignored) { }
+        }
         form.addView(recipient);
 
         Spinner kind = new Spinner(this);
@@ -15359,6 +15506,34 @@ public final class MainActivity extends Activity {
         dueDay.setHint("Planowany dzień zapłaty 1–31 (gdy brak faktury)");
         dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(dueDay);
+
+        if (!privateScope) {
+            recipient.setOnItemClickListener((parent,view,position,id)->{
+                try {
+                    PaycheckRecipientStore.Recipient preset =
+                        PaycheckRecipientStore.findByName(
+                            PaycheckRecipientStore.load(prefs),
+                            recipient.getText().toString().trim());
+                    if (preset == null) return;
+                    if (preset.defaultAmountGrosz > 0L
+                            && amount.getText().toString().trim().isEmpty())
+                        amount.setText(String.format(java.util.Locale.ROOT,
+                            "%.2f",preset.defaultAmountGrosz/100.0));
+                    if (preset.defaultDueDay > 0
+                            && dueDay.getText().toString().trim().isEmpty())
+                        dueDay.setText(Integer.toString(preset.defaultDueDay));
+                    if (preset.defaultCategory != null
+                            && !preset.defaultCategory.isBlank()) {
+                        for (int i=0;i<MoneyRules.CATEGORIES.length;i++)
+                            if (preset.defaultCategory.equals(
+                                    MoneyRules.CATEGORIES[i])) {
+                                category.setSelection(i);
+                                break;
+                            }
+                    }
+                } catch(Exception ignored) { }
+            });
+        }
 
         EditText invoiceDueDate = new EditText(this);
         invoiceDueDate.setSingleLine(true);
