@@ -111,6 +111,44 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 24. **Przypomnienia:** domyślnie 3 dni przed planowaną zapłatą i w dniu zapłaty; po rozliczeniu wyłączyć dalsze przypomnienia.
 25. **Załącznik:** opcjonalne zdjęcie/PDF faktury ukryte w rozwinięciu pozycji; nie zaśmieca głównej listy.
 
+### Audyt Budżetu miesiąca — stan bazowy 07.10.2026
+
+> Ten audyt zapisuje rzeczywisty stan wejściowy względem kontraktu 25/25. Bilans: **4 punkty kompletne, 11 częściowych i 10 wymagających wdrożenia/poprawy**. Statusu nie podnosić do 🟢 na podstawie samego istnienia podobnej funkcji — wymagane jest spełnienie całego ustalenia i regresja.
+
+| # | Ustalenie | Stan | Co jest teraz |
+|---|---|---|---|
+| 1 | Nawigacja miesięcy + trwała historia | 🟡 | Poprzedni / Następny / Bieżący działa. Historia nie jest jednak pełnym snapshotem miesiąca; usunięcie pozycji może usunąć część historii planu. |
+| 2 | Jeden PayCheck + jeden Budżet, prywatny odłożony | 🔴 | Prywatny budżet nadal jest w kodzie i UI. |
+| 3 | Lista bez kafelków, 1 zwarta linia | 🟡 | Linia jest zwarta, ale każda pozycja nadal siedzi w `card()`, czyli technicznie nadal są karty. |
+| 4 | Tylko jeden wpis rozwinięty | 🔴 | Każda pozycja rozwija się niezależnie. Można mieć kilka otwartych jednocześnie. |
+| 5 | Zielony / czerwony / żółty + plakietki typu | 🟡 | Zielony, czerwony i niebieski są. Brak żółtego dla częściowej płatności/różnicy. |
+| 6 | Opcjonalne = niebieskie + przenieś miesiąc | 🟢 | Jest. Opcjonalne nie tworzą zaległości i można je przenieść. |
+| 7 | Termin sortuje, zaległości zawsze najwyżej | 🟡 | Sortowanie po dniu działa. Zaległości nie mają osobnego priorytetu nad bieżącymi. |
+| 8 | Wpływy osobno, mała sekcja u góry | 🟡 | Są osobno, ale obecnie wydatki są renderowane przed wpływami. |
+| 9 | Plan nie zmienia salda | 🟢 | Jest poprawnie. Tylko potwierdzona transakcja PayCheck rozlicza plan. |
+| 10 | Jeden przelew rozlicza kilka pozycji | 🟡 | Jest automatyczne dopasowanie dokładnie dwóch pozycji. Nie dowolnej liczby. |
+| 11 | Różnica / nadpłata / niedopłata | 🟢 | Jest liczona i pokazywana. |
+| 12 | Niedopłata następnego miesiąca jako osobna linia | 🔴 | Nie. Aktualnie zaległość jest doliczana do tej samej pozycji. |
+| 13 | Historia nadpłat/niedopłat pod przyszłe statystyki | 🟡 | Część danych zostaje, ale nie ma porządnego dziennika zdarzeń per odbiorca/okres. |
+| 14 | Nadpłata tylko proponowana do odliczenia | 🔴 | Obecnie nadpłata automatycznie pomniejsza kolejne rozliczenie. To jest niezgodne z ustaleniem. |
+| 15 | Niezapłacony wydatek przechodzi jako zaległy | 🟡 | Przechodzi, ale nie jako osobna linia typu „z IX” i nie zawsze trafia ponad wszystkie bieżące. |
+| 16 | Ręczne zamknięcie + obowiązkowy powód + historia | 🟡 | Powód jest obowiązkowy. Brakuje pełnego zapisu zdarzenia z konkretną datą zamknięcia. |
+| 17 | Cykliczne: tylko ten / cały cykl / nadpłata | 🔴 | Jest „Zakończ cykl”, ale nie ma jednego dialogu z trzema ustalonymi opcjami. |
+| 18 | Zmiana kwoty: miesiąc / od teraz | 🟢 | Jest dokładnie to pytanie. |
+| 19 | Raty: liczba albo koniec + drugie automatycznie wyliczone | 🟡 | Pola się wzajemnie blokują. Drugie pole nie jest jeszcze automatycznie wyliczane i pokazywane. |
+| 20 | Postęp raty + zostało + suma zobowiązania | 🟡 | Jest RATA 5/16 i OSTATNIA. Brak „zostało 11”, ostrzeżenia ostatnich 2, sumy całkowitej/zapłacono/pozostało. |
+| 21 | Jeden odbiorca → kilka zobowiązań | 🔴 | Brak osobnego modelu odbiorcy. Nazwa pozycji jest zwykłym tekstem. |
+| 22 | Odbiorcy / szablony / uczenie | 🔴 | Jeszcze nie ma. |
+| 23 | Faktura ≠ planowana zapłata | 🔴 | Jeszcze nie ma osobnego terminu faktury i planowanego dnia płatności. Jest tylko `dueDay`. |
+| 24 | Przypomnienie 3 dni wcześniej + w dzień płatności | 🔴 | Brak przypomnień specyficznych dla Budżetu/rachunków. |
+| 25 | Zdjęcie/PDF faktury w rozwinięciu | 🔴 | Brak załącznika w modelu pozycji budżetu. |
+
+### Dodatkowe dane zobowiązania / kredytu
+
+- **Numer umowy kredytowej** jest trwałym polem danych zobowiązania/kredytu. Stan odnotowany przy audycie: zapis działa już w **0.8.0.39**.
+- Pole ma pozostać dostępne w szczegółach zobowiązania i zachowywać się poprawnie przy historii miesięcy, backup/restore, migracji oraz synchronizacji.
+- Numer umowy nie zastępuje modelu odbiorcy/zobowiązania z punktów 21–22; jest atrybutem konkretnego zobowiązania.
+
 ### Stan wdrożenia Budżetu miesiąca
 
 - **0.8.0.40 / P0:** zwarta lista, jeden rozwinięty wpis, kolory statusów, wpływy osobno, zaległości jako osobne wiersze, nadpłata tylko za zgodą, historia ręcznych zamknięć i zakres zamknięcia cyklu.
