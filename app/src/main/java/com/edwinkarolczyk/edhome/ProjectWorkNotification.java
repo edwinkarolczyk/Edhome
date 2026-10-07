@@ -2,7 +2,6 @@ package com.edwinkarolczyk.edhome;
 
 import android.Manifest;
 import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -44,7 +43,7 @@ final class ProjectWorkNotification {
                 != PackageManager.PERMISSION_GRANTED) return false;
         NotificationManager manager = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
-        return manager != null && manager.areNotificationsEnabled();
+        return manager != null && LegacyCompat.notificationsEnabled(manager);
     }
 
     static PendingIntent startAction(Context context, long taskId) {
@@ -53,7 +52,7 @@ final class ProjectWorkNotification {
             .putExtra("task_id", taskId);
         return PendingIntent.getBroadcast(context,
             actionRequestCode(taskId, false), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
     }
 
     static PendingIntent stopAction(Context context, long taskId) {
@@ -62,7 +61,7 @@ final class ProjectWorkNotification {
             .putExtra("task_id", taskId);
         return PendingIntent.getBroadcast(context,
             actionRequestCode(taskId, true), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
     }
 
     private static PendingIntent openAction(Context context,long projectId,
@@ -76,7 +75,7 @@ final class ProjectWorkNotification {
                 |Intent.FLAG_ACTIVITY_SINGLE_TOP);
         return PendingIntent.getActivity(context,
             3100000+(int)(taskId%800000),intent,
-            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            PendingIntent.FLAG_UPDATE_CURRENT|LegacyCompat.immutableFlag());
     }
 
     static boolean isActive(Context context, long taskId) {
@@ -189,9 +188,9 @@ final class ProjectWorkNotification {
         NotificationManager manager = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
-        manager.createNotificationChannel(new NotificationChannel(
-            CHANNEL_ID, "Aktywna praca nad projektem",
-            NotificationManager.IMPORTANCE_LOW));
+        LegacyCompat.ensureChannel(manager, CHANNEL_ID,
+            "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
+            null, true, true, false);
 
         PendingIntent open=openAction(context,projectId,taskId);
 
@@ -202,7 +201,7 @@ final class ProjectWorkNotification {
         String detail="● Praca trwa • "+title
             +"\nPlan: "+formatMinutes(plannedMinutes)
             +"\nDotknij, aby otworzyć tę czynność.";
-        Notification notification = new Notification.Builder(context, CHANNEL_ID)
+        Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • Projekt: " + projectName)
             .setContentText("● Praca trwa • " + title)
@@ -258,10 +257,10 @@ final class ProjectWorkNotification {
         NotificationManager manager = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
-        manager.createNotificationChannel(new NotificationChannel(
-            CHANNEL_ID, "Aktywna praca nad projektem",
-            NotificationManager.IMPORTANCE_LOW));
-        Notification notification = new Notification.Builder(context, CHANNEL_ID)
+        LegacyCompat.ensureChannel(manager, CHANNEL_ID,
+            "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
+            null, true, true, false);
+        Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • pomiar zatrzymany")
             .setContentText("Ostatnia sesja: " + formatMinutes(minutes))
@@ -277,10 +276,10 @@ final class ProjectWorkNotification {
         NotificationManager manager = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
-        manager.createNotificationChannel(new NotificationChannel(
-            CHANNEL_ID, "Aktywna praca nad projektem",
-            NotificationManager.IMPORTANCE_LOW));
-        Notification notification = new Notification.Builder(context, CHANNEL_ID)
+        LegacyCompat.ensureChannel(manager, CHANNEL_ID,
+            "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
+            null, true, true, false);
+        Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • nie rozpoczęto pomiaru")
             .setContentText(message)
