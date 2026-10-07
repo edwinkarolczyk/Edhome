@@ -2,6 +2,7 @@ package com.edwinkarolczyk.edhome;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
@@ -29,11 +30,13 @@ final class SuplaSecretStore {
     private SuplaSecretStore() {}
 
     static boolean hasToken(Context context) {
+        if (Build.VERSION.SDK_INT < 23) return false;
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         return prefs.contains(CIPHER_KEY) && prefs.contains(IV_KEY);
     }
 
     static void saveToken(Context context, String token) throws Exception {
+        requireKeystore();
         String clean = token == null ? "" : token.trim();
         if (clean.length() < 16 || clean.length() > 4096)
             throw new IllegalArgumentException("Token SUPLA ma nieprawidłową długość.");
@@ -52,6 +55,7 @@ final class SuplaSecretStore {
     }
 
     static String loadToken(Context context) throws Exception {
+        if (Build.VERSION.SDK_INT < 23) return "";
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String encryptedText = prefs.getString(CIPHER_KEY, "");
         String ivText = prefs.getString(IV_KEY, "");
@@ -71,21 +75,35 @@ final class SuplaSecretStore {
             .edit().remove(CIPHER_KEY).remove(IV_KEY).apply();
     }
 
-    private static SecretKey key() throws Exception {
-        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
-        store.load(null);
-        java.security.Key existing = store.getKey(KEY_ALIAS, null);
-        if (existing instanceof SecretKey) return (SecretKey) existing;
+    private static void requireKeystore() {
+        if (Build.VERSION.SDK_INT < 23)
+            throw new IllegalStateException(
+                "SUPLA Cloud wymaga Androida 6.0 lub nowszego.");
+    }
 
-        KeyGenerator generator = KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        generator.init(new KeyGenParameterSpec.Builder(
-            KEY_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true)
-            .build());
-        return generator.generateKey();
+    private static SecretKey key() throws Exception {
+        requireKeystore();
+        return Api23.key();
+    }
+
+    /** Kept in a separate class so Android 5.1 never verifies API 23 Keystore code. */
+    private static final class Api23 {
+        static SecretKey key() throws Exception {
+            KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+            store.load(null);
+            java.security.Key existing = store.getKey(KEY_ALIAS, null);
+            if (existing instanceof SecretKey) return (SecretKey) existing;
+
+            KeyGenerator generator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+            generator.init(new KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build());
+            return generator.generateKey();
+        }
     }
 }
