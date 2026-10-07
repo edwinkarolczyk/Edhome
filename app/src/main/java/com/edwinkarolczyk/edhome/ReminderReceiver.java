@@ -109,8 +109,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
     static void schedule(Context context) {
         // Active Project timers are independent from the reminder toggle.
         ProjectWorkNotification.restoreActive(context);
-        // Vehicle opt-in is independent of the global task reminder switch.
+        // Vehicle and PayCheck reminders have their own scheduling rules.
         VehicleReminderReceiver.schedule(context);
+        PaycheckBudgetReminderReceiver.schedule(context);
         AlarmManager manager = (AlarmManager) context.getSystemService(
             Context.ALARM_SERVICE);
         if (manager == null) return;
