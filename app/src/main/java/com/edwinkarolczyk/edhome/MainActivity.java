@@ -6311,28 +6311,6 @@ public final class MainActivity extends Activity {
             ReminderReceiver.schedule(this);
             render();
         });
-        if (!"income".equals(item.kind)) {
-            try {
-                java.util.List<PaycheckBudgetAttachmentStore.Attachment> attachments =
-                    PaycheckBudgetAttachmentStore.list(prefs,item.id);
-                details.addView(text("Faktura / załącznik"
-                    + (attachments.isEmpty() ? "" : " • " + attachments.size()),
-                    13,true));
-                for (PaycheckBudgetAttachmentStore.Attachment attachment:attachments)
-                    details.addView(budgetInlineButton(
-                        "📎 " + attachment.displayName,
-                        () -> showBudgetAttachmentActions(item,attachment)),
-                        new LinearLayout.LayoutParams(-1,dp(40)));
-                details.addView(budgetInlineButton("＋ Dodaj zdjęcie / PDF",
-                    () -> pickBudgetAttachment(item)),
-                    new LinearLayout.LayoutParams(-1,dp(40)));
-            } catch(Exception error) {
-                DiagnosticLog.error("PAYCHECK_ATTACHMENT_LIST",error);
-                details.addView(text(
-                    "Nie udało się odczytać załączników.",12,false));
-            }
-        }
-
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setVisibility(View.GONE);
@@ -14827,6 +14805,28 @@ public final class MainActivity extends Activity {
                 + " • zapłacono: " + MoneyRules.format(totalPaid)
                 + " • pozostało: " + MoneyRules.format(totalLeft),
                 13,false));
+        }
+
+        if (!"income".equals(item.kind)) {
+            try {
+                java.util.List<PaycheckBudgetAttachmentStore.Attachment> attachments =
+                    PaycheckBudgetAttachmentStore.list(prefs,item.id);
+                details.addView(text("Faktura / załącznik"
+                    + (attachments.isEmpty() ? "" : " • " + attachments.size()),
+                    13,true));
+                for (PaycheckBudgetAttachmentStore.Attachment attachment:attachments)
+                    details.addView(budgetInlineButton(
+                        "📎 " + attachment.displayName,
+                        () -> showBudgetAttachmentActions(item,attachment)),
+                        new LinearLayout.LayoutParams(-1,dp(40)));
+                details.addView(budgetInlineButton("＋ Dodaj zdjęcie / PDF",
+                    () -> pickBudgetAttachment(item)),
+                    new LinearLayout.LayoutParams(-1,dp(40)));
+            } catch(Exception error) {
+                DiagnosticLog.error("PAYCHECK_ATTACHMENT_LIST",error);
+                details.addView(text(
+                    "Nie udało się odczytać załączników.",12,false));
+            }
         }
 
         LinearLayout actions = new LinearLayout(this);
