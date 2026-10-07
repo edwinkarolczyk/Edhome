@@ -454,8 +454,14 @@ final class DataBackup {
                 }
                 if (tile.has("icon")) {
                     String iconId = tile.getString("icon");
-                    if (!TileIcon.known(iconId))
-                        throw new IllegalArgumentException("Nieznana ikona kafelka.");
+                    if (!TileIcon.known(iconId)) {
+                        String destination = tile.optString("target",
+                            HomeTileCatalog.defaultTarget(id));
+                        if (!HomeTileCatalog.validTarget(destination, true))
+                            destination = HomeTileCatalog.defaultTarget(id);
+                        String migrated = HomeTileCatalog.icon(destination);
+                        iconId = TileIcon.known(migrated) ? migrated : "tasks";
+                    }
                     icons.put(id, iconId);
                 }
                 if (tile.has("target")) {
@@ -472,11 +478,11 @@ final class DataBackup {
                 }
                 if(tile.has("art")){
                     String art=tile.getString("art");
-                    if(!TileArtLibrary.knownStyle(art)
-                            ||TileArtLibrary.NONE.equals(art))
+                    if(!TileArtLibrary.knownStyle(art))
                         throw new IllegalArgumentException(
                             "Nieznany styl grafiki kafelka.");
-                    arts.put(id,art);
+                    if(!TileArtLibrary.NONE.equals(art))
+                        arts.put(id,art);
                 }
             }
         }
