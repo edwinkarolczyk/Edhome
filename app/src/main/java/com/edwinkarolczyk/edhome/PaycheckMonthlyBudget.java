@@ -47,6 +47,7 @@ final class PaycheckMonthlyBudget {
         boolean optional;
         boolean installment;
         int installmentCount;
+        String creditAgreementNumber;
         boolean active;
         final List<String> matchedOperationIds = new ArrayList<>();
         final Map<String, Long> matchedAllocationsGrosz = new LinkedHashMap<>();
@@ -84,6 +85,16 @@ final class PaycheckMonthlyBudget {
             long amountGrosz, String amountMode, String startMonth,
             String endMonth, int cycleMonths, int dueDay, boolean optional,
             boolean installment, int installmentCount) {
+        return newItem(name, kind, category, amountGrosz, amountMode,
+            startMonth, endMonth, cycleMonths, dueDay, optional,
+            installment, installmentCount, "");
+    }
+
+    static Item newItem(String name, String kind, String category,
+            long amountGrosz, String amountMode, String startMonth,
+            String endMonth, int cycleMonths, int dueDay, boolean optional,
+            boolean installment, int installmentCount,
+            String creditAgreementNumber) {
         Item item = new Item();
         item.id = UUID.randomUUID().toString();
         item.name = name == null ? "" : name.trim();
@@ -98,6 +109,8 @@ final class PaycheckMonthlyBudget {
         item.optional = optional;
         item.installment = installment;
         item.installmentCount = installmentCount;
+        item.creditAgreementNumber = creditAgreementNumber == null
+            ? "" : creditAgreementNumber.trim();
         item.active = true;
         validate(item);
         return item;
@@ -549,6 +562,7 @@ final class PaycheckMonthlyBudget {
         json.put("optional", item.optional);
         json.put("installment", item.installment);
         json.put("installmentCount", item.installmentCount);
+        json.put("creditAgreementNumber", item.creditAgreementNumber);
         json.put("active", item.active);
         JSONArray matches = new JSONArray();
         for (String operationId : item.matchedOperationIds)
@@ -586,6 +600,8 @@ final class PaycheckMonthlyBudget {
         item.optional = json.optBoolean("optional", false);
         item.installment = json.optBoolean("installment", false);
         item.installmentCount = json.optInt("installmentCount", 0);
+        item.creditAgreementNumber =
+            json.optString("creditAgreementNumber", "").trim();
         item.active = !json.has("active") || json.getBoolean("active");
         JSONArray matches = json.optJSONArray("matches");
         if (matches != null) {
@@ -663,8 +679,15 @@ final class PaycheckMonthlyBudget {
                     || "estimate".equals(item.amountMode))
                 || !allowedCycle(item.cycleMonths)
                 || item.dueDay < 0 || item.dueDay > 31
-                || item.installmentCount < 0 || item.installmentCount > 600)
+                || item.installmentCount < 0 || item.installmentCount > 600
+                || item.creditAgreementNumber == null
+                || item.creditAgreementNumber.length() > 80)
             throw new IllegalArgumentException("Nieprawidłowa pozycja planu PayCheck.");
+        if (!item.creditAgreementNumber.isBlank()
+                && (!"expense".equals(item.kind)
+                    || !"loans".equals(item.category)))
+            throw new IllegalArgumentException(
+                "Numer umowy kredytowej można zapisać tylko przy wydatku Kredyty i raty.");
         if (item.installment) {
             if (!"expense".equals(item.kind) || item.cycleMonths != 1)
                 throw new IllegalArgumentException("Rata musi być miesięcznym wydatkiem.");
