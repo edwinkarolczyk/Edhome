@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bank notification to unassigned draft, explicit scope, pending ledger safety."""
+"""Bank notification to the single current PayCheck, pending-ledger safety."""
 from pathlib import Path
 root=Path("app/src/main/java/com/edwinkarolczyk/edhome")
 ui=(root/"MainActivity.java").read_text(encoding="utf-8")
@@ -12,12 +12,13 @@ for token in ('bank_notification_handled_v1','rememberHandled(context,key)',
               'return pref(context).edit().putString(HANDLED',
               'if(persist(context,entries))'):
     assert token in hints, token
-for token in ('WSPÓLNY • dodaj do oczekujących','PRYWATNY • otwórz sejf',
-              'pendingPrivateBankHintKey','PaycheckStore.add(db.getWritableDatabase()',
-              'PrivatePaycheckVault.addPending(this,',
+for token in ('Dodaj do oczekujących PayCheck',
+              'PaycheckStore.add(db.getWritableDatabase()',
               'BankNotificationHints.remove(this,signal.key)',
               'java.util.UUID.nameUUIDFromBytes('):
     assert token in ui,token
+assert 'WSPÓLNY • dodaj do oczekujących' not in ui
+assert 'PRYWATNY • otwórz sejf' not in ui
 assert 'entries.subList(0,MAX)' not in hints
 assert 'received>now-TTL' not in hints
 assert 'visibleBankDrafts++>=40' in ui
@@ -42,4 +43,4 @@ for token in ('countRecentStatementMatches(signal)',
 assert 'getBooleanExtra("open_paycheck",false)' in ui
 assert '.putExtra("open_paycheck",true)' in (
     root/"BankReceiptNotifier.java").read_text(encoding="utf-8")
-print("Bank auto-pending: unassigned drafts, explicit scope, replay guard, private encryption, balances PASS")
+print("Bank auto-pending: single PayCheck pending flow, replay guard and balances PASS")
