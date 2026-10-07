@@ -15105,11 +15105,13 @@ public final class MainActivity extends Activity {
                         ?"\n"+budgetMonthLabel(shownMonth)+" • oczekuje"
                         :"\n"+budgetMonthLabel(shownMonth)+" • wykonano "
                             +MoneyRules.format(actual)
-                            +(actual==item.amountGrosz
+                            +(actual==PaycheckMonthlyBudget.plannedAmount(item,shownMonth)
                                 ?" ✓"
-                                :" • plan "+MoneyRules.format(item.amountGrosz));
+                                :" • plan "+MoneyRules.format(
+                                    PaycheckMonthlyBudget.plannedAmount(
+                                        item,shownMonth)));
                 }
-                labels[i] = PaycheckMonthlyBudget.itemLabel(item)
+                labels[i] = PaycheckMonthlyBudget.itemLabel(item,shownMonth)
                     + " • " + range + realization;
             }
             AlertDialog dialog = new AlertDialog.Builder(this)
