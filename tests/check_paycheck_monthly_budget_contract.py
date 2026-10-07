@@ -42,6 +42,10 @@ for token in (
     'boolean installment;',
     'int installmentCount;',
     'int dueDay;',
+    'String creditAgreementNumber;',
+    'json.put("creditAgreementNumber", item.creditAgreementNumber);',
+    'json.optString("creditAgreementNumber", "")',
+    '"loans".equals(item.category)',
 ):
     assert token in budget, "Missing monthly budget contract: " + token
 
@@ -79,6 +83,10 @@ for token in (
     'Termin płatności • dzień 1–31',
     'Liczba rat, np. 12',
     'Jedno pole automatycznie blokuje drugie.',
+    'Nr umowy kredytowej (opcjonalnie)',
+    'refreshCreditAgreementVisibility',
+    '"loans".equals(itemCategory)',
+    'Nr umowy kredytowej: ',
     'Tylko " + label',
     'Od " + label + " na stałe',
     'Podziel → ',
