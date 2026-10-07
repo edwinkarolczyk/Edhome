@@ -57,6 +57,10 @@ final class PaycheckMonthlyBudget {
         final Map<String, Long> amountChanges = new LinkedHashMap<>();
         final Map<String, Long> balanceAdjustmentsGrosz = new LinkedHashMap<>();
         final Map<String, String> adjustmentReasons = new LinkedHashMap<>();
+        final Map<String, Long> adjustmentCreatedAt = new LinkedHashMap<>();
+        final Set<String> closedMonths = new HashSet<>();
+        final Map<String, String> closedMonthReasons = new LinkedHashMap<>();
+        final Map<String, Long> closedMonthCreatedAt = new LinkedHashMap<>();
         final Map<String, Long> creditApplicationsGrosz = new LinkedHashMap<>();
         final Map<String, Long> creditApplicationCreatedAt = new LinkedHashMap<>();
     }
@@ -435,8 +439,28 @@ final class PaycheckMonthlyBudget {
                 "Podaj powód zamknięcia zaległości (maks. 160 znaków).");
         List<Item> items = load(prefs);
         Item target = find(items,itemId);
-        target.balanceAdjustmentsGrosz.put(month.toString(),amountGrosz);
+        target.balanceAdjustmentsGrosz.put(month.toString(),
+            Math.addExact(target.balanceAdjustmentsGrosz.getOrDefault(
+                month.toString(),0L),amountGrosz));
         target.adjustmentReasons.put(month.toString(),clean);
+        target.adjustmentCreatedAt.put(month.toString(),System.currentTimeMillis());
+        save(prefs,items);
+    }
+
+    static void closeOccurrence(SharedPreferences prefs, String itemId,
+            YearMonth month, String reason) throws Exception {
+        String clean = reason == null ? "" : reason.trim();
+        if (clean.isEmpty() || clean.length() > 160)
+            throw new IllegalArgumentException(
+                "Podaj powód zamknięcia pozycji (maks. 160 znaków).");
+        List<Item> items = load(prefs);
+        Item target = find(items,itemId);
+        if (!occurs(target,month))
+            throw new IllegalArgumentException(
+                "Ta pozycja nie występuje w wybranym miesiącu.");
+        target.closedMonths.add(month.toString());
+        target.closedMonthReasons.put(month.toString(),clean);
+        target.closedMonthCreatedAt.put(month.toString(),System.currentTimeMillis());
         save(prefs,items);
     }
 
@@ -676,6 +700,15 @@ final class PaycheckMonthlyBudget {
         json.put("amountChanges", amounts(item.amountChanges));
         json.put("balanceAdjustmentsGrosz",
             amounts(item.balanceAdjustmentsGrosz));
+        json.put("adjustmentCreatedAt",
+            amountsAllowZero(item.adjustmentCreatedAt));
+        json.put("closedMonths",strings(item.closedMonths));
+        JSONObject closedReasons = new JSONObject();
+        for (Map.Entry<String,String> entry : item.closedMonthReasons.entrySet())
+            closedReasons.put(entry.getKey(),entry.getValue());
+        json.put("closedMonthReasons",closedReasons);
+        json.put("closedMonthCreatedAt",
+            amountsAllowZero(item.closedMonthCreatedAt));
         json.put("creditApplicationsGrosz",
             amounts(item.creditApplicationsGrosz));
         json.put("creditApplicationCreatedAt",
@@ -728,6 +761,19 @@ final class PaycheckMonthlyBudget {
         readAmounts(json.optJSONObject("amountChanges"), item.amountChanges);
         readAmounts(json.optJSONObject("balanceAdjustmentsGrosz"),
             item.balanceAdjustmentsGrosz);
+        readAmountsAllowZero(json.optJSONObject("adjustmentCreatedAt"),
+            item.adjustmentCreatedAt);
+        readStrings(json.optJSONArray("closedMonths"),item.closedMonths);
+        JSONObject closedReasons = json.optJSONObject("closedMonthReasons");
+        if (closedReasons != null) {
+            java.util.Iterator<String> keys = closedReasons.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                item.closedMonthReasons.put(key,closedReasons.optString(key,""));
+            }
+        }
+        readAmountsAllowZero(json.optJSONObject("closedMonthCreatedAt"),
+            item.closedMonthCreatedAt);
         readAmounts(json.optJSONObject("creditApplicationsGrosz"),
             item.creditApplicationsGrosz);
         readAmountsAllowZero(json.optJSONObject("creditApplicationCreatedAt"),
@@ -828,26 +874,14 @@ final class PaycheckMonthlyBudget {
         validateAmountMap(item.monthAmountOverrides);
         validateAmountMap(item.amountChanges);
         validateAmountMap(item.balanceAdjustmentsGrosz);
+        validateHistoryMap(item.balanceAdjustmentsGrosz,
+            item.adjustmentReasons,item.adjustmentCreatedAt,
+            "korekty zaległości");
+        validateClosedMonths(item.closedMonths,item.closedMonthReasons,
+            item.closedMonthCreatedAt);
         validateCreditApplications(item.creditApplicationsGrosz);
         validateCreditApplicationTimes(item.creditApplicationsGrosz,
             item.creditApplicationCreatedAt);
-        if (item.adjustmentReasons.size() > 600)
-            throw new IllegalArgumentException("Za dużo korekt budżetu.");
-        for (Map.Entry<String, String> reason : item.adjustmentReasons.entrySet()) {
-            try { YearMonth.parse(reason.getKey()); }
-            catch (Exception invalid) {
-                throw new IllegalArgumentException("Nieprawidłowy miesiąc korekty.");
-            }
-            if (!item.balanceAdjustmentsGrosz.containsKey(reason.getKey())
-                    || reason.getValue() == null
-                    || reason.getValue().trim().isEmpty()
-                    || reason.getValue().length() > 160)
-                throw new IllegalArgumentException("Nieprawidłowy opis korekty.");
-        }
-        for (String key : item.balanceAdjustmentsGrosz.keySet())
-            if (!item.adjustmentReasons.containsKey(key))
-                throw new IllegalArgumentException("Brak powodu korekty budżetu.");
-
         YearMonth start;
         try {
             start = YearMonth.parse(item.startMonth);
@@ -875,6 +909,7 @@ final class PaycheckMonthlyBudget {
 
     private static boolean occurs(Item item, YearMonth month) {
         String key = month.toString();
+        if (item.closedMonths.contains(key)) return false;
         if (item.skippedMonths.contains(key)) return false;
         if (item.carriedMonths.contains(key)) return true;
         YearMonth start = YearMonth.parse(item.startMonth);
@@ -956,6 +991,44 @@ final class PaycheckMonthlyBudget {
         while (keys.hasNext()) {
             String key = keys.next();
             target.put(key,json.optLong(key,0L));
+        }
+    }
+
+    private static void validateHistoryMap(
+            Map<String,Long> amounts, Map<String,String> reasons,
+            Map<String,Long> createdAt, String label) {
+        if (amounts.size() > 600 || reasons.size() != amounts.size()
+                || createdAt.size() != amounts.size())
+            throw new IllegalArgumentException(
+                "Niepełna historia " + label + ".");
+        for (String key : amounts.keySet()) {
+            try { YearMonth.parse(key); }
+            catch(Exception invalid) {
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy miesiąc historii " + label + ".");
+            }
+            String reason = reasons.get(key);
+            Long at = createdAt.get(key);
+            if (reason == null || reason.trim().isEmpty()
+                    || reason.length() > 160 || at == null || at <= 0L)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowy wpis historii " + label + ".");
+        }
+    }
+
+    private static void validateClosedMonths(Set<String> months,
+            Map<String,String> reasons, Map<String,Long> createdAt) {
+        validateMonthSet(months);
+        if (reasons.size() != months.size() || createdAt.size() != months.size())
+            throw new IllegalArgumentException(
+                "Niepełna historia ręcznie zamkniętych pozycji.");
+        for (String key : months) {
+            String reason = reasons.get(key);
+            Long at = createdAt.get(key);
+            if (reason == null || reason.trim().isEmpty()
+                    || reason.length() > 160 || at == null || at <= 0L)
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa historia ręcznie zamkniętej pozycji.");
         }
     }
 
