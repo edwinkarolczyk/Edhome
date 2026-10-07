@@ -128,7 +128,7 @@ final class PantryProductLookup {
                             || contentType.startsWith("image/webp")))
                         throw new java.io.IOException("Nieobsługiwany format zdjęcia.");
                 }
-                if (c.getContentLengthLong() > maximum)
+                if (c.getContentLength() > maximum)
                     throw new java.io.IOException("Odpowiedź przekracza limit.");
                 try (InputStream input = c.getInputStream();
                      ByteArrayOutputStream output = new ByteArrayOutputStream()) {
