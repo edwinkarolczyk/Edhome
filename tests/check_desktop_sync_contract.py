@@ -415,8 +415,8 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.100"' in desktop
-assert 'ANDROID_COMPAT_VERSION = "0.8.0.42"' in desktop
+assert 'DESKTOP_VERSION = "0.7.0.101"' in desktop
+assert 'ANDROID_COMPAT_VERSION = "0.8.0.43"' in desktop
 assert 'repairHubInitializationState();' in desktop
 assert 'reason=initialized_without_snapshot' in desktop
 assert 'POŁĄCZONO • Android ' in desktop
