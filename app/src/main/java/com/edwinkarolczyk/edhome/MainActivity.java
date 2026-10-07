@@ -14825,9 +14825,9 @@ public final class MainActivity extends Activity {
     }
 
     private void showBudgetItemDialog(boolean privateScope) {
-        if (privateScope) {
-            alert("Budżet miesiąca prowadzimy teraz w jednym PayCheck. "
-                + "Prywatny plan pozostaje wyłączony.");
+        if (privateScope && (privatePaycheckSession == null
+                || !privatePaycheckSession.active())) {
+            alert("Odblokuj najpierw prywatny sejf.");
             return;
         }
 
@@ -14969,7 +14969,9 @@ public final class MainActivity extends Activity {
 
         final int[] cycles = {1, 2, 3, 6, 12};
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Nowa pozycja Budżetu miesiąca")
+            .setTitle(privateScope
+                ? "Nowa prywatna pozycja Budżetu miesiąca"
+                : "Nowa pozycja Budżetu miesiąca")
             .setView(form)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz plan", null)
@@ -15031,9 +15033,19 @@ public final class MainActivity extends Activity {
                                 startMonth.getText().toString().trim(),
                                 end, cycleMonths, day, itemOptional,
                                 isInstallment, count);
-                        PaycheckMonthlyBudget.add(prefs, item);
-                        DiagnosticLog.event(
-                            "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
+                        if (privateScope) {
+                            String result = PrivatePaycheckVault.addBudgetItem(
+                                this,privatePaycheckSession,item);
+                            if (!"COMMITTED".equals(result))
+                                throw new IllegalStateException(
+                                    "Ta pozycja już istnieje.");
+                            DiagnosticLog.event(
+                                "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
+                        } else {
+                            PaycheckMonthlyBudget.add(prefs,item);
+                            DiagnosticLog.event(
+                                "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
+                        }
                         dialog.dismiss();
                         render();
                     } catch (NumberFormatException error) {
@@ -15043,11 +15055,15 @@ public final class MainActivity extends Activity {
                             ? "Nieprawidłowa pozycja budżetu."
                             : error.getMessage());
                     } catch (Exception error) {
-                        DiagnosticLog.error("PAYCHECK_SHARED_BUDGET_ADD",error);
+                        if (!privateScope)
+                            DiagnosticLog.error("PAYCHECK_SHARED_BUDGET_ADD",error);
                         alert("Nie zapisano pozycji budżetu.");
                     }
                 }));
         dialog.show();
+        if (privateScope && dialog.getWindow() != null)
+            dialog.getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
     }
 
     private void showBudgetItemsDialog(boolean privateScope) {
