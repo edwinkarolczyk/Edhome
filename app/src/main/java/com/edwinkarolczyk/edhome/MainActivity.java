@@ -346,6 +346,9 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && getIntent() != null
                 && getIntent().getBooleanExtra("open_paycheck",false))
             screen="paycheck";
+        if (BetaUpdater.isBeta() && getIntent() != null
+                && getIntent().getBooleanExtra("open_paycheck_budget",false))
+            screen="paycheck_budget";
         applyProjectTaskIntent(getIntent(),false);
         updater = new BetaUpdater(this);
         root = new LinearLayout(this);
@@ -540,6 +543,9 @@ public final class MainActivity extends Activity {
         if (BetaUpdater.isBeta() && intent != null
                 && intent.getBooleanExtra("open_paycheck",false))
             go("paycheck");
+        if (BetaUpdater.isBeta() && intent != null
+                && intent.getBooleanExtra("open_paycheck_budget",false))
+            go("paycheck_budget");
         handleNfcIntent(intent);
     }
 
