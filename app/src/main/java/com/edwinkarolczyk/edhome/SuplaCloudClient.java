@@ -79,7 +79,7 @@ final class SuplaCloudClient {
             if (status != 200)
                 throw new IllegalStateException("SUPLA Cloud odpowiedziała HTTP " + status + ".");
 
-            long declared = connection.getContentLengthLong();
+            long declared = connection.getContentLength();
             if (declared > MAX_RESPONSE_BYTES)
                 throw new IllegalStateException("Odpowiedź SUPLA jest zbyt duża.");
 
