@@ -761,8 +761,15 @@ final class PaycheckMonthlyBudget {
         readAmounts(json.optJSONObject("amountChanges"), item.amountChanges);
         readAmounts(json.optJSONObject("balanceAdjustmentsGrosz"),
             item.balanceAdjustmentsGrosz);
-        readAmountsAllowZero(json.optJSONObject("adjustmentCreatedAt"),
-            item.adjustmentCreatedAt);
+        JSONObject adjustmentTimesJson =
+            json.optJSONObject("adjustmentCreatedAt");
+        readAmountsAllowZero(adjustmentTimesJson,item.adjustmentCreatedAt);
+        if (adjustmentTimesJson == null
+                && !item.balanceAdjustmentsGrosz.isEmpty()) {
+            long migratedAt = System.currentTimeMillis();
+            for (String key : item.balanceAdjustmentsGrosz.keySet())
+                item.adjustmentCreatedAt.put(key,migratedAt);
+        }
         readStrings(json.optJSONArray("closedMonths"),item.closedMonths);
         JSONObject closedReasons = json.optJSONObject("closedMonthReasons");
         if (closedReasons != null) {
