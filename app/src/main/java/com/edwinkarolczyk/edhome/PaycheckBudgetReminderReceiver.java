@@ -82,9 +82,9 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
         long soonAmount=0L;
         String firstName="";
 
-        LocalDb helper=null;
+        MainActivity.LocalDb helper=null;
         try {
-            helper=new LocalDb(context);
+            helper=new MainActivity.LocalDb(context);
             java.util.List<PaycheckMonthlyBudget.Item> items=
                 PaycheckMonthlyBudget.load(pref);
             android.database.sqlite.SQLiteDatabase database=
