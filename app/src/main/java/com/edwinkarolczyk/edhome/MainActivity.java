@@ -16022,6 +16022,7 @@ public final class MainActivity extends Activity {
                                 "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
                         } else {
                             PaycheckMonthlyBudget.add(prefs,item);
+                            PaycheckBudgetReminderReceiver.schedule(this);
                             DiagnosticLog.event(
                                 "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
                         }
