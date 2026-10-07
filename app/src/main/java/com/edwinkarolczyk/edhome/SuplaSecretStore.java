@@ -87,6 +87,7 @@ final class SuplaSecretStore {
     }
 
     /** Kept in a separate class so Android 5.1 never verifies API 23 Keystore code. */
+    @android.annotation.TargetApi(23)
     private static final class Api23 {
         static SecretKey key() throws Exception {
             KeyStore store = KeyStore.getInstance("AndroidKeyStore");
