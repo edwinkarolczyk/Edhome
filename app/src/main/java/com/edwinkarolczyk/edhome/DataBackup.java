@@ -208,6 +208,8 @@ final class DataBackup {
             prefs.getString(PaycheckRecipientStore.PREF_KEY, "[]"));
         settings.put("paycheckBudgetHistory",
             prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY, "[]"));
+        settings.put("paycheckBudgetAttachments",
+            prefs.getString(PaycheckBudgetAttachmentStore.PREF_KEY, "[]"));
         // Include user-selected small storage photos in the portable JSON backup.
         // Never export the original photo or its external content URI.
         JSONArray storageThumbs=new JSONArray();
@@ -389,6 +391,10 @@ final class DataBackup {
         String paycheckBudgetHistory =
             settings.optString("paycheckBudgetHistory", "[]");
         PaycheckBudgetHistoryStore.validateSerialized(paycheckBudgetHistory);
+        String paycheckBudgetAttachments =
+            settings.optString("paycheckBudgetAttachments", "[]");
+        PaycheckBudgetAttachmentStore.validateSerialized(
+            paycheckBudgetAttachments);
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -1679,6 +1685,8 @@ final class DataBackup {
                 .putString(PaycheckMonthlyBudget.PREF_KEY, paycheckMonthlyBudget)
                 .putString(PaycheckRecipientStore.PREF_KEY, paycheckRecipients)
                 .putString(PaycheckBudgetHistoryStore.PREF_KEY, paycheckBudgetHistory)
+                .putString(PaycheckBudgetAttachmentStore.PREF_KEY,
+                    paycheckBudgetAttachments)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
                 .putString("quiet_hours_end", quietEnd);
