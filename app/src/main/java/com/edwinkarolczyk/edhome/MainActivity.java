@@ -14575,6 +14575,10 @@ public final class MainActivity extends Activity {
         details.setVisibility(View.GONE);
         details.addView(text("Kategoria: "
             + MoneyRules.categoryLabel(item.category), 13, false));
+        if (item.creditAgreementNumber != null
+                && !item.creditAgreementNumber.isBlank())
+            details.addView(text("Nr umowy kredytowej: "
+                + item.creditAgreementNumber, 13, false));
         details.addView(text("Plan tego miesiąca: " + MoneyRules.format(planned)
             + " • wykonano: " + MoneyRules.format(actual), 13, false));
         if (!item.optional && "expense".equals(item.kind) && carry != 0) {
@@ -14850,6 +14854,14 @@ public final class MainActivity extends Activity {
             java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
         form.addView(category);
 
+        EditText creditAgreementNumber = new EditText(this);
+        creditAgreementNumber.setSingleLine(true);
+        creditAgreementNumber.setHint("Nr umowy kredytowej (opcjonalnie)");
+        creditAgreementNumber.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(80)});
+        creditAgreementNumber.setVisibility(View.GONE);
+        form.addView(creditAgreementNumber);
+
         EditText amount = new EditText(this);
         amount.setSingleLine(true);
         amount.setHint("Kwota planowana w PLN");
@@ -14937,6 +14949,34 @@ public final class MainActivity extends Activity {
         installmentCount.addTextChangedListener(countWatcher);
         endMonth.addTextChangedListener(endWatcher);
 
+        final Runnable refreshCreditAgreementVisibility = () -> {
+            boolean creditExpense = kind.getSelectedItemPosition() == 0
+                && "loans".equals(MoneyRules.CATEGORIES[
+                    category.getSelectedItemPosition()]);
+            creditAgreementNumber.setVisibility(
+                creditExpense ? View.VISIBLE : View.GONE);
+        };
+        kind.setOnItemSelectedListener(
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> parent, View view,
+                        int position, long id) {
+                    refreshCreditAgreementVisibility.run();
+                }
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> parent) { }
+            });
+        category.setOnItemSelectedListener(
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> parent, View view,
+                        int position, long id) {
+                    refreshCreditAgreementVisibility.run();
+                }
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> parent) { }
+            });
+
         planType.setOnItemSelectedListener(
             new android.widget.AdapterView.OnItemSelectedListener() {
                 @Override public void onItemSelected(
@@ -14955,6 +14995,7 @@ public final class MainActivity extends Activity {
                     } else {
                         kind.setEnabled(true);
                     }
+                    refreshCreditAgreementVisibility.run();
                 }
                 @Override public void onNothingSelected(
                         android.widget.AdapterView<?> parent) { }
@@ -15027,12 +15068,17 @@ public final class MainActivity extends Activity {
 
                         boolean itemOptional =
                             "expense".equals(itemKind) && optional.isChecked();
+                        String agreementNumber =
+                            "expense".equals(itemKind)
+                                && "loans".equals(itemCategory)
+                            ? creditAgreementNumber.getText().toString().trim()
+                            : "";
                         PaycheckMonthlyBudget.Item item =
                             PaycheckMonthlyBudget.newItem(
                                 itemName, itemKind, itemCategory, grosz, mode,
                                 startMonth.getText().toString().trim(),
                                 end, cycleMonths, day, itemOptional,
-                                isInstallment, count);
+                                isInstallment, count, agreementNumber);
                         if (privateScope) {
                             String result = PrivatePaycheckVault.addBudgetItem(
                                 this,privatePaycheckSession,item);
@@ -15151,6 +15197,9 @@ public final class MainActivity extends Activity {
         String message = ("income".equals(item.kind) ? "Przychód: " : "Wydatek: ")
             + MoneyRules.format(item.amountGrosz)
             + "\nKategoria: " + MoneyRules.categoryLabel(item.category)
+            + (item.creditAgreementNumber != null
+                && !item.creditAgreementNumber.isBlank()
+                ? "\nNr umowy kredytowej: " + item.creditAgreementNumber : "")
             + "\nCykl: " + cycle
             + "\nOkres: " + range
             + "\nTryb kwoty: "
