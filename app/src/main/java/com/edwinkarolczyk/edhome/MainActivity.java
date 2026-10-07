@@ -14624,18 +14624,19 @@ public final class MainActivity extends Activity {
     }
 
     private void showBudgetItemDialog(boolean privateScope) {
-        if (privateScope && (privatePaycheckSession == null
-                || !privatePaycheckSession.active())) {
-            alert("Odblokuj najpierw prywatny sejf.");
+        if (privateScope) {
+            alert("Budżet miesiąca prowadzimy teraz w jednym PayCheck. "
+                + "Prywatny plan pozostaje wyłączony.");
             return;
         }
+
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(12), dp(18), dp(12));
 
         EditText name = new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Nazwa, np. Prąd / Pensja / Netflix");
+        name.setHint("Nazwa, np. Prąd / Rata TV / Netflix");
         form.addView(name);
 
         Spinner kind = new Spinner(this);
@@ -14655,6 +14656,17 @@ public final class MainActivity extends Activity {
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(amount);
 
+        EditText dueDay = new EditText(this);
+        dueDay.setSingleLine(true);
+        dueDay.setHint("Termin płatności • dzień 1–31 (opcjonalnie)");
+        dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(dueDay);
+
+        Spinner planType = new Spinner(this);
+        planType.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "Jednorazowy", "Cykliczny", "Rata")));
+        form.addView(planType);
+
         Spinner amountMode = new Spinner(this);
         amountMode.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "Stała kwota", "Kwota zmienna / prognoza")));
@@ -14662,38 +14674,106 @@ public final class MainActivity extends Activity {
 
         Spinner cycle = new Spinner(this);
         cycle.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
-            "Jednorazowo", "Co miesiąc", "Co 2 miesiące",
+            "Co miesiąc", "Co 2 miesiące",
             "Co kwartał", "Co 6 miesięcy", "Co rok")));
         form.addView(cycle);
 
-        EditText start = new EditText(this);
-        start.setSingleLine(true);
-        start.setHint("Start YYYY-MM");
-        start.setText(YearMonth.now().toString());
-        form.addView(start);
+        EditText startMonth = new EditText(this);
+        startMonth.setSingleLine(true);
+        startMonth.setHint("Start YYYY-MM");
+        startMonth.setText((paycheckBudgetMonth == null
+            ? YearMonth.now() : paycheckBudgetMonth).toString());
+        form.addView(startMonth);
 
-        EditText end = new EditText(this);
-        end.setSingleLine(true);
-        end.setHint("Koniec YYYY-MM • puste = bez końca");
-        form.addView(end);
+        EditText endMonth = new EditText(this);
+        endMonth.setSingleLine(true);
+        endMonth.setHint("Koniec YYYY-MM • dla rat zamiast liczby rat");
+        form.addView(endMonth);
 
-        form.addView(text("Stała opłata: wybierz „Co miesiąc” i zostaw koniec "
-            + "pusty. Rata: wybierz „Co miesiąc” i wpisz miesiąc ostatniej raty. "
-            + "Plan sam nie księguje pieniędzy.", 13, false));
+        EditText installmentCount = new EditText(this);
+        installmentCount.setSingleLine(true);
+        installmentCount.setHint("Liczba rat, np. 12");
+        installmentCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(installmentCount);
 
-        for (Spinner spinner : new Spinner[]{kind, category, amountMode, cycle})
+        android.widget.CheckBox optional = new android.widget.CheckBox(this);
+        optional.setText("Wydatek opcjonalny • niebieski • można przenieść");
+        optional.setTextColor(DialogContrast.TEXT_PRIMARY);
+        form.addView(optional);
+
+        TextView rule = text(
+            "Rata: podaj ALBO liczbę rat, ALBO miesiąc końca. "
+            + "Jedno pole automatycznie blokuje drugie. "
+            + "Pozycja planowana nie zmienia salda PayCheck.",
+            13, false);
+        form.addView(rule);
+
+        final boolean[] changing = {false};
+        android.text.TextWatcher countWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
+                if (changing[0]) return;
+                changing[0] = true;
+                boolean has = s != null && s.toString().trim().length() > 0;
+                endMonth.setEnabled(!has);
+                if (has) endMonth.setText("");
+                changing[0] = false;
+            }
+            @Override public void afterTextChanged(android.text.Editable e) { }
+        };
+        android.text.TextWatcher endWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
+                if (changing[0]) return;
+                changing[0] = true;
+                boolean has = s != null && s.toString().trim().length() > 0;
+                installmentCount.setEnabled(!has);
+                if (has) installmentCount.setText("");
+                changing[0] = false;
+            }
+            @Override public void afterTextChanged(android.text.Editable e) { }
+        };
+        installmentCount.addTextChangedListener(countWatcher);
+        endMonth.addTextChangedListener(endWatcher);
+
+        planType.setOnItemSelectedListener(
+            new android.widget.AdapterView.OnItemSelectedListener() {
+                @Override public void onItemSelected(
+                        android.widget.AdapterView<?> parent, View view,
+                        int position, long id) {
+                    boolean recurring = position == 1;
+                    boolean installment = position == 2;
+                    cycle.setVisibility(recurring ? View.VISIBLE : View.GONE);
+                    installmentCount.setVisibility(
+                        installment ? View.VISIBLE : View.GONE);
+                    endMonth.setVisibility(
+                        position == 0 ? View.GONE : View.VISIBLE);
+                    if (installment) {
+                        kind.setSelection(0);
+                        kind.setEnabled(false);
+                    } else {
+                        kind.setEnabled(true);
+                    }
+                }
+                @Override public void onNothingSelected(
+                        android.widget.AdapterView<?> parent) { }
+            });
+
+        for (Spinner spinner : new Spinner[]{
+                kind, category, planType, amountMode, cycle})
             spinner.setPopupBackgroundDrawable(
-                new android.graphics.drawable.ColorDrawable(DialogContrast.BACKGROUND));
+                new android.graphics.drawable.ColorDrawable(
+                    DialogContrast.BACKGROUND));
         lightDialogForm(form);
-        final int[] cycles = {0, 1, 2, 3, 6, 12};
+
+        final int[] cycles = {1, 2, 3, 6, 12};
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(privateScope
-                ? "Nowa prywatna pozycja budżetu"
-                : "Nowa pozycja budżetu")
+            .setTitle("Nowa pozycja Budżetu miesiąca")
             .setView(form)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz plan", null)
             .create();
+
         dialog.setOnShowListener(d ->
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> {
@@ -14701,48 +14781,72 @@ public final class MainActivity extends Activity {
                         long grosz = MoneyRules.parse(
                             amount.getText().toString());
                         String itemName = name.getText().toString().trim();
-                        String itemKind = kind.getSelectedItemPosition() == 1
-                            ? "income" : "expense";
+                        int typePosition = planType.getSelectedItemPosition();
+                        String itemKind = typePosition == 2
+                            ? "expense"
+                            : (kind.getSelectedItemPosition() == 1
+                                ? "income" : "expense");
                         String itemCategory = MoneyRules.CATEGORIES[
                             category.getSelectedItemPosition()];
                         String mode = amountMode.getSelectedItemPosition() == 1
                             ? "estimate" : "fixed";
+
+                        int day = 0;
+                        String dayText = dueDay.getText().toString().trim();
+                        if (!dayText.isEmpty()) {
+                            day = Integer.parseInt(dayText);
+                            if (day < 1 || day > 31)
+                                throw new IllegalArgumentException(
+                                    "Termin musi być dniem 1–31.");
+                        }
+
+                        boolean isInstallment = typePosition == 2;
+                        int cycleMonths = typePosition == 0
+                            ? 0
+                            : (isInstallment
+                                ? 1
+                                : cycles[cycle.getSelectedItemPosition()]);
+                        String end = typePosition == 0
+                            ? ""
+                            : endMonth.getText().toString().trim();
+                        int count = 0;
+                        String countText =
+                            installmentCount.getText().toString().trim();
+                        if (isInstallment && !countText.isEmpty()) {
+                            count = Integer.parseInt(countText);
+                            if (count < 1 || count > 600)
+                                throw new IllegalArgumentException(
+                                    "Liczba rat musi mieścić się w zakresie 1–600.");
+                        }
+                        if (isInstallment && count == 0 && end.isEmpty())
+                            throw new IllegalArgumentException(
+                                "Dla rat podaj liczbę rat albo miesiąc końca.");
+
+                        boolean itemOptional =
+                            "expense".equals(itemKind) && optional.isChecked();
                         PaycheckMonthlyBudget.Item item =
                             PaycheckMonthlyBudget.newItem(
                                 itemName, itemKind, itemCategory, grosz, mode,
-                                start.getText().toString().trim(),
-                                end.getText().toString().trim(),
-                                cycles[cycle.getSelectedItemPosition()]);
-                        if (privateScope) {
-                            String result = PrivatePaycheckVault.addBudgetItem(
-                                this, privatePaycheckSession, item);
-                            if (!"COMMITTED".equals(result))
-                                throw new IllegalStateException(
-                                    "Ta pozycja już istnieje.");
-                            DiagnosticLog.event(
-                                "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
-                        } else {
-                            PaycheckMonthlyBudget.add(prefs, item);
-                            DiagnosticLog.event(
-                                "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
-                        }
+                                startMonth.getText().toString().trim(),
+                                end, cycleMonths, day, itemOptional,
+                                isInstallment, count);
+                        PaycheckMonthlyBudget.add(prefs, item);
+                        DiagnosticLog.event(
+                            "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");
                         dialog.dismiss();
                         render();
+                    } catch (NumberFormatException error) {
+                        alert("Sprawdź termin lub liczbę rat.");
                     } catch (IllegalArgumentException error) {
-                        amount.setError(error.getMessage());
+                        alert(error.getMessage() == null
+                            ? "Nieprawidłowa pozycja budżetu."
+                            : error.getMessage());
                     } catch (Exception error) {
-                        DiagnosticLog.error(
-                            privateScope
-                                ? "PAYCHECK_PRIVATE_BUDGET_ADD"
-                                : "PAYCHECK_SHARED_BUDGET_ADD",
-                            error);
+                        DiagnosticLog.error("PAYCHECK_SHARED_BUDGET_ADD",error);
                         alert("Nie zapisano pozycji budżetu.");
                     }
                 }));
         dialog.show();
-        if (privateScope && dialog.getWindow() != null)
-            dialog.getWindow().addFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SECURE);
     }
 
     private void showBudgetItemsDialog(boolean privateScope) {
