@@ -15172,8 +15172,16 @@ public final class MainActivity extends Activity {
 
         EditText name = new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Nazwa, np. Prąd / Rata TV / Netflix");
+        name.setHint("Zobowiązanie, np. rachunek bieżący / rata");
         form.addView(name);
+
+        EditText recipient = new EditText(this);
+        recipient.setSingleLine(true);
+        recipient.setHint("Odbiorca, np. TAURON / bank (opcjonalnie)");
+        recipient.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(80)});
+        recipient.setVisibility(privateScope ? View.GONE : View.VISIBLE);
+        form.addView(recipient);
 
         Spinner kind = new Spinner(this);
         kind.setAdapter(lightDialogSpinnerAdapter(
@@ -15202,9 +15210,49 @@ public final class MainActivity extends Activity {
 
         EditText dueDay = new EditText(this);
         dueDay.setSingleLine(true);
-        dueDay.setHint("Termin płatności • dzień 1–31 (opcjonalnie)");
+        dueDay.setHint("Planowany dzień zapłaty 1–31 (gdy brak faktury)");
         dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(dueDay);
+
+        EditText invoiceDueDate = new EditText(this);
+        invoiceDueDate.setSingleLine(true);
+        invoiceDueDate.setHint("Termin faktury YYYY-MM-DD (opcjonalnie)");
+        form.addView(invoiceDueDate);
+
+        TextView plannedPaymentPreview = text(
+            "Planowana zapłata faktury: —",13,false);
+        form.addView(plannedPaymentPreview);
+
+        android.text.TextWatcher invoicePreviewWatcher =
+            new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(
+                        CharSequence s,int st,int c,int a) { }
+                @Override public void onTextChanged(
+                        CharSequence s,int st,int b,int count) {
+                    String raw = s == null ? "" : s.toString().trim();
+                    if (raw.isEmpty()) {
+                        plannedPaymentPreview.setText(
+                            "Planowana zapłata faktury: —");
+                        return;
+                    }
+                    try {
+                        java.time.LocalDate due =
+                            java.time.LocalDate.parse(raw);
+                        java.time.LocalDate plan =
+                            PaycheckMonthlyBudget.defaultPlannedPaymentDate(due);
+                        plannedPaymentPreview.setText(
+                            "Planowana zapłata: " + plan
+                            + " • faktura należy do "
+                            + budgetMonthLabel(java.time.YearMonth.from(due)));
+                    } catch(Exception invalid) {
+                        plannedPaymentPreview.setText(
+                            "Planowana zapłata: sprawdź datę YYYY-MM-DD");
+                    }
+                }
+                @Override public void afterTextChanged(
+                        android.text.Editable e) { }
+            };
+        invoiceDueDate.addTextChangedListener(invoicePreviewWatcher);
 
         Spinner planType = new Spinner(this);
         planType.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
@@ -15372,7 +15420,26 @@ public final class MainActivity extends Activity {
                             day = Integer.parseInt(dayText);
                             if (day < 1 || day > 31)
                                 throw new IllegalArgumentException(
-                                    "Termin musi być dniem 1–31.");
+                                    "Planowany dzień musi mieścić się w zakresie 1–31.");
+                        }
+
+                        java.time.LocalDate invoiceDue = null;
+                        String invoiceRaw =
+                            invoiceDueDate.getText().toString().trim();
+                        if (!invoiceRaw.isEmpty()) {
+                            if (!"expense".equals(itemKind))
+                                throw new IllegalArgumentException(
+                                    "Termin faktury dotyczy wydatku.");
+                            try {
+                                invoiceDue = java.time.LocalDate.parse(invoiceRaw);
+                            } catch(Exception invalidDate) {
+                                throw new IllegalArgumentException(
+                                    "Termin faktury podaj jako YYYY-MM-DD.");
+                            }
+                            java.time.LocalDate defaultPlan =
+                                PaycheckMonthlyBudget.defaultPlannedPaymentDate(
+                                    invoiceDue);
+                            day = defaultPlan.getDayOfMonth();
                         }
 
                         boolean isInstallment = typePosition == 2;
@@ -15404,12 +15471,25 @@ public final class MainActivity extends Activity {
                                 && "loans".equals(itemCategory)
                             ? creditAgreementNumber.getText().toString().trim()
                             : "";
+                        String start = invoiceDue == null
+                            ? startMonth.getText().toString().trim()
+                            : java.time.YearMonth.from(invoiceDue).toString();
                         PaycheckMonthlyBudget.Item item =
                             PaycheckMonthlyBudget.newItem(
                                 itemName, itemKind, itemCategory, grosz, mode,
-                                startMonth.getText().toString().trim(),
-                                end, cycleMonths, day, itemOptional,
+                                start, end, cycleMonths, day, itemOptional,
                                 isInstallment, count, agreementNumber);
+                        if (invoiceDue != null)
+                            PaycheckMonthlyBudget.setInvoiceForMonth(
+                                item,invoiceDue,null);
+                        if (!privateScope) {
+                            String recipientName =
+                                recipient.getText().toString().trim();
+                            if (!recipientName.isEmpty())
+                                item.recipientId =
+                                    PaycheckRecipientStore.getOrCreate(
+                                        prefs,recipientName).id;
+                        }
                         if (privateScope) {
                             String result = PrivatePaycheckVault.addBudgetItem(
                                 this,privatePaycheckSession,item);
