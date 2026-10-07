@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 230,
-  "versionName": "0.8.0.38",
-  "changelog": "EDHOME 0.8.0.38 — Budżet miesiąca w PayCheck: historia i nawigacja miesięcy, terminy na początku wiersza, statusy zapłacone/niezapłacone/opcjonalne, jednorazowe/cykliczne/raty, ostatnia rata, zmiana kwoty tylko dla miesiąca lub od miesiąca, przenoszenie wydatków opcjonalnych, zaległości i nadpłaty między miesiącami, zamknięcie zaległości z powodem, zakończenie cyklu oraz podział jednej potwierdzonej płatności na dwie pozycje planu. Plan nie zmienia salda — robią to tylko potwierdzone transakcje PayCheck. Main/Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.38/edhome-beta.apk",
-  "sha256": "475a3ec8c5a1156696796f4c0ca77cf59b38a6ea622324a9f8df3d8ff6d1009d"
+  "versionCode": 231,
+  "versionName": "0.8.0.39",
+  "changelog": "EDHOME 0.8.0.39 — Beta. Desktop działa jako lokalny Hub/API na TCP 45823, discovery po UDP 45822; Android jest klientem, parowanie QR zapisuje ID Desktopu i token, telefon automatycznie ponawia połączenie i pokazuje diagnostykę hosta. Zachowane Projekty z blokadami zależności, jednym timerem tej samej czynności, backupem przed pierwszym scaleniem, konfliktami Telefon/Desktop i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.39/edhome-beta.apk",
+  "sha256": "1ee24351806480649af17d807416153b4b4bba164917935b44e7a73631f61722"
 }
