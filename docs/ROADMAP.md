@@ -155,6 +155,19 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 - **0.8.0.41 / P1 — kandydat w CI:** trwała kartoteka odbiorców (odbiorca ≠ zobowiązanie), pełny postęp rat z wyliczaniem drugiego parametru, suma/zapłacono/pozostało oraz osobny termin faktury i planowana data zapłaty według reguły wcześniejszej daty z: 10. dzień miesiąca / termin faktury.
 - **Dalej:** przypomnienia 3 dni przed + w dniu zapłaty oraz lokalne zdjęcie/PDF faktury w rozwinięciu.
 
+### Stan kandydata Budżetu miesiąca 25/25 — 07.10.2026
+
+> Po wdrożeniu punktów P0/P1/P2 kontrakt 25/25 jest pokryty w kodzie `beta`. Audyt bazowy powyżej pozostaje jako zapis stanu wejściowego, a nie bieżący status. Ostateczne oznaczenie wydania jako odebranego wymaga zielonego CI oraz testu na fizycznym telefonie.
+
+- **1–9:** nawigacja miesięcy, historia, jeden bieżący PayCheck/Budżet, lista bez kafelków, jeden rozwinięty wpis, kolory/statusy, opcjonalne, sortowanie i wpływy osobno — wdrożone.
+- **10–18:** jeden przelew może zostać rozdzielony na wiele pozycji, jawne różnice/nadpłaty/niedopłaty, osobne zaległości, append-only historia zdarzeń, nadpłata tylko za zgodą, ręczne zamknięcia z powodem i zakresem oraz zmiana kwoty miesiąc/od teraz — wdrożone.
+- **19–23:** raty liczba/koniec, postęp i suma zobowiązania, odbiorca jako osobny byt, szablony odbiorców oraz termin faktury oddzielony od planowanej zapłaty — wdrożone.
+- **24:** lokalne przypomnienia Budżetu: w oknie 3 dni przed planowaną zapłatą oraz w dniu zapłaty, tylko dla nierozliczonych pozycji; kliknięcie otwiera Budżet miesiąca — wdrożone.
+- **25:** zdjęcie/PDF faktury w rozwinięciu pozycji, lokalny FileProvider oraz pełny backup/restore ZIP z weryfikacją plików — wdrożone.
+- **Historia/statystyki:** zdarzenia budżetu są utrwalane osobno od bieżącego planu; deaktywacja pozycji nie usuwa wcześniejszych miesięcy. Statystyki pozostają późniejszym widokiem nad już zapisywanymi danymi.
+- **Odbiorcy:** kartoteka przechowuje domyślną kategorię, kwotę i dzień zapłaty oraz licznik użycia do późniejszych podpowiedzi/uczenia.
+- **Stable:** brak zmian na `main`; ten zakres pozostaje wyłącznie na `beta` do osobnej akceptacji.
+
 ### Kolejność wdrożenia Budżetu miesiąca
 
 - **P0 — prawidłowe rozliczenia i UX listy:** punkty 2–8, 11–18.
