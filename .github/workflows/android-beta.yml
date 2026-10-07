@@ -404,6 +404,8 @@ jobs:
         run: python3 tests/check_supla_cloud_contract.py
       - name: Compile-check Beta and Stable
         run: gradle --no-daemon :app:compileBetaDebugJavaWithJavac :app:compileStableDebugJavaWithJavac
+      - name: Android 5.1 / API 22 compatibility lint
+        run: gradle --no-daemon :app:lintBetaDebug
       - name: Verify actual bundled 100 AI 3D icon images
         run: python3 tests/check_bundled_3d_assets.py
       - name: Require persistent private signing key
