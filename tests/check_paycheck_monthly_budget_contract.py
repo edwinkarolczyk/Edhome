@@ -9,6 +9,10 @@ vault = (root / "PrivatePaycheckVault.java").read_text(encoding="utf-8")
 backup = (root / "DataBackup.java").read_text(encoding="utf-8")
 portable = (root / "PrivatePaycheckPortable.java").read_text(encoding="utf-8")
 recipients = (root / "PaycheckRecipientStore.java").read_text(encoding="utf-8")
+history = (root / "PaycheckBudgetHistoryStore.java").read_text(encoding="utf-8")
+attachments = (root / "PaycheckBudgetAttachmentStore.java").read_text(encoding="utf-8")
+budget_reminder = (root / "PaycheckBudgetReminderReceiver.java").read_text(encoding="utf-8")
+archive = (root / "DataBackupArchive.java").read_text(encoding="utf-8")
 
 for token in (
     'PREF_KEY = "paycheck_monthly_budget_v1"',
@@ -122,9 +126,17 @@ for token in (
     'Nr umowy kredytowej: ',
     'Tylko " + label',
     'Od " + label + " na stałe',
-    'Podziel → ',
+    'Podziel na ',
     'PAYCHECK_SHARED_BUDGET_SPLIT_MATCHED',
     'PaycheckMonthlyBudget.allocateMatch(',
+    'budgetSplitItems(',
+    'allocateBudgetSplit(',
+    'Odbiorcy / szablony',
+    'showBudgetRecipientTemplateDialog(',
+    '＋ Dodaj zdjęcie / PDF',
+    'showBudgetAttachmentActions(',
+    'open_paycheck_budget',
+
     'privateMonthlyBudgetBlock(entries);',
     'Prywatny plan jest szyfrowany w sejfie.',
     'Dane istniejącego prywatnego sejfu',
@@ -203,4 +215,62 @@ for token in (
     '.putString(PaycheckRecipientStore.PREF_KEY, paycheckRecipients)',
 ):
     assert token in backup, "Recipient backup missing: " + token
+
+for token in (
+    'PREF_KEY = "paycheck_budget_history_v1"',
+    'ITEM_DEACTIVATED',
+    'TRANSACTION_ALLOCATED',
+    'ARREAR_CLOSED',
+    'OCCURRENCE_CLOSED',
+    'CYCLE_ENDED',
+):
+    assert token in history or token in budget, "Budget history contract missing: " + token
+
+assert 'target.active = false;' in budget
+assert 'PaycheckBudgetHistoryStore.append(' in budget
+
+for token in (
+    'static Recipient updateTemplate(',
+    'static boolean deactivate(',
+    'static java.util.List<String> suggestions(',
+    '"TAURON","Wodociągi","Podatek","Internet"',
+    'defaultCategory',
+    'defaultDueDay',
+    'defaultAmountGrosz',
+):
+    assert token in recipients, "Recipient template contract missing: " + token
+
+for token in (
+    'minusDays(3)',
+    'open_paycheck_budget',
+    'sharedMatchedActual(',
+    'PAYCHECK_BUDGET_REMINDER_DELIVERED',
+):
+    assert token in budget_reminder, "Budget reminder contract missing: " + token
+
+for token in (
+    'PREF_KEY = "paycheck_budget_attachments_v1"',
+    'MAX_FILE_BYTES = 20L * 1024 * 1024',
+    'application/pdf',
+    'image/',
+    'FileProvider.getUriForFile',
+):
+    assert token in attachments, "Budget attachment contract missing: " + token
+
+for token in (
+    'paycheckBudgetHistory',
+    'PaycheckBudgetHistoryStore.validateSerialized',
+    'paycheckBudgetAttachments',
+    'PaycheckBudgetAttachmentStore.validateSerialized',
+):
+    assert token in backup, "Budget extended backup missing: " + token
+
+for token in (
+    'BUDGET_ATTACHMENT_PREFIX',
+    'PaycheckBudgetAttachmentStore.liveFiles',
+    'PaycheckBudgetAttachmentStore.prune',
+    'paycheck-budget-attachment',
+):
+    assert token in archive, "Budget attachment ZIP backup missing: " + token
+
 print("PayCheck monthly plan, simple matching, private encryption and confirmed-transaction gate: PASS")
