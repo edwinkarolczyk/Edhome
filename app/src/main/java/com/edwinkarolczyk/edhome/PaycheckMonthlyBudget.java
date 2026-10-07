@@ -54,6 +54,8 @@ final class PaycheckMonthlyBudget {
         final Set<String> carriedMonths = new HashSet<>();
         final Map<String, Long> monthAmountOverrides = new LinkedHashMap<>();
         final Map<String, Long> amountChanges = new LinkedHashMap<>();
+        final Map<String, Long> balanceAdjustmentsGrosz = new LinkedHashMap<>();
+        final Map<String, String> adjustmentReasons = new LinkedHashMap<>();
     }
 
     static final class Totals {
@@ -280,6 +282,69 @@ final class PaycheckMonthlyBudget {
         return 0;
     }
 
+    /**
+     * Positive value = niedopłata carried into the selected month.
+     * Negative value = nadpłata/credit available to reduce later occurrences.
+     * Optional items intentionally never create arrears.
+     */
+    static long sharedCarryBefore(SQLiteDatabase db, Item item, YearMonth month) {
+        if (item.optional) return 0L;
+        YearMonth cursor = YearMonth.parse(item.startMonth);
+        if (!cursor.isBefore(month)) {
+            Long adjustment = item.balanceAdjustmentsGrosz.get(month.toString());
+            return adjustment == null ? 0L : -adjustment;
+        }
+        long balance = 0L;
+        int guard = 0;
+        while (cursor.isBefore(month) && guard++ < 600) {
+            if (occurs(item,cursor)) {
+                balance = Math.addExact(balance,
+                    plannedAmount(item,cursor)
+                    - sharedMatchedActual(db,item,cursor));
+            }
+            Long adjustment =
+                item.balanceAdjustmentsGrosz.get(cursor.toString());
+            if (adjustment != null)
+                balance = Math.subtractExact(balance, adjustment);
+            cursor = cursor.plusMonths(1);
+        }
+        Long currentAdjustment =
+            item.balanceAdjustmentsGrosz.get(month.toString());
+        if (currentAdjustment != null)
+            balance = Math.subtractExact(balance,currentAdjustment);
+        return balance;
+    }
+
+    static void closeArrears(SharedPreferences prefs, String itemId,
+            YearMonth month, long amountGrosz, String reason) throws Exception {
+        validateAmount(amountGrosz);
+        String clean = reason == null ? "" : reason.trim();
+        if (clean.isEmpty() || clean.length() > 160)
+            throw new IllegalArgumentException(
+                "Podaj powód zamknięcia zaległości (maks. 160 znaków).");
+        List<Item> items = load(prefs);
+        Item target = find(items,itemId);
+        target.balanceAdjustmentsGrosz.put(month.toString(),amountGrosz);
+        target.adjustmentReasons.put(month.toString(),clean);
+        save(prefs,items);
+    }
+
+    static void endCycleAt(SharedPreferences prefs, String itemId,
+            YearMonth month) throws Exception {
+        List<Item> items = load(prefs);
+        Item target = find(items,itemId);
+        if (target.cycleMonths <= 0)
+            throw new IllegalArgumentException("To nie jest pozycja cykliczna.");
+        YearMonth start = YearMonth.parse(target.startMonth);
+        if (month.isBefore(start))
+            throw new IllegalArgumentException(
+                "Koniec cyklu nie może być przed początkiem.");
+        target.endMonth = month.toString();
+        if (target.installment) target.installmentCount = 0;
+        validate(target);
+        save(prefs,items);
+    }
+
     private static Item find(List<Item> items, String itemId) {
         for (Item item : items)
             if (item.id.equals(itemId)) return item;
@@ -497,6 +562,12 @@ final class PaycheckMonthlyBudget {
         json.put("carriedMonths", strings(item.carriedMonths));
         json.put("monthAmountOverrides", amounts(item.monthAmountOverrides));
         json.put("amountChanges", amounts(item.amountChanges));
+        json.put("balanceAdjustmentsGrosz",
+            amounts(item.balanceAdjustmentsGrosz));
+        JSONObject reasons = new JSONObject();
+        for (Map.Entry<String, String> entry : item.adjustmentReasons.entrySet())
+            reasons.put(entry.getKey(),entry.getValue());
+        json.put("adjustmentReasons",reasons);
         return json;
     }
 
@@ -537,6 +608,16 @@ final class PaycheckMonthlyBudget {
         readAmounts(json.optJSONObject("monthAmountOverrides"),
             item.monthAmountOverrides);
         readAmounts(json.optJSONObject("amountChanges"), item.amountChanges);
+        readAmounts(json.optJSONObject("balanceAdjustmentsGrosz"),
+            item.balanceAdjustmentsGrosz);
+        JSONObject reasons = json.optJSONObject("adjustmentReasons");
+        if (reasons != null) {
+            java.util.Iterator<String> reasonKeys = reasons.keys();
+            while (reasonKeys.hasNext()) {
+                String key = reasonKeys.next();
+                item.adjustmentReasons.put(key,reasons.optString(key,""));
+            }
+        }
         validate(item);
         return item;
     }
@@ -617,6 +698,23 @@ final class PaycheckMonthlyBudget {
         validateMonthSet(item.carriedMonths);
         validateAmountMap(item.monthAmountOverrides);
         validateAmountMap(item.amountChanges);
+        validateAmountMap(item.balanceAdjustmentsGrosz);
+        if (item.adjustmentReasons.size() > 600)
+            throw new IllegalArgumentException("Za dużo korekt budżetu.");
+        for (Map.Entry<String, String> reason : item.adjustmentReasons.entrySet()) {
+            try { YearMonth.parse(reason.getKey()); }
+            catch (Exception invalid) {
+                throw new IllegalArgumentException("Nieprawidłowy miesiąc korekty.");
+            }
+            if (!item.balanceAdjustmentsGrosz.containsKey(reason.getKey())
+                    || reason.getValue() == null
+                    || reason.getValue().trim().isEmpty()
+                    || reason.getValue().length() > 160)
+                throw new IllegalArgumentException("Nieprawidłowy opis korekty.");
+        }
+        for (String key : item.balanceAdjustmentsGrosz.keySet())
+            if (!item.adjustmentReasons.containsKey(key))
+                throw new IllegalArgumentException("Brak powodu korekty budżetu.");
 
         YearMonth start;
         try {
