@@ -69,7 +69,8 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.99";
+    private static final String DESKTOP_VERSION = "0.7.0.100";
+    private static final String ANDROID_COMPAT_VERSION = "0.8.0.42";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
@@ -116,6 +117,8 @@ public final class EdhomeDesktop extends JFrame {
     private boolean dirty;
     private boolean connected;
     private boolean connecting;
+    private long hubLastDataSyncAt;
+    private String hubLastAndroidVersion = "";
     private String current = "Pulpit";
     private long desktopProjectId;
     private QrPairingSession qrPairingSession;
@@ -273,6 +276,7 @@ public final class EdhomeDesktop extends JFrame {
         setContentPane(root);
 
         loadCache();
+        repairHubInitializationState();
         startHubApi();
         showSection("Pulpit");
         initTray();
@@ -309,6 +313,29 @@ public final class EdhomeDesktop extends JFrame {
 
     static java.util.List<String> localLanAddresses() {
         return QrPairingSession.localAddresses();
+    }
+
+    private void repairHubInitializationState() {
+        if(PREFS.getBoolean("hubInitialized",false) && snapshot==null) {
+            PREFS.putBoolean("hubInitialized",false);
+            PREFS.putBoolean("hubMode",true);
+            DesktopDiagnosticLog.event("HUB_STATE_REPAIRED",
+                "reason=initialized_without_snapshot androidCompat="
+                    +ANDROID_COMPAT_VERSION);
+        }
+    }
+
+    private void markHubDataOnline(DesktopHubServer.ClientInfo client,
+            String detail) {
+        hubLastDataSyncAt=System.currentTimeMillis();
+        if(client!=null && client.version!=null && !client.version.isBlank())
+            hubLastAndroidVersion=client.version;
+        connected=true;
+        connection.setText("ONLINE • "+detail
+            +(hubLastAndroidVersion.isBlank()
+                ?"":" • Android "+hubLastAndroidVersion));
+        connection.setForeground(APP_ACCENT);
+        updateTrayTooltip();
     }
 
     private void startHubApi() {
@@ -348,17 +375,25 @@ public final class EdhomeDesktop extends JFrame {
                         return onEdt(()->hubRevision());
                     }
                     @Override public boolean initialized() {
-                        return PREFS.getBoolean("hubInitialized",false);
+                        return PREFS.getBoolean("hubInitialized",false)
+                            && snapshot!=null;
                     }
                     @Override public void registered(DesktopHubServer.ClientInfo client) {
                         SwingUtilities.invokeLater(()->{
                             PREFS.putBoolean("hubMode",true);
-                            connected=true;
+                            hubLastAndroidVersion=client.version==null
+                                ?"":client.version;
                             apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
                             apiStatus.setForeground(APP_ACCENT);
-                            connection.setText("ONLINE • "+client.userName
-                                +" • Android "+client.version);
-                            connection.setForeground(APP_ACCENT);
+                            if(hubLastDataSyncAt<=0L) {
+                                connected=false;
+                                connection.setText("POŁĄCZONO • Android "
+                                    +client.version+" • synchronizacja danych…");
+                                connection.setForeground(new Color(230,175,95));
+                            }
+                            DesktopDiagnosticLog.event("HUB_PHONE_REGISTERED",
+                                "android="+client.version
+                                    +" expected="+ANDROID_COMPAT_VERSION);
                             updateTrayTooltip();
                         });
                     }
@@ -393,6 +428,8 @@ public final class EdhomeDesktop extends JFrame {
     private String hubSnapshotJson() throws Exception {
         if(snapshot==null)throw new IOException("Desktop nie ma jeszcze lokalnej kopii danych.");
         commitHubLocalMetadata();
+        markHubDataOnline(hubServer==null?null:hubServer.newestClient(),
+            "dane zsynchronizowane");
         return GSON.toJson(snapshot);
     }
 
@@ -411,8 +448,13 @@ public final class EdhomeDesktop extends JFrame {
             throws Exception {
         JsonObject phone=JsonParser.parseString(incoming).getAsJsonObject();
         validate(phone);
-        if(PREFS.getBoolean("hubInitialized",false))
+        if(PREFS.getBoolean("hubInitialized",false) && snapshot!=null)
             return hubSnapshotJson();
+        if(PREFS.getBoolean("hubInitialized",false) && snapshot==null) {
+            PREFS.putBoolean("hubInitialized",false);
+            DesktopDiagnosticLog.event("HUB_STATE_REPAIRED",
+                "reason=bootstrap_without_snapshot");
+        }
 
         JsonObject before=snapshot==null?null:snapshot.deepCopy();
         saveFirstHubBackup(before,phone,client==null?"phone":client.deviceId);
@@ -427,9 +469,11 @@ public final class EdhomeDesktop extends JFrame {
         PREFS.putBoolean("hubMode",true);
         saveCache(snapshot);
         savePcBackup(snapshot);
-        connected=true;
+        markHubDataOnline(client,"pierwsza synchronizacja OK");
         DesktopDiagnosticLog.event("HUB_BOOTSTRAP_ACCEPTED",
-            "device="+(client==null?"":client.deviceId));
+            "device="+(client==null?"":client.deviceId)
+                +" android="+(client==null?"":client.version)
+                +" desktop="+DESKTOP_VERSION);
         showSection(current);
         return GSON.toJson(snapshot);
     }
@@ -551,7 +595,7 @@ public final class EdhomeDesktop extends JFrame {
         PREFS.putBoolean("hubInitialized",true);
         saveCache(snapshot);
         savePcBackup(snapshot);
-        connected=true;
+        markHubDataOnline(client,"pełny stan zsynchronizowany");
         DesktopDiagnosticLog.event("HUB_FULL_SNAPSHOT_APPLIED",
             "device="+(client==null?"":client.deviceId));
         showSection(current);
@@ -670,7 +714,8 @@ public final class EdhomeDesktop extends JFrame {
         PREFS.putBoolean("hubInitialized",true);
         saveCache(snapshot);
         savePcBackup(snapshot);
-        connected=true;
+        markHubDataOnline(client,phoneWins
+            ?"rozwiązano konflikt • Telefon":"zmiany zsynchronizowane");
         DesktopDiagnosticLog.event(phoneWins
             ?"HUB_CONFLICT_PHONE_WON":"HUB_PATCH_APPLIED",
             "device="+(client==null?"":client.deviceId)
@@ -5457,11 +5502,20 @@ public final class EdhomeDesktop extends JFrame {
                     DesktopHubServer.ClientInfo phone=hubServer.newestClient();
                     apiStatus.setText("● API działa • port "+DesktopHubServer.PORT);
                     apiStatus.setForeground(APP_ACCENT);
-                    if(phone!=null&&System.currentTimeMillis()-phone.seenAt<180000L) {
+                    long now=System.currentTimeMillis();
+                    boolean phoneRecent=phone!=null&&now-phone.seenAt<180000L;
+                    boolean dataRecent=hubLastDataSyncAt>0L
+                        &&now-hubLastDataSyncAt<180000L;
+                    if(phoneRecent&&dataRecent) {
                         connected=true;
-                        connection.setText("ONLINE • "+phone.userName
-                            +" • Android "+phone.version);
+                        connection.setText("ONLINE • dane zsynchronizowane • Android "
+                            +phone.version);
                         connection.setForeground(APP_ACCENT);
+                    } else if(phoneRecent) {
+                        connected=false;
+                        connection.setText("POŁĄCZONO • Android "+phone.version
+                            +" • czekam na synchronizację danych");
+                        connection.setForeground(new Color(230,175,95));
                     } else {
                         connected=false;
                         connection.setText("API GOTOWE • czekam na telefon");
