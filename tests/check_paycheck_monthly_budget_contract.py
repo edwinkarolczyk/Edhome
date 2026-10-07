@@ -46,7 +46,7 @@ for token in (
     'case "paycheck_budget": paycheckMonthlyBudget(); break;',
     'Wejdź do budżetu miesiąca',
     'Budżet miesiąca • ',
-    'Planowane saldo',
+    'planowane saldo',
     'Różnica plan–fakt',
     'Pozycja planowana nie jest transakcją.',
     '◀ Poprzedni',
