@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 231,
   "versionName": "0.8.0.39",
-  "changelog": "EDHOME 0.8.0.39 — Beta. Desktop działa jako lokalny Hub/API na TCP 45823, discovery po UDP 45822; Android jest klientem, parowanie QR zapisuje ID Desktopu i token, telefon automatycznie ponawia połączenie i pokazuje diagnostykę hosta. Zachowane Projekty z blokadami zależności, jednym timerem tej samej czynności, backupem przed pierwszym scaleniem, konfliktami Telefon/Desktop i Low RAM. Main bez zmian.",
+  "changelog": "EDHOME 0.8.0.39 — Budżet miesiąca / PayCheck: przy wydatku w kategorii „Kredyty i raty” pojawia się opcjonalne pole „Nr umowy kredytowej”. Numer jest zapisywany z pozycją budżetu, widoczny w szczegółach i zachowuje się w backupie; stare pozycje pozostają zgodne i mają puste pole. Main/Stable bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.39/edhome-beta.apk",
   "sha256": "1ee24351806480649af17d807416153b4b4bba164917935b44e7a73631f61722"
 }
