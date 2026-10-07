@@ -75,7 +75,7 @@ for token in (
     'NIEZAPŁACONE',
     'ZAPŁACONE',
     'OPCJONALNE',
-    'NIEDOPŁATA',
+    'Niedopłata " + item.name + " z ',
     'NADPŁATA',
     'ZALEGŁE',
     'Z poprzednich miesięcy: zaległości',
