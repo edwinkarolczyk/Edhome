@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="storage_camera" path="storage_camera/" />
+    <files-path name="paycheck_budget_attachments" path="paycheck-budget-attachments/" />
 </paths>
