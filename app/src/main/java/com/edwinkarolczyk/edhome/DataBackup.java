@@ -204,6 +204,8 @@ final class DataBackup {
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
         settings.put("paycheckMonthlyBudget",
             prefs.getString(PaycheckMonthlyBudget.PREF_KEY, "[]"));
+        settings.put("paycheckRecipients",
+            prefs.getString(PaycheckRecipientStore.PREF_KEY, "[]"));
         // Include user-selected small storage photos in the portable JSON backup.
         // Never export the original photo or its external content URI.
         JSONArray storageThumbs=new JSONArray();
@@ -379,6 +381,9 @@ final class DataBackup {
         String paycheckMonthlyBudget =
             settings.optString("paycheckMonthlyBudget", "[]");
         PaycheckMonthlyBudget.validateSerialized(paycheckMonthlyBudget);
+        String paycheckRecipients =
+            settings.optString("paycheckRecipients", "[]");
+        PaycheckRecipientStore.validateSerialized(paycheckRecipients);
         boolean timerNotifications = settings.optBoolean(
             "timerNotificationsEnabled", false);
         if (settings.has("timerNotificationsEnabled")
@@ -1667,6 +1672,7 @@ final class DataBackup {
                 .putBoolean("home_tile_full_art",fullTileArt)
                 .putInt(PantryTakeCountdown.DELAY_PREF, takeDelaySeconds)
                 .putString(PaycheckMonthlyBudget.PREF_KEY, paycheckMonthlyBudget)
+                .putString(PaycheckRecipientStore.PREF_KEY, paycheckRecipients)
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
                 .putString("quiet_hours_end", quietEnd);
