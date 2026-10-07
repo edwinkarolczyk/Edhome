@@ -170,13 +170,21 @@ final class PaycheckMonthlyBudget {
                 throw new IllegalArgumentException("Ta pozycja planu już istnieje.");
         items.add(item);
         save(prefs, items);
+        PaycheckBudgetHistoryStore.append(prefs,item,
+            YearMonth.parse(item.startMonth),"ITEM_CREATED",item.amountGrosz,
+            item.name);
     }
 
     static boolean delete(SharedPreferences prefs, String id) throws Exception {
         List<Item> items = load(prefs);
-        boolean removed = items.removeIf(item -> item.id.equals(id));
-        if (removed) save(prefs, items);
-        return removed;
+        Item target = find(items,id);
+        if (!target.active) return false;
+        target.active = false;
+        save(prefs,items);
+        PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
+            "ITEM_DEACTIVATED",plannedAmount(target,YearMonth.now()),
+            "Usunięto z bieżącego planu; historia pozostaje.");
+        return true;
     }
 
     static boolean match(SharedPreferences prefs, String itemId,
@@ -201,7 +209,11 @@ final class PaycheckMonthlyBudget {
             target.matchedAllocationsGrosz.remove(operationId);
             changed = true;
         }
-        if (changed) save(prefs, items);
+        if (changed) {
+            save(prefs, items);
+            PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
+                "TRANSACTION_MATCHED",0L,operationId);
+        }
         return changed;
     }
 
@@ -226,6 +238,8 @@ final class PaycheckMonthlyBudget {
         }
         target.matchedAllocationsGrosz.put(operationId, allocationGrosz);
         save(prefs, items);
+        PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
+            "TRANSACTION_ALLOCATED",allocationGrosz,operationId);
         return true;
     }
 
@@ -244,12 +258,23 @@ final class PaycheckMonthlyBudget {
             return false;
         List<Item> items = load(prefs);
         boolean changed = false;
+        java.util.List<Item> touched = new java.util.ArrayList<>();
         for (Item item : items) {
-            if (item.matchedOperationIds.remove(operationId)) changed = true;
+            boolean itemChanged = false;
+            if (item.matchedOperationIds.remove(operationId)) itemChanged = true;
             if (item.matchedAllocationsGrosz.remove(operationId) != null)
+                itemChanged = true;
+            if (itemChanged) {
                 changed = true;
+                touched.add(item);
+            }
         }
-        if (changed) save(prefs, items);
+        if (changed) {
+            save(prefs, items);
+            for (Item item : touched)
+                PaycheckBudgetHistoryStore.append(prefs,item,YearMonth.now(),
+                    "TRANSACTION_UNMATCHED",0L,operationId);
+        }
         return changed;
     }
 
@@ -266,6 +291,9 @@ final class PaycheckMonthlyBudget {
         target.skippedMonths.add(source);
         target.carriedMonths.add(destination);
         save(prefs, items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "OPTIONAL_MOVED",plannedAmount(target,month),
+            "Przeniesiono do " + destination);
         return true;
     }
 
@@ -279,6 +307,9 @@ final class PaycheckMonthlyBudget {
             throw new IllegalArgumentException("Ta pozycja nie występuje w wybranym miesiącu.");
         target.skippedMonths.add(month.toString());
         save(prefs, items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "OPTIONAL_CLOSED",plannedAmount(target,month),
+            "Zamknięto opcjonalny wydatek bez realizacji.");
         return true;
     }
 
@@ -287,8 +318,12 @@ final class PaycheckMonthlyBudget {
         validateAmount(amountGrosz);
         List<Item> items = load(prefs);
         Item target = find(items, itemId);
+        long previous = plannedAmount(target,month);
         target.monthAmountOverrides.put(month.toString(), amountGrosz);
         save(prefs, items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "AMOUNT_MONTH_CHANGED",amountGrosz,
+            "Poprzednio " + previous + " gr.");
     }
 
     static void changeAmountFromMonth(SharedPreferences prefs, String itemId,
@@ -296,8 +331,12 @@ final class PaycheckMonthlyBudget {
         validateAmount(amountGrosz);
         List<Item> items = load(prefs);
         Item target = find(items, itemId);
+        long previous = plannedAmount(target,month);
         target.amountChanges.put(month.toString(), amountGrosz);
         save(prefs, items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "AMOUNT_FROM_CHANGED",amountGrosz,
+            "Poprzednio " + previous + " gr.");
     }
 
     static long plannedAmount(Item item, YearMonth month) {
@@ -515,6 +554,9 @@ final class PaycheckMonthlyBudget {
                 amountGrosz));
         target.creditApplicationCreatedAt.put(key,System.currentTimeMillis());
         save(prefs,items);
+        PaycheckBudgetHistoryStore.append(prefs,target,targetMonth,
+            "CREDIT_APPLIED",amountGrosz,
+            "Nadpłata z " + sourceMonth);
     }
 
     static void closeArrears(SharedPreferences prefs, String itemId,
@@ -532,6 +574,8 @@ final class PaycheckMonthlyBudget {
         target.adjustmentReasons.put(month.toString(),clean);
         target.adjustmentCreatedAt.put(month.toString(),System.currentTimeMillis());
         save(prefs,items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "ARREAR_CLOSED",amountGrosz,clean);
     }
 
     static void closeOccurrence(SharedPreferences prefs, String itemId,
@@ -549,6 +593,8 @@ final class PaycheckMonthlyBudget {
         target.closedMonthReasons.put(month.toString(),clean);
         target.closedMonthCreatedAt.put(month.toString(),System.currentTimeMillis());
         save(prefs,items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "OCCURRENCE_CLOSED",plannedAmount(target,month),clean);
     }
 
     static void endCycleAt(SharedPreferences prefs, String itemId,
@@ -565,6 +611,9 @@ final class PaycheckMonthlyBudget {
         if (target.installment) target.installmentCount = 0;
         validate(target);
         save(prefs,items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            "CYCLE_ENDED",plannedAmount(target,month),
+            "Cykl zakończony na " + month);
     }
 
     private static Item find(List<Item> items, String itemId) {
