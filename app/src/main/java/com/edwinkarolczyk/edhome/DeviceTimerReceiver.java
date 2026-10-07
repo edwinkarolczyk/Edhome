@@ -3,7 +3,6 @@ package com.edwinkarolczyk.edhome;
 import android.Manifest;
 import android.app.AlarmManager;
 import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -44,7 +43,7 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             .putExtra("timer_id", id)
             .putExtra("end_at", end);
         return PendingIntent.getBroadcast(context, notificationId(id),
-            intent, flags | PendingIntent.FLAG_IMMUTABLE);
+            intent, flags | LegacyCompat.immutableFlag());
     }
 
     private static void cancelAlarm(Context context, long id) {
@@ -101,7 +100,7 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
         }
         long allowed = ReminderRules.nextAllowed(local, quietStart, quietEnd)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+        LegacyCompat.setAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP,
             allowed, alarm(context, id, end, PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
@@ -163,7 +162,7 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             AlarmManager manager = (AlarmManager)
                 context.getSystemService(Context.ALARM_SERVICE);
             if (manager != null)
-                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+                LegacyCompat.setAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP,
                     next, alarm(context, id, expected,
                         PendingIntent.FLAG_UPDATE_CURRENT));
             return;
@@ -173,18 +172,19 @@ public final class DeviceTimerReceiver extends BroadcastReceiver {
             return;
         NotificationManager notifications = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (notifications == null || !notifications.areNotificationsEnabled())
+        if (notifications == null || !LegacyCompat.notificationsEnabled(notifications))
             return;
-        notifications.createNotificationChannel(new NotificationChannel(
-            CHANNEL, "Minutniki urządzeń", NotificationManager.IMPORTANCE_DEFAULT));
+        LegacyCompat.ensureChannel(notifications, CHANNEL,
+            "Minutniki urządzeń", NotificationManager.IMPORTANCE_DEFAULT,
+            null, true, true, false);
         Intent open = new Intent(context, MainActivity.class)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra("open_timers", true);
         PendingIntent pending = PendingIntent.getActivity(context,
             notificationId(id), open, PendingIntent.FLAG_UPDATE_CURRENT
-                | PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(context, CHANNEL)
+                | LegacyCompat.immutableFlag());
+        Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • " + label(type))
             .setContentText("Zakończono: " + title
