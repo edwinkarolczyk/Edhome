@@ -50,6 +50,9 @@
             </intent-filter>
         </receiver>
         <receiver
+            android:name=".BudgetReminderReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".ReminderReceiver"
             android:exported="false">
             <intent-filter>
