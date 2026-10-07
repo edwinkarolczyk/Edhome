@@ -21,7 +21,7 @@ import java.util.Set;
  * Import is a full replacement, not a merge; validate before touching the database.
  */
 final class DataBackup {
-    static final int MAX_BYTES = 8 * 1024 * 1024;
+    static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
     private static final int DB_VERSION = 45;
@@ -285,7 +285,7 @@ final class DataBackup {
         result.put("tables", tables);
         String json = result.toString(2);
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
-            throw new IllegalStateException("Kopia przekracza limit 8 MB.");
+            throw new IllegalStateException("Kopia przekracza limit 32 MB.");
         return json;
     }
 
@@ -299,7 +299,7 @@ final class DataBackup {
         if (archivedStorageThumbs == null)
             archivedStorageThumbs = java.util.Collections.emptyMap();
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
-            throw new IllegalArgumentException("Plik jest za duży (maks. 8 MB).");
+            throw new IllegalArgumentException("Plik jest za duży (maks. 32 MB).");
         JSONObject root = new JSONObject(json);
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
