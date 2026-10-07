@@ -48,6 +48,7 @@ final class PaycheckMonthlyBudget {
         boolean installment;
         int installmentCount;
         String creditAgreementNumber;
+        String recipientId;
         boolean active;
         final List<String> matchedOperationIds = new ArrayList<>();
         final Map<String, Long> matchedAllocationsGrosz = new LinkedHashMap<>();
@@ -63,6 +64,8 @@ final class PaycheckMonthlyBudget {
         final Map<String, Long> closedMonthCreatedAt = new LinkedHashMap<>();
         final Map<String, Long> creditApplicationsGrosz = new LinkedHashMap<>();
         final Map<String, Long> creditApplicationCreatedAt = new LinkedHashMap<>();
+        final Map<String, String> invoiceDueDates = new LinkedHashMap<>();
+        final Map<String, String> plannedPaymentDates = new LinkedHashMap<>();
     }
 
     static final class Totals {
@@ -121,6 +124,16 @@ final class PaycheckMonthlyBudget {
             String endMonth, int cycleMonths, int dueDay, boolean optional,
             boolean installment, int installmentCount,
             String creditAgreementNumber) {
+        return newItem(name,kind,category,amountGrosz,amountMode,startMonth,
+            endMonth,cycleMonths,dueDay,optional,installment,installmentCount,
+            creditAgreementNumber,"");
+    }
+
+    static Item newItem(String name, String kind, String category,
+            long amountGrosz, String amountMode, String startMonth,
+            String endMonth, int cycleMonths, int dueDay, boolean optional,
+            boolean installment, int installmentCount,
+            String creditAgreementNumber, String recipientId) {
         Item item = new Item();
         item.id = UUID.randomUUID().toString();
         item.name = name == null ? "" : name.trim();
@@ -137,6 +150,7 @@ final class PaycheckMonthlyBudget {
         item.installmentCount = installmentCount;
         item.creditAgreementNumber = creditAgreementNumber == null
             ? "" : creditAgreementNumber.trim();
+        item.recipientId = recipientId == null ? "" : recipientId.trim();
         item.active = true;
         validate(item);
         return item;
@@ -319,6 +333,79 @@ final class PaycheckMonthlyBudget {
             return (int) ChronoUnit.MONTHS.between(start, end) + 1;
         }
         return 0;
+    }
+
+    static YearMonth installmentEndMonth(Item item) {
+        int total = installmentTotal(item);
+        if (!item.installment || total < 1) return null;
+        return YearMonth.parse(item.startMonth).plusMonths(total - 1L);
+    }
+
+    static long installmentTotalPlanned(Item item) {
+        int total = installmentTotal(item);
+        if (!item.installment || total < 1) return 0L;
+        YearMonth month = YearMonth.parse(item.startMonth);
+        long sum = 0L;
+        for (int i=0;i<total;i++)
+            sum = Math.addExact(sum,plannedAmount(item,month.plusMonths(i)));
+        return sum;
+    }
+
+    static long sharedMatchedActualAll(SQLiteDatabase db, Item item) {
+        long total = 0L;
+        for (String operationId : item.matchedOperationIds) {
+            try (Cursor cursor = db.rawQuery(
+                    "SELECT kind,amount_grosz,status FROM paycheck_transactions "
+                    + "WHERE scope='shared' AND operation_id=?",
+                    new String[]{operationId})) {
+                if (!cursor.moveToFirst()
+                        || !"confirmed".equals(cursor.getString(2))
+                        || !item.kind.equals(cursor.getString(0)))
+                    continue;
+                Long allocated = item.matchedAllocationsGrosz.get(operationId);
+                total = Math.addExact(total,
+                    allocated == null ? cursor.getLong(1) : allocated);
+            }
+        }
+        return total;
+    }
+
+    static LocalDate defaultPlannedPaymentDate(LocalDate invoiceDueDate) {
+        if (invoiceDueDate == null)
+            throw new IllegalArgumentException("Brak terminu faktury.");
+        LocalDate tenth = invoiceDueDate.withDayOfMonth(10);
+        return invoiceDueDate.isBefore(tenth) ? invoiceDueDate : tenth;
+    }
+
+    static void setInvoiceForMonth(Item item, LocalDate dueDate,
+            LocalDate plannedDate) {
+        if (item == null || dueDate == null)
+            throw new IllegalArgumentException("Brak terminu faktury.");
+        LocalDate plan = plannedDate == null
+            ? defaultPlannedPaymentDate(dueDate) : plannedDate;
+        YearMonth month = YearMonth.from(dueDate);
+        if (!YearMonth.from(plan).equals(month) || plan.isAfter(dueDate))
+            throw new IllegalArgumentException(
+                "Planowana zapłata musi być w miesiącu faktury i nie później niż termin.");
+        item.invoiceDueDates.put(month.toString(),dueDate.toString());
+        item.plannedPaymentDates.put(month.toString(),plan.toString());
+    }
+
+    static LocalDate invoiceDueDate(Item item, YearMonth month) {
+        String raw = item.invoiceDueDates.get(month.toString());
+        if (raw == null || raw.isBlank()) return null;
+        try { return LocalDate.parse(raw); }
+        catch (Exception invalid) { return null; }
+    }
+
+    static LocalDate plannedPaymentDate(Item item, YearMonth month) {
+        String raw = item.plannedPaymentDates.get(month.toString());
+        if (raw != null && !raw.isBlank()) {
+            try { return LocalDate.parse(raw); }
+            catch (Exception ignored) { }
+        }
+        if (item.dueDay <= 0) return null;
+        return month.atDay(Math.min(item.dueDay,month.lengthOfMonth()));
     }
 
     /**
@@ -685,6 +772,7 @@ final class PaycheckMonthlyBudget {
         json.put("installment", item.installment);
         json.put("installmentCount", item.installmentCount);
         json.put("creditAgreementNumber", item.creditAgreementNumber);
+        json.put("recipientId", item.recipientId);
         json.put("active", item.active);
         JSONArray matches = new JSONArray();
         for (String operationId : item.matchedOperationIds)
@@ -713,6 +801,8 @@ final class PaycheckMonthlyBudget {
             amounts(item.creditApplicationsGrosz));
         json.put("creditApplicationCreatedAt",
             amountsAllowZero(item.creditApplicationCreatedAt));
+        json.put("invoiceDueDates", stringsMap(item.invoiceDueDates));
+        json.put("plannedPaymentDates", stringsMap(item.plannedPaymentDates));
         JSONObject reasons = new JSONObject();
         for (Map.Entry<String, String> entry : item.adjustmentReasons.entrySet())
             reasons.put(entry.getKey(),entry.getValue());
@@ -737,6 +827,7 @@ final class PaycheckMonthlyBudget {
         item.installmentCount = json.optInt("installmentCount", 0);
         item.creditAgreementNumber =
             json.optString("creditAgreementNumber", "").trim();
+        item.recipientId = json.optString("recipientId", "").trim();
         item.active = !json.has("active") || json.getBoolean("active");
         JSONArray matches = json.optJSONArray("matches");
         if (matches != null) {
@@ -785,6 +876,10 @@ final class PaycheckMonthlyBudget {
             item.creditApplicationsGrosz);
         readAmountsAllowZero(json.optJSONObject("creditApplicationCreatedAt"),
             item.creditApplicationCreatedAt);
+        readStringsMap(json.optJSONObject("invoiceDueDates"),
+            item.invoiceDueDates);
+        readStringsMap(json.optJSONObject("plannedPaymentDates"),
+            item.plannedPaymentDates);
         JSONObject reasons = json.optJSONObject("adjustmentReasons");
         if (reasons != null) {
             java.util.Iterator<String> reasonKeys = reasons.keys();
@@ -840,7 +935,10 @@ final class PaycheckMonthlyBudget {
                 || item.dueDay < 0 || item.dueDay > 31
                 || item.installmentCount < 0 || item.installmentCount > 600
                 || item.creditAgreementNumber == null
-                || item.creditAgreementNumber.length() > 80)
+                || item.creditAgreementNumber.length() > 80
+                || item.recipientId == null
+                || (!item.recipientId.isBlank()
+                    && !item.recipientId.matches("[0-9a-fA-F-]{36}")))
             throw new IllegalArgumentException("Nieprawidłowa pozycja planu PayCheck.");
         if (!item.creditAgreementNumber.isBlank()
                 && (!"expense".equals(item.kind)
@@ -889,6 +987,7 @@ final class PaycheckMonthlyBudget {
         validateCreditApplications(item.creditApplicationsGrosz);
         validateCreditApplicationTimes(item.creditApplicationsGrosz,
             item.creditApplicationCreatedAt);
+        validateInvoiceDates(item);
         YearMonth start;
         try {
             start = YearMonth.parse(item.startMonth);
@@ -907,6 +1006,56 @@ final class PaycheckMonthlyBudget {
                 throw new IllegalArgumentException("Nieprawidłowy miesiąc końcowy.");
             }
         }
+    }
+
+    private static JSONObject stringsMap(Map<String,String> values)
+            throws Exception {
+        JSONObject json = new JSONObject();
+        for (Map.Entry<String,String> entry : values.entrySet())
+            json.put(entry.getKey(),entry.getValue());
+        return json;
+    }
+
+    private static void readStringsMap(JSONObject json, Map<String,String> target) {
+        if (json == null) return;
+        java.util.Iterator<String> keys = json.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            target.put(key,json.optString(key,""));
+        }
+    }
+
+    private static void validateInvoiceDates(Item item) {
+        if (item.invoiceDueDates.size() > 600
+                || item.plannedPaymentDates.size() > 600)
+            throw new IllegalArgumentException("Za dużo terminów faktur.");
+        for (Map.Entry<String,String> entry : item.invoiceDueDates.entrySet()) {
+            final YearMonth month;
+            final LocalDate due;
+            try {
+                month = YearMonth.parse(entry.getKey());
+                due = LocalDate.parse(entry.getValue());
+            } catch (Exception invalid) {
+                throw new IllegalArgumentException("Nieprawidłowy termin faktury.");
+            }
+            if (!YearMonth.from(due).equals(month))
+                throw new IllegalArgumentException("Termin faktury ma zły miesiąc.");
+            String rawPlan = item.plannedPaymentDates.get(entry.getKey());
+            if (rawPlan == null || rawPlan.isBlank())
+                throw new IllegalArgumentException("Brak planowanej daty zapłaty.");
+            final LocalDate plan;
+            try { plan = LocalDate.parse(rawPlan); }
+            catch (Exception invalid) {
+                throw new IllegalArgumentException("Nieprawidłowa planowana data zapłaty.");
+            }
+            if (!YearMonth.from(plan).equals(month) || plan.isAfter(due))
+                throw new IllegalArgumentException(
+                    "Planowana data zapłaty nie może być po terminie faktury.");
+        }
+        for (String month : item.plannedPaymentDates.keySet())
+            if (!item.invoiceDueDates.containsKey(month))
+                throw new IllegalArgumentException(
+                    "Planowana data zapłaty bez faktury.");
     }
 
     private static boolean allowedCycle(int cycle) {
