@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 228,
-  "versionName": "0.8.0.36",
-  "changelog": "EDHOME 0.8.0.36 — Beta. Desktop działa jako lokalny Hub/API na TCP 45823, discovery po UDP 45822; Android jest klientem, parowanie QR zapisuje ID Desktopu i token, telefon automatycznie ponawia połączenie i pokazuje diagnostykę hosta. Zachowane Projekty z blokadami zależności, jednym timerem tej samej czynności, backupem przed pierwszym scaleniem, konfliktami Telefon/Desktop i Low RAM. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.36/edhome-beta.apk",
-  "sha256": "7f2f3106bd3acb8ab4002790ecc437da0da58a00b4b61ad75490e00a4631528b"
+  "versionCode": 229,
+  "versionName": "0.8.0.37",
+  "changelog": "EDHOME 0.8.0.37 — Beta. Desktop działa jako lokalny Hub/API na TCP 45823, discovery po UDP 45822; Android jest klientem, parowanie QR zapisuje ID Desktopu i token, telefon automatycznie ponawia połączenie i pokazuje diagnostykę hosta. Zachowane Projekty z blokadami zależności, jednym timerem tej samej czynności, backupem przed pierwszym scaleniem, konfliktami Telefon/Desktop i Low RAM. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.37/edhome-beta.apk",
+  "sha256": "ee4ac982839e5332484c93f70745f0b5cf1bf89b3b1147842be1699158378b42"
 }
