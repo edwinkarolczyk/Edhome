@@ -36,7 +36,7 @@ import java.util.concurrent.Executors;
 final class DesktopHubServer implements AutoCloseable {
     static final int PORT=45823;
     static final int DISCOVERY_PORT=45822;
-    private static final int MAX_BODY=8*1024*1024;
+    private static final int MAX_BODY=32*1024*1024;
 
     interface Host {
         String snapshot() throws Exception;
