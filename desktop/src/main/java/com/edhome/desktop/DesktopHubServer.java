@@ -224,6 +224,7 @@ final class DesktopHubServer implements AutoCloseable {
                 root.addProperty("ok",true);
                 root.addProperty("desktopId",desktopId);
                 root.addProperty("version",desktopVersion);
+                root.addProperty("protocolVersion",2);
                 root.addProperty("port",PORT);
                 root.addProperty("initialized",host.initialized());
                 root.addProperty("revision",host.revision());
@@ -232,13 +233,16 @@ final class DesktopHubServer implements AutoCloseable {
                 return;
             }
             if("GET".equals(method)&&"/state".equals(path)) {
-                String snapshot=host.snapshot();
+                boolean initialized=host.initialized();
+                String snapshot=initialized?host.snapshot():"";
                 JsonObject root=new JsonObject();
-                root.addProperty("revision",host.revision());
-                root.addProperty("initialized",host.initialized());
-                root.addProperty("snapshotSha256",sha256(snapshot));
+                root.addProperty("revision",initialized?host.revision():0L);
+                root.addProperty("initialized",initialized);
+                root.addProperty("snapshotSha256",
+                    initialized?sha256(snapshot):"");
                 root.addProperty("desktopId",desktopId);
                 root.addProperty("version",desktopVersion);
+                root.addProperty("protocolVersion",2);
                 reply(peer,200,root.toString(),null);
                 return;
             }
