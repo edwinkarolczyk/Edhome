@@ -29,6 +29,9 @@ for token in (
 
 for token in (
     'sharedMonthlyBudgetBlock();',
+    'sharedMonthlyBudgetEntry();',
+    'case "paycheck_budget": paycheckMonthlyBudget(); break;',
+    'Wejdź do budżetu miesiąca',
     'privateMonthlyBudgetBlock(entries);',
     'Budżet miesiąca • ',
     'Plan nie zmienia salda.',
