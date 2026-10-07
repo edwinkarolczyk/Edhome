@@ -8,6 +8,7 @@ main = (root / "MainActivity.java").read_text(encoding="utf-8")
 vault = (root / "PrivatePaycheckVault.java").read_text(encoding="utf-8")
 backup = (root / "DataBackup.java").read_text(encoding="utf-8")
 portable = (root / "PrivatePaycheckPortable.java").read_text(encoding="utf-8")
+recipients = (root / "PaycheckRecipientStore.java").read_text(encoding="utf-8")
 
 for token in (
     'PREF_KEY = "paycheck_monthly_budget_v1"',
@@ -54,6 +55,16 @@ for token in (
     'int installmentCount;',
     'int dueDay;',
     'String creditAgreementNumber;',
+    'String recipientId;',
+    'invoiceDueDates',
+    'plannedPaymentDates',
+    'static YearMonth installmentEndMonth(',
+    'static long installmentTotalPlanned(',
+    'static long sharedMatchedActualAll(',
+    'static LocalDate defaultPlannedPaymentDate(',
+    'static void setInvoiceForMonth(',
+    'static LocalDate invoiceDueDate(',
+    'static LocalDate plannedPaymentDate(',
     'json.put("creditAgreementNumber", item.creditAgreementNumber);',
     'json.optString("creditAgreementNumber", "")',
     '"loans".equals(item.category)',
@@ -75,7 +86,7 @@ for token in (
     'NIEZAPŁACONE',
     'ZAPŁACONE',
     'OPCJONALNE',
-    'Niedopłata " + item.name + " z ',
+    'budgetItemDisplayName(item) + " z ',
     'NADPŁATA',
     'ZALEGŁE',
     'Z poprzednich miesięcy: zaległości',
@@ -94,7 +105,15 @@ for token in (
     'Jednorazowy',
     'Cykliczny',
     'Rata',
-    'Termin płatności • dzień 1–31',
+    'Planowany dzień zapłaty 1–31 (gdy brak faktury)',
+    'Termin faktury YYYY-MM-DD (opcjonalnie)',
+    'Planowana zapłata faktury: —',
+    'Odbiorca, np. TAURON / bank (opcjonalnie)',
+    'refreshInstallmentCalculation',
+    'installmentSource',
+    'Zobowiązanie łącznie: ',
+    'Odbiorca: ',
+    'Termin faktury: ',
     'Liczba rat, np. 12',
     'Jedno pole automatycznie blokuje drugie.',
     'Nr umowy kredytowej (opcjonalnie)',
@@ -111,7 +130,7 @@ for token in (
     'Dane istniejącego prywatnego sejfu',
     'transakcje potwierdzone po sprawdzeniu banku / wyciągu',
     'Pasuje do Budżetu miesiąca',
-    'Niedopłata " + item.name + " z ',
+    'budgetItemDisplayName(item) + " z ',
     'Nadpłata nie jest używana automatycznie.',
     'expandedBudgetItemId',
     'expandedBudgetDetailsView',
@@ -169,4 +188,19 @@ for token in (
 assert 'PaycheckMonthlyBudget.match(' in main
 assert 'PrivatePaycheckVault.matchBudgetOperation(' in main
 assert 'PaycheckMonthlyBudget.unmatch(prefs,operationId)' in main
+
+for token in (
+    'PREF_KEY = "paycheck_recipients_v1"',
+    'static Recipient getOrCreate(',
+    'static String name(',
+    'MAX_RECIPIENTS = 200',
+):
+    assert token in recipients, "Recipient contract missing: " + token
+
+for token in (
+    'settings.put("paycheckRecipients"',
+    'PaycheckRecipientStore.validateSerialized(paycheckRecipients);',
+    '.putString(PaycheckRecipientStore.PREF_KEY, paycheckRecipients)',
+):
+    assert token in backup, "Recipient backup missing: " + token
 print("PayCheck monthly plan, simple matching, private encryption and confirmed-transaction gate: PASS")
