@@ -42,7 +42,6 @@ for token in (
     'private void openPrivatePaycheck()',
     'private void privatePaycheck()',
     'case "paycheck_private": privatePaycheck(); break;',
-    'button("🔒 Prywatny sejf PayCheck", this::openPrivatePaycheck);',
     'if ("paycheck_private".equals(screen)) {',
     'root.removeAllViews();',
     'privatePaycheckSession.lock();',
@@ -66,6 +65,9 @@ for token in (
 ):
     assert token in ui, "Private UI guard missing: "+token
 assert ui.index('if ("paycheck_private".equals(screen)) {') < ui.index('super.onPause();')
+assert 'button("🔒 Prywatny sejf PayCheck", this::openPrivatePaycheck);' not in ui
+assert 'if ("paycheck_private".equals(target)) {\n            go("paycheck");' in ui
+assert 'PRYWATNY • otwórz sejf' not in ui
 assert 'PaycheckStore.add(' not in ui.split('private void privatePaycheck()',1)[1].split('private void sharedPaycheckGoals()',1)[0]
 assert '"edhome-paycheck-private.db"' not in backup
 assert 'private_paycheck_entries' not in backup
