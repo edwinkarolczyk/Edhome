@@ -96,6 +96,7 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_GARDEN_CATALOG = 1224;
     private static final int EXPORT_GARDEN_CATALOG = 1225;
     private static final int IMPORT_TILE_ART = 1226;
+    private static final int IMPORT_PAYCHECK_ATTACHMENT = 1227;
     private static final int STORAGE_CAMERA_PERMISSION = 7134;
     private byte[] pendingQrLabelsPdf;
     private int pendingQrLabelsCount;
@@ -104,6 +105,7 @@ public final class MainActivity extends Activity {
     private String pendingTileArtTarget;
     private String pendingTileArtStyle;
     private int pendingTileArtSpan;
+    private String pendingBudgetAttachmentItemId;
     private long pendingStorageThumbnailId;
     private Uri pendingStorageCameraUri;
     private java.io.File pendingStorageCameraFile;
@@ -6309,6 +6311,28 @@ public final class MainActivity extends Activity {
             ReminderReceiver.schedule(this);
             render();
         });
+        if (!"income".equals(item.kind)) {
+            try {
+                java.util.List<PaycheckBudgetAttachmentStore.Attachment> attachments =
+                    PaycheckBudgetAttachmentStore.list(prefs,item.id);
+                details.addView(text("Faktura / załącznik"
+                    + (attachments.isEmpty() ? "" : " • " + attachments.size()),
+                    13,true));
+                for (PaycheckBudgetAttachmentStore.Attachment attachment:attachments)
+                    details.addView(budgetInlineButton(
+                        "📎 " + attachment.displayName,
+                        () -> showBudgetAttachmentActions(item,attachment)),
+                        new LinearLayout.LayoutParams(-1,dp(40)));
+                details.addView(budgetInlineButton("＋ Dodaj zdjęcie / PDF",
+                    () -> pickBudgetAttachment(item)),
+                    new LinearLayout.LayoutParams(-1,dp(40)));
+            } catch(Exception error) {
+                DiagnosticLog.error("PAYCHECK_ATTACHMENT_LIST",error);
+                details.addView(text(
+                    "Nie udało się odczytać załączników.",12,false));
+            }
+        }
+
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setVisibility(View.GONE);
@@ -14860,6 +14884,79 @@ public final class MainActivity extends Activity {
         touchFeedback(line);
     }
 
+    private void pickBudgetAttachment(
+            PaycheckMonthlyBudget.Item item) {
+        pendingBudgetAttachmentItemId=item.id;
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("*/*");
+        picker.putExtra(Intent.EXTRA_MIME_TYPES,
+            new String[]{"application/pdf","image/jpeg","image/png",
+                "image/webp","image/*"});
+        try {
+            startActivityForResult(picker,IMPORT_PAYCHECK_ATTACHMENT);
+        } catch(Exception error) {
+            pendingBudgetAttachmentItemId=null;
+            alert("Nie można otworzyć wyboru zdjęcia lub PDF.");
+        }
+    }
+
+    private void showBudgetAttachmentActions(
+            PaycheckMonthlyBudget.Item item,
+            PaycheckBudgetAttachmentStore.Attachment attachment) {
+        new AlertDialog.Builder(this)
+            .setTitle(attachment.displayName)
+            .setItems(new String[]{"Otwórz","Usuń załącznik"},(d,which)->{
+                if (which==0) {
+                    openBudgetAttachment(attachment);
+                    return;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("Usunąć załącznik?")
+                    .setMessage(attachment.displayName
+                        + "\n\nPo usunięciu zniknie również z kolejnej "
+                        + "pełnej kopii ZIP.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń",(confirm,w)->{
+                        try {
+                            if (PaycheckBudgetAttachmentStore.remove(
+                                    this,prefs,attachment.id)) {
+                                PaycheckBudgetHistoryStore.append(
+                                    prefs,item,
+                                    paycheckBudgetMonth==null
+                                        ?YearMonth.now():paycheckBudgetMonth,
+                                    "ATTACHMENT_REMOVED",0L,
+                                    attachment.displayName);
+                                DiagnosticLog.event(
+                                    "PAYCHECK_ATTACHMENT_REMOVED");
+                                render();
+                            }
+                        } catch(Exception error) {
+                            DiagnosticLog.error(
+                                "PAYCHECK_ATTACHMENT_REMOVE",error);
+                            alert("Nie udało się usunąć załącznika.");
+                        }
+                    })
+                    .show();
+            })
+            .setNegativeButton("Zamknij",null)
+            .show();
+    }
+
+    private void openBudgetAttachment(
+            PaycheckBudgetAttachmentStore.Attachment attachment) {
+        try {
+            Uri uri=PaycheckBudgetAttachmentStore.uri(this,attachment);
+            Intent open=new Intent(Intent.ACTION_VIEW);
+            open.setDataAndType(uri,attachment.mime);
+            open.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(open);
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_ATTACHMENT_OPEN",error);
+            alert("Nie można otworzyć tego załącznika.");
+        }
+    }
+
     private void budgetArrearRow(PaycheckMonthlyBudget.Item item,
             PaycheckMonthlyBudget.Arrear arrear, YearMonth shownMonth) {
         LinearLayout box = new LinearLayout(this);
@@ -20267,6 +20364,38 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == IMPORT_PAYCHECK_ATTACHMENT) {
+            String itemId=pendingBudgetAttachmentItemId;
+            pendingBudgetAttachmentItemId=null;
+            if (result==RESULT_OK && itemId!=null && data!=null
+                    && data.getData()!=null) {
+                try {
+                    PaycheckMonthlyBudget.Item target=null;
+                    for (PaycheckMonthlyBudget.Item item:
+                            PaycheckMonthlyBudget.load(prefs))
+                        if (item.id.equals(itemId)) { target=item; break; }
+                    if (target==null)
+                        throw new IllegalArgumentException(
+                            "Pozycja budżetu już nie istnieje.");
+                    PaycheckBudgetAttachmentStore.Attachment attachment =
+                        PaycheckBudgetAttachmentStore.add(
+                            this,prefs,itemId,data.getData());
+                    PaycheckBudgetHistoryStore.append(
+                        prefs,target,
+                        paycheckBudgetMonth==null
+                            ?YearMonth.now():paycheckBudgetMonth,
+                        "ATTACHMENT_ADDED",0L,attachment.displayName);
+                    DiagnosticLog.event("PAYCHECK_ATTACHMENT_ADDED");
+                    expandedBudgetItemId=itemId;
+                    render();
+                } catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_ATTACHMENT_IMPORT",error);
+                    alert(error.getMessage()==null
+                        ?"Nie udało się dodać załącznika.":error.getMessage());
+                }
+            }
+            return;
+        }
         if (request == IMPORT_GARDEN_CATALOG) {
             if (result == RESULT_OK && data != null && data.getData() != null) {
                 try (InputStream in=getContentResolver().openInputStream(data.getData());
