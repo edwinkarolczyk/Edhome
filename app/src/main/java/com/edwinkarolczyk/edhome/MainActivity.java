@@ -14455,11 +14455,12 @@ public final class MainActivity extends Activity {
             java.util.List<PaycheckMonthlyBudget.Item> activeItems =
                 PaycheckMonthlyBudget.activeFor(items, month);
             activeItems.sort((a,b) -> {
-                int ad = a.dueDay <= 0 ? 99 : a.dueDay;
-                int bd = b.dueDay <= 0 ? 99 : b.dueDay;
-                int byDay = Integer.compare(ad, bd);
+                int ad = budgetSortDay(a,month);
+                int bd = budgetSortDay(b,month);
+                int byDay = Integer.compare(ad,bd);
                 return byDay != 0 ? byDay
-                    : a.name.compareToIgnoreCase(b.name);
+                    : budgetItemDisplayName(a)
+                        .compareToIgnoreCase(budgetItemDisplayName(b));
             });
 
             expandedBudgetDetailsView = null;
@@ -14497,8 +14498,8 @@ public final class MainActivity extends Activity {
                 if (byMonth != 0) return byMonth;
                 PaycheckMonthlyBudget.Item ai = arrearItems.get(left);
                 PaycheckMonthlyBudget.Item bi = arrearItems.get(right);
-                int ad = ai.dueDay <= 0 ? 99 : ai.dueDay;
-                int bd = bi.dueDay <= 0 ? 99 : bi.dueDay;
+                int ad = budgetSortDay(ai,a.sourceMonth);
+                int bd = budgetSortDay(bi,b.sourceMonth);
                 return Integer.compare(ad,bd);
             });
 
@@ -14526,6 +14527,36 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private int budgetSortDay(PaycheckMonthlyBudget.Item item,
+            YearMonth month) {
+        java.time.LocalDate planned =
+            PaycheckMonthlyBudget.plannedPaymentDate(item,month);
+        if (planned != null) return planned.getDayOfMonth();
+        return item.dueDay <= 0 ? 99 : item.dueDay;
+    }
+
+    private String budgetItemDisplayName(PaycheckMonthlyBudget.Item item) {
+        if (item == null) return "";
+        if (item.recipientId == null || item.recipientId.isBlank())
+            return item.name;
+        try {
+            String recipient = PaycheckRecipientStore.name(
+                PaycheckRecipientStore.load(prefs),item.recipientId);
+            if (recipient.isBlank()
+                    || recipient.equalsIgnoreCase(item.name))
+                return item.name;
+            return recipient + " • " + item.name;
+        } catch(Exception ignored) {
+            return item.name;
+        }
+    }
+
+    private String budgetDateLabel(java.time.LocalDate date) {
+        if (date == null) return "—";
+        return String.format(java.util.Locale.ROOT,"%02d.%02d",
+            date.getDayOfMonth(),date.getMonthValue());
+    }
+
     private void budgetItemCard(PaycheckMonthlyBudget.Item item,
             YearMonth month) {
         boolean scheduledThisMonth = !PaycheckMonthlyBudget.activeFor(
@@ -14540,18 +14571,22 @@ public final class MainActivity extends Activity {
         long dueTotal = Math.max(0L,planned-appliedCredit);
         long balanceAfter = dueTotal-actual;
 
-        String due = item.dueDay > 0
-            ? String.format(java.util.Locale.ROOT, "%02d.%02d",
-                Math.min(item.dueDay, month.lengthOfMonth()),
-                month.getMonthValue())
-            : "—";
+        java.time.LocalDate plannedDate =
+            PaycheckMonthlyBudget.plannedPaymentDate(item,month);
+        java.time.LocalDate invoiceDate =
+            PaycheckMonthlyBudget.invoiceDueDate(item,month);
+        String due = budgetDateLabel(plannedDate);
         String type;
         if (item.installment) {
             int position = PaycheckMonthlyBudget.installmentPosition(item, month);
             int total = PaycheckMonthlyBudget.installmentTotal(item);
-            boolean last = scheduledThisMonth && total > 0 && position == total;
+            int includingCurrent = total > 0
+                ? Math.max(0,total-position+1) : 0;
+            String tail = includingCurrent == 1
+                ? " • ⚠ ostatnia"
+                : (includingCurrent == 2 ? " • ⚠ ostatnie 2" : "");
             type = total > 0
-                ? "Rata " + position + "/" + total + (last ? " • ⚠ ostatnia" : "")
+                ? "Rata " + position + "/" + total + tail
                 : "Rata";
         } else if (item.cycleMonths == 0) {
             type = "1×";
@@ -14596,7 +14631,7 @@ public final class MainActivity extends Activity {
             new LinearLayout.LayoutParams(-1,-2);
         body.addView(box,boxParams);
 
-        String prefix = due + "  " + item.name + "  "
+        String prefix = due + "  " + budgetItemDisplayName(item) + "  "
             + MoneyRules.format(dueTotal) + "  [" + type + "]  ";
         android.text.SpannableString summary =
             new android.text.SpannableString(prefix + status);
@@ -14622,12 +14657,24 @@ public final class MainActivity extends Activity {
         details.setVisibility(expanded ? View.VISIBLE : View.GONE);
         if (expanded) expandedBudgetDetailsView = details;
 
+        if (item.recipientId != null && !item.recipientId.isBlank()) {
+            try {
+                String recipientName = PaycheckRecipientStore.name(
+                    PaycheckRecipientStore.load(prefs),item.recipientId);
+                if (!recipientName.isBlank())
+                    details.addView(text("Odbiorca: " + recipientName,13,false));
+            } catch(Exception ignored) { }
+        }
+        details.addView(text("Zobowiązanie: " + item.name,13,false));
         details.addView(text("Kategoria: "
             + MoneyRules.categoryLabel(item.category),13,false));
         if (item.creditAgreementNumber != null
                 && !item.creditAgreementNumber.isBlank())
             details.addView(text("Nr umowy kredytowej: "
                 + item.creditAgreementNumber,13,false));
+        if (invoiceDate != null)
+            details.addView(text("Termin faktury: " + invoiceDate
+                + " • planowana zapłata: " + plannedDate,13,false));
         details.addView(text("Plan tego miesiąca: " + MoneyRules.format(planned)
             + " • zapłacono/potwierdzono: " + MoneyRules.format(actual),
             13,false));
@@ -14646,9 +14693,23 @@ public final class MainActivity extends Activity {
             int position = PaycheckMonthlyBudget.installmentPosition(item,month);
             int total = PaycheckMonthlyBudget.installmentTotal(item);
             int left = total > 0 ? Math.max(0,total-position) : 0;
+            long totalPlanned =
+                PaycheckMonthlyBudget.installmentTotalPlanned(item);
+            long totalPaid =
+                PaycheckMonthlyBudget.sharedMatchedActualAll(
+                    db.getReadableDatabase(),item);
+            long totalLeft = Math.max(0L,totalPlanned-totalPaid);
+            java.time.YearMonth end =
+                PaycheckMonthlyBudget.installmentEndMonth(item);
             details.addView(text(total > 0
                 ? "Rata " + position + "/" + total + " • zostało " + left
+                    + " • koniec " + (end == null ? "—" : end)
                 : "Rata",13,false));
+            details.addView(text("Zobowiązanie łącznie: "
+                + MoneyRules.format(totalPlanned)
+                + " • zapłacono: " + MoneyRules.format(totalPaid)
+                + " • pozostało: " + MoneyRules.format(totalLeft),
+                13,false));
         }
 
         LinearLayout actions = new LinearLayout(this);
@@ -14717,12 +14778,11 @@ public final class MainActivity extends Activity {
             java.time.format.TextStyle.SHORT_STANDALONE,
             new java.util.Locale("pl","PL")).toUpperCase(
                 new java.util.Locale("pl","PL"));
-        String due = item.dueDay > 0
-            ? String.format(java.util.Locale.ROOT,"%02d.%02d",
-                Math.min(item.dueDay,arrear.sourceMonth.lengthOfMonth()),
-                arrear.sourceMonth.getMonthValue())
-            : "—";
-        String prefix = due + "  Niedopłata " + item.name + " z "
+        String due = budgetDateLabel(
+            PaycheckMonthlyBudget.plannedPaymentDate(
+                item,arrear.sourceMonth));
+        String prefix = due + "  Niedopłata "
+            + budgetItemDisplayName(item) + " z "
             + monthLabel + " " + arrear.sourceMonth.getYear() + "  "
             + MoneyRules.format(arrear.amountGrosz) + "  ";
         String status = "ZALEGŁE";
@@ -15172,8 +15232,16 @@ public final class MainActivity extends Activity {
 
         EditText name = new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Nazwa, np. Prąd / Rata TV / Netflix");
+        name.setHint("Zobowiązanie, np. rachunek bieżący / rata");
         form.addView(name);
+
+        EditText recipient = new EditText(this);
+        recipient.setSingleLine(true);
+        recipient.setHint("Odbiorca, np. TAURON / bank (opcjonalnie)");
+        recipient.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(80)});
+        recipient.setVisibility(privateScope ? View.GONE : View.VISIBLE);
+        form.addView(recipient);
 
         Spinner kind = new Spinner(this);
         kind.setAdapter(lightDialogSpinnerAdapter(
@@ -15202,9 +15270,49 @@ public final class MainActivity extends Activity {
 
         EditText dueDay = new EditText(this);
         dueDay.setSingleLine(true);
-        dueDay.setHint("Termin płatności • dzień 1–31 (opcjonalnie)");
+        dueDay.setHint("Planowany dzień zapłaty 1–31 (gdy brak faktury)");
         dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(dueDay);
+
+        EditText invoiceDueDate = new EditText(this);
+        invoiceDueDate.setSingleLine(true);
+        invoiceDueDate.setHint("Termin faktury YYYY-MM-DD (opcjonalnie)");
+        form.addView(invoiceDueDate);
+
+        TextView plannedPaymentPreview = text(
+            "Planowana zapłata faktury: —",13,false);
+        form.addView(plannedPaymentPreview);
+
+        android.text.TextWatcher invoicePreviewWatcher =
+            new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(
+                        CharSequence s,int st,int c,int a) { }
+                @Override public void onTextChanged(
+                        CharSequence s,int st,int b,int count) {
+                    String raw = s == null ? "" : s.toString().trim();
+                    if (raw.isEmpty()) {
+                        plannedPaymentPreview.setText(
+                            "Planowana zapłata faktury: —");
+                        return;
+                    }
+                    try {
+                        java.time.LocalDate due =
+                            java.time.LocalDate.parse(raw);
+                        java.time.LocalDate plan =
+                            PaycheckMonthlyBudget.defaultPlannedPaymentDate(due);
+                        plannedPaymentPreview.setText(
+                            "Planowana zapłata: " + plan
+                            + " • faktura należy do "
+                            + budgetMonthLabel(java.time.YearMonth.from(due)));
+                    } catch(Exception invalid) {
+                        plannedPaymentPreview.setText(
+                            "Planowana zapłata: sprawdź datę YYYY-MM-DD");
+                    }
+                }
+                @Override public void afterTextChanged(
+                        android.text.Editable e) { }
+            };
+        invoiceDueDate.addTextChangedListener(invoicePreviewWatcher);
 
         Spinner planType = new Spinner(this);
         planType.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
@@ -15253,32 +15361,103 @@ public final class MainActivity extends Activity {
         form.addView(rule);
 
         final boolean[] changing = {false};
-        android.text.TextWatcher countWatcher = new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
-            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
-                if (changing[0]) return;
-                changing[0] = true;
-                boolean has = s != null && s.toString().trim().length() > 0;
-                endMonth.setEnabled(!has);
-                if (has) endMonth.setText("");
+        // 0 = nic, 1 = użytkownik podał liczbę rat, 2 = użytkownik podał koniec.
+        final int[] installmentSource = {0};
+        final Runnable refreshInstallmentCalculation = () -> {
+            if (changing[0] || installmentSource[0] == 0) return;
+            changing[0] = true;
+            try {
+                YearMonth start = YearMonth.parse(
+                    startMonth.getText().toString().trim());
+                if (installmentSource[0] == 1) {
+                    String rawCount =
+                        installmentCount.getText().toString().trim();
+                    if (rawCount.isEmpty()) {
+                        installmentSource[0] = 0;
+                        endMonth.setText("");
+                        endMonth.setEnabled(true);
+                    } else {
+                        int value = Integer.parseInt(rawCount);
+                        if (value < 1 || value > 600)
+                            throw new IllegalArgumentException();
+                        endMonth.setText(
+                            start.plusMonths(value - 1L).toString());
+                        endMonth.setEnabled(false);
+                        installmentCount.setEnabled(true);
+                    }
+                } else {
+                    String rawEnd = endMonth.getText().toString().trim();
+                    if (rawEnd.isEmpty()) {
+                        installmentSource[0] = 0;
+                        installmentCount.setText("");
+                        installmentCount.setEnabled(true);
+                    } else {
+                        YearMonth end = YearMonth.parse(rawEnd);
+                        long months = java.time.temporal.ChronoUnit.MONTHS
+                            .between(start,end) + 1L;
+                        if (months < 1 || months > 600)
+                            throw new IllegalArgumentException();
+                        installmentCount.setText(Long.toString(months));
+                        installmentCount.setEnabled(false);
+                        endMonth.setEnabled(true);
+                    }
+                }
+            } catch(Exception invalid) {
+                // Walidacja przy zapisie pokaże dokładny komunikat.
+            } finally {
                 changing[0] = false;
+            }
+        };
+        android.text.TextWatcher countWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(
+                    CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(
+                    CharSequence s,int st,int b,int count) {
+                if (changing[0] || !installmentCount.isEnabled()) return;
+                installmentSource[0] =
+                    s == null || s.toString().trim().isEmpty() ? 0 : 1;
+                if (installmentSource[0] == 0) {
+                    changing[0] = true;
+                    endMonth.setText("");
+                    endMonth.setEnabled(true);
+                    changing[0] = false;
+                } else {
+                    refreshInstallmentCalculation.run();
+                }
             }
             @Override public void afterTextChanged(android.text.Editable e) { }
         };
         android.text.TextWatcher endWatcher = new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
-            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
-                if (changing[0]) return;
-                changing[0] = true;
-                boolean has = s != null && s.toString().trim().length() > 0;
-                installmentCount.setEnabled(!has);
-                if (has) installmentCount.setText("");
-                changing[0] = false;
+            @Override public void beforeTextChanged(
+                    CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(
+                    CharSequence s,int st,int b,int count) {
+                if (changing[0] || !endMonth.isEnabled()) return;
+                installmentSource[0] =
+                    s == null || s.toString().trim().isEmpty() ? 0 : 2;
+                if (installmentSource[0] == 0) {
+                    changing[0] = true;
+                    installmentCount.setText("");
+                    installmentCount.setEnabled(true);
+                    changing[0] = false;
+                } else {
+                    refreshInstallmentCalculation.run();
+                }
+            }
+            @Override public void afterTextChanged(android.text.Editable e) { }
+        };
+        android.text.TextWatcher startWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(
+                    CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(
+                    CharSequence s,int st,int b,int count) {
+                refreshInstallmentCalculation.run();
             }
             @Override public void afterTextChanged(android.text.Editable e) { }
         };
         installmentCount.addTextChangedListener(countWatcher);
         endMonth.addTextChangedListener(endWatcher);
+        startMonth.addTextChangedListener(startWatcher);
 
         final Runnable refreshCreditAgreementVisibility = () -> {
             boolean creditExpense = kind.getSelectedItemPosition() == 0
@@ -15323,8 +15502,17 @@ public final class MainActivity extends Activity {
                     if (installment) {
                         kind.setSelection(0);
                         kind.setEnabled(false);
+                        if (installmentSource[0] == 0) {
+                            installmentCount.setEnabled(true);
+                            endMonth.setEnabled(true);
+                        } else {
+                            refreshInstallmentCalculation.run();
+                        }
                     } else {
                         kind.setEnabled(true);
+                        installmentCount.setEnabled(true);
+                        endMonth.setEnabled(true);
+                        installmentSource[0] = 0;
                     }
                     refreshCreditAgreementVisibility.run();
                 }
@@ -15372,7 +15560,26 @@ public final class MainActivity extends Activity {
                             day = Integer.parseInt(dayText);
                             if (day < 1 || day > 31)
                                 throw new IllegalArgumentException(
-                                    "Termin musi być dniem 1–31.");
+                                    "Planowany dzień musi mieścić się w zakresie 1–31.");
+                        }
+
+                        java.time.LocalDate invoiceDue = null;
+                        String invoiceRaw =
+                            invoiceDueDate.getText().toString().trim();
+                        if (!invoiceRaw.isEmpty()) {
+                            if (!"expense".equals(itemKind))
+                                throw new IllegalArgumentException(
+                                    "Termin faktury dotyczy wydatku.");
+                            try {
+                                invoiceDue = java.time.LocalDate.parse(invoiceRaw);
+                            } catch(Exception invalidDate) {
+                                throw new IllegalArgumentException(
+                                    "Termin faktury podaj jako YYYY-MM-DD.");
+                            }
+                            java.time.LocalDate defaultPlan =
+                                PaycheckMonthlyBudget.defaultPlannedPaymentDate(
+                                    invoiceDue);
+                            day = defaultPlan.getDayOfMonth();
                         }
 
                         boolean isInstallment = typePosition == 2;
@@ -15385,17 +15592,35 @@ public final class MainActivity extends Activity {
                             ? ""
                             : endMonth.getText().toString().trim();
                         int count = 0;
-                        String countText =
-                            installmentCount.getText().toString().trim();
-                        if (isInstallment && !countText.isEmpty()) {
-                            count = Integer.parseInt(countText);
-                            if (count < 1 || count > 600)
+                        if (isInstallment) {
+                            if (installmentSource[0] == 1) {
+                                String countText =
+                                    installmentCount.getText().toString().trim();
+                                count = Integer.parseInt(countText);
+                                if (count < 1 || count > 600)
+                                    throw new IllegalArgumentException(
+                                        "Liczba rat musi mieścić się w zakresie 1–600.");
+                                // Koniec jest tylko wyliczonym polem UI.
+                                end = "";
+                            } else if (installmentSource[0] == 2) {
+                                // Liczba rat jest tylko wyliczonym polem UI.
+                                count = 0;
+                                YearMonth startForInstallment =
+                                    invoiceDue == null
+                                    ? YearMonth.parse(
+                                        startMonth.getText().toString().trim())
+                                    : YearMonth.from(invoiceDue);
+                                YearMonth endForInstallment = YearMonth.parse(end);
+                                long derivedCount = java.time.temporal.ChronoUnit.MONTHS
+                                    .between(startForInstallment,endForInstallment) + 1L;
+                                if (derivedCount < 1 || derivedCount > 600)
+                                    throw new IllegalArgumentException(
+                                        "Miesiąc końca daje nieprawidłową liczbę rat.");
+                            } else {
                                 throw new IllegalArgumentException(
-                                    "Liczba rat musi mieścić się w zakresie 1–600.");
+                                    "Dla rat podaj liczbę rat albo miesiąc końca.");
+                            }
                         }
-                        if (isInstallment && count == 0 && end.isEmpty())
-                            throw new IllegalArgumentException(
-                                "Dla rat podaj liczbę rat albo miesiąc końca.");
 
                         boolean itemOptional =
                             "expense".equals(itemKind) && optional.isChecked();
@@ -15404,12 +15629,25 @@ public final class MainActivity extends Activity {
                                 && "loans".equals(itemCategory)
                             ? creditAgreementNumber.getText().toString().trim()
                             : "";
+                        String start = invoiceDue == null
+                            ? startMonth.getText().toString().trim()
+                            : java.time.YearMonth.from(invoiceDue).toString();
                         PaycheckMonthlyBudget.Item item =
                             PaycheckMonthlyBudget.newItem(
                                 itemName, itemKind, itemCategory, grosz, mode,
-                                startMonth.getText().toString().trim(),
-                                end, cycleMonths, day, itemOptional,
+                                start, end, cycleMonths, day, itemOptional,
                                 isInstallment, count, agreementNumber);
+                        if (invoiceDue != null)
+                            PaycheckMonthlyBudget.setInvoiceForMonth(
+                                item,invoiceDue,null);
+                        if (!privateScope) {
+                            String recipientName =
+                                recipient.getText().toString().trim();
+                            if (!recipientName.isEmpty())
+                                item.recipientId =
+                                    PaycheckRecipientStore.getOrCreate(
+                                        prefs,recipientName).id;
+                        }
                         if (privateScope) {
                             String result = PrivatePaycheckVault.addBudgetItem(
                                 this,privatePaycheckSession,item);
