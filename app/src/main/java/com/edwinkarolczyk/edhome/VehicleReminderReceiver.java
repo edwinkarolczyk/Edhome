@@ -3,7 +3,6 @@ package com.edwinkarolczyk.edhome;
 import android.Manifest;
 import android.app.AlarmManager;
 import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -50,7 +49,7 @@ public final class VehicleReminderReceiver extends BroadcastReceiver {
             .putExtra("vehicle_id", id).putExtra("kind", kind);
         if (occurrence != null) intent.putExtra("occurrence", occurrence);
         return PendingIntent.getBroadcast(context, requestCode(id, kind),
-            intent, flags | PendingIntent.FLAG_IMMUTABLE);
+            intent, flags | LegacyCompat.immutableFlag());
     }
 
     private static void cancel(Context context, AlarmManager manager,
@@ -89,7 +88,7 @@ public final class VehicleReminderReceiver extends BroadcastReceiver {
         if (occurrence.equals(pref.getString(receipt(id, kind), ""))) return;
         try {
             LocalDateTime when = target(now, deadline, lead, pref);
-            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+            LegacyCompat.setAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP,
                 when.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
                 pending(context, id, kind, occurrence,
                     PendingIntent.FLAG_UPDATE_CURRENT));
@@ -137,7 +136,7 @@ public final class VehicleReminderReceiver extends BroadcastReceiver {
                 != PackageManager.PERMISSION_GRANTED) return;
         NotificationManager notifications = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (notifications == null || !notifications.areNotificationsEnabled()) return;
+        if (notifications == null || !LegacyCompat.notificationsEnabled(notifications)) return;
         java.io.File file = context.getDatabasePath(DB);
         if (!file.isFile()) return;
         String deadline, vehicleName;
@@ -168,16 +167,17 @@ public final class VehicleReminderReceiver extends BroadcastReceiver {
             schedule(context);
             return;
         }
-        notifications.createNotificationChannel(new NotificationChannel(
-            CHANNEL, "Pojazdy • OC i przeglądy", NotificationManager.IMPORTANCE_DEFAULT));
+        LegacyCompat.ensureChannel(notifications, CHANNEL,
+            "Pojazdy • OC i przeglądy", NotificationManager.IMPORTANCE_DEFAULT,
+            null, true, true, false);
         Intent open = new Intent(context, MainActivity.class)
             .putExtra("open_vehicles", true)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent content = PendingIntent.getActivity(context,
             requestCode(id, kind), open,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new Notification.Builder(context, CHANNEL)
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        Notification n = LegacyCompat.notificationBuilder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • " + ("oc".equals(kind) ? "OC" : "Przegląd"))
             .setContentText(vehicleName + " • termin: " + deadline)
