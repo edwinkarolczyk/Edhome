@@ -15361,32 +15361,103 @@ public final class MainActivity extends Activity {
         form.addView(rule);
 
         final boolean[] changing = {false};
-        android.text.TextWatcher countWatcher = new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
-            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
-                if (changing[0]) return;
-                changing[0] = true;
-                boolean has = s != null && s.toString().trim().length() > 0;
-                endMonth.setEnabled(!has);
-                if (has) endMonth.setText("");
+        // 0 = nic, 1 = użytkownik podał liczbę rat, 2 = użytkownik podał koniec.
+        final int[] installmentSource = {0};
+        final Runnable refreshInstallmentCalculation = () -> {
+            if (changing[0] || installmentSource[0] == 0) return;
+            changing[0] = true;
+            try {
+                YearMonth start = YearMonth.parse(
+                    startMonth.getText().toString().trim());
+                if (installmentSource[0] == 1) {
+                    String rawCount =
+                        installmentCount.getText().toString().trim();
+                    if (rawCount.isEmpty()) {
+                        installmentSource[0] = 0;
+                        endMonth.setText("");
+                        endMonth.setEnabled(true);
+                    } else {
+                        int value = Integer.parseInt(rawCount);
+                        if (value < 1 || value > 600)
+                            throw new IllegalArgumentException();
+                        endMonth.setText(
+                            start.plusMonths(value - 1L).toString());
+                        endMonth.setEnabled(false);
+                        installmentCount.setEnabled(true);
+                    }
+                } else {
+                    String rawEnd = endMonth.getText().toString().trim();
+                    if (rawEnd.isEmpty()) {
+                        installmentSource[0] = 0;
+                        installmentCount.setText("");
+                        installmentCount.setEnabled(true);
+                    } else {
+                        YearMonth end = YearMonth.parse(rawEnd);
+                        long months = java.time.temporal.ChronoUnit.MONTHS
+                            .between(start,end) + 1L;
+                        if (months < 1 || months > 600)
+                            throw new IllegalArgumentException();
+                        installmentCount.setText(Long.toString(months));
+                        installmentCount.setEnabled(false);
+                        endMonth.setEnabled(true);
+                    }
+                }
+            } catch(Exception invalid) {
+                // Walidacja przy zapisie pokaże dokładny komunikat.
+            } finally {
                 changing[0] = false;
+            }
+        };
+        android.text.TextWatcher countWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(
+                    CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(
+                    CharSequence s,int st,int b,int count) {
+                if (changing[0] || !installmentCount.isEnabled()) return;
+                installmentSource[0] =
+                    s == null || s.toString().trim().isEmpty() ? 0 : 1;
+                if (installmentSource[0] == 0) {
+                    changing[0] = true;
+                    endMonth.setText("");
+                    endMonth.setEnabled(true);
+                    changing[0] = false;
+                } else {
+                    refreshInstallmentCalculation.run();
+                }
             }
             @Override public void afterTextChanged(android.text.Editable e) { }
         };
         android.text.TextWatcher endWatcher = new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a) { }
-            @Override public void onTextChanged(CharSequence s,int st,int b,int c) {
-                if (changing[0]) return;
-                changing[0] = true;
-                boolean has = s != null && s.toString().trim().length() > 0;
-                installmentCount.setEnabled(!has);
-                if (has) installmentCount.setText("");
-                changing[0] = false;
+            @Override public void beforeTextChanged(
+                    CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(
+                    CharSequence s,int st,int b,int count) {
+                if (changing[0] || !endMonth.isEnabled()) return;
+                installmentSource[0] =
+                    s == null || s.toString().trim().isEmpty() ? 0 : 2;
+                if (installmentSource[0] == 0) {
+                    changing[0] = true;
+                    installmentCount.setText("");
+                    installmentCount.setEnabled(true);
+                    changing[0] = false;
+                } else {
+                    refreshInstallmentCalculation.run();
+                }
+            }
+            @Override public void afterTextChanged(android.text.Editable e) { }
+        };
+        android.text.TextWatcher startWatcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(
+                    CharSequence s,int st,int c,int a) { }
+            @Override public void onTextChanged(
+                    CharSequence s,int st,int b,int count) {
+                refreshInstallmentCalculation.run();
             }
             @Override public void afterTextChanged(android.text.Editable e) { }
         };
         installmentCount.addTextChangedListener(countWatcher);
         endMonth.addTextChangedListener(endWatcher);
+        startMonth.addTextChangedListener(startWatcher);
 
         final Runnable refreshCreditAgreementVisibility = () -> {
             boolean creditExpense = kind.getSelectedItemPosition() == 0
@@ -15431,8 +15502,17 @@ public final class MainActivity extends Activity {
                     if (installment) {
                         kind.setSelection(0);
                         kind.setEnabled(false);
+                        if (installmentSource[0] == 0) {
+                            installmentCount.setEnabled(true);
+                            endMonth.setEnabled(true);
+                        } else {
+                            refreshInstallmentCalculation.run();
+                        }
                     } else {
                         kind.setEnabled(true);
+                        installmentCount.setEnabled(true);
+                        endMonth.setEnabled(true);
+                        installmentSource[0] = 0;
                     }
                     refreshCreditAgreementVisibility.run();
                 }
@@ -15512,17 +15592,32 @@ public final class MainActivity extends Activity {
                             ? ""
                             : endMonth.getText().toString().trim();
                         int count = 0;
-                        String countText =
-                            installmentCount.getText().toString().trim();
-                        if (isInstallment && !countText.isEmpty()) {
-                            count = Integer.parseInt(countText);
-                            if (count < 1 || count > 600)
+                        if (isInstallment) {
+                            if (installmentSource[0] == 1) {
+                                String countText =
+                                    installmentCount.getText().toString().trim();
+                                count = Integer.parseInt(countText);
+                                if (count < 1 || count > 600)
+                                    throw new IllegalArgumentException(
+                                        "Liczba rat musi mieścić się w zakresie 1–600.");
+                                // Koniec jest tylko wyliczonym polem UI.
+                                end = "";
+                            } else if (installmentSource[0] == 2) {
+                                // Liczba rat jest tylko wyliczonym polem UI.
+                                count = 0;
+                                YearMonth startForInstallment = YearMonth.parse(
+                                    startMonth.getText().toString().trim());
+                                YearMonth endForInstallment = YearMonth.parse(end);
+                                long derivedCount = java.time.temporal.ChronoUnit.MONTHS
+                                    .between(startForInstallment,endForInstallment) + 1L;
+                                if (derivedCount < 1 || derivedCount > 600)
+                                    throw new IllegalArgumentException(
+                                        "Miesiąc końca daje nieprawidłową liczbę rat.");
+                            } else {
                                 throw new IllegalArgumentException(
-                                    "Liczba rat musi mieścić się w zakresie 1–600.");
+                                    "Dla rat podaj liczbę rat albo miesiąc końca.");
+                            }
                         }
-                        if (isInstallment && count == 0 && end.isEmpty())
-                            throw new IllegalArgumentException(
-                                "Dla rat podaj liczbę rat albo miesiąc końca.");
 
                         boolean itemOptional =
                             "expense".equals(itemKind) && optional.isChecked();
