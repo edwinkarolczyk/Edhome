@@ -76,6 +76,49 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 7. automatyczna synchronizacja Android ↔ Desktop w obie strony;
 8. migracja z ostatniej 0.6 bez utraty PayCheck, Pojazdów, Magazynu, NFC/QR ani ustawień panelu.
 
+## PayCheck — Budżet miesiąca 1.0 (kontrakt odbioru 25/25)
+
+> Ustalenie Edwina z 07.10.2026. Ta sekcja jest źródłem prawdy dla przebudowy Budżetu miesiąca. Funkcji nie uznawać za ukończoną tylko dlatego, że istnieje podobny ekran lub częściowa logika. Odbiór dopiero po spełnieniu poniższych punktów i testów regresyjnych. Rozwój wyłącznie na `beta`; `main` bez osobnej zgody pozostaje nietknięty.
+
+1. **Miesiące i historia:** osobny ekran Budżetu miesiąca z nawigacją poprzedni/następny/bieżący; historyczny stan ma umożliwiać późniejsze analizy zaległości, nadpłat i zmian planu.
+2. **Jeden bieżący PayCheck + jeden Budżet:** prywatny sejf i prywatny budżet są odłożone z bieżącego przepływu. Nie usuwać danych prywatnych podczas migracji, ale nie dublować logiki w głównym UX.
+3. **Lista bez kafelków:** jeden wydatek = jedna zwarta linia. Kliknięcie rozwija szczegóły w miejscu.
+4. **Jedna pozycja rozwinięta naraz:** otwarcie kolejnej automatycznie zwija poprzednią.
+5. **Statusy:** zapłacone = zielone, niezapłacone = czerwone, częściowo/różnica = żółte. Rodzaj pozycji jako niezależna plakietka: cykliczne, 1×, Rata n/m, ostatnia rata.
+6. **Opcjonalne:** niebieski akcent „Opcjonalne”; brak zakupu nie tworzy zaległości; można przenieść na kolejny miesiąc.
+7. **Sortowanie:** najpierw zaległości, potem bieżące według terminu/planowanej daty zapłaty.
+8. **Wpływy osobno i u góry:** kompaktowa sekcja wpływów, niżej główna lista wydatków.
+9. **Plan ≠ saldo:** plan nie księguje pieniędzy. Dopiero potwierdzona transakcja PayCheck rozlicza pozycję.
+10. **Jedna transakcja → kilka pozycji:** jeden przelew może rozliczyć kilka zobowiązań; EDHOME proponuje rozdzielenie i wymaga potwierdzenia.
+11. **Różnice kwot:** pokazać nadpłatę/niedopłatę i zachować ją jako jawne zdarzenie.
+12. **Niedopłata jako osobna linia w kolejnym miesiącu:** np. „Niedopłata TAURON z IX • 20,00 zł • Zaległe”. Nie doliczać po cichu do bieżącej faktury.
+13. **Historia rozliczeń:** zachować zdarzenia nadpłaty, niedopłaty, spóźnienia, korekty i zamknięcia tak, aby później można było policzyć statystyki per odbiorca/zobowiązanie. Statystyk nie trzeba budować teraz.
+14. **Nadpłata tylko za zgodą:** nadpłata nie pomniejsza następnego miesiąca automatycznie. Przy kolejnym rachunku EDHOME pyta „Masz nadpłatę X — odliczyć?” albo pozwala na ręczną korektę.
+15. **Niezapłacone przechodzi dalej:** jako osobna czerwona zaległość na górze kolejnego miesiąca do czasu zapłaty lub ręcznego zamknięcia.
+16. **Ręczne zamknięcie:** wymaga powodu; zapisać datę, powód i historię. Powody gotowe + własny opis.
+17. **Pozycja cykliczna — zakres zamknięcia:** „tylko tę pozycję”, „zakończ cały cykl”, „rozlicz jako nadpłatę”.
+18. **Zmiana kwoty cyklicznej:** pytanie „tylko ten miesiąc” / „od tego miesiąca na stałe”.
+19. **Raty — liczba lub ostatni miesiąc:** użytkownik podaje jedno; drugie jest automatycznie wyliczone i zablokowane. Nie dopuszczać sprzecznych danych.
+20. **Postęp rat:** „Rata 5/16 • zostało 11”, ostrzeżenie przy końcówce, a w szczegółach: łączna kwota zobowiązania, zapłacono, pozostało.
+21. **Odbiorca ≠ zobowiązanie:** jeden odbiorca może mieć kilka zobowiązań, np. TAURON bieżący + TAURON rata.
+22. **Odbiorcy/szablony:** trwała kartoteka odbiorców, pod nimi zobowiązania; później możliwość uczenia się z potwierdzonych transakcji.
+23. **Faktura ≠ planowana zapłata:** przechowywać osobno termin faktury i planowaną datę zapłaty.
+    - domyślny dzień planowanej zapłaty: 10. dzień miesiąca;
+    - planowana data = wcześniejsza z: 10. dzień miesiąca lub termin faktury;
+    - faktura należy do miesiąca swojego terminu płatności;
+    - faktura z terminem przed 10. pozostaje w tym miesiącu i ma plan zapłaty najpóźniej w terminie;
+    - po przekroczeniu terminu bez zapłaty staje się czerwoną zaległością, nie przenosi się wstecz do poprzedniego miesiąca.
+24. **Przypomnienia:** domyślnie 3 dni przed planowaną zapłatą i w dniu zapłaty; po rozliczeniu wyłączyć dalsze przypomnienia.
+25. **Załącznik:** opcjonalne zdjęcie/PDF faktury ukryte w rozwinięciu pozycji; nie zaśmieca głównej listy.
+
+### Kolejność wdrożenia Budżetu miesiąca
+
+- **P0 — prawidłowe rozliczenia i UX listy:** punkty 2–8, 11–18.
+- **P1 — raty, odbiorcy i faktury:** punkty 19–23.
+- **P1 — przypomnienia i załączniki:** punkty 24–25.
+- **P2 — statystyki:** dopiero po zebraniu poprawnej historii; nie blokują odbioru modelu danych, jeśli wszystkie zdarzenia są zapisywane.
+- **Regresja obowiązkowa:** plan nie zmienia salda, jedna potwierdzona transakcja nie księguje się podwójnie, backup/restore zachowuje historię i załączniki, a stara Beta migruje bez utraty danych.
+
 ## Backlog po stabilizacji — Pojazdy i maszyny
 
 To jest **kierunek do roadmapy, bez wdrażania podczas bieżącej stabilizacji**. Nie tworzyć osobnego modułu „Maszyny”; rozszerzyć istniejący moduł **Pojazdy** tak, aby obsługiwał także sprzęt z licznikiem motogodzin.
