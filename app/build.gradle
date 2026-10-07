@@ -12,10 +12,10 @@ android {
 
     defaultConfig {
         applicationId 'com.edwinkarolczyk.edhome'
-        minSdk 26
+        minSdk 22
         targetSdk 35
-        versionCode 226
-        versionName '0.8.0.34'
+        versionCode 227
+        versionName '0.8.0.35'
         buildConfigField 'boolean', 'DIAGNOSTICS_ENABLED', 'false'
         buildConfigField 'String', 'EDHOME_BETA_FEED_URL', groovy.json.JsonOutput.toJson(betaFeedUrl)
     }
@@ -61,12 +61,15 @@ android {
     buildFeatures { buildConfig true }
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 }
 
 dependencies {
+    // java.time and other modern JDK APIs on Android 5.1 / Fire OS 5.
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     // Offline camera barcode scanning; shared code compiles for both Android flavors.
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     // JourneyApps CaptureManager calls androidx.core.content.ContextCompat at runtime.
