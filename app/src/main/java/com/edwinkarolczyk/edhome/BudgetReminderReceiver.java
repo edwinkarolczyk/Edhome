@@ -56,7 +56,7 @@ public final class BudgetReminderReceiver extends BroadcastReceiver {
 
     static void schedule(Context context) {
         SharedPreferences pref = prefs(context);
-        if (!pref.getBoolean("budget_reminders_enabled",true)) return;
+        boolean enabled = pref.getBoolean("budget_reminders_enabled",true);
         AlarmManager manager = (AlarmManager) context.getSystemService(
             Context.ALARM_SERVICE);
         if (manager == null) return;
@@ -107,7 +107,7 @@ public final class BudgetReminderReceiver extends BroadcastReceiver {
                         PendingIntent pending = alarmIntent(context,item.id,month,
                             lead,PendingIntent.FLAG_UPDATE_CURRENT);
                         manager.cancel(pending);
-                        if (paid) continue;
+                        if (!enabled || paid) continue;
                         LocalDate targetDay = planned.minusDays(lead);
                         if (targetDay.isBefore(now.toLocalDate())) continue;
                         LocalDateTime target = LocalDateTime.of(
