@@ -3,7 +3,6 @@ package com.edwinkarolczyk.edhome;
 import android.Manifest;
 import android.app.AlarmManager;
 import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -51,7 +50,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         if (fingerprint != null)
             intent.putExtra("occurrence", fingerprint);
         return PendingIntent.getBroadcast(context, requestCode(id), intent,
-            flags | PendingIntent.FLAG_IMMUTABLE);
+            flags | LegacyCompat.immutableFlag());
     }
 
     static void cancelTask(Context context, long taskId) {
@@ -103,7 +102,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         PendingIntent pending = taskIntent(context, id,
             PendingIntent.FLAG_UPDATE_CURRENT, occurrence);
         // Inexact delivery: Android may delay it, e.g. Doze or battery saving.
-        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+        LegacyCompat.setAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP,
             epoch(when), pending);
     }
 
@@ -119,7 +118,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
             .setAction(ACTION_REMIND);
         PendingIntent daily = PendingIntent.getBroadcast(context, ALARM_ID,
             intent, PendingIntent.FLAG_UPDATE_CURRENT
-                | PendingIntent.FLAG_IMMUTABLE);
+                | LegacyCompat.immutableFlag());
         manager.cancel(daily);
         SharedPreferences pref = prefs(context);
         java.io.File file = context.getDatabasePath(DATABASE);
@@ -284,16 +283,16 @@ public final class ReminderReceiver extends BroadcastReceiver {
         }
         NotificationManager notifications = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (notifications == null || !notifications.areNotificationsEnabled())
+        if (notifications == null || !LegacyCompat.notificationsEnabled(notifications))
             return;
-        notifications.createNotificationChannel(new NotificationChannel(
-            CHANNEL_ID, "Przypomnienia o czynnościach",
-            NotificationManager.IMPORTANCE_DEFAULT));
+        LegacyCompat.ensureChannel(notifications, CHANNEL_ID,
+            "Przypomnienia o czynnościach", NotificationManager.IMPORTANCE_DEFAULT,
+            null, true, true, false);
         PendingIntent open = PendingIntent.getActivity(context, 0,
             new Intent(context, MainActivity.class).setFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID)
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        Notification.Builder builder = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle(!legacy && singleProjectTask
                 && !singleTaskTitle.isEmpty()
