@@ -14698,7 +14698,7 @@ public final class MainActivity extends Activity {
 
         android.widget.CheckBox optional = new android.widget.CheckBox(this);
         optional.setText("Wydatek opcjonalny • niebieski • można przenieść");
-        optional.setTextColor(DialogContrast.TEXT_PRIMARY);
+        optional.setTextColor(DialogContrast.TEXT);
         form.addView(optional);
 
         TextView rule = text(
@@ -14861,7 +14861,7 @@ public final class MainActivity extends Activity {
                 return;
             }
             String[] labels = new String[items.size()];
-            YearMonth shownMonth=YearMonth.now();
+            YearMonth shownMonth=paycheckBudgetMonth == null ? YearMonth.now() : paycheckBudgetMonth;
             java.util.List<PrivatePaycheckVault.Entry> privateEntries=
                 privateScope
                     ? PrivatePaycheckVault.entries(
