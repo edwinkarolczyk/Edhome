@@ -19800,7 +19800,7 @@ public final class MainActivity extends Activity {
 
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
-        note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego oraz własne obrazy kafelków.");
+        note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego, własne obrazy kafelków oraz zdjęcia/PDF faktur z Budżetu miesiąca.");
         note("Miniatury pozostają w data.json dla zgodności. Po przywróceniu EDHOME odtwarza je z oryginałów, gdy oryginał jest dostępny.");
         note("Starsze zdjęcia dodane przed tą zmianą mają w kopii dotychczasową miniaturę. Utraconej wcześniej pełnej jakości nie da się odtworzyć wstecz.");
         note("Po utworzeniu kopia jest sprawdzana: manifest, rozmiar i SHA-256 każdego pliku oraz ponowny odczyt całego ZIP-u z wybranego miejsca.");
