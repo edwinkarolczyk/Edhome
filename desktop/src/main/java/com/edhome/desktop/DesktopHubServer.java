@@ -161,10 +161,11 @@ final class DesktopHubServer implements AutoCloseable {
                 reply(peer,403,"{\"error\":\"LAN_ONLY\"}",null);
                 return;
             }
-            BufferedReader in=new BufferedReader(new InputStreamReader(
-                peer.getInputStream(),StandardCharsets.UTF_8));
-            String request=in.readLine();
-            if(request==null){return;}
+            InputStream raw=peer.getInputStream();
+            String headerText=readHttpHeaders(raw);
+            if(headerText==null||headerText.isBlank())return;
+            String[] headerLines=headerText.split("\\r\\n");
+            String request=headerLines[0];
             String[] parts=request.split(" ");
             if(parts.length<2){reply(peer,400,"{\"error\":\"BAD_REQUEST\"}",null);return;}
             String method=parts[0].toUpperCase(Locale.ROOT);
@@ -176,10 +177,8 @@ final class DesktopHubServer implements AutoCloseable {
             String userName="";
             String androidVersion="";
             String baseSha="";
-            int headerBytes=request.length();
-            for(String line;(line=in.readLine())!=null&&!line.isEmpty();) {
-                headerBytes+=line.length();
-                if(headerBytes>32768){reply(peer,431,"{\"error\":\"HEADERS_TOO_LARGE\"}",null);return;}
+            for(int i=1;i<headerLines.length;i++) {
+                String line=headerLines[i];
                 int colon=line.indexOf(':');
                 if(colon<=0)continue;
                 String name=line.substring(0,colon).trim().toLowerCase(Locale.ROOT);
@@ -202,7 +201,7 @@ final class DesktopHubServer implements AutoCloseable {
                 reply(peer,413,"{\"error\":\"BODY_TOO_LARGE\"}",null);
                 return;
             }
-            String body=contentLength==0?"":readBody(peer.getInputStream(),contentLength);
+            String body=contentLength==0?"":readBody(raw,contentLength);
             ClientInfo client=new ClientInfo(clean(deviceId,96),clean(userId,96),
                 clean(userName,120),clean(androidVersion,64),
                 remote.getHostAddress(),System.currentTimeMillis());
@@ -373,6 +372,29 @@ final class DesktopHubServer implements AutoCloseable {
             this.table=table==null?"":table;
             this.rowKey=rowKey==null?"":rowKey;
         }
+    }
+
+    private static String readHttpHeaders(InputStream in) throws Exception {
+        ByteArrayOutputStream out=new ByteArrayOutputStream();
+        int state=0;
+        while(true) {
+            int value=in.read();
+            if(value<0) {
+                if(out.size()==0)return null;
+                throw new IOException("Niepełne nagłówki HTTP.");
+            }
+            out.write(value);
+            if(out.size()>32768)
+                throw new IOException("Nagłówki HTTP przekraczają limit.");
+            if(state==0)state=value=='\r'?1:0;
+            else if(state==1)state=value=='\n'?2:(value=='\r'?1:0);
+            else if(state==2)state=value=='\r'?3:0;
+            else if(state==3) {
+                if(value=='\n')break;
+                state=value=='\r'?1:0;
+            }
+        }
+        return out.toString(StandardCharsets.US_ASCII);
     }
 
     private static String readBody(InputStream in,int length) throws Exception {
