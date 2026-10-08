@@ -41,6 +41,9 @@ final class PaycheckBudgetSyncPatch {
         JSONObject settings=merged.getJSONObject("settings");
         int changes=0;
         for(String field:FIELDS) {
+            if(delta.has(field)&&!(delta.opt(field) instanceof JSONArray))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa tablica zmian Budżetu: "+field);
             JSONArray edits=delta.optJSONArray(field);
             if(edits==null)continue;
             JSONArray existing=new JSONArray(settings.getString(field));
@@ -71,12 +74,10 @@ final class PaycheckBudgetSyncPatch {
                         throw new IllegalArgumentException(
                             "Historii Budżetu nie można edytować ani usuwać.");
                     JSONObject archived=findArchived(merged,id);
-                    if(archived!=null&&!same(archived,desired))
-                        throw new IllegalArgumentException(
-                            "Konflikt zdarzenia w archiwum Budżetu.");
-                    if(current!=null&&!same(current,desired))
-                        throw new IllegalArgumentException(
-                            "Konflikt historii Budżetu.");
+                    if(archived!=null&&!same(archived,desired)
+                            ||current!=null&&!same(current,desired))
+                        throw new SyncRecordStore.SyncConflict(
+                            "budget_history",id,"",0L,-1L);
                     if(current==null)rows.put(id,desired);
                 } else {
                     // Ponowienie po utracie odpowiedzi jest bezpieczne.
@@ -111,9 +112,14 @@ final class PaycheckBudgetSyncPatch {
 
         // P0: patch finansowy nie może odtwarzać wszystkich modułów EDHOME.
         // Aktualizujemy wyłącznie Budżet, archiwum historii pozostaje intact.
-        String oldItems=prefs.getString(PaycheckMonthlyBudget.PREF_KEY,"[]");
-        String oldRecipients=prefs.getString(PaycheckRecipientStore.PREF_KEY,"[]");
-        String oldHistory=prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY,"[]");
+        // Pobierz wartości z tego samego snapshotu, którego zawartość
+        // służyła do porównania UUID, nie z późniejszego odczytu preferencji.
+        String oldItems=original.getJSONObject("settings")
+            .getString("paycheckMonthlyBudget");
+        String oldRecipients=original.getJSONObject("settings")
+            .getString("paycheckRecipients");
+        String oldHistory=original.getJSONObject("settings")
+            .getString("paycheckBudgetHistory");
         String updatedItems=settings.getString("paycheckMonthlyBudget");
         String updatedRecipients=settings.getString("paycheckRecipients");
         String updatedHistory=settings.getString("paycheckBudgetHistory");
