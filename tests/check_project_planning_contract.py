@@ -51,7 +51,7 @@ assert "Najpierw ustaw innego użytkownika jako Administratora." in profile
 # Backup i LAN sync dostają wszystkie nowe tabele przez DataBackup.syncDefinitions().
 for table in ("member_shift_hours","member_project_windows","project_task_blockers"):
     assert '{"'+table+'"' in backup, table
-assert "private static final int DB_VERSION = 45;" in backup
+assert "private static final int DB_VERSION = 46;" in backup
 assert "inputVersion < 44" in backup
 assert '"slot".equals(column)' in backup
 assert '"enabled".equals(column)' in backup
