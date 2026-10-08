@@ -15,7 +15,7 @@ assert 'transaction.put("status","pending");' in cost
 for token in ('Do potwierdzenia • bez wpływu na saldo',
               'Potwierdź po sprawdzeniu banku / wyciągu',
               'PaycheckStore.confirm(db.getWritableDatabase()',
-              'Saldo potwierdzone wspólne:',
+              'Saldo potwierdzone:',
               'DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING'):
     assert token in main,token
 for token in ('DB_VERSION = 45;','"created_at", "status"',
