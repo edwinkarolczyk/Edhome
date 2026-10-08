@@ -10,13 +10,13 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.59 / versionCode 251** — kod Beta; [Android CI #1978](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083) oczekuje na ukończenie; poprzedni #1969 PASS |
+| Android Beta | **0.8.0.59 / versionCode 251** — [Android CI #1978 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083), podpisany APK opublikowany |
 | Desktop Beta | **0.7.0.111** — [Desktop CI #269 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080), instalator Windows opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | [run #37770405372 / #1968](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372) — **success**, commit `7680d0f19e29c43cb5de43f5866d27c6b641da86`; nowszy #1969 w toku |
-| Ostatni zweryfikowany CI Desktop | [run #37770627833 / #265](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627833) — **success**, commit `9fd0b378bb3111bc077e6ddaa8d7cbd8c53e04dd` |
+| Ostatni zweryfikowany CI Android | [run #37773023083 / #1978](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083) — **success**, commit `92591fd1374402a43824211f216d774320a8af53` |
+| Ostatni zweryfikowany CI Desktop | [run #37773023080 / #269](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080) — **success**, commit `92591fd1374402a43824211f216d774320a8af53` |
 | Bieżący etap | **PayCheck/Budżet — etap 5C w realizacji; test fizyczny nadal nieodebrany.** Projekty P0/P1 pozostają w planie, bez nowych zmian w tej serii. |
-| Następny krok | Sprawdzić Android CI #1978 / Desktop CI #269, naprawić ewentualne błędy kompilacji i uruchomić odbiór A1–A12 na urządzeniach, w tym backup ZIP → restore; 5C nie uznawać za odebrany bez tych testów. |
+| Następny krok | Przeprowadzić fizyczny odbiór A1–A16: telefon ↔ PC, konflikt tej samej wpłaty, idempotencja po utracie ACK, backup ZIP → restore; po akceptacji możliwy etap 6. Bez odbioru 5C nadal niezamknięty. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -58,9 +58,11 @@
 - **Desktop:** `DesktopBudgetOutboundDelta` wysyła edytowane pozycje/odbiorców/zdarzenia jako `budgetDelta` bez dołączania całego snapshotu. Odmawia przy zmianach pozabudżetowych (pozostaje CAS); po ACK pobiera rzeczywisty stan z Androida, nie ufa lokalnej kopii metadanych.
 - **Android:** `PaycheckBudgetSyncPatch` waliduje każdy UUID, porównuje wersję poprzednią i docelową, odrzuca konflikty, akceptuje identyczne powtórzenia po zerwanym LAN. Buduje tabele 5A w odizolowanym SQLite i stosuje wynik przez `DataBackup.restoreJson` z istniejącym rollbackiem oraz ochroną historii.
 - **Ograniczenia bezpieczeństwa:** paczka mieszana (Budżet + dowolne inne operacje) nie jest wykonywana po części; nadal wymaga oddzielnego przesłania albo kontrolowanego pełnego snapshotu. Nawet po zielonym CI potrzebny jest odbiór na rzeczywistych urządzeniach.
-- **Testy:** `DesktopBudgetOutboundDeltaTest` oraz `tests/check_paycheck_budget_stage5c_reverse_patch.py` uruchamiane w GitHub Actions; Android #1978 w toku i [Desktop #269] PASS; build [Android #1978](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083) i [Desktop #269](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080).
+- **Testy:** `DesktopBudgetOutboundDeltaTest` oraz `tests/check_paycheck_budget_stage5c_reverse_patch.py` uruchamiane w GitHub Actions; Android #1978 w toku i [Desktop #269] PASS; build [Android #1978](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083) i [Desktop #269](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080) — obie zakończone sukcesem.
 - **Ujawniony błąd CI (naprawiony w kodzie, ponowna kontrola trwa):** Android #1973 — `JSONObject.valueToString(Object)` nie istnieje w Android API; zastąpiono kanonicznym zapisem wartości obsługiwanym przez Androida.
 - **Bieżące wersje robocze:** Android 0.8.0.59/251, Desktop 0.7.0.111. Zmiany w `beta`; `main` nietknięty.
+
+**Odbiór 5C (stan końcowy tej serii):** Android 0.8.0.59/251 i Desktop 0.7.0.111 przeszły CI oraz mają opublikowane paczki Beta. Implementacja przyrostowych zmian Budżetu w obie strony jest gotowa do testów. **Nie zaliczono jeszcze testów A1–A16 na fizycznym telefonie i PC**; do tego czasu 5C pozostaje *kodowo wdrożony, lecz nieodebrany*. Nie wdrażać Stable bez akceptacji.
 
 ### Zadania do wykonania w etapie 5C
 
