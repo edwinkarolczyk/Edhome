@@ -1101,6 +1101,7 @@ public final class EdhomeDesktop extends JFrame {
             showDesktopProjectBatchEdit(projectId,new ArrayList<>(selectedTasks)));
 
         JScrollPane scroll = new JScrollPane(list);
+        scroll.setName("edhome-project-tasks");
         scroll.setBorder(null);
         scroll.getViewport().setBackground(APP_BG);
         scroll.getVerticalScrollBar().setUnitIncrement(18);
