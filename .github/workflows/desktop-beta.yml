@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.107"
+  DESKTOP_VERSION: "0.7.0.108"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
