@@ -6,6 +6,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.time.YearMonth;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +29,8 @@ final class PaycheckBudgetHistoryStore {
         String type;
         long amountGrosz;
         String note;
+        String operationId = "";
+        String transactionDate = "";
         long createdAt;
     }
 
@@ -38,21 +41,47 @@ final class PaycheckBudgetHistoryStore {
             throws Exception {
         if (prefs == null || item == null || type == null || type.isBlank())
             throw new IllegalArgumentException("Nieprawidłowe zdarzenie budżetu.");
-        List<Event> events = load(prefs);
+        Event event = make(item,month,type,amountGrosz,note,"",null);
+        SharedPreferences.Editor editor = prefs.edit();
+        stage(prefs,editor,java.util.Collections.singletonList(event));
+        if (!editor.commit())
+            throw new IllegalStateException("Nie zapisano historii Budżetu miesiąca.");
+    }
+
+    /** Operacja bankowa i data księgowania są jawne; data potwierdzenia jest osobna. */
+    static Event make(PaycheckMonthlyBudget.Item item, YearMonth month,
+            String type, long amountGrosz, String note, String operationId,
+            LocalDate transactionDate) {
+        if (item == null || month == null)
+            throw new IllegalArgumentException("Brak pozycji lub miesiąca historii.");
         Event event = new Event();
         event.id = UUID.randomUUID().toString();
         event.itemId = item.id;
         event.recipientId = item.recipientId == null ? "" : item.recipientId;
-        event.month = (month == null ? YearMonth.now() : month).toString();
+        event.month = month.toString();
         event.type = type.trim();
         event.amountGrosz = amountGrosz;
         event.note = note == null ? "" : note.trim();
+        event.operationId = operationId == null ? "" : operationId;
+        event.transactionDate = transactionDate == null
+            ? "" : transactionDate.toString();
         event.createdAt = System.currentTimeMillis();
         validate(event);
-        events.add(event);
+        return event;
+    }
+
+    /** Służy do atomowego zapisania planu razem z całą paczką zdarzeń. */
+    static void stage(SharedPreferences prefs, SharedPreferences.Editor editor,
+            List<Event> additions) throws Exception {
+        if (additions == null || additions.isEmpty()) return;
+        List<Event> events = load(prefs);
+        for (Event event : additions) {
+            validate(event);
+            events.add(event);
+        }
+        // Docelowa migracja dziennika bez limitu do SQLite: etap 5.
         while (events.size() > MAX_EVENTS) events.remove(0);
-        if (!prefs.edit().putString(PREF_KEY,serialize(events)).commit())
-            throw new IllegalStateException("Nie zapisano historii Budżetu miesiąca.");
+        editor.putString(PREF_KEY,serialize(events));
     }
 
     static List<Event> load(SharedPreferences prefs) throws Exception {
@@ -90,6 +119,8 @@ final class PaycheckBudgetHistoryStore {
             event.type = json.getString("type");
             event.amountGrosz = json.optLong("amountGrosz",0L);
             event.note = json.optString("note","");
+            event.operationId = json.optString("operationId","");
+            event.transactionDate = json.optString("transactionDate","");
             event.createdAt = json.getLong("createdAt");
             validate(event);
             if (!ids.add(event.id))
@@ -111,6 +142,8 @@ final class PaycheckBudgetHistoryStore {
             json.put("type",event.type);
             json.put("amountGrosz",event.amountGrosz);
             json.put("note",event.note);
+            json.put("operationId",event.operationId);
+            json.put("transactionDate",event.transactionDate);
             json.put("createdAt",event.createdAt);
             array.put(json);
         }
@@ -126,10 +159,20 @@ final class PaycheckBudgetHistoryStore {
                     && !event.recipientId.matches("[0-9a-fA-F-]{36}"))
                 || event.type == null || !event.type.matches("[A-Z0-9_]{2,48}")
                 || event.note == null || event.note.length() > 240
+                || event.operationId == null
+                || (!event.operationId.isBlank()
+                    && !event.operationId.matches("[0-9a-fA-F-]{36}"))
+                || event.transactionDate == null
                 || event.createdAt <= 0L) {
             throw new IllegalArgumentException("Nieprawidłowe zdarzenie budżetu.");
         }
-        try { YearMonth.parse(event.month); }
+        try {
+            YearMonth.parse(event.month);
+            if (!event.transactionDate.isBlank()
+                    && !YearMonth.from(LocalDate.parse(event.transactionDate))
+                        .equals(YearMonth.parse(event.month)))
+                throw new IllegalArgumentException("Niespójny miesiąc operacji.");
+        }
         catch (Exception invalid) {
             throw new IllegalArgumentException("Nieprawidłowy miesiąc historii budżetu.");
         }
