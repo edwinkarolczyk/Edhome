@@ -196,11 +196,16 @@ final class DesktopHubSync {
                     throw new IllegalStateException("Brak zapisanej zmiany konfliktowej.");
                 String host=resolveHost(app,prefs);
                 if(host==null)throw new IllegalStateException("Nie znaleziono Desktopu.");
+                String expectedLocal;
+                try(MainActivity.LocalDb helper=new MainActivity.LocalDb(app)) {
+                    expectedLocal=DataBackup.exportJson(
+                        helper.getWritableDatabase(),prefs);
+                }
                 HttpResult result=request(app,prefs,host,"POST",
                     "/resolve-phone",patch,"application/json; charset=utf-8");
                 if(result.code!=200)throw new IllegalStateException(
                     "Desktop odpowiedział HTTP "+result.code+".");
-                applyServerSnapshot(app,prefs,result.body,result.sha256);
+                applyServerSnapshot(app,prefs,result.body,result.sha256,expectedLocal);
                 clearConflict(app,prefs);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • konflikt rozwiązany wersją telefonu").apply();
@@ -246,7 +251,7 @@ final class DesktopHubSync {
                     "/bootstrap",current,"application/json; charset=utf-8");
                 if(boot.code!=200)
                     throw new IllegalStateException("Bootstrap Desktop HTTP "+boot.code+".");
-                applyServerSnapshot(context,prefs,boot.body,boot.sha256);
+                applyServerSnapshot(context,prefs,boot.body,boot.sha256,current);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • pierwszy backup i synchronizacja OK").apply();
                 DiagnosticLog.event("HUB_BOOTSTRAP_OK");
@@ -259,7 +264,7 @@ final class DesktopHubSync {
                 HttpResult server=request(context,prefs,host,"GET","/snapshot",null,null);
                 if(server.code!=200)
                     throw new IllegalStateException("Desktop snapshot HTTP "+server.code+".");
-                applyServerSnapshot(context,prefs,server.body,server.sha256);
+                applyServerSnapshot(context,prefs,server.body,server.sha256,current);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • pobrano stan Desktopu").apply();
                 DiagnosticLog.event("HUB_BASELINE_CREATED");
@@ -281,7 +286,7 @@ final class DesktopHubSync {
                 }
                 if(written.code!=200)
                     throw new IllegalStateException("Desktop zapis HTTP "+written.code+".");
-                applyServerSnapshot(context,prefs,written.body,written.sha256);
+                applyServerSnapshot(context,prefs,written.body,written.sha256,current);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • zsynchronizowano pełny stan").apply();
                 return;
@@ -297,7 +302,7 @@ final class DesktopHubSync {
                 }
                 if(patched.code!=200)
                     throw new IllegalStateException("Desktop patch HTTP "+patched.code+".");
-                applyServerSnapshot(context,prefs,patched.body,patched.sha256);
+                applyServerSnapshot(context,prefs,patched.body,patched.sha256,current);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • wysłano "+plan.operations
                         +(plan.operations==1?" zmianę":" zmiany")).apply();
@@ -310,7 +315,7 @@ final class DesktopHubSync {
                 HttpResult server=request(context,prefs,host,"GET","/snapshot",null,null);
                 if(server.code!=200)
                     throw new IllegalStateException("Desktop snapshot HTTP "+server.code+".");
-                applyServerSnapshot(context,prefs,server.body,server.sha256);
+                applyServerSnapshot(context,prefs,server.body,server.sha256,current);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • pobrano zmiany z Desktopu").apply();
                 DiagnosticLog.event("HUB_PULL_OK");
@@ -512,12 +517,29 @@ final class DesktopHubSync {
 
     private static void applyServerSnapshot(Context context,SharedPreferences prefs,
             String server,String suppliedSha) throws Exception {
+        applyServerSnapshot(context,prefs,server,suppliedSha,null);
+    }
+
+    /** Odmowa podmiany, jeżeli użytkownik edytował dane podczas transferu LAN. */
+    private static void applyServerSnapshot(Context context,SharedPreferences prefs,
+            String server,String suppliedSha,String expectedLocal) throws Exception {
         JSONObject parsed=new JSONObject(server);
         String current;
         try(MainActivity.LocalDb helper=new MainActivity.LocalDb(context)) {
             SQLiteDatabase database=helper.getWritableDatabase();
             SyncRecordStore.ensureAll(database);
             current=DataBackup.exportJson(database,prefs);
+            if(expectedLocal!=null) {
+                JSONObject expected=new JSONObject(expectedLocal);
+                JSONObject actual=new JSONObject(current);
+                for(String section:new String[]{"settings","tables","syncRecords"}) {
+                    if(!canonical(expected.opt(section)).equals(
+                            canonical(actual.opt(section))))
+                        throw new IllegalStateException(
+                            "Dane telefonu zmieniły się podczas synchronizacji; "
+                            +"nie nadpisano nowych zmian ("+section+").");
+                }
+            }
             if(!canonical(new JSONObject(current)).equals(canonical(parsed))) {
                 DataBackup.restoreJson(database,prefs,server);
                 ReminderReceiver.schedule(context);
