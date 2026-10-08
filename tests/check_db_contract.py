@@ -131,7 +131,13 @@ planning44 = statements(section(planning_store, "static void create(SQLiteDataba
                                 "private static void requireMember").replace(
                                     "db.execSQL(", "database.execSQL("))
 step44 = planning44.copy()
-step45 = statements(section(upgrade, "if(oldVersion < 45)", "if(newVersion >= 36)"))
+step45 = statements(section(upgrade, "if(oldVersion < 45)", "if(oldVersion < 46)"))
+budget46 = [
+    "CREATE TABLE IF NOT EXISTS " + table + " (id INTEGER PRIMARY KEY, "
+    "entity_key TEXT NOT NULL UNIQUE, payload TEXT NOT NULL)"
+    for table in ("budget_items", "budget_occurrences", "budget_recipients",
+                  "budget_credits", "budget_history")
+]
 step40 = statements(section(upgrade, "if(oldVersion < 40)", "if(oldVersion < 41)")) + project40
 step41 = statements(section(upgrade, "if(oldVersion < 41)", "if(oldVersion < 42)")) + project41
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
@@ -182,12 +188,12 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 45, "Database version and backup format differ"
+assert version == backup_version == 46, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
-execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42 + project43 + planning44)
+execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42 + project43 + planning44 + budget46)
 expected = schema(fresh)
-assert len(expected) == 50 and len(user42) == 1 and len(project40) == 6 and len(project41) == 2 and len(project43) == 3 and len(planning44) == 6 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 5 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
+assert len(expected) == 55 and len(user42) == 1 and len(project40) == 6 and len(project41) == 2 and len(project43) == 3 and len(planning44) == 6 and len(garden37) == 11 and len(garden38) == 7 and len(sync36) == 4 and len(bank34) == 2 and len(nfc35) == 2 and len(documents33) == 2 and len(costs29) == 2 and len(step30) == 1 and len(step31) == 3 and len(step32) == 3 and len(vehicles24) == 3 and len(tyres25) == 3 and len(policies27) == 3 and len(step27) == 1 and len(step28) == 2 and len(step23) == 3 and len(prices22) == 2 and len(goals21) == 3 and len(paycheck20) == 1 and len(storage19) == 5 and len(receipts18) == 1 and len(pantry14) == 4 and len(pantry15) == 1 and len(step16) == 1 and len(pantry17) == 1 and len(legacy17) == 1, "Unexpected number of tables"
 for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -275,6 +281,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step43)  # v42 to v43, sesje pracy w Projektach
     execute(db, step44)  # v43 to v44, dostępność i wymagania Projektów
     execute(db, step45)  # v44 to v45, trwała kolejność czynności Projektów
+    execute(db, budget46)  # v45 to v46, archiwum i tabele Budżetu
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
