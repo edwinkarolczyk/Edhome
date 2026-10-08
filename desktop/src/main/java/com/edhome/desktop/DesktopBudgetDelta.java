@@ -73,11 +73,15 @@ final class DesktopBudgetDelta {
                         // Powtórne otrzymanie identycznego zdarzenia nie księguje go drugi raz.
                     } else rows.put(id,incoming.deepCopy());
                 } else {
-                    if(!same(actual,expected))
-                        throw conflict(name,id,
-                            "Ta pozycja została zmieniona na innym urządzeniu.");
-                    if(incoming==null)rows.remove(id);
-                    else rows.put(id,incoming.deepCopy());
+                    // Powtórzenie po utracie odpowiedzi HTTP nie może
+                    // ponownie księgować ani fałszywie zgłosić konfliktu.
+                    if(!same(actual,incoming)) {
+                        if(!same(actual,expected))
+                            throw conflict(name,id,
+                                "Ta pozycja została zmieniona na innym urządzeniu.");
+                        if(incoming==null)rows.remove(id);
+                        else rows.put(id,incoming.deepCopy());
+                    }
                 }
                 if(++total>500)
                     throw conflict(name,id,"Za dużo zmian w jednej paczce.");
