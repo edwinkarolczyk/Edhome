@@ -94,9 +94,11 @@ final class PaycheckBudgetSqliteStore {
                     new String[]{"entity_key","payload"},"id=?",
                     new String[]{Long.toString(id)},null,null,null)) {
                 if(current.moveToFirst()) {
+                    // JSONObject.toString() nie gwarantuje tej samej
+                    // kolejności pól po eksporcie i imporcie między urządzeniami.
+                    // Identyczny UUID + te same wartości = bezpieczny retry.
                     if(!key.equals(current.getString(0))
-                            || !json.toString().equals(
-                                new JSONObject(current.getString(1)).toString()))
+                            || !sameJson(json,new JSONObject(current.getString(1))))
                         throw new IllegalStateException(
                             "Historia zawiera sprzeczne wersje zdarzenia.");
                     continue;
@@ -104,6 +106,38 @@ final class PaycheckBudgetSqliteStore {
             }
             upsert(db,"budget_history",key,json);
         }
+    }
+
+    /** Porównanie semantyczne JSON: klucze obiektów nie mają kolejności. */
+    static boolean sameJson(Object a,Object b) throws Exception {
+        if(a==b)return true;
+        if(a==null||b==null)return false;
+        if(a==JSONObject.NULL||b==JSONObject.NULL)
+            return a==JSONObject.NULL&&b==JSONObject.NULL;
+        if(a instanceof JSONObject&&b instanceof JSONObject) {
+            JSONObject left=(JSONObject)a,right=(JSONObject)b;
+            if(left.length()!=right.length())return false;
+            for(java.util.Iterator<String> it=left.keys();it.hasNext();) {
+                String key=it.next();
+                if(!right.has(key)||!sameJson(left.get(key),right.get(key)))
+                    return false;
+            }
+            return true;
+        }
+        if(a instanceof JSONArray&&b instanceof JSONArray) {
+            JSONArray left=(JSONArray)a,right=(JSONArray)b;
+            if(left.length()!=right.length())return false;
+            for(int i=0;i<left.length();i++)
+                if(!sameJson(left.get(i),right.get(i)))return false;
+            return true;
+        }
+        if(a instanceof Number&&b instanceof Number) {
+            try {
+                return new java.math.BigDecimal(a.toString()).compareTo(
+                    new java.math.BigDecimal(b.toString()))==0;
+            } catch(NumberFormatException invalid) {return false;}
+        }
+        return a.getClass().equals(b.getClass())&&a.equals(b);
     }
 
     /** Zapisy z aplikacji są archiwizowane zanim ulegnie skróceniu cache. */
