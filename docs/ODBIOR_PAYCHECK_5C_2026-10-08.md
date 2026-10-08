@@ -6,8 +6,8 @@
 
 ## Wersje do testu
 
-- Android Beta **0.8.0.58 / versionCode 250** (CI #1969 po ostatniej poprawce bootstrapu).
-- Desktop Beta **0.7.0.110** (CI #265 po ostatniej poprawce bootstrapu).
+- Android Beta **0.8.0.59 / versionCode 251** (nowa paczka delta Desktop→Android, weryfikacja CI #1978).
+- Desktop Beta **0.7.0.111** (weryfikacja CI #269).
 - GitHub `beta`; `main`/Stable niezmieniony.
 
 ## Scenariusze odbioru
@@ -27,10 +27,19 @@
 | A11 | Eksport ZIP → odtworzenie na testowej bazie → ponowna synchronizacja | Te same UUID, liczby pozycji, historię, zaległości, wpłaty i nadpłaty | ☐ |
 | A12 | Ręczny konflikt „Desktop wygrywa” | Kopia przed konfliktem zapisana; historia nie ulega bezpowrotnej utracie | ☐ |
 
+## Dodatkowe próby po uruchomieniu pełnej synchronizacji w obie strony
+
+| ID | Działanie | Warunek zaliczenia | Wynik |
+|---|---|---|---|
+| A13 | Zmień kwotę rachunku na PC i wyślij tylko zmianę do Androida (tryb klienta PC, nie tylko Hub) | Działające `budgetDelta`, nie pełne nadpisanie stanu, odczyt po ACK zawiera zaktualizowane SQL | ☐ |
+| A14 | Wyślij ten sam patch PC→Android drugi raz po symulacji utraconego ACK | Ten sam wynik, jeden wpis historii, te same UUID, brak podwójnej alokacji | ☐ |
+| A15 | Telefon zmienia rachunek offline, PC próbuje wysłać starszą zmianę na ten sam UUID | HTTP 409, dane telefonu bez zmian, konflikt jawnie zapisany na PC | ☐ |
+| A16 | PC wysyła jednocześnie Budżet i niepowiązaną zmianę magazynową | Paczka nie wykonuje się częściowo; każda zmiana wymaga kontrolowanego osobnego przesłania | ☐ |
+
 ## Kryteria zakończenia
 
 1. Zielony CI Android i Desktop dla **bieżącego kodu** oraz poprawne podpisy/instalatory.
-2. Testy A1–A12 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
+2. Testy A1–A16 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
 3. Porównanie sumy potwierdzonych transakcji, rozdzielonych kwot, nadpłat i sald przed/po synchronizacji — **różnica 0 gr**, pomijając jawnie zatwierdzone korekty.
 4. Kopia ZIP i testowy restore zweryfikowane. W razie awarii wstrzymać wydanie Stable, zachować eksport i diagnostykę z obu urządzeń.
 5. Potwierdzenie użytkownika. Dopiero wtedy 5C = odebrany i można rozpocząć 6 (ergonomia i kontrola 25/25).
