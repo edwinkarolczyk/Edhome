@@ -772,6 +772,50 @@ final class PaycheckMonthlyBudget {
         return total;
     }
 
+    /**
+     * Weryfikacja nadpłat otrzymanych z innego urządzenia.
+     * Zabezpiecza przed dwukrotnym odliczeniem jednego źródłowego miesiąca,
+     * także gdy docelowe miesiące są różne.
+     */
+    static void assertCreditConservation(SQLiteDatabase db,String serialized)
+            throws Exception {
+        for(Item item:parseSerialized(serialized)) {
+            if(item.creditApplicationsGrosz.isEmpty())continue;
+            if(!"expense".equals(item.kind))
+                throw new IllegalArgumentException(
+                    "Wpływ nie może odliczać nadpłaty zobowiązania.");
+            Map<YearMonth,Long> usedSources=new LinkedHashMap<>();
+            Map<YearMonth,Long> usedTargets=new LinkedHashMap<>();
+            for(Map.Entry<String,Long> application
+                    :item.creditApplicationsGrosz.entrySet()) {
+                String[] months=application.getKey().split("\\|",-1);
+                if(months.length!=2)
+                    throw new IllegalArgumentException(
+                        "Błędny miesiąc odliczenia nadpłaty.");
+                YearMonth from=YearMonth.parse(months[0]);
+                YearMonth to=YearMonth.parse(months[1]);
+                if(!from.isBefore(to)||application.getValue()==null
+                        ||application.getValue()<=0L)
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowa kolejność lub kwota odliczenia nadpłaty.");
+                usedSources.put(from,Math.addExact(
+                    usedSources.getOrDefault(from,0L),application.getValue()));
+                usedTargets.put(to,Math.addExact(
+                    usedTargets.getOrDefault(to,0L),application.getValue()));
+            }
+            for(Map.Entry<YearMonth,Long> source:usedSources.entrySet()) {
+                YearMonth month=source.getKey();
+                PaycheckBudgetCreditMath.requireSourceAvailable(
+                    sharedMatchedActual(db,item,month),
+                    sharedSplitSurplus(db,item,month),
+                    plannedAmount(item,month),source.getValue());
+            }
+            for(Map.Entry<YearMonth,Long> target:usedTargets.entrySet())
+                PaycheckBudgetCreditMath.requireTargetWithinPlan(
+                    plannedAmount(item,target.getKey()),target.getValue());
+        }
+    }
+
     static void applyCredit(SharedPreferences prefs, SQLiteDatabase db,
             String itemId, YearMonth sourceMonth, YearMonth targetMonth,
             long amountGrosz) throws Exception {
