@@ -10,11 +10,11 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.58 / versionCode 250** — kod na `beta`, [build Android #1969](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627881) uruchomiony; wynik końcowy niepotwierdzony |
-| Desktop Beta | **0.7.0.110** — kod, Gradle i workflow zgodne na `beta`; [build Desktop #265](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627833) uruchomiony, wynik końcowy niepotwierdzony |
+| Android Beta | **0.8.0.58 / versionCode 250** — podpisany APK opublikowany, [Android CI #1968: success](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372); końcowy build po ostatniej poprawce #1969 jeszcze w toku |
+| Desktop Beta | **0.7.0.110** — kod, Gradle i workflow zgodne; [Desktop CI #265: success](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627833), instalator Windows opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | [run #37764090792](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090792) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
-| Ostatni zweryfikowany CI Desktop | [run #37764090766](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090766) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
+| Ostatni zweryfikowany CI Android | [run #37770405372 / #1968](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372) — **success**, commit `7680d0f19e29c43cb5de43f5866d27c6b641da86`; nowszy #1969 w toku |
+| Ostatni zweryfikowany CI Desktop | [run #37770627833 / #265](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627833) — **success**, commit `9fd0b378bb3111bc077e6ddaa8d7cbd8c53e04dd` |
 | Bieżący etap | **PayCheck/Budżet — etap 5C w realizacji; test fizyczny nadal nieodebrany.** Projekty P0/P1 pozostają w planie, bez nowych zmian w tej serii. |
 | Następny krok | Zweryfikować buildy Android #1969 i Desktop #265, wykonać test Android ↔ PC z dwoma niezależnymi zmianami offline, konfliktem tej samej płatności, backup ZIP→restore; dopiero potem rozważyć etap 6. Projekty P0 nadal oczekują. |
 
