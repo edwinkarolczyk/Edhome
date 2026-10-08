@@ -10,13 +10,13 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.58 / versionCode 250** — kod na `beta`, [build Android #1968](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372) uruchomiony; wynik końcowy niepotwierdzony |
-| Desktop Beta | **0.7.0.110** — kod, Gradle i workflow zgodne na `beta`; [build Desktop #264](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405583) uruchomiony, wynik końcowy niepotwierdzony |
+| Android Beta | **0.8.0.58 / versionCode 250** — kod na `beta`, [build Android #1969](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627881) uruchomiony; wynik końcowy niepotwierdzony |
+| Desktop Beta | **0.7.0.110** — kod, Gradle i workflow zgodne na `beta`; [build Desktop #265](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627833) uruchomiony, wynik końcowy niepotwierdzony |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37764090792](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090792) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
 | Ostatni zweryfikowany CI Desktop | [run #37764090766](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090766) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
 | Bieżący etap | **PayCheck/Budżet — etap 5C w realizacji; test fizyczny nadal nieodebrany.** Projekty P0/P1 pozostają w planie, bez nowych zmian w tej serii. |
-| Następny krok | Zweryfikować buildy Android #1968 i Desktop #264, wykonać test Android ↔ PC z dwoma niezależnymi zmianami offline, konfliktem tej samej płatności, backup ZIP→restore; dopiero potem rozważyć etap 6. Projekty P0 nadal oczekują. |
+| Następny krok | Zweryfikować buildy Android #1969 i Desktop #265, wykonać test Android ↔ PC z dwoma niezależnymi zmianami offline, konfliktem tej samej płatności, backup ZIP→restore; dopiero potem rozważyć etap 6. Projekty P0 nadal oczekują. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -64,6 +64,8 @@
 7. Uruchomić testy kontraktowe, regresję CI, następnie przygotować scenariusz odbioru Android ↔ Desktop na fizycznych urządzeniach (offline, restart, konflikt, ponowne połączenie, restore).
 
 **Nie wolno zamykać 5C wyłącznie po przejściu CI.** Wymagane są wyniki testów użytkownika na urządzeniach i jednoznaczne sprawdzenie spójności danych.
+
+**Karta odbioru 5C:** [ODBIOR_PAYCHECK_5C_2026-10-08.md](ODBIOR_PAYCHECK_5C_2026-10-08.md) — 12 scenariuszy A1–A12, 0 gr różnicy po synchronizacji, test kopii ZIP i konfliktu offline.
 
 ## Aktywny temat 2: Projekty — stabilizacja P0 (PRIORYTET NASTĘPNYCH PRAC)
 
@@ -143,7 +145,7 @@
 
 | 2026-10-08 | Projekty — zapisano plan P0-01–P0-06, P1-01–P1-08 oraz 7 scenariuszy odbioru, **bez modyfikacji kodu** | [Audyt](AUDYT_PROJEKTY_2026-10-08.md); start od P0-01 po poleceniu użytkownika; PayCheck 5C zachowany. |
 
-| 2026-10-08 | Budżet 5C: per-ID delta, atomowe konflikty, kontrola podwójnych płatności, sidecar i local CAS | [Android #1968](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372), [Desktop #264](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405583) — weryfikacja w toku; test fizyczny nadal oczekuje. |
+| 2026-10-08 | Budżet 5C: per-ID delta, atomowe konflikty, kontrola podwójnych płatności, sidecar i local CAS | [Android #1969](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627881), [Desktop #265](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770627833) — weryfikacja w toku; test fizyczny nadal oczekuje. |
 
 ## Zasady aktualizacji tego pliku przy każdym następnym etapie
 
