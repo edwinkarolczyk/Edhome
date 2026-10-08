@@ -6,8 +6,8 @@
 
 ## Wersje do testu
 
-- Android Beta **0.8.0.61 / versionCode 253** — poprawka P0 zakresu zapisu i walidacji podwójnych wpłat (CI jeszcze w weryfikacji); **nie testować na jedynej kopii danych**.
-- Desktop Beta **0.7.0.111** — CI #269 PASS.
+- Android Beta **0.8.0.62 / versionCode 254** — ponowne QR i konflikt pierwszego połączenia (build #1994 w weryfikacji); **nie testować na jedynej kopii danych**.
+- Desktop Beta **0.7.0.112** — zapis pełnej kopii przed zastąpieniem snapshotu (build #273 w weryfikacji).
 - GitHub `beta`; `main`/Stable niezmieniony.
 
 ## Scenariusze odbioru
@@ -36,11 +36,12 @@
 | A15 | Telefon zmienia rachunek offline, PC próbuje wysłać starszą zmianę na ten sam UUID | HTTP 409, dane telefonu bez zmian, konflikt jawnie zapisany na PC | ☐ |
 | A16 | PC wysyła jednocześnie Budżet i niepowiązaną zmianę magazynową | Paczka nie wykonuje się częściowo; każda zmiana wymaga kontrolowanego osobnego przesłania | ☐ |
 | A17 | Telefon zapisuje czynność Projektu i stan Magazynu, następnie PC zmienia tylko kwotę rachunku | Zmienia się tylko Budżet; Projekt, Magazyn i inne tabele mają identyczne rekordy oraz historię; brak pełnego restore | ☐ |
+| A18 | Ponownie zeskanuj QR tego samego Desktopu, a następnie na kopii testowej QR innego PC | Ten sam PC zachowuje wspólną bazę i lokalne dane; inny PC pyta o konflikt przed zamianą danych, wybór Telefon robi kopię PC, wybór Desktop robi ZIP telefonu | ☐ |
 
 ## Kryteria zakończenia
 
 1. Zielony CI Android i Desktop dla **bieżącego kodu** oraz poprawne podpisy/instalatory.
-2. Testy A1–A17 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
+2. Testy A1–A18 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
 3. Porównanie sumy potwierdzonych transakcji, rozdzielonych kwot, nadpłat i sald przed/po synchronizacji — **różnica 0 gr**, pomijając jawnie zatwierdzone korekty.
 4. Kopia ZIP i testowy restore zweryfikowane. W razie awarii wstrzymać wydanie Stable, zachować eksport i diagnostykę z obu urządzeń.
 5. Potwierdzenie użytkownika. Dopiero wtedy 5C = odebrany i można rozpocząć 6 (ergonomia i kontrola 25/25).
@@ -49,5 +50,5 @@
 
 - Android → Desktop Hub: zmiany ustawień Budżetu są wysyłane per UUID; Desktop → Android wciąż pobiera snapshot z kontrolą lokalnych zmian, nie pełne per-UUID pobieranie.
 - Edycja wpłat i nadpłat z poziomu PC nie jest dostępna; synchronizowane są istniejące operacje Androida.
-- Wersja Android 0.8.0.59 miała nadmierny zakres przywracania danych podczas odbioru budżetowego patcha; do testu A17 wymagane jest minimum **0.8.0.61 / 253** po zielonym CI. Konflikty finansowe mogą wymagać ręcznego rozstrzygnięcia.
+- Wersja Android 0.8.0.59 miała nadmierny zakres przywracania danych podczas odbioru budżetowego patcha; do testu A17 wymagane jest minimum **0.8.0.62 / 254** po zielonym CI. Konflikty finansowe mogą wymagać ręcznego rozstrzygnięcia.
 - Sukces CI nie zastępuje testów fizycznych; nie oznaczać etapu ani Budżetu 25/25 jako ukończonego przed odbiorem.
