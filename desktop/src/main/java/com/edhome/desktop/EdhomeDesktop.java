@@ -2792,7 +2792,18 @@ public final class EdhomeDesktop extends JFrame {
                 && snapshot.get("settings").isJsonObject()
                 ?snapshot.getAsJsonObject("settings"):null;
             if (DesktopBudgetMirror.hasSharedBudget(syncedSettings))
-                DesktopBudgetMirror.show(this,syncedSettings);
+                DesktopBudgetMirror.showEditable(this,snapshot,edited->{
+                    JsonObject before=snapshot;
+                    try {
+                        snapshot=edited;
+                        markDirty();
+                        DesktopDiagnosticLog.event("BUDGET_DESKTOP_EDIT_SAVED");
+                    } catch(Exception invalid) {
+                        snapshot=before;
+                        throw new IllegalStateException(
+                            "Nie zapisano zmiany Budżetu.",invalid);
+                    }
+                });
             else
                 DesktopBudgetPlanner.show(this, table("paycheck_transactions"));
         });
