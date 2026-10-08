@@ -14169,8 +14169,7 @@ public final class MainActivity extends Activity {
                 PaycheckMonthlyBudget.load(prefs);
 
             final PaycheckMonthlyBudget.Item candidate =
-                PaycheckMonthlyBudget.suggest(items,month,
-                    kind,category,txAmount);
+                suggestSharedBudgetItem(items,month,kind,category,txAmount);
             final java.util.List<PaycheckMonthlyBudget.Item> split =
                 budgetSplitItems(items,month,kind,txAmount);
 
@@ -14180,8 +14179,9 @@ public final class MainActivity extends Activity {
             java.util.List<Integer> actions = new java.util.ArrayList<>();
             if (candidate != null) {
                 choices.add("Przypisz całość → " + budgetItemDisplayName(candidate)
-                    + " • " + MoneyRules.format(
-                        PaycheckMonthlyBudget.plannedAmount(candidate,month)));
+                    + " • do zapłaty " + MoneyRules.format(
+                        PaycheckMonthlyBudget.remainingDue(
+                            db.getReadableDatabase(),candidate,month)));
                 actions.add(1);
             }
             if (split != null) {
@@ -14193,10 +14193,16 @@ public final class MainActivity extends Activity {
                     else if (i==3) names.append("… +")
                         .append(split.size()-3).append(" poz.");
                     plannedSum = Math.addExact(plannedSum,
-                        PaycheckMonthlyBudget.plannedAmount(split.get(i),month));
+                        PaycheckMonthlyBudget.remainingDue(
+                            db.getReadableDatabase(),split.get(i),month));
                 }
+                long difference = txAmount - plannedSum;
+                String diffLabel = difference == 0L ? ""
+                    : (difference > 0L ? " • nadpłata " : " • niedopłata ")
+                        + MoneyRules.format(Math.abs(difference));
                 choices.add("Podziel na " + split.size() + " pozycje → "
-                    + names + " • plan " + MoneyRules.format(plannedSum));
+                    + names + " • pozostało " + MoneyRules.format(plannedSum)
+                    + diffLabel);
                 actions.add(2);
             }
             choices.add("Nie, zostaw poza planem");
@@ -14246,6 +14252,41 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Pojedyncze dopasowanie bazuje na kwocie pozostałej, nie pierwotnym planie. */
+    private PaycheckMonthlyBudget.Item suggestSharedBudgetItem(
+            java.util.List<PaycheckMonthlyBudget.Item> items,
+            YearMonth month, String kind, String category, long transferGrosz) {
+        PaycheckMonthlyBudget.Item best = null;
+        int bestScore = -1;
+        int secondScore = -1;
+        for (PaycheckMonthlyBudget.Item item
+                : PaycheckMonthlyBudget.activeFor(items,month)) {
+            if (!kind.equals(item.kind)) continue;
+            long due = PaycheckMonthlyBudget.remainingDue(
+                db.getReadableDatabase(),item,month);
+            if (due <= 0L) continue;
+            long diff = Math.abs(due-transferGrosz);
+            long tolerance = "estimate".equals(item.amountMode)
+                ? Math.max(500L,due*35L/100L)
+                : Math.max(100L,due*5L/100L);
+            if (diff > tolerance) continue;
+            int score = diff == 0L ? 100
+                : ("estimate".equals(item.amountMode) ? 55 : 75);
+            if (item.category.equals(category)) score += 35;
+            if (item.cycleMonths > 0) score += 10;
+            if (score > bestScore) {
+                secondScore = bestScore;
+                bestScore = score;
+                best = item;
+            } else if (score > secondScore) {
+                secondScore = score;
+            }
+        }
+        if (best == null || bestScore < 70 || secondScore >= bestScore-10)
+            return null;
+        return best;
+    }
+
     private java.util.List<PaycheckMonthlyBudget.Item> budgetSplitItems(
             java.util.List<PaycheckMonthlyBudget.Item> items,
             YearMonth month, String kind, long transactionAmount) {
@@ -14254,9 +14295,9 @@ public final class MainActivity extends Activity {
         for (PaycheckMonthlyBudget.Item item
                 : PaycheckMonthlyBudget.activeFor(items,month)) {
             if (!kind.equals(item.kind)) continue;
-            long already = PaycheckMonthlyBudget.sharedMatchedActual(
+            long due = PaycheckMonthlyBudget.remainingDue(
                 db.getReadableDatabase(),item,month);
-            if (already > 0) continue;
+            if (due <= 0L) continue;
             candidates.add(item);
         }
         if (candidates.size() < 2) return null;
@@ -14270,9 +14311,9 @@ public final class MainActivity extends Activity {
             new java.util.HashMap<>();
         java.util.Set<Long> ambiguous = new java.util.HashSet<>();
         sums.put(0L,new java.util.ArrayList<>());
-
         for (PaycheckMonthlyBudget.Item item : candidates) {
-            long amount = PaycheckMonthlyBudget.plannedAmount(item,month);
+            long amount = PaycheckMonthlyBudget.remainingDue(
+                db.getReadableDatabase(),item,month);
             java.util.List<java.util.Map.Entry<Long,
                 java.util.List<PaycheckMonthlyBudget.Item>>> snapshot =
                 new java.util.ArrayList<>(sums.entrySet());
@@ -14298,7 +14339,6 @@ public final class MainActivity extends Activity {
                 break;
             }
         }
-
         java.util.List<PaycheckMonthlyBudget.Item> best = null;
         long bestDiff = Long.MAX_VALUE;
         boolean tied = false;
@@ -14316,8 +14356,7 @@ public final class MainActivity extends Activity {
                 tied = true;
             }
         }
-        return best == null || tied ? null
-            : new java.util.ArrayList<>(best);
+        return best == null || tied ? null : new java.util.ArrayList<>(best);
     }
 
     private boolean sameBudgetItemSet(
@@ -14336,44 +14375,10 @@ public final class MainActivity extends Activity {
             java.util.List<PaycheckMonthlyBudget.Item> split,
             YearMonth month, String operationId, long transactionAmount)
             throws Exception {
-        if (split == null || split.size() < 2 || transactionAmount < split.size())
-            throw new IllegalArgumentException("Nie można podzielić tej kwoty.");
-        long plannedTotal = 0L;
-        for (PaycheckMonthlyBudget.Item item:split)
-            plannedTotal = Math.addExact(plannedTotal,
-                PaycheckMonthlyBudget.plannedAmount(item,month));
-        if (plannedTotal <= 0L)
-            throw new IllegalArgumentException("Nie można podzielić tej kwoty.");
-
-        java.util.List<PaycheckMonthlyBudget.Item> ordered =
-            new java.util.ArrayList<>(split);
-        ordered.sort((a,b)->Long.compare(
-            PaycheckMonthlyBudget.plannedAmount(a,month),
-            PaycheckMonthlyBudget.plannedAmount(b,month)));
-
-        long remaining = transactionAmount;
-        for (int i=0;i<ordered.size();i++) {
-            PaycheckMonthlyBudget.Item item=ordered.get(i);
-            int left=ordered.size()-i-1;
-            long allocation;
-            if (i==ordered.size()-1) {
-                allocation=remaining;
-            } else if (transactionAmount==plannedTotal) {
-                allocation=PaycheckMonthlyBudget.plannedAmount(item,month);
-            } else {
-                long planned=PaycheckMonthlyBudget.plannedAmount(item,month);
-                allocation=Math.max(1L,
-                    (planned*transactionAmount)/plannedTotal);
-                allocation=Math.min(allocation,remaining-left);
-            }
-            if (allocation < 1L)
-                throw new IllegalArgumentException("Nie można podzielić tej kwoty.");
-            PaycheckMonthlyBudget.allocateMatch(
-                prefs,item.id,operationId,allocation);
-            remaining-=allocation;
-        }
-        if (remaining!=0L)
-            throw new IllegalStateException("Nie rozdzielono całej transakcji.");
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        for (PaycheckMonthlyBudget.Item item:split) ids.add(item.id);
+        PaycheckMonthlyBudget.allocateSplit(
+            prefs,db.getReadableDatabase(),ids,month,operationId,transactionAmount);
     }
 
     private boolean offerPrivateBudgetMatch(String operationId,
