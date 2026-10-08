@@ -56,11 +56,7 @@ final class PaycheckBudgetSqliteStore {
     static long stableId(String table, String key) throws Exception {
         if (!known(table) || key==null || key.isBlank())
             throw new IllegalArgumentException("Nieprawidłowa tożsamość budżetu.");
-        byte[] digest=MessageDigest.getInstance("SHA-256")
-            .digest((table+"\u0000"+key).getBytes(StandardCharsets.UTF_8));
-        long result=0L;
-        for(int i=0;i<8;i++) result=(result<<8)|(digest[i]&255L);
-        return (result&Long.MAX_VALUE)==0L ? 1L : result&Long.MAX_VALUE;
+        return PaycheckBudgetStableIds.of(table,key);
     }
 
     private static boolean known(String table) {
