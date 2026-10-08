@@ -140,7 +140,6 @@ for token in (
 
     'privateMonthlyBudgetBlock(entries);',
     'Prywatny plan jest szyfrowany w sejfie.',
-    'Dane istniejącego prywatnego sejfu',
     'transakcje potwierdzone po sprawdzeniu banku / wyciągu',
     'Pasuje do Budżetu miesiąca',
     'budgetItemDisplayName(item) + " z ',
