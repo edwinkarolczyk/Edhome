@@ -194,65 +194,135 @@ final class PaycheckMonthlyBudget {
         return true;
     }
 
-    static boolean match(SharedPreferences prefs, String itemId,
-            String operationId) throws Exception {
-        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
-            throw new IllegalArgumentException("Nieprawidłowa transakcja.");
-        List<Item> items = load(prefs);
-        Item target = null;
-        boolean changed = false;
-        for (Item item : items) {
-            if (item.id.equals(itemId)) target = item;
-            if (item.matchedOperationIds.remove(operationId)) changed = true;
-            if (item.matchedAllocationsGrosz.remove(operationId) != null)
-                changed = true;
-            if (item.splitSurplusesGrosz.remove(operationId) != null)
-                changed = true;
+    /** Dane oryginalnej operacji, pobrane przed ewentualnym usunięciem. */
+    static final class SharedTransaction {
+        final String operationId;
+        final String kind;
+        final long amountGrosz;
+        final YearMonth month;
+        final LocalDate date;
+        final boolean confirmed;
+        SharedTransaction(String operationId, String kind, long amountGrosz,
+                LocalDate date, boolean confirmed) {
+            this.operationId=operationId;
+            this.kind=kind;
+            this.amountGrosz=amountGrosz;
+            this.date=date;
+            this.month=YearMonth.from(date);
+            this.confirmed=confirmed;
         }
-        if (target == null)
-            throw new IllegalArgumentException("Pozycja budżetu już nie istnieje.");
-        if (!target.matchedOperationIds.contains(operationId)) {
-            if (target.matchedOperationIds.size() >= MAX_MATCHES_PER_ITEM)
-                throw new IllegalArgumentException("Za dużo realizacji tej pozycji budżetu.");
-            target.matchedOperationIds.add(operationId);
-            target.matchedAllocationsGrosz.remove(operationId);
-            changed = true;
-        }
-        if (changed) {
-            save(prefs, items);
-            PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
-                "TRANSACTION_MATCHED",0L,operationId);
-        }
-        return changed;
     }
 
-    static boolean allocateMatch(SharedPreferences prefs, String itemId,
-            String operationId, long allocationGrosz) throws Exception {
-        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}")
-                || allocationGrosz < 1 || allocationGrosz > MoneyRules.MAX_GROSZ)
-            throw new IllegalArgumentException("Nieprawidłowy podział transakcji.");
-        List<Item> items = load(prefs);
-        Item target = null;
-        for (Item item : items)
-            if (item.id.equals(itemId)) {
-                target = item;
-                break;
-            }
-        if (target == null)
-            throw new IllegalArgumentException("Pozycja budżetu już nie istnieje.");
-        if (!target.matchedOperationIds.contains(operationId)) {
-            if (target.matchedOperationIds.size() >= MAX_MATCHES_PER_ITEM)
-                throw new IllegalArgumentException("Za dużo realizacji tej pozycji budżetu.");
-            target.matchedOperationIds.add(operationId);
+    static SharedTransaction sharedTransaction(SQLiteDatabase db,String operationId) {
+        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowy identyfikator przelewu.");
+        try (Cursor c = db.rawQuery(
+                "SELECT kind,amount_grosz,created_at,statement_date,status "
+                + "FROM paycheck_transactions WHERE scope='shared' AND operation_id=?",
+                new String[]{operationId})) {
+            if (!c.moveToFirst())
+                throw new IllegalArgumentException("Nie znaleziono operacji bankowej.");
+            long timestamp = c.getLong(2);
+            String statement = c.isNull(3) ? null : c.getString(3);
+            LocalDate date=PaycheckBudgetHistoryRules.bankDate(
+                timestamp,statement,ZoneId.systemDefault());
+            return new SharedTransaction(operationId,c.getString(0),c.getLong(1),
+                date,"confirmed".equals(c.getString(4)));
         }
-        target.matchedAllocationsGrosz.put(operationId, allocationGrosz);
-        target.splitSurplusesGrosz.remove(operationId);
-        save(prefs, items);
-        PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
-            "TRANSACTION_ALLOCATED",allocationGrosz,operationId);
+    }
+
+    /** Atomowy zapis obu kluczy SharedPreferences dla każdego potwierdzenia. */
+    private static void saveWithEvents(SharedPreferences prefs, List<Item> items,
+            List<PaycheckBudgetHistoryStore.Event> events) throws Exception {
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(PREF_KEY,serialize(items));
+        PaycheckBudgetHistoryStore.stage(prefs,editor,events);
+        if (!editor.commit())
+            throw new IllegalStateException("Nie zapisano planu i historii płatności.");
+    }
+
+    private static void addPaymentEvents(
+            List<PaycheckBudgetHistoryStore.Event> events, Item item,
+            SharedTransaction tx, long paymentGrosz, long dueBefore,
+            String auditType) {
+        events.add(PaycheckBudgetHistoryStore.make(item,tx.month,auditType,
+            paymentGrosz,"Powiązanie z operacją bankową",tx.operationId,tx.date));
+        events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+            "PAYMENT_CONFIRMED",paymentGrosz,"Potwierdzona płatność",
+            tx.operationId,tx.date));
+        if ("expense".equals(item.kind)) {
+            String differenceType=PaycheckBudgetHistoryRules.differenceType(
+                paymentGrosz,dueBefore);
+            if (!differenceType.isBlank())
+                events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                    differenceType,
+                    PaycheckBudgetHistoryRules.differenceGrosz(paymentGrosz,dueBefore),
+                    "Różnica względem kwoty pozostałej",
+                    tx.operationId,tx.date));
+        }
+    }
+
+    static boolean match(SharedPreferences prefs, SQLiteDatabase db,
+            String itemId, String operationId) throws Exception {
+        SharedTransaction tx=sharedTransaction(db,operationId);
+        if (!tx.confirmed)
+            throw new IllegalArgumentException("Można przypisywać tylko potwierdzone płatności.");
+        List<Item> items = load(prefs);
+        Item target = find(items,itemId);
+        if (!target.kind.equals(tx.kind))
+            throw new IllegalArgumentException("Niezgodny typ operacji bankowej.");
+        boolean existing=false;
+        for (Item item:items)
+            if (item.matchedOperationIds.contains(operationId)) {
+                if (item.id.equals(itemId)
+                        && item.matchedAllocationsGrosz.get(operationId)==null
+                        && item.splitSurplusesGrosz.get(operationId)==null)
+                    existing=true;
+                else
+                    throw new IllegalArgumentException(
+                        "Operacja jest już rozdzielona. Najpierw odłącz ją od budżetu.");
+            }
+        if (existing) return false; // ponowny klik nie tworzy zdarzenia ani wpłaty
+        if (target.matchedOperationIds.size() >= MAX_MATCHES_PER_ITEM)
+            throw new IllegalArgumentException("Za dużo realizacji pozycji budżetu.");
+        long dueBefore=remainingDue(db,target,tx.month);
+        target.matchedOperationIds.add(operationId);
+        List<PaycheckBudgetHistoryStore.Event> events=new ArrayList<>();
+        addPaymentEvents(events,target,tx,tx.amountGrosz,dueBefore,"TRANSACTION_MATCHED");
+        saveWithEvents(prefs,items,events);
         return true;
     }
 
+    static boolean allocateMatch(SharedPreferences prefs,SQLiteDatabase db,
+            String itemId,String operationId,long allocationGrosz) throws Exception {
+        SharedTransaction tx=sharedTransaction(db,operationId);
+        if (!tx.confirmed || allocationGrosz<1 || allocationGrosz>tx.amountGrosz)
+            throw new IllegalArgumentException("Nieprawidłowy podział potwierdzonej transakcji.");
+        List<Item> items=load(prefs);
+        Item target=find(items,itemId);
+        if (!target.kind.equals(tx.kind))
+            throw new IllegalArgumentException("Niezgodny typ operacji.");
+        if (target.matchedOperationIds.contains(operationId)) {
+            if (Long.valueOf(allocationGrosz).equals(
+                    target.matchedAllocationsGrosz.get(operationId)))
+                return false;
+            throw new IllegalArgumentException(
+                "Istniejący podział trzeba najpierw odłączyć od budżetu.");
+        }
+        if (target.matchedOperationIds.size()>=MAX_MATCHES_PER_ITEM)
+            throw new IllegalArgumentException("Za dużo realizacji.");
+        long allocated=allocatedForOperation(items,operationId);
+        if (Math.addExact(allocated,allocationGrosz)>tx.amountGrosz)
+            throw new IllegalArgumentException("Podział przekracza wartość przelewu.");
+        long dueBefore=remainingDue(db,target,tx.month);
+        target.matchedOperationIds.add(operationId);
+        target.matchedAllocationsGrosz.put(operationId,allocationGrosz);
+        List<PaycheckBudgetHistoryStore.Event> events=new ArrayList<>();
+        addPaymentEvents(events,target,tx,allocationGrosz,dueBefore,
+            "TRANSACTION_ALLOCATED");
+        saveWithEvents(prefs,items,events);
+        return true;
+    }
 
     /**
      * Reszta przelewu grupowego nie jest dopisywana do przydziału żadnego
@@ -304,18 +374,11 @@ final class PaycheckMonthlyBudget {
                 || transactionGrosz > MoneyRules.MAX_GROSZ)
             throw new IllegalArgumentException("Nieprawidłowy podział przelewu.");
 
-        String kind;
-        try (Cursor tx = db.rawQuery(
-                "SELECT kind,amount_grosz,created_at,statement_date,status "
-                + "FROM paycheck_transactions WHERE scope='shared' AND operation_id=?",
-                new String[]{operationId})) {
-            if (!tx.moveToFirst() || !"confirmed".equals(tx.getString(4))
-                    || tx.getLong(1) != transactionGrosz
-                    || !month.equals(transactionMonth(tx.getLong(2),
-                        tx.isNull(3) ? null : tx.getString(3))))
-                throw new IllegalArgumentException("Brak potwierdzonego przelewu w tym miesiącu.");
-            kind = tx.getString(0);
-        }
+        SharedTransaction tx=sharedTransaction(db,operationId);
+        if (!tx.confirmed || tx.amountGrosz!=transactionGrosz
+                || !month.equals(tx.month))
+            throw new IllegalArgumentException("Brak potwierdzonego przelewu w tym miesiącu.");
+        String kind=tx.kind;
 
         List<Item> all = load(prefs);
         for (Item item : all)
@@ -350,15 +413,24 @@ final class PaycheckMonthlyBudget {
         Item differenceOwner = ordered.get(ordered.size()-1);
         if (result.differenceGrosz > 0L)
             differenceOwner.splitSurplusesGrosz.put(operationId,result.differenceGrosz);
-        save(prefs,all);
-        for (int i=0;i<ordered.size();i++)
-            PaycheckBudgetHistoryStore.append(prefs,ordered.get(i),month,
-                "TRANSACTION_ALLOCATED",result.allocationsGrosz[i],operationId);
+        List<PaycheckBudgetHistoryStore.Event> events=new ArrayList<>();
+        for (int i=0;i<ordered.size();i++) {
+            Item item=ordered.get(i);
+            long allocation=result.allocationsGrosz[i];
+            events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                "TRANSACTION_ALLOCATED",allocation,
+                "Część przelewu grupowego",tx.operationId,tx.date));
+            events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                "PAYMENT_CONFIRMED",allocation,
+                "Potwierdzona część przelewu",tx.operationId,tx.date));
+        }
         if (result.differenceGrosz != 0L)
-            PaycheckBudgetHistoryStore.append(prefs,differenceOwner,month,
-                result.differenceGrosz > 0L
-                    ? "SPLIT_OVERPAYMENT" : "SPLIT_UNDERPAYMENT",
-                Math.abs(result.differenceGrosz),operationId);
+            events.add(PaycheckBudgetHistoryStore.make(differenceOwner,tx.month,
+                result.differenceGrosz > 0L ? "OVERPAYMENT" : "UNDERPAYMENT",
+                Math.abs(result.differenceGrosz),
+                "Różnica grupowego przelewu względem pozycji",
+                tx.operationId,tx.date));
+        saveWithEvents(prefs,all,events);
         return result;
     }
 
@@ -371,31 +443,37 @@ final class PaycheckMonthlyBudget {
         return total;
     }
 
-    static boolean unmatch(SharedPreferences prefs, String operationId)
-            throws Exception {
-        if (operationId == null || !operationId.matches("[0-9a-fA-F-]{36}"))
-            return false;
-        List<Item> items = load(prefs);
-        boolean changed = false;
-        java.util.List<Item> touched = new java.util.ArrayList<>();
-        for (Item item : items) {
-            boolean itemChanged = false;
-            if (item.matchedOperationIds.remove(operationId)) itemChanged = true;
-            if (item.matchedAllocationsGrosz.remove(operationId) != null)
-                itemChanged = true;
-            if (item.splitSurplusesGrosz.remove(operationId) != null)
-                itemChanged = true;
-            if (itemChanged) {
-                changed = true;
-                touched.add(item);
-            }
+    static boolean unmatch(SharedPreferences prefs,String operationId,
+            SharedTransaction tx) throws Exception {
+        if (tx==null || !operationId.equals(tx.operationId))
+            throw new IllegalArgumentException(
+                "Brak danych przelewu przed odłączeniem z budżetu.");
+        List<Item> items=load(prefs);
+        List<PaycheckBudgetHistoryStore.Event> events=new ArrayList<>();
+        boolean changed=false;
+        for (Item item:items) {
+            if (!item.matchedOperationIds.contains(operationId)) continue;
+            Long allocated=item.matchedAllocationsGrosz.get(operationId);
+            Long surplus=item.splitSurplusesGrosz.get(operationId);
+            long reversed=allocated==null ? tx.amountGrosz : allocated;
+            item.matchedOperationIds.remove(operationId);
+            item.matchedAllocationsGrosz.remove(operationId);
+            item.splitSurplusesGrosz.remove(operationId);
+            changed=true;
+            events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                "TRANSACTION_UNMATCHED",reversed,
+                "Odłączono operację bankową",tx.operationId,tx.date));
+            events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                "PAYMENT_REVERSED",reversed,
+                "Cofnięto przypisanie potwierdzonej płatności",
+                tx.operationId,tx.date));
+            if (surplus!=null && surplus>0)
+                events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                    "OVERPAYMENT_REVERSED",surplus,
+                    "Cofnięto nadwyżkę z przelewu grupowego",
+                    tx.operationId,tx.date));
         }
-        if (changed) {
-            save(prefs, items);
-            for (Item item : touched)
-                PaycheckBudgetHistoryStore.append(prefs,item,YearMonth.now(),
-                    "TRANSACTION_UNMATCHED",0L,operationId);
-        }
+        if (changed) saveWithEvents(prefs,items,events);
         return changed;
     }
 
@@ -1474,12 +1552,7 @@ final class PaycheckMonthlyBudget {
     }
 
     static YearMonth transactionMonth(long createdAt, String statementDate) {
-        if (statementDate != null && !statementDate.isBlank()) {
-            try {
-                return YearMonth.from(LocalDate.parse(statementDate));
-            } catch (Exception ignored) { }
-        }
-        return YearMonth.from(Instant.ofEpochMilli(createdAt)
-            .atZone(ZoneId.systemDefault()).toLocalDate());
+        return PaycheckBudgetHistoryRules.bankMonth(
+            createdAt,statementDate,ZoneId.systemDefault());
     }
 }

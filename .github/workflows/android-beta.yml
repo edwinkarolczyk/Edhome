@@ -187,6 +187,15 @@ jobs:
           java -cp "$RUNNER_TEMP/paycheck-budget-invoices" \
             com.edwinkarolczyk.edhome.PaycheckBudgetInvoiceDatesSmoke
           python3 tests/check_paycheck_budget_invoice_regression.py
+      - name: PayCheck budget transaction history stage 3 regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/paycheck-history"
+          javac -d "$RUNNER_TEMP/paycheck-history" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PaycheckBudgetHistoryRules.java \
+            tests/task_rules/PaycheckBudgetHistorySmoke.java
+          java -cp "$RUNNER_TEMP/paycheck-history" \
+            com.edwinkarolczyk.edhome.PaycheckBudgetHistorySmoke
+          python3 tests/check_paycheck_budget_history_regression.py
       - name: Opt-in bank notification parsing and privacy regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-notifications"

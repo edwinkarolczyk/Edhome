@@ -204,7 +204,7 @@ for token in (
 
 assert 'PaycheckMonthlyBudget.match(' in main
 assert 'PrivatePaycheckVault.matchBudgetOperation(' in main
-assert 'PaycheckMonthlyBudget.unmatch(prefs,operationId)' in main
+assert 'PaycheckMonthlyBudget.unmatch(prefs,operationId,' in main
 
 for token in (
     'PREF_KEY = "paycheck_recipients_v1"',

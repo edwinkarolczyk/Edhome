@@ -30,10 +30,10 @@ atomic = budget.split("static PaycheckBudgetSplitMath.Result allocateSplit(", 1)
     "static long allocatedForOperation(", 1
 )[0]
 assert "PaycheckBudgetSplitMath.calculate(" in atomic
-assert "save(prefs,all);" in atomic
+assert "saveWithEvents(prefs,all,events);" in atomic
 assert "splitSurplusesGrosz.put(" in atomic
-assert "SPLIT_OVERPAYMENT" in atomic and "SPLIT_UNDERPAYMENT" in atomic
-assert "confirmed" in atomic and "amount_grosz" in atomic
+assert '"OVERPAYMENT"' in atomic and '"UNDERPAYMENT"' in atomic
+assert "sharedTransaction(db,operationId)" in atomic and "tx.confirmed" in atomic
 
 candidate = main.split("private PaycheckMonthlyBudget.Item suggestSharedBudgetItem(", 1)[1].split(
     "private java.util.List<PaycheckMonthlyBudget.Item> budgetSplitItems(", 1
