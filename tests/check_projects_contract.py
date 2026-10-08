@@ -206,6 +206,18 @@ for marker in (
     assert marker in desktop, "Missing Desktop requirement or completion UX: "+marker
 print("Projects P0 requirement CRUD and dependency editor contract OK")
 
+# P0: okno Wymagania nie może dołączać paska już osadzonego w body.
+# compactActionRow() automatycznie dołącza element do głównego ekranu.
+requirements_dialog=main.split("private void showProjectBlockers(",1)[1].split(
+    "private void showProjectBlockerActions(",1)[0]
+assert "LinearLayout actions=compactActionRow();" not in requirements_dialog
+assert "LinearLayout actions=new LinearLayout(this);" in requirements_dialog
+assert "actions.setOrientation(LinearLayout.HORIZONTAL);" in requirements_dialog
+assert "row.addView(actions);" in requirements_dialog
+print("Projects Requirements dialog has only one view parent OK")
+
+
+
 
 # Dopracowanie 08.10: stan blokad, nazwy zależności i widoczne akcje Desktop.
 desktop_card=desktop.split("private JPanel desktopProjectTaskCard",1)[1].split(
