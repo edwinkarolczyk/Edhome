@@ -84,7 +84,7 @@ for token in (
     'Wejdź do budżetu miesiąca',
     'Budżet miesiąca • ',
     'planowane saldo',
-    'Różnica plan–fakt',
+    'Wykonanie pozycji Budżetu',
     'Pozycja planowana nie jest transakcją.',
     'budgetInlineButton("‹"',
     'budgetInlineButton("›"',
