@@ -15057,7 +15057,7 @@ public final class MainActivity extends Activity {
                         "📎 " + (attachment.month.isBlank()
                             ? "[Bez przypisanego miesiąca] " : "")
                             + attachment.displayName,
-                        () -> showBudgetAttachmentActions(item,attachment)),
+                        () -> showBudgetAttachmentActions(item,attachment,month)),
                         new LinearLayout.LayoutParams(-1,dp(40)));
                 details.addView(budgetInlineButton("＋ Dodaj zdjęcie / PDF",
                     () -> pickBudgetAttachment(item,month)),
@@ -15099,8 +15099,8 @@ public final class MainActivity extends Activity {
             lifecycle.addView(budgetInlineButton("Zamknij / cykl",
                 () -> endBudgetCycle(item,month)),
                 new LinearLayout.LayoutParams(0,dp(40),1f));
-        lifecycle.addView(budgetInlineButton("Usuń / korekta",
-            () -> confirmBudgetItemDelete(false,item)),
+        lifecycle.addView(budgetInlineButton("Korekta / zakres",
+            () -> showBudgetDeleteScopeDialog(item,month)),
             new LinearLayout.LayoutParams(0,dp(40),1f));
         details.addView(lifecycle,new LinearLayout.LayoutParams(-1,-2));
 
@@ -15333,12 +15333,45 @@ public final class MainActivity extends Activity {
 
     private void showBudgetAttachmentActions(
             PaycheckMonthlyBudget.Item item,
-            PaycheckBudgetAttachmentStore.Attachment attachment) {
+            PaycheckBudgetAttachmentStore.Attachment attachment,
+            YearMonth viewedMonth) {
+        boolean legacy=attachment.month.isBlank();
+        String[] options=legacy
+            ?new String[]{"Otwórz","Przypisz do "+budgetMonthLabel(viewedMonth),
+                "Usuń załącznik"}
+            :new String[]{"Otwórz","Usuń załącznik"};
         new AlertDialog.Builder(this)
             .setTitle(attachment.displayName)
-            .setItems(new String[]{"Otwórz","Usuń załącznik"},(d,which)->{
+            .setItems(options,(d,which)->{
                 if (which==0) {
                     openBudgetAttachment(attachment);
+                    return;
+                }
+                if (legacy && which==1) {
+                    new AlertDialog.Builder(this)
+                        .setTitle("Przypisać dokument?")
+                        .setMessage("Przypisz starszy dokument „"
+                            +attachment.displayName+"” do miesiąca "
+                            +budgetMonthLabel(viewedMonth)
+                            +". Dokument zniknie z pozostałych miesięcy, "
+                            +"ale plik i historia pozostaną bez zmian.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Przypisz",(confirm,w)->{
+                            try {
+                                PaycheckBudgetAttachmentStore.assignMonth(
+                                    prefs,attachment.id,viewedMonth);
+                                PaycheckBudgetHistoryStore.append(
+                                    prefs,item,viewedMonth,
+                                    "ATTACHMENT_MONTH_ASSIGNED",0L,
+                                    attachment.displayName);
+                                render();
+                            } catch(Exception error) {
+                                DiagnosticLog.error("PAYCHECK_ATTACHMENT_MONTH",error);
+                                alert(error.getMessage()==null
+                                    ?"Nie przypisano miesiąca dokumentu."
+                                    :error.getMessage());
+                            }
+                        }).show();
                     return;
                 }
                 new AlertDialog.Builder(this)
@@ -15640,7 +15673,7 @@ public final class MainActivity extends Activity {
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Zamknąć tylko " + budgetMonthLabel(month) + "?")
             .setMessage(item.name
-                + "\nBrak potwierdzonej płatności. "
+                + "\nTransakcje PayCheck zostają bez zmian. "
                 + "Data i powód zostaną zachowane w historii.")
             .setView(form)
             .setNegativeButton("Anuluj",null)
@@ -16586,8 +16619,67 @@ public final class MainActivity extends Activity {
             .show();
     }
 
+    /** Korekta dotyczy miesiąca oglądanego, a nie daty systemowej. */
+    private void showBudgetDeleteScopeDialog(PaycheckMonthlyBudget.Item item,
+            YearMonth selectedMonth) {
+        String label=budgetMonthLabel(selectedMonth);
+        String[] actions={
+            "Tylko ten miesiąc • "+label,
+            "Od wybranego miesiąca • "+label+" (włącznie)",
+            "Zakończ definicję po • "+label
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Korekta / zakończenie zobowiązania")
+            .setMessage(item.name+"\n\nWybierz zakres. "
+                +"Żadna operacja bankowa, przypisany dokument ani historia "
+                +"nie zostanie usunięta.")
+            .setItems(actions,(d,which)->{
+                if(which==0) {
+                    showBudgetCloseOccurrenceReasonDialog(item,selectedMonth);
+                    return;
+                }
+                String explanation=which==1
+                    ?"Pozycja przestanie występować od "
+                        +label+" (włącznie). Wcześniejsze miesiące pozostaną."
+                    :"Ostatnim miesiącem zobowiązania będzie "+label
+                        +". Nowe terminy nie będą już tworzone.";
+                new AlertDialog.Builder(this)
+                    .setTitle(which==1?"Zakończyć od miesiąca?":"Zakończyć definicję?")
+                    .setMessage(explanation+"\n\n"
+                        +"Historia, faktury i potwierdzone przelewy pozostaną.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Potwierdź",(yes,w)->{
+                        try {
+                            if(which==1)
+                                PaycheckMonthlyBudget.deleteFromMonth(
+                                    prefs,item.id,selectedMonth);
+                            else if(item.cycleMonths>0)
+                                PaycheckMonthlyBudget.endCycleAt(
+                                    prefs,item.id,selectedMonth);
+                            else
+                                PaycheckMonthlyBudget.deleteFromMonth(
+                                    prefs,item.id,selectedMonth.plusMonths(1));
+                            PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
+                            DiagnosticLog.event("PAYCHECK_BUDGET_SCOPE_CORRECTION");
+                            render();
+                        } catch(Exception error) {
+                            DiagnosticLog.error("PAYCHECK_BUDGET_SCOPE",error);
+                            alert(error.getMessage()==null
+                                ?"Nie udało się zmienić zakresu.":error.getMessage());
+                        }
+                    }).show();
+            })
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
     private void confirmBudgetItemDelete(boolean privateScope,
             PaycheckMonthlyBudget.Item item) {
+        if (!privateScope) {
+            showBudgetDeleteScopeDialog(item,
+                paycheckBudgetMonth==null?YearMonth.now():paycheckBudgetMonth);
+            return;
+        }
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Usunąć pozycję planu?")
             .setMessage(PaycheckMonthlyBudget.itemLabel(item)
