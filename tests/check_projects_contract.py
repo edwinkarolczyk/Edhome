@@ -224,3 +224,16 @@ assert 'private java.util.List<String> desktopOpenDependentTitles(' in desktop
 assert 'requirementsTotal=ProjectPlanningStore.blockers(' in project_tasks
 assert 'openRequirements>0?' in project_tasks
 print("Projects named dependents and responsive Desktop actions contract OK")
+
+# Projekty P0: zachowanie pozycji listy i nieutraconego formularza.
+assert 'pendingProjectTaskFocusView=box;' in main
+assert 'final View focusedProjectTask=pendingProjectTaskFocusView;' in main
+assert 'scroll.scrollTo(0,destination);' in main
+assert 'if(pageScroll==scroll && restoreScreen.equals(screen))' in main
+assert 'DiagnosticLog.error("PROJECT_TASK_SAVE",saveError);' in main
+assert 'Dane formularza zachowano.' in main
+assert 'if(id!=null)ReminderReceiver.cancelTask(this,id);' in main
+assert 'scroll.setName("edhome-project-tasks");' in desktop
+assert 'sectionScrollPane(content, current)' in desktop
+assert 'namedScrollPane(node,"edhome-project-tasks")' in desktop
+print("Projects Android/Desktop scroll and safe task-edit contract OK")
