@@ -88,11 +88,14 @@ final class PaycheckBudgetSyncPatch {
                             "Konflikt historii Budżetu.");
                     if(current==null)rows.put(id,desired);
                 } else {
-                    if(!same(current,previous))
-                        throw new IllegalArgumentException(
-                            "Konflikt Budżetu: pozycja zmieniona na drugim urządzeniu.");
-                    if(desired==null)rows.remove(id);
-                    else rows.put(id,desired);
+                    // Ponowienie po utracie odpowiedzi jest bezpieczne.
+                    if(!same(current,desired)) {
+                        if(!same(current,previous))
+                            throw new SyncRecordStore.SyncConflict(
+                                field,id,"",0L,-1L);
+                        if(desired==null)rows.remove(id);
+                        else rows.put(id,desired);
+                    }
                 }
                 if(++changes>500)throw new IllegalArgumentException(
                     "Zbyt wiele zmian w paczce Budżetu.");
@@ -242,6 +245,9 @@ final class PaycheckBudgetSyncPatch {
             }
             return result.append(']').toString();
         }
-        return JSONObject.valueToString(value);
+        if(value instanceof String)return JSONObject.quote((String)value);
+        if(value instanceof Number||value instanceof Boolean)
+            return String.valueOf(value);
+        return JSONObject.quote(String.valueOf(value));
     }
 }
