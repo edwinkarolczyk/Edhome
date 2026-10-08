@@ -2773,8 +2773,15 @@ public final class EdhomeDesktop extends JFrame {
 
         importBank.addActionListener(e -> importBankStatement());
         queue.addActionListener(e -> showBankEvidenceQueue());
-        futureBudget.addActionListener(e ->
-            DesktopBudgetPlanner.show(this, table("paycheck_transactions")));
+        futureBudget.addActionListener(e -> {
+            JsonObject syncedSettings=snapshot!=null && snapshot.has("settings")
+                && snapshot.get("settings").isJsonObject()
+                ?snapshot.getAsJsonObject("settings"):null;
+            if (DesktopBudgetMirror.hasSharedBudget(syncedSettings))
+                DesktopBudgetMirror.show(this,syncedSettings);
+            else
+                DesktopBudgetPlanner.show(this, table("paycheck_transactions"));
+        });
         analysis.addActionListener(e -> showPaycheckAnalysis());
         goals.addActionListener(e -> showPaycheckGoals());
         bulk.addActionListener(e -> showPaycheckBulkEdit());
