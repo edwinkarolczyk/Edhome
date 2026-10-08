@@ -584,6 +584,10 @@ public final class EdhomeDesktop extends JFrame {
                 "Desktop ma nowsze dane niż baza telefonu.");
         JsonObject incomingRoot=JsonParser.parseString(incoming).getAsJsonObject();
         validate(incomingRoot);
+        // Append-only: pełny stan nigdy nie usuwa archiwalnej historii PC.
+        // Rozbieżne zdarzenie przerywa operację przed podmianą snapshotu.
+        DesktopBudgetHistoryArchive.retain(snapshot,incomingRoot);
+        validate(incomingRoot);
         snapshot=incomingRoot.deepCopy();
         ensureDesktopSyncMetadata(snapshot);
         hubCommittedSnapshot=snapshot.deepCopy();
@@ -655,6 +659,16 @@ public final class EdhomeDesktop extends JFrame {
             JsonObject meta=metaByUuid!=null?metaByUuid:metaByRow;
             boolean liveMeta=meta!=null
                 &&(!meta.has("deletedAt")||meta.get("deletedAt").isJsonNull());
+            if("budget_history".equals(table)) {
+                // Archiwum jest append-only; wymuszony konflikt Telefon wygrywa
+                // nie może nadpisać ani usunąć zdarzenia finansowego.
+                if(!"upsert".equals(action)||baseRevision!=0L)
+                    throw new DesktopHubServer.Conflict(table,rowKey,
+                        "Historii Budżetu nie wolno edytować ani usuwać.");
+                if(rowIndex>=0||liveMeta)
+                    throw new DesktopHubServer.Conflict(table,rowKey,
+                        "Zdarzenie Budżetu już istnieje; nie nadpisano historii.");
+            }
             if(!phoneWins) {
                 if(baseRevision==0L) {
                     if(rowIndex>=0||liveMeta)
