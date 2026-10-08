@@ -87,7 +87,10 @@ assert 'ProjectStore.displayTasks' in main
 assert 'showProjectBlockedDialog' in main
 assert '🔗 Czeka na: ' in main
 assert '▣ Brakuje: ' in main
-assert '↳ Po wykonaniu odblokuje ' in main
+assert '↳ Od tej czynności zależą ' in main
+assert 'ProjectStore.openDependents(db.getReadableDatabase(),taskId)' in project_tasks
+assert 'showProjectDependentsDialog(taskId,taskName)' in project_tasks
+assert 'openProjectTask(dependent.id)' in project_tasks
 assert 'openProjectTask(dependency.id)' in main
 assert 'pendingProjectTaskFocusId' in main
 assert 'applyProjectTaskIntent(getIntent(),false)' in main
@@ -203,3 +206,21 @@ for marker in (
     assert marker in desktop, "Missing Desktop requirement or completion UX: "+marker
 print("Projects P0 requirement CRUD and dependency editor contract OK")
 
+
+# Dopracowanie 08.10: stan blokad, nazwy zależności i widoczne akcje Desktop.
+desktop_card=desktop.split("private JPanel desktopProjectTaskCard",1)[1].split(
+    "private JsonObject desktopTaskById",1)[0]
+for marker in (
+    'desktopOpenDependencyTitles(taskId)',
+    'desktopHardBlockReason(taskId)',
+    'desktopOpenDependentTitles(taskId)',
+    'Zależą od tej czynności',
+    'Gotowa do wykonania',
+    '⛔ ',
+    'actions,BorderLayout.SOUTH',
+):
+    assert marker in desktop_card, "Brak czytelnego stanu w Desktop: "+marker
+assert 'private java.util.List<String> desktopOpenDependentTitles(' in desktop
+assert 'requirementsTotal=ProjectPlanningStore.blockers(' in project_tasks
+assert 'openRequirements>0?' in project_tasks
+print("Projects named dependents and responsive Desktop actions contract OK")
