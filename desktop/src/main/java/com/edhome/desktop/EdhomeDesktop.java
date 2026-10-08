@@ -9158,6 +9158,14 @@ public final class EdhomeDesktop extends JFrame {
                 if (patchPlan != null && patchPlan.operations > 0) {
                     try {
                         PatchResult patched = client.patch(patchPlan.payload);
+                        if(patchPlan.payload.has("budgetDelta")) {
+                            // Android odbudowuje pochodne SQL i rewizje;
+                            // źródłem kolejnej bazy musi być jego ACK snapshot.
+                            SnapshotResult confirmed=client.snapshot();
+                            return new SyncWriteResult(confirmed.data,
+                                confirmed.sha256,confirmed.revision,false,
+                                patchPlan.operations);
+                        }
                         applyPatchAck(outgoing, patched.results);
                         return new SyncWriteResult(outgoing, patched.sha256,
                             patched.revision, true, patchPlan.operations);
@@ -9255,8 +9263,14 @@ public final class EdhomeDesktop extends JFrame {
         try {
             JsonElement baseSettings = baseline.get("settings");
             JsonElement nowSettings = current.get("settings");
-            if (!canonicalJson(baseSettings).equals(canonicalJson(nowSettings)))
-                return null; // ustawienia nadal idą pełnym, chronionym snapshotem
+            if (!canonicalJson(baseSettings).equals(canonicalJson(nowSettings))) {
+                // Finansowe preferencje są rekordami po UUID, a nie powodem
+                // do nadpisania wszystkich tabel Androida.
+                DesktopBudgetOutboundDelta.Result budget=
+                    DesktopBudgetOutboundDelta.build(baseline,current);
+                return budget==null?null:
+                    new RecordPatchPlan(budget.payload,budget.changes);
+            }
 
             if (!baseline.has("tables") || !baseline.get("tables").isJsonObject()
                     || !current.has("tables") || !current.get("tables").isJsonObject())
