@@ -149,6 +149,32 @@ final class PaycheckBudgetAttachmentStore {
         return result;
     }
 
+    /** Starszy dokument bez okresu może otrzymać miesiąc bez kopiowania pliku. */
+    static boolean assignMonth(SharedPreferences prefs, String attachmentId,
+            java.time.YearMonth month) throws Exception {
+        if (attachmentId == null || month == null)
+            throw new IllegalArgumentException("Nie wybrano faktury i miesiąca.");
+        List<Attachment> all=load(prefs);
+        Attachment target=null;
+        for (Attachment attachment:all)
+            if (attachmentId.equals(attachment.id)) { target=attachment; break; }
+        if (target==null)
+            throw new IllegalArgumentException("Załącznik już nie istnieje.");
+        if (!target.month.isBlank())
+            throw new IllegalArgumentException("Załącznik ma już przypisany miesiąc.");
+        int count=0;
+        for (Attachment attachment:all)
+            if (target.itemId.equals(attachment.itemId)
+                    && month.toString().equals(attachment.month)) count++;
+        if (count>=MAX_PER_ITEM)
+            throw new IllegalArgumentException(
+                "Ten miesiąc ma już 10 załączników.");
+        target.month=month.toString();
+        if (!prefs.edit().putString(PREF_KEY,serialize(all)).commit())
+            throw new IllegalStateException("Nie zapisano miesiąca załącznika.");
+        return true;
+    }
+
     static List<Attachment> load(SharedPreferences prefs) throws Exception {
         return parse(prefs.getString(PREF_KEY,"[]"));
     }
