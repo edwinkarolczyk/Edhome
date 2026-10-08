@@ -110,7 +110,7 @@ for token in (
     'Jednorazowy',
     'Cykliczny',
     'Rata',
-    'Planowany dzień zapłaty 1–31 (gdy brak faktury)',
+    'Dzień zapłaty 1–31 • domyślnie 10',
     'Termin faktury YYYY-MM-DD (opcjonalnie)',
     'Planowana zapłata faktury: —',
     'Odbiorca, np. TAURON / bank (opcjonalnie)',
