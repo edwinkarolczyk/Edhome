@@ -1269,89 +1269,124 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private JPanel desktopProjectTaskCard(JsonObject task) {
-        long taskId = longValue(task,"id");
-        int duration = Math.max(20,intValue(task,"duration_minutes"));
-        boolean done = intValue(task,"done") != 0;
-        JsonObject activeSession = desktopActiveProjectWorkSession(taskId);
+        long taskId=longValue(task,"id");
+        int duration=Math.max(20,intValue(task,"duration_minutes"));
+        boolean done=intValue(task,"done")!=0;
+        JsonObject activeSession=desktopActiveProjectWorkSession(taskId);
 
-        JPanel card = new RoundedPanel(APP_SURFACE,16);
-        card.setLayout(new BorderLayout(10,0));
+        JPanel card=new RoundedPanel(APP_SURFACE,16);
+        card.setLayout(new BorderLayout(8,5));
         card.setBorder(new EmptyBorder(9,11,9,11));
-        card.setMaximumSize(new Dimension(
-            Integer.MAX_VALUE,activeSession == null ? 86 : 108));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE,210));
 
-        JPanel text = new JPanel();
-        text.setOpaque(false);
-        text.setLayout(new BoxLayout(text,BoxLayout.Y_AXIS));
-        String titleText = value(task,"title");
-        JLabel title = new JLabel((done ? "✓ " : "• ") + titleText);
+        JPanel detail=new JPanel();
+        detail.setOpaque(false);
+        detail.setLayout(new BoxLayout(detail,BoxLayout.Y_AXIS));
+        JLabel title=new JLabel((done?"✓ ":"• ")+value(task,"title"));
         title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD,14f));
-        text.add(title);
+        detail.add(title);
 
-        int worked = desktopTaskWorkedMinutes(taskId);
-        int left = done ? 0 : Math.max(0,duration-worked);
-        int deps = desktopDependencyCount(taskId);
-        String due = value(task,"due_date");
-        JLabel meta = new JLabel("Plan: " + formatMinutes(duration)
-            + " • Zrobiono: " + formatMinutes(worked)
-            + " • Zostało: " + formatMinutes(left)
-            + (deps > 0 ? " • Zależności: " + deps : "")
-            + (due.isBlank() ? "" : " • Termin: " + due));
+        int worked=desktopTaskWorkedMinutes(taskId);
+        int remaining=done?0:Math.max(0,duration-worked);
+        String due=value(task,"due_date");
+        JLabel meta=new JLabel("Plan: "+formatMinutes(duration)
+            +" • Wykonano: "+formatMinutes(worked)
+            +" • Zostało: "+formatMinutes(remaining)
+            +(due.isBlank()?"":" • Termin: "+due));
         meta.setForeground(APP_MUTED);
         meta.setFont(meta.getFont().deriveFont(11f));
-        text.add(meta);
+        detail.add(meta);
 
-        if (activeSession != null) {
-            JLabel clock = new JLabel();
+        java.util.List<String> waiting=desktopOpenDependencyTitles(taskId);
+        String hard=desktopHardBlockReason(taskId);
+        if(!done&&(!waiting.isEmpty()||!hard.isBlank())) {
+            String reason="";
+            if(!waiting.isEmpty())
+                reason="Czeka na: "+String.join(", ",waiting);
+            if(!hard.isBlank())
+                reason+=(reason.isEmpty()?"":" • ")+hard;
+            JLabel blocked=new JLabel("<html>⛔ "+html(reason)+"</html>");
+            blocked.setForeground(new Color(220,90,90));
+            blocked.setToolTipText(reason);
+            detail.add(blocked);
+        } else if(!done) {
+            JLabel ready=new JLabel("✓ Gotowa do wykonania");
+            ready.setForeground(APP_ACCENT);
+            detail.add(ready);
+        }
+        if(!done) {
+            java.util.List<String> dependents=desktopOpenDependentTitles(taskId);
+            if(!dependents.isEmpty()) {
+                String names=String.join(", ",
+                    dependents.subList(0,Math.min(3,dependents.size())));
+                if(dependents.size()>3)
+                    names+=" (+"+(dependents.size()-3)+" pozostałe)";
+                JLabel unlocks=new JLabel("<html>↳ Zależą od tej czynności: "
+                    +html(names)+"</html>");
+                unlocks.setForeground(APP_ACCENT);
+                unlocks.setToolTipText(String.join(", ",dependents));
+                detail.add(unlocks);
+            }
+        }
+        if(activeSession!=null) {
+            JLabel clock=new JLabel();
             clock.setForeground(APP_ACCENT);
-            clock.setFont(clock.getFont().deriveFont(Font.BOLD,14f));
-            text.add(Box.createVerticalStrut(3));
-            text.add(clock);
+            clock.setFont(clock.getFont().deriveFont(Font.BOLD,13f));
+            detail.add(clock);
             bindDesktopProjectClock(clock,taskId,duration);
         }
-        card.add(text,BorderLayout.CENTER);
+        card.add(detail,BorderLayout.CENTER);
 
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT,5,8));
+        // Dwa rzędy działań mieszczą się w panelu również przy wąskim oknie.
+        JPanel actions=new JPanel();
         actions.setOpaque(false);
+        actions.setLayout(new BoxLayout(actions,BoxLayout.Y_AXIS));
+        JPanel primary=new JPanel(new FlowLayout(FlowLayout.LEFT,5,2));
+        JPanel secondary=new JPanel(new FlowLayout(FlowLayout.LEFT,5,2));
+        primary.setOpaque(false);
+        secondary.setOpaque(false);
 
-        if (activeSession != null) {
-            JButton stop = compactActionButton("■ Stop");
+        if(activeSession!=null) {
+            JButton stop=compactActionButton("■ Stop");
             stop.setToolTipText("Zatrzymaj pomiar czasu");
-            stop.addActionListener(e -> stopDesktopProjectWork(task));
-            actions.add(stop);
-        } else if (!done) {
-            JButton startTime = compactActionButton("▶ Start czasu");
-            startTime.setToolTipText("Uruchom pomiar czasu tej czynności");
-            startTime.addActionListener(e -> startDesktopProjectWork(task));
-            actions.add(startTime);
+            stop.addActionListener(e->stopDesktopProjectWork(task));
+            primary.add(stop);
+        } else if(!done) {
+            JButton start=compactActionButton("▶ Start czasu");
+            start.setToolTipText("Uruchom pomiar czasu tej czynności");
+            start.addActionListener(e->startDesktopProjectWork(task));
+            primary.add(start);
         }
+        JButton completion=compactActionButton(done?"↶ Cofnij":"✓ Wykonane");
+        completion.addActionListener(e->toggleDesktopProjectCompletion(task));
+        primary.add(completion);
 
-        JButton edit = compactActionButton("Edytuj");
-        edit.addActionListener(e -> editDesktopProjectTask(task));
-        JButton up = compactActionButton("↑");
+        JButton edit=compactActionButton("Edytuj");
+        edit.addActionListener(e->editDesktopProjectTask(task));
+        primary.add(edit);
+        JButton requirements=compactActionButton("Wymagania");
+        requirements.addActionListener(e->showDesktopTaskRequirements(task));
+        primary.add(requirements);
+
+        JButton deps=compactActionButton("Zależności");
+        deps.addActionListener(e->showDesktopTaskDependencies(task));
+        secondary.add(deps);
+        JButton up=compactActionButton("↑");
         up.setToolTipText("Przesuń czynność wyżej");
-        up.addActionListener(e -> moveDesktopProjectTask(task,-1));
-        JButton down = compactActionButton("↓");
+        up.addActionListener(e->moveDesktopProjectTask(task,-1));
+        secondary.add(up);
+        JButton down=compactActionButton("↓");
         down.setToolTipText("Przesuń czynność niżej");
-        down.addActionListener(e -> moveDesktopProjectTask(task,1));
-        JButton depsButton = compactActionButton("Zależności");
-        depsButton.addActionListener(e -> showDesktopTaskDependencies(task));
-        JButton requirements = compactActionButton("Wymagania");
-        requirements.addActionListener(e -> showDesktopTaskRequirements(task));
-        JButton completion = compactActionButton(
-            done ? "↶ Cofnij" : "✓ Wykonane");
-        completion.addActionListener(e -> toggleDesktopProjectCompletion(task));
-        JButton delete = compactActionButton("Usuń");
-        delete.addActionListener(e -> deleteDesktopProjectTask(task));
-        actions.add(up);
-        actions.add(down);
-        actions.add(edit);
-        actions.add(depsButton);
-        actions.add(requirements);
-        actions.add(completion);
-        actions.add(delete);
-        card.add(actions,BorderLayout.EAST);
+        down.addActionListener(e->moveDesktopProjectTask(task,1));
+        secondary.add(down);
+        JButton delete=compactActionButton("Usuń");
+        delete.addActionListener(e->deleteDesktopProjectTask(task));
+        secondary.add(delete);
+
+        actions.add(primary);
+        actions.add(secondary);
+        card.add(actions,BorderLayout.SOUTH);
         return card;
     }
 
@@ -1464,6 +1499,21 @@ public final class EdhomeDesktop extends JFrame {
             if(waiter!=null&&intValue(waiter,"done")==0)open++;
         }
         return open;
+    }
+
+    private java.util.List<String> desktopOpenDependentTitles(long taskId) {
+        java.util.List<String> titles=new ArrayList<>();
+        for(JsonElement element:table("project_task_dependencies")) {
+            if(!element.isJsonObject())continue;
+            JsonObject link=element.getAsJsonObject();
+            if(longValue(link,"depends_on_task_id")!=taskId)continue;
+            JsonObject waiting=desktopTaskById(longValue(link,"task_id"));
+            if(waiting==null||intValue(waiting,"done")!=0)continue;
+            String path=desktopProjectPath(desktopProjectById(
+                longValue(waiting,"project_id")));
+            titles.add(value(waiting,"title")+(path.isBlank()?"":" • "+path));
+        }
+        return titles;
     }
 
     private String desktopHardBlockReason(long taskId) {
