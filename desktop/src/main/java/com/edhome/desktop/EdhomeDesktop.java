@@ -802,7 +802,8 @@ public final class EdhomeDesktop extends JFrame {
         content.add(section(name), BorderLayout.CENTER);
         content.revalidate();
         content.repaint();
-        int restore = sectionScrollY.getOrDefault(name, 0);
+        int restore=sectionScrollY.getOrDefault(
+            sectionScrollKey(name,desktopProjectId),0);
         SwingUtilities.invokeLater(() -> {
             JScrollPane scroll = sectionScrollPane(content, current);
             if (scroll != null)
@@ -813,17 +814,26 @@ public final class EdhomeDesktop extends JFrame {
     private void rememberCurrentScroll() {
         if (current == null || current.isBlank()) return;
         JScrollPane scroll = sectionScrollPane(content, current);
-        if (scroll != null)
-            sectionScrollY.put(current, scroll.getVerticalScrollBar().getValue());
+        if (scroll != null) {
+            long projectId=desktopProjectId;
+            if("Projekty".equals(current)) {
+                Object boundId=scroll.getClientProperty("edhome.projectId");
+                if(boundId instanceof Long)projectId=(Long)boundId;
+            }
+            sectionScrollY.put(sectionScrollKey(current,projectId),
+                scroll.getVerticalScrollBar().getValue());
+        }
     }
 
     // W Projektach zapamiętuj przewinięcie czynności, nie drzewa po lewej.
     private static JScrollPane sectionScrollPane(Component node,String current) {
-        if("Projekty".equals(current)) {
-            JScrollPane tasks=namedScrollPane(node,"edhome-project-tasks");
-            if(tasks!=null)return tasks;
-        }
+        if("Projekty".equals(current))
+            return namedScrollPane(node,"edhome-project-tasks");
         return firstScrollPane(node);
+    }
+
+    private static String sectionScrollKey(String name,long projectId) {
+        return "Projekty".equals(name)?"Projekty:"+projectId:name;
     }
 
     private static JScrollPane namedScrollPane(Component node,String name) {
@@ -957,8 +967,16 @@ public final class EdhomeDesktop extends JFrame {
                 ((javax.swing.tree.DefaultMutableTreeNode) nodeObject).getUserObject();
             if (!(userObject instanceof DesktopProjectRef)) return;
             JsonObject project = ((DesktopProjectRef) userObject).row;
+            rememberCurrentScroll();
             desktopProjectId = longValue(project,"id");
             renderDetail.accept(project);
+            int previous=sectionScrollY.getOrDefault(
+                sectionScrollKey("Projekty",desktopProjectId),0);
+            SwingUtilities.invokeLater(()->{
+                JScrollPane tasks=sectionScrollPane(detail,"Projekty");
+                if(tasks!=null)
+                    tasks.getVerticalScrollBar().setValue(Math.max(0,previous));
+            });
         });
 
         if (desktopProjectId > 0 && nodes.containsKey(desktopProjectId)) {
@@ -1122,6 +1140,7 @@ public final class EdhomeDesktop extends JFrame {
 
         JScrollPane scroll = new JScrollPane(list);
         scroll.setName("edhome-project-tasks");
+        scroll.putClientProperty("edhome.projectId",Long.valueOf(projectId));
         scroll.setBorder(null);
         scroll.getViewport().setBackground(APP_BG);
         scroll.getVerticalScrollBar().setUnitIncrement(18);
