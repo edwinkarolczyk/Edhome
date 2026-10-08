@@ -415,7 +415,21 @@ for marker in (
 ):
     assert marker in desktop, "Missing Desktop project batch-edit contract: " + marker
 
-assert 'DESKTOP_VERSION = "0.7.0.102"' in desktop
+# Wersja Desktopu zmienia się przy każdym wydaniu. Sprawdź spójność kodu,
+# Gradle i workflow, zamiast blokować nowe wydania starą stałą wersji.
+import re
+desktop_gradle=(root/"desktop/build.gradle").read_text(encoding="utf-8")
+desktop_workflow=(root/".github/workflows/desktop-beta.yml").read_text(
+    encoding="utf-8")
+desktop_version=re.search(r'DESKTOP_VERSION = "(\d+\.\d+\.\d+)"',desktop)
+gradle_version=re.search(r"(?m)^version = '(\d+\.\d+\.\d+)'",desktop_gradle)
+workflow_version=re.search(
+    r'(?m)^  DESKTOP_VERSION: "(\d+\.\d+\.\d+)"',
+    desktop_workflow)
+assert desktop_version and gradle_version and workflow_version
+assert desktop_version.group(1)==gradle_version.group(1)==workflow_version.group(1), (
+    "Niespójna wersja Desktopu: kod/Gradle/workflow"
+)
 assert 'ANDROID_COMPAT_VERSION = "0.8.0.44"' in desktop
 assert 'repairHubInitializationState();' in desktop
 assert 'reason=initialized_without_snapshot' in desktop
