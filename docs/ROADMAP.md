@@ -107,6 +107,16 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 - **🟡 P0:** rozbieżny UX Android/Desktop; widoczne Cofnij, ochrona pomiaru przy zakończeniu, niezawodność powiadomienia/deep linku oraz synchronizacji muszą zostać odebrane scenariuszami urządzeń. Zielony test statyczny nie jest potwierdzeniem działania na telefonie.
 - **🟡 P1 (dopiero po P0):** uproszczenie edytorów i szybkiego dodawania, jednolite formatowanie czasu `0.20`/HH:MM, zachowanie przewinięcia po operacji, weryfikacja zasobów/kosztów w całym przepływie.
 
+### Stan po pierwszych poprawkach P0 — 08.10.2026
+
+> **Zmiany w kodzie `beta`, nie zatwierdzony jeszcze odbiór na urządzeniach.** Sekcja „Stan wejściowy” powyżej opisuje wyniki audytu sprzed poprawek i pozostaje śladem przyczyn.
+
+- **Android:** lista wymagań z bezpośrednimi checkboxami spełnione/oczekujące, edycja nazwy/rodzaju/twardości/daty, usuwanie po potwierdzeniu; wybór wielu zależności z przyciskiem „Zapisz”; widoczne Cofnij przy wykonanej czynności; domyślnie 20 min przy szybkim dodawaniu.
+- **Desktop:** lista i CRUD wymagań z checkboxami, edycja/usuwanie; jawne Wykonane/Cofnij z blokadą przy aktywnym pomiarze, poprzednikach i twardych wymaganiach. Dotychczasowy edytor wielu zależności pozostaje.
+- **Testy:** do `tests/check_projects_contract.py` dodano weryfikację interfejsów wymagania/zależności i akcji zakończenia; dotychczasowe testy w dużym stopniu są statycznymi kontraktami, zatem **nadal wymagane są testy rzeczywistych operacji i odbiór fizyczny**.
+- **Wersje kandydatów:** Android Beta `0.8.0.46 / 238`, Desktop Beta `0.7.0.103`. Nie ogłaszać gotowych instalatorów bez zielonej publikacji z tego samego commita/wersji.
+- **Nadal otwarte:** zgodność danych po LAN w obu kierunkach (wcześniejszy problem użytkownika), backup→restore, migracja, kliknięcie powiadomienia, zachowanie scroll i testy interakcji. Dopiero potwierdzenie tych punktów zmienia status Projektów na 🟢.
+
 ### Minimalny scenariusz odbioru P0 — na obu urządzeniach
 
 1. Utwórz Projekt A, podprojekt A1 i 3 czynności: zakup → przygotowanie → montaż. Dodaj zależności, zamknij edytor, otwórz ponownie, usuń jedną zależność i ustaw na nowo. Sprawdź komunikaty i ochronę przed pętlą.
