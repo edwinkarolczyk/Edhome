@@ -29,6 +29,7 @@ final class PaycheckBudgetAttachmentStore {
     static final class Attachment {
         String id;
         String itemId;
+        String month; // YYYY-MM; empty = legacy attachment without a month.
         String displayName;
         String mime;
         String fileName;
@@ -46,14 +47,29 @@ final class PaycheckBudgetAttachmentStore {
 
     static Attachment add(Context context, SharedPreferences prefs,
             String itemId, Uri source) throws Exception {
+        return add(context,prefs,itemId,"",source);
+    }
+
+    static Attachment add(Context context, SharedPreferences prefs,
+            String itemId, String month, Uri source) throws Exception {
         if (itemId == null || !itemId.matches("[0-9a-fA-F-]{36}") || source == null)
             throw new IllegalArgumentException("Nieprawidłowy załącznik.");
+        if (month == null) throw new IllegalArgumentException("Brak miesiąca faktury.");
+        if (!month.isBlank()) {
+            try { java.time.YearMonth.parse(month); }
+            catch (Exception invalid) {
+                throw new IllegalArgumentException("Nieprawidłowy miesiąc faktury.");
+            }
+        }
+        // Limit dziesięciu plików dotyczy miesiąca, a nie całego zobowiązania.
+
         List<Attachment> all=load(prefs);
         int count=0;
         for (Attachment attachment:all)
-            if (itemId.equals(attachment.itemId)) count++;
+            if (itemId.equals(attachment.itemId)
+                    && month.equals(attachment.month)) count++;
         if (count>=MAX_PER_ITEM)
-            throw new IllegalArgumentException("Maksymalnie 10 załączników do jednej pozycji.");
+            throw new IllegalArgumentException("Maksymalnie 10 załączników do faktury z jednego miesiąca.");
         if (all.size()>=MAX_ATTACHMENTS)
             throw new IllegalArgumentException("Za dużo załączników Budżetu miesiąca.");
 
@@ -72,6 +88,7 @@ final class PaycheckBudgetAttachmentStore {
         Attachment attachment=new Attachment();
         attachment.id=UUID.randomUUID().toString();
         attachment.itemId=itemId;
+        attachment.month=month;
         attachment.displayName=safeDisplayName(displayName,
             pdf?"faktura.pdf":"faktura.jpg");
         attachment.mime=mime;
@@ -116,6 +133,18 @@ final class PaycheckBudgetAttachmentStore {
         List<Attachment> result=new ArrayList<>();
         for (Attachment attachment:load(prefs))
             if (itemId.equals(attachment.itemId)) result.add(attachment);
+        result.sort((a,b)->Long.compare(a.createdAt,b.createdAt));
+        return result;
+    }
+
+    static List<Attachment> list(SharedPreferences prefs, String itemId,
+            java.time.YearMonth month) throws Exception {
+        List<Attachment> result = new ArrayList<>();
+        for (Attachment attachment : load(prefs))
+            if (itemId.equals(attachment.itemId)
+                    && (attachment.month.isBlank()
+                        || attachment.month.equals(month.toString())))
+                result.add(attachment);
         result.sort((a,b)->Long.compare(a.createdAt,b.createdAt));
         return result;
     }
@@ -215,6 +244,7 @@ final class PaycheckBudgetAttachmentStore {
             Attachment attachment=new Attachment();
             attachment.id=json.getString("id");
             attachment.itemId=json.getString("itemId");
+            attachment.month=json.optString("month","");
             attachment.displayName=json.getString("displayName");
             attachment.mime=json.getString("mime");
             attachment.fileName=json.getString("fileName");
@@ -234,6 +264,7 @@ final class PaycheckBudgetAttachmentStore {
             JSONObject json=new JSONObject();
             json.put("id",attachment.id);
             json.put("itemId",attachment.itemId);
+            json.put("month",attachment.month);
             json.put("displayName",attachment.displayName);
             json.put("mime",attachment.mime);
             json.put("fileName",attachment.fileName);
@@ -243,12 +274,19 @@ final class PaycheckBudgetAttachmentStore {
         return array.toString();
     }
 
+    private static boolean isValidMonth(String month) {
+        try { return java.time.YearMonth.parse(month).toString().equals(month); }
+        catch (Exception invalid) { return false; }
+    }
+
     private static void validate(Attachment attachment) {
         if (attachment==null
                 || attachment.id==null
                 || !attachment.id.matches("[0-9a-fA-F-]{36}")
                 || attachment.itemId==null
                 || !attachment.itemId.matches("[0-9a-fA-F-]{36}")
+                || attachment.month==null
+                || (!attachment.month.isBlank() && !isValidMonth(attachment.month))
                 || attachment.displayName==null
                 || attachment.displayName.isBlank()
                 || attachment.displayName.length()>120
