@@ -5705,27 +5705,48 @@ public final class MainActivity extends Activity {
                 (d,which,checked)->chosen[which]=checked)
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Zapisz",(d,w)->{
+                java.util.HashSet<Long> desired=new java.util.HashSet<>();
+                for(int i=0;i<chosen.length;i++)
+                    if(chosen[i])desired.add(candidateIds.get(i));
+                // Zapisuj wyłącznie zmienione połączenia. Ponowny zapis bez
+                // zmian nie może tworzyć nowych identyfikatorów ani dat.
+                java.util.Set<Long> current=new java.util.HashSet<>(
+                    ProjectStore.dependencyIds(
+                        db.getReadableDatabase(),taskId));
+                if(current.equals(desired))return;
                 SQLiteDatabase database=db.getWritableDatabase();
+                boolean saved=false;
                 database.beginTransaction();
                 try {
-                    for(Long old:existing)
-                        ProjectStore.removeDependency(database,taskId,old);
-                    for(int i=0;i<chosen.length;i++)
-                        if(chosen[i])
-                            ProjectStore.addDependency(database,taskId,
-                                candidateIds.get(i));
+                    for(Long old:current)
+                        if(!desired.contains(old))
+                            ProjectStore.removeDependency(database,taskId,old);
+                    for(Long added:desired)
+                        if(!current.contains(added))
+                            ProjectStore.addDependency(database,taskId,added);
                     database.setTransactionSuccessful();
-                    DiagnosticLog.event("PROJECT_DEPENDENCIES_SAVED",
-                        "task="+taskId+" selected="+
-                            java.util.Arrays.toString(chosen));
-                    render();
+                    saved=true;
                 } catch(Exception error) {
                     alert(error.getMessage()==null
                         ?"Nie udało się zapisać zależności.":error.getMessage());
                 } finally {
                     database.endTransaction();
                 }
+                if(saved) {
+                    DiagnosticLog.event("PROJECT_DEPENDENCIES_SAVED",
+                        "task="+taskId+" added="+
+                            differenceCount(desired,current)
+                            +" removed="+differenceCount(current,desired));
+                    render();
+                }
             }).show();
+    }
+
+    private static int differenceCount(
+            java.util.Set<Long> left,java.util.Set<Long> right) {
+        int count=0;
+        for(Long item:left)if(!right.contains(item))count++;
+        return count;
     }
 
     private void showProjectBlockers(long taskId,String taskName) {
