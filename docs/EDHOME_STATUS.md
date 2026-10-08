@@ -6,11 +6,11 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-08 — domykanie PayCheck 5C: przyrostowy zapis również Desktop → Android, idempotencja i kontrola UUID |
+| Ostatnia aktualizacja | 2026-10-08 — Budżet 5C: poprawka P0, zapis z PC aktualizuje wyłącznie tabele finansów, bez odtwarzania wszystkich danych EDHOME |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.59 / versionCode 251** — [Android CI #1978 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083), podpisany APK opublikowany |
+| Android Beta | **0.8.0.60 / versionCode 252** — poprawka P0 w `beta`, NOWY build CI do weryfikacji; poprzednia 0.8.0.59 / 251 przeszła #1978 |
 | Desktop Beta | **0.7.0.111** — [Desktop CI #269 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080), instalator Windows opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37773023083 / #1978](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083) — **success**, commit `92591fd1374402a43824211f216d774320a8af53` |
@@ -63,6 +63,14 @@
 - **Bieżące wersje robocze:** Android 0.8.0.59/251, Desktop 0.7.0.111. Zmiany w `beta`; `main` nietknięty.
 
 **Odbiór 5C (stan końcowy tej serii):** Android 0.8.0.59/251 i Desktop 0.7.0.111 przeszły CI oraz mają opublikowane paczki Beta. Implementacja przyrostowych zmian Budżetu w obie strony jest gotowa do testów. **Nie zaliczono jeszcze testów A1–A16 na fizycznym telefonie i PC**; do tego czasu 5C pozostaje *kodowo wdrożony, lecz nieodebrany*. Nie wdrażać Stable bez akceptacji.
+
+### 5C — dodatkowa poprawka P0 po aktualizacji na urządzeniach
+
+**Nowa diagnoza:** `PaycheckBudgetSyncPatch.apply` dla zmiany *jednej pozycji* z Desktopu wywoływał `DataBackup.restoreJson` — czyli kasował/odtwarzał wszystkie tabele, w tym Projekty i Magazyn. Przy lokalnej edycji podczas synchronizacji mogło to prowadzić do utraty równoległych zmian. Samo zielone CI #1978 nie wykryło tego ryzyka.
+
+**Poprawka:** odbieranie `budgetDelta` aktualizuje teraz wyłącznie trzy powiązane preferencje PayCheck i pięć tabel Budżetu poprzez `PaycheckBudgetSqliteStore.reconcileRaw`, `SyncRecordStore.ensureAll` oraz lokalną transakcję SQLite. Porównuje dane z tą samą migawką, na podstawie której sprawdziło UUID; odrzuca konfliktowe zdarzenia historii kodem 409 i uszkodzone paczki. Nie ma już globalnego `DataBackup.restoreJson` w tej ścieżce.
+
+**Bezpieczeństwo:** nie uznawać zainstalowanej 0.8.0.59 za końcową wersję 5C; najpierw zweryfikować nowy build 0.8.0.60/252 i test A1–A16 na urządzeniach. Desktop pozostaje 0.7.0.111. Test kontraktowy zabrania regresji do pełnego przywracania bazy w finansowym patchu. Odbiór fizyczny nadal NIEODEBRANY.
 
 ### Zadania do wykonania w etapie 5C
 

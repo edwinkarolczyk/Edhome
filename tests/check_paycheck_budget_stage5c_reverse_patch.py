@@ -22,18 +22,26 @@ for marker in (
     'if(!same(current,desired))',
     'new SyncRecordStore.SyncConflict(',
     '"paycheckBudgetHistory".equals(field)',
-    'PaycheckBudgetSqliteStore.reconcileRaw(temp,',
+    'PaycheckBudgetSqliteStore.reconcileRaw(db,',
     'PaycheckBudgetSqliteStore.validateSerialized' if False else
         'PaycheckMonthlyBudget.validateSerialized(',
     'PaycheckRecipientStore.validateSerialized(',
     'PaycheckBudgetHistoryStore.validateSerialized(',
-    'DataBackup.restoreJson(db,prefs,merged.toString())',
-    'm.put("deletedAt",now)',
+    'SyncRecordStore.ensureAll(db)',
+    'db.beginTransaction();',
+    'db.setTransactionSuccessful();',
+    'db.endTransaction();',
+    'if(!editor.commit())',
 ):
     assert marker in merge, marker
+assert 'DataBackup.restoreJson(db,prefs,merged.toString())' not in merge
+assert 'SQLiteDatabase.create(null)' not in merge
+assert 'original.getJSONObject("settings")' in merge
+assert 'if(delta.has(field)&&!(delta.opt(field) instanceof JSONArray))' in merge
+assert 'new SyncRecordStore.SyncConflict(' in merge
 assert 'new JsonArray()' in out and 'output.add("budgetDelta",budget);' in out
 assert 'return null' in out
 assert 'DesktopBudgetOutboundDelta.build(baseline,current)' in client
 assert 'SnapshotResult confirmed=client.snapshot();' in client
 assert 'return new SyncWriteResult(confirmed.data,' in client
-print("Etap 5C PC→Android: przyrostowy Budżet, CAS UUID, cache i archiwum, bezpieczny ACK — kontrakt PASS")
+print("Etap 5C PC→Android: przyrostowy Budżet, transakcja tylko tabel finansowych, CAS UUID i bezpieczny ACK — kontrakt PASS")
