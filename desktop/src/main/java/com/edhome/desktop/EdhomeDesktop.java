@@ -596,6 +596,9 @@ public final class EdhomeDesktop extends JFrame {
         validate(incomingRoot);
         DesktopBudgetIntegrity.assertAllocations(incomingRoot);
         DesktopBudgetIntegrity.assertSidecars(incomingRoot);
+        // Nieodwracalny pełny zapis zawsze poprzedza trwała kopia PC.
+        // Błąd dysku przerywa zastąpienie snapshotu, nie jest ignorowany.
+        saveHubBeforeFullReplace(current);
         snapshot=incomingRoot.deepCopy();
         ensureDesktopSyncMetadata(snapshot);
         hubCommittedSnapshot=snapshot.deepCopy();
@@ -612,6 +615,33 @@ public final class EdhomeDesktop extends JFrame {
             "device="+(client==null?"":client.deviceId));
         showSection(current);
         return GSON.toJson(snapshot);
+    }
+
+    private static void saveHubBeforeFullReplace(String original) throws Exception {
+        Path folder=PC_BACKUP_DIR.resolve("hub-full-replace-backups");
+        Files.createDirectories(folder);
+        String stamp=DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss_SSS")
+            .withZone(ZoneId.systemDefault()).format(Instant.now());
+        Path destination=folder.resolve("EDHOME-PC-before-replace-"+stamp+"-"
+            +java.util.UUID.randomUUID().toString().substring(0,8)+".json");
+        Files.writeString(destination,original,StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE);
+        DesktopDiagnosticLog.event("HUB_PRE_REPLACE_BACKUP",
+            "file="+destination.getFileName());
+        // Kopie z ostatnich pełnych podmian; najstarsze >20 usuwamy
+        // dopiero po zapisaniu najnowszej. Oddzielnie działa backup dzienny.
+        try(java.util.stream.Stream<Path> files=Files.list(folder)) {
+            java.util.List<Path> saved=files.filter(Files::isRegularFile)
+                .filter(file->file.getFileName().toString()
+                    .startsWith("EDHOME-PC-before-replace-"))
+                .sorted(java.util.Comparator.reverseOrder())
+                .collect(java.util.stream.Collectors.toList());
+            for(int i=20;i<saved.size();i++)
+                try{Files.deleteIfExists(saved.get(i));}
+                catch(IOException cleanupError) {
+                    DesktopDiagnosticLog.error("HUB_BACKUP_PRUNE",cleanupError);
+                }
+        }
     }
 
     private static String hubRawSha256(String text) throws Exception {
