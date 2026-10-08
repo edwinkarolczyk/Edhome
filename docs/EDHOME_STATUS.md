@@ -10,11 +10,11 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.63 / versionCode 255** — kod w `beta`, [Android CI #2002](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821584092) oczekuje; 0.8.0.61 / 253 wcześniej opublikowana i CI #1985 PASS |
-| Desktop Beta | **0.7.0.113** — kod w `beta`, [Desktop CI #279](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287) oczekuje; 0.7.0.111 wcześniej CI #269 PASS |
+| Android Beta | **0.8.0.63 / versionCode 255** — [CI Android #2002 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821584092), podpisany APK opublikowany |
+| Desktop Beta | **0.7.0.113** — [CI Desktop #279 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287), instalator Windows opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | [run #37816947501 / #1985](https://github.com/edwinkarolczyk/Edhome/actions/runs/37816947501) — **success**, commit `5e2109009eb176a589ef51c22f1f1d83af4984bc`; nowa wersja w CI |
-| Ostatni zweryfikowany CI Desktop | [run #37773023080 / #269](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080) — **success**, commit `92591fd1374402a43824211f216d774320a8af53` |
+| Ostatni zweryfikowany CI Android | [run #37821584092 / #2002](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821584092) — **success**, commit `b377feb1047b4b4e48a814a3222d1c905bc95d0b` |
+| Ostatni zweryfikowany CI Desktop | [run #37821546287 / #279](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287) — **success**, commit `6ab5efda0d96fc1c98f8286313c8c6cdad4530bb` |
 | Bieżący etap | **PayCheck/Budżet — etap 5C w realizacji; test fizyczny nadal nieodebrany.** Projekty P0/P1 pozostają w planie, bez nowych zmian w tej serii. |
 | Następny krok | Po zielonym CI i nowej instalacji przeprowadzić fizyczny odbiór A1–A19: telefon ↔ PC, konflikt tej samej wpłaty, idempotencja po utracie ACK, backup ZIP → restore; po akceptacji możliwy etap 6. Bez odbioru 5C nadal niezamknięty. |
 
@@ -80,9 +80,11 @@
 - **Nowy PC / brak bazowej synchronizacji:** jeśli stan telefonu i Desktopu jest inny, nie ma automatycznej podmiany danych. EDHOME prosi o rozstrzygnięcie. Ręczny wybór „Telefon” stosuje CAS z aktualnym SHA PC, a „Desktop” zachowuje ZIP telefonu i pilnuje, by lokalnych zmian z czasu transferu nie nadpisać.
 - **Kopia na PC:** `hubReplace` nie zamieni pełnego snapshotu bez uprzedniego zapisania JSON w `hub-full-replace-backups` (do 20 ostatnich); dzienny backup PC pozostaje osobny. Nieudana kopia przerywa podmianę.
 - **Historia:** zdarzenia append-only porównywane semantycznie (`sameJson`), z ignorowaniem kolejności pól JSON, ale wykryciem różnic kwoty i treści; przypadek idempotentnego odtworzenia nie wywołuje pozornego konfliktu.
-- **CI:** test kontraktowy `tests/check_hub_repair_history_safety.py` podpięty w Android i Desktop workflow. Kandydaci: Android `0.8.0.62/254`, Desktop `0.7.0.112`. Wyniki CI oraz A1–A18 **jeszcze nieodebrane na fizycznych urządzeniach**. Gałąź `main` bez zmian.
+- **CI:** test kontraktowy `tests/check_hub_repair_history_safety.py` podpięty w Android i Desktop workflow. Aktualne potwierdzone wydania: Android `0.8.0.63/255` — #2002 PASS, Desktop `0.7.0.113` — #279 PASS. A1–A19 **jeszcze nieodebrane na fizycznych urządzeniach**. Gałąź `main` bez zmian.
 
-**Dodatkowe P0 — utrata ACK:** `DesktopBudgetDelta` rozpoznaje identyczne ponowienie tej samej pozycji lub odbiorcy bez duplikowania. `EdhomeDesktop.hubApplyPatch` rozpoznaje identyczny retry po stronie rekordów SQLite `budget_*` tylko, gdy UUID metadanych i rewizja równa `base+1`, treść rekordu jest identyczna (lub to samo usunięcie), a inna edycja nadal powoduje konflikt 409. JUnit `DesktopBudgetDeltaTest` rozszerzony o retry i nowszy konflikt; test `check_hub_repair_history_safety.py` blokuje regresję. Kandydaci: Android `0.8.0.63/255`, Desktop `0.7.0.113`. Do odbioru A19 oraz pozostałe testy A1–A18.
+**Dodatkowe P0 — utrata ACK:** `DesktopBudgetDelta` rozpoznaje identyczne ponowienie tej samej pozycji lub odbiorcy bez duplikowania. `EdhomeDesktop.hubApplyPatch` rozpoznaje identyczny retry po stronie rekordów SQLite `budget_*` tylko, gdy UUID metadanych i rewizja równa `base+1`, treść rekordu jest identyczna (lub to samo usunięcie), a inna edycja nadal powoduje konflikt 409. JUnit `DesktopBudgetDeltaTest` rozszerzony o retry i nowszy konflikt; test `check_hub_repair_history_safety.py` blokuje regresję. CI PASS: Android `0.8.0.63/255`, Desktop `0.7.0.113`. Do odbioru A19 oraz pozostałe testy A1–A18.
+
+**Weryfikacja pakietów 2026-10-08:** oba CI zakończone sukcesem; Android [0.8.0.63 / 255](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.63), Desktop [0.7.0.113](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest). Wymagane testy fizyczne A1–A19 na kopii danych, zachowanie stanu Projektów i Magazynu po zmianie Budżetu, porównanie wpłat/nadpłat z dokładnością 1 gr, backup ZIP → restore, re-pairing QR. Bez tych testów nie oznaczać 5C/25 jako ukończonych i nie przenosić do `main`.
 
 ### Zadania do wykonania w etapie 5C
 
