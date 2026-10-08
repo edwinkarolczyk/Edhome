@@ -147,7 +147,7 @@ final class PaycheckMonthlyBudget {
         item.startMonth = startMonth;
         item.endMonth = endMonth == null ? "" : endMonth.trim();
         item.cycleMonths = cycleMonths;
-        item.dueDay = dueDay;
+        item.dueDay = PaycheckBudgetInvoiceDates.templateDay(dueDay);
         item.optional = optional;
         item.installment = installment;
         item.installmentCount = installmentCount;
@@ -533,8 +533,8 @@ final class PaycheckMonthlyBudget {
     static LocalDate defaultPlannedPaymentDate(LocalDate invoiceDueDate) {
         if (invoiceDueDate == null)
             throw new IllegalArgumentException("Brak terminu faktury.");
-        LocalDate tenth = invoiceDueDate.withDayOfMonth(10);
-        return invoiceDueDate.isBefore(tenth) ? invoiceDueDate : tenth;
+        return PaycheckBudgetInvoiceDates.planned(
+            YearMonth.from(invoiceDueDate),10,invoiceDueDate);
     }
 
     static void setInvoiceForMonth(Item item, LocalDate dueDate,
@@ -542,13 +542,45 @@ final class PaycheckMonthlyBudget {
         if (item == null || dueDate == null)
             throw new IllegalArgumentException("Brak terminu faktury.");
         LocalDate plan = plannedDate == null
-            ? defaultPlannedPaymentDate(dueDate) : plannedDate;
+            ? PaycheckBudgetInvoiceDates.planned(
+                YearMonth.from(dueDate),item.dueDay,dueDate) : plannedDate;
         YearMonth month = YearMonth.from(dueDate);
         if (!YearMonth.from(plan).equals(month) || plan.isAfter(dueDate))
             throw new IllegalArgumentException(
                 "Planowana zapłata musi być w miesiącu faktury i nie później niż termin.");
         item.invoiceDueDates.put(month.toString(),dueDate.toString());
         item.plannedPaymentDates.put(month.toString(),plan.toString());
+    }
+
+    /**
+     * Zapis faktury dotyczy wyłącznie wskazanego miesiąca.
+     * Nie zmienia dnia zapłaty szablonu ani następnych miesięcy.
+     */
+    static void updateInvoiceForMonth(SharedPreferences prefs, String itemId,
+            YearMonth month, long amountGrosz, LocalDate dueDate,
+            LocalDate plannedDate) throws Exception {
+        validateAmount(amountGrosz);
+        if (month == null || dueDate == null
+                || !month.equals(YearMonth.from(dueDate)))
+            throw new IllegalArgumentException(
+                "Termin faktury musi należeć do wybranego miesiąca.");
+        List<Item> items = load(prefs);
+        Item target = find(items,itemId);
+        if (!"expense".equals(target.kind)
+                || activeFor(java.util.Collections.singletonList(target),month).isEmpty())
+            throw new IllegalArgumentException(
+                "Fakturę można dodać tylko do istniejącego wydatku w tym miesiącu.");
+        long previousAmount = plannedAmount(target,month);
+        LocalDate previousDue = invoiceDueDate(target,month);
+        setInvoiceForMonth(target,dueDate,plannedDate);
+        target.monthAmountOverrides.put(month.toString(),amountGrosz);
+        save(prefs,items);
+        PaycheckBudgetHistoryStore.append(prefs,target,month,
+            previousDue == null ? "INVOICE_ADDED" : "INVOICE_UPDATED",
+            amountGrosz,
+            "Termin " + dueDate + ", poprzednio "
+                + previousAmount + " gr"
+                + (previousDue == null ? "" : ", termin " + previousDue));
     }
 
     static LocalDate invoiceDueDate(Item item, YearMonth month) {
@@ -564,8 +596,8 @@ final class PaycheckMonthlyBudget {
             try { return LocalDate.parse(raw); }
             catch (Exception ignored) { }
         }
-        if (item.dueDay <= 0) return null;
-        return month.atDay(Math.min(item.dueDay,month.lengthOfMonth()));
+        return PaycheckBudgetInvoiceDates.planned(
+            month,item.dueDay,invoiceDueDate(item,month));
     }
 
     /**
@@ -951,6 +983,7 @@ final class PaycheckMonthlyBudget {
         json.put("endMonth", item.endMonth);
         json.put("cycleMonths", item.cycleMonths);
         json.put("dueDay", item.dueDay);
+        json.put("templateDueDay", item.dueDay);
         json.put("optional", item.optional);
         json.put("installment", item.installment);
         json.put("installmentCount", item.installmentCount);
@@ -1006,7 +1039,8 @@ final class PaycheckMonthlyBudget {
         item.startMonth = json.getString("startMonth");
         item.endMonth = json.optString("endMonth", "");
         item.cycleMonths = json.getInt("cycleMonths");
-        item.dueDay = json.optInt("dueDay", 0);
+        item.dueDay = json.optInt("templateDueDay",
+            json.optInt("dueDay", 0));
         item.optional = json.optBoolean("optional", false);
         item.installment = json.optBoolean("installment", false);
         item.installmentCount = json.optInt("installmentCount", 0);
@@ -1069,6 +1103,16 @@ final class PaycheckMonthlyBudget {
             item.invoiceDueDates);
         readStringsMap(json.optJSONObject("plannedPaymentDates"),
             item.plannedPaymentDates);
+        if (!json.has("templateDueDay")) {
+            LocalDate firstDue = invoiceDueDate(item,YearMonth.parse(item.startMonth));
+            LocalDate firstPlan = null;
+            try {
+                String rawPlan = item.plannedPaymentDates.get(item.startMonth);
+                if (rawPlan != null) firstPlan = LocalDate.parse(rawPlan);
+            } catch (Exception ignored) { }
+            item.dueDay = PaycheckBudgetInvoiceDates.migrateLegacyDay(
+                item.dueDay,firstDue,firstPlan);
+        }
         JSONObject reasons = json.optJSONObject("adjustmentReasons");
         if (reasons != null) {
             java.util.Iterator<String> reasonKeys = reasons.keys();
