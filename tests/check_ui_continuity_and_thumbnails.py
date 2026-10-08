@@ -8,7 +8,10 @@ thumb=(src/"StorageThumbs.java").read_text(encoding="utf-8")
 beta=Path("app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
 assert 'private final java.util.Map<String,Integer> screenScrollY' in main
 assert 'screenScrollY.put(screen,pageScroll.getScrollY());' in main
-assert 'scroll.post(()->{' in main and 'scroll.scrollTo(0,Math.min(restoreScrollY,maxY));' in main
+assert 'scroll.post(()->{' in main
+assert 'int destination=Math.max(0,Math.min(restoreScrollY,maxY));' in main
+assert 'scroll.scrollTo(0,destination);' in main
+assert 'focusedProjectTask.getTop()-dp(88)' in main
 start=main.index('private LinearLayout storageTreeHeading(')
 end=main.index('private void storageTreePlace(',start)
 assert 'children.setVisibility(nowCollapsed?View.GONE:View.VISIBLE);' in main[start:end]
