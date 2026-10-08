@@ -625,12 +625,21 @@ public final class EdhomeDesktop extends JFrame {
                 ||!patch.has("operations")||!patch.get("operations").isJsonArray())
             throw new IllegalArgumentException("Nieobsługiwany patch synchronizacji.");
         JsonArray operations=patch.getAsJsonArray("operations");
-        if(operations.size()<1||operations.size()>500)
+        JsonObject budgetDelta=patch.has("budgetDelta")
+            &&patch.get("budgetDelta").isJsonObject()
+            ?patch.getAsJsonObject("budgetDelta"):null;
+        if(operations.size()>500
+                ||operations.size()==0&&budgetDelta==null
+                ||patch.has("budgetDelta")&&budgetDelta==null)
             throw new IllegalArgumentException("Patch ma nieprawidłową liczbę zmian.");
 
-        // Apply the whole phone patch to a detached copy. A late conflict or
-        // validation error must never leave half of a multi-record patch in RAM.
+        // Cały patch stosujemy wyłącznie na kopii: konflikt dowolnego
+        // rekordu/ustawienia finansowego odrzuca wszystkie operacje naraz.
         JsonObject working=snapshot.deepCopy();
+        int budgetOperations=budgetDelta==null
+            ?0:DesktopBudgetDelta.apply(working,budgetDelta);
+        if(operations.size()+budgetOperations>500)
+            throw new IllegalArgumentException("Za dużo zmian w jednej paczce.");
         JsonObject tables=working.getAsJsonObject("tables");
         JsonArray metadata=working.getAsJsonArray("syncRecords");
         for(JsonElement element:operations) {
@@ -669,7 +678,10 @@ public final class EdhomeDesktop extends JFrame {
                     throw new DesktopHubServer.Conflict(table,rowKey,
                         "Zdarzenie Budżetu już istnieje; nie nadpisano historii.");
             }
-            if(!phoneWins) {
+            // Konflikty płatności, korekt, kredytów i definicji budżetu
+            // zawsze wymagają kontroli rewizji, nawet po „Telefon wygrywa”.
+            if(!phoneWins||table.startsWith("budget_")
+                    ||"paycheck_transactions".equals(table)) {
                 if(baseRevision==0L) {
                     if(rowIndex>=0||liveMeta)
                         throw new DesktopHubServer.Conflict(table,rowKey,
