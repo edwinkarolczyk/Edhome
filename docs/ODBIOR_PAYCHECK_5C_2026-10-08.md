@@ -6,7 +6,7 @@
 
 ## Wersje do testu
 
-- Android Beta **0.8.0.63 / versionCode 255** — [CI #2002 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821584092), podpisany APK opublikowany; **nie testować na jedynej kopii danych**.
+- Android Beta **0.8.0.64 / versionCode 256** — zabezpieczenie podwójnego odliczania nadpłat; [CI #2009](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841667480) w trakcie. Poprzedni #2002 PASS.; **nie testować na jedynej kopii danych**.
 - Desktop Beta **0.7.0.113** — [CI #279 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287), instalator Windows opublikowany.
 - GitHub `beta`; `main`/Stable niezmieniony.
 
@@ -38,11 +38,12 @@
 | A17 | Telefon zapisuje czynność Projektu i stan Magazynu, następnie PC zmienia tylko kwotę rachunku | Zmienia się tylko Budżet; Projekt, Magazyn i inne tabele mają identyczne rekordy oraz historię; brak pełnego restore | ☐ |
 | A18 | Ponownie zeskanuj QR tego samego Desktopu, a następnie na kopii testowej QR innego PC | Ten sam PC zachowuje wspólną bazę i lokalne dane; inny PC pyta o konflikt przed zamianą danych, wybór Telefon robi kopię PC, wybór Desktop robi ZIP telefonu | ☐ |
 | A19 | Wyślij dwa razy identyczną paczkę z edycją rachunku i jego rekordów SQLite; potem wyślij starszą paczkę z inną kwotą | Identyczny retry nie dubluje historii ani alokacji; różna zmiana nadal otrzymuje 409 i nie nadpisuje nowszych danych | ☐ |
+| A20 | Nadpłata września 50 zł: odlicz 30 zł w październiku, a offline spróbuj odliczyć dalsze 30 zł w listopadzie | Sumarycznie nie może przekroczyć 50 zł; druga paczka odrzucona bez zmiany danych, limit liczony również dla grupowych przelewów | ☐ |
 
 ## Kryteria zakończenia
 
 1. **PASS — CI:** Android #2002 i Desktop #279 zakończone sukcesem; opublikowano podpisany APK i instalator. **Pozostałe kryteria wymagają testów fizycznych.**
-2. Testy A1–A19 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
+2. Testy A1–A20 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
 3. Porównanie sumy potwierdzonych transakcji, rozdzielonych kwot, nadpłat i sald przed/po synchronizacji — **różnica 0 gr**, pomijając jawnie zatwierdzone korekty.
 4. Kopia ZIP i testowy restore zweryfikowane. W razie awarii wstrzymać wydanie Stable, zachować eksport i diagnostykę z obu urządzeń.
 5. Potwierdzenie użytkownika. Dopiero wtedy 5C = odebrany i można rozpocząć 6 (ergonomia i kontrola 25/25).
