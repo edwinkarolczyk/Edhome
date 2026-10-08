@@ -224,14 +224,8 @@ final class PaycheckMonthlyBudget {
                 throw new IllegalArgumentException("Nie znaleziono operacji bankowej.");
             long timestamp = c.getLong(2);
             String statement = c.isNull(3) ? null : c.getString(3);
-            LocalDate date = null;
-            if (statement != null && !statement.isBlank()) {
-                try { date = LocalDate.parse(statement); }
-                catch (Exception ignored) { }
-            }
-            if (date == null)
-                date = Instant.ofEpochMilli(timestamp)
-                    .atZone(ZoneId.systemDefault()).toLocalDate();
+            LocalDate date=PaycheckBudgetHistoryRules.bankDate(
+                timestamp,statement,ZoneId.systemDefault());
             return new SharedTransaction(operationId,c.getString(0),c.getLong(1),
                 date,"confirmed".equals(c.getString(4)));
         }
@@ -257,11 +251,13 @@ final class PaycheckMonthlyBudget {
             "PAYMENT_CONFIRMED",paymentGrosz,"Potwierdzona płatność",
             tx.operationId,tx.date));
         if ("expense".equals(item.kind)) {
-            long difference = Math.subtractExact(paymentGrosz,dueBefore);
-            if (difference != 0L)
+            String differenceType=PaycheckBudgetHistoryRules.differenceType(
+                paymentGrosz,dueBefore);
+            if (!differenceType.isBlank())
                 events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
-                    difference > 0L ? "OVERPAYMENT" : "UNDERPAYMENT",
-                    Math.abs(difference),"Różnica względem kwoty pozostałej",
+                    differenceType,
+                    PaycheckBudgetHistoryRules.differenceGrosz(paymentGrosz,dueBefore),
+                    "Różnica względem kwoty pozostałej",
                     tx.operationId,tx.date));
         }
     }
@@ -1556,12 +1552,7 @@ final class PaycheckMonthlyBudget {
     }
 
     static YearMonth transactionMonth(long createdAt, String statementDate) {
-        if (statementDate != null && !statementDate.isBlank()) {
-            try {
-                return YearMonth.from(LocalDate.parse(statementDate));
-            } catch (Exception ignored) { }
-        }
-        return YearMonth.from(Instant.ofEpochMilli(createdAt)
-            .atZone(ZoneId.systemDefault()).toLocalDate());
+        return PaycheckBudgetHistoryRules.bankMonth(
+            createdAt,statementDate,ZoneId.systemDefault());
     }
 }
