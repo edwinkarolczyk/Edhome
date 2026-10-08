@@ -106,6 +106,7 @@ public final class MainActivity extends Activity {
     private String pendingTileArtStyle;
     private int pendingTileArtSpan;
     private String pendingBudgetAttachmentItemId;
+    private YearMonth pendingBudgetAttachmentMonth;
     private long pendingStorageThumbnailId;
     private Uri pendingStorageCameraUri;
     private java.io.File pendingStorageCameraFile;
@@ -14965,6 +14966,9 @@ public final class MainActivity extends Activity {
         if (invoiceDate != null)
             details.addView(text("Termin faktury: " + invoiceDate
                 + " • planowana zapłata: " + plannedDate,13,false));
+        else if ("expense".equals(item.kind))
+            details.addView(text("Planowana zapłata: " + plannedDate
+                + " • termin faktury niepodany",13,false));
         details.addView(text("Plan tego miesiąca: " + MoneyRules.format(planned)
             + " • zapłacono/potwierdzono: " + MoneyRules.format(actual),
             13,false));
@@ -15003,19 +15007,25 @@ public final class MainActivity extends Activity {
         }
 
         if (!"income".equals(item.kind)) {
+            details.addView(budgetInlineButton(
+                "🧾 Dodaj / aktualizuj fakturę tego miesiąca",
+                () -> showBudgetInvoiceDialog(item,month)),
+                new LinearLayout.LayoutParams(-1,dp(44)));
             try {
                 java.util.List<PaycheckBudgetAttachmentStore.Attachment> attachments =
-                    PaycheckBudgetAttachmentStore.list(prefs,item.id);
+                    PaycheckBudgetAttachmentStore.list(prefs,item.id,month);
                 details.addView(text("Faktura / załącznik"
                     + (attachments.isEmpty() ? "" : " • " + attachments.size()),
                     13,true));
                 for (PaycheckBudgetAttachmentStore.Attachment attachment:attachments)
                     details.addView(budgetInlineButton(
-                        "📎 " + attachment.displayName,
+                        "📎 " + (attachment.month.isBlank()
+                            ? "[Bez przypisanego miesiąca] " : "")
+                            + attachment.displayName,
                         () -> showBudgetAttachmentActions(item,attachment)),
                         new LinearLayout.LayoutParams(-1,dp(40)));
                 details.addView(budgetInlineButton("＋ Dodaj zdjęcie / PDF",
-                    () -> pickBudgetAttachment(item)),
+                    () -> pickBudgetAttachment(item,month)),
                     new LinearLayout.LayoutParams(-1,dp(40)));
             } catch(Exception error) {
                 DiagnosticLog.error("PAYCHECK_ATTACHMENT_LIST",error);
@@ -15144,8 +15154,9 @@ public final class MainActivity extends Activity {
     }
 
     private void pickBudgetAttachment(
-            PaycheckMonthlyBudget.Item item) {
+            PaycheckMonthlyBudget.Item item, YearMonth month) {
         pendingBudgetAttachmentItemId=item.id;
+        pendingBudgetAttachmentMonth=month;
         Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         picker.addCategory(Intent.CATEGORY_OPENABLE);
         picker.setType("*/*");
@@ -15156,6 +15167,7 @@ public final class MainActivity extends Activity {
             startActivityForResult(picker,IMPORT_PAYCHECK_ATTACHMENT);
         } catch(Exception error) {
             pendingBudgetAttachmentItemId=null;
+            pendingBudgetAttachmentMonth=null;
             alert("Nie można otworzyć wyboru zdjęcia lub PDF.");
         }
     }
@@ -15182,8 +15194,10 @@ public final class MainActivity extends Activity {
                                     this,prefs,attachment.id)) {
                                 PaycheckBudgetHistoryStore.append(
                                     prefs,item,
-                                    paycheckBudgetMonth==null
-                                        ?YearMonth.now():paycheckBudgetMonth,
+                                    attachment.month.isBlank()
+                                        ?(paycheckBudgetMonth==null
+                                            ?YearMonth.now():paycheckBudgetMonth)
+                                        :YearMonth.parse(attachment.month),
                                     "ATTACHMENT_REMOVED",0L,
                                     attachment.displayName);
                                 DiagnosticLog.event(
@@ -15865,7 +15879,7 @@ public final class MainActivity extends Activity {
 
         EditText dueDay = new EditText(this);
         dueDay.setSingleLine(true);
-        dueDay.setHint("Planowany dzień zapłaty 1–31 (gdy brak faktury)");
+        dueDay.setHint("Dzień zapłaty 1–31 • domyślnie 10");
         dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(dueDay);
 
@@ -15922,7 +15936,11 @@ public final class MainActivity extends Activity {
                         java.time.LocalDate due =
                             java.time.LocalDate.parse(raw);
                         java.time.LocalDate plan =
-                            PaycheckMonthlyBudget.defaultPlannedPaymentDate(due);
+                            PaycheckBudgetInvoiceDates.planned(
+                                YearMonth.from(due),
+                                dueDay.getText().toString().trim().isEmpty()
+                                    ?10:Integer.parseInt(dueDay.getText().toString().trim()),
+                                due);
                         plannedPaymentPreview.setText(
                             "Planowana zapłata: " + plan
                             + " • faktura należy do "
@@ -16177,7 +16195,7 @@ public final class MainActivity extends Activity {
                         String mode = amountMode.getSelectedItemPosition() == 1
                             ? "estimate" : "fixed";
 
-                        int day = 0;
+                        int day = 10;
                         String dayText = dueDay.getText().toString().trim();
                         if (!dayText.isEmpty()) {
                             day = Integer.parseInt(dayText);
@@ -16199,10 +16217,9 @@ public final class MainActivity extends Activity {
                                 throw new IllegalArgumentException(
                                     "Termin faktury podaj jako YYYY-MM-DD.");
                             }
-                            java.time.LocalDate defaultPlan =
-                                PaycheckMonthlyBudget.defaultPlannedPaymentDate(
-                                    invoiceDue);
-                            day = defaultPlan.getDayOfMonth();
+                            // Termin faktury nie zmienia cyklicznego dnia szablonu.
+                            PaycheckBudgetInvoiceDates.planned(
+                                YearMonth.from(invoiceDue),day,invoiceDue);
                         }
 
                         boolean isInstallment = typePosition == 2;
@@ -20626,7 +20643,9 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request, result, data);
         if (request == IMPORT_PAYCHECK_ATTACHMENT) {
             String itemId=pendingBudgetAttachmentItemId;
+            YearMonth invoiceMonth=pendingBudgetAttachmentMonth;
             pendingBudgetAttachmentItemId=null;
+            pendingBudgetAttachmentMonth=null;
             if (result==RESULT_OK && itemId!=null && data!=null
                     && data.getData()!=null) {
                 try {
@@ -20639,11 +20658,12 @@ public final class MainActivity extends Activity {
                             "Pozycja budżetu już nie istnieje.");
                     PaycheckBudgetAttachmentStore.Attachment attachment =
                         PaycheckBudgetAttachmentStore.add(
-                            this,prefs,itemId,data.getData());
+                            this,prefs,itemId,
+                            (invoiceMonth==null ? YearMonth.now() : invoiceMonth).toString(),
+                            data.getData());
                     PaycheckBudgetHistoryStore.append(
                         prefs,target,
-                        paycheckBudgetMonth==null
-                            ?YearMonth.now():paycheckBudgetMonth,
+                        invoiceMonth==null ? YearMonth.now():invoiceMonth,
                         "ATTACHMENT_ADDED",0L,attachment.displayName);
                     DiagnosticLog.event("PAYCHECK_ATTACHMENT_ADDED");
                     expandedBudgetItemId=itemId;
