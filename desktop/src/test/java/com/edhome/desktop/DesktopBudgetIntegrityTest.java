@@ -2,6 +2,7 @@ package com.edhome.desktop;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -55,6 +56,38 @@ final class DesktopBudgetIntegrityTest {
             ()->DesktopBudgetIntegrity.assertAllocations(state(7000,5000)));
         assertEquals("paycheck_transactions",error.table);
         assertEquals(OP,error.rowKey);
+    }
+
+    @Test void offlineSurplusCannotBeSpentTwiceAlongsideAnotherAllocation() {
+        JsonObject state=state(4000,2000);
+        JsonObject first=JsonParser.parseString(
+            state.getAsJsonObject("settings")
+                .get("paycheckMonthlyBudget").getAsString())
+            .getAsJsonArray().get(0).getAsJsonObject();
+        JsonObject surplus=new JsonObject();
+        surplus.addProperty(OP,6000);
+        first.add("splitSurplusesGrosz",surplus);
+        JsonArray updated=new JsonArray();
+        updated.add(first);
+        updated.add(item("33333333-3333-4333-8333-333333333333",2000));
+        state.getAsJsonObject("settings").addProperty(
+            "paycheckMonthlyBudget",updated.toString());
+        assertThrows(DesktopHubServer.Conflict.class,
+            ()->DesktopBudgetIntegrity.assertAllocations(state));
+    }
+
+    @Test void oneAllocationAndItsSurplusMayEqualPaymentExactly()
+            throws Exception {
+        JsonObject state=state(4000,0);
+        JsonObject single=item("22222222-2222-4222-8222-222222222222",4000);
+        JsonObject surplus=new JsonObject();
+        surplus.addProperty(OP,6000);
+        single.add("splitSurplusesGrosz",surplus);
+        JsonArray rows=new JsonArray();
+        rows.add(single);
+        state.getAsJsonObject("settings").addProperty(
+            "paycheckMonthlyBudget",rows.toString());
+        assertDoesNotThrow(()->DesktopBudgetIntegrity.assertAllocations(state));
     }
 
     @Test void twoFullAssignmentsCannotCountSamePaymentTwice() {
