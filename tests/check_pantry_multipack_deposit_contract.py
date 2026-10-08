@@ -47,7 +47,7 @@ for token in (
 
 assert "pendingUnits = PantryBarcodeStore.unitsPerScan" in take
 assert "long selectedPantryId, int quantity, int unitsPerScan" in scan
-assert "DB_VERSION = 45;" in backup
+assert "DB_VERSION = 46;" in backup
 assert '"units_per_scan"' in backup
 assert '"deposit_grosz", "deposit_pending"' in backup
 # Stabilizacja: produkt ze stanem lub nierozliczoną kaucją nie może zniknąć.
