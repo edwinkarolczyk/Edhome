@@ -52,4 +52,12 @@ assert 'static boolean sameJson(Object a,Object b)' in sql
 assert 'sameJson(json,new JSONObject(current.getString(1)))' in sql
 assert 'new java.math.BigDecimal(a.toString()).compareTo(' in sql
 assert 'if(left.length()!=right.length())return false;' in sql
+delta=(root/"desktop/src/main/java/com/edhome/desktop/DesktopBudgetDelta.java").read_text(encoding="utf-8")
+assert 'if(!same(actual,incoming))' in delta
+assert 'boolean alreadyUpserted=' in desktop
+assert 'boolean alreadyDeleted=' in desktop
+assert 'longValue(meta,"revision")==baseRevision+1L' in desktop
+assert 'if(alreadyUpserted||alreadyDeleted)continue;' in desktop
+print("PASS: retry ten sam UUID/rewizja nie tworzy drugiego zdarzenia finansowego")
+
 print("PASS: QR zachowuje baseline, nowe PC wymaga decyzji, pełny CAS robi backup, historia porównywana semantycznie")
