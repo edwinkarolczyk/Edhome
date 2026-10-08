@@ -214,6 +214,34 @@ final class PaycheckBudgetSyncPatch {
     private static boolean same(JSONObject first,JSONObject second)
             throws Exception {
         if(first==null||second==null)return first==second;
-        return first.similar(second);
+        return canonical(first).equals(canonical(second));
+    }
+
+    private static String canonical(Object value) throws Exception {
+        if(value==null||value==JSONObject.NULL)return "null";
+        if(value instanceof JSONObject) {
+            JSONObject object=(JSONObject)value;
+            java.util.List<String> keys=new java.util.ArrayList<>();
+            for(java.util.Iterator<String> it=object.keys();it.hasNext();)
+                keys.add(it.next());
+            java.util.Collections.sort(keys);
+            StringBuilder result=new StringBuilder("{");
+            for(String key:keys) {
+                if(result.length()>1)result.append(',');
+                result.append(JSONObject.quote(key)).append(':')
+                    .append(canonical(object.get(key)));
+            }
+            return result.append('}').toString();
+        }
+        if(value instanceof JSONArray) {
+            JSONArray array=(JSONArray)value;
+            StringBuilder result=new StringBuilder("[");
+            for(int i=0;i<array.length();i++) {
+                if(i>0)result.append(',');
+                result.append(canonical(array.get(i)));
+            }
+            return result.append(']').toString();
+        }
+        return JSONObject.valueToString(value);
     }
 }
