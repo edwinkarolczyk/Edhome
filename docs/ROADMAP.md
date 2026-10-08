@@ -126,6 +126,14 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 - **Testy:** sprawdzenie elementów UI i kolejności akcji w `tests/check_projects_contract.py`; rzeczywiste zachowanie na urządzeniach, pełny backup/restore i synchronizacja LAN Android↔Desktop pozostają do odbioru. Nie oznaczaj modułu jako 🟢 bez tego odbioru.
 - **Ochrona Stable:** wszystkie zmiany wyłącznie na `beta`; `main` bez zmian.
 
+### Stabilizacja edycji i pozycji list — 08.10.2026
+
+- **Android Beta 0.8.0.49 / 241:** wyeliminowano wyścig pomiędzy przywracaniem przewinięcia ekranu a przewijaniem do czynności otwieranej z powiadomienia; docelowe przewinięcie wykonywane jest raz, po układzie widoku. Ograniczono ryzyko utraty niezapisanego formularza: błąd podczas `saveTask` nie kończy edycji, wyświetla przyczynę i zapisuje diagnostykę. Anulowanie poprzedniego przypomnienia następuje dopiero po udanym zapisie.
+- **Bezpieczeństwo zależności:** Android odrzuca przeniesienie czynności mającej istniejące powiązania do innego projektu głównego (lub poza Projekty). Pozwala przenosić ją między podprojektami tego samego korzenia.
+- **Desktop Beta 0.7.0.105:** naprawiono zachowanie przewinięcia listy czynności przy ponownym renderowaniu, zamiast błędnego zapamiętywania przewinięcia lewego drzewa. Zapamiętuje osobną pozycję listy dla każdego projektu.
+- **Regresja:** dodano testy kontraktów przewijania, bezpiecznego błędu zapisu i ochrony zależności przy przenoszeniu. Nadal potrzebne jest potwierdzenie ręczne na fizycznych urządzeniach i pełny test synchronizacji LAN w obu kierunkach.
+- **Dalszy P0:** nie usuwać ani nie duplikować otwartych sesji Start/Stop po synchronizacji, backup/restore oraz start aplikacji po restarcie telefonu. Projekt ma pozostać używalny offline bez PC.
+
 ### Minimalny scenariusz odbioru P0 — na obu urządzeniach
 
 1. Utwórz Projekt A, podprojekt A1 i 3 czynności: zakup → przygotowanie → montaż. Dodaj zależności, zamknij edytor, otwórz ponownie, usuń jedną zależność i ustaw na nowo. Sprawdź komunikaty i ochronę przed pętlą.
