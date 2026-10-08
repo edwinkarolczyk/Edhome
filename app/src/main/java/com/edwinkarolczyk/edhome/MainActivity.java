@@ -14230,7 +14230,7 @@ public final class MainActivity extends Activity {
                     try {
                         if(action==1) {
                             PaycheckMonthlyBudget.match(
-                                prefs,candidate.id,operationId);
+                                prefs,db.getReadableDatabase(),candidate.id,operationId);
                             DiagnosticLog.event(
                                 "PAYCHECK_SHARED_BUDGET_MATCHED");
                         } else {
@@ -14491,10 +14491,17 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Usuń zaznaczone",(dialog,which)->{
                 try {
+                    java.util.Map<String,PaycheckMonthlyBudget.SharedTransaction> originals =
+                        new java.util.LinkedHashMap<>();
+                    for (String operationId:selected)
+                        originals.put(operationId,
+                            PaycheckMonthlyBudget.sharedTransaction(
+                                db.getReadableDatabase(),operationId));
                     int removed=PaycheckStore.deleteMany(
                         db.getWritableDatabase(),selected);
                     for(String operationId:selected)
-                        PaycheckMonthlyBudget.unmatch(prefs,operationId);
+                        PaycheckMonthlyBudget.unmatch(prefs,operationId,
+                            originals.get(operationId));
                     DiagnosticLog.event("PAYCHECK_SHARED_BULK_DELETED");
                     render();
                     alert("Usunięto wpisów PayCheck: "+removed+".");
@@ -14515,10 +14522,13 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Usuń",(dialog,which)->{
                 try {
+                    PaycheckMonthlyBudget.SharedTransaction original =
+                        PaycheckMonthlyBudget.sharedTransaction(
+                            db.getReadableDatabase(),operationId);
                     String result=PaycheckStore.delete(
                         db.getWritableDatabase(),operationId);
                     if("DELETED".equals(result)) {
-                        PaycheckMonthlyBudget.unmatch(prefs,operationId);
+                        PaycheckMonthlyBudget.unmatch(prefs,operationId,original);
                         DiagnosticLog.event("PAYCHECK_SHARED_DELETED");
                         render();
                     } else alert("Wpis już nie istnieje.");
@@ -15103,6 +15113,11 @@ public final class MainActivity extends Activity {
             case "ITEM_CREATED": return "Dodano do planu";
             case "ITEM_DEACTIVATED": return "Usunięto / zakończono";
             case "TRANSACTION_MATCHED": return "Powiązano transakcję";
+            case "PAYMENT_CONFIRMED": return "Potwierdzono płatność";
+            case "UNDERPAYMENT": return "Niedopłata";
+            case "OVERPAYMENT": return "Nadpłata";
+            case "PAYMENT_REVERSED": return "Cofnięto płatność";
+            case "OVERPAYMENT_REVERSED": return "Cofnięto nadpłatę";
             case "TRANSACTION_ALLOCATED": return "Przypisano część transakcji";
             case "TRANSACTION_UNMATCHED": return "Odłączono transakcję";
             case "OPTIONAL_MOVED": return "Przeniesiono na kolejny miesiąc";
@@ -15141,10 +15156,17 @@ public final class MainActivity extends Activity {
                 boolean internalId = note.matches("[0-9a-fA-F-]{36}");
                 String detail = note.isEmpty() || internalId ? ""
                     : "\n" + note;
-                String date = Instant.ofEpochMilli(event.createdAt)
+                String recorded = Instant.ofEpochMilli(event.createdAt)
                     .atZone(ZoneId.systemDefault()).toLocalDate().toString();
+                String operation = event.operationId == null
+                    || event.operationId.isBlank() ? ""
+                    : "\nPrzelew: " + (event.transactionDate.isBlank()
+                        ? event.month : event.transactionDate)
+                        + " • ID …" + event.operationId.substring(
+                            Math.max(0,event.operationId.length()-8));
                 labels[i] = budgetHistoryTypeLabel(event.type) + " • "
-                    + eventMonth + amount + detail + "\n" + date;
+                    + eventMonth + amount + detail + operation
+                    + "\nZapisano: " + recorded;
             }
             new AlertDialog.Builder(this)
                 .setTitle("Historia • " + budgetItemDisplayName(item))
