@@ -706,6 +706,22 @@ public final class EdhomeDesktop extends JFrame {
             JsonObject meta=metaByUuid!=null?metaByUuid:metaByRow;
             boolean liveMeta=meta!=null
                 &&(!meta.has("deletedAt")||meta.get("deletedAt").isJsonNull());
+            // Identyczna ponownie wysłana zmiana budżetu jest ACK, nie
+            // nowym księgowaniem. Akceptujemy TYLKO rewizję base+1 i
+            // ten sam UUID metadanych. Nowsza niezależna edycja nadal 409.
+            if(table.startsWith("budget_")&&!"budget_history".equals(table)
+                    &&meta!=null&&baseRevision>=0L
+                    &&longValue(meta,"revision")==baseRevision+1L
+                    &&syncUuid.equalsIgnoreCase(value(meta,"syncUuid"))) {
+                boolean alreadyUpserted="upsert".equals(action)
+                    &&rowIndex>=0&&op.has("row")
+                    &&op.get("row").isJsonObject()
+                    &&rows.get(rowIndex).equals(op.getAsJsonObject("row"));
+                boolean alreadyDeleted="delete".equals(action)
+                    &&rowIndex<0&&meta.has("deletedAt")
+                    &&!meta.get("deletedAt").isJsonNull();
+                if(alreadyUpserted||alreadyDeleted)continue;
+            }
             if("budget_history".equals(table)) {
                 // Archiwum jest append-only; wymuszony konflikt Telefon wygrywa
                 // nie może nadpisać ani usunąć zdarzenia finansowego.
