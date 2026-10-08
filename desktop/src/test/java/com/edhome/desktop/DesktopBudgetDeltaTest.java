@@ -90,6 +90,33 @@ final class DesktopBudgetDeltaTest {
         assertEquals(before,server.toString());
     }
 
+    @Test void retryItemChangeAfterLostAckIsIdempotent() throws Exception {
+        JsonObject server=snapshot();
+        JsonObject oldItem=item(A,10000);
+        JsonObject newItem=item(A,13500);
+        JsonObject packageDelta=delta("paycheckMonthlyBudget",
+            change(A,oldItem,newItem));
+        assertEquals(1,DesktopBudgetDelta.apply(server,packageDelta));
+        String first=server.getAsJsonObject("settings")
+            .get("paycheckMonthlyBudget").getAsString();
+        assertEquals(1,DesktopBudgetDelta.apply(server,packageDelta));
+        assertEquals(first,server.getAsJsonObject("settings")
+            .get("paycheckMonthlyBudget").getAsString());
+        assertEquals(2,items(server).size());
+    }
+
+    @Test void retryCannotHideNewerConflictingEdit() throws Exception {
+        JsonObject server=snapshot();
+        DesktopBudgetDelta.apply(server,delta("paycheckMonthlyBudget",
+            change(A,item(A,10000),item(A,15000))));
+        assertThrows(DesktopHubServer.Conflict.class,()->{
+            DesktopBudgetDelta.apply(server,delta("paycheckMonthlyBudget",
+                change(A,item(A,10000),item(A,17000))));
+        });
+        assertEquals(15000,items(server).get(0).getAsJsonObject()
+            .get("amountGrosz").getAsLong());
+    }
+
     @Test void historyIsIdempotentAndAppendOnly() throws Exception {
         JsonObject server=snapshot();
         JsonObject event=new JsonObject();
