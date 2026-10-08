@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 45;
+    private static final int DB_VERSION = 46;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -124,7 +124,12 @@ final class DataBackup {
         {"garden_events", "id", "planting_id", "event_kind", "event_date", "note",
             "created_at"},
         {"garden_harvests", "id", "planting_id", "harvested_on", "quantity_milli",
-            "unit", "note", "created_at"}
+            "unit", "note", "created_at"},
+        {"budget_items", "id", "entity_key", "payload"},
+        {"budget_occurrences", "id", "entity_key", "payload"},
+        {"budget_recipients", "id", "entity_key", "payload"},
+        {"budget_credits", "id", "entity_key", "payload"},
+        {"budget_history", "id", "entity_key", "payload"}
     };
 
     private DataBackup() { }
@@ -141,6 +146,9 @@ final class DataBackup {
             Set<Long> omitStorageThumbnailIds) throws Exception {
         if (omitStorageThumbnailIds == null)
             omitStorageThumbnailIds = java.util.Collections.emptySet();
+        // Migrate old preferences to SQLite before generating a snapshot.
+        // Failed migration aborts export and never drops historical entries.
+        PaycheckBudgetSqliteStore.reconcile(database,prefs);
         JSONObject result = new JSONObject();
         result.put("format", FORMAT);
         result.put("formatVersion", FORMAT_VERSION);
@@ -538,6 +546,7 @@ final class DataBackup {
                     && ("member_shift_hours".equals(definition[0])
                         || "member_project_windows".equals(definition[0])
                         || "project_task_blockers".equals(definition[0])))
+                || (inputVersion < 46 && definition[0].startsWith("budget_"))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -1724,6 +1733,9 @@ final class DataBackup {
                     thumb.getValue());
             if (!restored.commit())
                 throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
+            // Older snapshots do not contain the v46 budget tables.
+            // Reconstruct them from the validated restored preferences.
+            PaycheckBudgetSqliteStore.reconcile(database,prefs);
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
