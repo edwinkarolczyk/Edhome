@@ -129,7 +129,7 @@ for token in (
     'Od " + label + " na stałe',
     'Podziel na ',
     'PAYCHECK_SHARED_BUDGET_SPLIT_MATCHED',
-    'PaycheckMonthlyBudget.allocateMatch(',
+    'PaycheckMonthlyBudget.allocateSplit(',
     'budgetSplitItems(',
     'allocateBudgetSplit(',
     'Odbiorcy / szablony',
