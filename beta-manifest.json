@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 236,
-  "versionName": "0.8.0.44",
-  "changelog": "EDHOME 0.8.0.44 — Beta. Desktop działa jako lokalny Hub/API na TCP 45823, discovery po UDP 45822; Android jest klientem, parowanie QR zapisuje ID Desktopu i token, telefon automatycznie ponawia połączenie i pokazuje diagnostykę hosta. Zachowane Projekty z blokadami zależności, jednym timerem tej samej czynności, backupem przed pierwszym scaleniem, konfliktami Telefon/Desktop i Low RAM. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.44/edhome-beta.apk",
-  "sha256": "e1f521d0083d58f69174828b90e94c56e7aef1ca4e50cd328dbdc010ecfac1ef"
+  "versionCode": 237,
+  "versionName": "0.8.0.45",
+  "changelog": "EDHOME 0.8.0.45 — Beta. Budżet miesiąca: jeden PayCheck w bieżącym UI, zwarty nagłówek miesiąca, kolor całej linii wg statusu, Historia przy pozycji oraz przypomnienia dokładnie 3 dni przed i w dniu płatności. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.45/edhome-beta.apk",
+  "sha256": "62a43e0275c08c064e2df2d41b67ad29b25576922e56ded3c38d72a3b6dacd98"
 }
