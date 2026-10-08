@@ -19,7 +19,7 @@ assert "Użytkownicy • profile domowników" in main
 assert "USER_PROFILE_ADDED" in main and "USER_PROFILE_UPDATED" in main
 assert "MEMBER_PIN_HASH_PREFIX" in main
 assert "PBKDF2WithHmacSHA256" in main
-assert 'DB_VERSION = 45' in backup
+assert 'DB_VERSION = 46' in backup
 assert '{"user_profiles"' in backup
 assert "MEMBER_PIN_HASH_PREFIX" not in backup
 assert "member_pin_hash_" not in backup
