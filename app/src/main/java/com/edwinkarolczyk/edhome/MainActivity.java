@@ -221,6 +221,7 @@ public final class MainActivity extends Activity {
 
     private long selectedProjectId;
     private long pendingProjectTaskFocusId;
+    private View pendingProjectTaskFocusView;
     private Long taskEditorProjectPreset;
     private long selectedMemberId;
     private String membersReturnScreen = "tasks";
@@ -1491,6 +1492,7 @@ public final class MainActivity extends Activity {
             getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         else if (privateAuthDialog == null)
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        pendingProjectTaskFocusView=null;
         root.removeAllViews();
         if (structuredInterfaceShell()) root.setBackground(skin.page(this));
         else root.setBackgroundColor(bg);
@@ -1588,11 +1590,19 @@ public final class MainActivity extends Activity {
                 lastRenderPerfLogAt=now;
             }
         }
-        // post-layout restore; direct scrollTo before layout is silently lost.
+        // Najpierw odtwórz pozycję listy, a przy wejściu z powiadomienia
+        // przewiń do wybranej czynności. Tylko jedno scrollTo po layout.
+        final View focusedProjectTask=pendingProjectTaskFocusView;
+        pendingProjectTaskFocusView=null;
         scroll.post(()->{
             if(pageScroll==scroll && restoreScreen.equals(screen)) {
                 int maxY=Math.max(0,body.getHeight()-scroll.getHeight());
-                scroll.scrollTo(0,Math.min(restoreScrollY,maxY));
+                int destination=Math.max(0,Math.min(restoreScrollY,maxY));
+                if("projects".equals(screen)&&focusedProjectTask!=null
+                        &&focusedProjectTask.getParent()==body)
+                    destination=Math.max(0,Math.min(maxY,
+                        focusedProjectTask.getTop()-dp(88)));
+                scroll.scrollTo(0,destination);
             }
         });
         if(BetaUpdater.isBeta())DesktopHubSync.kick(this);
@@ -5327,12 +5337,9 @@ public final class MainActivity extends Activity {
             if(taskId==pendingProjectTaskFocusId) {
                 box.setBackground(skin.panel(this,skin.tileTop,22));
                 box.setElevation(dp(6));
-                final LinearLayout focusBox=box;
-                focusBox.post(()->{
-                    if(pageScroll!=null)
-                        pageScroll.smoothScrollTo(0,
-                            Math.max(0,focusBox.getTop()-dp(88)));
-                });
+                // Zaplanuj przejście do czynności po odtworzeniu przewinięcia
+                // całego ekranu, aby oba mechanizmy nie nadpisywały się.
+                pendingProjectTaskFocusView=box;
                 pendingProjectTaskFocusId=0L;
             }
 
@@ -7023,7 +7030,7 @@ public final class MainActivity extends Activity {
                     date.setError("Własne przypomnienie wymaga terminu.");
                     return;
                 }
-                if (id != null) ReminderReceiver.cancelTask(this, id);
+
                 Long selectedAssignee =
                     memberIds.get(chosenMember.getSelectedItemPosition());
                 String rotationError = RotationRules.validate(rotationIds,
@@ -7038,16 +7045,24 @@ public final class MainActivity extends Activity {
                     alert("Aktualny wykonawca musi należeć do rotacji.");
                     return;
                 }
-                db.saveTask(id, title, due, rule, every,
-                    placeIds.get(chosenPlace.getSelectedItemPosition()),
-                    selectedPriority, estimatedMinutes,
-                    selectedAssignee, customTime, leadDays,
-                    new java.util.ArrayList<>(rotationIds),
-                    selectedProjectId);
-                ReminderReceiver.schedule(this);
-                DiagnosticLog.event(id == null ? "TASK_ADDED" : "TASK_EDITED");
-                dialog.dismiss();
-                render();
+                try {
+                    db.saveTask(id, title, due, rule, every,
+                        placeIds.get(chosenPlace.getSelectedItemPosition()),
+                        selectedPriority, estimatedMinutes,
+                        selectedAssignee, customTime, leadDays,
+                        new java.util.ArrayList<>(rotationIds),
+                        selectedProjectId);
+                    if(id!=null)ReminderReceiver.cancelTask(this,id);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event(id==null?"TASK_ADDED":"TASK_EDITED");
+                    dialog.dismiss();
+                    render();
+                } catch(Exception saveError) {
+                    DiagnosticLog.error("PROJECT_TASK_SAVE",saveError);
+                    alert(saveError.getMessage()==null
+                        ?"Nie udało się zapisać czynności. Dane formularza zachowano."
+                        :saveError.getMessage());
+                }
             }));
         dialog.show();
         if (dialog.getWindow() != null) {
