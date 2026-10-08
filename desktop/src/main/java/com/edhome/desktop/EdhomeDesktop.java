@@ -448,6 +448,7 @@ public final class EdhomeDesktop extends JFrame {
             throws Exception {
         JsonObject phone=JsonParser.parseString(incoming).getAsJsonObject();
         validate(phone);
+        DesktopBudgetIntegrity.assertAllocations(phone);
         if(PREFS.getBoolean("hubInitialized",false) && snapshot!=null)
             return hubSnapshotJson();
         if(PREFS.getBoolean("hubInitialized",false) && snapshot==null) {
@@ -588,6 +589,7 @@ public final class EdhomeDesktop extends JFrame {
         // Rozbieżne zdarzenie przerywa operację przed podmianą snapshotu.
         DesktopBudgetHistoryArchive.retain(snapshot,incomingRoot);
         validate(incomingRoot);
+        DesktopBudgetIntegrity.assertAllocations(incomingRoot);
         snapshot=incomingRoot.deepCopy();
         ensureDesktopSyncMetadata(snapshot);
         hubCommittedSnapshot=snapshot.deepCopy();
@@ -730,6 +732,7 @@ public final class EdhomeDesktop extends JFrame {
             }
         }
         validate(working);
+        DesktopBudgetIntegrity.assertAllocations(working);
         snapshot=working;
         hubCommittedSnapshot=snapshot.deepCopy();
         syncedSnapshot=snapshot.deepCopy();
