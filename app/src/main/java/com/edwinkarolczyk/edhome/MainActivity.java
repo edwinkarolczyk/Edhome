@@ -5824,7 +5824,11 @@ public final class MainActivity extends Activity {
                 }
             });
             row.addView(checked);
-            LinearLayout actions=compactActionRow();
+            // Pasek okna musi pozostać lokalny: compactActionRow() dodaje
+            // go do body, więc ponowne row.addView(actions) powoduje crash.
+            LinearLayout actions=new LinearLayout(this);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            actions.setGravity(Gravity.CENTER_VERTICAL);
             compactAction(actions,"Edytuj",()->{
                 if(holder[0]!=null)holder[0].dismiss();
                 showProjectBlockerEditorDialog(item,taskId,taskName);
