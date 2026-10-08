@@ -34,5 +34,5 @@ for piece in (
 ):
     assert piece in tests,piece
 assert 'DesktopBudgetMirror.showEditable(' in desktop
-assert 'paycheck-budget-plan.json' in desktop
+assert 'Stary plik planu PC pozostaje bez zmian.' in ui
 print("Etap 6 Desktop: jeden nagłówek, wpłaty nad wydatkami, terminy, odbiorcy i edycja bez drugiej księgi — kontrakt PASS")
