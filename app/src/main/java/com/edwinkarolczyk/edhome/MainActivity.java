@@ -5383,8 +5383,8 @@ public final class MainActivity extends Activity {
             }
 
             if(unlocks>0&&!done) {
-                TextView unlock=text("↳ Po wykonaniu odblokuje "
-                    +unlocks+(unlocks==1?" czynność:":" czynności:"),12,true);
+                TextView unlock=text("↳ Od tej czynności zależą "
+                    +unlocks+(unlocks==1?" następna praca:":" następne prace:"),12,true);
                 unlock.setTextColor(accent);
                 box.addView(unlock);
                 for(int i=0;i<Math.min(3,openDependents.size());i++) {
@@ -5516,7 +5516,7 @@ public final class MainActivity extends Activity {
         for(ProjectStore.TaskRef item:items)
             names.add(item.title+" • "+projectPath(item.projectId));
         new AlertDialog.Builder(this)
-            .setTitle("Po wykonaniu: "+taskName)
+            .setTitle("Od tej czynności zależą • "+taskName)
             .setItems(names.toArray(new String[0]),(dialog,which)->
                 openProjectTask(items.get(which).id))
             .setNegativeButton("Zamknij",null).show();
