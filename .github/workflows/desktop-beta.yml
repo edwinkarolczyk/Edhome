@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.103"
+  DESKTOP_VERSION: "0.7.0.104"
 
 on:
   push:
