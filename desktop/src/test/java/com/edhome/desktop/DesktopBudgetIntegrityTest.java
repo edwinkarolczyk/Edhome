@@ -70,6 +70,44 @@ final class DesktopBudgetIntegrityTest {
         assertDoesNotThrow(()->DesktopBudgetIntegrity.assertAllocations(state));
     }
 
+    @Test void oldArchivedEventsMayOutliveTrimmedSettingsCache() {
+        JsonObject state=state(4000,6000);
+        JsonObject tables=state.getAsJsonObject("tables");
+        JsonObject settings=state.getAsJsonObject("settings");
+        JsonObject oldEvent=new JsonObject();
+        oldEvent.addProperty("id","44444444-4444-4444-8444-444444444444");
+        oldEvent.addProperty("amountGrosz",500);
+        JsonObject historyRow=new JsonObject();
+        historyRow.addProperty("id",123L);
+        historyRow.addProperty("entity_key",oldEvent.get("id").getAsString());
+        historyRow.addProperty("payload",oldEvent.toString());
+        JsonArray archive=new JsonArray();
+        archive.add(historyRow);
+        tables.add("budget_history",archive);
+        settings.addProperty("paycheckBudgetHistory","[]");
+        assertDoesNotThrow(()->DesktopBudgetIntegrity.assertSidecars(state));
+    }
+
+    @Test void inconsistentSidecarNeverAcknowledgesFinancialPatch() {
+        JsonObject state=state(4000,6000);
+        JsonObject item=item("22222222-2222-4222-8222-222222222222",4000);
+        JsonArray settingsItems=new JsonArray();
+        settingsItems.add(item);
+        state.getAsJsonObject("settings").addProperty(
+            "paycheckMonthlyBudget",settingsItems.toString());
+        JsonObject changed=item.deepCopy();
+        changed.getAsJsonObject("allocations").addProperty(OP,9500);
+        JsonObject row=new JsonObject();
+        row.addProperty("id",123L);
+        row.addProperty("entity_key",item.get("id").getAsString());
+        row.addProperty("payload",changed.toString());
+        JsonArray stored=new JsonArray();
+        stored.add(row);
+        state.getAsJsonObject("tables").add("budget_items",stored);
+        assertThrows(DesktopHubServer.Conflict.class,
+            ()->DesktopBudgetIntegrity.assertSidecars(state));
+    }
+
     @Test void wrongPaymentKindIsNotSilentlyAccepted() {
         JsonObject state=state(4000,6000);
         state.getAsJsonObject("tables")
