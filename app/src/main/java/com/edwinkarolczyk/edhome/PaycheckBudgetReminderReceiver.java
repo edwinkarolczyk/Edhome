@@ -98,8 +98,7 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
                         PaycheckMonthlyBudget.plannedPaymentDate(item,month);
                     if (planned==null) continue;
                     boolean todayHit=planned.equals(today);
-                    boolean soonHit=planned.isAfter(today)
-                        && !planned.isAfter(today.plusDays(3));
+                    boolean soonHit=planned.equals(today.plusDays(3));
                     if (!todayHit && !soonHit) continue;
 
                     long plannedAmount=PaycheckMonthlyBudget.plannedAmount(
@@ -112,7 +111,7 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
                     if (remaining<=0L) continue;
 
                     String firedKey="paycheck_budget_reminder_fired_"
-                        +item.id+"_"+month+"_"+(todayHit?"0":"pre");
+                        +item.id+"_"+month+"_"+(todayHit?"0":"-3");
                     if (today.toString().equals(pref.getString(firedKey,"")))
                         continue;
                     pref.edit().putString(firedKey,today.toString()).apply();
@@ -153,12 +152,12 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
         String text;
         if (dueToday>0 && dueSoon>0)
             text="Dzisiaj "+dueToday+" • "+MoneyRules.format(todayAmount)
-                +" | w ciągu 3 dni "+dueSoon+" • "+MoneyRules.format(soonAmount);
+                +" | za 3 dni "+dueSoon+" • "+MoneyRules.format(soonAmount);
         else if (dueToday>0)
             text="Dzisiaj do zapłaty: "+dueToday+" • "
                 +MoneyRules.format(todayAmount);
         else
-            text="W ciągu 3 dni do zapłaty: "+dueSoon+" • "
+            text="Za 3 dni do zapłaty: "+dueSoon+" • "
                 +MoneyRules.format(soonAmount);
 
         Notification notification=LegacyCompat.notificationBuilder(
@@ -175,6 +174,6 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
             .build();
         notifications.notify(NOTIFICATION_ID,notification);
         DiagnosticLog.event("PAYCHECK_BUDGET_REMINDER_DELIVERED",
-            "today="+dueToday+" soon="+dueSoon);
+            "today="+dueToday+" pre3="+dueSoon);
     }
 }

@@ -86,9 +86,8 @@ for token in (
     'planowane saldo',
     'Różnica plan–fakt',
     'Pozycja planowana nie jest transakcją.',
-    '◀ Poprzedni',
-    'Następny ▶',
-    'Bieżący miesiąc',
+    'budgetInlineButton("‹"',
+    'budgetInlineButton("›"',
     'NIEZAPŁACONE',
     'ZAPŁACONE',
     'OPCJONALNE',
@@ -148,6 +147,8 @@ for token in (
     'Nadpłata nie jest używana automatycznie.',
     'expandedBudgetItemId',
     'expandedBudgetDetailsView',
+    'showBudgetItemHistory(item)',
+    'line.setTextColor(statusColor);',
     'Color.rgb(251,192,45)',
 ):
     assert token in main, "Missing Android monthly budget UI: " + token
@@ -157,6 +158,9 @@ budget_method = main.split('private void budgetItemCard(',1)[1].split(
 assert 'LinearLayout box = card();' not in budget_method
 assert 'LinearLayout box = new LinearLayout(this);' in budget_method
 assert 'if (expandedBudgetDetailsView != null' in budget_method
+assert 'wspólny czy prywatny' not in main
+assert 'Saldo potwierdzone wspólne' not in main
+assert 'if ("paycheck_private".equals(destination)) destination="paycheck";' in main
 
 assert "PaycheckStore.add" not in budget
 assert "INSERT INTO paycheck_transactions" not in budget
@@ -244,12 +248,13 @@ for token in (
     assert token in recipients, "Recipient template contract missing: " + token
 
 for token in (
-    'today.plusDays(3)',
+    'planned.equals(today.plusDays(3))',
     'open_paycheck_budget',
     'sharedMatchedActual(',
     'PAYCHECK_BUDGET_REMINDER_DELIVERED',
 ):
     assert token in budget_reminder, "Budget reminder contract missing: " + token
+assert '!planned.isAfter(today.plusDays(3))' not in budget_reminder
 
 for token in (
     'PREF_KEY = "paycheck_budget_attachments_v1"',
