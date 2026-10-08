@@ -205,6 +205,15 @@ jobs:
           java -cp "$RUNNER_TEMP/paycheck-budget-stage4" \
             com.edwinkarolczyk.edhome.PaycheckBudgetExecutionSmoke
           python3 tests/check_paycheck_budget_stage4_regression.py
+      - name: PayCheck stage 5A SQLite migration and archive regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/paycheck-budget-sqlite"
+          javac -d "$RUNNER_TEMP/paycheck-budget-sqlite" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PaycheckBudgetStableIds.java \
+            tests/task_rules/PaycheckBudgetStableIdsSmoke.java
+          java -cp "$RUNNER_TEMP/paycheck-budget-sqlite" \
+            com.edwinkarolczyk.edhome.PaycheckBudgetStableIdsSmoke
+          python3 tests/check_paycheck_budget_stage5_migration.py
       - name: Opt-in bank notification parsing and privacy regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-notifications"
