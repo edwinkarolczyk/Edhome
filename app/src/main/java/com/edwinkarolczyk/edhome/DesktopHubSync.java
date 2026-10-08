@@ -170,6 +170,8 @@ final class DesktopHubSync {
                 HttpResult result=request(app,prefs,host,"GET","/snapshot",null,null);
                 if(result.code!=200)throw new IllegalStateException(
                     "Desktop odpowiedział HTTP "+result.code+".");
+                // Zanim przyjmiemy wersję PC, zapisz całą lokalną historię ZIP.
+                saveConflictBackup(app,prefs);
                 applyServerSnapshot(app,prefs,result.body,result.sha256);
                 clearConflict(app,prefs);
                 prefs.edit().putString(PREF_LAST_STATE,
@@ -554,6 +556,40 @@ final class DesktopHubSync {
                 "bytes="+target.length());
         } finally {
             created.file.delete();
+        }
+    }
+
+    /** Lokalna kopia przed ręcznym rozwiązaniem konfliktu na korzyść PC. */
+    private static void saveConflictBackup(Context context,SharedPreferences prefs)
+            throws Exception {
+        try(MainActivity.LocalDb helper=new MainActivity.LocalDb(context)) {
+            SQLiteDatabase database=helper.getWritableDatabase();
+            DataBackupArchive.Created created=DataBackupArchive.create(
+                context,database,prefs);
+            try {
+                File dir=new File(context.getFilesDir(),"hub-conflict-backups");
+                if(!dir.exists()&&!dir.mkdirs())
+                    throw new IllegalStateException(
+                        "Nie utworzono katalogu kopii sprzed konfliktu.");
+                String stamp=java.time.format.DateTimeFormatter
+                    .ofPattern("yyyy-MM-dd_HH-mm-ss_SSS")
+                    .withZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.Instant.now());
+                File target=new File(dir,"EDHOME-before-conflict-"+stamp+".zip");
+                try(FileInputStream in=new FileInputStream(created.file);
+                    FileOutputStream out=new FileOutputStream(target)) {
+                    byte[] buffer=new byte[8192];
+                    for(int n;(n=in.read(buffer))!=-1;)out.write(buffer,0,n);
+                    out.getFD().sync();
+                }
+                if(target.length()!=created.file.length())
+                    throw new IllegalStateException(
+                        "Kopia konfliktowa jest niekompletna.");
+                DiagnosticLog.event("HUB_CONFLICT_BACKUP_SAVED",
+                    "bytes="+target.length());
+            } finally {
+                created.file.delete();
+            }
         }
     }
 
