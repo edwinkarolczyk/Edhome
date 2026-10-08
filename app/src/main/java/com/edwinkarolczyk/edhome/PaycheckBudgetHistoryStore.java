@@ -1,6 +1,7 @@
 package com.edwinkarolczyk.edhome;
 
 import android.content.SharedPreferences;
+import android.database.sqlite.SQLiteDatabase;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -80,13 +81,34 @@ final class PaycheckBudgetHistoryStore {
             validate(event);
             events.add(event);
         }
-        // Docelowa migracja dziennika bez limitu do SQLite: etap 5.
+        // Skrócenie cache jest bezpieczne wyłącznie po archiwizacji całej
+        // historii do SQLite; w razie błędu nie gubimy ani jednego wpisu.
+        if (events.size() > MAX_EVENTS)
+            PaycheckBudgetSqliteStore.archiveBeforeTrim(events);
         while (events.size() > MAX_EVENTS) events.remove(0);
         editor.putString(PREF_KEY,serialize(events));
     }
 
     static List<Event> load(SharedPreferences prefs) throws Exception {
         return parse(prefs.getString(PREF_KEY,"[]"));
+    }
+
+    /** Pełny dziennik: archiwum SQLite + niedawny cache starych instalacji. */
+    static List<Event> loadAll(SQLiteDatabase db, SharedPreferences prefs)
+            throws Exception {
+        java.util.LinkedHashMap<String,Event> unique=new java.util.LinkedHashMap<>();
+        JSONArray archived=PaycheckBudgetSqliteStore.archivedHistory(db,null);
+        for(int i=0;i<archived.length();i++) {
+            Event event=eventFromJson(archived.getJSONObject(i));
+            unique.put(event.id,event);
+        }
+        for(Event event:load(prefs)) unique.putIfAbsent(event.id,event);
+        List<Event> result=new ArrayList<>(unique.values());
+        result.sort((a,b)->{
+            int cmp=Long.compare(a.createdAt,b.createdAt);
+            return cmp!=0 ? cmp : a.id.compareTo(b.id);
+        });
+        return result;
     }
 
     static String serialized(SharedPreferences prefs) throws Exception {
@@ -111,19 +133,7 @@ final class PaycheckBudgetHistoryStore {
         List<Event> result = new ArrayList<>();
         java.util.HashSet<String> ids = new java.util.HashSet<>();
         for (int i=0;i<array.length();i++) {
-            JSONObject json = array.getJSONObject(i);
-            Event event = new Event();
-            event.id = json.getString("id");
-            event.itemId = json.getString("itemId");
-            event.recipientId = json.optString("recipientId","");
-            event.month = json.getString("month");
-            event.type = json.getString("type");
-            event.amountGrosz = json.optLong("amountGrosz",0L);
-            event.note = json.optString("note","");
-            event.operationId = json.optString("operationId","");
-            event.transactionDate = json.optString("transactionDate","");
-            event.createdAt = json.getLong("createdAt");
-            validate(event);
+            Event event = eventFromJson(array.getJSONObject(i));
             if (!ids.add(event.id))
                 throw new IllegalArgumentException("Powtórzone zdarzenie budżetu.");
             result.add(event);
@@ -131,23 +141,41 @@ final class PaycheckBudgetHistoryStore {
         return result;
     }
 
+    static Event eventFromJson(JSONObject json) throws Exception {
+        Event event=new Event();
+        event.id=json.getString("id");
+        event.itemId=json.getString("itemId");
+        event.recipientId=json.optString("recipientId","");
+        event.month=json.getString("month");
+        event.type=json.getString("type");
+        event.amountGrosz=json.optLong("amountGrosz",0L);
+        event.note=json.optString("note","");
+        event.operationId=json.optString("operationId","");
+        event.transactionDate=json.optString("transactionDate","");
+        event.createdAt=json.getLong("createdAt");
+        validate(event);
+        return event;
+    }
+
+    static JSONObject eventJson(Event event) throws Exception {
+        validate(event);
+        JSONObject json=new JSONObject();
+        json.put("id",event.id);
+        json.put("itemId",event.itemId);
+        json.put("recipientId",event.recipientId);
+        json.put("month",event.month);
+        json.put("type",event.type);
+        json.put("amountGrosz",event.amountGrosz);
+        json.put("note",event.note);
+        json.put("operationId",event.operationId);
+        json.put("transactionDate",event.transactionDate);
+        json.put("createdAt",event.createdAt);
+        return json;
+    }
+
     private static String serialize(List<Event> events) throws Exception {
-        JSONArray array = new JSONArray();
-        for (Event event : events) {
-            validate(event);
-            JSONObject json = new JSONObject();
-            json.put("id",event.id);
-            json.put("itemId",event.itemId);
-            json.put("recipientId",event.recipientId);
-            json.put("month",event.month);
-            json.put("type",event.type);
-            json.put("amountGrosz",event.amountGrosz);
-            json.put("note",event.note);
-            json.put("operationId",event.operationId);
-            json.put("transactionDate",event.transactionDate);
-            json.put("createdAt",event.createdAt);
-            array.put(json);
-        }
+        JSONArray array=new JSONArray();
+        for(Event event:events)array.put(eventJson(event));
         return array.toString();
     }
 
