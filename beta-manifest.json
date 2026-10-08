@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 242,
-  "versionName": "0.8.0.50",
-  "changelog": "EDHOME Beta 0.8.0.50 / 242 — Budżet miesiąca (etapy 0–1): poprawione zaległości po wykorzystaniu nadpłaty; podział przelewu według pozostałych kwot rachunków, bez proporcjonalnego rozmazywania różnic; osobna nadpłata lub niedopłata z podziału; częściowo zapłacone pozycje ponownie kwalifikują się do dopasowania; dodano testy finansowe P0. Dane istniejących budżetów zachowane. Stable/main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.50/edhome-beta.apk",
-  "sha256": "366f10cfc337ddedf9f8882c91181a9ee11d6817b652dcee72fbefe51167d08b"
+  "versionCode": 243,
+  "versionName": "0.8.0.51",
+  "changelog": "EDHOME 0.8.0.51 — Beta. Budżet miesiąca: jeden PayCheck w bieżącym UI, zwarty nagłówek miesiąca, kolor całej linii wg statusu, Historia przy pozycji oraz przypomnienia dokładnie 3 dni przed i w dniu płatności. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.51/edhome-beta.apk",
+  "sha256": "edddd7444f5201d958a8237970cf8bfefdc340d2497be42e6600bd26e8ac0adc"
 }
