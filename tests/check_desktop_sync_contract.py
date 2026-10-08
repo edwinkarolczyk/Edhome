@@ -421,10 +421,12 @@ import re
 desktop_gradle=(root/"desktop/build.gradle").read_text(encoding="utf-8")
 desktop_workflow=(root/".github/workflows/desktop-beta.yml").read_text(
     encoding="utf-8")
-desktop_version=re.search(r'DESKTOP_VERSION = "(\d+\.\d+\.\d+)"',desktop)
-gradle_version=re.search(r"(?m)^version = '(\d+\.\d+\.\d+)'",desktop_gradle)
+desktop_version=re.search(r'DESKTOP_VERSION = "([0-9]+(?:[.][0-9]+){2,})"',desktop)
+gradle_version=re.search(
+    r"(?m)^version = '([0-9]+(?:[.][0-9]+){2,})'",
+    desktop_gradle)
 workflow_version=re.search(
-    r'(?m)^  DESKTOP_VERSION: "(\d+\.\d+\.\d+)"',
+    r'(?m)^  DESKTOP_VERSION: "([0-9]+(?:[.][0-9]+){2,})"',
     desktop_workflow)
 assert desktop_version and gradle_version and workflow_version
 assert desktop_version.group(1)==gradle_version.group(1)==workflow_version.group(1), (
