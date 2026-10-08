@@ -56,6 +56,9 @@ final class DesktopBudgetIntegrity {
                 ?item.getAsJsonArray("matches"):new JsonArray();
             JsonObject allocation=item.has("allocations")&&item.get("allocations").isJsonObject()
                 ?item.getAsJsonObject("allocations"):new JsonObject();
+            JsonObject surplus=item.has("splitSurplusesGrosz")
+                    &&item.get("splitSurplusesGrosz").isJsonObject()
+                ?item.getAsJsonObject("splitSurplusesGrosz"):new JsonObject();
             Set<String> seen=new HashSet<>();
             for(JsonElement match:matches) {
                 if(!match.isJsonPrimitive())
@@ -73,9 +76,14 @@ final class DesktopBudgetIntegrity {
                         :payment.amount;
                     if(allocated<=0L||allocated>payment.amount)
                         throw new ArithmeticException("Kwota poza zakresem.");
-                    long total=Math.addExact(used.getOrDefault(id,0L),allocated);
+                    long surplusGrosz=surplus.has(id)
+                        ?surplus.get(id).getAsLong():0L;
+                    if(surplusGrosz<0L)
+                        throw new ArithmeticException("Ujemna nadpłata.");
+                    long currentShare=Math.addExact(allocated,surplusGrosz);
+                    long total=Math.addExact(used.getOrDefault(id,0L),currentShare);
                     if(total>payment.amount)
-                        throw new ArithmeticException("Podwójne rozliczenie.");
+                        throw new ArithmeticException("Podwójne rozliczenie nadpłaty.");
                     used.put(id,total);
                 } catch(Exception invalid) {
                     throw new DesktopHubServer.Conflict(
