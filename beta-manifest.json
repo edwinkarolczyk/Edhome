@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 248,
-  "versionName": "0.8.0.56",
-  "changelog": "EDHOME 0.8.0.56 — Beta. Budżet miesiąca: jeden PayCheck w bieżącym UI, zwarty nagłówek miesiąca, kolor całej linii wg statusu, Historia przy pozycji oraz przypomnienia dokładnie 3 dni przed i w dniu płatności. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.56/edhome-beta.apk",
-  "sha256": "290ee17819363d4bec4f0ca32541193f0f2209f6ba37369a7f82cb2c476ee634"
+  "versionCode": 249,
+  "versionName": "0.8.0.57",
+  "changelog": "EDHOME 0.8.0.57 — Beta. Budżet miesiąca: jeden PayCheck w bieżącym UI, zwarty nagłówek miesiąca, kolor całej linii wg statusu, Historia przy pozycji oraz przypomnienia dokładnie 3 dni przed i w dniu płatności. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.57/edhome-beta.apk",
+  "sha256": "dca3851703d1cd02c27dead2a29bde975a44e55b71edbbeec453dcf06d735627"
 }
