@@ -76,6 +76,59 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 7. automatyczna synchronizacja Android ↔ Desktop w obie strony;
 8. migracja z ostatniej 0.6 bez utraty PayCheck, Pojazdów, Magazynu, NFC/QR ani ustawień panelu.
 
+## Projekty — kontrakt działania i odbioru (08.10.2026)
+
+> **Ustalenie Edwina, priorytet natychmiastowy: Projekty mają nadawać się do codziennej pracy bez obejść i bez utraty danych.** Poniższy kontrakt uzupełnia rozmowy z 03–08.10.2026 i ma pierwszeństwo przed opisem „projekty są już gotowe” wynikającym wyłącznie z przechodzących testów statycznych. Rozwój wyłącznie na `beta`; `main` nie dotykać bez odrębnej akceptacji. Nie ogłaszać ukończenia na podstawie numeru wersji, obecności metody lub zielonego CI — wymagane są także scenariusze ręczne na Androidzie i Desktopie.
+
+### Ustalenia funkcjonalne (P0 — wymagane przed odbiorem)
+
+1. **Hierarchia:** projekt główny → podprojekty → czynności, bez zrywania powiązań; przy statusie wstrzymanym nie wolno rozpocząć pracy; ukończenie projektu dopiero po zakończeniu otwartych czynności (również potomnych).
+2. **Czynności:** dodaj, edytuj (nazwa, czas, priorytet, osoba, termin), oznacz jako wykonane, cofnij wykonanie oraz usuń z ostrzeżeniem o skutkach. Widoczna akcja **Cofnij**, gdy zakończenie nastąpiło przez pomyłkę.
+3. **Szacowany czas:** minimum **20 minut** i domyślnie 20 minut; maksimum 10 godzin. Wpis godzin i minut osobno, bez nieczytelnych liczb dziesiętnych: `HH:MM` / 1 h 20 min; kropkowy zapis `0.20` = 20 min zgodnie z ustaleniem. Ujednolicić Android i Desktop, w tym szybkie dodawanie/wklejanie list.
+4. **Czas pracy:** Start/Stop z sumą wielu sesji, przepracowano/pozostało, podglądem sesji, bez resetowania planu. Start jest niedostępny przy aktywnej sesji i twardych blokerach. Przed zakończeniem wymagane zatrzymanie aktywnego timera albo jawne pytanie o Stop+zakończ; **bez cichego kasowania aktywnej sesji**.
+5. **Progress czasu:** zielony = praca mieści się w planie; żółty = czas przekroczony, pomiar zatrzymany; czerwony = czas przekroczony i timer wciąż działa. Gdy pozostało 0, pokazać przekroczenie zamiast ujemnego czasu; analogiczna informacja na liście i w podsumowaniu projektu.
+6. **Powiadomienie aktywnej pracy:** systemowy licznik podczas pracy, trwałe/ongoing, dostępny Stop bez otwierania aplikacji; dotknięcie otwiera **konkretny projekt i konkretną czynność**, nie tylko ekran główny. Przywrócenie po restarcie i synchronizacji wymaga regresji na urządzeniach.
+7. **Zależności:** dodawaj, przeglądaj, zmieniaj i **usuwaj istniejące zależności**. Android i Desktop mają mieć czytelny edytor wielokrotnego wyboru z zaznaczonymi obecnymi poprzednikami i jednym przyciskiem **Zapisz**. Wskazać nazwy czynności „czeka na”, ich status i projekt/podprojekt. Zakaz zależności do siebie, pętli i łączenia odrębnych projektów głównych.
+8. **Blokady zależności:** nierozwiązane poprzedniki blokują Start i zakończenie czynności; kliknięcie nazwy blokującej otwiera tę czynność. Pokazać odwrotną relację „Po wykonaniu odblokuje: [nazwy]” i liczbę innych oczekujących czynności.
+9. **Wymagania czynności:** rodzaje: zakup/materiał, dostawa/oczekiwanie, przygotowanie, zasób, akceptacja/decyzja i własne. Każde wymaganie ma etykietę, rodzaj, datę dostępności (opcjonalną), twarde/miękkie oraz status oczekujące/spełnione.
+10. **Obsługa wymagań (najpilniejszy brak):** na liście **bezpośredni checkbox** umożliwiający zaznaczenie jako spełnione i ponowne odznaczenie; **Edytuj** zmienia nazwę, rodzaj, datę i twarde/miękkie; **Usuń** po potwierdzeniu. Wszystkie akcje dostępne zarówno na Androidzie, jak i na Desktopie — nie tylko w ukrytym menu. Po zmianie natychmiast przelicz bloker i kolejność czynności.
+11. **Twarde/miękkie:** twarde wymaganie blokuje Start i wykonanie; miękkie ostrzega, ale nie blokuje. Przewidywana data nie oznacza automatycznego spełnienia i nie zwalnia blokady bez potwierdzenia.
+12. **Sortowanie listy:** na górze trwające, następnie gotowe i odblokowujące dalsze prace, potem pozostałe gotowe, zablokowane, na końcu wykonane. Pokazać „Do wykonania”, „Czeka na”, „Odblokuje” wraz z konkretnymi nazwami. Zapamiętywać ręczną kolejność w obrębie tej samej grupy priorytetu.
+13. **UX:** operacje Edytuj/Zaznacz/Usuń/Cofnij i przewijanie nie mogą samowolnie wracać na początek długiej listy; zachować zaznaczoną czynność i lokalny scroll. Wymagania i zależności muszą być czytelne bez zgadywania znaczenia samej liczby.
+14. **Konsystencja telefonu/PC:** identyczne blokady Start/zakończenia, zapis operacji i komunikaty; brak dwóch aktywnych timerów tego samego zadania na dwóch urządzeniach; usunięcie na jednym urządzeniu usuwa powiązania i sesje na drugim, bez ich powrotu po synchronizacji.
+15. **Trwałość:** migracja starszych baz, backup ZIP/restore, przyrostowa synchronizacja LAN, brak duplikatów krawędzi zależności i blokad, brak utraty rozpoczętych sesji. Działanie offline bez Desktopu.
+16. **Planer:** uwzględnia dostępność osoby (I zmiana 16:00–21:00, II 08:00–12:00, wolne 09:00–18:00; wyjątki edytowalne), podprojekty, kolejność poprzedników, twarde wymagania oraz **tylko pozostały** czas; terminy to propozycja do akceptacji, nigdy automatycznie wykonana czynność.
+17. **Zasoby i budżet:** przypisane rzeczy/pudełka oraz koszty/zakupy powiązane z projektem; koszty projektu nie mogą automatycznie księgować transakcji PayCheck.
+
+### Stan wejściowy z audytu 08.10.2026
+
+- **Potwierdzone w kodzie:** model projektów/podprojektów, lista czynności, ograniczenia zależności, Start/Stop, historia sesji, pozostały czas, sortowanie, twarde/miękkie wymagania, blokady, backup/sync schematu, powiadomienie z deep linkiem, dostępność i podstawowy planer.
+- **🔴 P0:** brak **edycji istniejącego wymagania** Android; brak pełnego **interfejsu wymagań** Desktop; brak jasnego jednego edytora zależności na Androidzie (obecnie przełączanie pojedynczej pozycji); nie ma regresji CRUD wymagań i ich cofania. Odznaczanie wymagania jest **w kodzie Androida**, ale jest schowane w menu i nie spełnia ustalonego UX.
+- **🟡 P0:** rozbieżny UX Android/Desktop; widoczne Cofnij, ochrona pomiaru przy zakończeniu, niezawodność powiadomienia/deep linku oraz synchronizacji muszą zostać odebrane scenariuszami urządzeń. Zielony test statyczny nie jest potwierdzeniem działania na telefonie.
+- **🟡 P1 (dopiero po P0):** uproszczenie edytorów i szybkiego dodawania, jednolite formatowanie czasu `0.20`/HH:MM, zachowanie przewinięcia po operacji, weryfikacja zasobów/kosztów w całym przepływie.
+
+### Minimalny scenariusz odbioru P0 — na obu urządzeniach
+
+1. Utwórz Projekt A, podprojekt A1 i 3 czynności: zakup → przygotowanie → montaż. Dodaj zależności, zamknij edytor, otwórz ponownie, usuń jedną zależność i ustaw na nowo. Sprawdź komunikaty i ochronę przed pętlą.
+2. Dodaj dwa wymagania: twarde „Materiał dostarczony” i miękkie „Sprawdź narzędzia”. Zmień etykietę/datę/typ pierwszego; zaznacz ✓, odznacz, usuń drugie. Po każdej czynności sprawdź poprawny status Start oraz zmianę kolejności zadań.
+3. Start 20-minutowej czynności: powiadomienie z działającym licznikiem, przejście do tej czynności, Stop w powiadomieniu, wznowienie Start; pomiar po dwóch sesjach sumuje minuty, a planer bierze pozostały czas. Zweryfikuj kolory przed i po przekroczeniu.
+4. Próba wykonania czynności z twardą blokadą i próba zakończenia projektu z otwartymi czynnościami kończą się odmową z czytelną listą przyczyn. Cofnij przypadkowe wykonanie, sprawdź ponowną blokadę następników.
+5. Usuń czynność, od której zależą inne; pokaż jej nazwy i skutki, wymagaj potwierdzenia; brak osieroconych wymagań/zależności i aktywnych sesji po usunięciu.
+6. Zrób backup, restart i restore, następnie synchronizację **Android → Desktop oraz Desktop → Android** po edycji wymagań/zależności na każdym urządzeniu. Nic nie znika, nie dubluje się i nie przywraca starego stanu.
+7. Potwierdź brak skoku na górę po zmianie checkboxa, zależności, Edytuj i po Stop. Sprawdź działania również offline bez PC.
+
+**Warunek zamknięcia:** dla każdego punktu P0 istnieje test regresyjny logiki (nie tylko marker tekstowy), zielony build Android/Desktop oraz wynik manualny „OK” na fizycznym telefonie i Desktopie. Do tego momentu status modułu pozostaje **🟡 W trakcie stabilizacji**. Rozpoczęcie RC/Stable nie zwalnia z odbioru Projektów.
+
+### Kolejność napraw na `beta`
+
+1. **P0-A:** Android — jawna obsługa wymagania: zaznacz/odznacz, Edytuj, Usuń oraz edytor wielokrotnego wyboru zależności; zachowanie scroll.
+2. **P0-B:** Desktop — CRUD wymagań i zgodna semantyka blokad Start/zakończenia; jednolita edycja zależności.
+3. **P0-C:** Cofnij/Stop, kolorystyka czasu, powiadomienie/deep link i scenariusze niezamierzonych kliknięć.
+4. **P0-D:** regresja logiki i pełny backup/restore + LAN Android↔Desktop, odbiór fizyczny.
+5. **P1:** dopiero po zielonym P0 — ergonomia/formatowanie/szybkie dodawanie.
+
+---
+
 ## PayCheck — Budżet miesiąca 1.0 (kontrakt odbioru 25/25)
 
 > Ustalenie Edwina z 07.10.2026. Ta sekcja jest źródłem prawdy dla przebudowy Budżetu miesiąca. Funkcji nie uznawać za ukończoną tylko dlatego, że istnieje podobny ekran lub częściowa logika. Odbiór dopiero po spełnieniu poniższych punktów i testów regresyjnych. Rozwój wyłącznie na `beta`; `main` bez osobnej zgody pozostaje nietknięty.
