@@ -1337,12 +1337,19 @@ public final class EdhomeDesktop extends JFrame {
         down.addActionListener(e -> moveDesktopProjectTask(task,1));
         JButton depsButton = compactActionButton("Zależności");
         depsButton.addActionListener(e -> showDesktopTaskDependencies(task));
+        JButton requirements = compactActionButton("Wymagania");
+        requirements.addActionListener(e -> showDesktopTaskRequirements(task));
+        JButton completion = compactActionButton(
+            done ? "↶ Cofnij" : "✓ Wykonane");
+        completion.addActionListener(e -> toggleDesktopProjectCompletion(task));
         JButton delete = compactActionButton("Usuń");
         delete.addActionListener(e -> deleteDesktopProjectTask(task));
         actions.add(up);
         actions.add(down);
         actions.add(edit);
         actions.add(depsButton);
+        actions.add(requirements);
+        actions.add(completion);
         actions.add(delete);
         card.add(actions,BorderLayout.EAST);
         return card;
@@ -1602,8 +1609,41 @@ public final class EdhomeDesktop extends JFrame {
                 "Czas [min]","duration_minutes",
                 "Termin","due_date",
                 "Priorytet","priority",
-                "Osoba","assignee_id",
-                "Wykonane","done"))) return;
+                "Osoba","assignee_id"))) return;
+        showSection("Projekty");
+    }
+
+    private void toggleDesktopProjectCompletion(JsonObject task) {
+        long id=longValue(task,"id");
+        boolean done=intValue(task,"done")!=0;
+        if(!done) {
+            if(desktopActiveProjectWorkSession(id)!=null) {
+                JOptionPane.showMessageDialog(this,
+                    "Najpierw zatrzymaj pomiar czasu tej czynności.");
+                return;
+            }
+            java.util.List<String> dependencies=desktopOpenDependencyTitles(id);
+            if(!dependencies.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "Najpierw zakończ:\n• "+String.join("\n• ",dependencies));
+                return;
+            }
+            String block=desktopHardBlockReason(id);
+            if(!block.isBlank()) {
+                JOptionPane.showMessageDialog(this,block);
+                return;
+            }
+            String projectBlock=desktopProjectWorkBlockReason(task);
+            if(!projectBlock.isBlank()) {
+                JOptionPane.showMessageDialog(this,projectBlock);
+                return;
+            }
+        }
+        task.addProperty("done",done?0:1);
+        markDirty();
+        DesktopDiagnosticLog.event(done
+            ?"PROJECT_TASK_REOPENED_DESKTOP":"PROJECT_TASK_COMPLETED_DESKTOP",
+            "task="+id);
         showSection("Projekty");
     }
 
@@ -1894,6 +1934,167 @@ public final class EdhomeDesktop extends JFrame {
                     && longValue(element.getAsJsonObject(),"task_id") == taskId)
                 count++;
         return count;
+    }
+
+    private void showDesktopTaskRequirements(JsonObject task) {
+        long taskId=longValue(task,"id");
+        if(taskId<=0L)return;
+        javax.swing.JDialog dialog=new javax.swing.JDialog(this,
+            "EDHOME • Wymagania: "+value(task,"title"),true);
+        JPanel list=new JPanel();
+        list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));
+        list.setBorder(new EmptyBorder(10,10,10,10));
+        renderDesktopTaskRequirements(list,task);
+        JScrollPane scroll=new JScrollPane(list);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,8,8));
+        JButton add=actionButton("+ Dodaj wymaganie");
+        JButton close=actionButton("Zamknij");
+        add.addActionListener(e->{
+            if(editDesktopTaskRequirement(task,null))
+                renderDesktopTaskRequirements(list,task);
+        });
+        close.addActionListener(e->dialog.dispose());
+        footer.add(add);
+        footer.add(close);
+        dialog.setLayout(new BorderLayout(0,8));
+        dialog.add(new JLabel(
+            "  Zaznacz spełnione. Twarde wymagania blokują rozpoczęcie i zakończenie."),
+            BorderLayout.NORTH);
+        dialog.add(scroll,BorderLayout.CENTER);
+        dialog.add(footer,BorderLayout.SOUTH);
+        dialog.setSize(720,440);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+        showSection("Projekty");
+    }
+
+    private void renderDesktopTaskRequirements(JPanel list,JsonObject task) {
+        long taskId=longValue(task,"id");
+        list.removeAll();
+        int count=0;
+        for(JsonElement element:table("project_task_blockers")) {
+            if(!element.isJsonObject())continue;
+            JsonObject requirement=element.getAsJsonObject();
+            if(longValue(requirement,"task_id")!=taskId)continue;
+            count++;
+            JPanel row=new JPanel(new FlowLayout(FlowLayout.LEFT,8,5));
+            JCheckBox checked=new JCheckBox(desktopRequirementKindLabel(
+                value(requirement,"kind"))+" • "+value(requirement,"label")
+                +(intValue(requirement,"hard")!=0?" • twarde":" • miękkie")
+                +(value(requirement,"available_on").isBlank()?""
+                    :" • od "+value(requirement,"available_on")));
+            checked.setSelected(intValue(requirement,"resolved")!=0);
+            checked.addActionListener(e->{
+                requirement.addProperty("resolved",checked.isSelected()?1:0);
+                markDirty();
+                DesktopDiagnosticLog.event(checked.isSelected()
+                    ?"PROJECT_BLOCKER_RESOLVED_DESKTOP"
+                    :"PROJECT_BLOCKER_REOPENED_DESKTOP",
+                    "id="+longValue(requirement,"id"));
+            });
+            JButton edit=compactActionButton("Edytuj");
+            edit.addActionListener(e->{
+                if(editDesktopTaskRequirement(task,requirement))
+                    renderDesktopTaskRequirements(list,task);
+            });
+            JButton delete=compactActionButton("Usuń");
+            delete.addActionListener(e->{
+                int answer=JOptionPane.showConfirmDialog(this,
+                    "Usunąć wymaganie „"+value(requirement,"label")+"”?",
+                    "EDHOME • Projekty",JOptionPane.YES_NO_OPTION);
+                if(answer!=JOptionPane.YES_OPTION)return;
+                table("project_task_blockers").remove(requirement);
+                markDirty();
+                renderDesktopTaskRequirements(list,task);
+            });
+            row.add(checked);
+            row.add(edit);
+            row.add(delete);
+            list.add(row);
+        }
+        if(count==0)list.add(new JLabel("Brak wymagań tej czynności."));
+        list.revalidate();
+        list.repaint();
+    }
+
+    private static String desktopRequirementKindLabel(String kind) {
+        switch(kind) {
+            case "purchase": return "Zakup / materiał";
+            case "delivery": return "Dostawa / oczekiwanie";
+            case "prepare": return "Dorób / przygotuj";
+            case "resource": return "Zasób";
+            case "approval": return "Akceptacja / decyzja";
+            default: return "Własne";
+        }
+    }
+
+    private boolean editDesktopTaskRequirement(JsonObject task,JsonObject existing) {
+        JComboBox<Choice> kind=new JComboBox<>(new Choice[]{
+            new Choice("purchase","Zakup / materiał"),
+            new Choice("delivery","Dostawa / oczekiwanie"),
+            new Choice("prepare","Dorób / przygotuj"),
+            new Choice("resource","Zasób"),
+            new Choice("approval","Akceptacja / decyzja"),
+            new Choice("manual","Własne")
+        });
+        JTextField label=new JTextField(existing==null?"":value(existing,"label"),34);
+        JTextField date=new JTextField(
+            existing==null?"":value(existing,"available_on"),14);
+        date.setToolTipText("Opcjonalnie RRRR-MM-DD");
+        JCheckBox hard=new JCheckBox("Twarde — blokuje Start i wykonanie",
+            existing==null||intValue(existing,"hard")!=0);
+        if(existing!=null) {
+            for(int i=0;i<kind.getItemCount();i++)
+                if(kind.getItemAt(i).value.equals(value(existing,"kind")))
+                    kind.setSelectedIndex(i);
+        }
+        JPanel form=new JPanel(new GridLayout(4,2,8,8));
+        form.setBorder(new EmptyBorder(10,10,10,10));
+        form.add(new JLabel("Rodzaj"));form.add(kind);
+        form.add(new JLabel("Wymaganie"));form.add(label);
+        form.add(new JLabel("Najwcześniej od"));form.add(date);
+        form.add(new JLabel("Blokada"));form.add(hard);
+        for(;;) {
+            int result=JOptionPane.showConfirmDialog(this,form,
+                existing==null?"Dodaj wymaganie":"Edytuj wymaganie",
+                JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+            if(result!=JOptionPane.OK_OPTION)return false;
+            String name=label.getText().trim();
+            String day=date.getText().trim();
+            if(name.isEmpty()||name.length()>180) {
+                JOptionPane.showMessageDialog(this,
+                    "Podaj wymaganie (1–180 znaków).");
+                continue;
+            }
+            if(!day.isEmpty()) {
+                try { LocalDate.parse(day); }
+                catch(Exception invalid) {
+                    JOptionPane.showMessageDialog(this,
+                        "Nieprawidłowa data. Użyj RRRR-MM-DD.");
+                    continue;
+                }
+            }
+            Choice selected=(Choice)kind.getSelectedItem();
+            if(selected==null)return false;
+            JsonObject row=existing==null?new JsonObject():existing;
+            if(existing==null) {
+                row.addProperty("id",nextId("project_task_blockers"));
+                row.addProperty("task_id",longValue(task,"id"));
+                row.addProperty("created_at",System.currentTimeMillis());
+                row.addProperty("resolved",0);
+            }
+            row.addProperty("kind",selected.value);
+            row.addProperty("label",name);
+            row.addProperty("hard",hard.isSelected()?1:0);
+            if(day.isEmpty())
+                row.add("available_on",com.google.gson.JsonNull.INSTANCE);
+            else row.addProperty("available_on",day);
+            if(existing==null)table("project_task_blockers").add(row);
+            markDirty();
+            return true;
+        }
     }
 
     private void showDesktopTaskDependencies(JsonObject task) {
