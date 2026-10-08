@@ -10,7 +10,7 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.60 / versionCode 252** — poprawka P0 w `beta`, NOWY build CI do weryfikacji; poprzednia 0.8.0.59 / 251 przeszła #1978 |
+| Android Beta | **0.8.0.61 / versionCode 253** — P0: ograniczony zakres zapisów finansowych + weryfikacja sum wpłat po stronie Androida; NOWY build CI do weryfikacji; ostatni w pełni potwierdzony Android 0.8.0.59 / 251 (#1978 PASS) |
 | Desktop Beta | **0.7.0.111** — [Desktop CI #269 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023080), instalator Windows opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37773023083 / #1978](https://github.com/edwinkarolczyk/Edhome/actions/runs/37773023083) — **success**, commit `92591fd1374402a43824211f216d774320a8af53` |
@@ -71,6 +71,8 @@
 **Poprawka:** odbieranie `budgetDelta` aktualizuje teraz wyłącznie trzy powiązane preferencje PayCheck i pięć tabel Budżetu poprzez `PaycheckBudgetSqliteStore.reconcileRaw`, `SyncRecordStore.ensureAll` oraz lokalną transakcję SQLite. Porównuje dane z tą samą migawką, na podstawie której sprawdziło UUID; odrzuca konfliktowe zdarzenia historii kodem 409 i uszkodzone paczki. Nie ma już globalnego `DataBackup.restoreJson` w tej ścieżce.
 
 **Bezpieczeństwo:** nie uznawać zainstalowanej 0.8.0.59 za końcową wersję 5C; najpierw zweryfikować nowy build 0.8.0.60/252 i test A1–A16 na urządzeniach. Desktop pozostaje 0.7.0.111. Test kontraktowy zabrania regresji do pełnego przywracania bazy w finansowym patchu. Odbiór fizyczny nadal NIEODEBRANY.
+
+**Dodatkowe zabezpieczenie P0:** odbiorca Android sprawdza sumę przydziałów i nadpłat każdej potwierdzonej transakcji PayCheck na podstawie istniejącej tabeli `paycheck_transactions`. Dwie niezależne alokacje, które łącznie przekroczą kwotę przelewu, skutkują 409 i brakiem zapisu. Poprawka dodana do testu kontraktowego 5C. Wersja kandydująca **0.8.0.61 / 253** — wynik CI jeszcze do sprawdzenia; wstrzymać odbiór do publikacji podpisanego APK.
 
 ### Zadania do wykonania w etapie 5C
 

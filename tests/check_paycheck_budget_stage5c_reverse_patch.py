@@ -32,6 +32,10 @@ for marker in (
     'db.setTransactionSuccessful();',
     'db.endTransaction();',
     'if(!editor.commit())',
+    'verifySharedAllocations(db,updatedItems)',
+    'Math.addExact(allocated,extra)',
+    'if(total>available)',
+    'SELECT operation_id,amount_grosz,kind',
 ):
     assert marker in merge, marker
 assert 'DataBackup.restoreJson(db,prefs,merged.toString())' not in merge

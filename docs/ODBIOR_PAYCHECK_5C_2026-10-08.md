@@ -6,7 +6,7 @@
 
 ## Wersje do testu
 
-- Android Beta **0.8.0.60 / versionCode 252** — poprawka P0 zapisująca tylko dane finansowe (GitHub CI #1982 w weryfikacji); **nie testować na jedynej kopii danych**.
+- Android Beta **0.8.0.61 / versionCode 253** — poprawka P0 zakresu zapisu i walidacji podwójnych wpłat (CI jeszcze w weryfikacji); **nie testować na jedynej kopii danych**.
 - Desktop Beta **0.7.0.111** — CI #269 PASS.
 - GitHub `beta`; `main`/Stable niezmieniony.
 
@@ -49,5 +49,5 @@
 
 - Android → Desktop Hub: zmiany ustawień Budżetu są wysyłane per UUID; Desktop → Android wciąż pobiera snapshot z kontrolą lokalnych zmian, nie pełne per-UUID pobieranie.
 - Edycja wpłat i nadpłat z poziomu PC nie jest dostępna; synchronizowane są istniejące operacje Androida.
-- Wersja Android 0.8.0.59 miała nadmierny zakres przywracania danych podczas odbioru budżetowego patcha; do testu A17 wymagane jest minimum **0.8.0.60 / 252** po zielonym CI. Konflikty finansowe mogą wymagać ręcznego rozstrzygnięcia.
+- Wersja Android 0.8.0.59 miała nadmierny zakres przywracania danych podczas odbioru budżetowego patcha; do testu A17 wymagane jest minimum **0.8.0.61 / 253** po zielonym CI. Konflikty finansowe mogą wymagać ręcznego rozstrzygnięcia.
 - Sukces CI nie zastępuje testów fizycznych; nie oznaczać etapu ani Budżetu 25/25 jako ukończonego przed odbiorem.
