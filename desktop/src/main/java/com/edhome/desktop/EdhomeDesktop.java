@@ -676,9 +676,16 @@ public final class EdhomeDesktop extends JFrame {
                 if(!"upsert".equals(action)||baseRevision!=0L)
                     throw new DesktopHubServer.Conflict(table,rowKey,
                         "Historii Budżetu nie wolno edytować ani usuwać.");
-                if(rowIndex>=0||liveMeta)
+                if(rowIndex>=0||liveMeta) {
+                    // Retry po zerwaniu LAN: identyczne zdarzenie jest już
+                    // zapisane, więc potwierdź je bez ponownego naliczenia.
+                    if(rowIndex>=0&&op.has("row")
+                            &&op.get("row").isJsonObject()
+                            &&rows.get(rowIndex).equals(op.get("row")))
+                        continue;
                     throw new DesktopHubServer.Conflict(table,rowKey,
                         "Zdarzenie Budżetu już istnieje; nie nadpisano historii.");
+                }
             }
             // Konflikty płatności, korekt, kredytów i definicji budżetu
             // zawsze wymagają kontroli rewizji, nawet po „Telefon wygrywa”.
