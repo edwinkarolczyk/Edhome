@@ -168,6 +168,16 @@ jobs:
         run: python3 tests/check_paycheck_pending_contract.py
       - name: Monthly PayCheck plan and confirmed-actuals regression
         run: python3 tests/check_paycheck_monthly_budget_contract.py
+      - name: Monthly PayCheck finance P0 behavioral regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/paycheck-budget-finance"
+          javac -d "$RUNNER_TEMP/paycheck-budget-finance" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PaycheckBudgetSplitMath.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/PaycheckBudgetSettlementMath.java \
+            tests/task_rules/PaycheckBudgetFinanceSmoke.java
+          java -cp "$RUNNER_TEMP/paycheck-budget-finance" \
+            com.edwinkarolczyk.edhome.PaycheckBudgetFinanceSmoke
+          python3 tests/check_paycheck_budget_finance_regression.py
       - name: Opt-in bank notification parsing and privacy regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-notifications"
