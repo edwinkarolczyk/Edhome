@@ -123,8 +123,12 @@ dependency_dialog=main.split("private void showProjectDependencyDialog",1)[1].sp
     "private void showProjectBlockers",1)[0]
 assert '.setMultiChoiceItems(labels.toArray(new String[0]),chosen' in dependency_dialog
 assert 'database.beginTransaction();' in dependency_dialog
+assert 'if(current.equals(desired))return;' in dependency_dialog
+assert 'if(!desired.contains(old))' in dependency_dialog
+assert 'if(!current.contains(added))' in dependency_dialog
 assert 'ProjectStore.removeDependency(database,taskId,old);' in dependency_dialog
-assert 'ProjectStore.addDependency(database,taskId,' in dependency_dialog
+assert 'ProjectStore.addDependency(database,taskId,added);' in dependency_dialog
+assert 'database.endTransaction();' in dependency_dialog
 assert '.setMessage(' not in dependency_dialog
 
 # Minimalny kontrakt SQL zależności: brak self-loop i brak duplikatów.
