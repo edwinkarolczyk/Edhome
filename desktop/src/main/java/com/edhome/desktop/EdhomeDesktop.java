@@ -804,7 +804,7 @@ public final class EdhomeDesktop extends JFrame {
         content.repaint();
         int restore = sectionScrollY.getOrDefault(name, 0);
         SwingUtilities.invokeLater(() -> {
-            JScrollPane scroll = firstScrollPane(content);
+            JScrollPane scroll = sectionScrollPane(content, current);
             if (scroll != null)
                 scroll.getVerticalScrollBar().setValue(Math.max(0, restore));
         });
@@ -812,9 +812,29 @@ public final class EdhomeDesktop extends JFrame {
 
     private void rememberCurrentScroll() {
         if (current == null || current.isBlank()) return;
-        JScrollPane scroll = firstScrollPane(content);
+        JScrollPane scroll = sectionScrollPane(content, current);
         if (scroll != null)
             sectionScrollY.put(current, scroll.getVerticalScrollBar().getValue());
+    }
+
+    // W Projektach zapamiętuj przewinięcie czynności, nie drzewa po lewej.
+    private static JScrollPane sectionScrollPane(Component node,String current) {
+        if("Projekty".equals(current)) {
+            JScrollPane tasks=namedScrollPane(node,"edhome-project-tasks");
+            if(tasks!=null)return tasks;
+        }
+        return firstScrollPane(node);
+    }
+
+    private static JScrollPane namedScrollPane(Component node,String name) {
+        if(node instanceof JScrollPane && name.equals(node.getName()))
+            return (JScrollPane)node;
+        if(node instanceof Container)
+            for(Component child:((Container)node).getComponents()) {
+                JScrollPane result=namedScrollPane(child,name);
+                if(result!=null)return result;
+            }
+        return null;
     }
 
     private static JScrollPane firstScrollPane(Component root) {
