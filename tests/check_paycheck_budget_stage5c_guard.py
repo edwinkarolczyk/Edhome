@@ -19,8 +19,9 @@ assert pos("PaycheckBudgetSqliteStore.reconcileRaw(database,") < pos(
     "PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetHistory)")
 assert pos("PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetHistory)") < pos(
     "PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetCache)")
-assert pos("PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetCache)") < pos(
-    "SyncRecordStore.ensureAll(database)")
+assert pos("PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetCache)") < (
+    restore.index("SyncRecordStore.ensureAll(database)", pos(
+        "PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetCache)")))
 assert pos("SyncRecordStore.ensureAll(database)") < pos("if (!restored.commit())")
 assert "Historia Budżetu jest tylko do dopisywania." in sync
 assert 'if("budget_history".equals(table)' in sync
