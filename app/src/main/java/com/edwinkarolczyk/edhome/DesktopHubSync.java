@@ -145,14 +145,22 @@ final class DesktopHubSync {
             device=UUID.randomUUID().toString();
             prefs.edit().putString(PREF_DEVICE,device).apply();
         }
-        prefs.edit().putString(PREF_ID,desktopId.toLowerCase(Locale.ROOT))
+        // Ponowne skanowanie QR tego SAMEGO Desktopu nie może usunąć
+        // wspólnej bazy porównawczej ani nierozstrzygniętego konfliktu.
+        boolean sameDesktop=desktopId.equalsIgnoreCase(
+            prefs.getString(PREF_ID,""));
+        SharedPreferences.Editor editor=prefs.edit()
+            .putString(PREF_ID,desktopId.toLowerCase(Locale.ROOT))
             .putString(PREF_TOKEN,token)
             .putString(PREF_HOST,first)
             .putString(PREF_HOSTS,android.text.TextUtils.join(",",validHosts))
-            .putString(PREF_LAST_STATE,"PAROWANIE • szukam API Desktopu")
-            .remove(PREF_CONFLICT).apply();
-        baselineFile(context).delete();
-        conflictFile(context).delete();
+            .putString(PREF_LAST_STATE,"PAROWANIE • szukam API Desktopu");
+        if(!sameDesktop)editor.remove(PREF_CONFLICT);
+        editor.apply();
+        if(!sameDesktop) {
+            baselineFile(context).delete();
+            conflictFile(context).delete();
+        }
         DiagnosticLog.event("HUB_QR_SAVED",
             "desktop="+desktopId+" hosts="+android.text.TextUtils.join(",",validHosts));
         ensureScheduled(context);
@@ -192,8 +200,6 @@ final class DesktopHubSync {
             try {
                 SharedPreferences prefs=prefs(app);
                 String patch=readText(conflictFile(app));
-                if(patch.isBlank())
-                    throw new IllegalStateException("Brak zapisanej zmiany konfliktowej.");
                 String host=resolveHost(app,prefs);
                 if(host==null)throw new IllegalStateException("Nie znaleziono Desktopu.");
                 String expectedLocal;
@@ -201,8 +207,30 @@ final class DesktopHubSync {
                     expectedLocal=DataBackup.exportJson(
                         helper.getWritableDatabase(),prefs);
                 }
-                HttpResult result=request(app,prefs,host,"POST",
-                    "/resolve-phone",patch,"application/json; charset=utf-8");
+                HttpResult result;
+                if(!patch.isBlank()) {
+                    result=request(app,prefs,host,"POST",
+                        "/resolve-phone",patch,"application/json; charset=utf-8");
+                } else {
+                    // Konflikt pierwszego parowania nie ma bazowej rewizji.
+                    // Użytkownik wybrał Telefon: wykonaj pełny CAS przeciw
+                    // AKTUALNEJ wersji PC, z backupem po obu stronach.
+                    saveConflictBackup(app,prefs);
+                    HttpResult remote=request(app,prefs,host,"GET",
+                        "/snapshot",null,null);
+                    if(remote.code!=200)
+                        throw new IllegalStateException(
+                            "Nie pobrano stanu PC przed wyborem Telefon.");
+                    String remoteSha=remote.sha256.isBlank()
+                        ?sha256(remote.body):remote.sha256;
+                    result=request(app,prefs,host,"POST",
+                        "/snapshot",expectedLocal,"application/json; charset=utf-8",
+                        "X-EDHOME-BASE-SHA256",remoteSha);
+                }
+                if(result.code==409)
+                    throw new IllegalStateException(
+                        "Desktop zmienił dane podczas rozstrzygania konfliktu. "
+                        +"Powtórz po ponownym sprawdzeniu.");
                 if(result.code!=200)throw new IllegalStateException(
                     "Desktop odpowiedział HTTP "+result.code+".");
                 applyServerSnapshot(app,prefs,result.body,result.sha256,expectedLocal);
@@ -264,6 +292,21 @@ final class DesktopHubSync {
                 HttpResult server=request(context,prefs,host,"GET","/snapshot",null,null);
                 if(server.code!=200)
                     throw new IllegalStateException("Desktop snapshot HTTP "+server.code+".");
+                JSONObject localRoot=new JSONObject(current);
+                JSONObject remoteRoot=new JSONObject(server.body);
+                // Brak baseline (np. po przełączeniu PC) nie jest zgodą na
+                // skasowanie lokalnych wpisów Projektów, Magazynu i PayCheck.
+                if(!canonical(localRoot.opt("settings")).equals(
+                            canonical(remoteRoot.opt("settings")))
+                        ||!canonical(localRoot.opt("tables")).equals(
+                            canonical(remoteRoot.opt("tables")))) {
+                    rememberConflict(context,prefs,
+                        "Pierwsze połączenie z Desktopem mającym inne dane. "
+                        +"Wybierz świadomie: zachowaj Telefon albo Desktop.",
+                        null);
+                    DiagnosticLog.event("HUB_NO_BASELINE_CONFLICT");
+                    return;
+                }
                 applyServerSnapshot(context,prefs,server.body,server.sha256,current);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • pobrano stan Desktopu").apply();
