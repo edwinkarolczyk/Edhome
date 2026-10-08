@@ -256,6 +256,19 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 - **P2 — statystyki:** dopiero po zebraniu poprawnej historii; nie blokują odbioru modelu danych, jeśli wszystkie zdarzenia są zapisywane.
 - **Regresja obowiązkowa:** plan nie zmienia salda, jedna potwierdzona transakcja nie księguje się podwójnie, backup/restore zachowuje historię i załączniki, a stara Beta migruje bez utraty danych.
 
+### Audyt naprawczy Budżetu miesiąca — 08.10.2026 (Beta 0.8.0.50 / 242)
+
+> Poprzednie oznaczenie „25/25 wdrożone” jest **pokryciem funkcji**, a nie potwierdzeniem poprawności finansowej ani zgodności Android ↔ Desktop. Całości **nie zamykamy jako odebranej 25/25**.
+
+- **Etap 0 — kod zabezpieczony:** gałąź `backup/beta-budget-before-etap0-1-2026-10-08` od commitu `ab823e0b…`; nie wykonano zdalnej kopii danych użytkownika z telefonu/PC (nie ma dostępu do urządzeń).
+- **Etap 1 — wykonany w Beta 0.8.0.50 / 242:** (1) zaległość odejmuje wykorzystaną nadpłatę; (7) podział grupowego przelewu przydziela kwoty pozostałe do zapłaty, a dodatnia reszta jest osobną nadpłatą, niedobór osobną niedopłatą; (8) częściowo opłacone rachunki kwalifikują się ponownie do podziału i pojedynczego dopasowania. Podział zapisywany jedną operacją planu. Testy wykonawcze, kontraktowe, kompilacja i build APK w GitHub Actions: **PASS**.
+- **Etap 2 — otwarty:** domyślny termin 10. dnia, faktura konkretnego miesiąca nie zmienia szablonu, ponawialny formularz faktury w istniejącym zobowiązaniu (punkty audytu 2–4).
+- **Etap 3 — otwarty:** rzeczywisty miesiąc operacji w historii, jawne płatności/niedopłaty/nadpłaty pod przyszłe statystyki (punkty 5–6).
+- **Etap 4 — otwarty:** zamykanie powiadomień po zapłacie, załączniki per faktura/miesiąc, jednoznaczny zakres korekty/usunięcia, osobne wykonanie budżetu i wydatki nieprzypisane (punkty 9–12).
+- **Etap 5 — otwarty:** jeden model budżetu dla Desktop i Android, migracja do SQLite, przyrostowe sync-records, historia bez limitu 6000 i bez cichego kasowania (punkty 13,14,18).
+- **Etap 6 — otwarty:** jeden zwarty nagłówek, uproszczone menu/lista rzeczywistych odbiorców, rozszerzone regresje całego modułu i odbiór na rzeczywistych urządzeniach (punkty 15–17,19).
+- **Wymagane przed 25/25:** próby rozliczenia na fizycznym Androidzie, synchronizacja Android ↔ Desktop, backup→restore danych z załącznikami i pełny test bez podwójnego księgowania. Gałąź `main` niezmieniona.
+
 ## Backlog po stabilizacji — Pojazdy i maszyny
 
 To jest **kierunek do roadmapy, bez wdrażania podczas bieżącej stabilizacji**. Nie tworzyć osobnego modułu „Maszyny”; rozszerzyć istniejący moduł **Pojazdy** tak, aby obsługiwał także sprzęt z licznikiem motogodzin.
