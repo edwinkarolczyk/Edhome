@@ -58,11 +58,11 @@ final class DesktopBudgetDeltaTest {
             throws Exception {
         JsonObject server=snapshot();
         JsonObject desktopA=item(A,15000);
-        server.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget",
-            new JsonArray() {{
-                add(desktopA);
-                add(item(B,20000));
-            }}.toString());
+        JsonArray editedA=new JsonArray();
+        editedA.add(desktopA);
+        editedA.add(item(B,20000));
+        server.getAsJsonObject("settings").addProperty(
+            "paycheckMonthlyBudget",editedA.toString());
         JsonObject androidB=item(B,24000);
         int count=DesktopBudgetDelta.apply(server,delta("paycheckMonthlyBudget",
             change(B,item(B,20000),androidB)));
@@ -76,11 +76,11 @@ final class DesktopBudgetDeltaTest {
     @Test void simultaneousEditOfSameBillConflictsAndKeepsSnapshot()
             throws Exception {
         JsonObject server=snapshot();
-        server.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget",
-            new JsonArray() {{
-                add(item(A,18000));
-                add(item(B,20000));
-            }}.toString());
+        JsonArray editedA=new JsonArray();
+        editedA.add(item(A,18000));
+        editedA.add(item(B,20000));
+        server.getAsJsonObject("settings").addProperty(
+            "paycheckMonthlyBudget",editedA.toString());
         String before=server.toString();
         assertThrows(DesktopHubServer.Conflict.class,()->{
             JsonObject work=server.deepCopy();
