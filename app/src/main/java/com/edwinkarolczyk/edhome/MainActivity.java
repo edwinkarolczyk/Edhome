@@ -323,6 +323,15 @@ public final class MainActivity extends Activity {
         db = new LocalDb(this);
         // Upgrade schema before reading reminder columns for rearming alarms.
         db.getWritableDatabase();
+        PaycheckBudgetSqliteStore.configure(this);
+        try {
+            PaycheckBudgetSqliteStore.reconcile(db.getWritableDatabase(),prefs);
+            DiagnosticLog.event("PAYCHECK_BUDGET_SQLITE_MIGRATION_OK");
+        } catch(Exception error) {
+            // The old budget remains untouched if the optional stage-5 mirror
+            // cannot be prepared; no automatic reset or data deletion.
+            DiagnosticLog.error("PAYCHECK_BUDGET_SQLITE_MIGRATION",error);
+        }
         UserProfileStore.ensureAll(db.getWritableDatabase());
         ensureActiveMember();
         int prunedStorageThumbs=StorageThumbs.prune(
@@ -15159,7 +15168,8 @@ public final class MainActivity extends Activity {
             java.util.List<PaycheckBudgetHistoryStore.Event> events =
                 new java.util.ArrayList<>();
             for (PaycheckBudgetHistoryStore.Event event
-                    : PaycheckBudgetHistoryStore.load(prefs))
+                    : PaycheckBudgetHistoryStore.loadAll(
+                        db.getReadableDatabase(),prefs))
                 if (item.id.equals(event.itemId)) events.add(event);
             events.sort((left,right) ->
                 Long.compare(right.createdAt,left.createdAt));
@@ -21318,7 +21328,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 45);
+            super(context, "edhome-beta-preview.db", null, 46);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -21365,6 +21375,7 @@ public final class MainActivity extends Activity {
             PantryPackageStore.create(database);
             GardenStore.create(database);
             GardenStore.upgrade38(database);
+            PaycheckBudgetSqliteStore.create(database);
             SyncRecordStore.create(database);
             DiagnosticLog.event("DATABASE_CREATED");
         }
@@ -21377,7 +21388,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 45) {
+            if (oldVersion < 1 || newVersion > 46) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -21624,6 +21635,10 @@ public final class MainActivity extends Activity {
                 database.execSQL("UPDATE tasks SET project_sort_order=id "
                     + "WHERE project_id IS NOT NULL");
                 DiagnosticLog.event("DATABASE_MIGRATED_44_TO_45_PROJECT_TASK_ORDER");
+            }
+            if(oldVersion < 46) {
+                PaycheckBudgetSqliteStore.create(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_45_TO_46_PAYCHECK_BUDGET");
             }
             if(newVersion >= 36) {
                 try {
