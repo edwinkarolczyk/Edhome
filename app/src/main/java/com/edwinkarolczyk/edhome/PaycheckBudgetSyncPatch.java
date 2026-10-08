@@ -138,6 +138,12 @@ final class PaycheckBudgetSyncPatch {
             // Kontrola wpłat musi być po stronie odbiorcy Androida.
             // Inaczej dwie zmiany z PC mogą podwójnie rozliczyć przelew.
             verifySharedAllocations(db,updatedItems);
+            try {
+                PaycheckMonthlyBudget.assertCreditConservation(db,updatedItems);
+            } catch(IllegalArgumentException|ArithmeticException invalid) {
+                throw new SyncRecordStore.SyncConflict(
+                    "budget_credits","", "",0L,-1L);
+            }
             PaycheckBudgetSqliteStore.reconcileRaw(db,
                 updatedItems,updatedRecipients,updatedHistory);
             SyncRecordStore.ensureAll(db);
