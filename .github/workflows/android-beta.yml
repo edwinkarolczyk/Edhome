@@ -215,6 +215,7 @@ jobs:
             com.edwinkarolczyk.edhome.PaycheckBudgetStableIdsSmoke
           python3 tests/check_paycheck_budget_stage5_migration.py
           python3 tests/check_paycheck_budget_stage5c_guard.py
+          python3 tests/check_paycheck_budget_stage5c_sync_contract.py
       - name: Opt-in bank notification parsing and privacy regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-notifications"
