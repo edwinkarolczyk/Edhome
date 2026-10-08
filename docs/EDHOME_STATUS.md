@@ -10,7 +10,7 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.64 / versionCode 256** — kod w `beta`, [CI Android #2009](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841667480) oczekuje na wynik; poprzednia 0.8.0.63/255 opublikowana, #2002 PASS |
+| Android Beta | **0.8.0.64 / versionCode 256** — kod w `beta`, [CI Android #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) oczekuje na wynik; #2009 anulowany; poprzednia 0.8.0.63/255 opublikowana, #2002 PASS |
 | Desktop Beta | **0.7.0.113** — [CI Desktop #279 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287), instalator Windows opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37821584092 / #2002](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821584092) — **success**, commit `b377feb1047b4b4e48a814a3222d1c905bc95d0b` |
@@ -92,7 +92,7 @@
 
 **Zmiana:** Android `PaycheckMonthlyBudget.assertCreditConservation` zlicza odliczenia per `źródło|cel`, porównuje całkowite wykorzystanie źródła z nadpłatą wynikającą z potwierdzonych wpłat i nadwyżki z przelewu grupowego, osobno pilnuje limitu planu w miesiącu docelowym oraz poprawnej kolejności dat. `PaycheckBudgetSyncPatch.apply` wywołuje sprawdzenie przed `reconcileRaw`; błędna paczka kończy się konfliktem finansowym (bez mutacji SQL). Nowa czysta matematyka `PaycheckBudgetCreditMath`; test wykonywalny `tests/task_rules/PaycheckBudgetCreditConservationSmoke.java` uruchamiany przez `tests/check_paycheck_credit_conservation.py` w Android CI.
 
-**Wersja robocza:** Android `0.8.0.64/256` — [GitHub Actions #2009](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841667480) do potwierdzenia. Desktop `0.7.0.113` bez nowych zmian. Test A20 dopisany do [odbioru 5C](ODBIOR_PAYCHECK_5C_2026-10-08.md). **Przyjęcie na urządzeniach nadal NIEODEBRANE**, Stable `main` bez zmian.
+**Wersja robocza:** Android `0.8.0.64/256` — [GitHub Actions #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) oczekuje w kolejce; #2009 został anulowany przez nowszy przebieg. Desktop `0.7.0.113` bez nowych zmian. Test A20 dopisany do [odbioru 5C](ODBIOR_PAYCHECK_5C_2026-10-08.md). **Przyjęcie na urządzeniach nadal NIEODEBRANE**, Stable `main` bez zmian.
 
 ### Zadania do wykonania w etapie 5C
 
