@@ -33,6 +33,8 @@ assert 'if(!patch.isBlank())' in resolve_phone
 assert 'saveConflictBackup(app,prefs);' in resolve_phone
 assert '"X-EDHOME-BASE-SHA256",remoteSha' in resolve_phone
 assert '"/snapshot",expectedLocal' in resolve_phone
+assert 'if(result.code==409)' in resolve_phone
+assert 'remote.sha256.isBlank()' in resolve_phone
 assert 'applyServerSnapshot(app,prefs,result.body,result.sha256,expectedLocal)' in resolve_phone
 
 resolve_desktop=section(android,"static void resolveDesktop(Context context)","static void resolvePhone(Context context)")
