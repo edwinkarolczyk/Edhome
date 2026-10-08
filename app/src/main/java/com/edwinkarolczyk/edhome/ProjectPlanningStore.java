@@ -270,6 +270,26 @@ final class ProjectPlanningStore {
         return db.insertOrThrow("project_task_blockers",null,v);
     }
 
+    static void updateBlocker(SQLiteDatabase db,long id,String kind,String rawLabel,
+            boolean hard,String availableOn){
+        if(indexOf(BLOCKER_KINDS,kind)<0)
+            throw new IllegalArgumentException("Nieprawidłowy rodzaj wymagania.");
+        String label=clean(rawLabel);
+        if(label.isEmpty()||label.length()>180)
+            throw new IllegalArgumentException("Podaj wymaganie 1–180 znaków.");
+        String date=clean(availableOn);
+        if(!date.isEmpty())try{LocalDate.parse(date);}
+        catch(Exception invalid){
+            throw new IllegalArgumentException("Nieprawidłowa data dostępności.");
+        }
+        ContentValues v=new ContentValues();
+        v.put("kind",kind);v.put("label",label);v.put("hard",hard?1:0);
+        if(date.isEmpty())v.putNull("available_on");else v.put("available_on",date);
+        if(db.update("project_task_blockers",v,"id=?",
+                new String[]{Long.toString(id)})!=1)
+            throw new IllegalArgumentException("Wymaganie już nie istnieje.");
+    }
+
     static void setResolved(SQLiteDatabase db,long id,boolean resolved){
         ContentValues v=new ContentValues();v.put("resolved",resolved?1:0);
         if(db.update("project_task_blockers",v,"id=?",
