@@ -133,13 +133,17 @@ final class PaycheckBudgetSqliteStore {
     /** Synchronizuje istniejące źródła bez usuwania żadnej pozycji historii. */
     static void reconcile(SQLiteDatabase db,SharedPreferences prefs)
             throws Exception {
+        reconcileRaw(db,prefs.getString(PaycheckMonthlyBudget.PREF_KEY,"[]"),
+            prefs.getString(PaycheckRecipientStore.PREF_KEY,"[]"),
+            prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY,"[]"));
+    }
+
+    static void reconcileRaw(SQLiteDatabase db,String itemsJson,
+            String recipientsJson,String historyJson) throws Exception {
         create(db);
-        JSONArray items=new JSONArray(prefs.getString(
-            PaycheckMonthlyBudget.PREF_KEY,"[]"));
-        JSONArray recipients=new JSONArray(prefs.getString(
-            PaycheckRecipientStore.PREF_KEY,"[]"));
-        JSONArray history=new JSONArray(prefs.getString(
-            PaycheckBudgetHistoryStore.PREF_KEY,"[]"));
+        JSONArray items=new JSONArray(itemsJson);
+        JSONArray recipients=new JSONArray(recipientsJson);
+        JSONArray history=new JSONArray(historyJson);
 
         Set<String> itemKeys=new HashSet<>();
         Set<String> occurrenceKeys=new HashSet<>();
