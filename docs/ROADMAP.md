@@ -118,6 +118,14 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 - **P0 — integralność zależności (08.10):** w Androidzie zapis bez zmian jest operacją pustą; przy edycji istniejące relacje zachowują identyfikatory i `created_at`, a dodanie/usunięcie faktycznie zmienionych krawędzi odbywa się w transakcji. Test kontraktu sprawdza warunki tego zapisu; odbiór na urządzeniu nadal otwarty.
 - **Nadal otwarte:** zgodność danych po LAN w obu kierunkach (wcześniejszy problem użytkownika), backup→restore, migracja, kliknięcie powiadomienia, zachowanie scroll i testy interakcji. Dopiero potwierdzenie tych punktów zmienia status Projektów na 🟢.
 
+### Dopracowanie czytelności Projektów — 08.10.2026
+
+- **Android Beta 0.8.0.48 / 240:** przy czynności widoczne są **konkretne nazwy prac, które od niej zależą** — maksymalnie trzy z bezpośrednim przejściem do danej czynności, przy większej liczbie przycisk „Pokaż pozostałe”. Nazwa projektu/podprojektu widoczna obok nazwy czynności. Zależność nie jest mylona z gwarantowanym odblokowaniem — inne wymagania lub poprzedniki nadal mogą blokować Start.
+- **Android, wymagania:** przycisk wyświetla łączną liczbę wszystkich wymagań oraz osobno liczbę niespełnionych; spełnione nie znikają z informacji o konfiguracji.
+- **Desktop Beta 0.7.0.104:** każda czynność pokazuje wprost status „Gotowa do wykonania” lub „Czeka na: [konkretne nazwy]” i nazwane twarde wymagania. Widoczne są również prace zależne wraz ze ścieżką projektu. Rozdzielono przyciski na dwa rzędy, aby usunąć ściskanie i obcinanie po dołożeniu „Wymagania” oraz „Wykonane/Cofnij”.
+- **Testy:** sprawdzenie elementów UI i kolejności akcji w `tests/check_projects_contract.py`; rzeczywiste zachowanie na urządzeniach, pełny backup/restore i synchronizacja LAN Android↔Desktop pozostają do odbioru. Nie oznaczaj modułu jako 🟢 bez tego odbioru.
+- **Ochrona Stable:** wszystkie zmiany wyłącznie na `beta`; `main` bez zmian.
+
 ### Minimalny scenariusz odbioru P0 — na obu urządzeniach
 
 1. Utwórz Projekt A, podprojekt A1 i 3 czynności: zakup → przygotowanie → montaż. Dodaj zależności, zamknij edytor, otwórz ponownie, usuń jedną zależność i ustaw na nowo. Sprawdź komunikaty i ochronę przed pętlą.
