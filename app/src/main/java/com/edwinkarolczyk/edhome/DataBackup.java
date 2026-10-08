@@ -1653,6 +1653,13 @@ final class DataBackup {
 
         database.beginTransaction();
         try {
+            // Etap 5C: pełny snapshot/restore nie może wymazać lokalnego
+            // archiwum historii (cache prefs zawiera tylko ostatnie 6000).
+            // Odczyt w tej samej transakcji chroni przed częściowym scaleniem.
+            JSONArray retainedBudgetHistory =
+                PaycheckBudgetSqliteStore.archivedHistory(database, null);
+            JSONArray retainedBudgetCache = new JSONArray(
+                prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY, "[]"));
             for (int i = TABLES.length - 1; i >= 0; i--)
                 database.delete(TABLES[i][0], null, null);
             for (String[] definition : TABLES) {
@@ -1686,6 +1693,12 @@ final class DataBackup {
             // touching preferences. Any failure leaves existing preferences intact.
             PaycheckBudgetSqliteStore.reconcileRaw(database,
                 paycheckMonthlyBudget,paycheckRecipients,paycheckBudgetHistory);
+            // Zdarzenia są append-only także przy odebraniu snapshotu z PC.
+            // Sprzeczny ten sam UUID => wyjątek i rollback całej transakcji.
+            PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetHistory);
+            PaycheckBudgetSqliteStore.appendHistory(database, retainedBudgetCache);
+            // Odtworzone lokalne zdarzenia muszą dostać własne metadane sync.
+            SyncRecordStore.ensureAll(database);
             // Preferences and SQL are separate stores. Save preferences BEFORE
             // committing SQL, so a failed preference write rolls SQL back.
             // Never clear the installed PIN, private vault or update channel.
