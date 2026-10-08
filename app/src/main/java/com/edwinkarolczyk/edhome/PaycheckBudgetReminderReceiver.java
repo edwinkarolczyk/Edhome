@@ -90,6 +90,21 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
         DiagnosticLog.event("PAYCHECK_BUDGET_REMINDER_SCHEDULED");
     }
 
+    /**
+     * Natychmiast usuwa nieaktualne powiadomienie po rozliczeniu, a gdy
+     * zostały niezapłacone rachunki wcześniej przypomniane dzisiaj,
+     * odbudowuje wyłącznie ich zbiorcze powiadomienie.
+     */
+    static void refreshAfterSettlement(Context context) {
+        NotificationManager manager=(NotificationManager)
+            context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager!=null) manager.cancel(NOTIFICATION_ID);
+        try { showDueReminders(context,true); }
+        catch (Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_REMINDER_REFRESH",error);
+        }
+    }
+
     @Override public void onReceive(Context context,Intent intent) {
         if (intent==null) return;
         String action=intent.getAction();
@@ -102,6 +117,10 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
             return;
         }
         schedule(context,false);
+        showDueReminders(context,false);
+    }
+
+    private static void showDueReminders(Context context,boolean onlyPreviouslyFired) {
         SharedPreferences pref=prefs(context);
         if (!pref.getBoolean(ENABLED_PREF,true)) return;
         if (Build.VERSION.SDK_INT>=33 && context.checkSelfPermission(
@@ -137,20 +156,18 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
                     boolean soonHit=planned.equals(today.plusDays(3));
                     if (!todayHit && !soonHit) continue;
 
-                    long plannedAmount=PaycheckMonthlyBudget.plannedAmount(
-                        item,month);
-                    long credit=PaycheckMonthlyBudget.creditAppliedTo(item,month);
-                    long due=Math.max(0L,plannedAmount-credit);
-                    long actual=PaycheckMonthlyBudget.sharedMatchedActual(
+                    long remaining=PaycheckMonthlyBudget.remainingDue(
                         database,item,month);
-                    long remaining=Math.max(0L,due-actual);
                     if (remaining<=0L) continue;
 
                     String firedKey="paycheck_budget_reminder_fired_"
                         +item.id+"_"+month+"_"+(todayHit?"0":"-3");
-                    if (today.toString().equals(pref.getString(firedKey,"")))
-                        continue;
-                    pref.edit().putString(firedKey,today.toString()).apply();
+                    boolean previouslyFired=today.toString().equals(
+                        pref.getString(firedKey,""));
+                    if (onlyPreviouslyFired && !previouslyFired) continue;
+                    if (!onlyPreviouslyFired && previouslyFired) continue;
+                    if (!onlyPreviouslyFired)
+                        pref.edit().putString(firedKey,today.toString()).apply();
                     if (firstName.isEmpty()) firstName=item.name;
                     if (todayHit) {
                         dueToday++;
