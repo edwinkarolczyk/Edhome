@@ -121,7 +121,10 @@ assert 'dueValue.isEmpty()||remind.isEmpty()?null:remind' in quick_tasks
 
 dependency_dialog=main.split("private void showProjectDependencyDialog",1)[1].split(
     "private void showProjectBlockers",1)[0]
-assert '.setItems(labels.toArray(new String[0])' in dependency_dialog
+assert '.setMultiChoiceItems(labels.toArray(new String[0]),chosen' in dependency_dialog
+assert 'database.beginTransaction();' in dependency_dialog
+assert 'ProjectStore.removeDependency(database,taskId,old);' in dependency_dialog
+assert 'ProjectStore.addDependency(database,taskId,' in dependency_dialog
 assert '.setMessage(' not in dependency_dialog
 
 # Minimalny kontrakt SQL zależności: brak self-loop i brak duplikatów.
@@ -166,3 +169,33 @@ assert 'hubEnsureSingleActiveProjectSession' in desktop
 assert 'Ta czynność ma już aktywny timer na innym urządzeniu.' in desktop
 assert 'JsonObject working=snapshot.deepCopy();' in desktop
 print("projects Android/Desktop blocker/order/delete stabilization contract OK")
+
+# P0 Projekty 08.10.2026 — pełny CRUD wymagań oraz czytelne checkboxy.
+blocker_ui=main.split("private void showProjectBlockers",1)[1].split(
+    "private void showProjectResourcePicker",1)[0]
+for marker in (
+    'checked.setChecked(item.resolved);',
+    'ProjectPlanningStore.setResolved',
+    'showProjectBlockerEditorDialog',
+    'ProjectPlanningStore.updateBlocker',
+    'ProjectPlanningStore.deleteBlocker',
+    'Wybierz datę',
+    'PROJECT_BLOCKER_EDITED',
+):
+    assert marker in blocker_ui, "Missing Android requirement CRUD: "+marker
+assert 'if(done)' in project_tasks and '↶ Cofnij' in project_tasks
+assert 'quickDuration.setSelection(0);' in main
+assert 'static void updateBlocker(' in (root /
+    "app/src/main/java/com/edwinkarolczyk/edhome/ProjectPlanningStore.java"
+    ).read_text(encoding="utf-8")
+for marker in (
+    'showDesktopTaskRequirements',
+    'renderDesktopTaskRequirements',
+    'editDesktopTaskRequirement',
+    'toggleDesktopProjectCompletion',
+    'Najpierw zatrzymaj pomiar czasu tej czynności.',
+    'PROJECT_TASK_COMPLETED_DESKTOP',
+):
+    assert marker in desktop, "Missing Desktop requirement or completion UX: "+marker
+print("Projects P0 requirement CRUD and dependency editor contract OK")
+
