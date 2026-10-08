@@ -180,17 +180,29 @@ final class PaycheckMonthlyBudget {
     }
 
     static boolean delete(SharedPreferences prefs, String id) throws Exception {
+        return deleteFromMonth(prefs,id,YearMonth.now());
+    }
+
+    /** Zakończenie definicji od miesiąca wskazanego przez użytkownika. */
+    static boolean deleteFromMonth(SharedPreferences prefs, String id,
+            YearMonth from) throws Exception {
+        if (from == null) throw new IllegalArgumentException("Wybierz miesiąc.");
         List<Item> items = load(prefs);
         Item target = find(items,id);
-        YearMonth from=YearMonth.now();
+        if (from.isBefore(YearMonth.parse(target.startMonth)))
+            throw new IllegalArgumentException(
+                "Nie można zakończyć definicji przed jej początkiem.");
         if (!target.active && target.inactiveFromMonth != null
-                && !target.inactiveFromMonth.isBlank()) return false;
+                && !target.inactiveFromMonth.isBlank()
+                && !from.isBefore(YearMonth.parse(target.inactiveFromMonth)))
+            return false;
         target.active = false;
         target.inactiveFromMonth = from.toString();
         save(prefs,items);
         PaycheckBudgetHistoryStore.append(prefs,target,from,
             "ITEM_DEACTIVATED",plannedAmount(target,from),
-            "Usunięto od " + from + "; wcześniejsze miesiące pozostają w historii.");
+            "Zakończono definicję od " + from
+                + ". Transakcje PayCheck i wcześniejsze miesiące zachowane.");
         return true;
     }
 
@@ -980,6 +992,24 @@ final class PaycheckMonthlyBudget {
             }
         }
         return total;
+    }
+
+    /**
+     * Realizacja Budżetu to tylko potwierdzone wpłaty przypisane do pozycji.
+     * Reszta potwierdzonego PayCheck nie może udawać realizacji planu.
+     */
+    static Totals sharedAssignedActual(SQLiteDatabase db, List<Item> all,
+            YearMonth month) {
+        Totals assigned = new Totals();
+        for (Item item : all) {
+            long amount = Math.addExact(sharedMatchedActual(db,item,month),
+                sharedSplitSurplus(db,item,month));
+            if ("income".equals(item.kind))
+                assigned.income=Math.addExact(assigned.income,amount);
+            else
+                assigned.expense=Math.addExact(assigned.expense,amount);
+        }
+        return assigned;
     }
 
     static Totals privateActual(List<PrivatePaycheckVault.Entry> entries,
