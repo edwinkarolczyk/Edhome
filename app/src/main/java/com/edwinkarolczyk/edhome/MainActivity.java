@@ -14740,17 +14740,18 @@ public final class MainActivity extends Activity {
                 + " • wydatki " + MoneyRules.format(plan.expense)
                 + " • zostaje " + MoneyRules.format(plan.net()) + ".");
             note("Wykonanie pozycji Budżetu: pokryto "
-                + MoneyRules.format(Math.max(0L,plan.expense-unpaidPlan))
+                + MoneyRules.format(PaycheckBudgetExecutionRules.coveredPlan(
+                    plan.expense,unpaidPlan))
                 + " z " + MoneyRules.format(plan.expense)
                 + " • pozostało do zapłaty " + MoneyRules.format(unpaidPlan)
                 + ". Potwierdzone płatności przypisane do planu: "
                 + MoneyRules.format(assigned.expense) + ".");
             note("Pozostałe / nieprzypisane wydatki PayCheck: "
-                + MoneyRules.format(Math.max(0L,
-                    confirmed.expense-assigned.expense))
+                + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
+                    confirmed.expense,assigned.expense))
                 + " • pozostałe wpływy PayCheck: "
-                + MoneyRules.format(Math.max(0L,
-                    confirmed.income-assigned.income)) + ".");
+                + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
+                    confirmed.income,assigned.income)) + ".");
             note("Cały PayCheck (potwierdzone): wpływy "
                 + MoneyRules.format(confirmed.income) + " • wydatki "
                 + MoneyRules.format(confirmed.expense)
