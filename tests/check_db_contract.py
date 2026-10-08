@@ -438,7 +438,7 @@ execute(existing14, step38)
 execute(existing14, step39)
 # legacy_create jest generowane z bieżącego CREATE tasks, więc project_id już istnieje.
 # Dodajemy tylko nowe tabele projektowe i zależności.
-execute(existing14, project40 + project41 + user42 + project43 + planning44)
+execute(existing14, project40 + project41 + user42 + project43 + planning44 + budget46)
 assert schema(existing14) == expected
 assert existing14.execute("SELECT id,name,qty,category FROM pantry").fetchone() == (2,'Mleko',7,'other')
 assert existing14.execute("SELECT pantry_id,barcode FROM pantry_barcodes").fetchone() == (2,'5901234123457')
@@ -470,9 +470,9 @@ execute(existing23, step38)
 execute(existing23, step39)
 # Ten fixture korzysta już z bieżącej definicji tabeli tasks, więc dodajemy
 # tylko nowe tabele projektowe, bez ponownego ALTER TABLE project_id.
-execute(existing23, project40 + project41 + user42 + project43 + planning44)
+execute(existing23, project40 + project41 + user42 + project43 + planning44 + budget46)
 assert schema(existing23) == expected
 assert existing23.execute("SELECT id,name,qty FROM pantry").fetchone() == (9,'Ryż',6)
 assert existing23.execute("SELECT id,name FROM shopping_items").fetchone() == (42,'Ryż')
 existing23.close()
-print("SQLite migrations v1–v44→v45: PASS; Projects/order/dependencies/work sessions, profiles, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
+print("SQLite migrations v1–v45→v46: PASS; Projects/order/dependencies/work sessions, profiles, pantry multipacks/deposits, Garden cycle/harvests, sync UUID/revision/tombstones, NFC links, bank queue, reminders, policies, tyres, vehicles, shopping, pantry, backup: PASS")
