@@ -5211,7 +5211,7 @@ public final class MainActivity extends Activity {
         quickDuration.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
             "20 min","30 min","45 min","1 h","1 h 30 min","2 h",
             "3 h","4 h","6 h","8 h","10 h")));
-        quickDuration.setSelection(1);
+        quickDuration.setSelection(0);
         EditText due=new EditText(this);
         due.setSingleLine(true);
         due.setHint("Termin • dotknij, aby wybrać datę");
@@ -5480,6 +5480,13 @@ public final class MainActivity extends Activity {
                         editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
                 }
             });
+            if(done)
+                compactAction(editRow,"↶ Cofnij",()->{
+                    db.reopenTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("PROJECT_TASK_REOPENED","task="+taskId);
+                    render();
+                });
             compactAction(editRow,"Usuń",
                 ()->confirmDeleteProjectTask(taskId,taskName));
         }
@@ -5672,7 +5679,7 @@ public final class MainActivity extends Activity {
             ProjectStore.dependencyIds(db.getReadableDatabase(),taskId));
         java.util.ArrayList<Long> candidateIds=new java.util.ArrayList<>();
         java.util.ArrayList<String> labels=new java.util.ArrayList<>();
-        java.util.ArrayList<Boolean> remove=new java.util.ArrayList<>();
+        java.util.ArrayList<Boolean> initial=new java.util.ArrayList<>();
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT id,title,done,project_id FROM tasks "
                     +"WHERE project_id IS NOT NULL ORDER BY done,title COLLATE NOCASE,id",
@@ -5680,76 +5687,130 @@ public final class MainActivity extends Activity {
             while(c.moveToNext()) {
                 long candidate=c.getLong(0);
                 if(candidate==taskId||!projectIds.contains(c.getLong(3)))continue;
-                boolean linked=existing.contains(candidate);
                 candidateIds.add(candidate);
-                remove.add(linked);
-                labels.add((linked?"✓ ":"○ ")
-                    +c.getString(1)+" • "+projectPath(c.getLong(3))
-                    +(linked?" • ustawiona":"")
-                    +(c.getInt(2)!=0?" • wykonana":""));
+                initial.add(existing.contains(candidate));
+                labels.add(c.getString(1)+" • "+projectPath(c.getLong(3))
+                    +(c.getInt(2)!=0?" • wykonana":" • do wykonania"));
             }
         }
         if(labels.isEmpty()) {
             alert("Brak innych czynności w tym projekcie.");
             return;
         }
+        final boolean[] chosen=new boolean[initial.size()];
+        for(int i=0;i<chosen.length;i++)chosen[i]=initial.get(i);
         new AlertDialog.Builder(this)
-            .setTitle("Ta czynność ma być wykonana po:")
-            .setItems(labels.toArray(new String[0]),(d,which)->{
+            .setTitle("Wykonaj po • wybierz zależności")
+            .setMultiChoiceItems(labels.toArray(new String[0]),chosen,
+                (d,which,checked)->chosen[which]=checked)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                SQLiteDatabase database=db.getWritableDatabase();
+                database.beginTransaction();
                 try {
-                    long other=candidateIds.get(which);
-                    if(remove.get(which))
-                        ProjectStore.removeDependency(
-                            db.getWritableDatabase(),taskId,other);
-                    else
-                        ProjectStore.addDependency(
-                            db.getWritableDatabase(),taskId,other);
-                    DiagnosticLog.event(remove.get(which)
-                        ?"PROJECT_DEPENDENCY_REMOVED":"PROJECT_DEPENDENCY_ADDED",
-                        "task="+taskId+" other="+other);
+                    for(Long old:existing)
+                        ProjectStore.removeDependency(database,taskId,old);
+                    for(int i=0;i<chosen.length;i++)
+                        if(chosen[i])
+                            ProjectStore.addDependency(database,taskId,
+                                candidateIds.get(i));
+                    database.setTransactionSuccessful();
+                    DiagnosticLog.event("PROJECT_DEPENDENCIES_SAVED",
+                        "task="+taskId+" selected="+
+                            java.util.Arrays.toString(chosen));
                     render();
                 } catch(Exception error) {
                     alert(error.getMessage()==null
-                        ?"Nie udało się zmienić zależności.":error.getMessage());
+                        ?"Nie udało się zapisać zależności.":error.getMessage());
+                } finally {
+                    database.endTransaction();
                 }
-            })
-            .setNegativeButton("Zamknij",null).show();
+            }).show();
     }
 
     private void showProjectBlockers(long taskId,String taskName) {
         java.util.List<ProjectPlanningStore.Blocker> items=
             ProjectPlanningStore.blockers(db.getReadableDatabase(),taskId);
-        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(16),dp(8),dp(16),dp(8));
+        content.addView(text(
+            "Zaznacz ✓, gdy wymaganie zostało spełnione. "
+                +"Twarde blokuje Start, miękkie tylko ostrzega.",
+            13,false));
+        final boolean[] changed={false};
+        final AlertDialog[] holder=new AlertDialog[1];
         for(ProjectPlanningStore.Blocker item:items) {
-            String state=item.resolved?"✓":
-                item.hard?"⛔":"⚠";
-            labels.add(state+" "+ProjectPlanningStore.kindLabel(item.kind)
+            LinearLayout row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0,dp(7),0,dp(7));
+            CheckBox checked=new CheckBox(this);
+            checked.setText(ProjectPlanningStore.kindLabel(item.kind)
                 +" • "+item.label
+                +(item.hard?" • twarde":" • miękkie")
                 +(item.availableOn.isEmpty()?"":" • od "+item.availableOn));
+            checked.setTextColor(ink);
+            checked.setChecked(item.resolved);
+            checked.setOnCheckedChangeListener((button,value)->{
+                try {
+                    ProjectPlanningStore.setResolved(db.getWritableDatabase(),
+                        item.id,value);
+                    DiagnosticLog.event(value?"PROJECT_BLOCKER_RESOLVED":
+                        "PROJECT_BLOCKER_REOPENED","id="+item.id);
+                    changed[0]=true;
+                } catch(Exception error) {
+                    button.setOnCheckedChangeListener(null);
+                    button.setChecked(!value);
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zmienić wymagania.":error.getMessage());
+                }
+            });
+            row.addView(checked);
+            LinearLayout actions=compactActionRow();
+            compactAction(actions,"Edytuj",()->{
+                if(holder[0]!=null)holder[0].dismiss();
+                showProjectBlockerEditorDialog(item,taskId,taskName);
+            });
+            compactAction(actions,"Usuń",()->{
+                new AlertDialog.Builder(this)
+                    .setTitle("Usunąć wymaganie?")
+                    .setMessage(item.label)
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Usuń",(d,w)->{
+                        ProjectPlanningStore.deleteBlocker(
+                            db.getWritableDatabase(),item.id);
+                        DiagnosticLog.event("PROJECT_BLOCKER_DELETED",
+                            "id="+item.id);
+                        if(holder[0]!=null)holder[0].dismiss();
+                        render();
+                    }).show();
+            });
+            row.addView(actions);
+            content.addView(row);
         }
-        AlertDialog.Builder builder=new AlertDialog.Builder(this)
+        if(items.isEmpty())
+            content.addView(text("Brak wymagań. Dodaj pierwsze.",14,false));
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(content);
+        AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Wymagania • "+taskName)
-            .setMessage(items.isEmpty()
-                ?"Brak wymagań. Dodaj zakup, dostawę, przygotowanie, zasób "
-                    +"lub decyzję, bez której czynność nie powinna ruszyć."
-                :"⛔ twarde blokuje Start • ⚠ miękkie tylko ostrzega.")
+            .setView(scroll)
             .setNegativeButton("Zamknij",null)
             .setPositiveButton("+ Dodaj",(d,w)->
-                showAddProjectBlockerDialog(taskId,taskName));
-        if(!items.isEmpty())builder.setItems(labels.toArray(new String[0]),(d,which)->
-            showProjectBlockerActions(items.get(which),taskName));
-        builder.show();
+                showAddProjectBlockerDialog(taskId,taskName))
+            .create();
+        holder[0]=dialog;
+        dialog.setOnDismissListener(d->{if(changed[0])render();});
+        dialog.show();
     }
 
     private void showProjectBlockerActions(ProjectPlanningStore.Blocker item,
             String taskName) {
-        String[] options=item.resolved
-            ?new String[]{"Oznacz ponownie jako oczekujące","Usuń wymaganie"}
-            :new String[]{"Oznacz jako spełnione","Usuń wymaganie"};
+        String[] options={
+            item.resolved?"Oznacz ponownie jako oczekujące":"Oznacz jako spełnione",
+            "Edytuj wymaganie","Usuń wymaganie"};
         new AlertDialog.Builder(this)
             .setTitle(item.label)
-            .setMessage((item.hard?"Twardy bloker":"Miękkie ostrzeżenie")
-                +(item.availableOn.isEmpty()?"":" • najwcześniej "+item.availableOn))
             .setItems(options,(d,which)->{
                 if(which==0) {
                     ProjectPlanningStore.setResolved(db.getWritableDatabase(),
@@ -5757,16 +5818,31 @@ public final class MainActivity extends Activity {
                     DiagnosticLog.event(item.resolved
                         ?"PROJECT_BLOCKER_REOPENED":"PROJECT_BLOCKER_RESOLVED",
                         "id="+item.id);
+                    render();
+                } else if(which==1) {
+                    showProjectBlockerEditorDialog(item,item.taskId,taskName);
                 } else {
-                    ProjectPlanningStore.deleteBlocker(db.getWritableDatabase(),item.id);
-                    DiagnosticLog.event("PROJECT_BLOCKER_DELETED","id="+item.id);
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć wymaganie?")
+                        .setMessage(item.label)
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(confirm,w)->{
+                            ProjectPlanningStore.deleteBlocker(
+                                db.getWritableDatabase(),item.id);
+                            DiagnosticLog.event("PROJECT_BLOCKER_DELETED",
+                                "id="+item.id);
+                            render();
+                        }).show();
                 }
-                render();
-            })
-            .setNegativeButton("Anuluj",null).show();
+            }).setNegativeButton("Anuluj",null).show();
     }
 
     private void showAddProjectBlockerDialog(long taskId,String taskName) {
+        showProjectBlockerEditorDialog(null,taskId,taskName);
+    }
+
+    private void showProjectBlockerEditorDialog(
+            ProjectPlanningStore.Blocker existing,long taskId,String taskName) {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20),dp(8),dp(20),0);
@@ -5785,46 +5861,63 @@ public final class MainActivity extends Activity {
         available.setFocusable(false);
         available.setOnClickListener(v->{
             java.time.LocalDate initial;
-            try { initial = java.time.LocalDate.parse(available.getText().toString()); }
-            catch (Exception ignored) { initial = java.time.LocalDate.now(); }
+            try { initial=java.time.LocalDate.parse(available.getText().toString()); }
+            catch(Exception ignored) { initial=java.time.LocalDate.now(); }
             new DatePickerDialog(this,(picker,y,m,d)->
                 available.setText(java.time.LocalDate.of(y,m+1,d).toString()),
                 initial.getYear(),initial.getMonthValue()-1,
                 initial.getDayOfMonth()).show();
         });
+        if(existing!=null) {
+            label.setText(existing.label);
+            strength.setSelection(existing.hard?0:1);
+            available.setText(existing.availableOn);
+            for(int i=0;i<ProjectPlanningStore.BLOCKER_KINDS.length;i++)
+                if(ProjectPlanningStore.BLOCKER_KINDS[i].equals(existing.kind))
+                    kind.setSelection(i);
+        }
         form.addView(text("Rodzaj",13,true));form.addView(kind);
         form.addView(text("Wymaganie",13,true));form.addView(label);
         form.addView(text("Znaczenie",13,true));form.addView(strength);
         form.addView(text("Przewidywana dostępność",13,true));form.addView(available);
         smallButton(form,"Wybierz datę",()->available.performClick());
         smallButton(form,"Bez daty",()->available.setText(""));
-        form.addView(text("Jeśli twardy bloker nie ma daty, planer nie zgaduje "
-            +"terminu. Jeśli ma datę, planuje nie wcześniej niż od tej daty, "
-            +"ale Start nadal wymaga oznaczenia blokera jako spełnionego.",
-            12,false));
+        form.addView(text("Twarde wymaganie blokuje Start do czasu "
+            +"ręcznego zaznaczenia jako spełnione.",12,false));
         lightDialogForm(form);
         AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("Nowe wymaganie • "+taskName)
+            .setTitle((existing==null?"Nowe":"Edytuj")+" wymaganie • "+taskName)
             .setView(form).setNegativeButton("Anuluj",null)
-            .setPositiveButton("Dodaj",null).create();
+            .setPositiveButton(existing==null?"Dodaj":"Zapisz",null).create();
         dialog.setOnShowListener(x->
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
                 try {
                     int index=kind.getSelectedItemPosition();
-                    ProjectPlanningStore.addBlocker(db.getWritableDatabase(),taskId,
-                        ProjectPlanningStore.BLOCKER_KINDS[index],
-                        label.getText().toString(),
-                        strength.getSelectedItemPosition()==0,
-                        available.getText().toString());
-                    DiagnosticLog.event("PROJECT_BLOCKER_ADDED","task="+taskId);
-                    dialog.dismiss();render();
+                    if(existing==null)
+                        ProjectPlanningStore.addBlocker(
+                            db.getWritableDatabase(),taskId,
+                            ProjectPlanningStore.BLOCKER_KINDS[index],
+                            label.getText().toString(),
+                            strength.getSelectedItemPosition()==0,
+                            available.getText().toString());
+                    else
+                        ProjectPlanningStore.updateBlocker(
+                            db.getWritableDatabase(),existing.id,
+                            ProjectPlanningStore.BLOCKER_KINDS[index],
+                            label.getText().toString(),
+                            strength.getSelectedItemPosition()==0,
+                            available.getText().toString());
+                    DiagnosticLog.event(existing==null?"PROJECT_BLOCKER_ADDED":
+                        "PROJECT_BLOCKER_EDITED","task="+taskId);
+                    dialog.dismiss();
+                    render();
                 } catch(Exception error) {
-                    label.setError(error.getMessage());
+                    label.setError(error.getMessage()==null
+                        ?"Nie udało się zapisać wymagania.":error.getMessage());
                 }
             }));
         dialog.show();
     }
-
 
     private void showProjectResourcePicker(long projectId) {
         java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
