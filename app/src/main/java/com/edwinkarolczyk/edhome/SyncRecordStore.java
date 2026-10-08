@@ -242,6 +242,15 @@ final class SyncRecordStore {
                 if (op == null)
                     throw new IllegalArgumentException("Operacja #" + i + " nie jest obiektem.");
                 String table=op.optString("table","");
+                // Płatność i historia są zapisem księgowym, nie nadpisywalnym
+                // cache. Każdy UUID historii może powstać tylko raz.
+                if("budget_history".equals(table)
+                        && (!"upsert".equals(op.optString("action",""))
+                            || (version==2 && op.optLong("baseRevision",-1L)!=0L)
+                            || (version==1 && !"ABSENT".equals(
+                                op.optString("baseRowSha256","")))))
+                    throw new IllegalArgumentException(
+                        "Historia Budżetu jest tylko do dopisywania.");
                 if("storage_items".equals(table)||"nfc_links".equals(table)
                         ||"places".equals(table))
                     storageGraphTouched=true;
