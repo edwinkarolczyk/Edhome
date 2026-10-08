@@ -2,6 +2,9 @@ package com.edwinkarolczyk.edhome;
 
 import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.Cursor;
+import java.util.HashMap;
+import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -132,6 +135,9 @@ final class PaycheckBudgetSyncPatch {
                         prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY,"[]")))
                 throw new SyncRecordStore.SyncConflict(
                     "budget_items","local-edits","",0L,-1L);
+            // Kontrola wpłat musi być po stronie odbiorcy Androida.
+            // Inaczej dwie zmiany z PC mogą podwójnie rozliczyć przelew.
+            verifySharedAllocations(db,updatedItems);
             PaycheckBudgetSqliteStore.reconcileRaw(db,
                 updatedItems,updatedRecipients,updatedHistory);
             SyncRecordStore.ensureAll(db);
@@ -151,6 +157,62 @@ final class PaycheckBudgetSyncPatch {
         result.put("operations",changes);
         result.put("results",new JSONArray());
         return result.toString();
+    }
+
+    /**
+     * Ten sam potwierdzony przelew można rozdzielić na wiele rachunków,
+     * ale suma alokacji i wydzielonych nadpłat nie może przekroczyć wpłaty.
+     * Weryfikujemy stan faktyczny w SQLite, a nie deklarację z PC.
+     */
+    private static void verifySharedAllocations(SQLiteDatabase db,String itemsJson)
+            throws Exception {
+        Map<String,Long> confirmed=new HashMap<>();
+        Map<String,String> kinds=new HashMap<>();
+        try(Cursor cursor=db.rawQuery(
+                "SELECT operation_id,amount_grosz,kind "
+                    +"FROM paycheck_transactions "
+                    +"WHERE scope='shared' AND status='confirmed'",null)) {
+            while(cursor.moveToNext()) {
+                String id=cursor.getString(0);
+                long amount=cursor.getLong(1);
+                if(id==null||id.isBlank()||amount<=0
+                        ||confirmed.put(id,amount)!=null)
+                    throw new SyncRecordStore.SyncConflict(
+                        "paycheck_transactions",id==null?"":id,"",0L,-1L);
+                kinds.put(id,cursor.getString(2));
+            }
+        }
+        Map<String,Long> used=new HashMap<>();
+        JSONArray items=new JSONArray(itemsJson);
+        for(int i=0;i<items.length();i++) {
+            JSONObject item=items.getJSONObject(i);
+            JSONArray matches=item.optJSONArray("matches");
+            if(matches==null)continue;
+            JSONObject allocations=item.optJSONObject("allocations");
+            JSONObject surplus=item.optJSONObject("splitSurplusesGrosz");
+            for(int j=0;j<matches.length();j++) {
+                String id=matches.getString(j);
+                Long available=confirmed.get(id);
+                if(available==null)continue;
+                try {
+                    if(!item.optString("kind","").equals(kinds.get(id)))
+                        throw new ArithmeticException("Niezgodny typ transakcji.");
+                    long allocated=allocations!=null&&allocations.has(id)
+                        ?allocations.getLong(id):available;
+                    long extra=surplus!=null&&surplus.has(id)
+                        ?surplus.getLong(id):0L;
+                    if(allocated<=0||extra<0)throw new ArithmeticException();
+                    long total=Math.addExact(
+                        used.getOrDefault(id,0L),
+                        Math.addExact(allocated,extra));
+                    if(total>available)throw new ArithmeticException();
+                    used.put(id,total);
+                } catch(ArithmeticException invalid) {
+                    throw new SyncRecordStore.SyncConflict(
+                        "paycheck_transactions",id,"",0L,-1L);
+                }
+            }
+        }
     }
 
     private static JSONObject findArchived(JSONObject snapshot,String id)
