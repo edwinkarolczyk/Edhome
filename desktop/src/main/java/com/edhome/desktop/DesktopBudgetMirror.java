@@ -11,6 +11,9 @@ import java.awt.*;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -59,24 +62,76 @@ final class DesktopBudgetMirror {
             recipientsById.put(str(p,"id",""),str(p,"name",""));
         }
         long income=0L,expenses=0L;
+        List<Object[]> incoming=new ArrayList<>();
+        List<Object[]> outgoing=new ArrayList<>();
         for(JsonElement e:items) {
             if(!e.isJsonObject()) continue;
             JsonObject item=e.getAsJsonObject();
             if(!occurs(item,month)) continue;
-            String type=str(item,"kind","expense");
+            boolean isIncome="income".equals(str(item,"kind","expense"));
             long amount=amountFor(item,month);
-            if("income".equals(type)) income=Math.addExact(income,amount);
+            if(isIncome) income=Math.addExact(income,amount);
             else expenses=Math.addExact(expenses,amount);
             String recipient=recipientsById.getOrDefault(
                 str(item,"recipientId",""),"");
             String label=str(item,"name","Bez nazwy");
             if(!recipient.isBlank()) label=recipient+" • "+label;
-            String day=plannedDate(item,month);
-            table.addRow(new Object[]{day,label,money(amount),
-                "income".equals(type)?"Wpływ":"Wydatek",
-                str(item,"id","")});
+            Object[] entry=new Object[]{
+                plannedDate(item,month),label,money(amount),
+                isIncome?"Wpływ":"Wydatek",str(item,"id","")};
+            (isIncome?incoming:outgoing).add(entry);
         }
+        // Wpływy u góry; bieżące wydatki według daty zapłaty, a nie
+        // według przypadkowej kolejności zapisu na urządzeniu.
+        Comparator<Object[]> byDate=Comparator
+            .comparing((Object[] entry)->(String)entry[0])
+            .thenComparing(entry->(String)entry[1],String.CASE_INSENSITIVE_ORDER);
+        incoming.sort(byDate);
+        outgoing.sort(byDate);
+        for(Object[] entry:incoming)table.addRow(entry);
+        for(Object[] entry:outgoing)table.addRow(entry);
         return new Summary(table,income,expenses);
+    }
+
+    /** Kartoteka faktycznych odbiorców i ich zobowiązań w wybranym miesiącu. */
+    static DefaultTableModel recipientOverview(JsonArray items,
+            JsonArray recipients,YearMonth month) {
+        DefaultTableModel table=new DefaultTableModel(
+                new String[]{"Odbiorca","Zobowiązania w miesiącu",
+                    "Plan wydatków","ID"},0) {
+            @Override public boolean isCellEditable(int row,int col) {return false;}
+        };
+        if(recipients==null)return table;
+        List<JsonObject> directory=new ArrayList<>();
+        java.util.Set<String> seen=new java.util.HashSet<>();
+        for(JsonElement candidate:recipients) {
+            if(!candidate.isJsonObject())continue;
+            JsonObject recipient=candidate.getAsJsonObject();
+            String id=str(recipient,"id","");
+            if(id.isBlank()||!seen.add(id))
+                throw new IllegalArgumentException(
+                    "Kartoteka zawiera pusty lub powtórzony identyfikator odbiorcy.");
+            directory.add(recipient);
+        }
+        directory.sort(Comparator.comparing(
+            (JsonObject entry)->str(entry,"name",""),String.CASE_INSENSITIVE_ORDER));
+        for(JsonObject recipient:directory) {
+            String id=str(recipient,"id","");
+            int obligations=0;
+            long amount=0L;
+            for(JsonElement e:items) {
+                if(!e.isJsonObject())continue;
+                JsonObject item=e.getAsJsonObject();
+                if(!id.equals(str(item,"recipientId",""))
+                        ||!"expense".equals(str(item,"kind","expense"))
+                        ||!occurs(item,month))continue;
+                obligations++;
+                amount=Math.addExact(amount,amountFor(item,month));
+            }
+            table.addRow(new Object[]{
+                str(recipient,"name","Bez nazwy"),obligations,money(amount),id});
+        }
+        return table;
     }
 
     private static boolean occurs(JsonObject item,YearMonth month) {
@@ -228,11 +283,16 @@ final class DesktopBudgetMirror {
             JScrollPane scroll=new JScrollPane(table);
             scroll.setPreferredSize(new Dimension(850,400));
             JPanel body=new JPanel(new BorderLayout(0,8));
-            body.add(new JLabel("<html><b>"+current+"</b> • wpływy "
-                +money(summary.income)+" • plan wydatków "
-                +money(summary.expenses)+" • zostaje "
-                +money(summary.income-summary.expenses)+"</html>"),
-                BorderLayout.NORTH);
+            String monthLabel=current.format(
+                java.time.format.DateTimeFormatter.ofPattern(
+                    "LLLL yyyy",Locale.forLanguageTag("pl-PL")));
+            String title=monthLabel.substring(0,1).toUpperCase(
+                Locale.forLanguageTag("pl-PL"))+monthLabel.substring(1);
+            body.add(new JLabel("<html><b>"+title+"</b>  |  Wpływy: "
+                +money(summary.income)+"  |  Wydatki: "
+                +money(summary.expenses)+"  |  Różnica: "
+                +money(Math.subtractExact(summary.income,summary.expenses))
+                +"</html>"),BorderLayout.NORTH);
             body.add(scroll,BorderLayout.CENTER);
             boolean editable=sharedSnapshot!=null&&onSave!=null;
             body.add(new JLabel(editable
@@ -245,16 +305,38 @@ final class DesktopBudgetMirror {
                     +"Starszy lokalny plik planu nie został skasowany.</html>"),
                 BorderLayout.SOUTH);
             Object[] options=editable
-                ?new Object[]{"‹ Miesiąc","Następny miesiąc ›",
-                    "Edytuj wybraną pozycję","Zamknij"}
-                :new Object[]{"‹ Miesiąc","Następny miesiąc ›","Zamknij"};
+                ?new Object[]{"‹ Poprzedni","Następny ›",
+                    "Bieżący miesiąc","Odbiorcy",
+                    "Edytuj pozycję","Zamknij"}
+                :new Object[]{"‹ Poprzedni","Następny ›",
+                    "Bieżący miesiąc","Odbiorcy","Zamknij"};
             int action=JOptionPane.showOptionDialog(owner,body,
                 "PayCheck • wspólny Budżet miesiąca",
                 JOptionPane.DEFAULT_OPTION,JOptionPane.PLAIN_MESSAGE,
                 null,options,options[options.length-1]);
             if(action==0) current=current.minusMonths(1);
             else if(action==1) current=current.plusMonths(1);
-            else if(editable&&action==2) {
+            else if(action==2) current=YearMonth.now();
+            else if(action==3) {
+                try {
+                    JTable recipientTable=new JTable(
+                        recipientOverview(items,recipients,current));
+                    recipientTable.setAutoCreateRowSorter(true);
+                    recipientTable.getColumnModel().getColumn(3).setMinWidth(0);
+                    recipientTable.getColumnModel().getColumn(3).setMaxWidth(0);
+                    JScrollPane directoryScroll=new JScrollPane(recipientTable);
+                    directoryScroll.setPreferredSize(new Dimension(650,280));
+                    JOptionPane.showMessageDialog(owner,directoryScroll,
+                        "Odbiorcy i zobowiązania • "+current,
+                        JOptionPane.PLAIN_MESSAGE);
+                } catch(Exception invalid) {
+                    JOptionPane.showMessageDialog(owner,
+                        "Nie można wyświetlić odbiorców: "
+                            +invalid.getMessage(),
+                        "Budżet miesiąca",JOptionPane.ERROR_MESSAGE);
+                }
+            }
+            else if(editable&&action==4) {
                 int selected=table.getSelectedRow();
                 if(selected<0) {
                     JOptionPane.showMessageDialog(owner,
