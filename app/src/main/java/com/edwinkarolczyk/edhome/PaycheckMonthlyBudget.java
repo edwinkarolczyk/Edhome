@@ -286,7 +286,8 @@ final class PaycheckMonthlyBudget {
         long applied = "expense".equals(item.kind)
             ? creditAppliedTo(item,month) : 0L;
         long closed = item.balanceAdjustmentsGrosz.getOrDefault(month.toString(),0L);
-        return Math.max(0L, planned - paid - applied - closed);
+        return PaycheckBudgetSettlementMath.outstanding(
+            planned,paid,closed,applied);
     }
 
     /**
@@ -584,7 +585,8 @@ final class PaycheckMonthlyBudget {
                 long closed = item.balanceAdjustmentsGrosz.getOrDefault(
                     cursor.toString(),0L);
                 long appliedCredit = creditAppliedTo(item,cursor);
-                long missing = planned - actual - closed - appliedCredit;
+                long missing = PaycheckBudgetSettlementMath.outstanding(
+                    planned,actual,closed,appliedCredit);
                 if (missing > 0L) result.add(new Arrear(cursor,missing));
             }
             cursor = cursor.plusMonths(1);
