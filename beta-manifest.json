@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 246,
-  "versionName": "0.8.0.54",
-  "changelog": "EDHOME Beta 0.8.0.54 / 246 — Budżet miesiąca (etap 4). Poprawiono usuwanie i odświeżanie powiadomień po rozliczeniu; stare załączniki bez miesiąca można przypisać do faktury z konkretnego miesiąca; korekta zobowiązania: tylko oglądany miesiąc / od wybranego miesiąca / zakończ definicję po nim; w podsumowaniu osobno wykonanie pozycji planu i pozostałe wydatki PayCheck. Regresja i podpisany build Beta PASS. Stable/main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.54/edhome-beta.apk",
-  "sha256": "57ff473898f11084d5bd9f8b7efff8fde32e99df155592dbe1d9caec4cf64bc0"
+  "versionCode": 247,
+  "versionName": "0.8.0.55",
+  "changelog": "EDHOME 0.8.0.55 — Beta. Budżet miesiąca: jeden PayCheck w bieżącym UI, zwarty nagłówek miesiąca, kolor całej linii wg statusu, Historia przy pozycji oraz przypomnienia dokładnie 3 dni przed i w dniu płatności. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.55/edhome-beta.apk",
+  "sha256": "468ef45163bda9c038105f9d7b9b3ecd1b08811c528d66ffe226205367da2084"
 }
