@@ -115,3 +115,13 @@
 5. **P1-04/P1-05/P1-06/P1-07:** domyślne 20 min, historia, dokładność naliczania, zwarte karty; dopiero później dalsze rozszerzenia.
 
 **Reguła zamknięcia:** P0 naprawione kodem, regresja logiki w CI, zielone buildy oraz siedem scenariuszy odbiorowych zapisanych w roadmapie. Nie modyfikować `main`/Stable bez wyraźnej akceptacji.
+
+## Uzupełnienie P0 z logu urządzenia — 08.10.2026, godz. 10:42
+
+### P0-06 — crash przy otwieraniu „Projekty → Wymagania”
+
+- **Dowód:** Android 0.8.0.51, dwa zdarzenia `ERROR_UNCAUGHT_main | IllegalStateException | android.view.ViewGroup#addViewInner` z `MainActivity#showProjectBlockers:5846`.
+- **Przyczyna jednoznaczna w kodzie:** `showProjectBlockers()` używało `compactActionRow()`, które od razu podłącza wiersz do `body`; ten sam wiersz był następnie dodawany do `row` dialogu. Android zabrania jednemu `View` mieć dwóch rodziców.
+- **Zastosowana poprawka `beta`:** lokalny `new LinearLayout(this)` z orientacją poziomą i wyśrodkowaniem, bez automatycznego przypisania rodzica; test statyczny `tests/check_projects_contract.py` pilnuje tego warunku.
+- **Wersja kandydująca:** Android 0.8.0.52 / 244; build i ręczny test na urządzeniu wymagane przed oznaczeniem jako naprawione w wydaniu.
+- **Oddzielny problem:** `HUB_HOST_UNREACHABLE` dla 192.168.100.19:45823 oznacza brak odpowiedzi Desktopu w LAN; nie odpowiada za ten wyjątek interfejsu.
