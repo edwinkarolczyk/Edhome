@@ -596,9 +596,17 @@ final class DesktopHubSync {
     private static PatchPlan buildPatch(String baseline,String current) throws Exception {
         JSONObject beforeRoot=new JSONObject(baseline);
         JSONObject afterRoot=new JSONObject(current);
-        if(!canonical(beforeRoot.optJSONObject("settings"))
-                .equals(canonical(afterRoot.optJSONObject("settings"))))
-            return PatchPlan.full();
+        // Ustawienia niezwiązane z Budżetem nadal wymagają pełnego CAS.
+        // Pozycje, odbiorcy i zdarzenia budżetowe są natomiast wysyłane
+        // per UUID, bez nadpisywania niezależnych zmian wykonanych na PC.
+        JSONObject budgetDelta=budgetSettingsDelta(
+            beforeRoot.optJSONObject("settings"),
+            afterRoot.optJSONObject("settings"));
+        if(budgetDelta==null)return PatchPlan.full();
+        int budgetChanges=0;
+        for(Iterator<String> it=budgetDelta.keys();it.hasNext();)
+            budgetChanges+=budgetDelta.getJSONArray(it.next()).length();
+        if(budgetChanges>500)return PatchPlan.full();
 
         JSONObject beforeTables=beforeRoot.getJSONObject("tables");
         JSONObject afterTables=afterRoot.getJSONObject("tables");
@@ -645,15 +653,80 @@ final class DesktopHubSync {
                     op.put("row",new JSONObject(newRow.toString()));
                 }
                 operations.put(op);
-                if(operations.length()>500)return PatchPlan.full();
+                if(operations.length()+budgetChanges>500)return PatchPlan.full();
             }
         }
-        if(operations.length()==0)return PatchPlan.none();
+        if(operations.length()==0&&budgetChanges==0)return PatchPlan.none();
         JSONObject payload=new JSONObject();
         payload.put("format","edhome-record-patch");
         payload.put("version",2);
         payload.put("operations",operations);
-        return new PatchPlan(payload,operations.length(),false);
+        if(budgetChanges>0)payload.put("budgetDelta",budgetDelta);
+        return new PatchPlan(payload,operations.length()+budgetChanges,false);
+    }
+
+    /**
+     * Zmiany ustawień budżetu po UUID (3 kolekcje). Null oznacza, że
+     * nie da się użyć przyrostowej synchronizacji: przejdź na CAS snapshot.
+     */
+    private static JSONObject budgetSettingsDelta(JSONObject before,
+            JSONObject after) throws Exception {
+        if(before==null||after==null)return null;
+        final String[] fields={
+            "paycheckMonthlyBudget","paycheckRecipients","paycheckBudgetHistory"
+        };
+        JSONObject oldOther=new JSONObject(before.toString());
+        JSONObject newOther=new JSONObject(after.toString());
+        for(String field:fields) {
+            oldOther.remove(field);
+            newOther.remove(field);
+        }
+        if(!canonical(oldOther).equals(canonical(newOther)))return null;
+        JSONObject delta=new JSONObject();
+        for(String field:fields) {
+            if(!before.has(field)||!after.has(field)
+                    ||!(before.opt(field) instanceof String)
+                    ||!(after.opt(field) instanceof String))return null;
+            Map<String,JSONObject> oldRows=budgetRows(
+                new JSONArray(before.getString(field)));
+            Map<String,JSONObject> newRows=budgetRows(
+                new JSONArray(after.getString(field)));
+            if(oldRows==null||newRows==null)return null;
+            JSONArray changed=new JSONArray();
+            Set<String> keys=new java.util.TreeSet<>();
+            keys.addAll(oldRows.keySet());
+            keys.addAll(newRows.keySet());
+            for(String id:keys) {
+                JSONObject previous=oldRows.get(id);
+                JSONObject next=newRows.get(id);
+                if(previous!=null&&next!=null
+                        &&canonical(previous).equals(canonical(next)))continue;
+                // Cache historii ma limit 6000; usunięcie starego eventu
+                // z cache NIE usuwa go z archiwum ani z drugiego urządzenia.
+                if("paycheckBudgetHistory".equals(field)&&next==null)continue;
+                JSONObject change=new JSONObject();
+                change.put("id",id);
+                change.put("before",previous==null
+                    ?JSONObject.NULL:previous);
+                change.put("after",next==null?JSONObject.NULL:next);
+                changed.put(change);
+                if(changed.length()>500)return null;
+            }
+            if(changed.length()>0)delta.put(field,changed);
+        }
+        return delta;
+    }
+
+    private static Map<String,JSONObject> budgetRows(JSONArray rows)
+            throws Exception {
+        Map<String,JSONObject> result=new LinkedHashMap<>();
+        for(int i=0;i<rows.length();i++) {
+            JSONObject row=rows.optJSONObject(i);
+            if(row==null)return null;
+            String id=row.optString("id","");
+            if(!validId(id)||result.put(id,row)!=null)return null;
+        }
+        return result;
     }
 
     private static Map<String,JSONObject> metaByRow(JSONObject root) {
