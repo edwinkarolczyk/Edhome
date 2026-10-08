@@ -165,6 +165,13 @@ final class PaycheckBudgetSyncPatch {
         return null;
     }
 
+    /** Cache może zostać skrócony, ale pełna historia zostaje w SQLite. */
+    private static JSONArray withoutFirst(JSONArray original) throws Exception {
+        JSONArray result=new JSONArray();
+        for(int i=1;i<original.length();i++)result.put(original.get(i));
+        return result;
+    }
+
     private static boolean allowed(String key) {
         for(String field:FIELDS)if(field.equals(key))return true;
         return false;
