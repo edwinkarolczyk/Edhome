@@ -83,7 +83,7 @@ for token in (
     'case "paycheck_budget": paycheckMonthlyBudget(); break;',
     'Wejdź do budżetu miesiąca',
     'Budżet miesiąca • ',
-    'planowane saldo',
+    'Pozostałe / nieprzypisane wydatki PayCheck',
     'Wykonanie pozycji Budżetu',
     'Pozycja planowana nie jest transakcją.',
     'budgetInlineButton("‹"',
