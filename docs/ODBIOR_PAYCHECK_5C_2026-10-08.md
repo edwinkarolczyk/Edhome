@@ -6,8 +6,8 @@
 
 ## Wersje do testu
 
-- Android Beta **0.8.0.59 / versionCode 251** (nowa paczka delta Desktop→Android, weryfikacja CI #1978).
-- Desktop Beta **0.7.0.111** (weryfikacja CI #269).
+- Android Beta **0.8.0.60 / versionCode 252** — poprawka P0 zapisująca tylko dane finansowe (GitHub CI #1982 w weryfikacji); **nie testować na jedynej kopii danych**.
+- Desktop Beta **0.7.0.111** — CI #269 PASS.
 - GitHub `beta`; `main`/Stable niezmieniony.
 
 ## Scenariusze odbioru
@@ -35,11 +35,12 @@
 | A14 | Wyślij ten sam patch PC→Android drugi raz po symulacji utraconego ACK | Ten sam wynik, jeden wpis historii, te same UUID, brak podwójnej alokacji | ☐ |
 | A15 | Telefon zmienia rachunek offline, PC próbuje wysłać starszą zmianę na ten sam UUID | HTTP 409, dane telefonu bez zmian, konflikt jawnie zapisany na PC | ☐ |
 | A16 | PC wysyła jednocześnie Budżet i niepowiązaną zmianę magazynową | Paczka nie wykonuje się częściowo; każda zmiana wymaga kontrolowanego osobnego przesłania | ☐ |
+| A17 | Telefon zapisuje czynność Projektu i stan Magazynu, następnie PC zmienia tylko kwotę rachunku | Zmienia się tylko Budżet; Projekt, Magazyn i inne tabele mają identyczne rekordy oraz historię; brak pełnego restore | ☐ |
 
 ## Kryteria zakończenia
 
 1. Zielony CI Android i Desktop dla **bieżącego kodu** oraz poprawne podpisy/instalatory.
-2. Testy A1–A16 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
+2. Testy A1–A17 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
 3. Porównanie sumy potwierdzonych transakcji, rozdzielonych kwot, nadpłat i sald przed/po synchronizacji — **różnica 0 gr**, pomijając jawnie zatwierdzone korekty.
 4. Kopia ZIP i testowy restore zweryfikowane. W razie awarii wstrzymać wydanie Stable, zachować eksport i diagnostykę z obu urządzeń.
 5. Potwierdzenie użytkownika. Dopiero wtedy 5C = odebrany i można rozpocząć 6 (ergonomia i kontrola 25/25).
@@ -47,5 +48,6 @@
 ## Znane ograniczenia przed odbiorem
 
 - Android → Desktop Hub: zmiany ustawień Budżetu są wysyłane per UUID; Desktop → Android wciąż pobiera snapshot z kontrolą lokalnych zmian, nie pełne per-UUID pobieranie.
-- Edycja wpłat i nadpłat z poziomu PC nie jest dostępna; synchronizowane są istniejące operacje Androida. Konflikty finansowe mogą wymagać ręcznego rozstrzygnięcia.
+- Edycja wpłat i nadpłat z poziomu PC nie jest dostępna; synchronizowane są istniejące operacje Androida.
+- Wersja Android 0.8.0.59 miała nadmierny zakres przywracania danych podczas odbioru budżetowego patcha; do testu A17 wymagane jest minimum **0.8.0.60 / 252** po zielonym CI. Konflikty finansowe mogą wymagać ręcznego rozstrzygnięcia.
 - Sukces CI nie zastępuje testów fizycznych; nie oznaczać etapu ani Budżetu 25/25 jako ukończonego przed odbiorem.
