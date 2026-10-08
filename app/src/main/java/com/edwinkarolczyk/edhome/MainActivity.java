@@ -5316,8 +5316,11 @@ public final class MainActivity extends Activity {
             final int softRequirements=ProjectPlanningStore.openSoftCount(
                 db.getReadableDatabase(),taskId);
             final int openRequirements=hardRequirements+softRequirements;
-            final int unlocks=ProjectStore.openDependentCount(
-                db.getReadableDatabase(),taskId);
+            final java.util.List<ProjectStore.TaskRef> openDependents=
+                ProjectStore.openDependents(db.getReadableDatabase(),taskId);
+            final int unlocks=openDependents.size();
+            final int requirementsTotal=ProjectPlanningStore.blockers(
+                db.getReadableDatabase(),taskId).size();
             final boolean completionBlocked=blockers>0||hardRequirements>0;
 
             LinearLayout box=card();
@@ -5381,9 +5384,18 @@ public final class MainActivity extends Activity {
 
             if(unlocks>0&&!done) {
                 TextView unlock=text("↳ Po wykonaniu odblokuje "
-                    +unlocks+(unlocks==1?" czynność":" czynności"),12,true);
+                    +unlocks+(unlocks==1?" czynność:":" czynności:"),12,true);
                 unlock.setTextColor(accent);
                 box.addView(unlock);
+                for(int i=0;i<Math.min(3,openDependents.size());i++) {
+                    ProjectStore.TaskRef dependent=openDependents.get(i);
+                    smallButton(box,"↳ "+dependent.title+" • "
+                        +projectPath(dependent.projectId),
+                        ()->openProjectTask(dependent.id));
+                }
+                if(openDependents.size()>3)
+                    smallButton(box,"Pokaż pozostałe: "+(openDependents.size()-3),
+                        ()->showProjectDependentsDialog(taskId,taskName));
             }
             if(softRequirements>0)
                 box.addView(text("⚠ Niespełnione zalecenia: "
@@ -5468,9 +5480,9 @@ public final class MainActivity extends Activity {
             compactAction(actions,"Zależności"
                     +(blockers>0?" ("+blockers+")":""),
                 ()->showProjectDependencyDialog(taskId,project.id));
-            compactAction(actions,"Wymagania"
-                    +(openRequirements>0?" ("+openRequirements+")":""),
-                ()->showProjectBlockers(taskId,taskName));
+            compactAction(actions,"Wymagania ("+requirementsTotal
+                    +(openRequirements>0?" • oczekuje "+openRequirements:"")
+                    +")",()->showProjectBlockers(taskId,taskName));
             LinearLayout editRow=compactActionRow();
             compactAction(editRow,"Edytuj",()->{
                 try(Cursor row=db.getReadableDatabase().rawQuery(
@@ -5491,6 +5503,23 @@ public final class MainActivity extends Activity {
                 ()->confirmDeleteProjectTask(taskId,taskName));
         }
         if(count==0)note("Brak czynności w tym projekcie.");
+    }
+
+    private void showProjectDependentsDialog(long taskId,String taskName) {
+        java.util.List<ProjectStore.TaskRef> items=
+            ProjectStore.openDependents(db.getReadableDatabase(),taskId);
+        if(items.isEmpty()) {
+            alert("Ta czynność nie odblokowuje już innych prac.");
+            return;
+        }
+        java.util.ArrayList<String> names=new java.util.ArrayList<>();
+        for(ProjectStore.TaskRef item:items)
+            names.add(item.title+" • "+projectPath(item.projectId));
+        new AlertDialog.Builder(this)
+            .setTitle("Po wykonaniu: "+taskName)
+            .setItems(names.toArray(new String[0]),(dialog,which)->
+                openProjectTask(items.get(which).id))
+            .setNegativeButton("Zamknij",null).show();
     }
 
     private void showProjectBlockedDialog(long taskId,String taskName) {
