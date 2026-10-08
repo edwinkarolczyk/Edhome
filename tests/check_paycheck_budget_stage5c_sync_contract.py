@@ -24,6 +24,8 @@ assert 'saveConflictBackup(app,prefs)' in android
 
 assert "DesktopBudgetDelta.apply(working,budgetDelta)" in desktop
 assert "DesktopBudgetIntegrity.assertAllocations(working)" in desktop
+assert "DesktopBudgetIntegrity.assertSidecars(working)" in desktop
+assert 'long currentShare=Math.addExact(allocated,surplusGrosz);' in integrity
 assert '||"paycheck_transactions".equals(table)' in desktop
 assert 'table.startsWith("budget_")' in desktop
 assert 'rows.get(rowIndex).equals(op.get("row"))' in desktop
