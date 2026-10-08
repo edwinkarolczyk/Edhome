@@ -460,6 +460,10 @@ public final class EdhomeDesktop extends JFrame {
 
         JsonObject before=snapshot==null?null:snapshot.deepCopy();
         saveFirstHubBackup(before,phone,client==null?"phone":client.deviceId);
+        // Pierwsze sparowanie też nie może wyczyścić wcześniej zachowanego
+        // archiwum Budżetu z Desktopu.
+        DesktopBudgetHistoryArchive.retain(before,phone);
+        DesktopBudgetIntegrity.assertSidecars(phone);
         snapshot=phone.deepCopy();
         ensureDesktopSyncMetadata(snapshot);
         hubCommittedSnapshot=snapshot.deepCopy();
