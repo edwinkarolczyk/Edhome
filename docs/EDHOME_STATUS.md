@@ -10,8 +10,8 @@
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.56 / versionCode 248** — w kodzie `app/build.gradle`; CI dla ostatniego HEAD w toku, nie mylić z opublikowanym manifestem |
-| Desktop Beta | **0.7.0.108** — w kodzie, Gradle i workflow na `beta`; CI i instalator z ostatniego HEAD nieodebrane |
+| Android Beta | **0.8.0.56 / versionCode 248** — kod, publikacja APK/manifest potwierdzona; [CI Android #1950: success](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797526) |
+| Desktop Beta | **0.7.0.108** — kod, Gradle i workflow zgodne; [CI Desktop #249: success](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797670), opublikowany instalator |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37764090792](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090792) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
 | Ostatni zweryfikowany CI Desktop | [run #37764090766](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090766) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
@@ -39,7 +39,7 @@
 - **Desktop Hub:** przy pełnym snapshot zachowuje poprzednie zdarzenia historii, nie nadpisuje różnej treści tego samego UUID, odrzuca destrukcyjne patche historii również w trybie „Telefon wygrywa”.
 - **Desktop PayCheck:** istniejącą pozycję wspólnego Budżetu można edytować z PC (nazwa i planowana kwota pojedynczego miesiąca). Jedna kopia snapshotu aktualizuje legacy JSON ustawień, `budget_items`, `budget_occurrences` i dopisuje `budget_history`. Starszy `paycheck-budget-plan.json` pozostaje nietknięty.
 - **Testy:** nowe JUnit `DesktopSharedBudgetEditsTest`, `DesktopBudgetHistoryArchiveTest`; źródłowy test `check_paycheck_budget_stage5c_guard.py`; Windows i Android CI uruchomione dla nowych zmian. **Nie oznaczaj 5C jako zakończonego bez wyników końcowego CI i testu dwóch fizycznych urządzeń.**
-- **Wersje:** Android 0.8.0.56/248 — [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.56), końcowy status CI Androida jeszcze niezweryfikowany; Desktop 0.7.0.108 — [instalator Windows opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest), workflow Desktop #249 zakończony sukcesem; ostatnie workflow dla HEAD po zmianach: [Android #1950](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797526), [Desktop #249](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797670). CI wcześniejszego Android [#1944](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767321384) przeszło, ale nie obejmuje ostatniego patcha konfliktów ani edycji Desktopu.
+- **Wersje:** Android 0.8.0.56/248 — [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.56), CI Android #1950 sukces; Desktop 0.7.0.108 — [instalator Windows opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest), workflow Desktop #249 zakończony sukcesem; ostatnie workflow dla HEAD po zmianach: [Android #1950](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797526), [Desktop #249](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797670) — oba success. CI wcześniejszego Android [#1944](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767321384) przeszło, ale nie obejmuje ostatniego patcha konfliktów ani edycji Desktopu.
 
 **Pozostało P0:** (1) dwa kierunki zmian i idempotencja płatności oraz nadpłat; (2) rozstrzyganie konfliktów per pozycja/operacja bez wyboru całego snapshotu, w tym jednoczesnych zmian offline; (3) końcowe testy na fizycznych urządzeniach oraz odbiór backup→restore. Od tej chwili każdą finansową zmianę po obu stronach należy testować na kopiach danych.
 
@@ -129,7 +129,7 @@
 | 2026-10-08 | 5A: struktura SQLite + historia Budżetu; 5B: Desktop — odczyt wspólnego Budżetu | Android Beta `0.8.0.55/247`; Desktop Beta `0.7.0.106`; CI [Android](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090792) i [Desktop](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090766) — success |
 | 2026-10-08 | 5C i odbiór 25/25 pozostają otwarte | [Roadmapa](ROADMAP.md); brak potwierdzenia testu fizycznego i pełnego dwukierunkowego zapisu |
 | 2026-10-08 | Utworzono stały plik statusu projektu | `docs/EDHOME_STATUS.md`, gałąź `beta`; commit widoczny w historii GitHub tego pliku |
-| 2026-10-08 | 5C — historia append-only, konflikty i pierwsza edycja wspólnego Budżetu PC | Commity: `3160b783`, `a58d37b1`, `9a9674de`, `4ba83a06`, `2d13d457`, `8caa634d`; nowe testy JUnit/kontrakt; Desktop CI #249 success i instalator 0.7.0.108 opublikowany; Android APK 0.8.0.56/248 opublikowany, całe Android CI #1950 jeszcze w toku. |
+| 2026-10-08 | 5C — historia append-only, konflikty i pierwsza edycja wspólnego Budżetu PC | Commity: `3160b783`, `a58d37b1`, `9a9674de`, `4ba83a06`, `2d13d457`, `8caa634d`; nowe testy JUnit/kontrakt; Desktop CI #249 i Android CI #1950 — success; oba instalatory dostępne, test fizyczny i odbiór 5C nadal wymagane. |
 
 | 2026-10-08 | Projekty — zapisano plan P0-01–P0-06, P1-01–P1-08 oraz 7 scenariuszy odbioru, **bez modyfikacji kodu** | [Audyt](AUDYT_PROJEKTY_2026-10-08.md); start od P0-01 po poleceniu użytkownika; PayCheck 5C zachowany. |
 
