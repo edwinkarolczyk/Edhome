@@ -6,8 +6,8 @@
 
 ## Wersje do testu
 
-- Android Beta **0.8.0.63 / versionCode 255** — ponowne QR, konflikt nowego PC i bezpieczny retry zmian finansowych (build #2002 w weryfikacji); **nie testować na jedynej kopii danych**.
-- Desktop Beta **0.7.0.113** — kopia przed pełnym zastąpieniem stanu i bezpieczny retry pozycji/rekordów Budżetu (build #279 w weryfikacji).
+- Android Beta **0.8.0.63 / versionCode 255** — [CI #2002 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821584092), podpisany APK opublikowany; **nie testować na jedynej kopii danych**.
+- Desktop Beta **0.7.0.113** — [CI #279 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287), instalator Windows opublikowany.
 - GitHub `beta`; `main`/Stable niezmieniony.
 
 ## Scenariusze odbioru
@@ -41,7 +41,7 @@
 
 ## Kryteria zakończenia
 
-1. Zielony CI Android i Desktop dla **bieżącego kodu** oraz poprawne podpisy/instalatory.
+1. **PASS — CI:** Android #2002 i Desktop #279 zakończone sukcesem; opublikowano podpisany APK i instalator. **Pozostałe kryteria wymagają testów fizycznych.**
 2. Testy A1–A19 na rzeczywistym Androidzie i Windows zakończone bez P0/P1.
 3. Porównanie sumy potwierdzonych transakcji, rozdzielonych kwot, nadpłat i sald przed/po synchronizacji — **różnica 0 gr**, pomijając jawnie zatwierdzone korekty.
 4. Kopia ZIP i testowy restore zweryfikowane. W razie awarii wstrzymać wydanie Stable, zachować eksport i diagnostykę z obu urządzeń.
