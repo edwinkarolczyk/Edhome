@@ -175,12 +175,18 @@ final class DesktopHubSync {
                 SharedPreferences prefs=prefs(app);
                 String host=resolveHost(app,prefs);
                 if(host==null)throw new IllegalStateException("Nie znaleziono Desktopu.");
+                String expectedLocal;
+                try(MainActivity.LocalDb helper=new MainActivity.LocalDb(app)) {
+                    expectedLocal=DataBackup.exportJson(
+                        helper.getWritableDatabase(),prefs);
+                }
                 HttpResult result=request(app,prefs,host,"GET","/snapshot",null,null);
                 if(result.code!=200)throw new IllegalStateException(
                     "Desktop odpowiedział HTTP "+result.code+".");
                 // Zanim przyjmiemy wersję PC, zapisz całą lokalną historię ZIP.
+                // Jeśli użytkownik zmienił dane podczas pobierania, przerwij.
                 saveConflictBackup(app,prefs);
-                applyServerSnapshot(app,prefs,result.body,result.sha256);
+                applyServerSnapshot(app,prefs,result.body,result.sha256,expectedLocal);
                 clearConflict(app,prefs);
                 prefs.edit().putString(PREF_LAST_STATE,
                     "ONLINE • konflikt rozwiązany wersją Desktop").apply();
