@@ -16,7 +16,7 @@ for token in (
     'PaycheckStore.sharedBalance(db.getReadableDatabase())',
     'PaycheckStore.add(',
     'new AlertDialog.Builder(this)',
-    'Potwierdź transakcję wspólną',
+    'Potwierdź transakcję',
     'PAYCHECK_SHARED_PENDING',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
