@@ -252,7 +252,7 @@ for token in (
     'schedule(context,false);',
     'PAYCHECK_BUDGET_REMINDER_CATCH_UP_TODAY',
     'open_paycheck_budget',
-    'sharedMatchedActual(',
+    'PaycheckMonthlyBudget.remainingDue(',
     'PAYCHECK_BUDGET_REMINDER_DELIVERED',
 ):
     assert token in budget_reminder, "Budget reminder contract missing: " + token
