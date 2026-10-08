@@ -6,17 +6,17 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-08 — dopisano szczegółowy plan stabilizacji Projektów P0/P1; PayCheck/Budżet 5C bez zmian zakresu |
+| Ostatnia aktualizacja | 2026-10-08 — kontynuacja PayCheck/Budżet 5C: per-ID delta, kontrola konfliktów, alokacji i archiwum |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.56 / versionCode 248** — kod, publikacja APK/manifest potwierdzona; [CI Android #1950: success](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797526) |
-| Desktop Beta | **0.7.0.108** — kod, Gradle i workflow zgodne; [CI Desktop #249: success](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797670), opublikowany instalator |
+| Android Beta | **0.8.0.58 / versionCode 250** — kod na `beta`, [build Android #1968](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372) uruchomiony; wynik końcowy niepotwierdzony |
+| Desktop Beta | **0.7.0.110** — kod, Gradle i workflow zgodne na `beta`; [build Desktop #264](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405583) uruchomiony, wynik końcowy niepotwierdzony |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37764090792](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090792) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
 | Ostatni zweryfikowany CI Desktop | [run #37764090766](https://github.com/edwinkarolczyk/Edhome/actions/runs/37764090766) — **success**, commit `58bb0d4c9228faa78011ab6afcda509e07750198` |
-| Bieżący etap | **Projekty — przygotowanie stabilizacji P0 (P0-01 do P0-06); naprawy jeszcze nierozpoczęte w tej serii**. PayCheck/Budżet 5C nadal OTWARTY. |
-| Następny krok | Po poleceniu start: **Projekty P0-01 → P0-02 → P0-03 → P0-04 → P0-05 → odbiór P0-06**, każdorazowo commit + test + CI + aktualizacja statusu. Budżet 5C zachowany jako osobny otwarty temat. |
+| Bieżący etap | **PayCheck/Budżet — etap 5C w realizacji; test fizyczny nadal nieodebrany.** Projekty P0/P1 pozostają w planie, bez nowych zmian w tej serii. |
+| Następny krok | Zweryfikować buildy Android #1968 i Desktop #264, wykonać test Android ↔ PC z dwoma niezależnymi zmianami offline, konfliktem tej samej płatności, backup ZIP→restore; dopiero potem rozważyć etap 6. Projekty P0 nadal oczekują. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -29,7 +29,7 @@
 | Etapy 0–4 | Wykonane kodowo według roadmapy; odbiór całości otwarty | Reguły budżetu i zachowania UI; nadal wymagane testy fizyczne i regresyjne |
 | **5A — Android / trwałość** | **Kod wdrożony, CI success** | Zgodnie z roadmapą: SQLite v46, tabele `budget_items`, `budget_occurrences`, `budget_recipients`, `budget_credits`, `budget_history`; historia bez limitu 6000 wpisów w archiwum; migracja, backup i protokół `sync-records` |
 | **5B — Desktop / odczyt** | **Kod wdrożony, CI success** | Podgląd wspólnego Budżetu z danych Androida; miesiące, faktury i korekty. Stary `paycheck-budget-plan.json` zachowany, **brak pełnej edycji wspólnego Budżetu z PC** |
-| **5C — synchronizacja i konflikty** | **W REALIZACJI / P0** | Kod: ochrona append-only historii na Androidzie i Desktopie, kopia ZIP przed „Desktop wygrywa”, Desktop: edycja istniejącej pozycji (nazwa/kwota miesiąca) i zapis do tych samych struktur. Brak odbioru fizycznego, pełnych per-rekordowych delt ustawień Budżetu, edycji wpłat/nadpłat oraz automatycznego scalania konfliktowych zmian finansowych. |
+| **5C — synchronizacja i konflikty** | **W REALIZACJI / P0** | Kod: ochrona historii append-only, kopia ZIP przy konflikcie, edycja istniejącej pozycji PC, per-ID delta Android→Hub dla pozycji/odbiorców/historii, ścisły CAS danych finansowych, kontrola sum alokacji/surplusów i zgodności JSON↔SQLite. Desktop→Android pobiera aktualny snapshot z kontrolą lokalnego CAS. Do odbioru: fizyczny test dwóch urządzeń, weryfikacja wpłat/nadpłat i backup→restore; edycja wpłat/nadpłat z PC nieukończona. |
 | Etap 6 — ergonomia i odbiór | **OTWARTE** | Zwarty nagłówek, odbiorcy, pełna regresja 25/25 i fizyczny test obu urządzeń |
 
 ### 5C — faktycznie wykonane w kodzie (nie mylić z odbiorem)
@@ -42,6 +42,16 @@
 - **Wersje:** Android 0.8.0.56/248 — [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.56), CI Android #1950 sukces; Desktop 0.7.0.108 — [instalator Windows opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest), workflow Desktop #249 zakończony sukcesem; ostatnie workflow dla HEAD po zmianach: [Android #1950](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797526), [Desktop #249](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767797670) — oba success. CI wcześniejszego Android [#1944](https://github.com/edwinkarolczyk/Edhome/actions/runs/37767321384) przeszło, ale nie obejmuje ostatniego patcha konfliktów ani edycji Desktopu.
 
 **Pozostało P0:** (1) dwa kierunki zmian i idempotencja płatności oraz nadpłat; (2) rozstrzyganie konfliktów per pozycja/operacja bez wyboru całego snapshotu, w tym jednoczesnych zmian offline; (3) końcowe testy na fizycznych urządzeniach oraz odbiór backup→restore. Od tej chwili każdą finansową zmianę po obu stronach należy testować na kopiach danych.
+
+### 5C — druga seria: mechanizm przyrostowy i ochrona finansów
+
+- **Android → Hub Desktop:** `DesktopHubSync.buildPatch` oblicza zmiany w trzech kolekcjach ustawień (`paycheckMonthlyBudget`, `paycheckRecipients`, `paycheckBudgetHistory`) **po UUID**, do 500 operacji łącznie z tabelami. Dla innych ustawień lub nieobsługiwanych zmian pozostaje bezpieczny, pełny snapshot z CAS. Skrócenie cache historii nie usuwa zdarzeń archiwalnych.
+- **Desktop Hub:** `DesktopBudgetDelta.apply` scala tylko zmienione pozycje/odbiorców i append-only historię na **odłączonej kopii** całego snapshotu. Ta sama pozycja zmieniona offline na obu urządzeniach powoduje konflikt 409; niezależne pozycje mogą się scalić. Retry identycznej historii nie dopisuje drugiego zdarzenia.
+- **Integralność wpłat/nadpłat:** `DesktopBudgetIntegrity.assertAllocations` sprawdza łączne wykorzystanie jednej potwierdzonej transakcji, w tym `splitSurplusesGrosz`. `assertSidecars` sprawdza spójność `settings` z `budget_items`, `budget_recipients` i cache/archiwum `budget_history`, zatrzymując niespójny patch przed zapisem.
+- **Desktop → Android:** telefon pobiera stan Huba, ale przed jego zastosowaniem weryfikuje, że dane lokalne nie zmieniły się podczas transmisji LAN. Pobieranie nadal wymaga pełnego snapshotu; docelowy przyrostowy download per UUID jest poza tą serią.
+- **Konflikt „Telefon wygrywa”:** nie omija kontroli rewizji dla `budget_*` ani `paycheck_transactions`; nie jest automatycznym nadpisaniem księgi.
+- **Regresja:** JUnit `DesktopBudgetDeltaTest`, `DesktopBudgetIntegrityTest` (+ poprzednie testy historii), test źródłowy `check_paycheck_budget_stage5c_sync_contract.py`; dodane do workflow obu aplikacji. **Zielony CI ≠ fizyczny odbiór.**
+- **Wersje kodu:** Android 0.8.0.58/250, Desktop 0.7.0.110; commity `2cbc838`, `d0ae940`, `0bc8282`, `cbb4c5a`, `d481ad7`, `7680d0f`. Bieżący wynik CI: oczekujący. Nie używać na jedynej kopii danych bez wcześniejszego eksportu ZIP.
 
 ### Zadania do wykonania w etapie 5C
 
@@ -132,6 +142,8 @@
 | 2026-10-08 | 5C — historia append-only, konflikty i pierwsza edycja wspólnego Budżetu PC | Commity: `3160b783`, `a58d37b1`, `9a9674de`, `4ba83a06`, `2d13d457`, `8caa634d`; nowe testy JUnit/kontrakt; Desktop CI #249 i Android CI #1950 — success; oba instalatory dostępne, test fizyczny i odbiór 5C nadal wymagane. |
 
 | 2026-10-08 | Projekty — zapisano plan P0-01–P0-06, P1-01–P1-08 oraz 7 scenariuszy odbioru, **bez modyfikacji kodu** | [Audyt](AUDYT_PROJEKTY_2026-10-08.md); start od P0-01 po poleceniu użytkownika; PayCheck 5C zachowany. |
+
+| 2026-10-08 | Budżet 5C: per-ID delta, atomowe konflikty, kontrola podwójnych płatności, sidecar i local CAS | [Android #1968](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405372), [Desktop #264](https://github.com/edwinkarolczyk/Edhome/actions/runs/37770405583) — weryfikacja w toku; test fizyczny nadal oczekuje. |
 
 ## Zasady aktualizacji tego pliku przy każdym następnym etapie
 
