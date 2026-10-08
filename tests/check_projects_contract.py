@@ -237,3 +237,16 @@ assert 'scroll.setName("edhome-project-tasks");' in desktop
 assert 'sectionScrollPane(content, current)' in desktop
 assert 'namedScrollPane(node,"edhome-project-tasks")' in desktop
 print("Projects Android/Desktop scroll and safe task-edit contract OK")
+
+# Bezpieczeństwo przenoszenia: nie wolno osierocić istniejących zależności.
+task_editor=main.split("private void editTask(",1)[1].split(
+    "private void showTaskHistory(",1)[0]
+assert 'boolean movingAcrossRoots=false;' in task_editor
+assert 'ProjectStore.rootProjectId(' in task_editor
+assert 'WHERE task_id=? OR depends_on_task_id=? LIMIT 1' in task_editor
+assert 'Najpierw usuń te powiązania w Projektach.' in task_editor
+assert 'if(movingAcrossRoots)' in task_editor
+assert 'scroll.putClientProperty("edhome.projectId",Long.valueOf(projectId))' in desktop
+assert 'sectionScrollKey("Projekty",desktopProjectId)' in desktop
+print("Projects dependency move guard and per-project scroll contract OK")
+
