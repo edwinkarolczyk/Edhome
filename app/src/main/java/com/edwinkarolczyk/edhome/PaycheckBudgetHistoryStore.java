@@ -41,7 +41,8 @@ final class PaycheckBudgetHistoryStore {
             throws Exception {
         if (prefs == null || item == null || type == null || type.isBlank())
             throw new IllegalArgumentException("Nieprawidłowe zdarzenie budżetu.");
-        Event event = make(item,month,type,amountGrosz,note,"",null);
+        Event event = make(item,month == null ? YearMonth.now() : month,
+            type,amountGrosz,note,"",null);
         SharedPreferences.Editor editor = prefs.edit();
         stage(prefs,editor,java.util.Collections.singletonList(event));
         if (!editor.commit())
