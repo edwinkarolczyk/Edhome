@@ -14240,6 +14240,7 @@ public final class MainActivity extends Activity {
                                 "PAYCHECK_SHARED_BUDGET_SPLIT_MATCHED",
                                 "count="+split.size());
                         }
+                        PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                     } catch(Exception error) {
                         DiagnosticLog.error(
                             "PAYCHECK_SHARED_BUDGET_MATCH",error);
@@ -14502,6 +14503,7 @@ public final class MainActivity extends Activity {
                     for(String operationId:selected)
                         PaycheckMonthlyBudget.unmatch(prefs,operationId,
                             originals.get(operationId));
+                    PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                     DiagnosticLog.event("PAYCHECK_SHARED_BULK_DELETED");
                     render();
                     alert("Usunięto wpisów PayCheck: "+removed+".");
@@ -14529,6 +14531,7 @@ public final class MainActivity extends Activity {
                         db.getWritableDatabase(),operationId);
                     if("DELETED".equals(result)) {
                         PaycheckMonthlyBudget.unmatch(prefs,operationId,original);
+                        PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                         DiagnosticLog.event("PAYCHECK_SHARED_DELETED");
                         render();
                     } else alert("Wpis już nie istnieje.");
@@ -14691,6 +14694,16 @@ public final class MainActivity extends Activity {
             PaycheckMonthlyBudget.Totals pending =
                 PaycheckMonthlyBudget.sharedActual(
                     db.getReadableDatabase(), month, "pending");
+            PaycheckMonthlyBudget.Totals assigned =
+                PaycheckMonthlyBudget.sharedAssignedActual(
+                    db.getReadableDatabase(),items,month);
+            long unpaidPlan=0L;
+            for (PaycheckMonthlyBudget.Item item
+                    :PaycheckMonthlyBudget.activeFor(items,month))
+                if ("expense".equals(item.kind))
+                    unpaidPlan=Math.addExact(unpaidPlan,
+                        PaycheckMonthlyBudget.remainingDue(
+                            db.getReadableDatabase(),item,month));
 
             LinearLayout monthNav = new LinearLayout(this);
             monthNav.setOrientation(LinearLayout.HORIZONTAL);
@@ -14725,15 +14738,23 @@ public final class MainActivity extends Activity {
 
             note("Plan: wpływy " + MoneyRules.format(plan.income)
                 + " • wydatki " + MoneyRules.format(plan.expense)
-                + " • planowane saldo " + MoneyRules.format(plan.net()) + ".");
-            note("Faktycznie potwierdzone: wpływy "
+                + " • zostaje " + MoneyRules.format(plan.net()) + ".");
+            note("Wykonanie pozycji Budżetu: pokryto "
+                + MoneyRules.format(Math.max(0L,plan.expense-unpaidPlan))
+                + " z " + MoneyRules.format(plan.expense)
+                + " • pozostało do zapłaty " + MoneyRules.format(unpaidPlan)
+                + ". Potwierdzone płatności przypisane do planu: "
+                + MoneyRules.format(assigned.expense) + ".");
+            note("Pozostałe / nieprzypisane wydatki PayCheck: "
+                + MoneyRules.format(Math.max(0L,
+                    confirmed.expense-assigned.expense))
+                + " • pozostałe wpływy PayCheck: "
+                + MoneyRules.format(Math.max(0L,
+                    confirmed.income-assigned.income)) + ".");
+            note("Cały PayCheck (potwierdzone): wpływy "
                 + MoneyRules.format(confirmed.income) + " • wydatki "
                 + MoneyRules.format(confirmed.expense)
                 + " • saldo " + MoneyRules.format(confirmed.net()) + ".");
-            long planVsActual = confirmed.net() - plan.net();
-            note("Różnica plan–fakt: "
-                + (planVsActual > 0 ? "+" : "")
-                + MoneyRules.format(planVsActual) + ".");
             if (!pending.empty())
                 note("Do potwierdzenia: wpływy "
                     + MoneyRules.format(pending.income) + " • wydatki "
@@ -15269,6 +15290,7 @@ public final class MainActivity extends Activity {
                     PaycheckMonthlyBudget.updateInvoiceForMonth(
                         prefs,item.id,month,amountGrosz,invoiceDue,customPlan);
                     PaycheckBudgetReminderReceiver.schedule(this);
+                    PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                     DiagnosticLog.event("PAYCHECK_BUDGET_INVOICE_SAVED");
                     expandedBudgetItemId=item.id;
                     dialog.dismiss();
@@ -15491,6 +15513,7 @@ public final class MainActivity extends Activity {
                                 credit.sourceMonth,targetMonth,amount);
                             DiagnosticLog.event(
                                 "PAYCHECK_BUDGET_CREDIT_APPLIED");
+                            PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                             render();
                         } catch(Exception error) {
                             alert(error.getMessage()==null
@@ -15640,6 +15663,7 @@ public final class MainActivity extends Activity {
                             prefs,item.id,month,reason);
                         DiagnosticLog.event(
                             "PAYCHECK_BUDGET_OCCURRENCE_CLOSED");
+                        PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                         dialog.dismiss();
                         render();
                     } catch(Exception error) {
@@ -15689,6 +15713,7 @@ public final class MainActivity extends Activity {
                                 prefs,item.id,month);
                             DiagnosticLog.event(
                                 "PAYCHECK_BUDGET_CYCLE_ENDED");
+                            PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                             render();
                         } catch(Exception error) {
                             alert(error.getMessage()==null
@@ -15743,6 +15768,7 @@ public final class MainActivity extends Activity {
                                 which == 0
                                     ? "PAYCHECK_BUDGET_AMOUNT_MONTH"
                                     : "PAYCHECK_BUDGET_AMOUNT_FROM_MONTH");
+                            PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                             render();
                         } catch (Exception error) {
                             alert("Nie zapisano zmiany kwoty.");
