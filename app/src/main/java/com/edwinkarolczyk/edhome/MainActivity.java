@@ -6995,6 +6995,33 @@ public final class MainActivity extends Activity {
                 }
                 Long selectedProjectId=projectIds.get(
                     chosenProject.getSelectedItemPosition());
+                if(id!=null) {
+                    Long previousProject=db.taskProjectId(id);
+                    boolean movingAcrossRoots=false;
+                    if(previousProject==null)
+                        movingAcrossRoots=selectedProjectId!=null;
+                    else if(selectedProjectId==null)
+                        movingAcrossRoots=true;
+                    else
+                        movingAcrossRoots=ProjectStore.rootProjectId(
+                            db.getReadableDatabase(),previousProject)
+                            !=ProjectStore.rootProjectId(
+                                db.getReadableDatabase(),selectedProjectId);
+                    if(movingAcrossRoots) {
+                        try(Cursor dependencies=db.getReadableDatabase().rawQuery(
+                                "SELECT 1 FROM project_task_dependencies "
+                                    +"WHERE task_id=? OR depends_on_task_id=? LIMIT 1",
+                                new String[]{Long.toString(id),
+                                    Long.toString(id)})) {
+                            if(dependencies.moveToFirst()) {
+                                alert("Nie można przenieść tej czynności poza "
+                                    +"projekt główny, ponieważ ma zależności. "
+                                    +"Najpierw usuń te powiązania w Projektach.");
+                                return;
+                            }
+                        }
+                    }
+                }
                 int minimumDuration=selectedProjectId==null
                     ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
                 Integer parsedDurationMinutes = TaskRules.minutesFromParts(
