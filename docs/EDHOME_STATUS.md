@@ -11,10 +11,10 @@
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
 | Android Beta | **0.8.0.64 / versionCode 256** — [CI Android #2010 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131), podpisany APK opublikowany |
-| Desktop Beta | **0.7.0.114** — wdrożony kod etapu 6 w `beta`, [Desktop CI #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) w weryfikacji; poprzedni 0.7.0.113 #279 PASS |
+| Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37841803131 / #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) — **success**, commit `7fa54c6c23d0d1a3c774fa1d5525f680d84ce05e` |
-| Ostatni zweryfikowany CI Desktop | [run #37821546287 / #279](https://github.com/edwinkarolczyk/Edhome/actions/runs/37821546287) — **success**, commit `6ab5efda0d96fc1c98f8286313c8c6cdad4530bb` |
+| Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
 | Bieżący etap | **PayCheck/Budżet — etap 6 w realizacji (UX Desktop + audyt 25/25); etap 5C nadal nieodebrany fizycznie.** Projekty P0/P1 pozostają w planie bez nowych zmian w tej serii. |
 | Następny krok | Po zielonym Desktop CI #284 przetestować nowy widok i odbiór B1–B12 z etapu 6; osobno wykonać A1–A20 z 5C: telefon ↔ PC, konflikt tej samej wpłaty, idempotencja po utracie ACK, backup ZIP → restore; po akceptacji możliwy etap 6. Bez odbioru 5C nadal niezamknięty. |
 
@@ -24,7 +24,7 @@
 
 **Wdrożono na Desktop w `beta`:** `DesktopBudgetMirror` pokazuje jeden zwarty nagłówek z polską nazwą miesiąca i planowanymi wpływami, wydatkami oraz różnicą; wpływy są zawsze nad wydatkami; wydatki domyślnie według planowanej daty zapłaty; jest przycisk „Bieżący miesiąc” i „Odbiorcy”. Podgląd kartoteki wyświetla rzeczywistych odbiorców oraz liczbę i planowaną kwotę aktywnych zobowiązań danego miesiąca. Nie tworzono drugiej księgi PayCheck; edycja nazwy i kwoty pojedynczego miesiąca działa dotychczasową ścieżką.
 
-**Testy:** JUnit `DesktopBudgetMirrorTest` poszerzony o dochody przed wydatkami, sortowanie i odbiorców (także podwójne ID); regresja `tests/check_paycheck_budget_stage6_desktop.py` dodana do Windows workflow. **Desktop 0.7.0.114 / build #284 weryfikowany**. Android 0.8.0.64 / #2010 potwierdzony PASS.
+**Testy:** JUnit `DesktopBudgetMirrorTest` poszerzony o dochody przed wydatkami, sortowanie i odbiorców (także podwójne ID); regresja `tests/check_paycheck_budget_stage6_desktop.py` dodana do Windows workflow. **Desktop 0.7.0.114 / build #284 PASS, instalator opublikowany**. Android 0.8.0.64 / #2010 potwierdzony PASS.
 
 **Lista odbiorowa:** [ODBIOR_PAYCHECK_ETAP6_25_25.md](ODBIOR_PAYCHECK_ETAP6_25_25.md) — wszystkie 25 wymagań i testy B1–B12, do wykonania na urządzeniach. 5C nadal wymaga fizycznych testów A1–A20 i backup→restore; dopóki to nie nastąpi, nie oznaczać 25/25 jako przyjęte i **nie dotykać `main`**.
 
