@@ -53,6 +53,8 @@ final class PaycheckMonthlyBudget {
         String inactiveFromMonth;
         final List<String> matchedOperationIds = new ArrayList<>();
         final Map<String, Long> matchedAllocationsGrosz = new LinkedHashMap<>();
+        // Reszta z przelewu grupowego: osobna nadpłata (nie część rachunku).
+        final Map<String, Long> splitSurplusesGrosz = new LinkedHashMap<>();
         final Set<String> skippedMonths = new HashSet<>();
         final Set<String> carriedMonths = new HashSet<>();
         final Map<String, Long> monthAmountOverrides = new LinkedHashMap<>();
@@ -204,6 +206,8 @@ final class PaycheckMonthlyBudget {
             if (item.matchedOperationIds.remove(operationId)) changed = true;
             if (item.matchedAllocationsGrosz.remove(operationId) != null)
                 changed = true;
+            if (item.splitSurplusesGrosz.remove(operationId) != null)
+                changed = true;
         }
         if (target == null)
             throw new IllegalArgumentException("Pozycja budżetu już nie istnieje.");
@@ -242,10 +246,119 @@ final class PaycheckMonthlyBudget {
             target.matchedOperationIds.add(operationId);
         }
         target.matchedAllocationsGrosz.put(operationId, allocationGrosz);
+        target.splitSurplusesGrosz.remove(operationId);
         save(prefs, items);
         PaycheckBudgetHistoryStore.append(prefs,target,YearMonth.now(),
             "TRANSACTION_ALLOCATED",allocationGrosz,operationId);
         return true;
+    }
+
+
+    /**
+     * Reszta przelewu grupowego nie jest dopisywana do przydziału żadnego
+     * rachunku. Staje się nadpłatą przypisaną do jednego odbiorcy/pozycji.
+     * Liczymy ją wyłącznie dla nadal potwierdzonej transakcji bankowej.
+     */
+    static long sharedSplitSurplus(SQLiteDatabase db, Item item, YearMonth month) {
+        long total = 0L;
+        for (Map.Entry<String,Long> entry : item.splitSurplusesGrosz.entrySet()) {
+            if (!item.matchedOperationIds.contains(entry.getKey())) continue;
+            try (Cursor cursor = db.rawQuery(
+                    "SELECT kind,created_at,statement_date,status "
+                    + "FROM paycheck_transactions "
+                    + "WHERE scope='shared' AND operation_id=?",
+                    new String[]{entry.getKey()})) {
+                if (!cursor.moveToFirst() || !"confirmed".equals(cursor.getString(3))
+                        || !item.kind.equals(cursor.getString(0))) continue;
+                YearMonth actualMonth = transactionMonth(cursor.getLong(1),
+                    cursor.isNull(2) ? null : cursor.getString(2));
+                if (month.equals(actualMonth))
+                    total = Math.addExact(total,entry.getValue());
+            }
+        }
+        return total;
+    }
+
+    /** Pozostało do zapłaty po wcześniejszych wpłatach i jawnych odliczeniach. */
+    static long remainingDue(SQLiteDatabase db, Item item, YearMonth month) {
+        long planned = plannedAmount(item,month);
+        long paid = sharedMatchedActual(db,item,month);
+        long applied = "expense".equals(item.kind)
+            ? creditAppliedTo(item,month) : 0L;
+        long closed = item.balanceAdjustmentsGrosz.getOrDefault(month.toString(),0L);
+        return Math.max(0L, planned - paid - applied - closed);
+    }
+
+    /**
+     * Atomowe przypisanie jednego przelewu do wielu rachunków.
+     * Rozdziela tylko ich niezapłacone części; dodatnia różnica powstaje
+     * jako oddzielna nadpłata, a ujemna pozostaje jawnie w historii.
+     */
+    static PaycheckBudgetSplitMath.Result allocateSplit(SharedPreferences prefs,
+            SQLiteDatabase db, List<String> itemIds, YearMonth month,
+            String operationId, long transactionGrosz) throws Exception {
+        if (itemIds == null || itemIds.size() < 2 || month == null
+                || operationId == null || !operationId.matches("[0-9a-fA-F-]{36}")
+                || transactionGrosz < itemIds.size()
+                || transactionGrosz > MoneyRules.MAX_GROSZ)
+            throw new IllegalArgumentException("Nieprawidłowy podział przelewu.");
+
+        String kind;
+        try (Cursor tx = db.rawQuery(
+                "SELECT kind,amount_grosz,created_at,statement_date,status "
+                + "FROM paycheck_transactions WHERE scope='shared' AND operation_id=?",
+                new String[]{operationId})) {
+            if (!tx.moveToFirst() || !"confirmed".equals(tx.getString(4))
+                    || tx.getLong(1) != transactionGrosz
+                    || !month.equals(transactionMonth(tx.getLong(2),
+                        tx.isNull(3) ? null : tx.getString(3))))
+                throw new IllegalArgumentException("Brak potwierdzonego przelewu w tym miesiącu.");
+            kind = tx.getString(0);
+        }
+
+        List<Item> all = load(prefs);
+        for (Item item : all)
+            if (item.matchedOperationIds.contains(operationId))
+                throw new IllegalArgumentException(
+                    "Przelew jest już przypisany. Najpierw usuń poprzednie przypisanie.");
+
+        Set<String> unique = new HashSet<>(itemIds);
+        if (unique.size() != itemIds.size())
+            throw new IllegalArgumentException("Powtórzona pozycja w podziale.");
+        List<Item> ordered = new ArrayList<>();
+        for (String id : itemIds) {
+            Item item = find(all,id);
+            if (!kind.equals(item.kind)
+                    || !activeFor(java.util.Collections.singletonList(item),month).contains(item)
+                    || item.matchedOperationIds.size() >= MAX_MATCHES_PER_ITEM)
+                throw new IllegalArgumentException("Pozycja nie kwalifikuje się do podziału.");
+            ordered.add(item);
+        }
+        ordered.sort((a,b)->Long.compare(
+            remainingDue(db,a,month),remainingDue(db,b,month)));
+        long[] outstanding = new long[ordered.size()];
+        for (int i=0;i<ordered.size();i++)
+            outstanding[i] = remainingDue(db,ordered.get(i),month);
+        PaycheckBudgetSplitMath.Result result =
+            PaycheckBudgetSplitMath.calculate(outstanding,transactionGrosz);
+        for (int i=0;i<ordered.size();i++) {
+            Item item = ordered.get(i);
+            item.matchedOperationIds.add(operationId);
+            item.matchedAllocationsGrosz.put(operationId,result.allocationsGrosz[i]);
+        }
+        Item differenceOwner = ordered.get(ordered.size()-1);
+        if (result.differenceGrosz > 0L)
+            differenceOwner.splitSurplusesGrosz.put(operationId,result.differenceGrosz);
+        save(prefs,all);
+        for (int i=0;i<ordered.size();i++)
+            PaycheckBudgetHistoryStore.append(prefs,ordered.get(i),month,
+                "TRANSACTION_ALLOCATED",result.allocationsGrosz[i],operationId);
+        if (result.differenceGrosz != 0L)
+            PaycheckBudgetHistoryStore.append(prefs,differenceOwner,month,
+                result.differenceGrosz > 0L
+                    ? "SPLIT_OVERPAYMENT" : "SPLIT_UNDERPAYMENT",
+                Math.abs(result.differenceGrosz),operationId);
+        return result;
     }
 
     static long allocatedForOperation(List<Item> items, String operationId) {
@@ -268,6 +381,8 @@ final class PaycheckMonthlyBudget {
             boolean itemChanged = false;
             if (item.matchedOperationIds.remove(operationId)) itemChanged = true;
             if (item.matchedAllocationsGrosz.remove(operationId) != null)
+                itemChanged = true;
+            if (item.splitSurplusesGrosz.remove(operationId) != null)
                 itemChanged = true;
             if (itemChanged) {
                 changed = true;
@@ -468,7 +583,8 @@ final class PaycheckMonthlyBudget {
                 long actual = sharedMatchedActual(db,item,cursor);
                 long closed = item.balanceAdjustmentsGrosz.getOrDefault(
                     cursor.toString(),0L);
-                long missing = planned - actual - closed;
+                long appliedCredit = creditAppliedTo(item,cursor);
+                long missing = planned - actual - closed - appliedCredit;
                 if (missing > 0L) result.add(new Arrear(cursor,missing));
             }
             cursor = cursor.plusMonths(1);
@@ -491,8 +607,8 @@ final class PaycheckMonthlyBudget {
         int guard = 0;
         while (cursor.isBefore(month) && guard++ < 600) {
             if (occurs(item,cursor)) {
-                long extra = sharedMatchedActual(db,item,cursor)
-                    - plannedAmount(item,cursor);
+                long extra = Math.addExact(sharedMatchedActual(db,item,cursor),
+                    sharedSplitSurplus(db,item,cursor)) - plannedAmount(item,cursor);
                 if (extra > 0L) {
                     long used = creditAppliedFrom(item,cursor);
                     long available = extra - used;
@@ -848,6 +964,7 @@ final class PaycheckMonthlyBudget {
         for (Map.Entry<String, Long> entry : item.matchedAllocationsGrosz.entrySet())
             allocations.put(entry.getKey(), entry.getValue());
         json.put("allocations", allocations);
+        json.put("splitSurplusesGrosz",amounts(item.splitSurplusesGrosz));
         json.put("skippedMonths", strings(item.skippedMonths));
         json.put("carriedMonths", strings(item.carriedMonths));
         json.put("monthAmountOverrides", amounts(item.monthAmountOverrides));
@@ -913,6 +1030,8 @@ final class PaycheckMonthlyBudget {
                     operationId, allocations.getLong(operationId));
             }
         }
+        readAmounts(json.optJSONObject("splitSurplusesGrosz"),
+            item.splitSurplusesGrosz);
         readStrings(json.optJSONArray("skippedMonths"), item.skippedMonths);
         readStrings(json.optJSONArray("carriedMonths"), item.carriedMonths);
         readAmounts(json.optJSONObject("monthAmountOverrides"),
@@ -1049,6 +1168,13 @@ final class PaycheckMonthlyBudget {
                     || allocation.getValue() > MoneyRules.MAX_GROSZ)
                 throw new IllegalArgumentException(
                     "Nieprawidłowy podział transakcji w budżecie.");
+        }
+        for (Map.Entry<String,Long> surplus : item.splitSurplusesGrosz.entrySet()) {
+            if (!matched.contains(surplus.getKey())
+                    || !item.matchedAllocationsGrosz.containsKey(surplus.getKey())
+                    || surplus.getValue() == null || surplus.getValue() < 1L
+                    || surplus.getValue() > MoneyRules.MAX_GROSZ)
+                throw new IllegalArgumentException("Nieprawidłowa nadpłata z podziału.");
         }
         validateMonthSet(item.skippedMonths);
         validateMonthSet(item.carriedMonths);
