@@ -114,7 +114,7 @@ final class DesktopBudgetMirror {
         }
     }
 
-    private static long amountFor(JsonObject item,YearMonth month) {
+    static long amountFor(JsonObject item,YearMonth month) {
         JsonObject overrides=object(item,"monthAmountOverrides");
         if(overrides.has(month.toString()))
             return overrides.get(month.toString()).getAsLong();
@@ -182,7 +182,21 @@ final class DesktopBudgetMirror {
     }
 
     static void show(Component owner,JsonObject settings) {
-        final JsonArray items,recipients;
+        showBudget(owner,settings,null,null);
+    }
+
+    static void showEditable(Component owner,JsonObject sharedSnapshot,
+            java.util.function.Consumer<JsonObject> onSave) {
+        if(sharedSnapshot==null||!sharedSnapshot.has("settings")
+                ||!sharedSnapshot.get("settings").isJsonObject())
+            throw new IllegalArgumentException("Brak wspólnego Budżetu.");
+        showBudget(owner,sharedSnapshot.getAsJsonObject("settings"),
+            sharedSnapshot,onSave);
+    }
+
+    private static void showBudget(Component owner,JsonObject settings,
+            JsonObject sharedSnapshot,java.util.function.Consumer<JsonObject> onSave) {
+        JsonArray items,recipients;
         try {
             items=loadShared(settings);
             JsonElement r=JsonParser.parseString(
@@ -208,6 +222,7 @@ final class DesktopBudgetMirror {
             }
             JTable table=new JTable(summary.rows);
             table.setAutoCreateRowSorter(true);
+            table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             table.getColumnModel().getColumn(4).setMinWidth(0);
             table.getColumnModel().getColumn(4).setMaxWidth(0);
             JScrollPane scroll=new JScrollPane(table);
@@ -219,18 +234,74 @@ final class DesktopBudgetMirror {
                 +money(summary.income-summary.expenses)+"</html>"),
                 BorderLayout.NORTH);
             body.add(scroll,BorderLayout.CENTER);
-            body.add(new JLabel("<html>Ten sam Budżet co na Androidzie "
-                +"(ostatni stan synchronizacji). Podgląd tylko do odczytu. "
-                +"Starszy lokalny plik planu nie został skasowany.</html>"),
+            boolean editable=sharedSnapshot!=null&&onSave!=null;
+            body.add(new JLabel(editable
+                ? "<html>Wspólny Budżet Android ↔ PC. Edycja nazwy i kwoty "
+                    +"wybranego miesiąca. Zmiany zapiszą się lokalnie i przejdą "
+                    +"synchronizację z kontrolą konfliktu. "
+                    +"Stary plik planu PC pozostaje bez zmian.</html>"
+                : "<html>Ten sam Budżet co na Androidzie "
+                    +"(ostatni stan synchronizacji). Podgląd tylko do odczytu. "
+                    +"Starszy lokalny plik planu nie został skasowany.</html>"),
                 BorderLayout.SOUTH);
-            Object[] options={"‹ Miesiąc","Następny miesiąc ›","Zamknij"};
+            Object[] options=editable
+                ?new Object[]{"‹ Miesiąc","Następny miesiąc ›",
+                    "Edytuj wybraną pozycję","Zamknij"}
+                :new Object[]{"‹ Miesiąc","Następny miesiąc ›","Zamknij"};
             int action=JOptionPane.showOptionDialog(owner,body,
                 "PayCheck • wspólny Budżet miesiąca",
                 JOptionPane.DEFAULT_OPTION,JOptionPane.PLAIN_MESSAGE,
-                null,options,options[2]);
+                null,options,options[options.length-1]);
             if(action==0) current=current.minusMonths(1);
             else if(action==1) current=current.plusMonths(1);
-            else return;
+            else if(editable&&action==2) {
+                int selected=table.getSelectedRow();
+                if(selected<0) {
+                    JOptionPane.showMessageDialog(owner,
+                        "Najpierw zaznacz pozycję budżetu do edycji.");
+                    continue;
+                }
+                String itemId=String.valueOf(summary.rows.getValueAt(
+                    table.convertRowIndexToModel(selected),4));
+                JsonObject item=null;
+                for(JsonElement e:items)if(e.isJsonObject()&&itemId.equals(
+                        str(e.getAsJsonObject(),"id","")))item=e.getAsJsonObject();
+                if(item==null)continue;
+                JTextField name=new JTextField(str(item,"name",""),28);
+                javax.swing.JFormattedTextField amount=new javax.swing.JFormattedTextField();
+                amount.setText(java.math.BigDecimal.valueOf(
+                    amountFor(item,current),2).toPlainString().replace('.',','));
+                JPanel fields=new JPanel(new GridLayout(0,1,4,4));
+                fields.add(new JLabel("Nazwa pozycji:"));
+                fields.add(name);
+                fields.add(new JLabel("Planowana kwota tylko za "+current+" (zł):"));
+                fields.add(amount);
+                if(JOptionPane.showConfirmDialog(owner,fields,
+                        "Edytuj pozycję Budżetu",JOptionPane.OK_CANCEL_OPTION)
+                        !=JOptionPane.OK_OPTION)continue;
+                try {
+                    String raw=amount.getText().trim().replace(" ","")
+                        .replace(',','.');
+                    if(!raw.matches("[0-9]{1,9}([.][0-9]{1,2})?"))
+                        throw new IllegalArgumentException(
+                            "Wprowadź kwotę z maksymalnie dwoma miejscami po przecinku.");
+                    long grosz=new java.math.BigDecimal(raw).movePointRight(2)
+                        .longValueExact();
+                    JsonObject edited=DesktopSharedBudgetEdits.changeMonth(
+                        sharedSnapshot,itemId,name.getText(),current,grosz);
+                    if(edited!=sharedSnapshot) {
+                        onSave.accept(edited);
+                        sharedSnapshot=edited;
+                        settings=edited.getAsJsonObject("settings");
+                        items=loadShared(settings);
+                    }
+                } catch(Exception invalid) {
+                    JOptionPane.showMessageDialog(owner,
+                        "Nie zapisano zmiany: "+invalid.getMessage(),
+                        "Budżet miesiąca",JOptionPane.ERROR_MESSAGE);
+                }
+            } else return;
         }
     }
+
 }
