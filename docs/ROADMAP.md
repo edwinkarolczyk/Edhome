@@ -114,7 +114,8 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 - **Android:** lista wymagań z bezpośrednimi checkboxami spełnione/oczekujące, edycja nazwy/rodzaju/twardości/daty, usuwanie po potwierdzeniu; wybór wielu zależności z przyciskiem „Zapisz”; widoczne Cofnij przy wykonanej czynności; domyślnie 20 min przy szybkim dodawaniu.
 - **Desktop:** lista i CRUD wymagań z checkboxami, edycja/usuwanie; jawne Wykonane/Cofnij z blokadą przy aktywnym pomiarze, poprzednikach i twardych wymaganiach. Dotychczasowy edytor wielu zależności pozostaje.
 - **Testy:** do `tests/check_projects_contract.py` dodano weryfikację interfejsów wymagania/zależności i akcji zakończenia; dotychczasowe testy w dużym stopniu są statycznymi kontraktami, zatem **nadal wymagane są testy rzeczywistych operacji i odbiór fizyczny**.
-- **Wersje kandydatów:** Android Beta `0.8.0.46 / 238`, Desktop Beta `0.7.0.103`. Nie ogłaszać gotowych instalatorów bez zielonej publikacji z tego samego commita/wersji.
+- **Wersje:** Android Beta `0.8.0.46 / 238` opublikowana po zielonym CI, Desktop Beta `0.7.0.103` z zielonym CI i instalatorem. Dodatkowy kandydat Android Beta `0.8.0.47 / 239` zawiera zapis tylko faktycznych zmian w zależnościach; wymaga osobnej zielonej publikacji.
+- **P0 — integralność zależności (08.10):** w Androidzie zapis bez zmian jest operacją pustą; przy edycji istniejące relacje zachowują identyfikatory i `created_at`, a dodanie/usunięcie faktycznie zmienionych krawędzi odbywa się w transakcji. Test kontraktu sprawdza warunki tego zapisu; odbiór na urządzeniu nadal otwarty.
 - **Nadal otwarte:** zgodność danych po LAN w obu kierunkach (wcześniejszy problem użytkownika), backup→restore, migracja, kliknięcie powiadomienia, zachowanie scroll i testy interakcji. Dopiero potwierdzenie tych punktów zmienia status Projektów na 🟢.
 
 ### Minimalny scenariusz odbioru P0 — na obu urządzeniach
