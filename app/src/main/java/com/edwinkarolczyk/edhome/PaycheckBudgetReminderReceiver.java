@@ -34,7 +34,34 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
             "edhome_beta_prefs",Context.MODE_PRIVATE);
     }
 
+    private static boolean reminderDateToday(Context context,LocalDate today) {
+        try {
+            List<PaycheckMonthlyBudget.Item> items=
+                PaycheckMonthlyBudget.load(prefs(context));
+            Set<YearMonth> months=new LinkedHashSet<>();
+            months.add(YearMonth.from(today));
+            months.add(YearMonth.from(today.plusDays(3)));
+            for (YearMonth month:months)
+                for (PaycheckMonthlyBudget.Item item
+                        :PaycheckMonthlyBudget.activeFor(items,month)) {
+                    if (!"expense".equals(item.kind)) continue;
+                    LocalDate planned=
+                        PaycheckMonthlyBudget.plannedPaymentDate(item,month);
+                    if (planned!=null && (planned.equals(today)
+                            || planned.equals(today.plusDays(3))))
+                        return true;
+                }
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_REMINDER_DATE_CHECK",error);
+        }
+        return false;
+    }
+
     static void schedule(Context context) {
+        schedule(context,true);
+    }
+
+    private static void schedule(Context context,boolean allowTodayCatchUp) {
         AlarmManager manager=(AlarmManager)context.getSystemService(
             Context.ALARM_SERVICE);
         if (manager==null) return;
@@ -48,7 +75,16 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
 
         LocalDateTime now=LocalDateTime.now();
         LocalDateTime next=now.toLocalDate().atTime(8,0);
-        if (!next.isAfter(now)) next=next.plusDays(1);
+        if (!next.isAfter(now)) {
+            if (allowTodayCatchUp
+                    && reminderDateToday(context,now.toLocalDate())) {
+                context.sendBroadcast(intent);
+                DiagnosticLog.event(
+                    "PAYCHECK_BUDGET_REMINDER_CATCH_UP_TODAY");
+                return;
+            }
+            next=next.plusDays(1);
+        }
         LegacyCompat.setAndAllowWhileIdle(manager,AlarmManager.RTC_WAKEUP,
             next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),pending);
         DiagnosticLog.event("PAYCHECK_BUDGET_REMINDER_SCHEDULED");
@@ -65,7 +101,7 @@ public final class PaycheckBudgetReminderReceiver extends BroadcastReceiver {
                 schedule(context);
             return;
         }
-        schedule(context);
+        schedule(context,false);
         SharedPreferences pref=prefs(context);
         if (!pref.getBoolean(ENABLED_PREF,true)) return;
         if (Build.VERSION.SDK_INT>=33 && context.checkSelfPermission(

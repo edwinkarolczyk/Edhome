@@ -249,6 +249,9 @@ for token in (
 
 for token in (
     'planned.equals(today.plusDays(3))',
+    'reminderDateToday(context,now.toLocalDate())',
+    'schedule(context,false);',
+    'PAYCHECK_BUDGET_REMINDER_CATCH_UP_TODAY',
     'open_paycheck_budget',
     'sharedMatchedActual(',
     'PAYCHECK_BUDGET_REMINDER_DELIVERED',
