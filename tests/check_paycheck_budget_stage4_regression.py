@@ -41,7 +41,7 @@ assert "PaycheckMonthlyBudget.endCycleAt(" in delete
 assert "selectedMonth.plusMonths(1)" in delete
 assert "PaycheckBudgetReminderReceiver.refreshAfterSettlement(this)" in delete
 assert "YearMonth.now()" not in delete
-assert 'confirmBudgetItemDelete(false,item)' in main
+assert 'showBudgetDeleteScopeDialog(item,month)' in main
 
 end=section(budget,"static boolean deleteFromMonth(", "    /** Dane oryginalnej operacji")
 assert "from.toString()" in end
