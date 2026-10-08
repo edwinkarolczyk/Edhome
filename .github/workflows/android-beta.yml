@@ -178,6 +178,15 @@ jobs:
           java -cp "$RUNNER_TEMP/paycheck-budget-finance" \
             com.edwinkarolczyk.edhome.PaycheckBudgetFinanceSmoke
           python3 tests/check_paycheck_budget_finance_regression.py
+      - name: Monthly PayCheck invoice and schedule P0 regression
+        run: |
+          mkdir -p "$RUNNER_TEMP/paycheck-budget-invoices"
+          javac -d "$RUNNER_TEMP/paycheck-budget-invoices" \
+            app/src/main/java/com/edwinkarolczyk/edhome/PaycheckBudgetInvoiceDates.java \
+            tests/task_rules/PaycheckBudgetInvoiceDatesSmoke.java
+          java -cp "$RUNNER_TEMP/paycheck-budget-invoices" \
+            com.edwinkarolczyk.edhome.PaycheckBudgetInvoiceDatesSmoke
+          python3 tests/check_paycheck_budget_invoice_regression.py
       - name: Opt-in bank notification parsing and privacy regression
         run: |
           mkdir -p "$RUNNER_TEMP/bank-notifications"
