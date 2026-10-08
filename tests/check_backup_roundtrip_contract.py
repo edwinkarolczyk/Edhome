@@ -14,7 +14,10 @@ originals=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageOriginals.jav
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==49
+assert len(manifest)==54, "Nieoczekiwana liczba tabel backupu: "+str(len(manifest))
+assert {"budget_items","budget_occurrences","budget_recipients",
+        "budget_credits","budget_history"}.issubset(manifest), (
+    "Brak tabel budżetu w kopii zapasowej")
 numbers=set(re.findall(r'"([^"]+)"\.equals\(column\)',
     source.split("private static boolean isNumberColumn(String column)",1)[1]))
 nulls=source.split("if (value == JSONObject.NULL) {",1)[1].split("values.putNull(key);",1)[0]
