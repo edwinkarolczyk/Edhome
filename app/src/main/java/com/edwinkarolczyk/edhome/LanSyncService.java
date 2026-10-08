@@ -154,8 +154,11 @@ public final class LanSyncService extends Service {
     }
 
     private String applyRecordPatch(String incoming) throws Exception {
-        String result = SyncRecordStore.applyPatch(
-            db.getWritableDatabase(), incoming);
+        android.database.sqlite.SQLiteDatabase database=db.getWritableDatabase();
+        org.json.JSONObject patch=new org.json.JSONObject(incoming);
+        String result=patch.has("budgetDelta")
+            ?PaycheckBudgetSyncPatch.apply(database,prefs,incoming)
+            :SyncRecordStore.applyPatch(database,incoming);
         afterDataChange();
         return result;
     }
