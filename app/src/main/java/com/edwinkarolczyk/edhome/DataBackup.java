@@ -1682,6 +1682,10 @@ final class DataBackup {
                 + "COALESCE((SELECT MAX(shopping_id) FROM pantry_purchase_prices),0)) "
                 + "WHERE name='shopping_items'");
 
+            // Rebuild budget sidecar using already-validated incoming JSON BEFORE
+            // touching preferences. Any failure leaves existing preferences intact.
+            PaycheckBudgetSqliteStore.reconcileRaw(database,
+                paycheckMonthlyBudget,paycheckRecipients,paycheckBudgetHistory);
             // Preferences and SQL are separate stores. Save preferences BEFORE
             // committing SQL, so a failed preference write rolls SQL back.
             // Never clear the installed PIN, private vault or update channel.
@@ -1733,9 +1737,6 @@ final class DataBackup {
                     thumb.getValue());
             if (!restored.commit())
                 throw new IllegalStateException("Nie zapisano ustawień; baza danych została cofnięta.");
-            // Older snapshots do not contain the v46 budget tables.
-            // Reconstruct them from the validated restored preferences.
-            PaycheckBudgetSqliteStore.reconcile(database,prefs);
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
