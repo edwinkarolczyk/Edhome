@@ -3,7 +3,7 @@
 **Gałąź:** `beta`. **Stable `main`:** bez zmian bez jawnej akceptacji.
 **Kontrakt:** [ROADMAP.md](ROADMAP.md#paycheck--budżet-miesiąca-10-kontrakt-odbioru-2525).
 **Rozdział obowiązkowy:** pokrycie kodowe ≠ przetestowanie zachowania ≠ odbiór na telefonie i PC.
-**Stan 09.10.2026:** Android Beta `0.8.0.67/259` (kandydat: zwarty bilans i rozwijane szczegóły — CI i odbiór oczekują); poprzednia `0.8.0.66/258` (CI #2019 PASS); Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
+**Stan 09.10.2026:** Android Beta `0.8.0.67/259` (kandydat: zwarty bilans i rozwijane szczegóły — pierwsze CI #2020 FAIL przez zbyt szeroki zakres patcha, naprawa testowana w kolejnym CI; odbiór oczekuje); poprzednia `0.8.0.66/258` (CI #2019 PASS); Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
 
 ## Macierz 25 ustaleń
 

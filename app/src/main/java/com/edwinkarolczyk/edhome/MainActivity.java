@@ -14672,6 +14672,80 @@ public final class MainActivity extends Activity {
             PaycheckMonthlyBudget.Totals plan =
                 PaycheckMonthlyBudget.planned(items, month);
             title("Budżet miesiąca • " + budgetMonthLabel(month));
+            note("Plan: wpływy " + MoneyRules.format(plan.income)
+                + " • wydatki " + MoneyRules.format(plan.expense)
+                + " • zostaje " + MoneyRules.format(plan.net()) + ".");
+            button("📅 Wejdź do budżetu miesiąca • " + items.size()
+                + (items.size()==1 ? " pozycja" : " pozycji"),
+                () -> go("paycheck_budget"));
+        } catch (Exception error) {
+            DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_ENTRY", error);
+            button("📅 Wejdź do budżetu miesiąca",
+                () -> go("paycheck_budget"));
+        }
+    }
+
+    private void paycheckMonthlyBudget() {
+        header("PayCheck • Budżet miesiąca");
+        sharedMonthlyBudgetBlock();
+    }
+
+    private void sharedMonthlyBudgetBlock() {
+        final YearMonth month = paycheckBudgetMonth == null
+            ? YearMonth.now() : paycheckBudgetMonth;
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> items =
+                PaycheckMonthlyBudget.load(prefs);
+            PaycheckMonthlyBudget.Totals plan =
+                PaycheckMonthlyBudget.planned(items, month);
+            PaycheckMonthlyBudget.Totals confirmed =
+                PaycheckMonthlyBudget.sharedActual(
+                    db.getReadableDatabase(), month, "confirmed");
+            PaycheckMonthlyBudget.Totals pending =
+                PaycheckMonthlyBudget.sharedActual(
+                    db.getReadableDatabase(), month, "pending");
+            PaycheckMonthlyBudget.Totals assigned =
+                PaycheckMonthlyBudget.sharedAssignedActual(
+                    db.getReadableDatabase(),items,month);
+            long unpaidPlan=0L;
+            for (PaycheckMonthlyBudget.Item item
+                    :PaycheckMonthlyBudget.activeFor(items,month))
+                if ("expense".equals(item.kind))
+                    unpaidPlan=Math.addExact(unpaidPlan,
+                        PaycheckMonthlyBudget.remainingDue(
+                            db.getReadableDatabase(),item,month));
+
+            LinearLayout monthNav = new LinearLayout(this);
+            monthNav.setOrientation(LinearLayout.HORIZONTAL);
+            TextView previousMonth = budgetInlineButton("‹", () -> {
+                paycheckBudgetMonth = month.minusMonths(1);
+                expandedBudgetItemId = null;
+                expandedBudgetDetailsView = null;
+                render();
+            });
+            TextView monthLabel = text(budgetMonthLabel(month),18,true);
+            monthLabel.setGravity(Gravity.CENTER);
+            monthLabel.setTextColor(ink);
+            if (!month.equals(YearMonth.now())) {
+                monthLabel.setOnClickListener(v -> {
+                    paycheckBudgetMonth = YearMonth.now();
+                    expandedBudgetItemId = null;
+                    expandedBudgetDetailsView = null;
+                    render();
+                });
+                touchFeedback(monthLabel);
+            }
+            TextView nextMonth = budgetInlineButton("›", () -> {
+                paycheckBudgetMonth = month.plusMonths(1);
+                expandedBudgetItemId = null;
+                expandedBudgetDetailsView = null;
+                render();
+            });
+            monthNav.addView(previousMonth,new LinearLayout.LayoutParams(dp(52),dp(44)));
+            monthNav.addView(monthLabel,new LinearLayout.LayoutParams(0,dp(44),1f));
+            monthNav.addView(nextMonth,new LinearLayout.LayoutParams(dp(52),dp(44)));
+            body.addView(monthNav,new LinearLayout.LayoutParams(-1,-2));
+
             // Etap 6: krótki bilans widoczny od razu; rozliczenia na żądanie.
             LinearLayout summary = new LinearLayout(this);
             summary.setOrientation(LinearLayout.VERTICAL);

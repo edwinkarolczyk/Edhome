@@ -174,6 +174,11 @@ assert 'if (!pending.empty())' in android_budget
 assert 'summary.addView(text("Do potwierdzenia:' in android_budget
 assert 'PaycheckMonthlyBudget.sharedArrearsBefore(' in android_budget
 assert 'PaycheckMonthlyBudget.sharedCreditBefore(' in android_budget
+assert 'private void paycheckMonthlyBudget() {' in main
+assert 'sharedMonthlyBudgetBlock();' in main
+assert 'private void sharedMonthlyBudgetBlock() {' in main
+assert 'Plan: wpływy ' in main.split('private void paycheckMonthlyBudget()',1)[0]
+
 
 budget_method = main.split('private void budgetItemCard(',1)[1].split(
     'private void budgetArrearRow(',1)[0]
