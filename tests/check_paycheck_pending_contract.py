@@ -33,7 +33,7 @@ for token in ("✓ Pokaż i potwierdź oczekujące przelewy","✓ Potwierdź ocz
     assert token in main, 'Brak działania P0: '+token
 
 for token in ('Do potwierdzenia • bez wpływu na saldo',
-              'Potwierdź po sprawdzeniu banku / wyciągu',
+              'Potwierdź / dopasuj',
               'PaycheckStore.confirm(db.getWritableDatabase()',
               'Saldo potwierdzone:',
               'DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING'):
