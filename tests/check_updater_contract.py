@@ -37,7 +37,7 @@ assert src.count("handler.post(() ->")==1
 assert src.count("postUi(() ->")>=3
 assert "if (updater != null) updater.destroy();" in main
 for token in (
-    'QR Beta /\\nStable',
+    'button("QR do pobrania Beta / Stable", this::showUpdateDownloadQrCodes);',
     'showUpdateDownloadQrCodes',
     'releases/download/beta-v',
     'edhome-beta.apk',
@@ -47,4 +47,15 @@ for token in (
     'QR pobierania EDHOME Stable',
 ):
     assert token in main, token
+assert 'updater.showLatestChanges()' in main
+assert 'Układ Start 3 × 3. Gdy jest więcej niż 9 kafelków' not in main
+assert main.count('updateTile(tiles,') == 5  # cztery aktywne kafelki Beta, dwa alternatywne Stable
+for token in (
+    'public void showLatestChanges()',
+    'private void cacheLatestRelease(JSONObject manifest)',
+    'cacheLatestRelease(json);',
+    'validReleaseManifest(read)',
+    'Ostatnio zapisany opis (bez potwierdzenia aktualności)',
+):
+    assert token in src, token
 print("Updater single-flight, explicit retry, throttle and Beta/Stable QR: PASS")
