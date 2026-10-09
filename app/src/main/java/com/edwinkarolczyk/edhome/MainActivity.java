@@ -13992,8 +13992,10 @@ public final class MainActivity extends Activity {
             int mbankFiles=0;
             int veloPdfFiles=0;
             int genericFiles=0;
+            int currentFile=0;
             for(Uri uri:files) {
-                diagStage="READ";
+                currentFile++;
+                diagStage="ODCZYT PLIKU "+currentFile+"/"+files.size();
                 ByteArrayOutputStream output=new ByteArrayOutputStream();
                 try(InputStream stream=getContentResolver().openInputStream(uri)){
                     if(stream==null)throw new IllegalArgumentException(
@@ -14012,11 +14014,13 @@ public final class MainActivity extends Activity {
                 String sourceKind;
                 String sourceLabel;
                 if(BankPdfText.isPdf(bytes)) {
-                    diagStage="PDF_TEXT";
+                    diagStage="PDF / tekst • plik "+currentFile+"/"+files.size();
                     String pdfText=BankPdfText.extract(this,bytes);
                     if(!BankStatementVeloPdf.recognizes(pdfText))
                         throw new IllegalArgumentException(
                             "Tekstowy PDF jest czytelny, ale nie rozpoznano obsługiwanego formatu banku.");
+                    diagStage="VeloBank / transakcje • plik "
+                        +currentFile+"/"+files.size();
                     parsed=BankStatementVeloPdf.parse(pdfText);
                     sourceKind="velo_pdf";
                     sourceLabel="VeloBank";
@@ -14119,12 +14123,15 @@ public final class MainActivity extends Activity {
             DiagnosticLog.error("PAYCHECK_BANK_FILES_REJECTED",error);
             final String explanation=error instanceof IllegalArgumentException
                 ?error.getMessage():"Błąd odczytu pliku. Zobacz diagnostykę.";
+            final String failedStage=diagStage;
             runOnLiveUi(()->{
                 bankImportRunning=false;
                 if(isFinishing()||isDestroyed())return;
                 progress.dismiss();
-                alert("Nie wczytano historii. Nic nie zostało zapisane: "
-                    +explanation);
+                alert("Nie wczytano historii bankowej.\n"
+                    +"Etap: "+failedStage+"\n\n"
+                    +explanation+"\n\nŻadna operacja z tej partii "
+                    +"nie została zaimportowana.");
             });
         }
     }
