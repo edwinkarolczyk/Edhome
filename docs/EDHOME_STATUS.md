@@ -6,19 +6,33 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — **Android Beta 0.8.0.79 / 271 opublikowany, CI #2085 PASS**, podpisany APK. P0 poprawiono widoczną listę wyboru banku oraz trzy zwarte listy PayCheck/banków (pojedyncze rozwijanie) i usuwanie tylko nierozliczonych operacji bankowych. Odbiór na telefonie oraz pełny import VeloBanku nadal OTWARTE |
+| Ostatnia aktualizacja | 2026-10-09 — P0 Android Beta 0.8.0.80/272: VeloBank PDF na telefonie nieodczytany mimo 0.8.0.79. Kod parsuje teraz bezpiecznie kwoty podpisane +/− bez PLN przy każdej operacji i pokazuje etap błędu; [CI #2090](https://github.com/edwinkarolczyk/Edhome/actions/runs/37924337632) oczekuje, APK NIEPOTWIERDZONY. Ostatni podpisany APK: 0.8.0.79/271, #2085 PASS |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.79 / versionCode 271** — [CI #2085 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37922923711), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.79/edhome-beta.apk) opublikowany (13 344 423 bajtów, SHA-256 `f8eefae36a16421205c00d8160ddf3f17c2dc000e3a6f2534cfa8e3c4c886eee`). Test wyboru plików, rozwijania i usuwania na telefonie do potwierdzenia |
+| Android Beta | **W kodzie 0.8.0.80 / 272** — kandydat poprawy Velo PDF, [CI #2090](https://github.com/edwinkarolczyk/Edhome/actions/runs/37924337632) weryfikowane, podpisany APK niepotwierdzony. **Ostatni potwierdzony: 0.8.0.79 / 271, CI #2085 PASS** — [APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.79/edhome-beta.apk). Test prawdziwego PDF VeloBanku nadal P0 |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.79 / 271, CI #2085 PASS**, commit `10a8b7d79d572d2a1c3f04db371b595311370b4e`, [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37922923711), [Release podpisanego APK](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.79). Wcześniejsze #2082–#2084 FAIL z powodu starych statycznych testów nazw przycisków i historycznego liczenia propozycji po równej kwocie; testy dostosowano do nowego UI przed #2085 |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
-| Bieżący etap | **P0 Android PayCheck/import banków:** lista kompaktowa i jedno rozwinięcie dla PayCheck, pełnej historii i banków; poprawiony AlertDialog banków i fallback wyboru plików, usuwanie nierozliczonych dowodów. Wdrożone 0.8.0.79 / 271, CI #2085 PASS, odbiór fizyczny otwarty. Rzeczywisty PDF VeloBank do 09.10 wciąż osobne P0 |
-| Następny krok | Na Android Beta 0.8.0.79/271 wgrać VeloBank i mBank (wybór banku i pliku, 1 lub do 10), sprawdzić zakres dat z 09.10, liczbę operacji, powtórny import/duplikaty. Sprawdzić jeden rozwinięty wiersz naraz na głównej liście, w pełnej historii i w bankowej; usunąć otwarty dowód bez zmiany salda, sprawdzić blokadę usunięcia zaksięgowanego. Następnie test 4500→4300, backup/sync. Stable main bez zmian |
+| Bieżący etap | **P0 VeloBank PDF na Androidzie**: poprzednia 0.8.0.79 nie czyta realnego pliku zgłoszonego przez użytkownika. Parsowanie rozszerzone w 0.8.0.80/272, diagnostyka etapu błędu i testy regresyjne dodane. Brak dostępnego oryginalnego eksportu Velo do weryfikacji całej historii, dlatego odbiór wstrzymany; nowe CI #2090 do weryfikacji |
+| Następny krok | Zweryfikować #2090 i publikację 0.8.0.80/272, pobrać od użytkownika dokładny komunikat wraz z etapem oraz — jeśli potrzebny — oryginalny plik lub zanonimizowaną próbkę VeloBanku (daty, kwoty, opisy strukturalne). Sprawdzić 09.10, kompletność operacji, liczby, duplikaty, brak ponownego salda. Nie przechodzić do Stable ani 5C bez odbioru P0 |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — VeloBank PDF nadal nieczytelny na Androidzie (09.10.2026)
+
+**Nowe zgłoszenie:** w Beta 0.8.0.79 użytkownik nie może odczytać wyciągu VeloBanku. Nie znamy jeszcze dokładnego komunikatu/układu oryginalnego dokumentu. Zielone CI i syntetyczne pliki NIE są dowodem, że rzeczywisty PDF importuje się w całości.
+
+**Weryfikacja kodu wykazała:** dotychczasowe wyrażenie regularne `MONEY` wymagało symbolu waluty `PLN/zł` na każdej linii. W PDF, gdzie waluta występuje tylko w nagłówku tabeli, podpisane kwoty w wierszach operacji były pomijane. Parser mógł też przy jednej rozpoznanej pozycji milcząco pominąć następną nieczytelną; niepoprawnie mógł próbować łączyć dane kolejnej datowanej transakcji. Mogą istnieć też inne układy PDF, których bez rzeczywistej próbki nie znamy.
+
+**Kandydat Android 0.8.0.80/272 tylko na `beta`:**
+- `BankStatementVeloPdf.java` commit `615b5ea` — akceptacja jednoznacznie podpisanych kwot z groszami, gdy `PLN` jest tylko w nagłówku, także w wieloliniowych transakcjach. Nie łączy linii przekraczając kolejną datę ani słowo `saldo`; odrzuca import przy chociaż jednej wykrytej nieczytelnej operacji, zamiast po cichu wczytać fragment. Zachowuje identyfikatory dotychczas poprawnie rozpoznawanych wierszy.
+- `BankStatementVeloPdfSmoke.java` commit `41e3a9a` — testy dla operacji bez `PLN` w każdej linii, wpływu +4300 zł, historii z 09.10, niezapisania częściowej historii i niewykorzystywania salda jako kwoty przelewu.
+- `MainActivity.java` commit `207a9ea` — przy nieudanym imporcie widoczny etap `PDF / tekst` lub `VeloBank / transakcje` z numerem pliku bez ujawniania treści wyciągu. Brak zapisów dla błędnej paczki.
+- `app/build.gradle` commit `5862077` — 0.8.0.80 / 272, opis zmian Beta commit `a428bfb`; [CI #2090](https://github.com/edwinkarolczyk/Edhome/actions/runs/37924337632) oczekuje na wynik.
+
+**P0 nadal nieodebrane:** potrzebny dokładny komunikat i etap błędu z telefonu (bez danych wrażliwych), ewentualnie kopia wyciągu po maskowaniu numerów rachunków i danych osobowych. Sprawdzić kompletną listę operacji po imporcie i brakujący 09.10, duplikaty, potwierdzenia, saldo. Nie twierdzić, że samo CI dowodzi naprawy. Stable `main` nietknięta.
 
 ## P0 — czytelny PayCheck, import i usuwanie historii (09.10.2026)
 
