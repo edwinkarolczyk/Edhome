@@ -117,6 +117,53 @@ public final class BankStatementVeloPdfSmoke {
         }
         check(noSaldoGuess,"do not use signed balance as transfer amount");
 
+        // Regresja z wyciągu: dwie daty w wierszu, opis i kwota
+        // przelewu oddzielone od siebie, PLN tylko w nagłówku tabeli.
+        String multiLine="VeloBank\\nHistoria PLN\\n"
+            +"07.10.2026 08.10.2026\\n"
+            +"Przelew przychodzący\\n"
+            +"Od nadawcy\\n"
+            +"Wynagrodzenie\\n"
+            +"Numer referencyjny\\n"
+            +"Za październik\\n"
+            +"Kwota przelewu: 4 300,00\\n"
+            +"09.10.2026 Przelew wychodzący\\n"
+            +"Tytuł: rachunek\\n"
+            +"Kwota przelewu: 280,00\\n";
+        List<BankStatementCsv.Entry> varied=
+            BankStatementVeloPdf.parse(multiLine);
+        check(varied.size()==2,"both multiline Velo transfers without signs");
+        check("2026-10-07".equals(varied.get(0).date),
+            "keep first source date until booking/operation field confirmed");
+        check("income".equals(varied.get(0).kind)
+            &&varied.get(0).amountGrosz==430000,"unsigned labeled salary");
+        check("expense".equals(varied.get(1).kind)
+            &&varied.get(1).amountGrosz==28000,"unsigned labeled bill");
+        check(BankStatementVeloPdf.parse(multiLine).get(0).evidenceKey
+            .equals(varied.get(0).evidenceKey),"multiline import stable key");
+
+        // Jeżeli siedem pozycji pozostanie nierozpoznanych, komunikat
+        // musi podać powody, bez ujawniania treści operacji.
+        StringBuilder seven=new StringBuilder("VeloBank\\nHistoria PLN\\n")
+            .append("05.10.2026 Operacja kartą -6,50 PLN\\n");
+        for(int n=0;n<7;n++)
+            seven.append("08.10.2026 Przelew wychodzący\\n");
+        boolean sevenReported=false;
+        try {BankStatementVeloPdf.parse(seven.toString());}
+        catch(IllegalArgumentException expected) {
+            sevenReported=expected.getMessage().contains("7 potencjalnych")
+                &&expected.getMessage().contains("brak jednoznacznej kwoty 7");
+        }
+        check(sevenReported,"report full count and category of 7 unreadable rows");
+
+        String balanceOnly="VeloBank\\nHistoria PLN\\n"
+            +"08.10.2026 Przelew wychodzący\\n"
+            +"Saldo po operacji +4 300,00\\n";
+        boolean balanceRejected=false;
+        try {BankStatementVeloPdf.parse(balanceOnly);}
+        catch(IllegalArgumentException expected){balanceRejected=true;}
+        check(balanceRejected,"do not treat a signed balance as transaction amount");
+
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
