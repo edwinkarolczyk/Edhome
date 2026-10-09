@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 267,
-  "versionName": "0.8.0.75",
-  "changelog": "EDHOME 0.8.0.75 — Beta. P0 PayCheck i Budżet: pozycje planu automatycznie trafiają do Do potwierdzenia, bez ręcznego tworzenia operacji. Import historii bankowej może potwierdzić i przypisać płatność wyłącznie przy zgodności kwoty, kierunku, miesiąca, charakterystycznego odbiorcy oraz braku konfliktu. Niejasne wpisy czekają na decyzję. Saldo tylko po uzgodnieniu, bez duplikatów. Test fizyczny nadal wymagany; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.75/edhome-beta.apk",
-  "sha256": "da2a99c427d31fe92edf701b415bb14b23f0ba1d3f5f2a0e25ff5ccc003e9736"
+  "versionCode": 268,
+  "versionName": "0.8.0.76",
+  "changelog": "EDHOME 0.8.0.76 — Beta. P0 PayCheck i Budżet: pozycje planu automatycznie trafiają do Do potwierdzenia, bez ręcznego tworzenia operacji. Import historii bankowej może potwierdzić i przypisać płatność wyłącznie przy zgodności kwoty, kierunku, miesiąca, charakterystycznego odbiorcy oraz braku konfliktu. Niejasne wpisy czekają na decyzję. Saldo tylko po uzgodnieniu, bez duplikatów. Test fizyczny nadal wymagany; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.76/edhome-beta.apk",
+  "sha256": "799fdfad536528acc596b3adc262f2a7bc3913aad5ee9542c2a3e8ffdfc1e4d3"
 }
