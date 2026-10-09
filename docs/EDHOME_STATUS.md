@@ -6,19 +6,31 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android Beta 0.8.0.76/268 kandydat (CI #2059 niezweryfikowane): pełna historia bankowa wszystkie statusy, diagnostyka dat importu, blokada cichego pomijania podejrzanych wierszy PDF Velo; ostatni potwierdzony podpisany APK nadal 0.8.0.75/267 CI #2052 PASS. |
+| Ostatnia aktualizacja | 2026-10-09 — potwierdzony Android Beta 0.8.0.76/268 CI #2062 PASS i podpisany APK. Dalsza korekta parsera wieloliniowych operacji PDF VeloBanku w kodzie Beta 0.8.0.77/269, CI #2065 oczekuje na wynik; kompletność importu na realnych danych nadal NIEODEBRANA |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.75 / versionCode 267**, [CI #2052 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37912832678), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.75/edhome-beta.apk) opublikowany. Odbiór pełnej historii, automatycznych dopasowań i konfliktów na telefonie OTWARTY. |
+| Android Beta | **Ostatni potwierdzony APK 0.8.0.76 / 268** — [CI #2062 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37917478402), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.76/edhome-beta.apk) opublikowany 09.10.2026. **W kodzie następna wersja 0.8.0.77 / 269** — CI [#2065](https://github.com/edwinkarolczyk/Edhome/actions/runs/37918452566) rozpoczęty; publikacja i test na urządzeniu do weryfikacji. Nie uznawać importu VeloBank za kompletny |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | **0.8.0.75/267 CI #2052 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37912832678), 108 kroków sukcesem, podpisany i opublikowany APK. Pierwszy run #2051 FAIL ze względu na przestarzałe wymaganie obecności ręcznego formularza PayCheck w teście; kontrakt zaktualizowany w commicie `785b708`, CI #2052 PASS. |
+| Ostatni zweryfikowany CI Android | **0.8.0.76/268 CI #2062 PASS** — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37917478402), commit `e8336ad5d8cf616ba3d50681a666d5a3fb8a7aa5`, podpisany APK w [Release](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.76). CI #2059–#2061 FAIL na przestarzałych kontraktach napisów UI; poprawione przed #2062 |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
-| Bieżący etap | **P0 Android: plan→pending i konserwatywne dopasowanie z wyciągu wdrożone w Beta 0.8.0.75, CI PASS; użytkownik powinien potwierdzić zachowanie na realnych wyciągach, konfliktach, różnych miesiącach i po synchronizacji.** |
-| Następny krok | Przeprowadzić na Androidzie Beta 0.8.0.75: utworzyć testową pozycję Budżetu → sprawdzić automatyczny pending w PayCheck, bez zmiany salda → zaimportować testowy wyciąg z jednoznaczną nazwą odbiorcy i kwotą → potwierdzić auto match/saldo 1×/rozliczenie pozycji → ponownie wczytać ten sam plik (0 nowych, 0 ponownych księgowań) → konflikt dwóch podobnych operacji powinien zostać ręczny. Następnie sprawdzić prawdziwe formaty banku, częściowe kwoty, backup/restore oraz LAN Android↔Desktop. Stable main bez zmian. |
+| Bieżący etap | **P0 Android VeloBank PDF: wcześniejszy importer przy części układów wieloliniowych pomijał przelewy.** W Beta 0.8.0.77/269 (`29b4bc1`, `03530cf`) dodano kontrolowane łączenie daty/opisu/kwoty z kilku linii i regresje; CI #2065 nadal weryfikowane. Rozdzielone: dane rozpoznane vs wszystkie pozycje kolejki (`open/matched/dismissed`). Brak dowodu 100% kompletności na prawdziwym wyciągu |
+| Następny krok | Sprawdzić Android CI #2065 i podpisany release 0.8.0.77/269; następnie zweryfikować liczbę rozpoznanych pozycji, daty, wpływy/wydatki i brakujące przelewy 09.10 na rzeczywistym eksporcie VeloBanku, bez usuwania danych ani podwójnego księgowania. Sprawdzić operacje otwarte/uzgodnione/odrzucone i powtórny import. Nie przechodzić do 5C LAN ani Stable, dopóki import nie zostanie odebrany |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — kontynuacja po CI #2062: wieloliniowe przelewy VeloBank (09.10.2026)
+
+**Nie uznawać za naprawione wyłącznie na podstawie zielonego CI.** Poprzednie testy obejmowały przede wszystkim wiersze PDF z datą i kwotą w jednej linii. Prawdziwe wyciągi mogą rozdzielać datę księgowania, datę operacji, opis i kwotę na kilka linii, a importer miał prawo zgubić przelewy mimo prawidłowego wczytania kart. Ze zdjęcia: 70 pozycji w dawnym oknie „Wszystkie” oznaczało 70 otwartych, nie całe archiwum. Wpis 05.10 zawierał w opisie 07.10: wciąż wymaga porównania znaczenia dat z oryginałem.
+
+**Weryfikacja poprzedniego etapu:** Android Beta **0.8.0.76 / 268**, [CI #2062 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37917478402), [release z podpisanym APK](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.76), opublikowany 09.10.2026 (APK 13 339 627 B). Ten etap dodał pełną historię bankową (open/matched/dismissed), liczby i zakres dat importu oraz odrzucanie rozpoznanych niekompletnych przelewów. **Nie odzyskiwał jeszcze operacji, której kwota była w innej linii PDF.**
+
+**Następna korekta, wyłącznie `beta` — kandydat Android 0.8.0.77/269:**
+- `BankStatementVeloPdf.java`, commit `29b4bc17` — obsługa daty + typu operacji + kwoty rozdzielonych na linie (maks. kilka wierszy), bez łączenia z następną datowaną operacją, bez traktowania „Saldo” jako kwoty przelewu. Dotychczasowe poprawne pojedyncze linie pozostają bez zmian identyfikatora.
+- `BankStatementVeloPdfSmoke.java`, commit `03530cfb` — dodatkowe przypadki: 2 transakcje kartą i przelew 09.10 na kilku liniach, osobna linia daty, kierunek wydatku, grosze i stabilny identyfikator przy ponownym imporcie. Niepełny przelew nadal ma zostać odrzucony jawnie, bez cichego obcinania.
+- `app/build.gradle`, commit `93e7ee39` — numer 0.8.0.77/versionCode 269. [CI #2065](https://github.com/edwinkarolczyk/Edhome/actions/runs/37918452566) w toku podczas aktualizacji wpisu.
+- **Ryzyko nierozwiązane:** inne nieznane układy PDF, przelewy bez rozpoznawalnego kierunku/kwoty, wiersze w nietypowej kolejności i rozbieżność dat (księgowania/transakcji). Testy syntetyczne nie potwierdzają poprawnego importu 100% realnej historii. Brak automatycznego potwierdzania wpływów/wydatków bez jednoznacznego dowodu; saldo nie może być naliczone dwukrotnie. Stable `main` nietknięta.
 
 ## P0 — historia bankowa VeloBank: znikające nowsze przelewy w kolejce (09.10.2026)
 
@@ -31,7 +43,7 @@
 - `MainActivity.java` commit `f46985b`: odrębny przycisk „Cała historia bankowa”, paginacja i oznaczenia statusów; dawne „Wszystkie” jednoznacznie zmienione na „Wszystkie otwarte”; po imporcie komunikat z liczbą wpływów/wydatków i zakresem dat rozpoznanych operacji oraz ostrzeżeniem o możliwych pominięciach w PDF.
 - `BankStatementVeloPdf.java` commit `bc7655e`: gdy parser ma więcej niż jeden rozpoznany wiersz, ale dostrzegł równocześnie datowane linie przypominające nieodczytane przelewy/operacje, odrzuca import całego pliku z komunikatem (zamiast cicho częściowo go zapisać). Rozpoznawanie jest konserwatywne, nie gwarantuje wykrycia wszystkich wieloliniowych układów PDF.
 - `BankStatementVeloPdfSmoke.java` komity `6d6d91a` i `e7e9424`: regresja „przelew datowany 09.10 zapisany w rozbitych liniach nie może zniknąć”.
-- `app/build.gradle` commit `3da9abf`: Beta **0.8.0.76/versionCode 268**; poprzedni build 0.8.0.75 #2053 pomimo kompilacji nie został opublikowany, bo wersja wydania była już zajęta. CI **#2059 rozpoczęte, wynik i podpisany APK nadal do potwierdzenia**.
+- `app/build.gradle` commit `3da9abf`: Beta **0.8.0.76/versionCode 268**; poprzedni build 0.8.0.75 #2053 pomimo kompilacji nie został opublikowany, bo wersja wydania była już zajęta. CI **#2059 FAIL (przestarzały kontrakt UI); #2062 PASS, podpisany APK 0.8.0.76 opublikowany. Następna korekta 0.8.0.77/269 jest nadal w CI #2065**.
 
 **Pozostałe P0 przed odbiorem:** pobrać przykładowy rzeczywisty plik PDF/CSV VeloBanku obejmujący 09.10 i porównać liczbę przelewów/ich daty z „Rozpoznane operacje”, „Data najnowsza” i „Całą historią”; sprawdzić dopasowane, odrzucone, pozycje w PayCheck, wpływy, różnicę dat operacji/księgowania. Bez pliku nie wolno twierdzić, że wszystkie operacje od 09.10 zostały naprawione. Sprawdzić #2059, wydać APK, fizyczny test na Androidzie, backup i sync; Stable `main` pozostaje nietknięta.
 
@@ -43,7 +55,7 @@
 - `MainActivity.selectStatementCsv()`: zamiast pola tekstowego pokazuje listę `mBank`, `VeloBank`, `Inny bank (CSV / XLSX)`. Dwa pierwsze wybory bez wpisywania nazwy; następnie systemowy wybór pliku/plików. „Inny bank” zachowuje ręczne pole do pierwszego wpisania nazwy i zapamiętuje ostatnią nazwę niestandardową.
 - Dotychczasowa automatyczna identyfikacja natywnych formatów mBank i tekstowych PDF VeloBanku pozostaje bez zmian; wybór nazwy w interfejsie jest istotny zwłaszcza dla zwykłego CSV, bo wpływa na `evidence_key` i deduplikację.
 - **Uwaga migracyjna:** jeśli w starszej wersji użytkownik wpisywał inną nazwę tego samego banku (np. `Velo` zamiast `VeloBank`) dla zwykłego CSV, przejście na nowy kanoniczny wybór może wygenerować inny klucz operacji. Przed uznaniem deduplikacji za zamkniętą potrzebny test takich aliasów lub bezpieczna migracja, bez samoczynnego zaksięgowania operacji.
-- **Stan weryfikacji:** kod zapisany w repo `beta`; Android CI #2053 był uruchomiony w chwili aktualizacji, nie stwierdzono jeszcze PASS, wydania APK ani testu na telefonie. Ostatni wcześniej potwierdzony APK pozostaje 0.8.0.75/267 (CI #2052).
+- **Stan weryfikacji:** kod zapisany w repo `beta`; Android CI #2053 zakończył się FAIL przy próbie powtórnego opublikowania istniejącej wersji 0.8.0.75; zmiana listy banków została następnie zintegrowana i przeszła CI #2062 PASS wraz z 0.8.0.76. Nadal nie przeprowadzono odbioru na telefonie. Ostatni wcześniej potwierdzony APK pozostaje 0.8.0.75/267 (CI #2052).
 
 ## P0 — automatyczny Budżet → PayCheck → wyciąg (09.10.2026)
 
