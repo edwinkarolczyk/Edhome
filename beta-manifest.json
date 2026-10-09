@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 258,
-  "versionName": "0.8.0.66",
-  "changelog": "EDHOME 0.8.0.66 — Beta. Aktualizacje: uproszczony ekran z pięcioma działaniami (w tym QR Beta / Stable), połączony przycisk instalacji gotowego lub wybranego APK, prawdziwe Co nowego z bieżącego manifestu kanału Beta i bezpieczne przechowywanie ostatniego opisu. QR pobierania przeniesiony do opcji zaawansowanych. Bez zmian danych i bazy. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.66/edhome-beta.apk",
-  "sha256": "c4d1a10097a36c2b6da77dbda7d78b58db9c811b5d0dac947e28c998beb45668"
+  "versionCode": 259,
+  "versionName": "0.8.0.67",
+  "changelog": "EDHOME 0.8.0.67 — Beta. PayCheck / Budżet miesiąca, etap 6: Android ma zwarty bilans wpływów, wydatków, różnicy i kwoty do zapłaty. Potwierdzenia, zaległości i nadpłaty są widoczne od razu, a rozbudowane rozliczenie ma rozwijaną sekcję bez gubienia przewinięcia. Nie zmieniano księgi, danych finansowych, SQLite ani synchronizacji LAN. QR Beta / Stable pozostaje w Aktualizacjach. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.67/edhome-beta.apk",
+  "sha256": "cfca046ae86d810c94d9d7803b9129b65b37674a08d761c540cec45a491b6b4d"
 }
