@@ -218,6 +218,7 @@ jobs:
           python3 tests/check_paycheck_budget_stage5c_sync_contract.py
           python3 tests/check_paycheck_budget_stage5c_reverse_patch.py
           python3 tests/check_paycheck_credit_conservation.py
+          python3 tests/check_paycheck_full_allocation_guard.py
           python3 tests/check_hub_repair_history_safety.py
       - name: Opt-in bank notification parsing and privacy regression
         run: |
