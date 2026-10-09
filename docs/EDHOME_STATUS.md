@@ -20,6 +20,22 @@
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
+## Audyt przyczyny brakujących transakcji VeloBank — 09.10.2026, 14:58
+
+**Stan:** analiza źródła Android Beta 0.8.0.80/272, CI #2092 PASS; **bez zmian kodu importu i bez zmian salda/danych bankowych**. Zgłoszenie brakujących przelewów z 09.10 oraz rozbieżności między datą nagłówka w PayCheck 05.10 a datą 07.10 w opisie nadal **P0 niezamknięte**.
+
+**Potwierdzone ścieżki kodu:**
+- `MainActivity.importStatementFilesWorker()`: PDF → `BankPdfText.extract()` → `BankStatementVeloPdf.parse()` → `BankEvidenceStore.ingest()`. Ostatnia wyświetlana data jest obliczana z dat rzeczywiście *rozpoznanych* przez parser, a nie wszystkich dat obecnych w źródłowym tekście PDF.
+- `BankStatementVeloPdf.parseStatementRows()`: bierze **pierwszą datę w datowanym wierszu**, nie rozdziela jawnie daty operacji od daty księgowania. Screenshot z 05.10 w nagłówku i 07.10 w opisie jest zgodny z takim scenariuszem, ale bez rzeczywistego dokumentu nie wiadomo, które pole pochodzi z której kolumny banku.
+- **Konkretna luka parsowania:** datowany wiersz z **dwiema datami, ale bez frazy rozpoznawanej przez `TRANSACTION_LINE` i bez kwoty w tej samej linii**, po którym dopiero kolejne linie niosą nazwę przelewu i kwotę, jest pomijany bez zwiększenia `unreadableCount`. Wynika wprost z warunku `if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find())` oraz wcześniejszego obsłużenia tylko `line.equals(statementDate)`. To możliwa przyczyna niewidocznych 09.10 mimo syntetycznych testów.
+- `BankPdfText.extract()` używa `PDFTextStripper.getText()` bez ustawienia kolejności pozycyjnej. W układzie tabelowym PDF tekst może trafiać do parsera w kolejności strumienia, nie w kolejności kolumn; nie ma potwierdzenia, że to występuje w pliku użytkownika.
+- `BankEvidenceStore.ingest()`: transakcja SQL wstawia wszystkie kandydaty zwrócone przez parser albo wycofuje całą partię przy błędzie. Nie znaleziono datowego filtra do 05.10. Sama deduplikacja może jedynie odrzucić istniejący `evidenceKey`, nie wylicza daty granicznej.
+- `MainActivity.autoSettleImportedBankEvidence()`: `sourceKind=velo_pdf` **nigdy nie uzgadnia się automatycznie**, więc nieobecność 09.10 na wcześniejszej liście 70 otwartych nie wynikała z automatycznego potwierdzenia PDF.
+- `BankEvidenceStore.listPageAll()` w Beta 0.8.0.80 pokazuje wszystkie statusy; poprzednia lista „Wszystkie” odnosiła się do otwartych.
+- Testy CI Velo to pliki tekstowe syntetyczne, a nie rzeczywisty PDF VeloBanku użytkownika.
+
+**Następny bezpieczny krok:** porównać tę samą rzeczywistą historię PDF z widocznymi w banku datami i liczbą pozycji: źródłowe operacje do 09.10 → tekst wypisany przez PDFTextStripper (może być próbka po zamaskowaniu danych) → wynik parsera 0.8.0.80 → `Cała historia bankowa`. Jeśli brak próbki, dodać najpierw diagnostykę tylko odczytu „najpóźniejsza data występująca w tekście PDF” vs „najpóźniejsza rozpoznana transakcja” (daty nagłówka ≠ transakcje, więc bez automatycznego księgowania). Dopiero potem zmieniać rozdzielanie dat lub składanie datowanych wieloliniowych rekordów. Nie zamykać P0 na podstawie CI. Stable main nietknięta.
+
 ## P0 — VeloBank PDF nadal nieczytelny na Androidzie (09.10.2026)
 
 **Nowe zgłoszenie:** w Beta 0.8.0.79 użytkownik nie może odczytać wyciągu VeloBanku. Nie znamy jeszcze dokładnego komunikatu/układu oryginalnego dokumentu. Zielone CI i syntetyczne pliki NIE są dowodem, że rzeczywisty PDF importuje się w całości.
