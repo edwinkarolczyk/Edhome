@@ -305,6 +305,65 @@ final class BankEvidenceStore {
         } finally {db.endTransaction();}
     }
 
+    /**
+     * Uzgodnienie rozbieżnej kwoty wyłącznie po świadomym wyborze pozycji
+     * Budżetu przez użytkownika. Zawsze księguj kwotę z wyciągu, nigdy plan.
+     * Nie używać w automatycznym dopasowaniu.
+     */
+    static String matchBudgetActual(SQLiteDatabase db,String evidenceKey,
+            String operationId) {
+        if(evidenceKey==null||!evidenceKey.matches("[0-9a-f]{64}")
+                ||operationId==null||!operationId.matches("[0-9a-fA-F-]{36}"))
+            throw new IllegalArgumentException("Nieprawidłowe uzgodnienie bankowe.");
+        db.beginTransaction();
+        try {
+            String kind,bookingDate;
+            long actual;
+            try(Cursor evidence=db.rawQuery(
+                    "SELECT kind,amount_grosz,booking_date,state "
+                    +"FROM bank_evidence_queue WHERE evidence_key=?",
+                    new String[]{evidenceKey})) {
+                if(!evidence.moveToFirst())return "MISSING";
+                if(!"open".equals(evidence.getString(3)))return "CLOSED";
+                kind=evidence.getString(0);
+                actual=evidence.getLong(1);
+                bookingDate=evidence.getString(2);
+            }
+            try(Cursor assigned=db.rawQuery(
+                    "SELECT operation_id FROM paycheck_transactions WHERE statement_key=?",
+                    new String[]{evidenceKey})) {
+                if(assigned.moveToFirst()) {
+                    db.setTransactionSuccessful();
+                    return operationId.equals(assigned.getString(0))
+                        ?"ALREADY_MATCHED":"EVIDENCE_USED";
+                }
+            }
+            ContentValues payment=new ContentValues();
+            payment.put("amount_grosz",actual);
+            payment.put("status","confirmed");
+            payment.put("confirmation_source","manual");
+            payment.put("confirmed_at",System.currentTimeMillis());
+            payment.put("statement_key",evidenceKey);
+            payment.put("statement_date",bookingDate);
+            // Nie modyfikuj obcych lub już potwierdzonych transakcji.
+            int changed=db.update("paycheck_transactions",payment,
+                "operation_id=? AND scope='shared' AND status='pending' "
+                +"AND kind=? AND statement_key IS NULL AND note LIKE 'Budżet %'",
+                new String[]{operationId,kind});
+            if(changed!=1)return "NOT_PENDING_OR_MISMATCH";
+            ContentValues finished=new ContentValues();
+            finished.put("state","matched");
+            finished.put("matched_operation_id",operationId);
+            finished.put("matched_at",System.currentTimeMillis());
+            if(db.update("bank_evidence_queue",finished,
+                    "evidence_key=? AND state='open'",
+                    new String[]{evidenceKey})!=1)
+                throw new IllegalStateException("Nie zamknięto potwierdzenia bankowego.");
+            db.setTransactionSuccessful();
+            return "MATCHED";
+        }finally{db.endTransaction();}
+    }
+
     static boolean dismiss(SQLiteDatabase db,String evidenceKey) {
         if(evidenceKey==null||!evidenceKey.matches("[0-9a-f]{64}"))return false;
         ContentValues v=new ContentValues();
