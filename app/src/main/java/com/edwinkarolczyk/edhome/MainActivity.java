@@ -13757,39 +13757,60 @@ public final class MainActivity extends Activity {
     }
 
     private void selectStatementCsv() {
-        EditText bank = new EditText(this);
-        bank.setSingleLine(true);
-        bank.setHint("Nazwa banku dla zwykłego CSV (mBank/Velo wykrywane automatycznie)");
-        bank.setText(prefs.getString("paycheck_csv_bank_name",""));
-        lightDialogForm(bank);
-        new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
-            .setMessage("Do 10 plików naraz, do 8 MB każdy, do 25 000 "
-                + "transakcji na jeden plik CSV/mBank. Jedna partia: do 50 000. "
-                + "Obsługiwane: zwykły CSV, tekstowy eksport "
-                + "mBanku, XLSX (do 12 000 wierszy) oraz tekstowy PDF VeloBanku. "
-                + "Nazwę banku wpisz dla zwykłego CSV; mBank i VeloBank są wykrywane "
-                + "automatycznie. PDF będący wyłącznie skanem obrazu nie jest OCR-owany. "
-                + "EDHOME niczego nie wysyła i nie sprawdza autentyczności pliku.")
-            .setView(bank).setNegativeButton("Anuluj",null)
-            .setPositiveButton("Wybierz pliki bankowe",(d,w)->{
-                String label=bank.getText().toString().trim();
-                if(label.length()>80){
-                    alert("Nazwa banku może mieć maksymalnie 80 znaków.");return;
-                }
-                pendingStatementBank=label;
-                if(!label.isEmpty())
-                    prefs.edit().putString("paycheck_csv_bank_name",label).apply();
-                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                picker.addCategory(Intent.CATEGORY_OPENABLE);
-                picker.setType("*/*");
-                picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-                try{startActivityForResult(picker,IMPORT_STATEMENT_CSV);}
-                catch(Exception error){
-                    pendingStatementBank=null;
-                    DiagnosticLog.event("PAYCHECK_CSV_PICKER_FAILED");
-                    alert("Nie można wskazać pliku CSV.");
-                }
-            }).show();
+        new AlertDialog.Builder(this).setTitle("Wybierz bank • PayCheck")
+            .setMessage("Wybierz bank, z którego pochodzi historia. "
+                + "mBank i tekstowy PDF VeloBanku są rozpoznawane automatycznie. "
+                + "Dla zwykłego CSV nazwa banku pomaga wykrywać duplikaty, "
+                + "więc zawsze używaj tej samej nazwy. "
+                + "Możesz wybrać do 10 plików na raz. "
+                + "Skanowane PDF bez warstwy tekstowej nie są obsługiwane.")
+            .setItems(new String[]{"mBank", "VeloBank", "Inny bank (CSV / XLSX)"},
+                (dialog,choice)->{
+                    if(choice==0) {
+                        openStatementFilePicker("mBank");
+                    } else if(choice==1) {
+                        openStatementFilePicker("VeloBank");
+                    } else {
+                        EditText bank=new EditText(this);
+                        bank.setSingleLine(true);
+                        bank.setHint("Nazwa banku");
+                        String previous=prefs.getString("paycheck_csv_bank_name","");
+                        if(!"mBank".equalsIgnoreCase(previous)
+                                && !"VeloBank".equalsIgnoreCase(previous))
+                            bank.setText(previous);
+                        lightDialogForm(bank);
+                        new AlertDialog.Builder(this)
+                            .setTitle("Inny bank • nazwa do identyfikacji CSV")
+                            .setMessage("Wpisz nazwę tylko raz. "
+                                + "Używaj jej niezmiennie przy kolejnych wyciągach "
+                                + "tego banku, aby nie dublować operacji.")
+                            .setView(bank).setNegativeButton("Anuluj",null)
+                            .setPositiveButton("Wybierz pliki",(d,w)->
+                                openStatementFilePicker(bank.getText().toString().trim()))
+                            .show();
+                    }
+                })
+            .setNegativeButton("Anuluj",null).show();
+    }
+
+    private void openStatementFilePicker(String bankLabel) {
+        String label=bankLabel==null?"":bankLabel.trim();
+        if(label.isEmpty()||label.length()>80){
+            alert("Podaj nazwę banku (od 1 do 80 znaków).");
+            return;
+        }
+        pendingStatementBank=label;
+        prefs.edit().putString("paycheck_csv_bank_name",label).apply();
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("*/*");
+        picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+        try{startActivityForResult(picker,IMPORT_STATEMENT_CSV);}
+        catch(Exception error){
+            pendingStatementBank=null;
+            DiagnosticLog.event("PAYCHECK_CSV_PICKER_FAILED");
+            alert("Nie można wskazać plików historii bankowej.");
+        }
     }
 
     private void bankImportDiag(String state,int files,int rows) {
