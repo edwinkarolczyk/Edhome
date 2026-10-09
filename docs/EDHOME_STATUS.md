@@ -6,17 +6,17 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android P0: naprawa importu całej historii bankowej, Beta 0.8.0.74/266 przygotowana do CI; fizyczny import i dopasowania do odbioru |
+| Ostatnia aktualizacja | 2026-10-09 — Android import pełnej historii: Beta 0.8.0.74/266, CI #2050 PASS, podpisany APK opublikowany, fizyczny odbiór na pliku bankowym otwarty |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.74 / versionCode 266 — kandydat naprawy importu całej historii bankowej; CI / podpisany APK do weryfikacji**; poprzednia 0.8.0.73/265 [CI #2048 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), [APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.73/edhome-beta.apk). |
+| Android Beta | **0.8.0.74 / versionCode 266**, [CI #2050 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37910463724), [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.74/edhome-beta.apk); pełny import na realnym Androidzie nadal do odbioru. |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | **0.8.0.73/265 CI #2048 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), podpisany APK oraz opublikowany Release i manifest SHA-256. Pierwszy run #2047 FAIL: test źródłowy błędnie szukał definicji metody wyłącznie w obszarze `paycheck()`; naprawiono sam test, rerun sukces. |
+| Ostatni zweryfikowany CI Android | **0.8.0.74/266 CI #2050 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37910463724), podpisany APK z Release beta-v0.8.0.74. Poprzedni run #2049 FAIL tylko na kontrakcie bezpiecznego wywołania UI; poprawiono callback na `runOnLiveUi` w commicie `2bfef5b`, CI #2050 sukces. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
-| Bieżący etap | **P0 Android: niepełna historia wpływów/wydatków i znaki — kod naprawczy przygotowany, fizyczny odbiór oczekuje.** Potwierdzanie przelewów także nieodebrane, 5C i 6 otwarte. |
-| Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
+| Bieżący etap | **P0 Android: importer historii bankowej i paginacja poprawione w 0.8.0.74, CI PASS; użytkownik musi sprawdzić własny plik i zgodność liczby operacji.** Docelowe automatyczne uzgadnianie bank→Budżet i test 5C/LAN nadal otwarte. |
+| Następny krok | Import rzeczywistego wyciągu przez Android 0.8.0.74: porównać liczbę operacji z pliku vs rozpoznane / nowe / duplikaty, przejrzeć wszystkie strony, ponownie importować (0 nowych), restart i backup/restore; na błędzie poprosić o zanonimizowaną próbkę CSV/XLSX/PDF i diagnostykę importu. Dalej osobny etap automatycznego dopasowania do Budżetu (konflikty ręcznie), test LAN i rozliczeń. Stable main bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -31,6 +31,8 @@
 - Odczyt, parsowanie i zapis dużej partii wykonują się poza wątkiem UI. Dialog importu pokazuje sumę rozpoznanych, nowych oraz duplikatów; odrzucona partia ma jawny błąd i nie kasuje wcześniej zaimportowanych danych.
 - **Bezpieczeństwo finansowe:** import wyciągu dopisuje jedynie dowody w `bank_evidence_queue`, **nie tworzy ani automatycznie nie potwierdza transakcji PayCheck**. Ręczne parowanie, brak duplikatów i saldo tylko przy zatwierdzeniu zachowane. Automatyczne uzgadnianie jednoznacznych bankowych dopasowań według ostatnich ustaleń użytkownika **pozostaje osobnym, nieukończonym wymaganiem**.
 - Testy regresyjne: Java `BankStatementLongHistorySmoke` — CSV 3500, mBank 1600, XLSX 2200, Velo PDF 350 operacji, test stabilnych ID i duplikatów; Python `check_bank_large_history_android.py` — kompletność 3001 wierszy i SQL-paginacja filtrów. Kontrakty CSV, bank queue zaktualizowane. Android CI musi potwierdzić wynik.
+
+**Wynik wydania 09.10.2026:** commit zmian `3e99fc04ecdcf17a3b70a8c83f5246f78b7c684c`, poprawka bezpiecznych callbacków UI `2bfef5b1d96db0bd89cf49e4203c88673679be9d`. [Android CI #2050](https://github.com/edwinkarolczyk/Edhome/actions/runs/37910463724) **PASS — 107 kroków pomyślnych**, w tym długie wyciągi CSV 3500, mBank 1600, XLSX 2200, Velo PDF 350 oraz Android 5.1/API22 lint i kompilacja. [Release 0.8.0.74](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.74) z podpisanym `edhome-beta.apk` (13 334 040 bajtów), SHA-256 `eaf132aef96e07aa7ec6079150176b9f1fa3dfd2ee8eddc765b59b661714b22d`. Skorygowano opis „Co nowego” w manifeście. **CI nie jest testem kompletnego pliku bankowego użytkownika.**
 
 **Nierozwiązane i do odbioru:** prawdziwy plik bankowy użytkownika (jeśli układ nie odpowiada rozpoznawanym CSV/mBank/XLSX/PDF, sam większy limit nie wystarczy), liczba operacji w pliku vs „rozpoznane / zapisane / duplikaty”, historia wszystkich stron, restart telefonu, backup→restore (obecny format kopii JSON nadal ma odrębny limit 32 MB; przy ogromnych historiach może wymagać przebudowy), synchronizacja Desktop↔Android i parowanie z Budżetem. `main` bez zmian.
 
