@@ -591,7 +591,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. PayCheck: kwota planowana i kwota faktyczna są rozdzielone. Dla wypłat, innych wpływów i rachunków po zatwierdzeniu dowodu bankowego zapisuje się rzeczywistą kwotę z wyciągu, a różnicę wobec planu zachowuje się w Budżecie i historii. Przy różnej kwocie wybierz i zatwierdź właściwą pozycję; brak automatycznego zgadywania. Blokada potwierdzenia samego planu jako przelewu. Historia bankowa obejmuje wszystkie statusy, parser PDF VeloBanku obsługuje część wieloliniowych przelewów. Bez podwójnego salda. Import realnych plików i synchronizacja nadal wymagają odbioru na urządzeniu. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. PayCheck: zwarta lista transakcji kwota pod kwotą, dotknięcie rozwija szczegóły, maksymalnie jeden wpis otwarty naraz — również w pełnej historii i kolejce bankowej. Poprawiony wybór banku mBank / VeloBank / Inny: lista opcji nie jest zasłaniana opisem; awaryjny wybierak plików. Przycisk Importuj dostępny także z historii. Nierozliczoną operację z importu można usunąć po świadomym potwierdzeniu, bez zmiany salda; rozliczone pozostają chronione. Rzeczywista kwota z wyciągu nadal ma pierwszeństwo nad kwotą planu. Test na telefonie i pełny import rzeczywistych wyciągów są nadal wymagane; Stable main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
