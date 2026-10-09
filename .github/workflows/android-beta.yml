@@ -168,6 +168,8 @@ jobs:
         run: python3 tests/check_paycheck_pending_contract.py
       - name: PayCheck visible payment selection and consent regression
         run: python3 tests/check_paycheck_choice_dialogs.py
+      - name: Budget to PayCheck pending-flow safety regression
+        run: python3 tests/check_budget_to_paycheck_flow_android.py
       - name: All Android PayCheck history pages and bank amount signs
         run: |
           mkdir -p "$RUNNER_TEMP/paycheck-history-all"

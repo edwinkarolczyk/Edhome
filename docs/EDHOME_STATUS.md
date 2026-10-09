@@ -6,11 +6,11 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android PayCheck historia i znaki: 0.8.0.72/264, CI #2046 PASS, podpisany APK opublikowany, odbiór telefonu otwarty |
+| Ostatnia aktualizacja | 2026-10-09 — P0 Android: brakujące przejście Budżet → PayCheck; kandydat kodu Beta 0.8.0.73/265, CI i odbiór telefonu niepotwierdzone |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.72 / versionCode 264**, [Android CI #2046 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.72/edhome-beta.apk); test fizyczny i weryfikacja kompletności starszych wpływów nadal OTWARTE. |
+| Android Beta | **0.8.0.73 / versionCode 265 — nowy kandydat kodu integracji Budżet→PayCheck, CI i APK jeszcze niezweryfikowane**; poprzednia 0.8.0.72/264 [CI #2046 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), [APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.72/edhome-beta.apk); test fizyczny nadal otwarty. |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.72/264 CI #2046 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), opublikowane wydanie beta-v0.8.0.72 i APK z manifestem SHA-256. |
@@ -19,6 +19,18 @@
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — Budżet → PayCheck / Do potwierdzenia (09.10.2026)
+
+**Zgłoszenie:** użytkownik oczekuje, że pozycja Budżetu trafi do PayCheck do obsłużenia i potwierdzenia. Audyt Beta 0.8.0.72: `showBudgetItemDialog` wykonuje tylko `PaycheckMonthlyBudget.add`; PayCheck wyświetla jedynie niezależną kolejkę `paycheck_transactions` oraz przycisk dopasowania *już istniejącego* przelewu do Budżetu. **Brakowało automatycznej ekspozycji pozycji planu w PayCheck i przejścia Budżet → PayCheck.**
+
+**Naprawa przygotowana dla Android Beta 0.8.0.73/265** (tylko `beta`):
+- Po otwarciu PayCheck automatyczna sekcja **„Z Budżetu miesiąca • do obsłużenia”** pokazuje wszystkie aktywne, nierozliczone pozycje planu bieżącego miesiąca, osobno ze znakiem wpływu `+` albo wydatku `−`. Lista jest wyliczana z danych Budżetu; **samo wejście nie dodaje wpisów do `paycheck_transactions` i nie zmienia salda**.
+- Przy pozycji można **wybrać istniejący przelew** (w tym potwierdzony/importowany) albo **zgłosić do PayCheck** nową operację `pending`. Wyraźna informacja, że zgłoszenie nie oznacza potwierdzenia bankowego. Dopiero świadome `pending→confirmed` i przypisanie do rachunku aktualizują saldo raz i historię Budżetu. Przycisk do zgłoszenia także w rozwiniętej pozycji Budżetu.
+- Stabilny `operation_id` z `item.id + miesiąc` uniemożliwia ponownemu kliknięciu stworzenie duplikatu tego samego zgłoszenia; istniejąca transakcja jest kierowana do potwierdzenia/przypisania bez drugiego księgowania. Częściową kolejną płatność można wybrać spośród **innych istniejących przelewów**.
+- W Budżecie dodano jawny przycisk „← Wróć do PayCheck”. Dla innych miesięcy nie tworzymy na ślepo bankowego przelewu z bieżącą datą; historia może użyć istniejących transakcji.
+- Nowy kontrakt `tests/check_budget_to_paycheck_flow_android.py` kontroluje brak automatycznego księgowania, UI, ID oraz zmianę salda tylko po potwierdzeniu na przykładowej bazie SQLite. Dodany etap w `.github/workflows/android-beta.yml`.
+- **Nieodebrane:** fizyczne testy Android: wpis planu od razu widoczny w PayCheck, wejście/wyjście, wykrywanie już istniejących przelewów, przejście `pending→confirmed`, dokładnie 1× saldo, dopasowanie do pozycji, rata/cykl/wpływ/pozycja opcjonalna, nadpłata/niedopłata i synchronizacja Desktop. CI i publikacja muszą być osobno potwierdzone przed deklaracją sukcesu. `main` bez zmian.
 
 ## P0 — Historia PayCheck i znaki kwot (09.10.2026)
 

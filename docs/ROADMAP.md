@@ -158,6 +158,9 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 
 ## PayCheck — Budżet miesiąca 1.0 (kontrakt odbioru 25/25)
 
+**P0 — przepływ Budżet → PayCheck, 09.10.2026 (kandydat Android 0.8.0.73/265):** pozycje bieżącego miesiąca (wpływ/wydatek) muszą być automatycznie widoczne w PayCheck jako **planowane do obsłużenia**. Nie wolno tworzyć transakcji ani zmieniać salda przy samym zapisie planu. Użytkownik może wybrać istniejący przelew z PayCheck/wyciągu lub świadomie zgłosić nową płatność jako `pending`. Dopiero sprawdzenie banku i potwierdzenie `pending → confirmed` pozwala zmienić saldo **jeden raz** i przypisać przelew do pozycji, zachowując jej historię. Ten sam rachunek + miesiąc nie może tworzyć powtarzających się automatycznych zgłoszeń; raty, wpływy, nadpłaty i częściowe płatności pozostają do odbioru na urządzeniu. Z poziomu Budżetu musi być widoczne przejście do PayCheck i powrót. **Kod wdrożony na beta, odbiór fizyczny i CI osobno; main bez zmian.**
+
+
 **P0 z odbioru 09.10.2026:** użytkownik nie może potwierdzić przelewów. Kategorycznie nie zamykać rozliczeń 9–14/25 ani B6. Przygotować/odebrać ręczne pending→confirmed z PayCheck i Budżetu, przypisanie do rachunku, brak dublowania salda i historia; sprawdzić na kopii danych i po synchronizacji. Kandydat Android 0.8.0.68/260; kod i CI nie stanowią odbioru.
 
 

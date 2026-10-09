@@ -13031,6 +13031,7 @@ public final class MainActivity extends Activity {
         title("Saldo potwierdzone: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
         sharedMonthlyBudgetEntry();
+        sharedBudgetAwaitingPaycheckConfirmation();
         Spinner kind=new Spinner(this);
         kind.setAdapter(themeSpinnerAdapter(
             java.util.Arrays.asList("Wydatek −","Przychód +")));
@@ -14878,6 +14879,163 @@ public final class MainActivity extends Activity {
         return name + " " + month.getYear();
     }
 
+    /**
+     * Pozycje Budżetu są automatycznie widoczne w PayCheck, ale nie są
+     * transakcjami bankowymi. Zgłoszenie zapłaty wymaga osobnej akcji.
+     */
+    private void sharedBudgetAwaitingPaycheckConfirmation() {
+        final YearMonth month=YearMonth.now();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> planned=
+                PaycheckMonthlyBudget.activeFor(
+                    PaycheckMonthlyBudget.load(prefs),month);
+            int waiting=0;
+            for(PaycheckMonthlyBudget.Item item:planned) {
+                long due=PaycheckMonthlyBudget.remainingDue(
+                    db.getReadableDatabase(),item,month);
+                if(due>0)waiting++;
+            }
+            title("Z Budżetu miesiąca • do obsłużenia ("+waiting+")");
+            if(waiting==0) {
+                note("W tym miesiącu brak nierozliczonych pozycji Budżetu.");
+                return;
+            }
+            note("To planowane wpływy i wydatki, a nie wykonane przelewy. "
+                +"Nie zmieniają salda. Po sprawdzeniu banku zgłoś operację, "
+                +"potwierdź ją w PayCheck i przypisz do rachunku.");
+            for(PaycheckMonthlyBudget.Item item:planned) {
+                long due=PaycheckMonthlyBudget.remainingDue(
+                    db.getReadableDatabase(),item,month);
+                if(due<=0)continue;
+                String opId=budgetPaycheckOperationId(item,month);
+                String status=null;
+                long transactionAmount=0L;
+                try(Cursor tx=db.getReadableDatabase().rawQuery(
+                        "SELECT status,amount_grosz FROM paycheck_transactions "
+                        +"WHERE scope='shared' AND operation_id=?",
+                        new String[]{opId})) {
+                    if(tx.moveToFirst()) {
+                        status=tx.getString(0);
+                        transactionAmount=tx.getLong(1);
+                    }
+                }
+                LinearLayout entry=new LinearLayout(this);
+                entry.setOrientation(LinearLayout.VERTICAL);
+                entry.setPadding(dp(6),dp(5),dp(6),dp(5));
+                entry.addView(text(("income".equals(item.kind)?"+ ":"− ")
+                    +MoneyRules.format(due)+" • "+budgetItemDisplayName(item)
+                    +(item.optional?" • OPCJONALNE":"")
+                    +(status==null?" • PLAN"
+                        :"pending".equals(status)?" • DO POTWIERDZENIA"
+                        :" • PRZELEW POTWIERDZONY"),14,true));
+                if(status==null) {
+                    smallButton(entry,"Zgłoś wpłatę / wydatek do PayCheck",
+                        ()->showBudgetToPaycheckDialog(item,month));
+                } else if(!item.matchedOperationIds.contains(opId)) {
+                    final String originalStatus=status;
+                    final long originalAmount=transactionAmount;
+                    smallButton(entry,"Potwierdź / przypisz w PayCheck",
+                        ()->confirmBudgetPaymentAssignment(item,month,
+                            opId,originalStatus,originalAmount));
+                }
+                smallButton(entry,"Wybierz istniejący przelew",
+                    ()->showBudgetPaymentPicker(item,month,0));
+                body.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+            }
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_DUE_LIST",error);
+            note("Nie udało się odczytać pozycji Budżetu do potwierdzenia.");
+        }
+    }
+
+    /** To samo ID dla tej samej pozycji i miesiąca, aby nie dublować wpisu. */
+    private String budgetPaycheckOperationId(
+            PaycheckMonthlyBudget.Item item,YearMonth month) {
+        return java.util.UUID.nameUUIDFromBytes(
+            ("edhome-budget-pending:"+item.id+":"+month)
+                .getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    /**
+     * Budżet może zaproponować operację, lecz nie może sam założyć, że
+     * przelew został wykonany. Import bankowy lub użytkownik potwierdza fakt.
+     */
+    private void showBudgetToPaycheckDialog(
+            PaycheckMonthlyBudget.Item item,YearMonth month) {
+        if(!month.equals(YearMonth.now())) {
+            alert("Zgłoszenie nowej operacji z planu dotyczy bieżącego "
+                +"miesiąca. Historyczne przelewy przypisz ręcznie "
+                +"w Budżecie albo PayCheck.");
+            return;
+        }
+        final long due;
+        try {
+            due=PaycheckMonthlyBudget.remainingDue(
+                db.getReadableDatabase(),item,month);
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_DUE",error);
+            alert("Nie można odczytać kwoty do zapłaty.");
+            return;
+        }
+        if(due<=0) {
+            alert("Ta pozycja Budżetu nie ma już kwoty do rozliczenia.");
+            render();
+            return;
+        }
+        final String operationId=budgetPaycheckOperationId(item,month);
+        try(Cursor existing=db.getReadableDatabase().rawQuery(
+                "SELECT status,amount_grosz FROM paycheck_transactions "
+                +"WHERE scope='shared' AND operation_id=?",
+                new String[]{operationId})) {
+            if(existing.moveToFirst()) {
+                if(item.matchedOperationIds.contains(operationId)) {
+                    alert("Zgłoszenie z tej pozycji już zostało rozliczone. "
+                        +"Kolejną płatność wybierz z istniejących przelewów.");
+                    return;
+                }
+                confirmBudgetPaymentAssignment(item,month,operationId,
+                    existing.getString(0),existing.getLong(1));
+                return;
+            }
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_EXISTING_CHECK",error);
+            alert("Nie sprawdzono istniejących przelewów. Nie utworzono duplikatu.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Budżet → PayCheck • zgłoś operację")
+            .setMessage(budgetItemDisplayName(item)+"\n"
+                +("income".equals(item.kind)?"Wpływ + ":"Wydatek − ")
+                +MoneyRules.format(due)
+                +"\n\nSamo planowanie nie oznacza płatności. "
+                +"Jeżeli przelew już istnieje w PayCheck lub pochodzi "
+                +"z importu bankowego, wybierz go zamiast tworzyć kolejny. "
+                +"Nowa operacja pozostanie NIEPOTWIERDZONA i nie zmieni salda.")
+            .setNegativeButton("Anuluj",null)
+            .setNeutralButton("Wybierz istniejący przelew",
+                (d,w)->showBudgetPaymentPicker(item,month,0))
+            .setPositiveButton("Zgłoś do PayCheck",(d,w)->{
+                try {
+                    String memo=("Budżet "+month+" • "+item.name);
+                    if(memo.length()>160)memo=memo.substring(0,160);
+                    String result=PaycheckStore.add(db.getWritableDatabase(),
+                        operationId,item.kind,item.category,due,memo);
+                    if("COMMITTED".equals(result))
+                        DiagnosticLog.event("PAYCHECK_BUDGET_PENDING_CREATED");
+                    render();
+                    if("COMMITTED".equals(result))
+                        alert("Zgłoszenie jest w PayCheck — Do potwierdzenia. "
+                            +"Saldo bez zmian. Potwierdź dopiero po sprawdzeniu banku.");
+                    else
+                        alert("Ta operacja już istnieje w PayCheck. "
+                            +"Nie utworzono duplikatu.");
+                } catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_BUDGET_PENDING_CREATE",error);
+                    alert("Nie zapisano operacji z Budżetu. Saldo bez zmian.");
+                }
+            }).show();
+    }
+
     private void sharedMonthlyBudgetEntry() {
         final YearMonth month = YearMonth.now();
         try {
@@ -14901,6 +15059,7 @@ public final class MainActivity extends Activity {
 
     private void paycheckMonthlyBudget() {
         header("PayCheck • Budżet miesiąca");
+        button("← Wróć do PayCheck", ()->go("paycheck"));
         button("✓ Potwierdź oczekujący przelew", this::showSharedPaycheckPendingQueue);
         button("Historia PayCheck • wszystkie wpływy + / wydatki −",
             this::showSharedPaycheckHistory);
@@ -15330,6 +15489,9 @@ public final class MainActivity extends Activity {
             }
         }
 
+        details.addView(budgetInlineButton("→ PayCheck • do potwierdzenia",
+            () -> showBudgetToPaycheckDialog(item,month)),
+            new LinearLayout.LayoutParams(-1,dp(44)));
         details.addView(budgetInlineButton("✓ Rozlicz / przypisz przelew",
             () -> showBudgetPaymentPicker(item,month,0)),
             new LinearLayout.LayoutParams(-1,dp(44)));
