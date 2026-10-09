@@ -6,14 +6,14 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — P0 zgłoszone przez użytkownika: brak możliwości potwierdzania przelewów; kandydat Android 0.8.0.68/260, CI i odbiór fizyczny wymagane |
+| Ostatnia aktualizacja | 2026-10-09 — etap 6 / PayCheck P0: ochrona ponownego użycia całego przelewu przy ręcznym podziale, kandydat 0.8.0.69/261; 0.8.0.68 zainstalowana przez użytkownika |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.68 / versionCode 260 — kandydat P0, niezweryfikowany na telefonie**. Poprzednie **0.8.0.67 / 259** — [Android CI #2022 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37883517699) i manifest podpisanego wydania. |
+| Android Beta | **0.8.0.69 / versionCode 261 — kod Beta przygotowany, oczekuje na CI**. Poprzednia **0.8.0.68 / 260** — [Android CI #2023 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37884360118), według użytkownika już zainstalowana; brak fizycznego potwierdzenia płatności. |
 | Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | [run #37841803131 / #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) — **success**, commit `7fa54c6c23d0d1a3c774fa1d5525f680d84ce05e` |
+| Ostatni zweryfikowany CI Android | [run #37884360118 / #2023](https://github.com/edwinkarolczyk/Edhome/actions/runs/37884360118) — **success** dla poprzedniej wersji 0.8.0.68/260; nowa 0.8.0.69 oczekuje na osobny CI |
 | Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
 | Bieżący etap | **P0 PayCheck/Budżet: nie działają potwierdzenia przelewów według zgłoszenia użytkownika; brak fizycznego odbioru.** Etapy 5C i 6 nieodebrane. |
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
@@ -30,6 +30,14 @@
 - **Do zamknięcia:** (1) zielony build i opublikowany podpisany APK 0.8.0.65; (2) na telefonie sprawdzenie, czy są dokładnie 4 działania i nie ma starych kafli; (3) „Co nowego” z działającym internetem, przy braku internetu i przy nieaktualnej wersji telefonu; (4) QR w zaawansowanych, ręczna instalacja i odtwarzanie gotowego APK; (5) sprawdzić, że PayCheck, Projekty, Magazyn i LAN sync zachowały dane. **Stable `main` nietknięty.**
 
 **Korekta na wyraźne życzenie użytkownika (09.10):** osobny kafelek **QR Beta / Stable** zostaje też na głównym ekranie Aktualizacji (łącznie **5 działań**: Sprawdź, Instaluj APK, Co nowego, QR Beta / Stable, Opcje zaawansowane). Dodatkowo QR pozostaje w Opcjach zaawansowanych. Commit [`8999850`](https://github.com/edwinkarolczyk/Edhome/commit/899985019780e91c1ce80cc3b1157b68af8cb8a1) aktualizuje kod i test kontraktowy, podnosi wersję do **Android Beta 0.8.0.66/258** w celu uniknięcia konfliktu z ewentualną publikacją 0.8.0.65. Nie oznaczać jako gotowego przed CI i publikacją podpisanego APK; `main` bez zmian.
+
+## Etap 6 — P0 powtórne wykorzystanie przelewu (09.10.2026)
+
+**Zidentyfikowany defekt w kodzie:** `PaycheckMonthlyBudget.allocatedForOperation` używana przez `allocateMatch` zliczała tylko `matchedAllocationsGrosz`. Gdy operacja była wcześniej przypisana **w całości** przez `match` (bez osobnej alokacji), wynik wynosił **0 gr** i późniejsze częściowe przypisanie tej samej transakcji mogło przejść. Dodatkowo ignorowano `splitSurplusesGrosz`. To narusza warunek jednego rozliczenia i wymagało poprawki mimo wcześniejszych zielonych testów.
+
+**Naprawa `beta`:** nowy `PaycheckBudgetAllocationGuard.addUsed` sumuje dla każdej powiązanej pozycji pełną kwotę przy braku jawnej alokacji, jawne przydziały i wydzielone nadpłaty, odrzuca osierocone i ujemne kwoty oraz wykorzystanie większe niż potwierdzona transakcja. `PaycheckMonthlyBudget.allocatedForOperation` korzysta z niego podczas `allocateMatch`. Test wykonywalny `PaycheckBudgetAllocationGuardSmoke.java` oraz kontrakt `check_paycheck_full_allocation_guard.py` podłączone do Android CI.
+
+**Wersje:** zainstalowana u użytkownika 0.8.0.68/260 — bez tej ostatniej ochrony w lokalnej ścieżce ręcznego podziału. Beta `0.8.0.69/261` czeka na nowy build i publikację. **Nie wykonywać testów celowego podwójnego przypisania na prawdziwej księdze.** Fizyczny odbiór pending→confirmed oraz 5C A1–A20, etap 6 B1–B12 nadal OTWARTE. Stable `main` bez zmian.
 
 ## P0 — potwierdzanie przelewów, zgłoszenie z telefonu (09.10.2026)
 
