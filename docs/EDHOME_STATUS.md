@@ -6,19 +6,32 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android Beta **0.8.0.78/270 opublikowany**, [CI #2072 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37920454073), podpisany APK. P0: rzeczywista kwota z wyciągu zastępuje planowaną tylko w potwierdzonej księdze PayCheck, różnica pozostaje w Budżecie dla wpływów i wydatków. Test telefonu nadal OTWARTY |
+| Ostatnia aktualizacja | 2026-10-09 — Android Beta 0.8.0.79/271 kandydat: lista PayCheck i bankowa jako zwarte kwoty (jeden rozwinięty wiersz), naprawiony wybór banku i przywrócony import plików, bezpieczne usuwanie nierozliczonych operacji z kolejki. [CI #2083](https://github.com/edwinkarolczyk/Edhome/actions/runs/37922674373) w kolejce, APK tej wersji niepotwierdzony; ostatni potwierdzony APK 0.8.0.78/270 |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.78 / versionCode 270** — [CI #2072 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37920454073), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.78/edhome-beta.apk) opublikowany (13 342 421 bajtów, SHA-256 `bd2b462b6505d6cb6b453d8cd25dce149a231eeece51d035286ff263b3a8b4c3`). Test różnicy kwot i rzeczywistej historii banku na telefonie do potwierdzenia. Stable `main` nietknięta |
+| Android Beta | **W kodzie 0.8.0.79 / 271**, CI #2083 weryfikowany, APK niepotwierdzony. **Ostatni wydany i potwierdzony 0.8.0.78/270** — [CI #2072 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37920454073), [APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.78/edhome-beta.apk). Odbiór importu oraz UI nierozliczony |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **Android Beta 0.8.0.78/270 CI #2072 PASS**, commit `07e37da6020e484f710490c95f33fea9ceab6c32` — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37920454073); [Release z podpisanym APK](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.78). Regresja Budżet/bank, parsery, compile i podpis przeszły. Fizyczny test nie jest częścią CI |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
-| Bieżący etap | **P0 Budżet → PayCheck → bank, różna kwota:** wdrożone w Android Beta 0.8.0.78/270, CI #2072 PASS. Zgodne kwoty i silny odbiorca mogą być uzgodnione automatycznie; różne kwoty wymagają wyboru pary i potwierdzenia, po czym PayCheck księguje kwotę z banku, nie plan. Różnice dla wpływów/wydatków pozostają w Budżecie i historii. P0 realnego VeloBank PDF nadal nierozliczone bez testu na telefonie |
-| Następny krok | Test na fizycznym Android Beta 0.8.0.78/270: plan wpływu +4500 i rzeczywisty wyciąg +4300 — po ręcznym dopasowaniu saldo +4300, różnica 200; analogicznie prąd 300→280, woda 150→170, premia 500→650, brak automatycznego zgadywania, brak podwójnego księgowania po reimporcie. Sprawdzić pełny VeloBank PDF z przelewami 09.10, wszystkie statusy historii bankowej, backup/restore, LAN Android↔Desktop. Do czasu odbioru nie zamykać P0 ani nie zmieniać Stable |
+| Bieżący etap | **P0 Android PayCheck i banki:** po zgłoszeniu, że importu nie da się otworzyć, wykryto konflikt AlertDialog.setMessage + setItems przy wyborze banku. Poprawiono wybór mBank/Velo/Inny, awaryjne GET_CONTENT; zwartą rozwijaną listę banków, ostatnich 40 i pełnej historii; usuwanie wyłącznie nierozliczonych dowodów bankowych po zatwierdzeniu. Kod Beta 0.8.0.79, CI #2083; test na telefonie wciąż konieczny |
+| Następny krok | Sprawdzić CI #2083 i podpisaną 0.8.0.79/271; na telefonie sprawdzić widoczność wyboru banku, wybór jednego i wielu plików, PDF Velo 09.10, listy zwijane z jednym rozwinięciem, usunięcie open/dismissed bez zmiany salda i blokadę usuwania matched, powtórny import po usunięciu. Zachować backup i sync do odbioru. Stable main bez zmian |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — czytelny PayCheck, import i usuwanie historii (09.10.2026)
+
+**Zgłoszenie z telefonu:** wybór banku przy imporcie nie pozwalał skutecznie dodać historii; brakowało usuwania pojedynczych importowanych operacji. Lista pokazywała długie teksty zamiast kompaktowych kwot, trzeba ją rozwijać jak w Budżecie: jeden wiersz na raz.
+
+**Wdrożenie tylko `beta`, kandydat Android 0.8.0.79 / 271:**
+- `MainActivity.selectStatementCsv()` commit `7f651ead`: usunięte łączenie `AlertDialog.setMessage()` z `setItems()` — lista banków mBank / VeloBank / Inny ma teraz osobny własny nagłówek `setCustomTitle`. `ACTION_OPEN_DOCUMENT` z rezerwowym `ACTION_GET_CONTENT`, zapamiętanie banku także po odtworzeniu aktywności, widoczny błąd przy braku wyboru pliku.
+- `BankEvidenceStore.deleteUnmatched()` commit `f77ebb56`: wyłącznie `open` lub `dismissed` można usunąć; stan `matched` lub dowód użyty w PayCheck jest chroniony. Operacja usunięta z kolejki wróci po ponownym imporcie tego samego pliku; nie księguje żadnego salda.
+- `MainActivity.showBankEvidenceList()` commit `cf07543f`: kwota pod kwotą, kliknięcie otwiera szczegóły (opis, bank, data i akcje), drugie kliknięcie zwija, kliknięcie innej automatycznie zwija poprzednią. Jeden rozwinięty wiersz. Obejmuje otwarte i wszystkie statusy. Import i filtry są dostępne bez powrotu do głównego ekranu.
+- `MainActivity.paycheck()` i `showSharedPaycheckHistoryPage()`, commity `ef55dd1a` i `034b924c`: także lista ostatnich 40 i pełna historia PayCheck są w formie jednoliniowych kwot, ze szczegółami i akcjami dopiero po dotknięciu. Historię przegląda się stronicowo.
+- Testy kontraktowe `bea510db`, `5d0e59d`, `7c9190a`, `95fe0d0` — sprawdzają nowe UI, picker i usuwanie. Pierwszy CI #2082 FAIL na testowej starej nazwie przycisku; CI [#2083](https://github.com/edwinkarolczyk/Edhome/actions/runs/37922674373) uruchomione po korekcie. `app/build.gradle` commit `e87398b`: 0.8.0.79/271, changelog commit `35d776c`.
+
+**Otwarte P0 przed uznaniem za gotowe:** potwierdzić CI/publikację i test na fizycznym telefonie. Nie ma jeszcze dowodu, że wybierak i parser obsłużyły rzeczywistą historię Velo do 09.10 ani że dane są w pełni kompletne. Usuwanie matched pozostaje celowo zablokowane, by nie zmienić salda bez świadomego odłączenia. Stable `main` nietknięta.
 
 ## P0 — różne kwoty Bank ↔ Budżet ↔ PayCheck (09.10.2026)
 
