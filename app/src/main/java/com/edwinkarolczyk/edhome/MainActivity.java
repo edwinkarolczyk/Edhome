@@ -13079,10 +13079,13 @@ public final class MainActivity extends Activity {
                     + MoneyRules.format(pending.getLong(1))
                     + " (łączna wartość, przychody i wydatki osobno w historii)");
         }
-        title("Ostatnie 40 wpisów • podgląd PayCheck");
+        title("PayCheck • ostatnie operacje");
+        note("Dotknij kwoty, aby zobaczyć szczegóły. "
+            +"Otwarta może być tylko jedna pozycja.");
         button("Pełna historia • wpływy + / wydatki −",
             this::showSharedPaycheckHistory);
         int count=0;
+        final LinearLayout[] expandedPaycheckDetails={null};
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source,statement_key "
                 +"FROM paycheck_transactions WHERE scope='shared' "
@@ -13091,28 +13094,63 @@ public final class MainActivity extends Activity {
                 count++;
                 String operationId=c.getString(0);
                 boolean income="income".equals(c.getString(1));
+                String category=MoneyRules.categoryLabel(c.getString(2));
+                long amountGrosz=c.getLong(3);
+                String noteText=c.getString(4);
+                long createdAt=c.getLong(5);
                 String status=c.getString(6);
                 String evidence=c.getString(7);
                 boolean withStatement=!c.isNull(8);
-                LinearLayout entry=card();
-                entry.addView(text((income?"+ ":"− ")
-                    +MoneyRules.format(c.getLong(3))
-                    +("pending".equals(status)?" • DO POTWIERDZENIA"
-                         :withStatement?" • UZGODNIONE Z IMPORTOWANYM CSV"
-                        :"manual".equals(evidence)?" • POTWIERDZONE RĘCZNIE"
-                        :" • WPIS HISTORYCZNY"),18,true));
-                entry.addView(text(MoneyRules.categoryLabel(c.getString(2))
-                    +(c.getString(4).isEmpty()?"":" • "+c.getString(4)),14,false));
-                if ("legacy".equals(evidence))
-                    entry.addView(text("Brak informacji o źródle potwierdzenia bankowego.",12,false));
-                entry.addView(text(Instant.ofEpochMilli(c.getLong(5))
-                    .atZone(ZoneId.systemDefault()).toLocalDate().toString(),
-                    12,false));
-                if ("pending".equals(status))
-                    smallButton(entry, "Potwierdź po sprawdzeniu banku / wyciągu",
-                        () -> confirmSharedPaycheckEntry(operationId));
-                smallButton(entry, "Usuń wpis", () ->
-                    deleteSharedPaycheckEntry(operationId));
+                LinearLayout entry=new LinearLayout(this);
+                entry.setOrientation(LinearLayout.VERTICAL);
+                body.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+                LinearLayout headerRow=new LinearLayout(this);
+                headerRow.setOrientation(LinearLayout.HORIZONTAL);
+                headerRow.setGravity(Gravity.CENTER_VERTICAL);
+                headerRow.setPadding(dp(6),dp(5),dp(6),dp(5));
+                entry.addView(headerRow,new LinearLayout.LayoutParams(-1,dp(44)));
+                TextView label=text(category,14,false);
+                label.setTextColor(subdued);
+                label.setSingleLine(true);
+                label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                headerRow.addView(label,new LinearLayout.LayoutParams(0,-2,1f));
+                TextView amountLabel=text((income?"+ ":"− ")
+                    +MoneyRules.format(amountGrosz)
+                    +("pending".equals(status)?"  ?":"  ✓"),16,true);
+                headerRow.addView(amountLabel);
+                LinearLayout details=new LinearLayout(this);
+                details.setOrientation(LinearLayout.VERTICAL);
+                details.setPadding(dp(10),dp(3),dp(10),dp(6));
+                details.setVisibility(View.GONE);
+                entry.addView(details);
+                String description=noteText==null||noteText.isBlank()
+                    ?"Bez opisu":noteText;
+                details.addView(text(description,14,false));
+                details.addView(text(Instant.ofEpochMilli(createdAt)
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                    +" • "+("pending".equals(status)?"DO POTWIERDZENIA"
+                        :withStatement?"UZGODNIONE Z BANKIEM"
+                        :"manual".equals(evidence)?"POTWIERDZONE RĘCZNIE"
+                        :"WPIS HISTORYCZNY"),12,false));
+                if("legacy".equals(evidence))
+                    details.addView(text(
+                        "Brak informacji o źródle potwierdzenia.",12,false));
+                if("pending".equals(status))
+                    smallButton(details,"Potwierdź / dopasuj",
+                        ()->confirmSharedPaycheckEntry(operationId));
+                smallButton(details,"Usuń wpis",
+                    ()->deleteSharedPaycheckEntry(operationId));
+                headerRow.setOnClickListener(v->{
+                    boolean open=details.getVisibility()!=View.VISIBLE;
+                    if(expandedPaycheckDetails[0]!=null
+                            &&expandedPaycheckDetails[0]!=details)
+                        expandedPaycheckDetails[0].setVisibility(View.GONE);
+                    details.setVisibility(open?View.VISIBLE:View.GONE);
+                    expandedPaycheckDetails[0]=open?details:null;
+                });
+                View divider=new View(this);
+                divider.setBackgroundColor(subdued & 0x35FFFFFF);
+                entry.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
             }
         }
         if(count==0)note("Brak transakcji.");
