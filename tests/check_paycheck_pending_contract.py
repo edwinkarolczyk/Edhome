@@ -11,6 +11,23 @@ for token in ('values.put("status","pending");','status=\'confirmed\'',
               'status=\'pending\'','static String confirm(','state.put("status", "confirmed");',
               "AND status='pending'"):
     assert token in pay,token
+# Na Androidzie AlertDialog.Builder.setMessage() wraz z setItems() może
+# ukryć klikalną listę przelewów. Dwa widoki wyboru muszą być bez message.
+pending_picker=main.split(
+    'private void showSharedPaycheckPendingQueue(int offset)',1)[1].split(
+    'private void confirmSharedPaycheckEntry(',1)[0]
+budget_picker=main.split(
+    'private void showBudgetPaymentPicker(PaycheckMonthlyBudget.Item item,',1)[1].split(
+    'private void confirmBudgetPaymentAssignment(',1)[0]
+for label,dialog in (
+    ('PayCheck oczekujące',pending_picker),
+    ('Budżet ręczne przypisanie',budget_picker),
+):
+    assert '.setItems(' in dialog, label+' — brak listy'
+    assert '.setMessage(' not in dialog, label+' — message zasłania listę'
+    assert '.setNegativeButton("Zamknij",null)' in dialog, label+' — brak Zamknij'
+assert '.setTitle("Potwierdź operację?")' in main
+assert '.setPositiveButton("Sprawdziłem — potwierdź"' in main
 assert 'transaction.put("status","pending");' in cost
 for token in ("✓ Pokaż i potwierdź oczekujące przelewy","✓ Potwierdź oczekujący przelew","✓ Rozlicz / przypisz przelew","private void showSharedPaycheckPendingQueue(int offset)","ORDER BY id DESC LIMIT ? OFFSET ?","private void showBudgetPaymentPicker(","private void confirmBudgetPaymentAssignment(","AND status IN ('pending','confirmed')","if(assigned.contains(operationId))continue;","String result=PaycheckStore.confirm(","boolean changed=PaycheckMonthlyBudget.match(","Przelew potwierdzono w PayCheck, lecz NIE przypisano",):
     assert token in main, 'Brak działania P0: '+token
