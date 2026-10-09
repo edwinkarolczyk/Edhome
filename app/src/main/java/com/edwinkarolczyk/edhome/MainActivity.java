@@ -14249,7 +14249,7 @@ public final class MainActivity extends Activity {
                 +(description.isEmpty()?"Bez opisu":description)+"\n"
                 +(pending==1?"✓ 1 propozycja • sprawdź"
                     :pending>1?"? "+pending+" możliwych wpisów"
-                    :"— Brak oczekującego wpisu"));
+                    :"— Sprawdź Budżet • możliwa inna kwota"));
         }
         final boolean hasPrevious=first>0;
         final boolean hasNext=first+visible.size()<count;
@@ -14257,8 +14257,8 @@ public final class MainActivity extends Activity {
         if(hasPrevious)labels.add("← Poprzednie 100 operacji");
         final int nextIndex=labels.size();
         if(hasNext)labels.add("→ Następne 100 operacji");
-        String[] filters={"Wszystkie otwarte","1 propozycja","Kilka propozycji",
-            "Bez pasującego wpisu","Wydatki −","Wpływy +"};
+        String[] filters={"Wszystkie otwarte","1 propozycja identyczna",
+            "Kilka identycznych","Bez identycznej kwoty","Wydatki −","Wpływy +"};
         AlertDialog.Builder dialog=new AlertDialog.Builder(this)
             .setTitle("Do wyjaśnienia • "+filters[filter]
                 +"\n"+(count==0?0:first+1)+"–"+(first+visible.size())
@@ -14715,6 +14715,21 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmSharedPaycheckEntry(String operationId,String hintKey) {
+        try(Cursor planned=db.getReadableDatabase().rawQuery(
+                "SELECT note FROM paycheck_transactions WHERE "
+                +"operation_id=? AND status='pending'",
+                new String[]{operationId})) {
+            if(planned.moveToFirst() && planned.getString(0).startsWith("Budżet ")) {
+                alert("To plan z Budżetu, nie rzeczywisty przelew. "
+                    +"Wybierz odpowiadającą mu operację z wyciągu bankowego, "
+                    +"aby zaksięgować faktyczną kwotę.");
+                return;
+            }
+        }catch(Exception failed) {
+            DiagnosticLog.error("PAYCHECK_PENDING_BANK_CHECK",failed);
+            alert("Nie zweryfikowano źródła operacji. Saldo bez zmian.");
+            return;
+        }
         new AlertDialog.Builder(this)
             .setTitle("Potwierdź operację?")
             .setMessage("Potwierdź wyłącznie po sprawdzeniu faktycznej transakcji "
@@ -15341,16 +15356,30 @@ public final class MainActivity extends Activity {
                     +(item.optional?" • OPCJONALNE":"")
                     +(status==null?" • PLAN"
                         :"pending".equals(status)?" • DO POTWIERDZENIA"
-                        :" • PRZELEW POTWIERDZONY"),14,true));
+                        :item.matchedOperationIds.contains(opId)
+                            ?" • RÓŻNICA WOBEC PLANU"
+                            :" • PRZELEW POTWIERDZONY"),14,true));
+                if(item.matchedOperationIds.contains(opId)
+                        && "confirmed".equals(status)) {
+                    entry.addView(text("Z banku: "
+                        +("income".equals(item.kind)?"+ ":"− ")
+                        +MoneyRules.format(transactionAmount)
+                        +" • pozostała różnica: "
+                        +MoneyRules.format(due),13,false));
+                }
                 if(status==null) {
                     smallButton(entry,"Przywróć oczekującą pozycję",
                         ()->{ ensureBudgetPaycheckPending(month); render(); });
                 } else if(!item.matchedOperationIds.contains(opId)) {
                     final String originalStatus=status;
                     final long originalAmount=transactionAmount;
-                    smallButton(entry,"Potwierdź / przypisz w PayCheck",
-                        ()->confirmBudgetPaymentAssignment(item,month,
-                            opId,originalStatus,originalAmount));
+                    if("pending".equals(originalStatus))
+                        smallButton(entry,"Rozlicz z historii bankowej",
+                            ()->showBankEvidenceQueue(0));
+                    else
+                        smallButton(entry,"Przypisz potwierdzony przelew",
+                            ()->confirmBudgetPaymentAssignment(item,month,
+                                opId,originalStatus,originalAmount));
                 }
                 smallButton(entry,"Wybierz istniejący przelew",
                     ()->showBudgetPaymentPicker(item,month,0));
@@ -16356,6 +16385,12 @@ public final class MainActivity extends Activity {
     private void confirmBudgetPaymentAssignment(PaycheckMonthlyBudget.Item item,
             YearMonth month,String operationId,String oldStatus,long amount) {
         final boolean pending="pending".equals(oldStatus);
+        if(pending) {
+            alert("To kwota planowana, nie kwota potwierdzona przez bank. "
+                +"Dopasuj ją w PayCheck → Do wyjaśnienia • banki. "
+                +"Po zatwierdzeniu zostanie użyta rzeczywista kwota wyciągu.");
+            return;
+        }
         new AlertDialog.Builder(this)
             .setTitle(pending?"Potwierdź i przypisz przelew"
                 :"Przypisz potwierdzony przelew")
