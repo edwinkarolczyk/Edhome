@@ -33,6 +33,14 @@ final class BankStatementVeloPdf {
     private static final Pattern SIGNED_MONEY=Pattern.compile(
         "(?<![\\p{L}\\p{N}])([-+−]\\s*[0-9]{1,9}"
         +"(?:[ \\u00a0][0-9]{3})*[.,][0-9]{2})(?![\\p{N}])");
+    // Kolumna PLN bywa tylko w nagłówku; na kolejnej linii wyciągu
+    // występuje np. "Kwota przelewu: 4300,00", bez znaku i bez waluty.
+    // Nie wolno domyślać się dowolnej liczby z numeru konta czy salda.
+    private static final Pattern LABELED_MONEY_NO_CURRENCY=Pattern.compile(
+        "(?iu)\\b(?:kwota|kwotę|w\\s+kwocie)"
+        +"(?:\\s+(?:operacji|transakcji|przelewu|płatności))?"
+        +"\\s*[:=]?\\s*([-+−]?\\s*[0-9]{1,9}"
+        +"(?:[ \\u00a0][0-9]{3})*[.,][0-9]{2})(?![0-9])");
     // Podejrzane wiersze trzeba zgłosić, a nie po cichu pominąć przelew.
     private static final Pattern TRANSACTION_LINE=Pattern.compile(
         "(?iu)(?:przelew|operacj[aeyięą]*\\s+kart|transakcj[aeyięą]*\\s+kart|"
@@ -94,6 +102,9 @@ final class BankStatementVeloPdf {
         Set<String> unique=new HashSet<>();
         String firstUnreadable="";
         int unreadableCount=0;
+        int missingMoneyCount=0;
+        int ambiguousMoneyCount=0;
+        int directionCount=0;
         for(int i=0;i<lines.length;i++) {
             String line=lines[i].trim();
             if(line.isEmpty())continue;
@@ -104,7 +115,11 @@ final class BankStatementVeloPdf {
             // PDFTextStripper bywa dzieli przelew na datę, tytuł i osobną
             // kwotę. Składamy tylko jednoznaczną grupę bez przeskakiwania
             // do kolejnej datowanej transakcji ani wiersza salda.
-            if(line.equals(statementDate)&&i+1<lines.length) {
+            // Niektóre tekstowe PDF-y stawiają obok siebie datę
+            // księgowania i datę operacji, a typ przelewu w nowej linii.
+            // Łączymy tylko gdy wiersz zawiera WYŁĄCZNIE jedną lub dwie daty.
+            if(DATE.matcher(line).replaceAll("").trim().isEmpty()
+                    &&i+1<lines.length) {
                 String next=lines[i+1].trim();
                 if(!DATE.matcher(next).find()
                         && TRANSACTION_LINE.matcher(next).find()) {
@@ -120,8 +135,11 @@ final class BankStatementVeloPdf {
                 while(signed.find())moneyTokens.add(signed.group(1).trim());
             }
             if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
+                appendLabeledMoney(moneyTokens,line);
+            }
+            if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
                 StringBuilder joined=new StringBuilder(line);
-                for(int next=i+1;next<lines.length&&next<=i+4;next++) {
+                for(int next=i+1;next<lines.length&&next<=i+10;next++) {
                     String extra=lines[next].trim();
                     if(extra.isEmpty())continue;
                     // Następnego przelewu nie wolno dołączyć do poprzedniego.
@@ -137,6 +155,7 @@ final class BankStatementVeloPdf {
                         while(signed.find())
                             moneyTokens.add(signed.group(1).trim());
                     }
+                    if(moneyTokens.isEmpty())appendLabeledMoney(moneyTokens,extra);
                     if(!moneyTokens.isEmpty()) {
                         line=joined.toString();
                         i=next;
@@ -148,6 +167,7 @@ final class BankStatementVeloPdf {
                 if(TRANSACTION_LINE.matcher(line).find()) {
                     if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                     unreadableCount++;
+                    missingMoneyCount++;
                 }
                 continue;
             }
@@ -165,6 +185,7 @@ final class BankStatementVeloPdf {
                     if(TRANSACTION_LINE.matcher(line).find()) {
                         if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                         unreadableCount++;
+                        ambiguousMoneyCount++;
                     }
                     continue;
                 }
@@ -176,6 +197,7 @@ final class BankStatementVeloPdf {
                 if(TRANSACTION_LINE.matcher(line).find()) {
                     if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                     unreadableCount++;
+                    directionCount++;
                 }
                 continue;
             }
@@ -199,14 +221,22 @@ final class BankStatementVeloPdf {
                 throw new IllegalArgumentException(
                     "PDF VeloBanku: maksymalnie 25 000 operacji.");
         }
-        if(!result.isEmpty() && unreadableCount>0)
+        if(unreadableCount>0)
             throw new IllegalArgumentException(
                 "PDF VeloBanku: "+unreadableCount
                 +" potencjalnych operacji nie dało się poprawnie odczytać"
-                +" (pierwsza data: "+firstUnreadable+"). "
+                +" (pierwsza data: "+firstUnreadable+")."
+                +" Powody: brak jednoznacznej kwoty "+missingMoneyCount
+                +", kilka kwot "+ambiguousMoneyCount
+                +", nieustalony kierunek "+directionCount+". "
                 +"Import odrzucono w całości, aby nie zgubić przelewów. "
-                +"Wyeksportuj historię jako CSV lub udostępnij próbkę PDF do diagnostyki.");
+                +"Jeśli błąd powtarza się, potrzebna jest zamaskowana próbka PDF.");
         return result;
+    }
+
+    private static void appendLabeledMoney(List<String> values,String line) {
+        Matcher labeled=LABELED_MONEY_NO_CURRENCY.matcher(line);
+        while(labeled.find())values.add(labeled.group(1).trim());
     }
 
     private static ParsedAmount amount(String raw,String context) {
