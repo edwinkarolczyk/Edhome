@@ -6,12 +6,12 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — etap 6 / PayCheck P0: wszystkie 10 list przelewów/odbiorców/korekt + blokada podwójnego przypisania, Android 0.8.0.71/263 |
+| Ostatnia aktualizacja | 2026-10-09 — zgłoszenie historii PayCheck i znaków kwot; Desktop Beta 0.7.0.115 (kod na beta, CI niepotwierdzone), Android historia nadal do naprawy |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
 | Android Beta | **0.8.0.71 / versionCode 263 — kandydat P0 w CI #2037**; poprzednia **0.8.0.70 / 262 CI #2032 PASS**, ale nie obejmuje jeszcze pozostałych ośmiu list. Według użytkownika na urządzeniu 0.8.0.68/260; test fizyczny potwierdzania nadal otwarty. |
-| Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
+| Desktop Beta | **0.7.0.115 — zmiany zapisane na beta, CI i publikacja do potwierdzenia**; poprzednia **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37884360118 / #2023](https://github.com/edwinkarolczyk/Edhome/actions/runs/37884360118) — **success** dla poprzedniej wersji 0.8.0.68/260; nowa 0.8.0.69 oczekuje na osobny CI |
 | Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
@@ -19,6 +19,24 @@
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — Historia PayCheck i znaki kwot (09.10.2026)
+
+**Zgłoszenie użytkownika:** PayCheck / Budżet nie pokazuje całej historii, szczególnie wpływów; każdy wydatek ma mieć jawny znak **−**, a każdy wpływ **+** przed kwotą. Nie wolno traktować tego jako prośby o odwrócenie znaków w bazie: `amount_grosz` zostaje dodatnią wartością, `kind` określa kierunek.
+
+**Audyt kodu:**
+- Android: stary ekran historii PayCheck miał limit 40 ostatnich operacji (potwierdzone wcześniejszym audytem). Kolejka 60 oczekujących z etapu 6 nie zastępuje całej historii. `PaycheckMonthlyBudget.sharedActual` iteruje po wszystkich operacjach danego statusu i liczy osobno `income`/`expense`, ale to nie dowodzi, że lista historii wyświetla wszystkie wpisy. Kod olbrzymiego `MainActivity.java` nie został udostępniony przez API `fetch_file` (pusta treść mimo istniejącego SHA) i **nie wykonano poprawki UI Android**.
+- Desktop: `EdhomeDesktop.paycheckTransactionsView` pobierał wszystkie transakcje wspólne ze snapshotu, ale celowo urywał renderowanie po 100. Ten błąd widoczności nie usuwał rekordów.
+- Import na PC: wykrywanie kierunku w ogólnym CSV i mBanku rozpoznawało minus ASCII, ale nie minus typograficzny `−`; wydatek mógł być błędnie przedstawiony jako wpływ.
+
+**Zmiany tylko `beta`:**
+- `EdhomeDesktop.java`: historia wszystkich operacji ze snapshotu dostępna porcjami po 100 (przycisk „Pokaż kolejne 100”, aktualny licznik); brak twardego ucięcia przy 100. Commit `76a8c5b`. Znak w głównej liście `+ / −` już istniał, bez zmiany księgowania.
+- `DesktopBudgetMirror.java`: `+ ` przy planowanym wpływie i `− ` przy planowanym wydatku, także w nagłówku Budżetu i kartotece odbiorców. Commit `4a2ee455`.
+- `DesktopBankImporter.java`: normalizacja `−` / `-` i twardej spacji w wyciągach CSV i mBank. Commit `3a69aa64`.
+- Testy: dodano `DesktopBankAmountSignTest` (3 transakcje +, -, −); `DesktopBudgetMirrorTest` i kontrakt `check_paycheck_budget_stage6_desktop.py` kontrolują widoczność znaków i stronicowanie. Commity `6e05d9a`, `0fc99a9`, `0f102b0`.
+- Kandydat Desktop Beta **0.7.0.115**, wersja spójna w klasie, Gradle i Desktop workflow; ostatni commit wydaniowy `cc56a74b`. **CI nie zostało jeszcze zweryfikowane, nie ogłaszać gotowego instalatora.**
+
+**OTWARTE / nie uznawać za naprawione:** (1) Android — pełna historia bez limitu 40, stronicowanie i jawny podział wpływy/wydatki ze znakami we wszystkich listach oraz szczegółach; (2) stwierdzić, czy brakujące stare wpływy faktycznie istnieją w bazie/snapshot po LAN oraz porównać sumy i ilości po każdej stronie, bez przepisywania starych danych; (3) rozróżnić błędy widoczności od błędów importu/synchronizacji i przeprowadzić test na rzeczywistym telefonie; (4) zweryfikować Desktop CI 0.7.0.115 i testy jednostkowe. **Nie ruszać `main` i nie usuwać historii.**
 
 ## Aktualizacje Android Beta — porządki na ekranie (09.10.2026)
 
