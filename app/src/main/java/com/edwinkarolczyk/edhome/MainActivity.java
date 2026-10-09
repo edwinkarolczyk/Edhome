@@ -14180,8 +14180,8 @@ public final class MainActivity extends Activity {
         }
         AlertDialog.Builder picker=new AlertDialog.Builder(this)
             .setTitle("Do potwierdzenia • "+(offset+1)+"–"+(offset+ids.size()))
-            .setMessage("Wybierz operację sprawdzoną w banku. "
-                +"Samo otwarcie listy niczego nie księguje.")
+            // Android AlertDialog: message ukrywa listę setItems.
+            // Ostrzeżenie o banku pozostaje w dialogu potwierdzenia.
             .setItems(labels.toArray(new String[0]),(d,index)->{
                 if(more && index==ids.size())
                     showSharedPaycheckPendingQueue(offset+pageSize);
@@ -15580,8 +15580,8 @@ public final class MainActivity extends Activity {
         if(more)visible.add("→ Następne przelewy");
         AlertDialog.Builder dialog=new AlertDialog.Builder(this)
             .setTitle("Rozlicz • "+item.name)
-            .setMessage("Wybierz przelew z "+budgetMonthLabel(month)
-                +". Potwierdzenie i przypisanie wymagają Twojej zgody.")
+            // Komunikat setMessage + setItems potrafi ukryć listę
+            // na Androidzie. Kontekst i świadoma zgoda są dalej.
             .setItems(visible.toArray(new String[0]),(d,index)->{
                 if(more && index==last-first) {
                     showBudgetPaymentPicker(item,month,last);
