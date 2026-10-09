@@ -3,7 +3,7 @@
 **Gałąź:** `beta`. **Stable `main`:** bez zmian bez jawnej akceptacji.
 **Kontrakt:** [ROADMAP.md](ROADMAP.md#paycheck--budżet-miesiąca-10-kontrakt-odbioru-2525).
 **Rozdział obowiązkowy:** pokrycie kodowe ≠ przetestowanie zachowania ≠ odbiór na telefonie i PC.
-**Stan 09.10.2026:** Android Beta `0.8.0.68/260` (CI #2023 PASS, według użytkownika zainstalowana); nowa `0.8.0.70/262` zawiera poprawkę P0 widoczności list przelewów oraz ochrony pełnego przelewu przed ponownym przydziałem, [CI #2032](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888594149) oczekuje; Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
+**Stan 09.10.2026:** Android Beta `0.8.0.68/260` (CI #2023 PASS, według użytkownika zainstalowana); nowa `0.8.0.71/263` zawiera ochronę podwójnego przypisania i poprawkę widoczności 10 okien wyboru, [CI #2037](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571) oczekuje; Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
 
 ## Macierz 25 ustaleń
 
@@ -39,7 +39,7 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 
 **Ocena:** w kodzie Beta istnieje pokrycie 25 punktów według kontraktu źródłowego i wcześniejszych regresji. Nie wolno zapisywać „odebrane 25/25” do czasu ukończenia odpowiednich prób B i A1–A20. Szczególnie wymagają uwagi Android UX, kopie załączników i konflikty zmian offline.
 
-**Blokada P0 (09.10):** użytkownik wcześniej nie był w stanie potwierdzić żadnego przelewu. Ma już 0.8.0.68, ale nie potwierdził jeszcze działania pending→confirmed→Budżet. W kodzie 0.8.0.68 znaleziono dodatkowo możliwość ręcznego przydziału przelewu już rozliczonego w całości; poprawka ochrony księgowania jest w Beta 0.8.0.70/262; dodatkowo poprawiono dwa okna wyboru, w których komunikat mógł ukrywać listę. Obie poprawki mają testy regresyjne. B6 oraz punkty 9–14 wymagają testów na kopii finansów, a nie tylko zielonego CI.
+**Blokada P0 (09.10):** użytkownik wcześniej nie był w stanie potwierdzić żadnego przelewu. Ma już 0.8.0.68, ale nie potwierdził jeszcze działania pending→confirmed→Budżet. W kodzie 0.8.0.68 znaleziono dodatkowo możliwość ręcznego przydziału przelewu już rozliczonego w całości; poprawka ochrony księgowania jest w Beta 0.8.0.71/263; poprawiono 10 okien wyboru, w których komunikat mógł ukrywać listę. Instrukcja pozostaje nad listą w nagłówku. Obie poprawki mają testy regresyjne. B6 oraz punkty 9–14 wymagają testów na kopii finansów, a nie tylko zielonego CI.
 
 ## Scenariusze etapu 6
 
@@ -61,6 +61,6 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 ## Kontrola wersji / zależności
 
 - Desktop 0.7.0.114: zwarty nagłówek z bilansem, nawigacja do bieżącego miesiąca, wpływy przed wydatkami, sortowanie wydatków datą, podgląd odbiorców i liczby zobowiązań. Testy `DesktopBudgetMirrorTest` i `check_paycheck_budget_stage6_desktop.py`; build #284 **PASS**, Windows Beta opublikowany.
-- Android 0.8.0.68/260 — #2023 PASS, według użytkownika zainstalowana, kolejka potwierdzeń i ręczne przypisywanie w Budżecie. Android 0.8.0.70/262 — kandydat naprawy widoczności list oraz ochrony wykorzystania przelewu w całości + nadpłaty; [CI #2032](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888594149) w trakcie/oczekuje. Niczego nie uznawać za odebrane bez testów fizycznych.
+- Android 0.8.0.68/260 — #2023 PASS, według użytkownika zainstalowana, kolejka potwierdzeń i ręczne przypisywanie w Budżecie. Android 0.8.0.71/263 — kandydat widoczności 10 list i ochrony wykorzystania przelewu + nadpłaty; [CI #2037](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571) oczekuje. Niczego nie uznawać za odebrane bez testów fizycznych.
 - 5C: [ODBIOR_PAYCHECK_5C_2026-10-08.md](ODBIOR_PAYCHECK_5C_2026-10-08.md), A1–A20 nadal niewykonane fizycznie.
 - Nie przenosić na Stable, nie usuwać poprzednich wpisów historii i nie zastępować kopii prawdziwych danych plikami testowymi.
