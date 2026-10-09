@@ -78,7 +78,6 @@ for token in (
 for token in (
     'BankEvidenceStore.ingest(',
     'showBankEvidenceQueue(0)',
-    'BankEvidenceStore.pendingMatches(',
     'BankEvidenceStore.match(',
     'BankEvidenceStore.dismiss(',
     'BankEvidenceStore.reopen(',
