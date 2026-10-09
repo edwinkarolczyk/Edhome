@@ -77,7 +77,7 @@ final class DesktopBudgetMirror {
             String label=str(item,"name","Bez nazwy");
             if(!recipient.isBlank()) label=recipient+" • "+label;
             Object[] entry=new Object[]{
-                plannedDate(item,month),label,money(amount),
+                plannedDate(item,month),label,(isIncome ? "+ " : "− ")+money(amount),
                 isIncome?"Wpływ":"Wydatek",str(item,"id","")};
             (isIncome?incoming:outgoing).add(entry);
         }
@@ -129,7 +129,7 @@ final class DesktopBudgetMirror {
                 amount=Math.addExact(amount,amountFor(item,month));
             }
             table.addRow(new Object[]{
-                str(recipient,"name","Bez nazwy"),obligations,money(amount),id});
+                str(recipient,"name","Bez nazwy"),obligations,"− "+money(amount),id});
         }
         return table;
     }
@@ -288,8 +288,8 @@ final class DesktopBudgetMirror {
                     "LLLL yyyy",Locale.forLanguageTag("pl-PL")));
             String title=monthLabel.substring(0,1).toUpperCase(
                 Locale.forLanguageTag("pl-PL"))+monthLabel.substring(1);
-            body.add(new JLabel("<html><b>"+title+"</b>  |  Wpływy: "
-                +money(summary.income)+"  |  Wydatki: "
+            body.add(new JLabel("<html><b>"+title+"</b>  |  Wpływy: + "
+                +money(summary.income)+"  |  Wydatki: − "
                 +money(summary.expenses)+"  |  Różnica: "
                 +money(Math.subtractExact(summary.income,summary.expenses))
                 +"</html>"),BorderLayout.NORTH);
