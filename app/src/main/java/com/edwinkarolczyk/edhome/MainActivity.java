@@ -13173,6 +13173,7 @@ public final class MainActivity extends Activity {
     }
 
     /** Odczyt z całej lokalnej księgi, bez sztywnego limitu 40/100 wpisów. */
+    /** Pełna księga: kompaktowe kwoty, jedna rozwinięta pozycja naraz. */
     private void showSharedPaycheckHistoryPage(String kind,int offset) {
         final int pageSize=60;
         if(kind!=null && !"income".equals(kind) && !"expense".equals(kind))
@@ -13180,6 +13181,10 @@ public final class MainActivity extends Activity {
         int all=0,incomes=0,expenses=0;
         java.util.List<String> ids=new java.util.ArrayList<>();
         java.util.List<String> labels=new java.util.ArrayList<>();
+        java.util.List<String> descriptions=new java.util.ArrayList<>();
+        java.util.List<String> categories=new java.util.ArrayList<>();
+        java.util.List<String> states=new java.util.ArrayList<>();
+        java.util.List<String> dates=new java.util.ArrayList<>();
         try {
             try(Cursor totals=db.getReadableDatabase().rawQuery(
                     "SELECT COUNT(*),"
@@ -13192,64 +13197,118 @@ public final class MainActivity extends Activity {
                     expenses=totals.getInt(2);
                 }
             }
-            String where="WHERE scope='shared'"
-                +(kind==null?"":" AND kind=?");
+            String where="WHERE scope='shared'"+(kind==null?"":" AND kind=?");
             String[] args=kind==null
                 ?new String[]{Integer.toString(pageSize+1),Integer.toString(offset)}
-                :new String[]{kind,Integer.toString(pageSize+1),
-                    Integer.toString(offset)};
+                :new String[]{kind,Integer.toString(pageSize+1),Integer.toString(offset)};
             try(Cursor c=db.getReadableDatabase().rawQuery(
                     "SELECT operation_id,kind,category,amount_grosz,note,"
-                    +"created_at,statement_date,status "
-                    +"FROM paycheck_transactions "+where
-                    +" ORDER BY id DESC LIMIT ? OFFSET ?",args)) {
+                    +"created_at,statement_date,status FROM paycheck_transactions "
+                    +where+" ORDER BY id DESC LIMIT ? OFFSET ?",args)) {
                 while(c.moveToNext()) {
                     ids.add(c.getString(0));
                     String date=c.isNull(6)||c.getString(6).isBlank()
                         ?Instant.ofEpochMilli(c.getLong(5))
                             .atZone(ZoneId.systemDefault()).toLocalDate().toString()
                         :c.getString(6);
-                    String note=c.getString(4);
-                    labels.add(date+" • "
-                        +("income".equals(c.getString(1))?"+ ":"− ")
-                        +MoneyRules.format(c.getLong(3))+" • "
-                        +MoneyRules.categoryLabel(c.getString(2))
-                        +(note==null||note.isBlank()?"":" • "+note)
-                        +("pending".equals(c.getString(7))
-                            ?" • DO POTWIERDZENIA":""));
+                    String label=(("income".equals(c.getString(1))?"+ ":"− ")
+                        +MoneyRules.format(c.getLong(3)));
+                    labels.add(label);
+                    dates.add(date);
+                    categories.add(MoneyRules.categoryLabel(c.getString(2)));
+                    descriptions.add(c.getString(4));
+                    states.add(c.getString(7));
                 }
             }
-        } catch(Exception error) {
+        }catch(Exception error) {
             DiagnosticLog.error("PAYCHECK_HISTORY_ALL",error);
             alert("Nie udało się odczytać pełnej historii PayCheck.");
-            return;
-        }
-        if(ids.isEmpty()) {
-            alert(offset==0?"Brak wpisów dla wybranego rodzaju."
-                :"To koniec historii.");
             return;
         }
         boolean more=ids.size()>pageSize;
         if(more) {
             ids.remove(pageSize);
             labels.remove(pageSize);
-            labels.add("→ Następne 60 wpisów");
+            dates.remove(pageSize);
+            categories.remove(pageSize);
+            descriptions.remove(pageSize);
+            states.remove(pageSize);
         }
+        final AlertDialog[] dialogRef={null};
+        final LinearLayout[] expanded={null};
+        LinearLayout list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(10),dp(3),dp(10),dp(5));
+        for(int i=0;i<ids.size();i++) {
+            final String operationId=ids.get(i);
+            final String state=states.get(i);
+            LinearLayout entry=new LinearLayout(this);
+            entry.setOrientation(LinearLayout.VERTICAL);
+            list.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+            LinearLayout header=new LinearLayout(this);
+            header.setOrientation(LinearLayout.HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            header.setPadding(dp(5),dp(5),dp(5),dp(5));
+            entry.addView(header,new LinearLayout.LayoutParams(-1,dp(43)));
+            TextView dateLabel=text(dates.get(i),13,false);
+            dateLabel.setTextColor(subdued);
+            header.addView(dateLabel,new LinearLayout.LayoutParams(0,-2,1f));
+            TextView amountLabel=text(labels.get(i)
+                +("pending".equals(state)?" ?":" ✓"),16,true);
+            header.addView(amountLabel);
+            LinearLayout details=new LinearLayout(this);
+            details.setOrientation(LinearLayout.VERTICAL);
+            details.setPadding(dp(10),dp(3),dp(10),dp(7));
+            details.setVisibility(View.GONE);
+            entry.addView(details);
+            String comment=descriptions.get(i);
+            details.addView(text(categories.get(i)
+                +(comment==null||comment.isBlank()?"":" • "+comment),14,false));
+            details.addView(text("Data: "+dates.get(i)+" • "
+                +("pending".equals(state)?"DO POTWIERDZENIA":"POTWIERDZONA"),
+                12,false));
+            if("pending".equals(state))
+                smallButton(details,"Potwierdź / dopasuj",()->{
+                    if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                    confirmSharedPaycheckEntry(operationId);
+                });
+            smallButton(details,"Usuń wpis",()->{
+                if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                deleteSharedPaycheckEntry(operationId);
+            });
+            header.setOnClickListener(v->{
+                boolean open=details.getVisibility()!=View.VISIBLE;
+                if(expanded[0]!=null&&expanded[0]!=details)
+                    expanded[0].setVisibility(View.GONE);
+                details.setVisibility(open?View.VISIBLE:View.GONE);
+                expanded[0]=open?details:null;
+            });
+            View divider=new View(this);
+            divider.setBackgroundColor(subdued & 0x35FFFFFF);
+            entry.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
+        }
+        if(ids.isEmpty())list.addView(text("Brak wpisów dla wybranego filtra.",14,false));
+        if(offset>0)smallButton(list,"← Poprzednie",()->{
+            if(dialogRef[0]!=null)dialogRef[0].dismiss();
+            showSharedPaycheckHistoryPage(kind,Math.max(0,offset-pageSize));
+        });
+        if(more)smallButton(list,"→ Następne 60 wpisów",()->{
+            if(dialogRef[0]!=null)dialogRef[0].dismiss();
+            showSharedPaycheckHistoryPage(kind,offset+pageSize);
+        });
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(list);
         String label=kind==null?"Wszystkie"
             :"income".equals(kind)?"Wpływy +":"Wydatki −";
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
-            .setTitle(label+" • "+(offset+1)+"–"+(offset+ids.size())
-                +"  |  łącznie "+all+" (+ "+incomes+" / − "+expenses+")")
-            .setItems(labels.toArray(new String[0]),(d,index)->{
-                if(more && index==ids.size())
-                    showSharedPaycheckHistoryPage(kind,offset+pageSize);
-                else showSharedPaycheckHistoryEntry(ids.get(index));
-            })
-            .setNegativeButton("Zamknij",null);
-        if(offset>0)
-            dialog.setNeutralButton("← Poprzednie",
-                (d,w)->showSharedPaycheckHistoryPage(
-                    kind,Math.max(0,offset-pageSize)));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle(label+" • "+(ids.isEmpty()?0:offset+1)+"–"
+                +(offset+ids.size())+"  |  łącznie "+all
+                +" (+ "+incomes+" / − "+expenses+")")
+            .setView(scroll)
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Filtry",(d,w)->showSharedPaycheckHistory())
+            .create();
+        dialogRef[0]=dialog;
         dialog.show();
     }
 
