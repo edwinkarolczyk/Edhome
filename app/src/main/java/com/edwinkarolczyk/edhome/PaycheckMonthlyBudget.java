@@ -262,15 +262,20 @@ final class PaycheckMonthlyBudget {
         events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
             "PAYMENT_CONFIRMED",paymentGrosz,"Potwierdzona płatność",
             tx.operationId,tx.date));
-        if ("expense".equals(item.kind)) {
-            String differenceType=PaycheckBudgetHistoryRules.differenceType(
-                paymentGrosz,dueBefore);
-            if (!differenceType.isBlank())
-                events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
-                    differenceType,
-                    PaycheckBudgetHistoryRules.differenceGrosz(paymentGrosz,dueBefore),
-                    "Różnica względem kwoty pozostałej",
-                    tx.operationId,tx.date));
+        String differenceType=PaycheckBudgetHistoryRules.differenceType(
+            paymentGrosz,dueBefore);
+        if (!differenceType.isBlank()) {
+            // Dla wpływu nie tworzymy fikcyjnego długu/środków: rejestrujemy
+            // tylko odchylenie od planu i rzeczywistą kwotę z banku.
+            String eventType="income".equals(item.kind)
+                ? ("OVERPAYMENT".equals(differenceType)
+                    ? "INCOME_SURPLUS" : "INCOME_SHORTFALL")
+                : differenceType;
+            events.add(PaycheckBudgetHistoryStore.make(item,tx.month,
+                eventType,
+                PaycheckBudgetHistoryRules.differenceGrosz(paymentGrosz,dueBefore),
+                "Różnica rzeczywistej kwoty względem planu",
+                tx.operationId,tx.date));
         }
     }
 
