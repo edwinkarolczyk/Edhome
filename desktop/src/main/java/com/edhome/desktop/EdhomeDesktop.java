@@ -2976,7 +2976,7 @@ public final class EdhomeDesktop extends JFrame {
 
         JPanel heading = new JPanel(new BorderLayout());
         heading.setOpaque(false);
-        JLabel title = new JLabel("Ostatnie transakcje");
+        JLabel title = new JLabel("Historia transakcji");
         title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
         JLabel count = new JLabel(rows.size() + " wpisów");
@@ -2989,13 +2989,36 @@ public final class EdhomeDesktop extends JFrame {
         list.setBackground(APP_SURFACE);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
 
-        int shown = 0;
-        for (JsonObject tx : rows) {
-            list.add(paycheckTransactionRow(tx));
+        // Pełna historia pozostaje w rows; ładujemy porcjami po 100,
+        // aby duża liczba operacji nie blokowała interfejsu Swing.
+        final int[] shown = {Math.min(100, rows.size())};
+        for (int i=0; i<shown[0]; i++) {
+            list.add(paycheckTransactionRow(rows.get(i)));
             list.add(Box.createVerticalStrut(6));
-            if (++shown >= 100) break;
         }
-        if (shown == 0) {
+        if (shown[0] < rows.size()) {
+            JButton more = new JButton();
+            more.setText("Pokaż kolejne 100 • widoczne " + shown[0]
+                + " z " + rows.size());
+            more.addActionListener(event -> {
+                list.remove(more);
+                int end = Math.min(shown[0] + 100, rows.size());
+                for (int i=shown[0]; i<end; i++) {
+                    list.add(paycheckTransactionRow(rows.get(i)));
+                    list.add(Box.createVerticalStrut(6));
+                }
+                shown[0] = end;
+                if (shown[0] < rows.size()) {
+                    more.setText("Pokaż kolejne 100 • widoczne " + shown[0]
+                        + " z " + rows.size());
+                    list.add(more);
+                }
+                list.revalidate();
+                list.repaint();
+            });
+            list.add(more);
+        }
+        if (shown[0] == 0) {
             JLabel empty = new JLabel(
                 "Brak transakcji. Zaimportuj bank albo dodaj wpis na telefonie.");
             empty.setForeground(APP_MUTED);
@@ -4160,7 +4183,7 @@ public final class EdhomeDesktop extends JFrame {
             openRows.add(row);
             int candidates = pendingMatches(row).size();
             String shown = value(row, "booking_date") + " • "
-                + ("expense".equals(value(row, "kind")) ? "Wydatek " : "Wpływ ")
+                + ("expense".equals(value(row, "kind")) ? "Wydatek − " : "Wpływ + ")
                 + money(value(row, "amount_grosz")) + " • "
                 + value(row, "description") + " • " + value(row, "source_label")
                 + (candidates == 0 ? " • brak dopasowania"
