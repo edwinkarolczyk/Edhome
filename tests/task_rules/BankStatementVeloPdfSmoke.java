@@ -67,6 +67,56 @@ public final class BankStatementVeloPdfSmoke {
         check(separate.size()==3
             && "2026-10-09".equals(separate.get(2).date),
             "Velo transfer with separate date line must be recovered");
+        // W części wyciągów waluta występuje tylko w nagłówku tabeli.
+        String currencyHeader="VeloBank\nHistoria operacji PLN\n"
+            +"05.10.2026 Operacja kartą -6,50\n"
+            +"06.10.2026 Operacja kartą -7,50\n"
+            +"09.10.2026 Przelew wychodzący do TEST -35,49\n";
+        List<BankStatementCsv.Entry> unsignedCurrency=
+            BankStatementVeloPdf.parse(currencyHeader);
+        check(unsignedCurrency.size()==3,"PDF with PLN only in header");
+        check("2026-10-09".equals(unsignedCurrency.get(2).date),
+            "no-currency transfer date");
+        check(unsignedCurrency.get(2).amountGrosz==3549
+            &&"expense".equals(unsignedCurrency.get(2).kind),
+            "no-currency transfer amount and direction");
+
+        String currencySplit="VeloBank\nHistoria operacji PLN\n"
+            +"05.10.2026 Operacja kartą -6,50\n"
+            +"06.10.2026 Operacja kartą -7,50\n"
+            +"09.10.2026\n"
+            +"Przelew przychodzący od PRACODAWCY\n"
+            +"Kwota: +4 300,00\n";
+        List<BankStatementCsv.Entry> splitWithoutPln=
+            BankStatementVeloPdf.parse(currencySplit);
+        check(splitWithoutPln.size()==3,
+            "PDF split transfer with amount and PLN only in header");
+        check("income".equals(splitWithoutPln.get(2).kind)
+            &&splitWithoutPln.get(2).amountGrosz==430000,
+            "salary +4300 from split no-currency PDF");
+
+        boolean noSilentTruncation=false;
+        try {
+            BankStatementVeloPdf.parse("VeloBank\n"
+                +"05.10.2026 Operacja kartą -6,50 PLN\n"
+                +"09.10.2026 Przelew wychodzący bez kwoty\n");
+        }catch(IllegalArgumentException expected) {
+            noSilentTruncation=expected.getMessage().contains("nie dało");
+        }
+        check(noSilentTruncation,
+            "one recognized row and one unreadable bank transfer MUST fail");
+
+        boolean noSaldoGuess=false;
+        try {
+            BankStatementVeloPdf.parse("VeloBank\n"
+                +"05.10.2026 Operacja kartą -6,50 PLN\n"
+                +"09.10.2026 Przelew wychodzący\n"
+                +"Saldo po operacji -199,99\n");
+        }catch(IllegalArgumentException expected) {
+            noSaldoGuess=true;
+        }
+        check(noSaldoGuess,"do not use signed balance as transfer amount");
+
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
