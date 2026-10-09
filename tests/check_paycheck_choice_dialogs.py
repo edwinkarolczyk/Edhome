@@ -19,15 +19,15 @@ sections=[
     "Odbiorcy / szablony",
     "Korekta / zakończenie zobowiązania",
 ]
+dialog_bodies=src.split(".setCustomTitle(paycheckChoiceDialogTitle(")[1:]
+assert len(dialog_bodies)==8, len(dialog_bodies)
 for title in sections:
-    token='"'+title
-    start=src.find(token)
-    assert start>=0,title
-    prefix=src[max(0,start-130):start]
-    assert ".setCustomTitle(paycheckChoiceDialogTitle(" in prefix,title
-    after=src[start:start+1100]
-    assert ".setItems(" in after,title
-    assert ".setMessage(" not in after.split(".setItems(",1)[0],title
+    matches=[chunk for chunk in dialog_bodies
+             if '"'+title in chunk.split(".setItems(",1)[0]]
+    assert len(matches)==1,(title,len(matches))
+    before_list=matches[0].split(".setItems(",1)[0]
+    assert ".setItems(" in matches[0],title
+    assert ".setMessage(" not in before_list,title
 
 # Kolejka i ręczny wybór z Budżetu też nie łączą message i listy.
 queue=src.split(
