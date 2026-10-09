@@ -74,4 +74,75 @@ try:
     raise AssertionError("Dwie operacje bankowe nie moga rozliczyc tego samego ID")
 except sqlite3.IntegrityError:
     pass
+
+# Kwoty na wyciagu wyznaczaja saldo, nawet gdy roznia sie od planu.
+budget_action=main.split("private void confirmBankEvidenceMatch(",1)[1].split(
+    "private void showDismissedBankEvidence()",1)[0]
+budget_selector=main.split("private void openBankEvidenceRow(",1)[1].split(
+    "private void confirmBankEvidenceMatch(",1)[0]
+actual_match=bank.split("static String matchBudgetActual(",1)[1].split(
+    "static boolean dismiss(",1)[0]
+for required in (
+    'payment.put("amount_grosz",actual);',
+    'payment.put("status","confirmed");',
+    'payment.put("statement_key",evidenceKey);',
+    'statement_key IS NULL',
+    "status='pending'",
+    'finished.put("state","matched");',
+):
+    assert required in actual_match,required
+for required in (
+    'PaycheckMonthlyBudget.plannedAmount(item,month)',
+    'PaycheckMonthlyBudget.remainingDue(',
+    'BankEvidenceStore.matchBudgetActual(',
+    'PaycheckMonthlyBudget.match(',
+    'row.amount',
+    'Zatwierdź parę',
+):
+    assert required in budget_action,required
+assert 'amount_grosz=?' not in budget_selector, "Nie wybieraj tylko identycznych kwot"
+assert 'BankBudgetMatchRules.descriptionIdentifies(' in budget_selector
+assert 'ensureBudgetPaycheckPending(month);' in budget_selector
+assert 'if(!"velo_pdf".equals(e.sourceKind))' in matching
+ledger=sqlite3.connect(":memory:")
+ledger.execute("""CREATE TABLE tx (
+    operation_id TEXT PRIMARY KEY, kind TEXT, amount_grosz INTEGER,
+    status TEXT, statement_key TEXT UNIQUE)""")
+ledger.execute("""CREATE TABLE bank (
+    evidence_key TEXT PRIMARY KEY, kind TEXT, amount_grosz INTEGER,
+    state TEXT)""")
+entries=[
+    ("salary","income",450000,430000),
+    ("electricity","expense",30000,28000),
+    ("water","expense",15000,17000),
+    ("bonus","income",50000,65000),
+]
+for label,kind,plan,actual in entries:
+    ledger.execute("INSERT INTO tx VALUES (?,?,?,'pending',NULL)",(label,kind,plan))
+    ledger.execute("INSERT INTO bank VALUES (?,?,?,'open')",(label,kind,actual))
+def actual_balance():
+    return ledger.execute("""SELECT coalesce(sum(
+        CASE WHEN kind='income' THEN amount_grosz ELSE -amount_grosz END
+    ),0) FROM tx WHERE status='confirmed'""").fetchone()[0]
+assert actual_balance()==0
+for label,kind,planned,actual in entries:
+    assert ledger.execute("""UPDATE tx SET status='confirmed', amount_grosz=?,
+        statement_key=? WHERE operation_id=? AND status='pending'
+        AND kind=? AND statement_key IS NULL""",
+        (actual,label,label,kind)).rowcount==1
+    assert ledger.execute("""UPDATE bank SET state='matched'
+        WHERE evidence_key=? AND state='open'""",(label,)).rowcount==1
+    assert ledger.execute("""UPDATE tx SET status='confirmed',amount_grosz=?
+        WHERE operation_id=? AND status='pending'""",
+        (actual,label)).rowcount==0
+assert actual_balance()==430000-28000-17000+65000
+assert ledger.execute("SELECT amount_grosz FROM tx WHERE operation_id='salary'").fetchone()[0]==430000
+assert 450000-430000==20000
+assert 30000-28000==2000
+assert 17000-15000==2000
+assert 65000-50000==15000
+assert all(ledger.execute("SELECT count(*) FROM tx WHERE operation_id=?",(key,)).fetchone()[0]==1
+           for key,_,_,_ in entries)
+print("PASS Budget Bank actual: 4500->4300, rachunki 300->280 i 150->170, premia 500->650; saldo tylko bank 1x")
+
 print("PASS Budget Bank auto: plan pending 1x, wyciag confirm 1x, konflikty bez podwojnego salda")
