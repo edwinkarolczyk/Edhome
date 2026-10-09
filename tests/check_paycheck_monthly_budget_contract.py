@@ -224,7 +224,7 @@ for token in (
 # Existing transaction confirmation remains the source of truth for real saldo.
 for token in (
     'status=\'confirmed\'',
-    'Potwierdź po sprawdzeniu banku / wyciągu',
+    'Potwierdź / dopasuj',
     'Do potwierdzenia • bez wpływu na saldo',
     'Sprawdziłem w banku • potwierdź',
 ):
