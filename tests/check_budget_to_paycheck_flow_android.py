@@ -15,7 +15,7 @@ def between(source,a,b):
 
 pay_ui=between(main,"private void paycheck() {","/** Android notification access")
 assert "sharedBudgetAwaitingPaycheckConfirmation();" in pay_ui
-assert "private void sharedBudgetAwaitingPaycheckConfirmation()" in pay_ui
+assert "private void sharedBudgetAwaitingPaycheckConfirmation()" in main
 queue=between(main,"private void sharedBudgetAwaitingPaycheckConfirmation()",
               "private String budgetPaycheckOperationId(")
 for token in (
