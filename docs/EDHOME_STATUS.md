@@ -6,7 +6,7 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android Beta **0.8.0.80 / 272 opublikowany, CI #2092 PASS**. Rozszerzony parser PDF VeloBank dla podpisanych kwot bez PLN na każdej linii; widoczny etap i numer pliku przy błędzie. Rzeczywisty wyciąg użytkownika nadal P0 / nieodebrany |
+| Ostatnia aktualizacja | 2026-10-09 17:50 — realny VeloBank PDF: 7 błędów od daty 08.10, import w całości odrzucony; poprawki wielowierszowych kwot Android Beta **0.8.0.81/273 KANDYDAT**, CI #2097 bez wyniku, podpisany APK jeszcze niepotwierdzony. Ostatni potwierdzony APK nadal 0.8.0.80/272 CI #2092 PASS. |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
@@ -35,6 +35,20 @@
 - Testy CI Velo to pliki tekstowe syntetyczne, a nie rzeczywisty PDF VeloBanku użytkownika.
 
 **Następny bezpieczny krok:** porównać tę samą rzeczywistą historię PDF z widocznymi w banku datami i liczbą pozycji: źródłowe operacje do 09.10 → tekst wypisany przez PDFTextStripper (może być próbka po zamaskowaniu danych) → wynik parsera 0.8.0.80 → `Cała historia bankowa`. Jeśli brak próbki, dodać najpierw diagnostykę tylko odczytu „najpóźniejsza data występująca w tekście PDF” vs „najpóźniejsza rozpoznana transakcja” (daty nagłówka ≠ transakcje, więc bez automatycznego księgowania). Dopiero potem zmieniać rozdzielanie dat lub składanie datowanych wieloliniowych rekordów. Nie zamykać P0 na podstawie CI. Stable main nietknięta.
+
+## P0 — rzeczywisty VeloBank PDF: 7 nieodczytanych operacji od 08.10 (09.10.2026, 17:50)
+
+**Dowód z telefonu:** po imporcie jednego pliku PDF aplikacja pokazuje `Etap: VeloBank / transakcje • plik 1/1` oraz `7 potencjalnych operacji nie dało się poprawnie odczytać (pierwsza data 08.10.2026)`; **partia odrzucona, 0 zaimportowanych**. Stan lokalnej historii przed nową próbą: **74 operacje**, w tym 69 `open`, 1 `matched`, 4 `dismissed`. Osobno 13 pozycji Budżetu `do potwierdzenia`. Brak połączenia nasłuchu powiadomień Android nie ma związku z lokalnym parserem PDF.
+
+**Potwierdzenie błędu:** Beta 0.8.0.80 / 272, CI #2092 PASS, ale **rzeczywisty import FAIL**. `BankStatementVeloPdf.parseStatementRows()` szukał podpisanej kwoty albo `PLN/zł` w maks. 4 kolejnych wierszach po datowanym przelewie, nie odczytywał ostrożnie kwot typu „Kwota przelewu: 4300,00” bez znaku i jednostki. Łączenie daty ze słowem operacji działało tylko dla wiersza z jedną datą. Nie można stwierdzić bez zamaskowanego PDF, jaki dokładnie układ wszystkich siedmiu operacji był w pliku.
+
+**Wprowadzony kandydat Android Beta 0.8.0.81 / 273, wyłącznie `beta`:**
+- `BankStatementVeloPdf.java` `ddf515c3`: podpisana lub jawnie nazwana „Kwota / Kwota przelewu / Kwota operacji” z groszami bez PLN, jeśli typ transakcji określa kierunek; 10 wierszy kontynuacji zamiast 4, bez przekraczania kolejnej datowanej operacji ani salda; data + druga data + typ przelewu w następnej linii; błąd nie tylko „7”, ale **brak kwoty / wiele kwot / brak jednoznacznego kierunku**. Gdy istnieje co najmniej jedna niejednoznaczna operacja, odrzuca CAŁĄ partię bez księgowania.
+- `BankStatementVeloPdfSmoke.java` `f4fea4ab`, `a4624194`: regresje dla dwóch dat, niepodpisanego +4300/-280 według nazwy przelewu, dłuższych rekordów, siedmiu nieodczytanych i zakazu uznania salda za kwotę transakcji.
+- `app/build.gradle` `a82bcf79`: `0.8.0.81 / 273`; release notes `1dd89e24`. **CI #2097 uruchomione, bez potwierdzonego PASS / APK w chwili wpisu**.
+- **Nie zmieniono żadnych wpisów lokalnych ani poprzednich kluczy transakcji rozpoznawanych w całości z jednego wiersza; `main` nietknięty.**
+
+**Odbiór obowiązkowy:** zweryfikować CI, instalację podpisanego APK; ponowny import tego samego dokumentu powinien wyświetlić najpóźniejszą datę 09.10 (jeśli rzeczywiście występuje w pliku), liczbę rozpoznanych nowych/duplikatów i przynajmniej 7 odzyskanych lub jawny błąd z kategoriami. Przed stwierdzeniem kompletności zestawić liczbę wszystkich operacji i daty z PDF banku, rozdzielić datę operacji od księgowania i sprawdzić saldo. Jeśli nadal nie działa, uzyskać PDF po maskowaniu danych i przeprowadzić regresję na realnym układzie; nie zgadywać transakcji ani nie importować częściowej historii.
 
 ## P0 — VeloBank PDF nadal nieczytelny na Androidzie (09.10.2026)
 
