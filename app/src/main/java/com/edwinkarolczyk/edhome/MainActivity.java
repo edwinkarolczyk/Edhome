@@ -13053,10 +13053,13 @@ public final class MainActivity extends Activity {
                 db.getReadableDatabase(),"matched",0);
             long bankDismissed=BankEvidenceStore.count(
                 db.getReadableDatabase(),"dismissed",0);
-            button("Banki i potwierdzenia • kolejka ("+bankOpen+")",
+            button("Do wyjaśnienia • banki ("+bankOpen+")",
                 ()->showBankEvidenceQueue(0));
-            note("Kolejka bankowa: "+bankOpen+" otwartych • "
-                +bankMatched+" uzgodnionych • "+bankDismissed+" odrzuconych.");
+            button("Cała historia bankowa ("+(bankOpen+bankMatched+bankDismissed)+")",
+                ()->showBankEvidenceArchive(0));
+            note("Historia bankowa: "+bankOpen+" do wyjaśnienia • "
+                +bankMatched+" uzgodnionych • "+bankDismissed+" odrzuconych. "
+                +"Lista «Do wyjaśnienia» nie pokazuje już uzgodnionych operacji.");
             note("Diagnostyka importu: "+bankImportDiagLine());
         }
         note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
@@ -13944,6 +13947,21 @@ public final class MainActivity extends Activity {
                         entry,sourceKind,sourceLabel));
                 }
             }
+            String earliestDate="";
+            String latestDate="";
+            int importedIncome=0,importedExpense=0;
+            for(BankStatementCsv.Entry row:entries) {
+                if(earliestDate.isEmpty()||row.date.compareTo(earliestDate)<0)
+                    earliestDate=row.date;
+                if(latestDate.isEmpty()||row.date.compareTo(latestDate)>0)
+                    latestDate=row.date;
+                if("income".equals(row.kind))importedIncome++;
+                else importedExpense++;
+            }
+            final String importedRange=entries.isEmpty()?"brak operacji":
+                earliestDate+" – "+latestDate;
+            final int importedIncomeCount=importedIncome;
+            final int importedExpenseCount=importedExpense;
             diagStage="QUEUE_SAVE";
             BankEvidenceStore.IngestResult queue=BankEvidenceStore.ingest(
                 db.getWritableDatabase(),incoming);
@@ -13968,10 +13986,16 @@ public final class MainActivity extends Activity {
                     .setTitle("Historia bankowa wczytana")
                     .setMessage("Pliki: "+files.size()
                         +"\nRozpoznane operacje: "+entries.size()
+                        +"\nDaty rozpoznane: "+importedRange
+                        +"\nWpływy: "+importedIncomeCount
+                        +" • Wydatki: "+importedExpenseCount
                         +"\nNowo zapisane: "+queue.inserted
                         +"\nDuplikaty: "+duplicates
                         +"\nAutomatycznie uzgodnione: "+reconciliation.matched
                         +"\nDo wyjaśnienia: "+reconciliation.review
+                        +"\n\nJeśli w pliku są późniejsze daty lub przelewy, "
+                        +"a nie występują w rozpoznanych, parser mógł pominąć "
+                        +"wiersze PDF. Nie uznawaj importu za kompletny."
                         +"\n\nSaldo zmieniły wyłącznie jednoznacznie "
                         +"uzgodnione płatności. Konflikty pozostają do decyzji.")
                     .setNegativeButton("Zamknij",null)
@@ -14141,6 +14165,67 @@ public final class MainActivity extends Activity {
         return stats;
     }
 
+    /** Tylko odczyt. Lista kolejki otwartej nie jest pełną historią importu. */
+    private void showBankEvidenceArchive(int offset) {
+        final int pageSize=100;
+        SQLiteDatabase read=db.getReadableDatabase();
+        long count=BankEvidenceStore.countAll(read);
+        int first=count==0?0:Math.min(offset,
+            ((int)(count-1)/pageSize)*pageSize);
+        java.util.List<BankEvidenceStore.Row> visible=
+            BankEvidenceStore.listPageAll(read,pageSize,first);
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        for(BankEvidenceStore.Row row:visible) {
+            String state="matched".equals(row.state)?"✓ Uzgodnione":
+                "dismissed".equals(row.state)?"× Odrzucone":"? Do wyjaśnienia";
+            String description=row.description.length()>65
+                ?row.description.substring(0,65)+"…":row.description;
+            labels.add(row.sourceLabel+" • "+row.date+" • "
+                +("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)+"\n"
+                +state+" • "+description);
+        }
+        final boolean previous=first>0;
+        final boolean next=first+visible.size()<count;
+        int prevIndex=labels.size();
+        if(previous)labels.add("← Poprzednie 100 operacji");
+        int nextIndex=labels.size();
+        if(next)labels.add("→ Następne 100 operacji");
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("Cała historia bankowa • wszystkie statusy"
+                +"\n"+(count==0?0:first+1)+"–"+(first+visible.size())
+                +" z "+count+" pozycji")
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                if(index<visible.size()) {
+                    BankEvidenceStore.Row row=visible.get(index);
+                    if("open".equals(row.state)) {
+                        openBankEvidenceRow(row);
+                    } else {
+                        String state="matched".equals(row.state)
+                            ?"Uzgodniona z pozycją PayCheck":"Odrzucona";
+                        new AlertDialog.Builder(this)
+                            .setTitle(row.sourceLabel+" • "+state)
+                            .setMessage("Data z importu: "+row.date
+                                +"\n"+("income".equals(row.kind)?"+ ":"− ")
+                                +MoneyRules.format(row.amount)
+                                +"\n\n"+row.description
+                                +"\n\nTen podgląd nie księguje operacji.")
+                            .setNegativeButton("Zamknij",null)
+                            .setPositiveButton("Wróć do historii",
+                                (dd,w)->showBankEvidenceArchive(first))
+                            .show();
+                    }
+                } else if(previous&&index==prevIndex) {
+                    showBankEvidenceArchive(Math.max(0,first-pageSize));
+                } else if(next&&index==nextIndex) {
+                    showBankEvidenceArchive(first+pageSize);
+                }
+            })
+            .setNegativeButton("Zamknij",null);
+        if(visible.isEmpty())dialog.setMessage("Historia bankowa jest pusta.");
+        dialog.show();
+    }
+
     private void showBankEvidenceQueue(int filter) {
         showBankEvidenceQueue(filter,0);
     }
@@ -14172,10 +14257,10 @@ public final class MainActivity extends Activity {
         if(hasPrevious)labels.add("← Poprzednie 100 operacji");
         final int nextIndex=labels.size();
         if(hasNext)labels.add("→ Następne 100 operacji");
-        String[] filters={"Wszystkie","1 propozycja","Kilka propozycji",
+        String[] filters={"Wszystkie otwarte","1 propozycja","Kilka propozycji",
             "Bez pasującego wpisu","Wydatki −","Wpływy +"};
         AlertDialog.Builder dialog=new AlertDialog.Builder(this)
-            .setTitle("Banki i potwierdzenia • "+filters[filter]
+            .setTitle("Do wyjaśnienia • "+filters[filter]
                 +"\n"+(count==0?0:first+1)+"–"+(first+visible.size())
                 +" z "+count+" pozycji")
             .setItems(labels.toArray(new String[0]),(d,index)->{
