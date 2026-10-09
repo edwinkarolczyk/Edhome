@@ -13977,7 +13977,7 @@ public final class MainActivity extends Activity {
                 bank==null||bank.trim().isEmpty()?"CSV":bank.trim());
             String detected=android.text.TextUtils.join(" + ",detectedSources);
             int duplicates=duplicateRows+queue.duplicates;
-            runOnUiThread(()->{
+            runOnLiveUi(()->{
                 bankImportRunning=false;
                 if(isFinishing()||isDestroyed())return;
                 progress.dismiss();
@@ -13998,7 +13998,7 @@ public final class MainActivity extends Activity {
             DiagnosticLog.error("PAYCHECK_BANK_FILES_REJECTED",error);
             final String explanation=error instanceof IllegalArgumentException
                 ?error.getMessage():"Błąd odczytu pliku. Zobacz diagnostykę.";
-            runOnUiThread(()->{
+            runOnLiveUi(()->{
                 bankImportRunning=false;
                 if(isFinishing()||isDestroyed())return;
                 progress.dismiss();
