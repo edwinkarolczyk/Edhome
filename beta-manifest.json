@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 269,
-  "versionName": "0.8.0.77",
-  "changelog": "EDHOME 0.8.0.77 — Beta. P0 PayCheck i Budżet: pozycje planu automatycznie trafiają do Do potwierdzenia, bez ręcznego tworzenia operacji. Import historii bankowej może potwierdzić i przypisać płatność wyłącznie przy zgodności kwoty, kierunku, miesiąca, charakterystycznego odbiorcy oraz braku konfliktu. Niejasne wpisy czekają na decyzję. Saldo tylko po uzgodnieniu, bez duplikatów. Test fizyczny nadal wymagany; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.77/edhome-beta.apk",
-  "sha256": "b541c0ef86a096df7c241cce1da96d5d678e51c9ea03fdc3e434dad4181d9dbb"
+  "versionCode": 270,
+  "versionName": "0.8.0.78",
+  "changelog": "EDHOME 0.8.0.78 — Beta. PayCheck: kwota planowana i kwota faktyczna są rozdzielone. Dla wypłat, innych wpływów i rachunków po zatwierdzeniu dowodu bankowego zapisuje się rzeczywistą kwotę z wyciągu, a różnicę wobec planu zachowuje się w Budżecie i historii. Przy różnej kwocie wybierz i zatwierdź właściwą pozycję; brak automatycznego zgadywania. Blokada potwierdzenia samego planu jako przelewu. Historia bankowa obejmuje wszystkie statusy, parser PDF VeloBanku obsługuje część wieloliniowych przelewów. Bez podwójnego salda. Import realnych plików i synchronizacja nadal wymagają odbioru na urządzeniu. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.78/edhome-beta.apk",
+  "sha256": "bd2b462b6505d6cb6b453d8cd25dce149a231eeece51d035286ff263b3a8b4c3"
 }
