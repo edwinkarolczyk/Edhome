@@ -6,15 +6,15 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android P0: pełna historia PayCheck z filtrami i paginacją + znaki kwot i parsery wyciągów; kandydat 0.8.0.72/264, oczekuje na Android CI |
+| Ostatnia aktualizacja | 2026-10-09 — Android PayCheck historia i znaki: 0.8.0.72/264, CI #2046 PASS, podpisany APK opublikowany, odbiór telefonu otwarty |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.72 / versionCode 264 — kandydat historii P0, build i podpisany APK jeszcze do potwierdzenia**; poprzednia 0.8.0.71/263 [CI #2037](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571) PASS, podpisany APK w artefaktach; odbiór fizyczny nadal otwarty. |
-| Desktop Beta | **0.7.0.115 — zmiany zapisane na beta, CI i publikacja do potwierdzenia**; poprzednia **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) |
+| Android Beta | **0.8.0.72 / versionCode 264**, [Android CI #2046 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.72/edhome-beta.apk); test fizyczny i weryfikacja kompletności starszych wpływów nadal OTWARTE. |
+| Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | **0.8.0.71/263 CI #2037 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571); 0.8.0.72/264 wymaga niezależnego zielonego CI i podpisanego APK |
-| Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
+| Ostatni zweryfikowany CI Android | **0.8.0.72/264 CI #2046 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), opublikowane wydanie beta-v0.8.0.72 i APK z manifestem SHA-256. |
+| Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
 | Bieżący etap | **P0 Android: niepełna historia wpływów/wydatków i znaki — kod naprawczy przygotowany, fizyczny odbiór oczekuje.** Potwierdzanie przelewów także nieodebrane, 5C i 6 otwarte. |
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
 
@@ -48,7 +48,9 @@
 - Znaki **+ dla wpływów, − dla wydatków** w nagłówku planu, podsumowaniu potwierdzonych/oczekujących, pozycjach Budżetu, ręcznym wyborze płatności i listach historii. Nie zmieniano `amount_grosz`, obliczania salda ani księgi.
 - `BankStatementCsv.java` oraz `BankStatementMbank.java` normalizują minus Unicode `−` i twarde spacje przed rozpoznaniem kierunku; dotyczy przyszłych importów, nie przepisuje wcześniej zatwierdzonych danych.
 - Nowy test `tests/check_paycheck_history_all_android.py`: filtr, paginacja, znaki i symulacja SQLite ponad 180 operacji. Uruchamiany na Android CI razem z wykonywalnym Java `tests/task_rules/BankStatementSignsSmoke.java`, który parsuje prawdziwe przykłady CSV/mBank `+`, `-`, `−`.
-- **Wydanie Android Beta 0.8.0.72/264 nie jest jeszcze odebrane.** Potwierdzić CI, podpisanie oraz na realnym telefonie: stare wpływy, obie strony paginacji, wszystkie/filtry, historia jednej pozycji ponad 100 zdarzeń, znak w każdej wyświetlanej kwocie, poprawny bilans oraz LAN Android↔PC bez duplikatów. Nie używać prawdziwych danych do testowych operacji finansowych.
+- **Wydanie Android Beta 0.8.0.72/264: CI #2046 PASS, podpisany APK i Release opublikowane 09.10.2026, test użytkownika nadal nieodebrany.** Potwierdzić CI, podpisanie oraz na realnym telefonie: stare wpływy, obie strony paginacji, wszystkie/filtry, historia jednej pozycji ponad 100 zdarzeń, znak w każdej wyświetlanej kwocie, poprawny bilans oraz LAN Android↔PC bez duplikatów. Nie używać prawdziwych danych do testowych operacji finansowych.
+
+**09.10.2026 — kontrola po buildzie:** [Android CI #2046](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257) zakończył się `success`; w artefaktach jest `EDHOME-0.8.0.72-signed-apk`, a [Release 0.8.0.72](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.72) publikuje podpisany plik `edhome-beta.apk`. Manifest `beta-manifest.json` wskazuje wersję 264 i właściwy SHA-256 APK. Poprawiono w manifeście opis „Co nowego” dla tej wersji (wcześniej skopiowany ze starej wersji). **Wciąż wymagane:** próba odczytania brakujących wpływów i potwierdzenia przelewu na realnym Androidzie; backup przed testowaniem i późniejsza kontrola sync PC↔telefon. Nie przenosić do Stable bez akceptacji.
 
 ## Aktualizacje Android Beta — porządki na ekranie (09.10.2026)
 
