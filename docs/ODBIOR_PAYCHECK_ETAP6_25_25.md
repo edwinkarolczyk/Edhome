@@ -3,7 +3,7 @@
 **Gałąź:** `beta`. **Stable `main`:** bez zmian bez jawnej akceptacji.
 **Kontrakt:** [ROADMAP.md](ROADMAP.md#paycheck--budżet-miesiąca-10-kontrakt-odbioru-2525).
 **Rozdział obowiązkowy:** pokrycie kodowe ≠ przetestowanie zachowania ≠ odbiór na telefonie i PC.
-**Stan 08.10.2026:** Android Beta `0.8.0.64/256` (#2010 PASS); Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
+**Stan 09.10.2026:** Android Beta `0.8.0.67/259` (kandydat: zwarty bilans i rozwijane szczegóły — CI i odbiór oczekują); poprzednia `0.8.0.66/258` (CI #2019 PASS); Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
 
 ## Macierz 25 ustaleń
 
@@ -44,7 +44,7 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 | Test | Co sprawdzić na kopii danych | Stan |
 |---|---|---|
 | B1 | Zmień miesiąc w obie strony, wróć do bieżącego; stary okres i korekty nie znikają | ☐ |
-| B2 | Jedna księga; wpływy osobno na górze, jeden zwarty nagłówek | ☐ |
+| B2 | Jedna księga; wpływy osobno na górze, zwarty bilans wpływy/wydatki/różnica/do zapłaty oraz rozwijane szczegóły; zaległości i do potwierdzenia jawne | ☐ |
 | B3 | Rozwiń pozycję A, potem B; poprzednia zwinięta, przewinięcie się nie resetuje | ☐ |
 | B4 | Opłacone/zaległe/częściowo/opcjonalne i plakietki rat mają właściwe kolory | ☐ |
 | B5 | Zaległość poprzedniego miesiąca na górze, opcjonalnego brak w zaległościach | ☐ |
@@ -59,6 +59,6 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 ## Kontrola wersji / zależności
 
 - Desktop 0.7.0.114: zwarty nagłówek z bilansem, nawigacja do bieżącego miesiąca, wpływy przed wydatkami, sortowanie wydatków datą, podgląd odbiorców i liczby zobowiązań. Testy `DesktopBudgetMirrorTest` i `check_paycheck_budget_stage6_desktop.py`; build #284 **PASS**, Windows Beta opublikowany.
-- Android 0.8.0.64: zabezpieczenie nadpłat między miesiącami, CI #2010 PASS; dalsze zmiany wyłącznie na `beta`.
+- Android 0.8.0.67/259 — kandydat etapu 6: zwarty bilans i rozwijane szczegóły, do testów CI/fizycznych. Poprzedni 0.8.0.66/258 z CI #2019 PASS. Poprawki nadpłat z 0.8.0.64 zachowane; dalsze zmiany wyłącznie na `beta`.
 - 5C: [ODBIOR_PAYCHECK_5C_2026-10-08.md](ODBIOR_PAYCHECK_5C_2026-10-08.md), A1–A20 nadal niewykonane fizycznie.
 - Nie przenosić na Stable, nie usuwać poprzednich wpisów historii i nie zastępować kopii prawdziwych danych plikami testowymi.

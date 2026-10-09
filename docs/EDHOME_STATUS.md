@@ -6,17 +6,17 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — ekran Aktualizacji: osobny kafelek QR Beta / Stable zachowany na życzenie; Android 0.8.0.66/258, CI po poprawce weryfikowane; Budżet 5C i etap 6 nadal nieodebrane fizycznie |
+| Ostatnia aktualizacja | 2026-10-09 — etap 6 Budżetu Android: zwarty bilans i rozwijane rozliczenie, kandydat 0.8.0.67/259; odbiór fizyczny 5C/6 nadal otwarty |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.66 / versionCode 258 — kod na `beta`, CI i podpisana publikacja wymagają weryfikacji**. Wersja wcześniejszego kandydata 0.8.0.65/257: [#2018](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880487760); ostatni niezależnie potwierdzony APK: **0.8.0.64/256**, [#2010 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) |
+| Android Beta | **0.8.0.67 / 259 — kandydat etapu 6, wymaga CI i publikacji**. Poprzednia **0.8.0.66/258**: [Android CI #2019 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880718359); podpisane wydanie do sprawdzenia w manifest |
 | Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37841803131 / #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) — **success**, commit `7fa54c6c23d0d1a3c774fa1d5525f680d84ce05e` |
 | Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
-| Bieżący etap | **Aktualizacje Androida: kod naprawy „Co nowego” i czterech funkcji wdrożony w `beta`, CI i odbiór telefonu oczekują.** Równolegle PayCheck/Budżet: etap 6 w realizacji i etap 5C bez odbioru fizycznego; Projekty P0/P1 w planie. |
-| Następny krok | Po zielonym Desktop CI #284 przetestować nowy widok i odbiór B1–B12 z etapu 6; osobno wykonać A1–A20 z 5C: telefon ↔ PC, konflikt tej samej wpłaty, idempotencja po utracie ACK, backup ZIP → restore; po akceptacji możliwy etap 6. Bez odbioru 5C nadal niezamknięty. |
+| Bieżący etap | **PayCheck/Budżet etap 6:** Android UX kompaktowy bilans wdrożony kodowo, czeka na CI i test B1–B12; **5C:** A1–A20 nadal bez fizycznego odbioru. Aktualizacje Beta 0.8.0.66 mają CI #2019 PASS. |
+| Następny krok | Po zielonym Android CI etapu 6: B1–B12 na telefonie, porównanie Android↔Desktop, osobny bezpieczny test 5C A1–A20 na kopii danych, zwłaszcza dwa kierunki, nadpłaty i backup→restore; nie przenosić do `main` bez akceptacji. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -30,6 +30,12 @@
 - **Do zamknięcia:** (1) zielony build i opublikowany podpisany APK 0.8.0.65; (2) na telefonie sprawdzenie, czy są dokładnie 4 działania i nie ma starych kafli; (3) „Co nowego” z działającym internetem, przy braku internetu i przy nieaktualnej wersji telefonu; (4) QR w zaawansowanych, ręczna instalacja i odtwarzanie gotowego APK; (5) sprawdzić, że PayCheck, Projekty, Magazyn i LAN sync zachowały dane. **Stable `main` nietknięty.**
 
 **Korekta na wyraźne życzenie użytkownika (09.10):** osobny kafelek **QR Beta / Stable** zostaje też na głównym ekranie Aktualizacji (łącznie **5 działań**: Sprawdź, Instaluj APK, Co nowego, QR Beta / Stable, Opcje zaawansowane). Dodatkowo QR pozostaje w Opcjach zaawansowanych. Commit [`8999850`](https://github.com/edwinkarolczyk/Edhome/commit/899985019780e91c1ce80cc3b1157b68af8cb8a1) aktualizuje kod i test kontraktowy, podnosi wersję do **Android Beta 0.8.0.66/258** w celu uniknięcia konfliktu z ewentualną publikacją 0.8.0.65. Nie oznaczać jako gotowego przed CI i publikacją podpisanego APK; `main` bez zmian.
+
+## Etap 6 — Android, zwarty bilans (09.10.2026)
+
+**Wdrożenie kodowe Beta 0.8.0.67/259 (kandydat):** Android Budżet miesiąca ma dwa zwarte wiersze: planowane wpływy i wydatki, różnicę oraz pozostało do zapłaty. Kwoty do potwierdzenia, zaległości i nadpłaty pozostają jawne bez rozwijania. Pozostałe informacje („Wykonanie pozycji Budżetu”, pozostałe transakcje PayCheck, sumy potwierdzone i wyjaśnienie księgowania) są pod przyciskiem **„Szczegóły rozliczenia”**. Stan rozwinięcia zachowuje się podczas przerysowania widoku; zmiana nie zapisuje danych. Sekcja wpływów i wydatków oraz pojedynczo rozwijane pozycje bez zmian.
+
+**Testy:** rozszerzono kontrakt `check_paycheck_monthly_budget_contract.py` o obecność szczegółów, domyślne zwinięcie oraz jawne zaległości/do potwierdzenia. Nie zmieniano SQLite, tabel ani API synchronizacji. Wymagane: **nowy Android CI oraz fizyczny odbiór B1–B12**; bez tego etap 6 pozostaje nieodebrany. Stable `main` bez zmian.
 
 ## Etap 6 — bieżąca seria prac (08.10.2026)
 

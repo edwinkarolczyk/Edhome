@@ -180,6 +180,7 @@ public final class MainActivity extends Activity {
     private YearMonth paycheckBudgetMonth = YearMonth.now();
     private String expandedBudgetItemId;
     private View expandedBudgetDetailsView;
+    private boolean budgetFinanceDetailsExpanded;
     private String calendarDay = LocalDate.now().toString();
     private String calendarView = "month";
     private String tasksFilter = "all";
@@ -14671,105 +14672,20 @@ public final class MainActivity extends Activity {
             PaycheckMonthlyBudget.Totals plan =
                 PaycheckMonthlyBudget.planned(items, month);
             title("Budżet miesiąca • " + budgetMonthLabel(month));
-            note("Plan: wpływy " + MoneyRules.format(plan.income)
-                + " • wydatki " + MoneyRules.format(plan.expense)
-                + " • zostaje " + MoneyRules.format(plan.net()) + ".");
-            button("📅 Wejdź do budżetu miesiąca • " + items.size()
-                + (items.size()==1 ? " pozycja" : " pozycji"),
-                () -> go("paycheck_budget"));
-        } catch (Exception error) {
-            DiagnosticLog.error("PAYCHECK_MONTHLY_BUDGET_ENTRY", error);
-            button("📅 Wejdź do budżetu miesiąca",
-                () -> go("paycheck_budget"));
-        }
-    }
-
-    private void paycheckMonthlyBudget() {
-        header("PayCheck • Budżet miesiąca");
-        sharedMonthlyBudgetBlock();
-    }
-
-    private void sharedMonthlyBudgetBlock() {
-        final YearMonth month = paycheckBudgetMonth == null
-            ? YearMonth.now() : paycheckBudgetMonth;
-        try {
-            java.util.List<PaycheckMonthlyBudget.Item> items =
-                PaycheckMonthlyBudget.load(prefs);
-            PaycheckMonthlyBudget.Totals plan =
-                PaycheckMonthlyBudget.planned(items, month);
-            PaycheckMonthlyBudget.Totals confirmed =
-                PaycheckMonthlyBudget.sharedActual(
-                    db.getReadableDatabase(), month, "confirmed");
-            PaycheckMonthlyBudget.Totals pending =
-                PaycheckMonthlyBudget.sharedActual(
-                    db.getReadableDatabase(), month, "pending");
-            PaycheckMonthlyBudget.Totals assigned =
-                PaycheckMonthlyBudget.sharedAssignedActual(
-                    db.getReadableDatabase(),items,month);
-            long unpaidPlan=0L;
-            for (PaycheckMonthlyBudget.Item item
-                    :PaycheckMonthlyBudget.activeFor(items,month))
-                if ("expense".equals(item.kind))
-                    unpaidPlan=Math.addExact(unpaidPlan,
-                        PaycheckMonthlyBudget.remainingDue(
-                            db.getReadableDatabase(),item,month));
-
-            LinearLayout monthNav = new LinearLayout(this);
-            monthNav.setOrientation(LinearLayout.HORIZONTAL);
-            TextView previousMonth = budgetInlineButton("‹", () -> {
-                paycheckBudgetMonth = month.minusMonths(1);
-                expandedBudgetItemId = null;
-                expandedBudgetDetailsView = null;
-                render();
-            });
-            TextView monthLabel = text(budgetMonthLabel(month),18,true);
-            monthLabel.setGravity(Gravity.CENTER);
-            monthLabel.setTextColor(ink);
-            if (!month.equals(YearMonth.now())) {
-                monthLabel.setOnClickListener(v -> {
-                    paycheckBudgetMonth = YearMonth.now();
-                    expandedBudgetItemId = null;
-                    expandedBudgetDetailsView = null;
-                    render();
-                });
-                touchFeedback(monthLabel);
-            }
-            TextView nextMonth = budgetInlineButton("›", () -> {
-                paycheckBudgetMonth = month.plusMonths(1);
-                expandedBudgetItemId = null;
-                expandedBudgetDetailsView = null;
-                render();
-            });
-            monthNav.addView(previousMonth,new LinearLayout.LayoutParams(dp(52),dp(44)));
-            monthNav.addView(monthLabel,new LinearLayout.LayoutParams(0,dp(44),1f));
-            monthNav.addView(nextMonth,new LinearLayout.LayoutParams(dp(52),dp(44)));
-            body.addView(monthNav,new LinearLayout.LayoutParams(-1,-2));
-
-            note("Plan: wpływy " + MoneyRules.format(plan.income)
-                + " • wydatki " + MoneyRules.format(plan.expense)
-                + " • zostaje " + MoneyRules.format(plan.net()) + ".");
-            note("Wykonanie pozycji Budżetu: pokryto "
-                + MoneyRules.format(PaycheckBudgetExecutionRules.coveredPlan(
-                    plan.expense,unpaidPlan))
-                + " z " + MoneyRules.format(plan.expense)
-                + " • pozostało do zapłaty " + MoneyRules.format(unpaidPlan)
-                + ". Potwierdzone płatności przypisane do planu: "
-                + MoneyRules.format(assigned.expense) + ".");
-            note("Pozostałe / nieprzypisane wydatki PayCheck: "
-                + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
-                    confirmed.expense,assigned.expense))
-                + " • pozostałe wpływy PayCheck: "
-                + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
-                    confirmed.income,assigned.income)) + ".");
-            note("Cały PayCheck (potwierdzone): wpływy "
-                + MoneyRules.format(confirmed.income) + " • wydatki "
-                + MoneyRules.format(confirmed.expense)
-                + " • saldo " + MoneyRules.format(confirmed.net()) + ".");
+            // Etap 6: krótki bilans widoczny od razu; rozliczenia na żądanie.
+            LinearLayout summary = new LinearLayout(this);
+            summary.setOrientation(LinearLayout.VERTICAL);
+            summary.setPadding(dp(4),dp(3),dp(4),dp(5));
+            summary.addView(text("Plan: wpływy " + MoneyRules.format(plan.income)
+                + " • wydatki " + MoneyRules.format(plan.expense),15,true));
+            summary.addView(text("Różnica " + MoneyRules.format(plan.net())
+                + " • do zapłaty " + MoneyRules.format(unpaidPlan),14,false));
             if (!pending.empty())
-                note("Do potwierdzenia: wpływy "
+                summary.addView(text("Do potwierdzenia: wpływy "
                     + MoneyRules.format(pending.income) + " • wydatki "
                     + MoneyRules.format(pending.expense)
-                    + ". Nie zmieniają salda ani wykonania budżetu.");
+                    + " (nie zmieniają salda)",12,false));
+
             long arrears = 0L;
             long credit = 0L;
             for (PaycheckMonthlyBudget.Item item : items) {
@@ -14782,11 +14698,50 @@ public final class MainActivity extends Activity {
                     credit = Math.addExact(credit,availableCredit);
             }
             if (arrears > 0 || credit > 0)
-                note("Z poprzednich miesięcy: zaległości "
+                summary.addView(text("Z poprzednich miesięcy: zaległości "
                     + MoneyRules.format(arrears) + " • nadpłaty "
-                    + MoneyRules.format(credit) + ".");
-            note("Pozycja planowana nie jest transakcją. Saldo zmieniają dopiero "
-                + "transakcje potwierdzone po sprawdzeniu banku / wyciągu.");
+                    + MoneyRules.format(credit),13,true));
+
+            LinearLayout financeDetails = new LinearLayout(this);
+            financeDetails.setOrientation(LinearLayout.VERTICAL);
+            financeDetails.setVisibility(budgetFinanceDetailsExpanded
+                ? View.VISIBLE : View.GONE);
+            financeDetails.addView(text("Wykonanie pozycji Budżetu: pokryto "
+                + MoneyRules.format(PaycheckBudgetExecutionRules.coveredPlan(
+                    plan.expense,unpaidPlan))
+                + " z " + MoneyRules.format(plan.expense)
+                + " • pozostało do zapłaty " + MoneyRules.format(unpaidPlan)
+                + ". Potwierdzone płatności przypisane do planu: "
+                + MoneyRules.format(assigned.expense) + ".",13,false));
+            financeDetails.addView(text("Pozostałe / nieprzypisane wydatki PayCheck: "
+                + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
+                    confirmed.expense,assigned.expense))
+                + " • pozostałe wpływy PayCheck: "
+                + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
+                    confirmed.income,assigned.income)) + ".",13,false));
+            financeDetails.addView(text("Cały PayCheck (potwierdzone): wpływy "
+                + MoneyRules.format(confirmed.income) + " • wydatki "
+                + MoneyRules.format(confirmed.expense)
+                + " • saldo " + MoneyRules.format(confirmed.net()) + ".",13,false));
+            financeDetails.addView(text("Pozycja planowana nie jest transakcją. "
+                + "Saldo zmieniają dopiero transakcje potwierdzone "
+                + "po sprawdzeniu banku / wyciągu.",12,false));
+            TextView detailsToggle = text(budgetFinanceDetailsExpanded
+                ? "▴ Ukryj szczegóły rozliczenia"
+                : "▾ Szczegóły rozliczenia",13,true);
+            detailsToggle.setPadding(dp(4),dp(9),dp(4),dp(9));
+            detailsToggle.setOnClickListener(v -> {
+                budgetFinanceDetailsExpanded = !budgetFinanceDetailsExpanded;
+                financeDetails.setVisibility(budgetFinanceDetailsExpanded
+                    ? View.VISIBLE : View.GONE);
+                detailsToggle.setText(budgetFinanceDetailsExpanded
+                    ? "▴ Ukryj szczegóły rozliczenia"
+                    : "▾ Szczegóły rozliczenia");
+            });
+            touchFeedback(detailsToggle);
+            summary.addView(detailsToggle);
+            summary.addView(financeDetails);
+            body.addView(summary,new LinearLayout.LayoutParams(-1,-2));
 
             button("＋ Dodaj pozycję", () -> showBudgetItemDialog(false));
             button("👥 Odbiorcy / szablony", this::showBudgetRecipientsDialog);

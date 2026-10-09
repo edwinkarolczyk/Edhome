@@ -152,6 +152,29 @@ for token in (
 ):
     assert token in main, "Missing Android monthly budget UI: " + token
 
+# Etap 6 Android: zwięzły bilans i szczegóły na żądanie, bez zmiany księgi.
+android_budget = main.split('private void sharedMonthlyBudgetBlock()',1)[1].split(
+    'private int budgetSortDay(',1)[0]
+for token in (
+    'private boolean budgetFinanceDetailsExpanded;',
+    '▾ Szczegóły rozliczenia',
+    '▴ Ukryj szczegóły rozliczenia',
+    'budgetFinanceDetailsExpanded = !budgetFinanceDetailsExpanded;',
+    'financeDetails.setVisibility(budgetFinanceDetailsExpanded',
+    'summary.addView(financeDetails);',
+    'Różnica ',
+    'do zapłaty ',
+):
+    assert token in main, "Brak ergonomii Android etapu 6: " + token
+assert android_budget.index('summary.addView(text("Plan:') < android_budget.index(
+    'financeDetails.addView(text("Wykonanie pozycji Budżetu:')
+assert android_budget.index('summary.addView(text("Z poprzednich miesięcy:') < android_budget.index(
+    'financeDetails.addView(text("Wykonanie pozycji Budżetu:')
+assert 'if (!pending.empty())' in android_budget
+assert 'summary.addView(text("Do potwierdzenia:' in android_budget
+assert 'PaycheckMonthlyBudget.sharedArrearsBefore(' in android_budget
+assert 'PaycheckMonthlyBudget.sharedCreditBefore(' in android_budget
+
 budget_method = main.split('private void budgetItemCard(',1)[1].split(
     'private void budgetArrearRow(',1)[0]
 assert 'LinearLayout box = card();' not in budget_method
