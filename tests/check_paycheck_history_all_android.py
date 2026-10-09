@@ -23,13 +23,25 @@ for required in (
     "ORDER BY id DESC LIMIT ? OFFSET ?", "Integer.toString(offset)",
     'ids.remove(pageSize);', 'labels.remove(pageSize);',
     '"→ Następne 60 wpisów"', '"← Poprzednie"',
-    '.setItems(labels.toArray(new String[0])',
+    '.setView(scroll)',
+    'details.setVisibility(View.GONE)',
+    'expanded[0].setVisibility(View.GONE)',
     '"income".equals(c.getString(1))?"+ ":"− "',
 ):
     assert required in body, required
 assert ".setMessage(" not in body, "Komunikat Android moze schowac liste"
 assert 'if (++count >= 40)' not in body
 assert 'ORDER BY id DESC LIMIT 40' in main, "Zostawiono podglad 40 wpisow"
+# Ostatnie 40 w glownym PayCheck i pełna historia bez kart;
+# klik w inna kwotę zwija poprzednią pozycję.
+summary=main.split('title("PayCheck • ostatnie operacje");',1)[1].split(
+    'if(count==0)note("Brak transakcji.");',1)[0]
+assert 'LinearLayout entry=new LinearLayout(this);' in summary
+assert 'LinearLayout entry=card();' not in summary
+assert 'expandedPaycheckDetails[0].setVisibility(View.GONE)' in summary
+assert 'details.setVisibility(open?View.VISIBLE:View.GONE)' in summary
+assert 'smallButton(details,"Usuń wpis"' in summary
+
 
 events=main.split("private void showBudgetItemHistory(PaycheckMonthlyBudget.Item item,int offset)",1)[1].split(
     "/** Jedno zobowiązanie",1)[0]
