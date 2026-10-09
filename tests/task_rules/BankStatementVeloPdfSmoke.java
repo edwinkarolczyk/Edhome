@@ -42,6 +42,31 @@ public final class BankStatementVeloPdfSmoke {
         try {BankStatementVeloPdf.parse(broken);}
         catch(IllegalArgumentException expected){splitTransferRejected=true;}
         check(splitTransferRejected,"A split transfer must not disappear silently");
+        String splitTransfer="VeloBank\n"
+            +"05.10.2026 Operacja kartą -6,50 PLN\n"
+            +"06.10.2026 Operacja kartą -7,50 PLN\n"
+            +"09.10.2026 Przelew wychodzący do odbiorcy\n"
+            +"Kwota przelewu -35,49 PLN\n";
+        List<BankStatementCsv.Entry> recovered=
+            BankStatementVeloPdf.parse(splitTransfer);
+        check(recovered.size()==3,"all three rows including split transfer");
+        check("2026-10-09".equals(recovered.get(2).date),"new transfer date");
+        check("expense".equals(recovered.get(2).kind),"outgoing transfer");
+        check(recovered.get(2).amountGrosz==3549,"transfer exact grosze");
+        check(BankStatementVeloPdf.parse(splitTransfer).get(2).evidenceKey
+            .equals(recovered.get(2).evidenceKey),"split transfer stable ID");
+
+        String separateDate="VeloBank\n"
+            +"05.10.2026 Operacja kartą -6,50 PLN\n"
+            +"06.10.2026 Operacja kartą -7,50 PLN\n"
+            +"09.10.2026\n"
+            +"Przelew wychodzący do odbiorcy\n"
+            +"Kwota przelewu -35,49 PLN\n";
+        List<BankStatementCsv.Entry> separate=
+            BankStatementVeloPdf.parse(separateDate);
+        check(separate.size()==3
+            && "2026-10-09".equals(separate.get(2).date),
+            "Velo transfer with separate date line must be recovered");
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
