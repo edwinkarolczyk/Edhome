@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 270,
-  "versionName": "0.8.0.78",
-  "changelog": "EDHOME 0.8.0.78 — Beta. PayCheck: kwota planowana i kwota faktyczna są rozdzielone. Dla wypłat, innych wpływów i rachunków po zatwierdzeniu dowodu bankowego zapisuje się rzeczywistą kwotę z wyciągu, a różnicę wobec planu zachowuje się w Budżecie i historii. Przy różnej kwocie wybierz i zatwierdź właściwą pozycję; brak automatycznego zgadywania. Blokada potwierdzenia samego planu jako przelewu. Historia bankowa obejmuje wszystkie statusy, parser PDF VeloBanku obsługuje część wieloliniowych przelewów. Bez podwójnego salda. Import realnych plików i synchronizacja nadal wymagają odbioru na urządzeniu. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.78/edhome-beta.apk",
-  "sha256": "bd2b462b6505d6cb6b453d8cd25dce149a231eeece51d035286ff263b3a8b4c3"
+  "versionCode": 271,
+  "versionName": "0.8.0.79",
+  "changelog": "EDHOME 0.8.0.79 — Beta. PayCheck: zwarta lista transakcji kwota pod kwotą, dotknięcie rozwija szczegóły, maksymalnie jeden wpis otwarty naraz — również w pełnej historii i kolejce bankowej. Poprawiony wybór banku mBank / VeloBank / Inny: lista opcji nie jest zasłaniana opisem; awaryjny wybierak plików. Przycisk Importuj dostępny także z historii. Nierozliczoną operację z importu można usunąć po świadomym potwierdzeniu, bez zmiany salda; rozliczone pozostają chronione. Rzeczywista kwota z wyciągu nadal ma pierwszeństwo nad kwotą planu. Test na telefonie i pełny import rzeczywistych wyciągów są nadal wymagane; Stable main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.79/edhome-beta.apk",
+  "sha256": "f8eefae36a16421205c00d8160ddf3f17c2dc000e3a6f2534cfa8e3c4c886eee"
 }
