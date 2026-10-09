@@ -35,4 +35,17 @@ for piece in (
     assert piece in tests,piece
 assert 'DesktopBudgetMirror.showEditable(' in desktop
 assert 'Stary plik planu PC pozostaje bez zmian.' in ui
+
+# Pełna historia PayCheck ma być osiągalna partiami, bez ucięcia na 100.
+assert 'Historia transakcji' in desktop
+assert 'final int[] shown = {Math.min(100, rows.size())};' in desktop
+assert 'more.addActionListener(event -> {' in desktop
+assert 'shown[0] = end;' in desktop
+assert 'if (++shown >= 100) break;' not in desktop
+# Znak transakcji i planu musi pochodzić z kind, nie z salda.
+assert '(income ? "+ " : "− ")' in desktop
+assert '(isIncome ? "+ " : "− ")+money(amount)' in ui
+assert '+money(summary.income)+"  |  Wydatki: − "' in ui
+assert 'csvRespectsPlusAndBothMinusCharacters' in (root/"desktop/src/test/java/com/edhome/desktop/DesktopBankAmountSignTest.java").read_text(encoding="utf-8")
+
 print("Etap 6 Desktop: jeden nagłówek, wpłaty nad wydatkami, terminy, odbiorcy i edycja bez drugiej księgi — kontrakt PASS")
