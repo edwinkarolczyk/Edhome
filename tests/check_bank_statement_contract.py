@@ -71,7 +71,7 @@ for word in ('BankStatementMbank.recognizes(text)',
              'BankEvidenceStore.match(',
              'BankEvidenceStore.dismiss(',
              'BankEvidenceStore.reopen(',
-             'Banki i potwierdzenia • kolejka',
+             'Do wyjaśnienia • banki',
              'Zatwierdź parę'):
     assert word in ui, word
 for word in ('CREATE TABLE bank_evidence_queue',
