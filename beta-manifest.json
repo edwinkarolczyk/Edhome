@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 259,
-  "versionName": "0.8.0.67",
-  "changelog": "EDHOME 0.8.0.67 — Beta. PayCheck / Budżet miesiąca, etap 6: Android ma zwarty bilans wpływów, wydatków, różnicy i kwoty do zapłaty. Potwierdzenia, zaległości i nadpłaty są widoczne od razu, a rozbudowane rozliczenie ma rozwijaną sekcję bez gubienia przewinięcia. Nie zmieniano księgi, danych finansowych, SQLite ani synchronizacji LAN. QR Beta / Stable pozostaje w Aktualizacjach. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.67/edhome-beta.apk",
-  "sha256": "cfca046ae86d810c94d9d7803b9129b65b37674a08d761c540cec45a491b6b4d"
+  "versionCode": 260,
+  "versionName": "0.8.0.68",
+  "changelog": "EDHOME 0.8.0.68 — Beta. P0 PayCheck: oczekujące przelewy można otworzyć także z Budżetu; kolejka z paginacją, jawne ręczne potwierdzenie, wybór konkretnego rachunku i przypisanie potwierdzonego przelewu bez ponownego księgowania. Informacja o niepowodzeniu przypisania bez ukrywania potwierdzenia. Wymaga testu fizycznego; main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.68/edhome-beta.apk",
+  "sha256": "ad0ce9d16b1818b6864e234626e4d93a492c2c3d52a171afcc402643b4efdfe9"
 }
