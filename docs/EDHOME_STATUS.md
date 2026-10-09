@@ -6,11 +6,11 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — uproszczenie Aktualizacji Android Beta i naprawa „Co nowego”; CI #2018 w toku po dostosowaniu testu; Budżet 5C i etap 6 nadal nieodebrane fizycznie |
+| Ostatnia aktualizacja | 2026-10-09 — ekran Aktualizacji: osobny kafelek QR Beta / Stable zachowany na życzenie; Android 0.8.0.66/258, CI po poprawce weryfikowane; Budżet 5C i etap 6 nadal nieodebrane fizycznie |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.65 / versionCode 257 — kandydat, CI [#2018](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880487760) w toku**. Ostatni potwierdzony podpisany APK: **0.8.0.64 / 256**, [CI #2010 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) |
+| Android Beta | **0.8.0.66 / versionCode 258 — kod na `beta`, CI i podpisana publikacja wymagają weryfikacji**. Wersja wcześniejszego kandydata 0.8.0.65/257: [#2018](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880487760); ostatni niezależnie potwierdzony APK: **0.8.0.64/256**, [#2010 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) |
 | Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37841803131 / #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) — **success**, commit `7fa54c6c23d0d1a3c774fa1d5525f680d84ce05e` |
@@ -28,6 +28,8 @@
 - **Dodatkowo:** poprawiono nieprawidłową informację „kontrola co 30 sekund” — rzeczywisty interwał automatycznej kontroli to około 15 min (30 s dotyczy taktu sprawdzania). Schemat SQLite i dane niezmienione. Numer kandydata `0.8.0.65 / 257`. Opis wydania w Android workflow odświeżony.
 - **Testy przeprowadzone:** przed commitem kontrola zakresu zmian i statycznych warunków (stary tekst usunięty, 4 działania, prawdziwy changelog, QR zachowany, numer kompilacji). **To nie zastępuje kompilacji ani odbioru na urządzeniu.** CI [#2017](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880359413) **FAIL** na starej asercji oczekującej kafelka QR w poprzednim miejscu; dopasowano regresję do nowego UX: [commit `f026fda`](https://github.com/edwinkarolczyk/Edhome/commit/f026fda16bd93b8d6838210a27ce5cbe7d3dddc5). Ponowny Android CI [#2018](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880487760) w toku; test instalatora i inne regresje PASS, pełna kompilacja i publikacja nadal w toku.
 - **Do zamknięcia:** (1) zielony build i opublikowany podpisany APK 0.8.0.65; (2) na telefonie sprawdzenie, czy są dokładnie 4 działania i nie ma starych kafli; (3) „Co nowego” z działającym internetem, przy braku internetu i przy nieaktualnej wersji telefonu; (4) QR w zaawansowanych, ręczna instalacja i odtwarzanie gotowego APK; (5) sprawdzić, że PayCheck, Projekty, Magazyn i LAN sync zachowały dane. **Stable `main` nietknięty.**
+
+**Korekta na wyraźne życzenie użytkownika (09.10):** osobny kafelek **QR Beta / Stable** zostaje też na głównym ekranie Aktualizacji (łącznie **5 działań**: Sprawdź, Instaluj APK, Co nowego, QR Beta / Stable, Opcje zaawansowane). Dodatkowo QR pozostaje w Opcjach zaawansowanych. Commit [`8999850`](https://github.com/edwinkarolczyk/Edhome/commit/899985019780e91c1ce80cc3b1157b68af8cb8a1) aktualizuje kod i test kontraktowy, podnosi wersję do **Android Beta 0.8.0.66/258** w celu uniknięcia konfliktu z ewentualną publikacją 0.8.0.65. Nie oznaczać jako gotowego przed CI i publikacją podpisanego APK; `main` bez zmian.
 
 ## Etap 6 — bieżąca seria prac (08.10.2026)
 
