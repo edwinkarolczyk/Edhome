@@ -14289,32 +14289,70 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    /**
+     * Weryfikacja dowodu bankowego z rzeczywistą kwotą, również różną od planu.
+     * Nie dobieramy operacji tylko po kwocie: każdą parę zatwierdza użytkownik.
+     */
     private void openBankEvidenceRow(BankEvidenceStore.Row row) {
-        java.util.List<String> ids=new java.util.ArrayList<>();
-        java.util.List<String> labels=new java.util.ArrayList<>();
-        try(Cursor c=db.getReadableDatabase().rawQuery(
-                "SELECT operation_id,note,created_at FROM paycheck_transactions "
-                +"WHERE scope='shared' AND status='pending' AND kind=? "
-                +"AND amount_grosz=? ORDER BY id DESC LIMIT 40",
-                new String[]{row.kind,Long.toString(row.amount)})) {
-            while(c.moveToNext()) {
-                ids.add(c.getString(0));
-                String note=c.getString(1);
-                labels.add((note.isEmpty()?"Bez opisu":note)
-                    +" • "+Instant.ofEpochMilli(c.getLong(2))
-                        .atZone(ZoneId.systemDefault()).toLocalDate());
-            }
+        final YearMonth month;
+        try {month=YearMonth.parse(row.date.substring(0,7));}
+        catch(Exception invalid) {
+            alert("Nieprawidłowy miesiąc wyciągu. Saldo bez zmian.");
+            return;
         }
-        if(ids.isEmpty()) {
+        ensureBudgetPaycheckPending(month);
+        java.util.List<PaycheckMonthlyBudget.Item> candidates=
+            new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try {
+            java.util.List<PaycheckRecipientStore.Recipient> recipients=
+                PaycheckRecipientStore.load(prefs);
+            java.util.List<PaycheckMonthlyBudget.Item> planned=
+                PaycheckMonthlyBudget.activeFor(
+                    PaycheckMonthlyBudget.load(prefs),month);
+            for(PaycheckMonthlyBudget.Item item:planned) {
+                if(!row.kind.equals(item.kind))continue;
+                String operationId=budgetPaycheckOperationId(item,month);
+                if(item.matchedOperationIds.contains(operationId))continue;
+                long remaining=PaycheckMonthlyBudget.remainingDue(
+                    db.getReadableDatabase(),item,month);
+                if(remaining<=0)continue;
+                try(Cursor tx=db.getReadableDatabase().rawQuery(
+                        "SELECT 1 FROM paycheck_transactions WHERE "
+                        +"scope='shared' AND status='pending' AND kind=? "
+                        +"AND operation_id=? AND statement_key IS NULL",
+                        new String[]{row.kind,operationId})) {
+                    if(!tx.moveToFirst())continue;
+                }
+                boolean nameMatch=BankBudgetMatchRules.descriptionIdentifies(
+                    row.description,item.name,
+                    PaycheckRecipientStore.name(recipients,item.recipientId));
+                candidates.add(item);
+                long difference=row.amount-remaining;
+                labels.add((nameMatch?"✓ Nazwa pasuje • ":"Sprawdź odbiorcę • ")
+                    +item.name+"\nPlan pozostały: "
+                    +MoneyRules.format(remaining)+" • bank: "
+                    +MoneyRules.format(row.amount)
+                    +(difference==0?" • zgodne"
+                        :" • różnica: "+(difference>0?"+":"−")
+                            +MoneyRules.format(Math.abs(difference))));
+            }
+        }catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BANK_BUDGET_CANDIDATES",error);
+            alert("Nie można sprawdzić pozycji Budżetu. Saldo bez zmian.");
+            return;
+        }
+        if(candidates.isEmpty()) {
             new AlertDialog.Builder(this)
                 .setTitle(row.sourceLabel+" • "
                     +("income".equals(row.kind)?"+ ":"− ")
                     +MoneyRules.format(row.amount))
                 .setMessage(row.date+"\n"+row.description
-                    +"\n\nBrak oczekującego wpisu PayCheck. "
-                    +"Import nie tworzy automatycznie płatności.")
+                    +"\n\nNie znaleziono oczekującej pozycji w Budżecie "
+                    +"tego miesiąca. Niczego nie zaksięgowano. "
+                    +"Sprawdź miesiąc, pozycje Budżetu i bank.")
                 .setNegativeButton("Powrót",null)
-                .setPositiveButton("Odrzuć z kolejki",(d,w)->{
+                .setPositiveButton("Odrzuć dowód",(d,w)->{
                     if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
                             row.evidenceKey))
                         alert("Nie odrzucono wpisu.");
@@ -14322,17 +14360,14 @@ public final class MainActivity extends Activity {
                 }).show();
             return;
         }
-        if(ids.size()==1) {
-            confirmBankEvidenceMatch(row,ids.get(0),labels.get(0));
-            return;
-        }
         new AlertDialog.Builder(this)
-            .setTitle(row.sourceLabel+" • "
+            .setTitle("Dopasuj przelew • "+row.date+" • "
                 +("income".equals(row.kind)?"+ ":"− ")
-                +MoneyRules.format(row.amount)
-                +" • wybierz właściwy wpis")
-            .setItems(labels.toArray(new String[0]),(d,index)->
-                confirmBankEvidenceMatch(row,ids.get(index),labels.get(index)))
+                +MoneyRules.format(row.amount))
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                PaycheckMonthlyBudget.Item item=candidates.get(index);
+                confirmBankEvidenceMatch(row,item,month);
+            })
             .setNeutralButton("Odrzuć dowód",(d,w)->{
                 if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
                         row.evidenceKey))
@@ -14343,30 +14378,77 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmBankEvidenceMatch(BankEvidenceStore.Row row,
-            String operationId,String candidateLabel) {
+            PaycheckMonthlyBudget.Item item,YearMonth month) {
+        String operationId=budgetPaycheckOperationId(item,month);
+        long planned=PaycheckMonthlyBudget.plannedAmount(item,month);
+        long remaining=PaycheckMonthlyBudget.remainingDue(
+            db.getReadableDatabase(),item,month);
+        long difference=row.amount-remaining;
+        String sign="income".equals(row.kind)?"+ ":"− ";
+        String differenceLabel=difference==0?"Zgodnie z planem":
+            difference>0?"Więcej niż pozostało: +"+MoneyRules.format(difference)
+                :"Mniej niż pozostało: −"+MoneyRules.format(-difference);
         new AlertDialog.Builder(this)
-            .setTitle("Potwierdź parę")
-            .setMessage(row.sourceLabel+" • "+row.date+" • "
-                +("income".equals(row.kind)?"+ ":"− ")
-                +MoneyRules.format(row.amount)+"\n"
-                +row.description+"\n\nWpis PayCheck: "+candidateLabel
-                +"\n\nPlik nie jest uwierzytelnionym połączeniem z bankiem. "
-                +"Saldo zmieni się tylko raz po zatwierdzeniu.")
+            .setTitle("Potwierdź parę • kwota z banku")
+            .setMessage("Pozycja: "+item.name
+                +"\nPlan miesiąca: "+sign+MoneyRules.format(planned)
+                +"\nPozostało według planu: "+MoneyRules.format(remaining)
+                +"\nFaktycznie w banku: "+sign+MoneyRules.format(row.amount)
+                +"\n"+differenceLabel
+                +"\n\nOpis banku: "+row.description
+                +"\nData banku: "+row.date
+                +"\n\nSaldo PayCheck zostanie zmienione WYŁĄCZNIE "
+                +"o rzeczywistą kwotę z wyciągu. Różnica pozostanie "
+                +"w Budżecie i historii. W razie wątpliwości anuluj.")
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Zatwierdź parę",(d,w)->{
                 try {
-                    String result=BankEvidenceStore.match(
+                    PaycheckMonthlyBudget.Item fresh=null;
+                    for(PaycheckMonthlyBudget.Item current:
+                            PaycheckMonthlyBudget.load(prefs))
+                        if(current.id.equals(item.id)){fresh=current;break;}
+                    if(fresh==null||!row.kind.equals(fresh.kind)
+                            ||!PaycheckMonthlyBudget.activeFor(
+                                java.util.Collections.singletonList(fresh),
+                                month).contains(fresh)
+                            ||fresh.matchedOperationIds.contains(operationId))
+                        throw new IllegalStateException(
+                            "Pozycja Budżetu zmieniła się. Otwórz parowanie ponownie.");
+                    String result=BankEvidenceStore.matchBudgetActual(
                         db.getWritableDatabase(),row.evidenceKey,operationId);
-                    if("MATCHED".equals(result)
-                            ||"ALREADY_MATCHED".equals(result)) {
-                        DiagnosticLog.event("PAYCHECK_BANK_QUEUE_MATCHED");
+                    if("MATCHED".equals(result)) {
+                        try {
+                            PaycheckMonthlyBudget.match(
+                                prefs,db.getReadableDatabase(),
+                                fresh.id,operationId);
+                        }catch(Exception assignmentError) {
+                            DiagnosticLog.error(
+                                "PAYCHECK_BANK_ACTUAL_ASSIGNMENT_FAILED",
+                                assignmentError);
+                            render();
+                            alert("Kwotę bankową potwierdzono w PayCheck, "
+                                +"ale przypisanie do Budżetu się nie udało. "
+                                +"Zobacz diagnostykę i przypisz potwierdzony "
+                                +"przelew ręcznie. Nie importuj go drugi raz.");
+                            return;
+                        }
+                        DiagnosticLog.event("PAYCHECK_BANK_ACTUAL_MATCHED");
+                        PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                         render();
-                        showBankEvidenceQueue(0);
-                    } else alert("Nie uzgodniono: wpis nie jest już oczekujący "
-                        +"albo dowód został wykorzystany.");
+                        alert("Potwierdzono kwotę z banku: "+sign
+                            +MoneyRules.format(row.amount)
+                            +". Różnica względem planu: "
+                            +(difference>0?"+":"")+
+                                MoneyRules.format(difference)
+                            +". Bez ponownego księgowania.");
+                    }else if("ALREADY_MATCHED".equals(result)) {
+                        alert("Ta operacja była już rozliczona. Saldo bez zmian.");
+                    }else alert("Nie uzgodniono: wpis nie jest już oczekujący "
+                        +"lub dowód został wykorzystany. Saldo bez zmian.");
                 }catch(Exception error) {
-                    DiagnosticLog.event("PAYCHECK_BANK_QUEUE_MATCH_FAILED");
-                    alert("Nie zapisano uzgodnienia. Saldo bez zmian.");
+                    DiagnosticLog.error("PAYCHECK_BANK_ACTUAL_MATCH_FAILED",error);
+                    alert("Nie zapisano uzgodnienia. Saldo bez zmian. "
+                        +"Sprawdź diagnostykę.");
                 }
             }).show();
     }
