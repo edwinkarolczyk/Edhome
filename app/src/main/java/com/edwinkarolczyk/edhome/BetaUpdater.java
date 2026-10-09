@@ -135,6 +135,88 @@ public final class BetaUpdater {
         return prefs.getString("updates_channel_status", "unchecked");
     }
 
+    /** Pobranie i ręczna instalacja używają jednego kafelka. */
+    public boolean hasReadyApk() {
+        return targetFile != null && targetFile.isFile();
+    }
+
+    /** Ostatnia zweryfikowana nazwa wydania, nigdy ręcznie wpisana wersja. */
+    public String latestVersionName() {
+        int code = prefs.getInt("updates_latest_code", 0);
+        return code >= BuildConfig.VERSION_CODE
+            ? prefs.getString("updates_latest_name", "") : "";
+    }
+
+    private static boolean validReleaseManifest(JSONObject json) {
+        if (json == null) return false;
+        String hash = json.optString("sha256", "").toLowerCase(java.util.Locale.ROOT);
+        return "beta".equals(json.optString("channel", ""))
+            && json.optInt("versionCode", 0) > 0
+            && isSecureUrl(json.optString("apkUrl", ""))
+            && hash.matches("[0-9a-f]{64}");
+    }
+
+    /** Nie nadpisuj nowszego opisu starszym wynikiem sieciowym. */
+    private void cacheLatestRelease(JSONObject manifest) {
+        if (!validReleaseManifest(manifest)) return;
+        int code = manifest.optInt("versionCode", 0);
+        if (code < prefs.getInt("updates_latest_code", 0)) return;
+        prefs.edit()
+            .putInt("updates_latest_code", code)
+            .putString("updates_latest_name", manifest.optString("versionName", "").trim())
+            .putString("updates_latest_notes", manifest.optString("changelog", "").trim())
+            .apply();
+    }
+
+    /** Opis aktualnego wydania odczytany z HTTPS, bez inicjowania pobierania APK. */
+    public void showLatestChanges() {
+        if (!isBeta()) { openPlay(); return; }
+        String endpoint = configuredFeed();
+        if (endpoint.isEmpty()) {
+            showCachedChanges(true);
+            return;
+        }
+        background.execute(() -> {
+            JSONObject manifest = null;
+            try {
+                JSONObject read = readManifest(endpoint);
+                if (validReleaseManifest(read)) manifest = read;
+            } catch (Exception failure) {
+                DiagnosticLog.error("UPDATE_CHANGELOG_FETCH", failure);
+            }
+            JSONObject found = manifest;
+            postUi(() -> {
+                if (found != null) cacheLatestRelease(found);
+                showCachedChanges(found == null);
+            });
+        });
+    }
+
+    private void showCachedChanges(boolean outdated) {
+        int code = prefs.getInt("updates_latest_code", 0);
+        String notes = prefs.getString("updates_latest_notes", "").trim();
+        if (code <= 0 || notes.isEmpty()) {
+            inform(outdated
+                ? "Nie udało się pobrać opisu najnowszych zmian. Sprawdź internet "
+                    + "lub kanał Beta i spróbuj ponownie."
+                : "To wydanie nie ma jeszcze opublikowanego opisu zmian.");
+            return;
+        }
+        String name = prefs.getString("updates_latest_name", "");
+        String title = "Co nowego • EDHOME " + (name.isEmpty()
+            ? Integer.toString(code) : name);
+        String disclaimer = outdated
+            ? "Ostatnio zapisany opis (bez potwierdzenia aktualności):\n\n"
+            : code > BuildConfig.VERSION_CODE
+                ? "Nowsze wydanie jest dostępne:\n\n"
+                : "Zmiany w aktualnym wydaniu:\n\n";
+        new AlertDialog.Builder(activity)
+            .setTitle(title)
+            .setMessage(disclaimer + notes)
+            .setPositiveButton("Zamknij", null)
+            .show();
+    }
+
     public boolean feedFromBuild() {
         return !BuildConfig.EDHOME_BETA_FEED_URL.isEmpty();
     }
@@ -297,6 +379,7 @@ public final class BetaUpdater {
         }
         prefs.edit().putBoolean("updates_channel_verified", true)
             .putString("updates_channel_status", "online").apply();
+        cacheLatestRelease(json);
         if (code <= BuildConfig.VERSION_CODE) {
             DiagnosticLog.event("UPDATE_UP_TO_DATE");
             if (manual) inform("Masz aktualną wersję: " + BuildConfig.VERSION_NAME);

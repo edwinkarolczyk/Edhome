@@ -20374,56 +20374,35 @@ public final class MainActivity extends Activity {
         note("Przywrócenie zastępuje wspólne dane EDHOME. Przed importem wykonaj świeżą kopię obecnego stanu.");
     }
 
-    /** Update dashboard: no feed URL, SHA, manifest or developer text in primary UI. */
+    /** Prosty ekran aktualizacji; opis zmian pochodzi z aktualnego manifestu Beta. */
     private void updates() {
         title("EDHOME  •  " + (BetaUpdater.isBeta() ? "BETA" : "STABLE"));
         note("Aktualizacje aplikacji");
         button("⌂ Panel główny", this::goHome);
+
         LinearLayout version = card();
         version.addView(text("Zainstalowana wersja", 15, false));
-        version.addView(text(BuildConfig.VERSION_NAME, 29, true));
-        version.addView(text("Wersja instalacyjna: " + BuildConfig.VERSION_CODE, 13, false));
-        TextView installed = text("✓  Gotowa do użycia", 15, true);
-        installed.setTextColor(accent);
-        version.addView(installed);
+        version.addView(text(BuildConfig.VERSION_NAME
+            + "  •  kompilacja " + BuildConfig.VERSION_CODE, 22, true));
+        String channelText = !BetaUpdater.isBeta() ? "Stable • Google Play"
+            : updater.configuredFeed().isEmpty() ? "Beta • brak źródła aktualizacji"
+            : updater.channelVerified() ? "Beta • ostatnie sprawdzenie kanału: OK"
+            : "Beta • kanał nie został jeszcze potwierdzony";
+        version.addView(text(channelText, 13, false));
 
-        LinearLayout status = card();
-        status.addView(text("Aktualizacje automatyczne", 19, true));
-        if (!BetaUpdater.isBeta()) {
-            status.addView(text("Google Play • aktualizacja lub Później", 15, false));
-        } else if (updater.configuredFeed().isEmpty()) {
-            TextView line = text("○  Kanał pobierania nie jest podłączony", 16, true);
-            line.setTextColor(subdued);
-            status.addView(line);
-            status.addView(text("Na razie wybierasz APK z telefonu. "
-                + "Sam podpis aplikacji nie uruchamia automatycznych pobrań.", 14, false));
-        } else if (updater.channelVerified()) {
-            TextView line = text("✓  Kanał aktualizacji dostępny", 16, true);
-            line.setTextColor(accent);
-            status.addView(line);
-            status.addView(text("Nowe wydania będą pobierane z oficjalnego kanału EDHOME. "
-                + "Instalację potwierdzasz w Androidzie.", 14, false));
-        } else {
-            TextView line = text("!  Kanał aktualizacji jeszcze niedostępny", 16, true);
-            line.setTextColor(ink);
-            status.addView(line);
-            status.addView(text("Adres jest już wpisany w aplikację — niczego nie musisz "
-                + "konfigurować ani szukać w internecie. Gdy plik aktualizacji "
-                + "zostanie opublikowany, aplikacja wykryje go sama. "
-                + "Na razie wybierz podpisany APK przyciskiem Instaluj APK.", 14, false));
-        }
-
-        note("Menu • 3 × 3, przewijaj ekran góra–dół ↓");
+        note("Aktualizacje • wybierz działanie");
         LinearLayout tiles = tileGrid();
         updateTile(tiles, "↻", "Sprawdź\naktualizację", true, () -> {
             if (!BetaUpdater.isBeta()) updater.openPlay();
-            else if (updater.configuredFeed().isEmpty())
-                alert("Automatyczny kanał nie jest jeszcze podłączony. "
-                    + "Możesz zainstalować nowy APK z telefonu.");
             else updater.check(true);
         });
         if (BetaUpdater.isBeta()) {
             updateTile(tiles, "↓", "Instaluj\nAPK", false, () -> {
+                // Jeden kafelek obsługuje gotowe pobranie i ręczny wybór pliku.
+                if (updater.hasReadyApk()) {
+                    updater.installReady();
+                    return;
+                }
                 Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 picker.addCategory(Intent.CATEGORY_OPENABLE);
                 picker.setType("application/vnd.android.package-archive");
@@ -20433,38 +20412,17 @@ public final class MainActivity extends Activity {
                     alert("Nie można wybrać APK.");
                 }
             });
-            updateTile(tiles, "✓", "Pobrany\nAPK", false, () -> updater.installReady());
+            updateTile(tiles, "◷", "Co\nnowego", false,
+                () -> updater.showLatestChanges());
         } else {
-            updateTile(tiles, "▶", "Otwórz\nGoogle Play", false, () -> updater.openPlay());
-            updateTile(tiles, "i", "Kanał\nStable", false, () ->
-                alert("Stable pobiera aktualizacje z Google Play. Dostępny jest przycisk Później."));
+            updateTile(tiles, "◷", "Co\nnowego", false,
+                () -> updater.openPlay());
         }
-        updateTile(tiles, "▦", "QR Beta /\nStable", false,
-            this::showUpdateDownloadQrCodes);
-        updateTile(tiles, "▣", "Kopia\ndanych", false, () -> go("backup"));
-        updateTile(tiles, "⚙", "Opcje\nzaawansowane", false, () -> go("updates_advanced"));
-        updateTile(tiles, "◉", "Status\nkanału", false, () ->
-            alert(!BetaUpdater.isBeta() ? "Kanał Stable: Google Play."
-                : updater.configuredFeed().isEmpty()
-                    ? "Brak źródła HTTPS. Możesz instalować APK ręcznie."
-                    : updater.channelVerified()
-                        ? "Kanał EDHOME został odczytany. Aktualizacje są dostępne."
-                        : "Kanał EDHOME nie został jeszcze potwierdzony. "
-                            + "Adres jest zapisany automatycznie. "
-                            + "Nie musisz wpisywać żadnego HTTPS; na razie "
-                            + "wybierz podpisany APK z GitHub Actions."));
-        updateTile(tiles, "i", "Wersja\naplikacji", false, () ->
-            alert("EDHOME " + BuildConfig.VERSION_NAME
-                + "\nversionCode: " + BuildConfig.VERSION_CODE));
-        updateTile(tiles, "◷", "Co\nnowego", false, () ->
-            alert("EDHOME " + BuildConfig.VERSION_NAME
-                + "\nUkład Start 3 × 3. Gdy jest więcej niż 9 kafelków, "
-                + "przesuwaj strony palcem w lewo lub prawo. "
-                + "Aktywna strona jest zaznaczona kropką."));
-        updateTile(tiles, "⌂", "Panel\ngłówny", false, this::goHome);
+        updateTile(tiles, "⚙", "Opcje\nzaawansowane", false,
+            () -> go("updates_advanced"));
         note(BetaUpdater.isBeta()
-            ? "Beta: nowa, zweryfikowana wersja ma pierwszeństwo. Instalację potwierdzasz w Androidzie."
-            : "Stable: możesz wybrać Aktualizuj lub Później.");
+            ? "Opis zmian pobierany z kanału Beta. Instalację APK zatwierdzasz w Androidzie."
+            : "Stable: szczegóły wydania i aktualizacje znajdziesz w Google Play.");
     }
 
     private Bitmap updateDownloadQrBitmap(String value, int size)
@@ -20482,7 +20440,8 @@ public final class MainActivity extends Activity {
     }
 
     private void showUpdateDownloadQrCodes() {
-        String betaVersion=BuildConfig.VERSION_NAME
+        String betaVersion=updater.latestVersionName();
+        if (betaVersion.isEmpty()) betaVersion=BuildConfig.VERSION_NAME
             .replace("-prototype","");
         String betaUrl="https://github.com/edwinkarolczyk/Edhome/"
             +"releases/download/beta-v"+betaVersion+"/edhome-beta.apk";
@@ -20763,12 +20722,13 @@ public final class MainActivity extends Activity {
         title("Aktualizacje • opcje zaawansowane");
         button("← Cofnij", this::goBack);
         note("Zainstalowany versionCode: " + BuildConfig.VERSION_CODE);
+        button("QR do pobrania Beta / Stable", this::showUpdateDownloadQrCodes);
         if (!BetaUpdater.isBeta()) {
             note("Stable używa wyłącznie Google Play.");
             button("Sprawdź w Google Play", () -> updater.openPlay());
             return;
         }
-        note("Kanał Beta sprawdza manifest co 30 sekund, kiedy aplikacja jest aktywna.");
+        note("Kanał Beta sprawdza manifest co około 15 minut podczas używania aplikacji.");
         if (updater.feedFromBuild()) {
             note("Adres zatwierdzonego kanału Beta jest zapisany w aplikacji. "
                 + "Poprzednie lokalne wyłączenie aktualizacji nie blokuje go.");
