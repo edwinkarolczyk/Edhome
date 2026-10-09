@@ -211,6 +211,33 @@ final class BankEvidenceStore {
         return result;
     }
 
+    /** Pełna historia dowodów: otwarte, uzgodnione i odrzucone, bez zmiany salda. */
+    static long countAll(SQLiteDatabase db) {
+        try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM bank_evidence_queue",null)) {
+            return c.moveToFirst()?c.getLong(0):0;
+        }
+    }
+
+    static List<Row> listPageAll(SQLiteDatabase db,int limit,int offset) {
+        if(limit<1||limit>100||offset<0)
+            throw new IllegalArgumentException("Nieprawidłowa strona historii bankowej.");
+        List<Row> result=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT id,evidence_key,source_kind,source_label,kind,amount_grosz,"
+                +"booking_date,description,imported_at,state,matched_operation_id,matched_at "
+                +"FROM bank_evidence_queue "
+                +"ORDER BY booking_date DESC,id DESC LIMIT ? OFFSET ?",
+                new String[]{Integer.toString(limit),Integer.toString(offset)})) {
+            while(c.moveToNext())
+                result.add(new Row(c.getLong(0),c.getString(1),c.getString(2),
+                    c.getString(3),c.getString(4),c.getLong(5),c.getString(6),
+                    c.getString(7),c.getLong(8),c.getString(9),
+                    c.isNull(10)?null:c.getString(10),
+                    c.isNull(11)?null:c.getLong(11)));
+        }
+        return result;
+    }
+
     private static void validateState(String state) {
         if(!("open".equals(state)||"matched".equals(state)
                 ||"dismissed".equals(state)))
