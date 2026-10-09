@@ -211,7 +211,7 @@ final class DesktopBankImporter {
                 throw new IllegalArgumentException("Błędna liczba kolumn CSV, wiersz " + (i+1));
             String booked = normalizeDate(row.get(date));
             String raw = row.get(amount).trim();
-            boolean expense = raw.replace(" ","").startsWith("-");
+            boolean expense = raw.replace(" ","").replace("\u00a0","").replace('−','-').startsWith("-");
             long grosz = parseMoneyAbsolute(raw);
             String reference = row.get(ref).trim();
             if (reference.length() < 4 || reference.length() > 160)
@@ -290,7 +290,7 @@ final class DesktopBankImporter {
             String bookedOn = normalizeMbankDate(cells.get(booked));
             String operatedOn = normalizeMbankDate(cells.get(operated));
             String rawAmount = cells.get(amount).trim();
-            boolean expense = rawAmount.replace(" ","").startsWith("-");
+            boolean expense = rawAmount.replace(" ","").replace("\u00a0","").replace('−','-').startsWith("-");
             long grosz = parseMoneyAbsolute(rawAmount);
             if (grosz == 0)
                 throw new IllegalArgumentException("mBank: zerowa kwota w wierszu " + (i+1));
