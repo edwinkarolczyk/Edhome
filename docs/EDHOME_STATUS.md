@@ -6,7 +6,7 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android 0.8.0.75/267 automatyczny Budżet→PayCheck i uzgadnianie banków: CI #2052 PASS, APK opublikowany, testy na telefonie nadal otwarte |
+| Ostatnia aktualizacja | 2026-10-09 — Android: lista banków mBank / VeloBank / Inny w imporcie PayCheck; commit `75e360b3` na `beta`, CI #2053 uruchomiony, wynik i nowy APK jeszcze niepotwierdzone. Ostatni potwierdzony APK: 0.8.0.75/267, CI #2052 PASS |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
@@ -19,6 +19,16 @@
 | Następny krok | Przeprowadzić na Androidzie Beta 0.8.0.75: utworzyć testową pozycję Budżetu → sprawdzić automatyczny pending w PayCheck, bez zmiany salda → zaimportować testowy wyciąg z jednoznaczną nazwą odbiorcy i kwotą → potwierdzić auto match/saldo 1×/rozliczenie pozycji → ponownie wczytać ten sam plik (0 nowych, 0 ponownych księgowań) → konflikt dwóch podobnych operacji powinien zostać ręczny. Następnie sprawdzić prawdziwe formaty banku, częściowe kwoty, backup/restore oraz LAN Android↔Desktop. Stable main bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P1 — wybór banku z listy w imporcie PayCheck (09.10.2026)
+
+**Zgłoszenie:** użytkownik nie chce ręcznie wpisywać nazwy banku przy każdym imporcie; dotychczasowe formaty bankowe to mBank i VeloBank.
+
+**Zmiana tylko Android `beta`, commit `75e360b3b2fe793338cde514b2ded23228c4da35`:**
+- `MainActivity.selectStatementCsv()`: zamiast pola tekstowego pokazuje listę `mBank`, `VeloBank`, `Inny bank (CSV / XLSX)`. Dwa pierwsze wybory bez wpisywania nazwy; następnie systemowy wybór pliku/plików. „Inny bank” zachowuje ręczne pole do pierwszego wpisania nazwy i zapamiętuje ostatnią nazwę niestandardową.
+- Dotychczasowa automatyczna identyfikacja natywnych formatów mBank i tekstowych PDF VeloBanku pozostaje bez zmian; wybór nazwy w interfejsie jest istotny zwłaszcza dla zwykłego CSV, bo wpływa na `evidence_key` i deduplikację.
+- **Uwaga migracyjna:** jeśli w starszej wersji użytkownik wpisywał inną nazwę tego samego banku (np. `Velo` zamiast `VeloBank`) dla zwykłego CSV, przejście na nowy kanoniczny wybór może wygenerować inny klucz operacji. Przed uznaniem deduplikacji za zamkniętą potrzebny test takich aliasów lub bezpieczna migracja, bez samoczynnego zaksięgowania operacji.
+- **Stan weryfikacji:** kod zapisany w repo `beta`; Android CI #2053 był uruchomiony w chwili aktualizacji, nie stwierdzono jeszcze PASS, wydania APK ani testu na telefonie. Ostatni wcześniej potwierdzony APK pozostaje 0.8.0.75/267 (CI #2052).
 
 ## P0 — automatyczny Budżet → PayCheck → wyciąg (09.10.2026)
 
