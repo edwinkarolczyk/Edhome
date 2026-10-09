@@ -6,16 +6,16 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — zgłoszenie historii PayCheck i znaków kwot; Desktop Beta 0.7.0.115 (kod na beta, CI niepotwierdzone), Android historia nadal do naprawy |
+| Ostatnia aktualizacja | 2026-10-09 — Android P0: pełna historia PayCheck z filtrami i paginacją + znaki kwot i parsery wyciągów; kandydat 0.8.0.72/264, oczekuje na Android CI |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.71 / versionCode 263 — kandydat P0 w CI #2037**; poprzednia **0.8.0.70 / 262 CI #2032 PASS**, ale nie obejmuje jeszcze pozostałych ośmiu list. Według użytkownika na urządzeniu 0.8.0.68/260; test fizyczny potwierdzania nadal otwarty. |
+| Android Beta | **0.8.0.72 / versionCode 264 — kandydat historii P0, build i podpisany APK jeszcze do potwierdzenia**; poprzednia 0.8.0.71/263 [CI #2037](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571) PASS, podpisany APK w artefaktach; odbiór fizyczny nadal otwarty. |
 | Desktop Beta | **0.7.0.115 — zmiany zapisane na beta, CI i publikacja do potwierdzenia**; poprzednia **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | [run #37884360118 / #2023](https://github.com/edwinkarolczyk/Edhome/actions/runs/37884360118) — **success** dla poprzedniej wersji 0.8.0.68/260; nowa 0.8.0.69 oczekuje na osobny CI |
+| Ostatni zweryfikowany CI Android | **0.8.0.71/263 CI #2037 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571); 0.8.0.72/264 wymaga niezależnego zielonego CI i podpisanego APK |
 | Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
-| Bieżący etap | **P0 PayCheck/Budżet: nie działają potwierdzenia przelewów według zgłoszenia użytkownika; brak fizycznego odbioru.** Etapy 5C i 6 nieodebrane. |
+| Bieżący etap | **P0 Android: niepełna historia wpływów/wydatków i znaki — kod naprawczy przygotowany, fizyczny odbiór oczekuje.** Potwierdzanie przelewów także nieodebrane, 5C i 6 otwarte. |
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
@@ -37,6 +37,18 @@
 - Kandydat Desktop Beta **0.7.0.115**, wersja spójna w klasie, Gradle i Desktop workflow; ostatni commit wydaniowy `cc56a74b`. **CI nie zostało jeszcze zweryfikowane, nie ogłaszać gotowego instalatora.**
 
 **OTWARTE / nie uznawać za naprawione:** (1) Android — pełna historia bez limitu 40, stronicowanie i jawny podział wpływy/wydatki ze znakami we wszystkich listach oraz szczegółach; (2) stwierdzić, czy brakujące stare wpływy faktycznie istnieją w bazie/snapshot po LAN oraz porównać sumy i ilości po każdej stronie, bez przepisywania starych danych; (3) rozróżnić błędy widoczności od błędów importu/synchronizacji i przeprowadzić test na rzeczywistym telefonie; (4) zweryfikować Desktop CI 0.7.0.115 i testy jednostkowe. **Nie ruszać `main` i nie usuwać historii.**
+
+### Android — korekta historii PayCheck i znaków (+ / −), kandydat 0.8.0.72 / 264
+
+**Odczyt rzeczywistego kodu:** mimo ograniczeń zwykłego `fetch_file` pełny `MainActivity.java` pozyskano przez GitHub `fetch_blob`, SHA poprzedni `fdbdc5d3`. Zidentyfikowano w kodzie `paycheck()` zapytanie `ORDER BY id DESC LIMIT 40`, w `showBudgetItemHistory()` obcięcie do `Math.min(events.size(),100)`. Dane historyczne nie były usuwane przez te zapytania, jedynie niewyświetlane. **Nie wiadomo jeszcze, czy brakujące wpływy użytkownika są już w lokalnej bazie — to wymaga porównania z bankiem / PC i kopią.**
+
+**Wdrożenie kandydujące na gałęzi `beta`:**
+- Android PayCheck ma jawny przycisk **„Pełna historia • wpływy + / wydatki −”**, widoczny obok podglądu 40 najnowszych operacji; ten sam dostęp jest z Budżetu miesiąca. Filtry: wszystkie / tylko wpływy / tylko wydatki; pobieranie ze wszystkich `paycheck_transactions` `scope='shared'` bez filtra na `status`, stronicowanie SQLite po **60** z „Następne” / „Poprzednie”, licznik wszystkich operacji oraz wpływów i wydatków. Historia nie jest sztucznie skracana na 40 ani 100; wybór pozycji otwiera datę, kierunek, kategorię, kwotę, notatkę, status, z możliwością świadomego potwierdzenia pending.
+- Historia pojedynczej pozycji Budżetu wykorzystuje istniejące `PaycheckBudgetHistoryStore.loadAll` (archiwum SQLite + cache), ale prezentuje wszystkie zdarzenia w stronach po 60 zamiast tylko pierwszych 100.
+- Znaki **+ dla wpływów, − dla wydatków** w nagłówku planu, podsumowaniu potwierdzonych/oczekujących, pozycjach Budżetu, ręcznym wyborze płatności i listach historii. Nie zmieniano `amount_grosz`, obliczania salda ani księgi.
+- `BankStatementCsv.java` oraz `BankStatementMbank.java` normalizują minus Unicode `−` i twarde spacje przed rozpoznaniem kierunku; dotyczy przyszłych importów, nie przepisuje wcześniej zatwierdzonych danych.
+- Nowy test `tests/check_paycheck_history_all_android.py`: filtr, paginacja, znaki i symulacja SQLite ponad 180 operacji. Uruchamiany na Android CI razem z wykonywalnym Java `tests/task_rules/BankStatementSignsSmoke.java`, który parsuje prawdziwe przykłady CSV/mBank `+`, `-`, `−`.
+- **Wydanie Android Beta 0.8.0.72/264 nie jest jeszcze odebrane.** Potwierdzić CI, podpisanie oraz na realnym telefonie: stare wpływy, obie strony paginacji, wszystkie/filtry, historia jednej pozycji ponad 100 zdarzeń, znak w każdej wyświetlanej kwocie, poprawny bilans oraz LAN Android↔PC bez duplikatów. Nie używać prawdziwych danych do testowych operacji finansowych.
 
 ## Aktualizacje Android Beta — porządki na ekranie (09.10.2026)
 

@@ -13117,7 +13117,9 @@ public final class MainActivity extends Activity {
                     + MoneyRules.format(pending.getLong(1))
                     + " (łączna wartość, przychody i wydatki osobno w historii)");
         }
-        title("Historia PayCheck");
+        title("Ostatnie 40 wpisów • podgląd PayCheck");
+        button("Pełna historia • wpływy + / wydatki −",
+            this::showSharedPaycheckHistory);
         int count=0;
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source,statement_key "
@@ -13153,6 +13155,136 @@ public final class MainActivity extends Activity {
         }
         if(count==0)note("Brak transakcji.");
         sharedPaycheckGoals();
+    }
+
+
+    /** Pełna historia księgi na Androidzie: filtr bez utraty wcześniejszych wpływów. */
+    private void showSharedPaycheckHistory() {
+        new AlertDialog.Builder(this)
+            .setTitle("Historia PayCheck • wybierz rodzaj")
+            .setItems(new String[]{
+                "Wszystkie operacje (+ i −)",
+                "Tylko wpływy (+)",
+                "Tylko wydatki (−)"
+            },(dialog,which)->showSharedPaycheckHistoryPage(
+                which==1?"income":which==2?"expense":null,0))
+            .setNegativeButton("Zamknij",null)
+            .show();
+    }
+
+    /** Odczyt z całej lokalnej księgi, bez sztywnego limitu 40/100 wpisów. */
+    private void showSharedPaycheckHistoryPage(String kind,int offset) {
+        final int pageSize=60;
+        if(kind!=null && !"income".equals(kind) && !"expense".equals(kind))
+            throw new IllegalArgumentException("Nieznany filtr historii.");
+        int all=0,incomes=0,expenses=0;
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try {
+            try(Cursor totals=db.getReadableDatabase().rawQuery(
+                    "SELECT COUNT(*),"
+                    +"COALESCE(SUM(CASE WHEN kind='income' THEN 1 ELSE 0 END),0),"
+                    +"COALESCE(SUM(CASE WHEN kind='expense' THEN 1 ELSE 0 END),0) "
+                    +"FROM paycheck_transactions WHERE scope='shared'",null)) {
+                if(totals.moveToFirst()) {
+                    all=totals.getInt(0);
+                    incomes=totals.getInt(1);
+                    expenses=totals.getInt(2);
+                }
+            }
+            String where="WHERE scope='shared'"
+                +(kind==null?"":" AND kind=?");
+            String[] args=kind==null
+                ?new String[]{Integer.toString(pageSize+1),Integer.toString(offset)}
+                :new String[]{kind,Integer.toString(pageSize+1),
+                    Integer.toString(offset)};
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT operation_id,kind,category,amount_grosz,note,"
+                    +"created_at,statement_date,status "
+                    +"FROM paycheck_transactions "+where
+                    +" ORDER BY id DESC LIMIT ? OFFSET ?",args)) {
+                while(c.moveToNext()) {
+                    ids.add(c.getString(0));
+                    String date=c.isNull(6)||c.getString(6).isBlank()
+                        ?Instant.ofEpochMilli(c.getLong(5))
+                            .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                        :c.getString(6);
+                    String note=c.getString(4);
+                    labels.add(date+" • "
+                        +("income".equals(c.getString(1))?"+ ":"− ")
+                        +MoneyRules.format(c.getLong(3))+" • "
+                        +MoneyRules.categoryLabel(c.getString(2))
+                        +(note==null||note.isBlank()?"":" • "+note)
+                        +("pending".equals(c.getString(7))
+                            ?" • DO POTWIERDZENIA":""));
+                }
+            }
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_HISTORY_ALL",error);
+            alert("Nie udało się odczytać pełnej historii PayCheck.");
+            return;
+        }
+        if(ids.isEmpty()) {
+            alert(offset==0?"Brak wpisów dla wybranego rodzaju."
+                :"To koniec historii.");
+            return;
+        }
+        boolean more=ids.size()>pageSize;
+        if(more) {
+            ids.remove(pageSize);
+            labels.remove(pageSize);
+            labels.add("→ Następne 60 wpisów");
+        }
+        String label=kind==null?"Wszystkie"
+            :"income".equals(kind)?"Wpływy +":"Wydatki −";
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle(label+" • "+(offset+1)+"–"+(offset+ids.size())
+                +"  |  łącznie "+all+" (+ "+incomes+" / − "+expenses+")")
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                if(more && index==ids.size())
+                    showSharedPaycheckHistoryPage(kind,offset+pageSize);
+                else showSharedPaycheckHistoryEntry(ids.get(index));
+            })
+            .setNegativeButton("Zamknij",null);
+        if(offset>0)
+            dialog.setNeutralButton("← Poprzednie",
+                (d,w)->showSharedPaycheckHistoryPage(
+                    kind,Math.max(0,offset-pageSize)));
+        dialog.show();
+    }
+
+    private void showSharedPaycheckHistoryEntry(String operationId) {
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT kind,category,amount_grosz,note,created_at,"
+                +"statement_date,status FROM paycheck_transactions "
+                +"WHERE scope='shared' AND operation_id=?",
+                new String[]{operationId})) {
+            if(!c.moveToFirst()) {
+                alert("Nie znaleziono już tej operacji.");
+                return;
+            }
+            boolean pending="pending".equals(c.getString(6));
+            String date=c.isNull(5)||c.getString(5).isBlank()
+                ?Instant.ofEpochMilli(c.getLong(4))
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                :c.getString(5);
+            AlertDialog.Builder details=new AlertDialog.Builder(this)
+                .setTitle("PayCheck • szczegóły operacji")
+                .setMessage(date+"\n"
+                    +("income".equals(c.getString(0))?"Wpływ + ":"Wydatek − ")
+                    +MoneyRules.format(c.getLong(2))+"\n"
+                    +MoneyRules.categoryLabel(c.getString(1))+"\n"
+                    +c.getString(3)+"\n"
+                    +(pending?"DO POTWIERDZENIA":"POTWIERDZONA"))
+                .setPositiveButton("Zamknij",null);
+            if(pending)
+                details.setNeutralButton("Sprawdź i potwierdź",
+                    (d,w)->confirmSharedPaycheckEntry(operationId));
+            details.show();
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_HISTORY_ENTRY",error);
+            alert("Nie udało się otworzyć szczegółów przelewu.");
+        }
     }
 
     /** Android notification access always requires the user's system-level approval.
@@ -14754,8 +14886,8 @@ public final class MainActivity extends Activity {
             PaycheckMonthlyBudget.Totals plan =
                 PaycheckMonthlyBudget.planned(items, month);
             title("Budżet miesiąca • " + budgetMonthLabel(month));
-            note("Plan: wpływy " + MoneyRules.format(plan.income)
-                + " • wydatki " + MoneyRules.format(plan.expense)
+            note("Plan: wpływy + " + MoneyRules.format(plan.income)
+                + " • wydatki − " + MoneyRules.format(plan.expense)
                 + " • zostaje " + MoneyRules.format(plan.net()) + ".");
             button("📅 Wejdź do budżetu miesiąca • " + items.size()
                 + (items.size()==1 ? " pozycja" : " pozycji"),
@@ -14770,6 +14902,8 @@ public final class MainActivity extends Activity {
     private void paycheckMonthlyBudget() {
         header("PayCheck • Budżet miesiąca");
         button("✓ Potwierdź oczekujący przelew", this::showSharedPaycheckPendingQueue);
+        button("Historia PayCheck • wszystkie wpływy + / wydatki −",
+            this::showSharedPaycheckHistory);
         sharedMonthlyBudgetBlock();
     }
 
@@ -14833,13 +14967,13 @@ public final class MainActivity extends Activity {
             LinearLayout summary = new LinearLayout(this);
             summary.setOrientation(LinearLayout.VERTICAL);
             summary.setPadding(dp(4),dp(3),dp(4),dp(5));
-            summary.addView(text("Plan: wpływy " + MoneyRules.format(plan.income)
-                + " • wydatki " + MoneyRules.format(plan.expense),15,true));
+            summary.addView(text("Plan: wpływy + " + MoneyRules.format(plan.income)
+                + " • wydatki − " + MoneyRules.format(plan.expense),15,true));
             summary.addView(text("Różnica " + MoneyRules.format(plan.net())
                 + " • do zapłaty " + MoneyRules.format(unpaidPlan),14,false));
             if (!pending.empty())
-                summary.addView(text("Do potwierdzenia: wpływy "
-                    + MoneyRules.format(pending.income) + " • wydatki "
+                summary.addView(text("Do potwierdzenia: wpływy + "
+                    + MoneyRules.format(pending.income) + " • wydatki − "
                     + MoneyRules.format(pending.expense)
                     + " (nie zmieniają salda)",12,false));
 
@@ -14876,8 +15010,8 @@ public final class MainActivity extends Activity {
                 + " • pozostałe wpływy PayCheck: "
                 + MoneyRules.format(PaycheckBudgetExecutionRules.outsideBudget(
                     confirmed.income,assigned.income)) + ".",13,false));
-            financeDetails.addView(text("Cały PayCheck (potwierdzone): wpływy "
-                + MoneyRules.format(confirmed.income) + " • wydatki "
+            financeDetails.addView(text("Cały PayCheck (potwierdzone): wpływy + "
+                + MoneyRules.format(confirmed.income) + " • wydatki − "
                 + MoneyRules.format(confirmed.expense)
                 + " • saldo " + MoneyRules.format(confirmed.net()) + ".",13,false));
             financeDetails.addView(text("Pozycja planowana nie jest transakcją. "
@@ -15083,6 +15217,7 @@ public final class MainActivity extends Activity {
         body.addView(box,boxParams);
 
         String prefix = due + "  " + budgetItemDisplayName(item) + "  "
+            + ("income".equals(item.kind)?"+ ":"− ")
             + MoneyRules.format(dueTotal) + "  [" + type + "]  ";
         android.text.SpannableString summary =
             new android.text.SpannableString(prefix + status);
@@ -15126,8 +15261,12 @@ public final class MainActivity extends Activity {
         else if ("expense".equals(item.kind))
             details.addView(text("Planowana zapłata: " + plannedDate
                 + " • termin faktury niepodany",13,false));
-        details.addView(text("Plan tego miesiąca: " + MoneyRules.format(planned)
-            + " • zapłacono/potwierdzono: " + MoneyRules.format(actual),
+        details.addView(text("Plan tego miesiąca: "
+            + ("income".equals(item.kind)?"+ ":"− ")
+            + MoneyRules.format(planned)
+            + " • zapłacono/potwierdzono: "
+            + ("income".equals(item.kind)?"+ ":"− ")
+            + MoneyRules.format(actual),
             13,false));
         if ("expense".equals(item.kind) && appliedCredit > 0)
             details.addView(text("Odliczona nadpłata: "
@@ -15279,6 +15418,10 @@ public final class MainActivity extends Activity {
     }
 
     private void showBudgetItemHistory(PaycheckMonthlyBudget.Item item) {
+        showBudgetItemHistory(item,0);
+    }
+
+    private void showBudgetItemHistory(PaycheckMonthlyBudget.Item item,int offset) {
         try {
             java.util.List<PaycheckBudgetHistoryStore.Event> events =
                 new java.util.ArrayList<>();
@@ -15292,10 +15435,13 @@ public final class MainActivity extends Activity {
                 alert("Brak historii tej pozycji.");
                 return;
             }
-            int count = Math.min(events.size(),100);
-            String[] labels = new String[count];
+            final int pageSize=60;
+            final int first=offset>=events.size()?0:offset;
+            final int count=Math.min(events.size()-first,pageSize);
+            final boolean more=first+count<events.size();
+            String[] labels = new String[count+(more?1:0)];
             for (int i=0;i<count;i++) {
-                PaycheckBudgetHistoryStore.Event event = events.get(i);
+                PaycheckBudgetHistoryStore.Event event = events.get(first+i);
                 String eventMonth = budgetMonthLabel(YearMonth.parse(event.month));
                 String amount = event.amountGrosz == 0L ? ""
                     : " • " + MoneyRules.format(event.amountGrosz);
@@ -15315,11 +15461,20 @@ public final class MainActivity extends Activity {
                     + eventMonth + amount + detail + operation
                     + "\nZapisano: " + recorded;
             }
-            new AlertDialog.Builder(this)
-                .setTitle("Historia • " + budgetItemDisplayName(item))
-                .setItems(labels,null)
-                .setNegativeButton("Zamknij",null)
-                .show();
+            if(more) labels[count]="→ Następne wpisy historii";
+            AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+                .setTitle("Historia • " + budgetItemDisplayName(item)
+                    +"  "+(first+1)+"–"+(first+count)+"/"+events.size())
+                .setItems(labels,(d,index)->{
+                    if(more&&index==count)
+                        showBudgetItemHistory(item,first+pageSize);
+                })
+                .setNegativeButton("Zamknij",null);
+            if(first>0)
+                dialog.setNeutralButton("← Poprzednie",
+                    (d,w)->showBudgetItemHistory(item,
+                        Math.max(0,first-pageSize)));
+            dialog.show();
         } catch(Exception error) {
             DiagnosticLog.error("PAYCHECK_BUDGET_HISTORY_VIEW",error);
             alert("Nie udało się otworzyć historii tej pozycji.");
@@ -15578,6 +15733,7 @@ public final class MainActivity extends Activity {
                     String note=c.getString(2);
                     labels.add(("pending".equals(c.getString(5))
                         ?"DO POTWIERDZENIA • ":"POTWIERDZONY • ")
+                        +("income".equals(item.kind)?"+ ":"− ")
                         +MoneyRules.format(c.getLong(1))
                         +(note==null||note.isBlank()?"":" • "+note));
                 }

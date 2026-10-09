@@ -70,7 +70,8 @@ final class BankStatementCsv {
             if(row.size()!=header.size())
                 throw new IllegalArgumentException("Błędna liczba kolumn CSV, wiersz "+(i+1));
             String dateValue=normalizeDate(row.get(date));
-            String raw=row.get(amount).trim().replace(" ","");
+            String raw=row.get(amount).trim().replace(" ","")
+                .replace("\u00a0","").replace('−','-');
             boolean expense=raw.startsWith("-");
             if(raw.startsWith("-")||raw.startsWith("+"))raw=raw.substring(1);
             long grosz;

@@ -77,7 +77,7 @@ final class BankStatementMbank {
             String bookedOn=date(cells.get(booked));
             String operatedOn=date(cells.get(operated));
             String rawAmount=cells.get(amount).trim().replace(" ","")
-                .replace("\u00a0","");
+                .replace("\u00a0","").replace('−','-');
             boolean expense=rawAmount.startsWith("-");
             if(rawAmount.startsWith("-")||rawAmount.startsWith("+"))
                 rawAmount=rawAmount.substring(1);
@@ -85,7 +85,7 @@ final class BankStatementMbank {
             if(grosz==0)throw new IllegalArgumentException(
                 "mBank: zerowa kwota w wierszu "+(i+1));
             String rawBalance=cells.get(balance).trim().replace(" ","")
-                .replace("\u00a0","");
+                .replace("\u00a0","").replace('−','-');
             if(rawBalance.isEmpty())
                 throw new IllegalArgumentException(
                     "mBank: brak salda po operacji w wierszu "+(i+1)

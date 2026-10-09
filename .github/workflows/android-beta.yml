@@ -168,6 +168,17 @@ jobs:
         run: python3 tests/check_paycheck_pending_contract.py
       - name: PayCheck visible payment selection and consent regression
         run: python3 tests/check_paycheck_choice_dialogs.py
+      - name: All Android PayCheck history pages and bank amount signs
+        run: |
+          mkdir -p "$RUNNER_TEMP/paycheck-history-all"
+          javac -d "$RUNNER_TEMP/paycheck-history-all" \
+            app/src/main/java/com/edwinkarolczyk/edhome/MoneyRules.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementCsv.java \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankStatementMbank.java \
+            tests/task_rules/BankStatementSignsSmoke.java
+          java -cp "$RUNNER_TEMP/paycheck-history-all" \
+            com.edwinkarolczyk.edhome.BankStatementSignsSmoke
+          python3 tests/check_paycheck_history_all_android.py
       - name: Monthly PayCheck plan and confirmed-actuals regression
         run: python3 tests/check_paycheck_monthly_budget_contract.py
       - name: Monthly PayCheck finance P0 behavioral regression
