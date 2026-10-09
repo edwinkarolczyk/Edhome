@@ -16,13 +16,14 @@ for token in (
     'PaycheckStore.sharedBalance(db.getReadableDatabase())',
     'PaycheckStore.add(',
     'new AlertDialog.Builder(this)',
-    'Potwierdź transakcję',
-    'PAYCHECK_SHARED_PENDING',
+    'ensureBudgetPaycheckPending(YearMonth.now());',
+    'PAYCHECK_BUDGET_PENDING_AUTO_CREATED',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
     'super(context, "edhome-beta-preview.db", null, 46)',
 ):
     assert token in main, token
+assert 'button("Dodaj transakcję do PayCheck"' not in main, "PayCheck nie moze tworzyc osobnych transakcji z formularza"
 for token in (
     "CHECK(scope='shared')",
     "kind IN ('income','expense')",
