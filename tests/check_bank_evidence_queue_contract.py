@@ -103,4 +103,24 @@ for token in (
 ):
     assert token in backup,token
 
+assert 'static boolean deleteUnmatched(' in store
+assert "state IN ('open','dismissed')" in store
+assert "AND NOT EXISTS (SELECT 1 FROM paycheck_transactions" in store
+assert 'private void showBankEvidenceList(boolean all,int filter,int offset)' in main
+bankview=main.split("private void showBankEvidenceList(",1)[1].split(
+    "private void openBankEvidenceRow(",1)[0]
+for expected in ('expandedDetails[0].setVisibility(View.GONE)',
+                 'details.setVisibility(open?View.VISIBLE:View.GONE)',
+                 'header.setOnClickListener(v->',
+                 'BankEvidenceStore.deleteUnmatched(',
+                 'smallButton(details,"Usuń operację"',
+                 '"matched".equals(row.state)'):
+    assert expected in bankview, expected
+picker=main.split('private void selectStatementCsv() {',1)[1].split(
+    'private void openStatementFilePicker(',1)[0]
+assert '.setCustomTitle(paycheckChoiceDialogTitle(' in picker
+assert '.setMessage("Wybierz bank' not in picker
+assert '.setItems(new String[]{"mBank", "VeloBank"' in picker
+assert 'Intent.ACTION_GET_CONTENT' in main, "Brak awaryjnego wyboru plikow"
+
 print("Bank evidence queue: persistent v35 schema, state constraints, dedup, UI and backup PASS")
