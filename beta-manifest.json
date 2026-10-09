@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 266,
-  "versionName": "0.8.0.74",
-  "changelog": "EDHOME 0.8.0.74 — Beta. Android PayCheck: naprawa wgrywania długiej historii bankowej CSV/mBank (do 8 MB i 25 000 operacji na plik, do 50 000 na partię), XLSX do 12 000 wierszy oraz tekstowego PDF VeloBanku. Import w osobnym wątku; podsumowanie wczytanych, nowych i zduplikowanych operacji. Banki i potwierdzenia: pełna kolejka, stronicowanie i filtry bez ucinania po 500 wpisach. Import zapisuje dowody bankowe, nie księguje automatycznie salda. Fizyczny test na pliku z banku i synchronizacja do odbioru; main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.74/edhome-beta.apk",
-  "sha256": "eaf132aef96e07aa7ec6079150176b9f1fa3dfd2ee8eddc765b59b661714b22d"
+  "versionCode": 267,
+  "versionName": "0.8.0.75",
+  "changelog": "EDHOME 0.8.0.75 — Beta. P0 PayCheck i Budżet: pozycje planu automatycznie trafiają do Do potwierdzenia, bez ręcznego tworzenia operacji. Import historii bankowej może potwierdzić i przypisać płatność wyłącznie przy zgodności kwoty, kierunku, miesiąca, charakterystycznego odbiorcy oraz braku konfliktu. Niejasne wpisy czekają na decyzję. Saldo tylko po uzgodnieniu, bez duplikatów. Test fizyczny nadal wymagany; Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.75/edhome-beta.apk",
+  "sha256": "da2a99c427d31fe92edf701b415bb14b23f0ba1d3f5f2a0e25ff5ccc003e9736"
 }
