@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 271,
-  "versionName": "0.8.0.79",
-  "changelog": "EDHOME 0.8.0.79 — Beta. PayCheck: zwarta lista transakcji kwota pod kwotą, dotknięcie rozwija szczegóły, maksymalnie jeden wpis otwarty naraz — również w pełnej historii i kolejce bankowej. Poprawiony wybór banku mBank / VeloBank / Inny: lista opcji nie jest zasłaniana opisem; awaryjny wybierak plików. Przycisk Importuj dostępny także z historii. Nierozliczoną operację z importu można usunąć po świadomym potwierdzeniu, bez zmiany salda; rozliczone pozostają chronione. Rzeczywista kwota z wyciągu nadal ma pierwszeństwo nad kwotą planu. Test na telefonie i pełny import rzeczywistych wyciągów są nadal wymagane; Stable main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.79/edhome-beta.apk",
-  "sha256": "f8eefae36a16421205c00d8160ddf3f17c2dc000e3a6f2534cfa8e3c4c886eee"
+  "versionCode": 272,
+  "versionName": "0.8.0.80",
+  "changelog": "EDHOME 0.8.0.80 — Beta. VeloBank: tekstowe PDF z kwotami podpisanymi +/−, także gdy PLN jest tylko w nagłówku tabeli; obsługa daty, nazwy i kwoty w kilku liniach. Import nie pomija po cichu podejrzanych brakujących przelewów. Przy błędzie pokazuje etap i numer pliku, bez ujawniania danych rachunku. Poprawiona lista banków mBank / VeloBank / Inny, zwarte listy operacji oraz zabezpieczone usuwanie nierozliczonych. Rzeczywiste PDF VeloBanku nadal do odbioru na telefonie. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.80/edhome-beta.apk",
+  "sha256": "a6fdd2726ebdaf1a7ec11fc7eed9bed777475a5bcef7f8d50c6c8af39394fee7"
 }
