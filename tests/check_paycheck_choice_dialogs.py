@@ -10,6 +10,7 @@ assert "hint.setMaxLines(3);" in src
 assert "hint.setText(explanation);" in src
 
 sections=[
+    "Wybierz bank • PayCheck",
     "Wybierz właściwy wydatek / wpływ",
     "Potwierdzenia • ",
     "Wybierz właściwą transakcję",
@@ -20,7 +21,7 @@ sections=[
     "Korekta / zakończenie zobowiązania",
 ]
 dialog_bodies=src.split(".setCustomTitle(paycheckChoiceDialogTitle(")[1:]
-assert len(dialog_bodies)==8, len(dialog_bodies)
+assert len(dialog_bodies)==9, len(dialog_bodies)
 for title in sections:
     matches=[chunk for chunk in dialog_bodies
              if '"'+title in chunk.split(".setItems(",1)[0]]
@@ -43,4 +44,4 @@ for body in (queue,picker):
 assert '.setPositiveButton("Sprawdziłem — potwierdź"' in src
 assert 'PaycheckStore.confirm(db.getWritableDatabase()' in src
 assert 'boolean changed=PaycheckMonthlyBudget.match(' in src
-print("PASS: 10 list PayCheck jest klikalnych, ostrzeżenia i świadoma zgoda zachowane")
+print("PASS: 11 list PayCheck jest klikalnych, ostrzeżenia i świadoma zgoda zachowane")
