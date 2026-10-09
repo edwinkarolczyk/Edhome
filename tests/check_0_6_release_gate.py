@@ -84,8 +84,8 @@ for token in ('CREATE TABLE bank_evidence_queue',
     assert token in queue,token
 assert '{"bank_evidence_queue", "id", "evidence_key"' in backup
 for token in (
-    'diagStage="READ"',
-    'diagStage="PDF_TEXT"',
+    'diagStage="ODCZYT PLIKU "',
+    'diagStage="PDF / tekst • plik "',
     'diagStage="XLSX_TEXT"',
     'diagStage="MBANK_PARSE"',
     'diagStage="CSV_PARSE"',
