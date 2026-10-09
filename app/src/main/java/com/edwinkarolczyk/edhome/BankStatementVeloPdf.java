@@ -91,12 +91,47 @@ final class BankStatementVeloPdf {
             if(line.isEmpty())continue;
             Matcher dateMatcher=DATE.matcher(line);
             if(!dateMatcher.find())continue;
+            String statementDate=dateMatcher.group(1);
+
+            // PDFTextStripper bywa dzieli przelew na datę, tytuł i osobną
+            // kwotę. Składamy tylko jednoznaczną grupę bez przeskakiwania
+            // do kolejnej datowanej transakcji ani wiersza salda.
+            if(line.equals(statementDate)&&i+1<lines.length) {
+                String next=lines[i+1].trim();
+                if(!DATE.matcher(next).find()
+                        && TRANSACTION_LINE.matcher(next).find()) {
+                    line=line+" "+next;
+                    i++;
+                }
+            }
             List<String> moneyTokens=new ArrayList<>();
             Matcher mm=MONEY.matcher(line);
             while(mm.find())moneyTokens.add(mm.group(1).trim());
+            if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
+                StringBuilder joined=new StringBuilder(line);
+                for(int next=i+1;next<lines.length&&next<=i+4;next++) {
+                    String extra=lines[next].trim();
+                    if(extra.isEmpty())continue;
+                    // Następnego przelewu nie wolno dołączyć do poprzedniego.
+                    if(DATE.matcher(extra).find()
+                            && TRANSACTION_LINE.matcher(extra).find())
+                        break;
+                    if(extra.toLowerCase(Locale.ROOT).contains("saldo"))
+                        break;
+                    joined.append(" ").append(extra);
+                    if(MONEY.matcher(extra).find()) {
+                        line=joined.toString();
+                        i=next;
+                        Matcher continued=MONEY.matcher(line);
+                        while(continued.find())
+                            moneyTokens.add(continued.group(1).trim());
+                        break;
+                    }
+                }
+            }
             if(moneyTokens.isEmpty()) {
                 if(TRANSACTION_LINE.matcher(line).find()) {
-                    if(firstUnreadable.isEmpty())firstUnreadable=dateMatcher.group(1);
+                    if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                     unreadableCount++;
                 }
                 continue;
@@ -113,7 +148,7 @@ final class BankStatementVeloPdf {
             if(chosen==null) {
                 if(moneyTokens.size()!=1) {
                     if(TRANSACTION_LINE.matcher(line).find()) {
-                        if(firstUnreadable.isEmpty())firstUnreadable=dateMatcher.group(1);
+                        if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                         unreadableCount++;
                     }
                     continue;
@@ -124,14 +159,14 @@ final class BankStatementVeloPdf {
             try {parsed=amount(chosen,line);}
             catch(IllegalArgumentException ambiguous){
                 if(TRANSACTION_LINE.matcher(line).find()) {
-                    if(firstUnreadable.isEmpty())firstUnreadable=dateMatcher.group(1);
+                    if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                     unreadableCount++;
                 }
                 continue;
             }
-            String booked=date(dateMatcher.group(1));
+            String booked=date(statementDate);
             String description=line
-                .replace(dateMatcher.group(1)," ")
+                .replace(statementDate," ")
                 .replace(chosen," ")
                 .replaceAll("(?iu)\\b(?:PLN|zł)\\b"," ")
                 .replaceAll("\\s+"," ").trim();
