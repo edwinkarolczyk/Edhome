@@ -82,8 +82,8 @@ for token in (
     'BankEvidenceStore.match(',
     'BankEvidenceStore.dismiss(',
     'BankEvidenceStore.reopen(',
-    'Banki i potwierdzenia • kolejka (',
-    'Kolejka bankowa:',
+    'Do wyjaśnienia • banki (',
+    'Historia bankowa:',
     'diagStage="QUEUE_SAVE"',
 ):
     assert token in main,token
