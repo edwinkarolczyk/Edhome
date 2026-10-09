@@ -119,17 +119,17 @@ public final class BankStatementVeloPdfSmoke {
 
         // Regresja z wyciągu: dwie daty w wierszu, opis i kwota
         // przelewu oddzielone od siebie, PLN tylko w nagłówku tabeli.
-        String multiLine="VeloBank\\nHistoria PLN\\n"
-            +"07.10.2026 08.10.2026\\n"
-            +"Przelew przychodzący\\n"
-            +"Od nadawcy\\n"
-            +"Wynagrodzenie\\n"
-            +"Numer referencyjny\\n"
-            +"Za październik\\n"
-            +"Kwota przelewu: 4 300,00\\n"
-            +"09.10.2026 Przelew wychodzący\\n"
-            +"Tytuł: rachunek\\n"
-            +"Kwota przelewu: 280,00\\n";
+        String multiLine="VeloBank\nHistoria PLN\n"
+            +"07.10.2026 08.10.2026\n"
+            +"Przelew przychodzący\n"
+            +"Od nadawcy\n"
+            +"Wynagrodzenie\n"
+            +"Numer referencyjny\n"
+            +"Za październik\n"
+            +"Kwota przelewu: 4 300,00\n"
+            +"09.10.2026 Przelew wychodzący\n"
+            +"Tytuł: rachunek\n"
+            +"Kwota przelewu: 280,00\n";
         List<BankStatementCsv.Entry> varied=
             BankStatementVeloPdf.parse(multiLine);
         check(varied.size()==2,"both multiline Velo transfers without signs");
@@ -144,10 +144,10 @@ public final class BankStatementVeloPdfSmoke {
 
         // Jeżeli siedem pozycji pozostanie nierozpoznanych, komunikat
         // musi podać powody, bez ujawniania treści operacji.
-        StringBuilder seven=new StringBuilder("VeloBank\\nHistoria PLN\\n")
-            .append("05.10.2026 Operacja kartą -6,50 PLN\\n");
+        StringBuilder seven=new StringBuilder("VeloBank\nHistoria PLN\n")
+            .append("05.10.2026 Operacja kartą -6,50 PLN\n");
         for(int n=0;n<7;n++)
-            seven.append("08.10.2026 Przelew wychodzący\\n");
+            seven.append("08.10.2026 Przelew wychodzący\n");
         boolean sevenReported=false;
         try {BankStatementVeloPdf.parse(seven.toString());}
         catch(IllegalArgumentException expected) {
@@ -156,9 +156,9 @@ public final class BankStatementVeloPdfSmoke {
         }
         check(sevenReported,"report full count and category of 7 unreadable rows");
 
-        String balanceOnly="VeloBank\\nHistoria PLN\\n"
-            +"08.10.2026 Przelew wychodzący\\n"
-            +"Saldo po operacji +4 300,00\\n";
+        String balanceOnly="VeloBank\nHistoria PLN\n"
+            +"08.10.2026 Przelew wychodzący\n"
+            +"Saldo po operacji +4 300,00\n";
         boolean balanceRejected=false;
         try {BankStatementVeloPdf.parse(balanceOnly);}
         catch(IllegalArgumentException expected){balanceRejected=true;}
