@@ -14182,63 +14182,7 @@ public final class MainActivity extends Activity {
 
     /** Tylko odczyt. Lista kolejki otwartej nie jest pełną historią importu. */
     private void showBankEvidenceArchive(int offset) {
-        final int pageSize=100;
-        SQLiteDatabase read=db.getReadableDatabase();
-        long count=BankEvidenceStore.countAll(read);
-        int first=count==0?0:Math.min(offset,
-            ((int)(count-1)/pageSize)*pageSize);
-        java.util.List<BankEvidenceStore.Row> visible=
-            BankEvidenceStore.listPageAll(read,pageSize,first);
-        java.util.List<String> labels=new java.util.ArrayList<>();
-        for(BankEvidenceStore.Row row:visible) {
-            String state="matched".equals(row.state)?"✓ Uzgodnione":
-                "dismissed".equals(row.state)?"× Odrzucone":"? Do wyjaśnienia";
-            String description=row.description.length()>65
-                ?row.description.substring(0,65)+"…":row.description;
-            labels.add(row.sourceLabel+" • "+row.date+" • "
-                +("income".equals(row.kind)?"+ ":"− ")
-                +MoneyRules.format(row.amount)+"\n"
-                +state+" • "+description);
-        }
-        final boolean previous=first>0;
-        final boolean next=first+visible.size()<count;
-        int prevIndex=labels.size();
-        if(previous)labels.add("← Poprzednie 100 operacji");
-        int nextIndex=labels.size();
-        if(next)labels.add("→ Następne 100 operacji");
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
-            .setTitle("Cała historia bankowa • wszystkie statusy"
-                +"\n"+(count==0?0:first+1)+"–"+(first+visible.size())
-                +" z "+count+" pozycji")
-            .setItems(labels.toArray(new String[0]),(d,index)->{
-                if(index<visible.size()) {
-                    BankEvidenceStore.Row row=visible.get(index);
-                    if("open".equals(row.state)) {
-                        openBankEvidenceRow(row);
-                    } else {
-                        String state="matched".equals(row.state)
-                            ?"Uzgodniona z pozycją PayCheck":"Odrzucona";
-                        new AlertDialog.Builder(this)
-                            .setTitle(row.sourceLabel+" • "+state)
-                            .setMessage("Data z importu: "+row.date
-                                +"\n"+("income".equals(row.kind)?"+ ":"− ")
-                                +MoneyRules.format(row.amount)
-                                +"\n\n"+row.description
-                                +"\n\nTen podgląd nie księguje operacji.")
-                            .setNegativeButton("Zamknij",null)
-                            .setPositiveButton("Wróć do historii",
-                                (dd,w)->showBankEvidenceArchive(first))
-                            .show();
-                    }
-                } else if(previous&&index==prevIndex) {
-                    showBankEvidenceArchive(Math.max(0,first-pageSize));
-                } else if(next&&index==nextIndex) {
-                    showBankEvidenceArchive(first+pageSize);
-                }
-            })
-            .setNegativeButton("Zamknij",null);
-        if(visible.isEmpty())dialog.setMessage("Historia bankowa jest pusta.");
-        dialog.show();
+        showBankEvidenceList(true,0,offset);
     }
 
     private void showBankEvidenceQueue(int filter) {
@@ -14246,61 +14190,150 @@ public final class MainActivity extends Activity {
     }
 
     private void showBankEvidenceQueue(int filter,int offset) {
+        showBankEvidenceList(false,filter,offset);
+    }
+
+    /**
+     * Zwarte wiersze: jeden przelew = jedna linia. Tylko jedna rozwinięta
+     * pozycja naraz; szczegóły i akcje dopiero po dotknięciu kwoty.
+     */
+    private void showBankEvidenceList(boolean all,int filter,int offset) {
         final int pageSize=100;
-        final SQLiteDatabase read=db.getReadableDatabase();
-        final long count=BankEvidenceStore.count(read,"open",filter);
+        SQLiteDatabase read=db.getReadableDatabase();
+        long count=all?BankEvidenceStore.countAll(read)
+            :BankEvidenceStore.count(read,"open",filter);
         final int first=count==0?0:Math.min(offset,
-            ((int)(count-1)/pageSize)*pageSize);
-        java.util.List<BankEvidenceStore.Row> visible=
-            BankEvidenceStore.listPage(read,"open",filter,pageSize,first);
-        java.util.List<String> labels=new java.util.ArrayList<>();
-        for(BankEvidenceStore.Row row:visible) {
-            int pending=BankEvidenceStore.pendingMatches(read,row);
-            String description=row.description.length()>55
-                ?row.description.substring(0,55)+"…":row.description;
-            labels.add(row.sourceLabel+" • "+row.date+" • "
-                +("income".equals(row.kind)?"+ ":"− ")
-                +MoneyRules.format(row.amount)+"\n"
-                +(description.isEmpty()?"Bez opisu":description)+"\n"
-                +(pending==1?"✓ 1 propozycja • sprawdź"
-                    :pending>1?"? "+pending+" możliwych wpisów"
-                    :"— Sprawdź Budżet • możliwa inna kwota"));
+            (int)((count-1)/pageSize)*pageSize);
+        java.util.List<BankEvidenceStore.Row> rows=all
+            ?BankEvidenceStore.listPageAll(read,pageSize,first)
+            :BankEvidenceStore.listPage(read,"open",filter,pageSize,first);
+        final AlertDialog[] dialogRef={null};
+        final LinearLayout[] expandedDetails={null};
+        LinearLayout list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(10),dp(4),dp(10),dp(6));
+        if(rows.isEmpty()) {
+            TextView empty=text("Brak pozycji w tym widoku. "
+                +"Możesz wczytać historię bankową przyciskiem Importuj.",14,false);
+            list.addView(empty);
         }
-        final boolean hasPrevious=first>0;
-        final boolean hasNext=first+visible.size()<count;
-        final int previousIndex=labels.size();
-        if(hasPrevious)labels.add("← Poprzednie 100 operacji");
-        final int nextIndex=labels.size();
-        if(hasNext)labels.add("→ Następne 100 operacji");
-        String[] filters={"Wszystkie otwarte","1 propozycja identyczna",
-            "Kilka identycznych","Bez identycznej kwoty","Wydatki −","Wpływy +"};
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
-            .setTitle("Do wyjaśnienia • "+filters[filter]
-                +"\n"+(count==0?0:first+1)+"–"+(first+visible.size())
-                +" z "+count+" pozycji")
-            .setItems(labels.toArray(new String[0]),(d,index)->{
-                if(index<visible.size()) {
-                    openBankEvidenceRow(visible.get(index));
-                } else if(hasPrevious&&index==previousIndex) {
-                    showBankEvidenceQueue(filter,Math.max(0,first-pageSize));
-                } else if(hasNext&&index==nextIndex) {
-                    showBankEvidenceQueue(filter,first+pageSize);
-                }
-            })
-            .setNeutralButton("Filtry",(d,w)->
-                new AlertDialog.Builder(this)
-                    .setTitle("Filtruj kolejkę bankową")
-                    .setItems(filters,(fd,selected)->
-                        showBankEvidenceQueue(selected,0))
-                    .setNegativeButton("Anuluj",null).show())
-            .setPositiveButton("Odrzucone",(d,w)->
-                showDismissedBankEvidence())
-            .setNegativeButton("Zamknij",null);
-        if(visible.isEmpty())
-            dialog.setMessage(count==0
-                ?"Brak pozycji dla wybranego filtra. "
-                    +"Dane archiwalne pozostają zachowane."
-                :"Nie udało się odczytać strony kolejki.");
+        if(!all)smallButton(list,"Filtry",()->{
+            if(dialogRef[0]!=null)dialogRef[0].dismiss();
+            String[] filters={"Wszystkie otwarte","1 propozycja identyczna",
+                "Kilka identycznych","Bez identycznej kwoty",
+                "Wydatki −","Wpływy +"};
+            new AlertDialog.Builder(this)
+                .setTitle("Filtry historii bankowej")
+                .setItems(filters,(d,selected)->showBankEvidenceQueue(selected,0))
+                .setNegativeButton("Zamknij",null).show();
+        });
+        for(BankEvidenceStore.Row row:rows) {
+            LinearLayout entry=new LinearLayout(this);
+            entry.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams entryParams=
+                new LinearLayout.LayoutParams(-1,-2);
+            entryParams.setMargins(0,dp(1),0,dp(1));
+            list.addView(entry,entryParams);
+            LinearLayout header=new LinearLayout(this);
+            header.setOrientation(LinearLayout.HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            header.setPadding(dp(5),dp(5),dp(5),dp(5));
+            entry.addView(header,new LinearLayout.LayoutParams(-1,dp(43)));
+            TextView date=text(row.date+"  "+row.sourceLabel,13,false);
+            date.setSingleLine(true);
+            date.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            date.setTextColor(subdued);
+            header.addView(date,new LinearLayout.LayoutParams(0,-2,1f));
+            String stateSymbol="matched".equals(row.state)?" ✓":
+                "dismissed".equals(row.state)?" ×":" ›";
+            TextView amount=text(("income".equals(row.kind)?"+ ":"− ")
+                +MoneyRules.format(row.amount)+stateSymbol,16,true);
+            amount.setGravity(Gravity.END);
+            header.addView(amount);
+            LinearLayout details=new LinearLayout(this);
+            details.setOrientation(LinearLayout.VERTICAL);
+            details.setPadding(dp(10),dp(2),dp(10),dp(8));
+            details.setVisibility(View.GONE);
+            entry.addView(details);
+            String state="matched".equals(row.state)?"Uzgodniona":
+                "dismissed".equals(row.state)?"Odrzucona":"Do wyjaśnienia";
+            TextView description=text("Status: "+state+"\n"
+                +"Data: "+row.date+"\n"
+                +"Bank: "+row.sourceLabel+"\nOpis: "+row.description,
+                13,false);
+            details.addView(description);
+            if("open".equals(row.state)) {
+                smallButton(details,"Dopasuj do Budżetu",()->{
+                    if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                    openBankEvidenceRow(row);
+                });
+            } else if("dismissed".equals(row.state)) {
+                smallButton(details,"Przywróć",()->{
+                    if(BankEvidenceStore.reopen(
+                            db.getWritableDatabase(),row.evidenceKey)) {
+                        if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                        showBankEvidenceList(all,filter,first);
+                    }else alert("Nie udało się przywrócić operacji.");
+                });
+            } else {
+                details.addView(text("Operacja rozliczona. "
+                    +"Usunięcie dowodu nie może usuwać pieniędzy z PayCheck.",
+                    12,false));
+            }
+            if(!"matched".equals(row.state))
+                smallButton(details,"Usuń operację",()->{
+                    new AlertDialog.Builder(this)
+                        .setTitle("Usunąć importowaną operację?")
+                        .setMessage(row.sourceLabel+" • "+row.date+"\n"
+                            +("income".equals(row.kind)?"+ ":"− ")
+                            +MoneyRules.format(row.amount)
+                            +"\n\nOperacja zostanie usunięta z historii importów. "
+                            +"Jeśli ponownie wczytasz wyciąg, może się pojawić "
+                            +"jeszcze raz. Saldo PayCheck się nie zmieni.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Usuń",(d,w)->{
+                            if(BankEvidenceStore.deleteUnmatched(
+                                    db.getWritableDatabase(),row.evidenceKey)) {
+                                DiagnosticLog.event("PAYCHECK_BANK_EVIDENCE_DELETED");
+                                if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                                showBankEvidenceList(all,filter,first);
+                            }else alert("Operacja została już rozliczona "
+                                +"lub zmieniona. Nie usunięto danych.");
+                        }).show();
+                });
+            header.setOnClickListener(v->{
+                boolean open=details.getVisibility()!=View.VISIBLE;
+                if(expandedDetails[0]!=null && expandedDetails[0]!=details)
+                    expandedDetails[0].setVisibility(View.GONE);
+                details.setVisibility(open?View.VISIBLE:View.GONE);
+                expandedDetails[0]=open?details:null;
+            });
+            View divider=new View(this);
+            divider.setBackgroundColor(subdued & 0x35FFFFFF);
+            entry.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
+        }
+        if(first>0)smallButton(list,"← Poprzednie 100",()->{
+            if(dialogRef[0]!=null)dialogRef[0].dismiss();
+            showBankEvidenceList(all,filter,Math.max(0,first-pageSize));
+        });
+        if(first+rows.size()<count)smallButton(list,"Następne 100 →",()->{
+            if(dialogRef[0]!=null)dialogRef[0].dismiss();
+            showBankEvidenceList(all,filter,first+pageSize);
+        });
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.addView(list);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle((all?"Cała historia bankowa":"Do wyjaśnienia • banki")
+                +"  "+(count==0?0:first+1)+"–"+(first+rows.size())
+                +" z "+count)
+            .setView(scroll)
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Importuj",(d,w)->selectStatementCsv())
+            .setPositiveButton(all?"Do wyjaśnienia":"Cała historia",
+                (d,w)->showBankEvidenceList(!all,0,0))
+            .create();
+        dialogRef[0]=dialog;
         dialog.show();
     }
 
