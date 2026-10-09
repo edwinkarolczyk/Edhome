@@ -6,14 +6,14 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — P0 Android: brakujące przejście Budżet → PayCheck; kandydat kodu Beta 0.8.0.73/265, CI i odbiór telefonu niepotwierdzone |
+| Ostatnia aktualizacja | 2026-10-09 — Android Budżet → PayCheck: 0.8.0.73/265, CI #2048 PASS, podpisany APK opublikowany; fizyczne potwierdzanie i LAN nadal do odbioru |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.73 / versionCode 265 — nowy kandydat kodu integracji Budżet→PayCheck, CI i APK jeszcze niezweryfikowane**; poprzednia 0.8.0.72/264 [CI #2046 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), [APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.72/edhome-beta.apk); test fizyczny nadal otwarty. |
+| Android Beta | **0.8.0.73 / versionCode 265**, [CI #2048 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.73/edhome-beta.apk); test fizyczny przepływu, historia, saldo i LAN nadal nieodebrane. |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | **0.8.0.72/264 CI #2046 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37897468257), opublikowane wydanie beta-v0.8.0.72 i APK z manifestem SHA-256. |
+| Ostatni zweryfikowany CI Android | **0.8.0.73/265 CI #2048 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), podpisany APK oraz opublikowany Release i manifest SHA-256. Pierwszy run #2047 FAIL: test źródłowy błędnie szukał definicji metody wyłącznie w obszarze `paycheck()`; naprawiono sam test, rerun sukces. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
 | Bieżący etap | **P0 Android: niepełna historia wpływów/wydatków i znaki — kod naprawczy przygotowany, fizyczny odbiór oczekuje.** Potwierdzanie przelewów także nieodebrane, 5C i 6 otwarte. |
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
@@ -31,6 +31,7 @@
 - W Budżecie dodano jawny przycisk „← Wróć do PayCheck”. Dla innych miesięcy nie tworzymy na ślepo bankowego przelewu z bieżącą datą; historia może użyć istniejących transakcji.
 - Nowy kontrakt `tests/check_budget_to_paycheck_flow_android.py` kontroluje brak automatycznego księgowania, UI, ID oraz zmianę salda tylko po potwierdzeniu na przykładowej bazie SQLite. Dodany etap w `.github/workflows/android-beta.yml`.
 - **Nieodebrane:** fizyczne testy Android: wpis planu od razu widoczny w PayCheck, wejście/wyjście, wykrywanie już istniejących przelewów, przejście `pending→confirmed`, dokładnie 1× saldo, dopasowanie do pozycji, rata/cykl/wpływ/pozycja opcjonalna, nadpłata/niedopłata i synchronizacja Desktop. CI i publikacja muszą być osobno potwierdzone przed deklaracją sukcesu. `main` bez zmian.
+- **Weryfikacja wydania 09.10.2026:** commit przepływu `a8807ed08aef2f08801392d73e22225242166abd`; poprawka testu `08dd9d5b4da1e06e84e4829ae60894d363497f91`. Android CI [#2048](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090) **PASS** (107 zakończonych kroków sukcesem); [Release Beta 0.8.0.73](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.73) zawiera podpisane `edhome-beta.apk` (13 329 950 B). Manifest wersji 265, SHA-256 `7d49e5a728f63321e5c717c829659646ada82a9d7f48481dd2cf2ce7914297ba`, opis „Co nowego” poprawiony. **Nie oznaczać testów na realnym telefonie jako zaliczonych bez potwierdzenia.**
 
 ## P0 — Historia PayCheck i znaki kwot (09.10.2026)
 
