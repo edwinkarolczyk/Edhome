@@ -38,10 +38,10 @@ public final class BankStatementVeloPdfSmoke {
             +"05.10.2026 Operacja kartą -6,50 PLN\n"
             +"06.10.2026 Operacja kartą -7,50 PLN\n"
             +"09.10.2026 Przelew wychodzący\n";
-        boolean rejected=false;
+        boolean splitTransferRejected=false;
         try {BankStatementVeloPdf.parse(broken);}
-        catch(IllegalArgumentException expected){rejected=true;}
-        check(rejected,"A split transfer must not disappear silently");
+        catch(IllegalArgumentException expected){splitTransferRejected=true;}
+        check(splitTransferRejected,"A split transfer must not disappear silently");
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
