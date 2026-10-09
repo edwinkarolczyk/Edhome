@@ -35,6 +35,8 @@
 
 **Wdrożenie kodowe Beta 0.8.0.67/259 (kandydat):** Android Budżet miesiąca ma dwa zwarte wiersze: planowane wpływy i wydatki, różnicę oraz pozostało do zapłaty. Kwoty do potwierdzenia, zaległości i nadpłaty pozostają jawne bez rozwijania. Pozostałe informacje („Wykonanie pozycji Budżetu”, pozostałe transakcje PayCheck, sumy potwierdzone i wyjaśnienie księgowania) są pod przyciskiem **„Szczegóły rozliczenia”**. Stan rozwinięcia zachowuje się podczas przerysowania widoku; zmiana nie zapisuje danych. Sekcja wpływów i wydatków oraz pojedynczo rozwijane pozycje bez zmian.
 
+**CI #2021 — FAIL:** odzyskano wywołanie Budżetu i resztę `MainActivity`, ale regresja wymaga jednego ciągłego tekstu „transakcje potwierdzone po sprawdzeniu banku / wyciągu”. Poprawiono tylko podział literału Java na jeden napis, bez zmiany semantyki. Kolejny CI oczekuje.
+
 **CI #2020 — FAIL:** pierwsza wersja patcha w `MainActivity` objęła dwie sekcje o identycznym początku tekstu i przypadkiem usunęła wywołanie `sharedMonthlyBudgetBlock()`. Żaden APK nie został opublikowany z tej kompilacji. Naprawa: odtworzono poprzedni plik i zastosowano minimalną poprawkę wyłącznie **wewnątrz** `sharedMonthlyBudgetBlock`; porównanie odtworzeniowe potwierdziło nienaruszenie pozostałego pliku. Wersja nadal **0.8.0.67/259**, nowy CI oczekuje. 
 
 **Testy:** rozszerzono kontrakt `check_paycheck_monthly_budget_contract.py` o obecność szczegółów, domyślne zwinięcie oraz jawne zaległości/do potwierdzenia. Nie zmieniano SQLite, tabel ani API synchronizacji. Wymagane: **nowy Android CI oraz fizyczny odbiór B1–B12**; bez tego etap 6 pozostaje nieodebrany. Stable `main` bez zmian.

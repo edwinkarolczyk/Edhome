@@ -14798,8 +14798,8 @@ public final class MainActivity extends Activity {
                 + MoneyRules.format(confirmed.expense)
                 + " • saldo " + MoneyRules.format(confirmed.net()) + ".",13,false));
             financeDetails.addView(text("Pozycja planowana nie jest transakcją. "
-                + "Saldo zmieniają dopiero transakcje potwierdzone "
-                + "po sprawdzeniu banku / wyciągu.",12,false));
+                + "Saldo zmieniają dopiero transakcje potwierdzone po sprawdzeniu banku / wyciągu.",
+                12,false));
             TextView detailsToggle = text(budgetFinanceDetailsExpanded
                 ? "▴ Ukryj szczegóły rozliczenia"
                 : "▾ Szczegóły rozliczenia",13,true);
