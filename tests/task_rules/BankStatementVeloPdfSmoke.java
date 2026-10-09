@@ -34,6 +34,14 @@ public final class BankStatementVeloPdfSmoke {
             BankStatementVeloPdf.parse("VeloBank\n24.09.2026 60,10 PLN Saldo 100,00 PLN");
         } catch(IllegalArgumentException expected) {rejected=true;}
         check(rejected,"ambiguous unsigned amounts rejected");
+        String broken="VeloBank\n"
+            +"05.10.2026 Operacja kartą -6,50 PLN\n"
+            +"06.10.2026 Operacja kartą -7,50 PLN\n"
+            +"09.10.2026 Przelew wychodzący\n";
+        boolean rejected=false;
+        try {BankStatementVeloPdf.parse(broken);}
+        catch(IllegalArgumentException expected){rejected=true;}
+        check(rejected,"A split transfer must not disappear silently");
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
