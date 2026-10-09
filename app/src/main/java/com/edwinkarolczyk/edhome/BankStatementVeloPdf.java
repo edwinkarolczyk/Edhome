@@ -27,6 +27,10 @@ final class BankStatementVeloPdf {
     private static final Pattern MONEY=Pattern.compile(
         "(?iu)([-+−]?\\s*[0-9]{1,9}(?:[ \\u00a0][0-9]{3})*(?:[.,][0-9]{2})?)"
         +"\\s*(?:PLN|zł)\\b");
+    // Podejrzane wiersze trzeba zgłosić, a nie po cichu pominąć przelew.
+    private static final Pattern TRANSACTION_LINE=Pattern.compile(
+        "(?iu)(?:przelew|operacj[aeyięą]*\\s+kart|transakcj[aeyięą]*\\s+kart|"
+        +"wpływ|wpłat|wypłat|obciąż|uznan|płatnoś|zakup)");
     private static final Pattern LABELED_DATE=Pattern.compile(
         "(?iu)(?:data\\s+(?:transakcji|operacji|księgowania|płatności))"
         +"[^0-9]{0,30}(\\d{2}[.]\\d{2}[.]\\d{4}|\\d{4}-\\d{2}-\\d{2})");
@@ -80,6 +84,8 @@ final class BankStatementVeloPdf {
         String[] lines=text.split("\\n");
         List<BankStatementCsv.Entry> result=new ArrayList<>();
         Set<String> unique=new HashSet<>();
+        String firstUnreadable="";
+        int unreadableCount=0;
         for(int i=0;i<lines.length;i++) {
             String line=lines[i].trim();
             if(line.isEmpty())continue;
@@ -88,7 +94,13 @@ final class BankStatementVeloPdf {
             List<String> moneyTokens=new ArrayList<>();
             Matcher mm=MONEY.matcher(line);
             while(mm.find())moneyTokens.add(mm.group(1).trim());
-            if(moneyTokens.isEmpty())continue;
+            if(moneyTokens.isEmpty()) {
+                if(TRANSACTION_LINE.matcher(line).find()) {
+                    if(firstUnreadable.isEmpty())firstUnreadable=dateMatcher.group(1);
+                    unreadableCount++;
+                }
+                continue;
+            }
 
             String chosen=null;
             for(String token:moneyTokens) {
@@ -99,12 +111,24 @@ final class BankStatementVeloPdf {
                 }
             }
             if(chosen==null) {
-                if(moneyTokens.size()!=1)continue;
+                if(moneyTokens.size()!=1) {
+                    if(TRANSACTION_LINE.matcher(line).find()) {
+                        if(firstUnreadable.isEmpty())firstUnreadable=dateMatcher.group(1);
+                        unreadableCount++;
+                    }
+                    continue;
+                }
                 chosen=moneyTokens.get(0);
             }
             ParsedAmount parsed;
             try {parsed=amount(chosen,line);}
-            catch(IllegalArgumentException ambiguous){continue;}
+            catch(IllegalArgumentException ambiguous){
+                if(TRANSACTION_LINE.matcher(line).find()) {
+                    if(firstUnreadable.isEmpty())firstUnreadable=dateMatcher.group(1);
+                    unreadableCount++;
+                }
+                continue;
+            }
             String booked=date(dateMatcher.group(1));
             String description=line
                 .replace(dateMatcher.group(1)," ")
@@ -125,6 +149,13 @@ final class BankStatementVeloPdf {
                 throw new IllegalArgumentException(
                     "PDF VeloBanku: maksymalnie 25 000 operacji.");
         }
+        if(result.size()>1 && unreadableCount>0)
+            throw new IllegalArgumentException(
+                "PDF VeloBanku: "+unreadableCount
+                +" potencjalnych operacji nie dało się poprawnie odczytać"
+                +" (pierwsza data: "+firstUnreadable+"). "
+                +"Import odrzucono w całości, aby nie zgubić przelewów. "
+                +"Wyeksportuj historię jako CSV lub udostępnij próbkę PDF do diagnostyki.");
         return result;
     }
 
