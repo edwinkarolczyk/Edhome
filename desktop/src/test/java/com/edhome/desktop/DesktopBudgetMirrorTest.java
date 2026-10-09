@@ -37,6 +37,8 @@ final class DesktopBudgetMirrorTest {
         assertEquals(17345L,october.expenses);
         assertEquals(3,october.rows.getRowCount());
         assertEquals("Wpływ",october.rows.getValueAt(0,3));
+        assertTrue(october.rows.getValueAt(0,2).toString().startsWith("+ "));
+        assertTrue(october.rows.getValueAt(1,2).toString().startsWith("− "));
         assertEquals("2026-10-10",october.rows.getValueAt(0,0));
         assertEquals("2026-10-07",october.rows.getValueAt(1,0));
         assertEquals("2026-10-14",october.rows.getValueAt(2,0));
@@ -96,7 +98,7 @@ final class DesktopBudgetMirrorTest {
         assertEquals(0,rows.getValueAt(0,1));
         assertEquals("TAURON",rows.getValueAt(1,0));
         assertEquals(2,rows.getValueAt(1,1));
-        assertEquals("150,00 zł",rows.getValueAt(1,2).toString().replace("\u00a0"," "));
+        assertEquals("− 150,00 zł",rows.getValueAt(1,2).toString().replace("\u00a0"," "));
         assertEquals("Wodociągi",rows.getValueAt(2,0));
         assertEquals(0,rows.getValueAt(2,1));
         assertEquals(1,DesktopBudgetMirror.recipientOverview(
