@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 261,
-  "versionName": "0.8.0.69",
-  "changelog": "EDHOME 0.8.0.69 — Beta. P0 PayCheck: oczekujące przelewy można otworzyć także z Budżetu; kolejka z paginacją, jawne ręczne potwierdzenie, wybór konkretnego rachunku i przypisanie potwierdzonego przelewu bez ponownego księgowania. Informacja o niepowodzeniu przypisania bez ukrywania potwierdzenia. Wymaga testu fizycznego; main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.69/edhome-beta.apk",
-  "sha256": "7cb9b1e33879e539f911c078e12f9250307519a368e2d4999b59d90202e55a94"
+  "versionCode": 262,
+  "versionName": "0.8.0.70",
+  "changelog": "EDHOME 0.8.0.70 — Beta. P0 PayCheck: oczekujące przelewy można otworzyć także z Budżetu; kolejka z paginacją, jawne ręczne potwierdzenie, wybór konkretnego rachunku i przypisanie potwierdzonego przelewu bez ponownego księgowania. Informacja o niepowodzeniu przypisania bez ukrywania potwierdzenia. Wymaga testu fizycznego; main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.70/edhome-beta.apk",
+  "sha256": "62e1b72dae054308eace7b9a26448307acd71013c1bedf23f19f60e75e3a9019"
 }
