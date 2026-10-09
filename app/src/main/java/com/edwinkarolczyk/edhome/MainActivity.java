@@ -13106,6 +13106,8 @@ public final class MainActivity extends Activity {
         button("Usuń wiele wpisów PayCheck",
             this::deleteSharedPaycheckEntriesBulk);
         title("Do potwierdzenia • bez wpływu na saldo");
+        button("✓ Pokaż i potwierdź oczekujące przelewy",
+            this::showSharedPaycheckPendingQueue);
         try (Cursor pending = db.getReadableDatabase().rawQuery(
                 "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
                 + "FROM paycheck_transactions WHERE scope='shared' "
@@ -14133,6 +14135,66 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    /** Oczekujące przelewy poza ograniczeniem historii ostatnich 40 pozycji. */
+    private void showSharedPaycheckPendingQueue() {
+        showSharedPaycheckPendingQueue(0);
+    }
+
+    private void showSharedPaycheckPendingQueue(int offset) {
+        final int pageSize=60;
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT operation_id,kind,amount_grosz,note,created_at "
+                + "FROM paycheck_transactions "
+                + "WHERE scope='shared' AND status='pending' "
+                + "ORDER BY id DESC LIMIT ? OFFSET ?",
+                new String[]{Integer.toString(pageSize+1),
+                    Integer.toString(offset)})) {
+            while(c.moveToNext()) {
+                ids.add(c.getString(0));
+                String description=c.getString(3);
+                String date=Instant.ofEpochMilli(c.getLong(4))
+                    .atZone(ZoneId.systemDefault()).toLocalDate().toString();
+                labels.add(date+" • "+("income".equals(c.getString(1))
+                    ? "+ " : "− ")+MoneyRules.format(c.getLong(2))
+                    +(description==null||description.isBlank()
+                        ? "" : " • "+description));
+            }
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_PENDING_QUEUE",error);
+            alert("Nie udało się odczytać przelewów. Sprawdź diagnostykę.");
+            return;
+        }
+        if(ids.isEmpty()) {
+            alert(offset==0 ? "Brak oczekujących przelewów. "
+                + "Możesz dodać transakcję w PayCheck."
+                : "To koniec oczekujących przelewów.");
+            return;
+        }
+        boolean more=ids.size()>pageSize;
+        if(more) {
+            ids.remove(pageSize);
+            labels.remove(pageSize);
+            labels.add("→ Następne przelewy");
+        }
+        AlertDialog.Builder picker=new AlertDialog.Builder(this)
+            .setTitle("Do potwierdzenia • "+(offset+1)+"–"+(offset+ids.size()))
+            .setMessage("Wybierz operację sprawdzoną w banku. "
+                +"Samo otwarcie listy niczego nie księguje.")
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                if(more && index==ids.size())
+                    showSharedPaycheckPendingQueue(offset+pageSize);
+                else confirmSharedPaycheckEntry(ids.get(index));
+            })
+            .setNegativeButton("Zamknij",null);
+        if(offset>0)
+            picker.setNeutralButton("← Poprzednie",
+                (d,w)->showSharedPaycheckPendingQueue(
+                    Math.max(0,offset-pageSize)));
+        picker.show();
+    }
+
     /** A manual attestation, NOT an automated bank statement verification. */
     private void confirmSharedPaycheckEntry(String operationId) {
         confirmSharedPaycheckEntry(operationId,null);
@@ -14687,6 +14749,7 @@ public final class MainActivity extends Activity {
 
     private void paycheckMonthlyBudget() {
         header("PayCheck • Budżet miesiąca");
+        button("✓ Potwierdź oczekujący przelew", this::showSharedPaycheckPendingQueue);
         sharedMonthlyBudgetBlock();
     }
 
@@ -15108,6 +15171,9 @@ public final class MainActivity extends Activity {
             }
         }
 
+        details.addView(budgetInlineButton("✓ Rozlicz / przypisz przelew",
+            () -> showBudgetPaymentPicker(item,month,0)),
+            new LinearLayout.LayoutParams(-1,dp(44)));
         details.addView(budgetInlineButton("Historia",
             () -> showBudgetItemHistory(item)),
             new LinearLayout.LayoutParams(-1,dp(40)));
@@ -15460,6 +15526,140 @@ public final class MainActivity extends Activity {
             DiagnosticLog.error("PAYCHECK_ATTACHMENT_OPEN",error);
             alert("Nie można otworzyć tego załącznika.");
         }
+    }
+
+    /** Użytkownik wskazuje przelew konkretnego miesiąca i rachunku. */
+    private void showBudgetPaymentPicker(PaycheckMonthlyBudget.Item item,
+            YearMonth month,int offset) {
+        final int pageSize=60;
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        java.util.List<String> states=new java.util.ArrayList<>();
+        java.util.List<Long> amounts=new java.util.ArrayList<>();
+        java.util.List<String> labels=new java.util.ArrayList<>();
+        try {
+            java.util.Set<String> assigned=new java.util.HashSet<>();
+            for(PaycheckMonthlyBudget.Item other:PaycheckMonthlyBudget.load(prefs))
+                assigned.addAll(other.matchedOperationIds);
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT operation_id,amount_grosz,note,created_at,"
+                    +"statement_date,status FROM paycheck_transactions "
+                    +"WHERE scope='shared' AND kind=? "
+                    +"AND status IN ('pending','confirmed') ORDER BY id DESC",
+                    new String[]{item.kind})) {
+                while(c.moveToNext()) {
+                    String operationId=c.getString(0);
+                    if(assigned.contains(operationId))continue;
+                    String statementDate=c.isNull(4)?null:c.getString(4);
+                    if(!month.equals(PaycheckMonthlyBudget.transactionMonth(
+                            c.getLong(3),statementDate)))continue;
+                    ids.add(operationId);
+                    amounts.add(c.getLong(1));
+                    states.add(c.getString(5));
+                    String note=c.getString(2);
+                    labels.add(("pending".equals(c.getString(5))
+                        ?"DO POTWIERDZENIA • ":"POTWIERDZONY • ")
+                        +MoneyRules.format(c.getLong(1))
+                        +(note==null||note.isBlank()?"":" • "+note));
+                }
+            }
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_PAYMENT_PICKER",error);
+            alert("Nie udało się odczytać przelewów. Dane bez zmian.");
+            return;
+        }
+        if(ids.isEmpty()) {
+            alert("Brak nieprzypisanych przelewów z "
+                +budgetMonthLabel(month)+". Dodaj transakcję w PayCheck.");
+            return;
+        }
+        final int first=offset>=ids.size()?0:offset;
+        final int last=Math.min(first+pageSize,ids.size());
+        java.util.List<String> visible=new java.util.ArrayList<>(
+            labels.subList(first,last));
+        final boolean more=last<ids.size();
+        if(more)visible.add("→ Następne przelewy");
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("Rozlicz • "+item.name)
+            .setMessage("Wybierz przelew z "+budgetMonthLabel(month)
+                +". Potwierdzenie i przypisanie wymagają Twojej zgody.")
+            .setItems(visible.toArray(new String[0]),(d,index)->{
+                if(more && index==last-first) {
+                    showBudgetPaymentPicker(item,month,last);
+                    return;
+                }
+                int selected=first+index;
+                confirmBudgetPaymentAssignment(item,month,
+                    ids.get(selected),states.get(selected),amounts.get(selected));
+            })
+            .setNegativeButton("Zamknij",null);
+        if(first>0)
+            dialog.setNeutralButton("← Poprzednie",(d,w)->
+                showBudgetPaymentPicker(item,month,
+                    Math.max(0,first-pageSize)));
+        dialog.show();
+    }
+
+    /** Potwierdzenie księgi i powiązanie z planem: bez nowej transakcji. */
+    private void confirmBudgetPaymentAssignment(PaycheckMonthlyBudget.Item item,
+            YearMonth month,String operationId,String oldStatus,long amount) {
+        final boolean pending="pending".equals(oldStatus);
+        new AlertDialog.Builder(this)
+            .setTitle(pending?"Potwierdź i przypisz przelew"
+                :"Przypisz potwierdzony przelew")
+            .setMessage("Przelew: "+MoneyRules.format(amount)
+                +"\nRachunek: "+budgetItemDisplayName(item)
+                +"\nMiesiąc: "+budgetMonthLabel(month)
+                +"\nDo zapłaty: "+MoneyRules.format(
+                    PaycheckMonthlyBudget.remainingDue(
+                        db.getReadableDatabase(),item,month))
+                +"\n\n"+(pending
+                    ?"Najpierw sprawdź transakcję w banku. "
+                    :"Przelew jest już potwierdzony w PayCheck. ")
+                +"Jeśli kwoty się różnią, różnica pozostanie jawna. "
+                +"Saldo nie zostanie policzone drugi raz.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton(pending
+                ?"Sprawdziłem — potwierdź i przypisz":"Przypisz",
+                (d,w)->{
+                    boolean justConfirmed=false;
+                    try {
+                        if(pending) {
+                            String result=PaycheckStore.confirm(
+                                db.getWritableDatabase(),operationId);
+                            if(!"CONFIRMED".equals(result)) {
+                                render();
+                                alert("Przelew był już potwierdzony lub nie istnieje. "
+                                    +"Nie zaksięgowano drugi raz.");
+                                return;
+                            }
+                            justConfirmed=true;
+                            DiagnosticLog.event("PAYCHECK_SHARED_CONFIRMED");
+                        }
+                        boolean changed=PaycheckMonthlyBudget.match(
+                            prefs,db.getReadableDatabase(),item.id,operationId);
+                        if(!changed) {
+                            render();
+                            alert("Przelew był już przypisany. Bez duplikatu.");
+                            return;
+                        }
+                        PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
+                        DiagnosticLog.event("PAYCHECK_BUDGET_MANUAL_MATCH");
+                        render();
+                        alert("Przelew "+(justConfirmed
+                            ?"potwierdzony i przypisany."
+                            :"przypisany bez powtórnego księgowania."));
+                    } catch(Exception error) {
+                        DiagnosticLog.error("PAYCHECK_BUDGET_MANUAL_CONFIRM",error);
+                        render();
+                        String reason=error.getMessage();
+                        alert((justConfirmed
+                            ?"Przelew potwierdzono w PayCheck, lecz NIE przypisano "
+                                +"go do rachunku."
+                            :"Nie udało się rozliczyć przelewu.")
+                            +(reason==null||reason.isBlank()
+                                ?" Sprawdź diagnostykę.":"\nPowód: "+reason));
+                    }
+                }).show();
     }
 
     private void budgetArrearRow(PaycheckMonthlyBudget.Item item,

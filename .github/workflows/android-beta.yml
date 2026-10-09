@@ -562,7 +562,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. PayCheck / Budżet miesiąca, etap 6: Android ma zwarty bilans wpływów, wydatków, różnicy i kwoty do zapłaty. Potwierdzenia, zaległości i nadpłaty są widoczne od razu, a rozbudowane rozliczenie ma rozwijaną sekcję bez gubienia przewinięcia. Nie zmieniano księgi, danych finansowych, SQLite ani synchronizacji LAN. QR Beta / Stable pozostaje w Aktualizacjach. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. P0 PayCheck: oczekujące przelewy można otworzyć także z Budżetu; kolejka z paginacją, jawne ręczne potwierdzenie, wybór konkretnego rachunku i przypisanie potwierdzonego przelewu bez ponownego księgowania. Informacja o niepowodzeniu przypisania bez ukrywania potwierdzenia. Wymaga testu fizycznego; main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

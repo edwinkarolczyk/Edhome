@@ -6,17 +6,17 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — etap 6 Budżetu Android: poprawiony zakres patcha po CI #2020 FAIL; 0.8.0.67/259 ponownie weryfikowane; 5C i 6 bez odbioru fizycznego |
+| Ostatnia aktualizacja | 2026-10-09 — P0 zgłoszone przez użytkownika: brak możliwości potwierdzania przelewów; kandydat Android 0.8.0.68/260, CI i odbiór fizyczny wymagane |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.67 / 259 — kandydat etapu 6, wymaga CI i publikacji**. Poprzednia **0.8.0.66/258**: [Android CI #2019 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37880718359); podpisane wydanie do sprawdzenia w manifest |
+| Android Beta | **0.8.0.68 / versionCode 260 — kandydat P0, niezweryfikowany na telefonie**. Poprzednie **0.8.0.67 / 259** — [Android CI #2022 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37883517699) i manifest podpisanego wydania. |
 | Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37841803131 / #2010](https://github.com/edwinkarolczyk/Edhome/actions/runs/37841803131) — **success**, commit `7fa54c6c23d0d1a3c774fa1d5525f680d84ce05e` |
 | Ostatni zweryfikowany CI Desktop | [run #37848629781 / #284](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781) — **success**, commit `c52b5e0b9111205b6916c4240de5ea35cfb1753c` |
-| Bieżący etap | **PayCheck/Budżet etap 6:** Android UX kompaktowy bilans wdrożony kodowo, czeka na CI i test B1–B12; **5C:** A1–A20 nadal bez fizycznego odbioru. Aktualizacje Beta 0.8.0.66 mają CI #2019 PASS. |
-| Następny krok | Po zielonym Android CI etapu 6: B1–B12 na telefonie, porównanie Android↔Desktop, osobny bezpieczny test 5C A1–A20 na kopii danych, zwłaszcza dwa kierunki, nadpłaty i backup→restore; nie przenosić do `main` bez akceptacji. |
+| Bieżący etap | **P0 PayCheck/Budżet: nie działają potwierdzenia przelewów według zgłoszenia użytkownika; brak fizycznego odbioru.** Etapy 5C i 6 nieodebrane. |
+| Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -30,6 +30,16 @@
 - **Do zamknięcia:** (1) zielony build i opublikowany podpisany APK 0.8.0.65; (2) na telefonie sprawdzenie, czy są dokładnie 4 działania i nie ma starych kafli; (3) „Co nowego” z działającym internetem, przy braku internetu i przy nieaktualnej wersji telefonu; (4) QR w zaawansowanych, ręczna instalacja i odtwarzanie gotowego APK; (5) sprawdzić, że PayCheck, Projekty, Magazyn i LAN sync zachowały dane. **Stable `main` nietknięty.**
 
 **Korekta na wyraźne życzenie użytkownika (09.10):** osobny kafelek **QR Beta / Stable** zostaje też na głównym ekranie Aktualizacji (łącznie **5 działań**: Sprawdź, Instaluj APK, Co nowego, QR Beta / Stable, Opcje zaawansowane). Dodatkowo QR pozostaje w Opcjach zaawansowanych. Commit [`8999850`](https://github.com/edwinkarolczyk/Edhome/commit/899985019780e91c1ce80cc3b1157b68af8cb8a1) aktualizuje kod i test kontraktowy, podnosi wersję do **Android Beta 0.8.0.66/258** w celu uniknięcia konfliktu z ewentualną publikacją 0.8.0.65. Nie oznaczać jako gotowego przed CI i publikacją podpisanego APK; `main` bez zmian.
+
+## P0 — potwierdzanie przelewów, zgłoszenie z telefonu (09.10.2026)
+
+**Stan odbioru: ZABLOKOWANY.** Użytkownik zgłosił, że nie udało mu się potwierdzić żadnego przelewu. Zielony CI nie jest dowodem działania na telefonie. Nie oznaczać punktów 9–14 kontraktu 25/25 ani scenariusza B6 jako odebranych przed fizycznym testem.
+
+**Co wykryto w kodzie:** potwierdzanie dostępne było przy transakcjach w historii PayCheck (tylko 40 ostatnich), bez bezpośredniego przycisku w Budżecie. Automatyczne sugerowanie dopasowań wymaga wyraźnej zgodności kwoty/kategorii; potwierdzona płatność bez dopasowania pozostawała poza rachunkiem. To potwierdzone luki obsługi, ale **nie jest jeszcze udowodnioną przyczyną** nieudanego zapisu na urządzeniu użytkownika.
+
+**Kandydat 0.8.0.68/260:** (1) jawna kolejka oczekujących przelewów w PayCheck i Budżecie, po 60 szt. na stronę, bez limitu historii 40; (2) w rozwiniętym rachunku akcja „Rozlicz / przypisz przelew”, lista nieprzypisanych operacji tego samego rodzaju i miesiąca; (3) osobny dialog świadomego potwierdzenia pending i przypisania lub przypisania istniejącej confirmed, bez nowego INSERT w księdze; (4) sprawdzanie rezultatu, logi PAYCHECK_PENDING_QUEUE / PAYCHECK_BUDGET_PAYMENT_PICKER / PAYCHECK_BUDGET_MANUAL_CONFIRM; (5) osobny komunikat, gdy PayCheck został potwierdzony, a zapis przypisania się nie udał. Nie usuwano historii, migracji ani danych istniejących.
+
+**Obowiązkowy test:** nowy wpis pending → lista → ręczne potwierdzenie → saldo 1× → podpięcie do rachunku → spadek „do zapłaty” bez zmiany salda drugi raz → historia → restart. Osobno sprawdzić istniejący już confirmed, ponowne wskazanie tego samego przelewu, różnice kwoty, konflikt, import bankowy oraz synchronizację Desktop→Android. Na błędzie pobrać diagnostykę, bez ujawniania danych bankowych. **Nie zmieniać `main`**.
 
 ## Etap 6 — Android, zwarty bilans (09.10.2026)
 

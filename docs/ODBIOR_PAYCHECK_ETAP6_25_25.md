@@ -39,6 +39,8 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 
 **Ocena:** w kodzie Beta istnieje pokrycie 25 punktów według kontraktu źródłowego i wcześniejszych regresji. Nie wolno zapisywać „odebrane 25/25” do czasu ukończenia odpowiednich prób B i A1–A20. Szczególnie wymagają uwagi Android UX, kopie załączników i konflikty zmian offline.
 
+**Blokada P0 (09.10):** użytkownik nie był w stanie potwierdzić żadnego przelewu. B6 oraz rozliczeniowe punkty 9–14 muszą być przyjęte fizycznie na telefonie po poprawce 0.8.0.68/260 i sprawdzeniu pending→confirmed→Budżet. Pozostałe testy automatyczne nie wystarczają.
+
 ## Scenariusze etapu 6
 
 | Test | Co sprawdzić na kopii danych | Stan |
@@ -48,7 +50,7 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 | B3 | Rozwiń pozycję A, potem B; poprzednia zwinięta, przewinięcie się nie resetuje | ☐ |
 | B4 | Opłacone/zaległe/częściowo/opcjonalne i plakietki rat mają właściwe kolory | ☐ |
 | B5 | Zaległość poprzedniego miesiąca na górze, opcjonalnego brak w zaległościach | ☐ |
-| B6 | Przelew grupowy, nadpłata i zgoda na odliczenie; brak podwójnego księgowania | ☐ |
+| B6 | **P0:** ręczne pending→confirmed, bezpośrednie przypisanie do rachunku, jedna zmiana salda; dalej grupowy przelew, nadpłata i zgodne odliczenie | ☐ — zgłoszono brak możliwości potwierdzenia |
 | B7 | Ręczne zamknięcie z powodem, zakres cyklu i zmiana kwoty miesiąc/od teraz | ☐ |
 | B8 | Raty: liczba → koniec i koniec → liczba, „zostało”, suma i ostatnie raty | ☐ |
 | B9 | Jeden odbiorca, dwa zobowiązania, podpowiedź szablonu; PC pokazuje tę kartotekę | ☐ |

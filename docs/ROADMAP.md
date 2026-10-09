@@ -158,6 +158,9 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 
 ## PayCheck — Budżet miesiąca 1.0 (kontrakt odbioru 25/25)
 
+**P0 z odbioru 09.10.2026:** użytkownik nie może potwierdzić przelewów. Kategorycznie nie zamykać rozliczeń 9–14/25 ani B6. Przygotować/odebrać ręczne pending→confirmed z PayCheck i Budżetu, przypisanie do rachunku, brak dublowania salda i historia; sprawdzić na kopii danych i po synchronizacji. Kandydat Android 0.8.0.68/260; kod i CI nie stanowią odbioru.
+
+
 > Ustalenie Edwina z 07.10.2026. Ta sekcja jest źródłem prawdy dla przebudowy Budżetu miesiąca. Funkcji nie uznawać za ukończoną tylko dlatego, że istnieje podobny ekran lub częściowa logika. Odbiór dopiero po spełnieniu poniższych punktów i testów regresyjnych. Rozwój wyłącznie na `beta`; `main` bez osobnej zgody pozostaje nietknięty.
 
 1. **Miesiące i historia:** osobny ekran Budżetu miesiąca z nawigacją poprzedni/następny/bieżący; historyczny stan ma umożliwiać późniejsze analizy zaległości, nadpłat i zmian planu.
