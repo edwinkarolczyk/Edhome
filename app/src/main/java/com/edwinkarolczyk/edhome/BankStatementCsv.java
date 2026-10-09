@@ -13,8 +13,8 @@ import java.util.Set;
 
 /** User-selected CSV file. This does not connect to a bank or authenticate the file. */
 final class BankStatementCsv {
-    static final int MAX_BYTES = 256 * 1024;
-    static final int MAX_ROWS = 250;
+    static final int MAX_BYTES = 8 * 1024 * 1024;
+    static final int MAX_ROWS = 25000;
     private static final DateTimeFormatter POLISH_DATE =
         DateTimeFormatter.ofPattern("dd.MM.uuuu", Locale.ROOT)
             .withResolverStyle(ResolverStyle.STRICT);
@@ -38,7 +38,7 @@ final class BankStatementCsv {
 
     static List<Entry> parse(String csv, String bankLabel) {
         if (csv == null || csv.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES)
-            throw new IllegalArgumentException("Wyciąg CSV jest za duży (maks. 256 KB).");
+            throw new IllegalArgumentException("Wyciąg CSV jest za duży (maks. 8 MB).");
         String bank=bankLabel==null?"":bankLabel.trim();
         if (bank.isEmpty() || bank.length()>80)
             throw new IllegalArgumentException("Podaj nazwę banku (maks. 80 znaków).");
@@ -65,7 +65,7 @@ final class BankStatementCsv {
         for(int i=1;i<lines.length;i++) {
             if(lines[i].trim().isEmpty())continue;
             if(entries.size()>=MAX_ROWS)
-                throw new IllegalArgumentException("Maksymalnie 250 transakcji na plik.");
+                throw new IllegalArgumentException("Maksymalnie 25 000 transakcji na jeden plik CSV.");
             List<String> row=fields(lines[i],delimiter);
             if(row.size()!=header.size())
                 throw new IllegalArgumentException("Błędna liczba kolumn CSV, wiersz "+(i+1));

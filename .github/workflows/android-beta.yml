@@ -257,15 +257,19 @@ jobs:
             app/src/main/java/com/edwinkarolczyk/edhome/BankStatementWorkbook.java \
             tests/task_rules/BankStatementCsvSmoke.java \
             tests/task_rules/BankStatementMbankSmoke.java \
-            tests/task_rules/BankStatementVeloPdfSmoke.java
+            tests/task_rules/BankStatementVeloPdfSmoke.java \
+            tests/task_rules/BankStatementLongHistorySmoke.java
           java -cp "$RUNNER_TEMP/bank-csv" \
             com.edwinkarolczyk.edhome.BankStatementCsvSmoke
           java -cp "$RUNNER_TEMP/bank-csv" \
             com.edwinkarolczyk.edhome.BankStatementMbankSmoke
           java -cp "$RUNNER_TEMP/bank-csv" \
             com.edwinkarolczyk.edhome.BankStatementVeloPdfSmoke
+          java -cp "$RUNNER_TEMP/bank-csv" \
+            com.edwinkarolczyk.edhome.BankStatementLongHistorySmoke
           python3 tests/check_bank_statement_contract.py
           python3 tests/check_bank_evidence_queue_contract.py
+          python3 tests/check_bank_large_history_android.py
       - name: PayCheck provenance and backup regression
         run: python3 tests/check_paycheck_provenance_contract.py
       - name: SQLite migration and backup contract

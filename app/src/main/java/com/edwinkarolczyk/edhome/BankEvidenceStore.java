@@ -13,7 +13,8 @@ import java.util.List;
  * the user explicitly matches or dismisses them. Raw files are never stored.
  */
 final class BankEvidenceStore {
-    static final int MAX_ROWS=5000;
+    static final int MAX_ROWS=200000;
+    static final int MAX_IMPORT_BATCH=50000;
 
     static final class Incoming {
         final BankStatementCsv.Entry entry;
@@ -71,8 +72,8 @@ final class BankEvidenceStore {
 
     static IngestResult ingest(SQLiteDatabase db,List<Incoming> incoming) {
         if(incoming==null||incoming.isEmpty())return new IngestResult(0,0);
-        if(incoming.size()>BankStatementCsv.MAX_ROWS)
-            throw new IllegalArgumentException("Za dużo pozycji w jednej partii.");
+        if(incoming.size()>MAX_IMPORT_BATCH)
+            throw new IllegalArgumentException("Jedna partia może mieć maksymalnie 50 000 operacji bankowych. Podziel import na partie.");
         db.beginTransaction();
         try {
             long total;
@@ -87,8 +88,8 @@ final class BankEvidenceStore {
                 }
                 if(total+inserted>=MAX_ROWS)
                     throw new IllegalArgumentException(
-                        "Kolejka bankowa osiągnęła limit 5000 pozycji. "
-                        +"Zamknij stare wpisy przed kolejnym importem.");
+                        "Archiwum bankowe osiągnęło limit 200 000 pozycji. "
+                        +"Zachowaj kopię danych i skontaktuj się z diagnostyką.");
                 ContentValues v=new ContentValues();
                 v.put("evidence_key",candidate.entry.evidenceKey);
                 v.put("source_kind",candidate.sourceKind);
@@ -154,6 +155,66 @@ final class BankEvidenceStore {
                     c.isNull(11)?null:c.getLong(11)));
         }
         return result;
+    }
+
+    /**
+     * Paginacja archiwum bankowego bez cięcia historii do 500 pozycji.
+     * Filtr stosowany jest po stronie SQLite PRZED LIMIT/OFFSET,
+     * inaczej starsze pasujące operacje nigdy nie pojawią się w widoku.
+     */
+    private static String filterPredicate(int filter) {
+        switch(filter) {
+            case 0: return "";
+            case 1: return " AND (SELECT COUNT(*) FROM paycheck_transactions t "
+                +"WHERE t.scope='shared' AND t.status='pending' "
+                +"AND t.kind=e.kind AND t.amount_grosz=e.amount_grosz)=1";
+            case 2: return " AND (SELECT COUNT(*) FROM paycheck_transactions t "
+                +"WHERE t.scope='shared' AND t.status='pending' "
+                +"AND t.kind=e.kind AND t.amount_grosz=e.amount_grosz)>1";
+            case 3: return " AND NOT EXISTS (SELECT 1 FROM paycheck_transactions t "
+                +"WHERE t.scope='shared' AND t.status='pending' "
+                +"AND t.kind=e.kind AND t.amount_grosz=e.amount_grosz)";
+            case 4: return " AND e.kind='expense'";
+            case 5: return " AND e.kind='income'";
+            default: throw new IllegalArgumentException("Nieznany filtr dowodów bankowych.");
+        }
+    }
+
+    static long count(SQLiteDatabase db,String state,int filter) {
+        validateState(state);
+        try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM bank_evidence_queue e "
+                +"WHERE e.state=?"+filterPredicate(filter),new String[]{state})) {
+            return c.moveToFirst()?c.getLong(0):0;
+        }
+    }
+
+    static List<Row> listPage(SQLiteDatabase db,String state,int filter,
+            int limit,int offset) {
+        validateState(state);
+        if(limit<1||limit>100||offset<0)
+            throw new IllegalArgumentException("Nieprawidłowa strona kolejki.");
+        List<Row> result=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT e.id,e.evidence_key,e.source_kind,e.source_label,e.kind,"
+                +"e.amount_grosz,e.booking_date,e.description,e.imported_at,"
+                +"e.state,e.matched_operation_id,e.matched_at "
+                +"FROM bank_evidence_queue e WHERE e.state=?"+filterPredicate(filter)
+                +" ORDER BY e.booking_date DESC,e.id DESC LIMIT ? OFFSET ?",
+                new String[]{state,Integer.toString(limit),Integer.toString(offset)})) {
+            while(c.moveToNext())
+                result.add(new Row(c.getLong(0),c.getString(1),c.getString(2),
+                    c.getString(3),c.getString(4),c.getLong(5),c.getString(6),
+                    c.getString(7),c.getLong(8),c.getString(9),
+                    c.isNull(10)?null:c.getString(10),
+                    c.isNull(11)?null:c.getLong(11)));
+        }
+        return result;
+    }
+
+    private static void validateState(String state) {
+        if(!("open".equals(state)||"matched".equals(state)
+                ||"dismissed".equals(state)))
+            throw new IllegalArgumentException("Nieprawidłowy filtr kolejki.");
     }
 
     static int pendingMatches(SQLiteDatabase db,Row row) {

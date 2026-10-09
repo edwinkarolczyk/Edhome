@@ -156,6 +156,10 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 
 ---
 
+## P0 — Import pełnej historii bankowej Android (09.10.2026)
+
+**Problem zgłoszony po Beta 0.8.0.73:** importer ograniczał CSV/mBank do 250 operacji / 256 KB, partię do 250 wpisów, bazę dowodów do 5000, a listę do pierwszych 500; XLSX do 2000 wierszy. **Kandydat 0.8.0.74/266:** zwiększenie limitów 8 MB / 25 000 operacji na plik, 50 000/partię, 200 000 w kolejce, 12 000 wierszy XLSX; przegląd i filtry całej historii stronami po 100; praca importu w tle i widoczny raport nowo zapisanych oraz duplikatów, bez automatycznego księgowania. Odrzuca nieobsługiwane lub niejednoznaczne dane — nie wolno po cichu obcinać transakcji. **Test z prawdziwym plikiem i backup pozostaje obowiązkowy; automatyczne bankowe potwierdzanie jednoznacznych dopasowań to osobny przyszły etap.** Stable `main` bez zmian.
+
 ## PayCheck — Budżet miesiąca 1.0 (kontrakt odbioru 25/25)
 
 **P0 — przepływ Budżet → PayCheck, 09.10.2026 (kandydat Android 0.8.0.73/265):** pozycje bieżącego miesiąca (wpływ/wydatek) muszą być automatycznie widoczne w PayCheck jako **planowane do obsłużenia**. Nie wolno tworzyć transakcji ani zmieniać salda przy samym zapisie planu. Użytkownik może wybrać istniejący przelew z PayCheck/wyciągu lub świadomie zgłosić nową płatność jako `pending`. Dopiero sprawdzenie banku i potwierdzenie `pending → confirmed` pozwala zmienić saldo **jeden raz** i przypisać przelew do pozycji, zachowując jej historię. Ten sam rachunek + miesiąc nie może tworzyć powtarzających się automatycznych zgłoszeń; raty, wpływy, nadpłaty i częściowe płatności pozostają do odbioru na urządzeniu. Z poziomu Budżetu musi być widoczne przejście do PayCheck i powrót. **Kod wdrożony na beta, odbiór fizyczny i CI osobno; main bez zmian.**

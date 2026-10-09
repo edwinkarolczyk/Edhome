@@ -47,11 +47,18 @@ final class BankStatementVeloPdf {
         if(!recognizes(text))
             throw new IllegalArgumentException("PDF nie został rozpoznany jako dokument VeloBanku.");
         String normalized=normalize(text);
-        if(normalized.getBytes(StandardCharsets.UTF_8).length>512*1024)
+        if(normalized.getBytes(StandardCharsets.UTF_8).length>BankStatementCsv.MAX_BYTES)
             throw new IllegalArgumentException("Tekst PDF VeloBanku jest za duży.");
+        // W wielostronicowej historii PDF pola nagłówka mogą wyglądać
+        // jak pojedyncze potwierdzenie. Najpierw sprawdź wiersze tabeli.
+        List<BankStatementCsv.Entry> statement=parseStatementRows(normalized);
+        if(statement.size()>1)return statement;
         List<BankStatementCsv.Entry> labeled=parseLabeledConfirmation(normalized);
         if(!labeled.isEmpty())return labeled;
-        return parseStatementRows(normalized);
+        if(!statement.isEmpty())return statement;
+        throw new IllegalArgumentException(
+            "Nie znaleziono jednoznacznych operacji w tekstowym PDF VeloBanku. "
+            +"PDF skanowany jako obraz nie jest automatycznie odczytywany.");
     }
 
     private static List<BankStatementCsv.Entry> parseLabeledConfirmation(String text) {
@@ -116,12 +123,8 @@ final class BankStatementVeloPdf {
                 parsed.grosz,trim(description,300),"VeloBank PDF",key));
             if(result.size()>BankStatementCsv.MAX_ROWS)
                 throw new IllegalArgumentException(
-                    "PDF VeloBanku: maksymalnie 250 operacji.");
+                    "PDF VeloBanku: maksymalnie 25 000 operacji.");
         }
-        if(result.isEmpty())
-            throw new IllegalArgumentException(
-                "Nie znaleziono jednoznacznych operacji w tekstowym PDF VeloBanku. "
-                +"PDF skanowany jako obraz nie jest automatycznie odczytywany.");
         return result;
     }
 

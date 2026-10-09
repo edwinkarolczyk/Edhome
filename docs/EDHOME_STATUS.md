@@ -6,11 +6,11 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android Budżet → PayCheck: 0.8.0.73/265, CI #2048 PASS, podpisany APK opublikowany; fizyczne potwierdzanie i LAN nadal do odbioru |
+| Ostatnia aktualizacja | 2026-10-09 — Android P0: naprawa importu całej historii bankowej, Beta 0.8.0.74/266 przygotowana do CI; fizyczny import i dopasowania do odbioru |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.73 / versionCode 265**, [CI #2048 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.73/edhome-beta.apk); test fizyczny przepływu, historia, saldo i LAN nadal nieodebrane. |
+| Android Beta | **0.8.0.74 / versionCode 266 — kandydat naprawy importu całej historii bankowej; CI / podpisany APK do weryfikacji**; poprzednia 0.8.0.73/265 [CI #2048 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), [APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.73/edhome-beta.apk). |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.73/265 CI #2048 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37902154090), podpisany APK oraz opublikowany Release i manifest SHA-256. Pierwszy run #2047 FAIL: test źródłowy błędnie szukał definicji metody wyłącznie w obszarze `paycheck()`; naprawiono sam test, rerun sukces. |
@@ -19,6 +19,20 @@
 | Następny krok | CI P0 oraz odbiór na kopii danych: dodanie → potwierdzenie pending → aktualizacja salda jeden raz → ręczne przypisanie do konkretnego rachunku → różnice, historia, restart, backup/restore i LAN. Dopiero potem B1–B12 i A1–A20. Stable `main` bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — Android: import całej historii bankowej (09.10.2026)
+
+**Zgłoszenie:** mimo wcześniejszego naprawienia widoku historii PayCheck, użytkownik nadal nie może zaimportować pełnego wyciągu bankowego. **Audyt kodu wersji 0.8.0.73:** import jest niezależny od stronicowanej księgi PayCheck, miał ograniczenia 256 KB / 250 pozycji *na plik i łącznie na partię*, 5000 pozycji w trwałej kolejce i niewidoczny ogon po pierwszych 500. XLSX zatrzymywał się przy 2000 wierszy; tekstowy PDF mógł zostać uznany za pojedyncze potwierdzenie przez priorytet parsera, mimo tabeli z wieloma operacjami. Import całych plików działał synchronicznie na głównym wątku, co mogło blokować UI.
+
+**Kandydat Android Beta 0.8.0.74 / 266** (tylko `beta`; przed CI):
+- CSV/mBank: limit bezpiecznego odczytu **8 MB / 25 000 operacji na plik**; 10 plików na wybór; do **50 000 różnych operacji w partii**. Dalsze pliki można importować osobno. Limity jawne i brak cichego obcięcia; błąd przy przekroczeniu limitu i atomowy brak częściowego zapisu danej partii.
+- Trwała kolejka `bank_evidence_queue`: limit techniczny 200 000 wpisów. Odpytywanie **count()** (bez podglądowego LIMIT 500); **listPage()** z filtrowaniem w SQLite *przed* `LIMIT 100 OFFSET`, zarówno kolejka otwarta, jak i odrzucona. Widać zakres i liczbę operacji, kolejne/poprzednie strony, wpływy/wydatki i filtry dopasowania.
+- XLSX: do 12 000 wierszy w rozpoznawanym arkuszu, 16 MB rozpakowanych danych; dla większych historii eksport CSV. VeloBank PDF: do 25 000 rozpoznanych wierszy; parsowanie całej tabeli ma pierwszeństwo przed pojedynczym potwierdzeniem. **Nadal wymagany tekstowy, rozpoznawalny format PDF — brak OCR dla skanów.**
+- Odczyt, parsowanie i zapis dużej partii wykonują się poza wątkiem UI. Dialog importu pokazuje sumę rozpoznanych, nowych oraz duplikatów; odrzucona partia ma jawny błąd i nie kasuje wcześniej zaimportowanych danych.
+- **Bezpieczeństwo finansowe:** import wyciągu dopisuje jedynie dowody w `bank_evidence_queue`, **nie tworzy ani automatycznie nie potwierdza transakcji PayCheck**. Ręczne parowanie, brak duplikatów i saldo tylko przy zatwierdzeniu zachowane. Automatyczne uzgadnianie jednoznacznych bankowych dopasowań według ostatnich ustaleń użytkownika **pozostaje osobnym, nieukończonym wymaganiem**.
+- Testy regresyjne: Java `BankStatementLongHistorySmoke` — CSV 3500, mBank 1600, XLSX 2200, Velo PDF 350 operacji, test stabilnych ID i duplikatów; Python `check_bank_large_history_android.py` — kompletność 3001 wierszy i SQL-paginacja filtrów. Kontrakty CSV, bank queue zaktualizowane. Android CI musi potwierdzić wynik.
+
+**Nierozwiązane i do odbioru:** prawdziwy plik bankowy użytkownika (jeśli układ nie odpowiada rozpoznawanym CSV/mBank/XLSX/PDF, sam większy limit nie wystarczy), liczba operacji w pliku vs „rozpoznane / zapisane / duplikaty”, historia wszystkich stron, restart telefonu, backup→restore (obecny format kopii JSON nadal ma odrębny limit 32 MB; przy ogromnych historiach może wymagać przebudowy), synchronizacja Desktop↔Android i parowanie z Budżetem. `main` bez zmian.
 
 ## P0 — Budżet → PayCheck / Do potwierdzenia (09.10.2026)
 

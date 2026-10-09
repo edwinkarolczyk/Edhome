@@ -13087,14 +13087,14 @@ public final class MainActivity extends Activity {
                 +"i czas, bez treści i kodów.");
             showBankNotificationHints();
         }
-        button("Dodaj potwierdzenia • CSV / mBank / XLSX", this::selectStatementCsv);
+        button("Import historii bankowej • CSV / mBank / XLSX / PDF", this::selectStatementCsv);
         if(BetaUpdater.isBeta()) {
-            int bankOpen=BankEvidenceStore.list(
-                db.getReadableDatabase(),"open").size();
-            int bankMatched=BankEvidenceStore.list(
-                db.getReadableDatabase(),"matched").size();
-            int bankDismissed=BankEvidenceStore.list(
-                db.getReadableDatabase(),"dismissed").size();
+            long bankOpen=BankEvidenceStore.count(
+                db.getReadableDatabase(),"open",0);
+            long bankMatched=BankEvidenceStore.count(
+                db.getReadableDatabase(),"matched",0);
+            long bankDismissed=BankEvidenceStore.count(
+                db.getReadableDatabase(),"dismissed",0);
             button("Banki i potwierdzenia • kolejka ("+bankOpen+")",
                 ()->showBankEvidenceQueue(0));
             note("Kolejka bankowa: "+bankOpen+" otwartych • "
@@ -13805,8 +13805,10 @@ public final class MainActivity extends Activity {
         bank.setText(prefs.getString("paycheck_csv_bank_name",""));
         lightDialogForm(bank);
         new AlertDialog.Builder(this).setTitle("Dodaj pliki bankowe • PayCheck")
-            .setMessage("Do 10 plików naraz. Obsługiwane: zwykły CSV, tekstowy eksport "
-                + "mBanku, XLSX z tekstowym eksportem oraz tekstowy PDF VeloBanku. "
+            .setMessage("Do 10 plików naraz, do 8 MB każdy, do 25 000 "
+                + "transakcji na jeden plik CSV/mBank. Jedna partia: do 50 000. "
+                + "Obsługiwane: zwykły CSV, tekstowy eksport "
+                + "mBanku, XLSX (do 12 000 wierszy) oraz tekstowy PDF VeloBanku. "
                 + "Nazwę banku wpisz dla zwykłego CSV; mBank i VeloBank są wykrywane "
                 + "automatycznie. PDF będący wyłącznie skanem obrazu nie jest OCR-owany. "
                 + "EDHOME niczego nie wysyła i nie sprawdza autentyczności pliku.")
@@ -13861,11 +13863,32 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private volatile boolean bankImportRunning;
+
     private void importStatementCsv(java.util.List<Uri> files, String bank) {
         if(files==null||bank==null||files.isEmpty())return;
         if(files.size()>10){alert("Wybierz maksymalnie 10 plików na raz.");return;}
+        if(bankImportRunning) {
+            alert("Import już trwa. Drugi import uruchom po zakończeniu pierwszego.");
+            return;
+        }
+        bankImportRunning=true;
+        bankImportDiag("START",files.size(),0);
+        final AlertDialog progress=new AlertDialog.Builder(this)
+            .setTitle("Import historii bankowej")
+            .setMessage("Czytam wszystkie operacje i sprawdzam duplikaty. "
+                +"Saldo i dotychczasowa historia pozostają bez zmian. "
+                +"Możesz zamknąć to okno, import będzie kontynuowany.")
+            .setNegativeButton("W tle",null).create();
+        progress.show();
+        final java.util.List<Uri> chosen=new java.util.ArrayList<>(files);
+        new Thread(()->importStatementFilesWorker(chosen,bank,progress),
+            "EDHOME-bank-history-import").start();
+    }
+
+    private void importStatementFilesWorker(
+            java.util.List<Uri> files,String bank,AlertDialog progress) {
         String diagStage="START";
-        bankImportDiag(diagStage,files.size(),0);
         try {
             java.util.List<BankStatementCsv.Entry> entries=new java.util.ArrayList<>();
             java.util.List<BankEvidenceStore.Incoming> incoming=
@@ -13883,9 +13906,10 @@ public final class MainActivity extends Activity {
                         "Nie można odczytać wybranego pliku.");
                     byte[] buffer=new byte[4096];int n;
                     while((n=stream.read(buffer))!=-1) {
-                        if(output.size()+n>8*1024*1024)
+                        if(output.size()+n>BankStatementCsv.MAX_BYTES)
                             throw new IllegalArgumentException(
-                                "Plik bankowy jest za duży (maks. 8 MB; CSV nadal maks. 256 KB).");
+                                "Plik bankowy przekracza limit 8 MB. "
+                                +"Podziel eksport na mniejsze pliki.");
                         output.write(buffer,0,n);
                     }
                 }
@@ -13932,9 +13956,10 @@ public final class MainActivity extends Activity {
                 }
                 for(BankStatementCsv.Entry entry:parsed) {
                     if(!seen.add(entry.evidenceKey)){duplicateRows++;continue;}
-                    if(entries.size()>=BankStatementCsv.MAX_ROWS)
+                    if(entries.size()>=BankEvidenceStore.MAX_IMPORT_BATCH)
                         throw new IllegalArgumentException(
-                            "Maksymalnie 250 różnych transakcji w partii.");
+                            "W partii jest ponad 50 000 różnych transakcji. "
+                            +"Podziel historię na kilka partii.");
                     entries.add(entry);
                     incoming.add(new BankEvidenceStore.Incoming(
                         entry,sourceKind,sourceLabel));
@@ -13952,32 +13977,52 @@ public final class MainActivity extends Activity {
                 bank==null||bank.trim().isEmpty()?"CSV":bank.trim());
             String detected=android.text.TextUtils.join(" + ",detectedSources);
             int duplicates=duplicateRows+queue.duplicates;
-            if(duplicates>0)
-                alert("Pominięto "+duplicates+" powtórzonych / wcześniej zapisanych "
-                    +"pozycji. Żaden duplikat nie zmieni salda.");
-            showBankEvidenceQueue(0);
+            runOnUiThread(()->{
+                bankImportRunning=false;
+                if(isFinishing()||isDestroyed())return;
+                progress.dismiss();
+                new AlertDialog.Builder(this)
+                    .setTitle("Historia bankowa wczytana")
+                    .setMessage("Pliki: "+files.size()
+                        +"\nRozpoznane operacje: "+entries.size()
+                        +"\nNowo zapisane: "+queue.inserted
+                        +"\nDuplikaty: "+duplicates
+                        +"\n\nPełna kolejka jest dostępna stronami. "
+                        +"Sam import nie zmienia salda.")
+                    .setNegativeButton("Zamknij",null)
+                    .setPositiveButton("Pokaż kolejkę",
+                        (d,w)->showBankEvidenceQueue(0)).show();
+            });
         }catch(Exception error){
             bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
-            DiagnosticLog.event("PAYCHECK_BANK_FILES_REJECTED");
-            alert("Nie wczytano plików: "+(error instanceof IllegalArgumentException
-                ?error.getMessage():"błąd odczytu pliku."));
+            DiagnosticLog.error("PAYCHECK_BANK_FILES_REJECTED",error);
+            final String explanation=error instanceof IllegalArgumentException
+                ?error.getMessage():"Błąd odczytu pliku. Zobacz diagnostykę.";
+            runOnUiThread(()->{
+                bankImportRunning=false;
+                if(isFinishing()||isDestroyed())return;
+                progress.dismiss();
+                alert("Nie wczytano historii. Nic nie zostało zapisane: "
+                    +explanation);
+            });
         }
     }
 
     private void showBankEvidenceQueue(int filter) {
-        java.util.List<BankEvidenceStore.Row> all=
-            BankEvidenceStore.list(db.getReadableDatabase(),"open");
-        java.util.List<BankEvidenceStore.Row> visible=new java.util.ArrayList<>();
+        showBankEvidenceQueue(filter,0);
+    }
+
+    private void showBankEvidenceQueue(int filter,int offset) {
+        final int pageSize=100;
+        final SQLiteDatabase read=db.getReadableDatabase();
+        final long count=BankEvidenceStore.count(read,"open",filter);
+        final int first=count==0?0:Math.min(offset,
+            ((int)(count-1)/pageSize)*pageSize);
+        java.util.List<BankEvidenceStore.Row> visible=
+            BankEvidenceStore.listPage(read,"open",filter,pageSize,first);
         java.util.List<String> labels=new java.util.ArrayList<>();
-        for(BankEvidenceStore.Row row:all) {
-            int pending=BankEvidenceStore.pendingMatches(
-                db.getReadableDatabase(),row);
-            if(filter==1&&pending!=1 || filter==2&&pending<2
-                    || filter==3&&pending!=0
-                    || filter==4&&!"expense".equals(row.kind)
-                    || filter==5&&!"income".equals(row.kind))
-                continue;
-            visible.add(row);
+        for(BankEvidenceStore.Row row:visible) {
+            int pending=BankEvidenceStore.pendingMatches(read,row);
             String description=row.description.length()>55
                 ?row.description.substring(0,55)+"…":row.description;
             labels.add(row.sourceLabel+" • "+row.date+" • "
@@ -13988,27 +14033,41 @@ public final class MainActivity extends Activity {
                     :pending>1?"? "+pending+" możliwych wpisów"
                     :"— Brak oczekującego wpisu"));
         }
+        final boolean hasPrevious=first>0;
+        final boolean hasNext=first+visible.size()<count;
+        final int previousIndex=labels.size();
+        if(hasPrevious)labels.add("← Poprzednie 100 operacji");
+        final int nextIndex=labels.size();
+        if(hasNext)labels.add("→ Następne 100 operacji");
         String[] filters={"Wszystkie","1 propozycja","Kilka propozycji",
             "Bez pasującego wpisu","Wydatki −","Wpływy +"};
         AlertDialog.Builder dialog=new AlertDialog.Builder(this)
-            .setTitle("Banki i potwierdzenia • "+visible.size()
-                +" / "+all.size()+"\nFiltr: "+filters[filter])
-            .setItems(labels.toArray(new String[0]),(d,index)->
-                openBankEvidenceRow(visible.get(index)))
+            .setTitle("Banki i potwierdzenia • "+filters[filter]
+                +"\n"+(count==0?0:first+1)+"–"+(first+visible.size())
+                +" z "+count+" pozycji")
+            .setItems(labels.toArray(new String[0]),(d,index)->{
+                if(index<visible.size()) {
+                    openBankEvidenceRow(visible.get(index));
+                } else if(hasPrevious&&index==previousIndex) {
+                    showBankEvidenceQueue(filter,Math.max(0,first-pageSize));
+                } else if(hasNext&&index==nextIndex) {
+                    showBankEvidenceQueue(filter,first+pageSize);
+                }
+            })
             .setNeutralButton("Filtry",(d,w)->
                 new AlertDialog.Builder(this)
                     .setTitle("Filtruj kolejkę bankową")
                     .setItems(filters,(fd,selected)->
-                        showBankEvidenceQueue(selected))
+                        showBankEvidenceQueue(selected,0))
                     .setNegativeButton("Anuluj",null).show())
             .setPositiveButton("Odrzucone",(d,w)->
                 showDismissedBankEvidence())
             .setNegativeButton("Zamknij",null);
         if(visible.isEmpty())
-            dialog.setMessage(all.isEmpty()
-                ?"Kolejka jest pusta. Dodaj pliki bankowe lub poczekaj na "
-                    +"powiadomienie banku."
-                :"Brak pozycji dla wybranego filtra.");
+            dialog.setMessage(count==0
+                ?"Brak pozycji dla wybranego filtra. "
+                    +"Dane archiwalne pozostają zachowane."
+                :"Nie udało się odczytać strony kolejki.");
         dialog.show();
     }
 
@@ -14095,16 +14154,40 @@ public final class MainActivity extends Activity {
     }
 
     private void showDismissedBankEvidence() {
+        showDismissedBankEvidence(0);
+    }
+
+    private void showDismissedBankEvidence(int offset) {
+        final int pageSize=100;
+        SQLiteDatabase read=db.getReadableDatabase();
+        final long count=BankEvidenceStore.count(read,"dismissed",0);
+        final int first=count==0?0:Math.min(offset,
+            ((int)(count-1)/pageSize)*pageSize);
         java.util.List<BankEvidenceStore.Row> rows=
-            BankEvidenceStore.list(db.getReadableDatabase(),"dismissed");
+            BankEvidenceStore.listPage(read,"dismissed",0,pageSize,first);
         java.util.List<String> labels=new java.util.ArrayList<>();
         for(BankEvidenceStore.Row row:rows)
             labels.add(row.sourceLabel+" • "+row.date+" • "
                 +("income".equals(row.kind)?"+ ":"− ")
                 +MoneyRules.format(row.amount));
+        final boolean hasPrevious=first>0;
+        final boolean hasNext=first+rows.size()<count;
+        final int prevIndex=labels.size();
+        if(hasPrevious)labels.add("← Poprzednie 100 odrzuconych");
+        final int nextIndex=labels.size();
+        if(hasNext)labels.add("→ Następne 100 odrzuconych");
         AlertDialog.Builder dialog=new AlertDialog.Builder(this)
-            .setTitle("Odrzucone dowody bankowe • "+rows.size())
+            .setTitle("Odrzucone dowody bankowe • "
+                +(count==0?0:first+1)+"–"+(first+rows.size())
+                +" z "+count)
             .setItems(labels.toArray(new String[0]),(d,index)->{
+                if(index>=rows.size()) {
+                    if(hasPrevious&&index==prevIndex)
+                        showDismissedBankEvidence(Math.max(0,first-pageSize));
+                    else if(hasNext&&index==nextIndex)
+                        showDismissedBankEvidence(first+pageSize);
+                    return;
+                }
                 BankEvidenceStore.Row row=rows.get(index);
                 new AlertDialog.Builder(this)
                     .setTitle("Przywrócić do kolejki?")
@@ -14119,7 +14202,8 @@ public final class MainActivity extends Activity {
                     }).show();
             })
             .setNegativeButton("Zamknij",null);
-        if(rows.isEmpty())dialog.setMessage("Brak odrzuconych pozycji.");
+        if(rows.isEmpty())
+            dialog.setMessage("Brak odrzuconych pozycji.");
         dialog.show();
     }
 

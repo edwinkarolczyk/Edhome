@@ -57,7 +57,11 @@ except sqlite3.IntegrityError:
     pass
 
 for token in (
-    'MAX_ROWS=5000',
+    'MAX_ROWS=200000',
+    'MAX_IMPORT_BATCH=50000',
+    'static List<Row> listPage(',
+    'static long count(',
+    'filterPredicate(int filter)',
     'UNION SELECT 1 FROM paycheck_transactions WHERE statement_key=?',
     'static IngestResult ingest(',
     'static List<Row> list(',

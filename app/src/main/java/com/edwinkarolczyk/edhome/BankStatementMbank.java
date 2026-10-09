@@ -38,7 +38,7 @@ final class BankStatementMbank {
     static List<BankStatementCsv.Entry> parse(String data) {
         if(data==null || data.getBytes(StandardCharsets.UTF_8).length
                 >BankStatementCsv.MAX_BYTES)
-            throw new IllegalArgumentException("Eksport mBanku: maks. 256 KB na plik.");
+            throw new IllegalArgumentException("Eksport mBanku: maks. 8 MB na plik.");
         String[] lines=data.replace("\r\n","\n").replace('\r','\n').split("\n",-1);
         int header=-1;
         String account="";
@@ -114,7 +114,7 @@ final class BankStatementMbank {
                 "mBank / wiersz "+(i+1)+" (bez ID bankowego)",key));
             if(result.size()>BankStatementCsv.MAX_ROWS)
                 throw new IllegalArgumentException(
-                    "mBank: maksymalnie 250 transakcji na plik.");
+                    "mBank: maksymalnie 25 000 transakcji na plik.");
         }
         if(result.isEmpty())
             throw new IllegalArgumentException("mBank: brak transakcji w eksporcie.");

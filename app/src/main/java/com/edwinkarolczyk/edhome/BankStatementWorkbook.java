@@ -46,7 +46,7 @@ final class BankStatementWorkbook {
                 int n;
                 while((n=zip.read(buffer))!=-1) {
                     total+=n;
-                    if(total>4*1024*1024)
+                    if(total>16*1024*1024)
                         throw new IllegalArgumentException(
                             "Za duży arkusz po rozpakowaniu.");
                     out.write(buffer,0,n);
@@ -63,14 +63,14 @@ final class BankStatementWorkbook {
         List<String> strings=new ArrayList<>();
         if(shared!=null) {
             NodeList nodes=parse(shared).getElementsByTagName("si");
-            if(nodes.getLength()>20000)throw new IllegalArgumentException(
+            if(nodes.getLength()>50000)throw new IllegalArgumentException(
                 "Zbyt dużo tekstów XLSX.");
             for(int i=0;i<nodes.getLength();i++)
                 strings.add(texts((Element)nodes.item(i),"t"));
         }
         NodeList rows=parse(sheet).getElementsByTagName("row");
-        if(rows.getLength()>2000)
-            throw new IllegalArgumentException("Za dużo wierszy XLSX.");
+        if(rows.getLength()>12000)
+            throw new IllegalArgumentException("Arkusz ma ponad 12 000 wierszy. Podziel go na mniejsze eksporty XLSX lub użyj CSV.");
         StringBuilder result=new StringBuilder();
         for(int r=0;r<rows.getLength();r++) {
             Element row=(Element)rows.item(r);

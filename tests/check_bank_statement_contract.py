@@ -45,7 +45,13 @@ assert 'inputVersion != DB_VERSION' in backup
 assert 'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])' in backup
 assert '"statement_key", "statement_date"' in backup
 assert 'bankStatementOperations.add(bankKey)' in backup
-assert 'MAX_ROWS = 250' in parser and 'MAX_BYTES = 256 * 1024' in parser
+assert 'MAX_ROWS = 25000' in parser and 'MAX_BYTES = 8 * 1024 * 1024' in parser
+assert 'MAX_IMPORT_BATCH=50000' in queue
+assert 'MAX_ROWS=200000' in queue
+assert 'new Thread(()->importStatementFilesWorker' in ui
+assert 'BankStatementCsv.MAX_BYTES' in ui
+assert 'BankEvidenceStore.listPage(' in ui
+assert 'BankEvidenceStore.count(' in ui
 fixture=Path("tests/fixtures/paycheck_statement_acceptance.csv").read_text(encoding="utf-8").splitlines()
 assert fixture[0]=="Data;Kwota;Id transakcji;Opis"
 assert len(fixture)==2
