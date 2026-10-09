@@ -6,7 +6,7 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android: lista banków mBank / VeloBank / Inny w imporcie PayCheck; commit `75e360b3` na `beta`, CI #2053 uruchomiony, wynik i nowy APK jeszcze niepotwierdzone. Ostatni potwierdzony APK: 0.8.0.75/267, CI #2052 PASS |
+| Ostatnia aktualizacja | 2026-10-09 — Android Beta 0.8.0.76/268 kandydat (CI #2059 niezweryfikowane): pełna historia bankowa wszystkie statusy, diagnostyka dat importu, blokada cichego pomijania podejrzanych wierszy PDF Velo; ostatni potwierdzony podpisany APK nadal 0.8.0.75/267 CI #2052 PASS. |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
@@ -19,6 +19,21 @@
 | Następny krok | Przeprowadzić na Androidzie Beta 0.8.0.75: utworzyć testową pozycję Budżetu → sprawdzić automatyczny pending w PayCheck, bez zmiany salda → zaimportować testowy wyciąg z jednoznaczną nazwą odbiorcy i kwotą → potwierdzić auto match/saldo 1×/rozliczenie pozycji → ponownie wczytać ten sam plik (0 nowych, 0 ponownych księgowań) → konflikt dwóch podobnych operacji powinien zostać ręczny. Następnie sprawdzić prawdziwe formaty banku, częściowe kwoty, backup/restore oraz LAN Android↔Desktop. Stable main bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — historia bankowa VeloBank: znikające nowsze przelewy w kolejce (09.10.2026)
+
+**Zgłoszenie z telefonu:** okno „Banki i potwierdzenia • Wszystkie” pokazało 70 operacji otwartych z najnowszą datą 2026-10-05, choć użytkownik ma w eksportowanym pliku operacje nawet z 2026-10-09. Opis pozycji 2026-10-05 zawiera datę 07.10.2026, co wymaga weryfikacji, czy są to daty operacji i księgowania; bez surowego PDF nie przyjmować automatycznie, że któryś zapis jest nieprawidłowy.
+
+**Potwierdzone w kodzie:** `showBankEvidenceQueue()` wykonywał `BankEvidenceStore.count(...,"open",filter)` i `listPage(...,"open"...)`, więc napis „Wszystkie” dotyczył tylko otwartych, nie rozliczonych/odrzuconych. `BankStatementVeloPdf.parseStatementRows()` pomijał bez powiadomienia datowane linie przelewów przy braku jednoznacznej kwoty i kierunku w tej samej linii tekstowej PDF. Nie ustalono jeszcze, czy konkretne 09.10 występują w źródłowym PDF oraz czy miały status `matched`.
+
+**Naprawy wyłącznie `beta`:**
+- `BankEvidenceStore.java` commit `8e347c7`: read-only `countAll()` i `listPageAll()` po WSZYSTKICH stanach (otwarte, uzgodnione, odrzucone), bez migracji danych.
+- `MainActivity.java` commit `f46985b`: odrębny przycisk „Cała historia bankowa”, paginacja i oznaczenia statusów; dawne „Wszystkie” jednoznacznie zmienione na „Wszystkie otwarte”; po imporcie komunikat z liczbą wpływów/wydatków i zakresem dat rozpoznanych operacji oraz ostrzeżeniem o możliwych pominięciach w PDF.
+- `BankStatementVeloPdf.java` commit `bc7655e`: gdy parser ma więcej niż jeden rozpoznany wiersz, ale dostrzegł równocześnie datowane linie przypominające nieodczytane przelewy/operacje, odrzuca import całego pliku z komunikatem (zamiast cicho częściowo go zapisać). Rozpoznawanie jest konserwatywne, nie gwarantuje wykrycia wszystkich wieloliniowych układów PDF.
+- `BankStatementVeloPdfSmoke.java` komity `6d6d91a` i `e7e9424`: regresja „przelew datowany 09.10 zapisany w rozbitych liniach nie może zniknąć”.
+- `app/build.gradle` commit `3da9abf`: Beta **0.8.0.76/versionCode 268**; poprzedni build 0.8.0.75 #2053 pomimo kompilacji nie został opublikowany, bo wersja wydania była już zajęta. CI **#2059 rozpoczęte, wynik i podpisany APK nadal do potwierdzenia**.
+
+**Pozostałe P0 przed odbiorem:** pobrać przykładowy rzeczywisty plik PDF/CSV VeloBanku obejmujący 09.10 i porównać liczbę przelewów/ich daty z „Rozpoznane operacje”, „Data najnowsza” i „Całą historią”; sprawdzić dopasowane, odrzucone, pozycje w PayCheck, wpływy, różnicę dat operacji/księgowania. Bez pliku nie wolno twierdzić, że wszystkie operacje od 09.10 zostały naprawione. Sprawdzić #2059, wydać APK, fizyczny test na Androidzie, backup i sync; Stable `main` pozostaje nietknięta.
 
 ## P1 — wybór banku z listy w imporcie PayCheck (09.10.2026)
 
