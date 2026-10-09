@@ -3,7 +3,7 @@
 **Gałąź:** `beta`. **Stable `main`:** bez zmian bez jawnej akceptacji.
 **Kontrakt:** [ROADMAP.md](ROADMAP.md#paycheck--budżet-miesiąca-10-kontrakt-odbioru-2525).
 **Rozdział obowiązkowy:** pokrycie kodowe ≠ przetestowanie zachowania ≠ odbiór na telefonie i PC.
-**Stan 09.10.2026:** Android Beta `0.8.0.67/259` (kandydat: zwarty bilans i rozwijane szczegóły — pierwsze CI #2020 FAIL przez zbyt szeroki zakres patcha, naprawa testowana w kolejnym CI; odbiór oczekuje); poprzednia `0.8.0.66/258` (CI #2019 PASS); Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
+**Stan 09.10.2026:** Android Beta `0.8.0.68/260` (CI #2023 PASS, według użytkownika zainstalowana); nowa `0.8.0.69/261` z poprawką P0 ochrony pełnego przelewu przed ponownym przydziałem w CI; Desktop `0.7.0.114` ([CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator opublikowany). Synchronizacja 5C wymaga nadal fizycznych testów A1–A20; testy etap 6 oznaczono poniżej B1–B12. Na jedynej kopii danych NIE przeprowadzać prób celowych konfliktów.
 
 ## Macierz 25 ustaleń
 
@@ -39,7 +39,7 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 
 **Ocena:** w kodzie Beta istnieje pokrycie 25 punktów według kontraktu źródłowego i wcześniejszych regresji. Nie wolno zapisywać „odebrane 25/25” do czasu ukończenia odpowiednich prób B i A1–A20. Szczególnie wymagają uwagi Android UX, kopie załączników i konflikty zmian offline.
 
-**Blokada P0 (09.10):** użytkownik nie był w stanie potwierdzić żadnego przelewu. B6 oraz rozliczeniowe punkty 9–14 muszą być przyjęte fizycznie na telefonie po poprawce 0.8.0.68/260 i sprawdzeniu pending→confirmed→Budżet. Pozostałe testy automatyczne nie wystarczają.
+**Blokada P0 (09.10):** użytkownik wcześniej nie był w stanie potwierdzić żadnego przelewu. Ma już 0.8.0.68, ale nie potwierdził jeszcze działania pending→confirmed→Budżet. W kodzie 0.8.0.68 znaleziono dodatkowo możliwość ręcznego przydziału przelewu już rozliczonego w całości; poprawka jest w Beta 0.8.0.69/261 i ma nowy test wykonywalny. B6 oraz punkty 9–14 wymagają testów na kopii finansów, a nie tylko zielonego CI.
 
 ## Scenariusze etapu 6
 
@@ -50,7 +50,7 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 | B3 | Rozwiń pozycję A, potem B; poprzednia zwinięta, przewinięcie się nie resetuje | ☐ |
 | B4 | Opłacone/zaległe/częściowo/opcjonalne i plakietki rat mają właściwe kolory | ☐ |
 | B5 | Zaległość poprzedniego miesiąca na górze, opcjonalnego brak w zaległościach | ☐ |
-| B6 | **P0:** ręczne pending→confirmed, bezpośrednie przypisanie do rachunku, jedna zmiana salda; dalej grupowy przelew, nadpłata i zgodne odliczenie | ☐ — zgłoszono brak możliwości potwierdzenia |
+| B6 | **P0:** ręczne pending→confirmed i przypisanie do rachunku, jedna zmiana salda; na oddzielnej kopii sprawdź pełne przypisanie przelewu, a następnie nielegalny kolejny przydział jego części (ma zostać zablokowany), grupowy podział i nadpłatę | ☐ — fizycznie nieodebrane |
 | B7 | Ręczne zamknięcie z powodem, zakres cyklu i zmiana kwoty miesiąc/od teraz | ☐ |
 | B8 | Raty: liczba → koniec i koniec → liczba, „zostało”, suma i ostatnie raty | ☐ |
 | B9 | Jeden odbiorca, dwa zobowiązania, podpowiedź szablonu; PC pokazuje tę kartotekę | ☐ |
@@ -61,6 +61,6 @@ Legenda: **K** = wymaganie ma implementację w Beta / kontrakt źródłowy (bez 
 ## Kontrola wersji / zależności
 
 - Desktop 0.7.0.114: zwarty nagłówek z bilansem, nawigacja do bieżącego miesiąca, wpływy przed wydatkami, sortowanie wydatków datą, podgląd odbiorców i liczby zobowiązań. Testy `DesktopBudgetMirrorTest` i `check_paycheck_budget_stage6_desktop.py`; build #284 **PASS**, Windows Beta opublikowany.
-- Android 0.8.0.67/259 — kandydat etapu 6: zwarty bilans i rozwijane szczegóły, do testów CI/fizycznych. Poprzedni 0.8.0.66/258 z CI #2019 PASS. Poprawki nadpłat z 0.8.0.64 zachowane; dalsze zmiany wyłącznie na `beta`.
+- Android 0.8.0.68/260 — #2023 PASS, według użytkownika zainstalowana, kolejka potwierdzeń i ręczne przypisywanie w Budżecie. Android 0.8.0.69/261 — kandydat poprawki ochrony wykorzystania przelewu w całości + nadpłaty; nowy CI wymagany. Niczego nie uznawać za odebrane bez testów fizycznych.
 - 5C: [ODBIOR_PAYCHECK_5C_2026-10-08.md](ODBIOR_PAYCHECK_5C_2026-10-08.md), A1–A20 nadal niewykonane fizycznie.
 - Nie przenosić na Stable, nie usuwać poprzednich wpisów historii i nie zastępować kopii prawdziwych danych plikami testowymi.
