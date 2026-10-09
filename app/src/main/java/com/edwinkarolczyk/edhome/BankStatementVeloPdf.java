@@ -27,6 +27,12 @@ final class BankStatementVeloPdf {
     private static final Pattern MONEY=Pattern.compile(
         "(?iu)([-+−]?\\s*[0-9]{1,9}(?:[ \\u00a0][0-9]{3})*(?:[.,][0-9]{2})?)"
         +"\\s*(?:PLN|zł)\\b");
+    // Część tekstowych PDF VeloBanku ma walutę wyłącznie w nagłówku
+    // tabeli. Akceptujemy wtedy tylko jawnie podpisaną kwotę z groszami
+    // (bez zgadywania salda lub kwoty z daty / numeru rachunku).
+    private static final Pattern SIGNED_MONEY=Pattern.compile(
+        "(?<![\\p{L}\\p{N}])([-+−]\\s*[0-9]{1,9}"
+        +"(?:[ \\u00a0][0-9]{3})*[.,][0-9]{2})(?![\\p{N}])");
     // Podejrzane wiersze trzeba zgłosić, a nie po cichu pominąć przelew.
     private static final Pattern TRANSACTION_LINE=Pattern.compile(
         "(?iu)(?:przelew|operacj[aeyięą]*\\s+kart|transakcj[aeyięą]*\\s+kart|"
@@ -57,9 +63,11 @@ final class BankStatementVeloPdf {
         // jak pojedyncze potwierdzenie. Najpierw sprawdź wiersze tabeli.
         List<BankStatementCsv.Entry> statement=parseStatementRows(normalized);
         if(statement.size()>1)return statement;
+        // Potwierdzenie pojedynczej operacji może zawierać dodatkową datę
+        // w nagłówku. Dla historii pierwszeństwo mają poprawne wiersze.
         List<BankStatementCsv.Entry> labeled=parseLabeledConfirmation(normalized);
-        if(!labeled.isEmpty())return labeled;
         if(!statement.isEmpty())return statement;
+        if(!labeled.isEmpty())return labeled;
         throw new IllegalArgumentException(
             "Nie znaleziono jednoznacznych operacji w tekstowym PDF VeloBanku. "
             +"PDF skanowany jako obraz nie jest automatycznie odczytywany.");
@@ -108,23 +116,30 @@ final class BankStatementVeloPdf {
             Matcher mm=MONEY.matcher(line);
             while(mm.find())moneyTokens.add(mm.group(1).trim());
             if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
+                Matcher signed=SIGNED_MONEY.matcher(line);
+                while(signed.find())moneyTokens.add(signed.group(1).trim());
+            }
+            if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
                 StringBuilder joined=new StringBuilder(line);
                 for(int next=i+1;next<lines.length&&next<=i+4;next++) {
                     String extra=lines[next].trim();
                     if(extra.isEmpty())continue;
                     // Następnego przelewu nie wolno dołączyć do poprzedniego.
-                    if(DATE.matcher(extra).find()
-                            && TRANSACTION_LINE.matcher(extra).find())
-                        break;
+                    if(DATE.matcher(extra).find())break;
                     if(extra.toLowerCase(Locale.ROOT).contains("saldo"))
                         break;
                     joined.append(" ").append(extra);
-                    if(MONEY.matcher(extra).find()) {
+                    Matcher continued=MONEY.matcher(extra);
+                    while(continued.find())
+                        moneyTokens.add(continued.group(1).trim());
+                    if(moneyTokens.isEmpty()) {
+                        Matcher signed=SIGNED_MONEY.matcher(extra);
+                        while(signed.find())
+                            moneyTokens.add(signed.group(1).trim());
+                    }
+                    if(!moneyTokens.isEmpty()) {
                         line=joined.toString();
                         i=next;
-                        Matcher continued=MONEY.matcher(line);
-                        while(continued.find())
-                            moneyTokens.add(continued.group(1).trim());
                         break;
                     }
                 }
@@ -184,7 +199,7 @@ final class BankStatementVeloPdf {
                 throw new IllegalArgumentException(
                     "PDF VeloBanku: maksymalnie 25 000 operacji.");
         }
-        if(result.size()>1 && unreadableCount>0)
+        if(!result.isEmpty() && unreadableCount>0)
             throw new IllegalArgumentException(
                 "PDF VeloBanku: "+unreadableCount
                 +" potencjalnych operacji nie dało się poprawnie odczytać"
