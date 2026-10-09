@@ -13543,10 +13543,9 @@ public final class MainActivity extends Activity {
             else
                 smallButton(entry,"Wybierz spośród "+ids.size()+" wpisów",
                     ()->new AlertDialog.Builder(this)
-                        .setTitle("Wybierz właściwy wydatek / wpływ")
-                        .setMessage("Ta sama kwota wystąpiła kilka razy. "
-                            +"Powiadomienie nie rozstrzyga, która to płatność.")
-                        .setItems(labels.toArray(new String[0]),
+                        .setCustomTitle(paycheckChoiceDialogTitle("Wybierz właściwy wydatek / wpływ","Ta sama kwota wystąpiła kilka razy. "
+                            +"Powiadomienie nie rozstrzyga, która to płatność."))
+            .setItems(labels.toArray(new String[0]),
                             (d,which)->confirmSharedPaycheckEntry(
                                 ids.get(which),signal.key))
                         .setNegativeButton("Anuluj",null).show());
@@ -14049,10 +14048,9 @@ public final class MainActivity extends Activity {
                 +"Nie odjęto ponownie pieniędzy.");render();return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("Potwierdzenia • "+bank+" • "+visible.size())
-            .setMessage("Zduplikowane: "+duplicates+". "
+            .setCustomTitle(paycheckChoiceDialogTitle("Potwierdzenia • "+bank+" • "+visible.size(),"Zduplikowane: "+duplicates+". "
                 +"Dopasowania to propozycje, nie automatyczne księgowanie. "
-                +"Saldo zmienia się wyłącznie po Twoim zatwierdzeniu.")
+                +"Saldo zmienia się wyłącznie po Twoim zatwierdzeniu."))
             .setItems(labels.toArray(new String[0]),(d,index)->
                 matchStatementEntry(visible.get(index),rows,bank))
             .setNeutralButton("Filtry",(d,w)->showStatementFilters(rows,bank))
@@ -14085,12 +14083,11 @@ public final class MainActivity extends Activity {
             confirmStatementMatch(statement,rows,bank,ids.get(0),labels.get(0));
             return;
         }
-        new AlertDialog.Builder(this).setTitle("Wybierz właściwą transakcję")
-            .setMessage(statement.date+" • "
+        new AlertDialog.Builder(this).setCustomTitle(paycheckChoiceDialogTitle("Wybierz właściwą transakcję",statement.date+" • "
                 +("income".equals(statement.kind)?"+ ":"− ")
                 +MoneyRules.format(statement.amountGrosz)
                 +"\n"+statement.description
-                +"\nKilka identycznych kwot. Nie wybieram za Ciebie.")
+                +"\nKilka identycznych kwot. Nie wybieram za Ciebie."))
             .setItems(labels.toArray(new String[0]),(d,index)->
                 confirmStatementMatch(statement,rows,bank,
                     ids.get(index),labels.get(index)))
@@ -14227,6 +14224,30 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+    /**
+     * Instrukcja nad listą wyboru. W natywnym AlertDialog setMessage()
+     * i setItems() mogą konkurować o ten sam panel treści i ukryć listę.
+     * Tytuł własny pozostawia klikalne elementy na całej wysokości.
+     */
+    private android.view.View paycheckChoiceDialogTitle(
+            String heading,String explanation) {
+        LinearLayout container=new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(dp(20),dp(14),dp(20),dp(8));
+        TextView headline=new TextView(this);
+        headline.setText(heading);
+        headline.setTextSize(19f);
+        headline.setTypeface(null,android.graphics.Typeface.BOLD);
+        container.addView(headline);
+        TextView hint=new TextView(this);
+        hint.setText(explanation);
+        hint.setTextSize(14f);
+        hint.setMaxLines(3);
+        hint.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        container.addView(hint);
+        return container;
+    }
+
     private boolean offerSharedBudgetMatch(String operationId,
             Runnable done) {
         try (Cursor tx = db.getReadableDatabase().rawQuery(
@@ -14286,14 +14307,13 @@ public final class MainActivity extends Activity {
             actions.add(0);
 
             new AlertDialog.Builder(this)
-                .setTitle("Pasuje do Budżetu miesiąca")
-                .setMessage(MoneyRules.format(txAmount)
+                .setCustomTitle(paycheckChoiceDialogTitle("Pasuje do Budżetu miesiąca",MoneyRules.format(txAmount)
                     + " • " + budgetMonthLabel(month)
                     + "\n\nMożesz przypisać całą płatność albo rozdzielić "
                     + "jeden przelew na kilka pasujących pozycji planu. "
                     + "Jeżeli suma różni się nieznacznie, różnica zostanie "
-                    + "jawnie pokazana w rozliczeniu. Saldo nie zmieni się drugi raz.")
-                .setItems(choices.toArray(new String[0]),(d,index)->{
+                    + "jawnie pokazana w rozliczeniu. Saldo nie zmieni się drugi raz."))
+            .setItems(choices.toArray(new String[0]),(d,index)->{
                     int action=actions.get(index);
                     if(action==0) {
                         done.run();
@@ -15756,9 +15776,8 @@ public final class MainActivity extends Activity {
                 + " • " + MoneyRules.format(credit.amountGrosz);
         }
         new AlertDialog.Builder(this)
-            .setTitle("Odliczyć nadpłatę?")
-            .setMessage("Nadpłata nie jest używana automatycznie. "
-                + "Wybierz, z którego miesiąca ją odliczyć.")
+            .setCustomTitle(paycheckChoiceDialogTitle("Odliczyć nadpłatę?","Nadpłata nie jest używana automatycznie. "
+                + "Wybierz, z którego miesiąca ją odliczyć."))
             .setItems(labels,(d,which) -> {
                 PaycheckMonthlyBudget.Credit credit = credits.get(which);
                 long planned = PaycheckMonthlyBudget.plannedAmount(
@@ -15956,10 +15975,9 @@ public final class MainActivity extends Activity {
             "Pokryj tę pozycję nadpłatą"
         };
         new AlertDialog.Builder(this)
-            .setTitle("Co chcesz zamknąć?")
-            .setMessage(item.name
+            .setCustomTitle(paycheckChoiceDialogTitle("Co chcesz zamknąć?",item.name
                 + "\nWybór dotyczy planu. Potwierdzone transakcje "
-                + "PayCheck i historia pozostają bez zmian.")
+                + "PayCheck i historia pozostają bez zmian."))
             .setItems(options,(d,which) -> {
                 if (which == 0) {
                     showBudgetCloseOccurrenceReasonDialog(item,month);
@@ -16142,11 +16160,10 @@ public final class MainActivity extends Activity {
             }
             labels.add("＋ Nowy odbiorca / szablon");
             new AlertDialog.Builder(this)
-                .setTitle("Odbiorcy / szablony")
-                .setMessage("Odbiorca może mieć domyślną kategorię, kwotę "
+                .setCustomTitle(paycheckChoiceDialogTitle("Odbiorcy / szablony","Odbiorca może mieć domyślną kategorię, kwotę "
                     + "i planowany dzień zapłaty. Te dane są tylko podpowiedzią "
-                    + "przy nowym wydatku i można je zmienić.")
-                .setItems(labels.toArray(new String[0]),(d,which)->{
+                    + "przy nowym wydatku i można je zmienić."))
+            .setItems(labels.toArray(new String[0]),(d,which)->{
                     if (which==active.size())
                         showBudgetRecipientTemplateDialog(null);
                     else showBudgetRecipientTemplateDialog(active.get(which));
@@ -16869,10 +16886,9 @@ public final class MainActivity extends Activity {
             "Zakończ definicję po • "+label
         };
         new AlertDialog.Builder(this)
-            .setTitle("Korekta / zakończenie zobowiązania")
-            .setMessage(item.name+"\n\nWybierz zakres. "
+            .setCustomTitle(paycheckChoiceDialogTitle("Korekta / zakończenie zobowiązania",item.name+"\n\nWybierz zakres. "
                 +"Żadna operacja bankowa, przypisany dokument ani historia "
-                +"nie zostanie usunięta.")
+                +"nie zostanie usunięta."))
             .setItems(actions,(d,which)->{
                 if(which==0) {
                     showBudgetCloseOccurrenceReasonDialog(item,selectedMonth);
