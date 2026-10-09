@@ -25,7 +25,7 @@ for token in (
     '"Z Budżetu miesiąca • do obsłużenia ("',
     '" • PLAN"', '" • DO POTWIERDZENIA"',
     "smallButton(entry,\"Wybierz istniejący przelew\"",
-    "showBudgetToPaycheckDialog(item,month)",
+    "ensureBudgetPaycheckPending(month);",
     "confirmBudgetPaymentAssignment(item,month,",
     "if(due<=0)continue;",
 ):

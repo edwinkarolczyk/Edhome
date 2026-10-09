@@ -170,6 +170,15 @@ jobs:
         run: python3 tests/check_paycheck_choice_dialogs.py
       - name: Budget to PayCheck pending-flow safety regression
         run: python3 tests/check_budget_to_paycheck_flow_android.py
+      - name: Budget and bank automatic reconciliation contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/budget-bank-auto"
+          javac -d "$RUNNER_TEMP/budget-bank-auto" \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankBudgetMatchRules.java \
+            tests/task_rules/BankBudgetMatchSmoke.java
+          java -cp "$RUNNER_TEMP/budget-bank-auto" \
+            com.edwinkarolczyk.edhome.BankBudgetMatchSmoke
+          python3 tests/check_budget_bank_automatch_android.py
       - name: All Android PayCheck history pages and bank amount signs
         run: |
           mkdir -p "$RUNNER_TEMP/paycheck-history-all"
@@ -582,7 +591,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. P0 PayCheck: oczekujące przelewy można otworzyć także z Budżetu; kolejka z paginacją, jawne ręczne potwierdzenie, wybór konkretnego rachunku i przypisanie potwierdzonego przelewu bez ponownego księgowania. Informacja o niepowodzeniu przypisania bez ukrywania potwierdzenia. Wymaga testu fizycznego; main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. P0 PayCheck i Budżet: pozycje planu automatycznie trafiają do Do potwierdzenia, bez ręcznego tworzenia operacji. Import historii bankowej może potwierdzić i przypisać płatność wyłącznie przy zgodności kwoty, kierunku, miesiąca, charakterystycznego odbiorcy oraz braku konfliktu. Niejasne wpisy czekają na decyzję. Saldo tylko po uzgodnieniu, bez duplikatów. Test fizyczny nadal wymagany; Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

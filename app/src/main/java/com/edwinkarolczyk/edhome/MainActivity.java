@@ -13028,56 +13028,14 @@ public final class MainActivity extends Activity {
         note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
             + "Nowe wpisy finansowe czekają na potwierdzenie; "
             + "saldo liczy tylko potwierdzone operacje.");
+        // Każdy plan bieżącego miesiąca jest od razu pending w PayCheck.
+        ensureBudgetPaycheckPending(YearMonth.now());
         title("Saldo potwierdzone: " + MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
         sharedMonthlyBudgetEntry();
         sharedBudgetAwaitingPaycheckConfirmation();
-        Spinner kind=new Spinner(this);
-        kind.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList("Wydatek −","Przychód +")));
-        body.addView(kind);
-        Spinner category=new Spinner(this);
-        category.setAdapter(themeSpinnerAdapter(
-            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
-        body.addView(category);
-        EditText amount=field("Kwota w PLN, np. 12,50",false);
-        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
-            | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        EditText noteField=field("Opis (opcjonalnie, maks. 160 znaków)",false);
-        button("Dodaj transakcję do PayCheck",()->{
-            long grosz;
-            try{grosz=MoneyRules.parse(amount.getText().toString());}
-            catch(IllegalArgumentException error){amount.setError(error.getMessage());return;}
-            String description=noteField.getText().toString().trim();
-            if(description.length()>160){
-                noteField.setError("Opis ma maksymalnie 160 znaków.");return;
-            }
-            String type=kind.getSelectedItemPosition()==1?"income":"expense";
-            String group=MoneyRules.CATEGORIES[category.getSelectedItemPosition()];
-            String operationId=java.util.UUID.randomUUID().toString();
-            new AlertDialog.Builder(this)
-                .setTitle("Potwierdź transakcję")
-                .setMessage(("income".equals(type)?"Przychód: ":"Wydatek: ")
-                    +MoneyRules.format(grosz)+"\n"
-                    +MoneyRules.categoryLabel(group)
-                    +(description.isEmpty()?"":"\n"+description)
-                    +"\n\nBez automatycznego powiązania z zakupami.")
-                .setNegativeButton("Anuluj",null)
-                .setPositiveButton("Zapisz",(d,w)->{
-                    try{
-                        String outcome=PaycheckStore.add(
-                            db.getWritableDatabase(),operationId,
-                            type,group,grosz,description);
-                        if("COMMITTED".equals(outcome)){
-                            DiagnosticLog.event("PAYCHECK_SHARED_PENDING");
-                            render();
-                        }else alert("Ta operacja była już zapisana.");
-                    }catch(Exception problem){
-                        DiagnosticLog.error("PAYCHECK_SHARED",problem);
-                        alert("Nie zapisano transakcji.");
-                    }
-                }).show();
-        });
+        note("Nowe wydatki i wpływy dodawaj wyłącznie w Budżecie "
+            +"miesiąca. PayCheck otrzymuje je automatycznie do potwierdzenia.");
         if (BetaUpdater.isBeta()) {
             button("Powiadomienia bankowe • wybierz aplikacje",
                 this::configureBankNotifications);
@@ -13968,6 +13926,10 @@ public final class MainActivity extends Activity {
             diagStage="QUEUE_SAVE";
             BankEvidenceStore.IngestResult queue=BankEvidenceStore.ingest(
                 db.getWritableDatabase(),incoming);
+            // Jednoznaczne powiązania z pozycjami Budżetu: tylko kwota,
+            // kierunek, miesiąc, charakterystyczna nazwa odbiorcy i unikalność.
+            // Wątpliwe dopasowania pozostają w kolejce do ręcznej decyzji.
+            BankAutoResult reconciliation=autoSettleImportedBankEvidence(incoming);
             bankImportDiag("OK",files.size(),queue.inserted);
             DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
             java.util.List<String> detectedSources=new java.util.ArrayList<>();
@@ -13987,8 +13949,10 @@ public final class MainActivity extends Activity {
                         +"\nRozpoznane operacje: "+entries.size()
                         +"\nNowo zapisane: "+queue.inserted
                         +"\nDuplikaty: "+duplicates
-                        +"\n\nPełna kolejka jest dostępna stronami. "
-                        +"Sam import nie zmienia salda.")
+                        +"\nAutomatycznie uzgodnione: "+reconciliation.matched
+                        +"\nDo wyjaśnienia: "+reconciliation.review
+                        +"\n\nSaldo zmieniły wyłącznie jednoznacznie "
+                        +"uzgodnione płatności. Konflikty pozostają do decyzji.")
                     .setNegativeButton("Zamknij",null)
                     .setPositiveButton("Pokaż kolejkę",
                         (d,w)->showBankEvidenceQueue(0)).show();
@@ -14006,6 +13970,154 @@ public final class MainActivity extends Activity {
                     +explanation);
             });
         }
+    }
+
+    private static final class BankAutoCandidate {
+        final PaycheckMonthlyBudget.Item item;
+        final YearMonth month;
+        final String operationId;
+        final String recipient;
+        BankAutoCandidate(PaycheckMonthlyBudget.Item item,YearMonth month,
+                String operationId,String recipient) {
+            this.item=item;this.month=month;this.operationId=operationId;
+            this.recipient=recipient;
+        }
+    }
+
+    private static final class BankAutoResult {
+        int matched;
+        int review;
+    }
+
+    private String bankAutoKey(YearMonth month,String kind,long amount) {
+        return month+"|"+kind+"|"+amount;
+    }
+
+    /**
+     * Importowany plik bankowy nie jest uwierzytelnionym API.
+     * Automat rozlicza TYLKO jednoznaczne pozycje pochodzące z Budżetu,
+     * przy zgodności daty miesiąca, kwoty, kierunku i nazwy odbiorcy.
+     * Dowolna niezgodność, brak nazwy lub wiele kandydatów => do decyzji.
+     */
+    private BankAutoResult autoSettleImportedBankEvidence(
+            java.util.List<BankEvidenceStore.Incoming> imported) {
+        BankAutoResult stats=new BankAutoResult();
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> allItems=
+                PaycheckMonthlyBudget.load(prefs);
+            java.util.List<PaycheckRecipientStore.Recipient> recipients=
+                PaycheckRecipientStore.load(prefs);
+            java.util.Map<String,java.util.List<BankAutoCandidate>> index=
+                new java.util.HashMap<>();
+            java.util.Set<YearMonth> months=new java.util.HashSet<>();
+            for(BankEvidenceStore.Incoming e:imported)
+                if(!"velo_pdf".equals(e.sourceKind))
+                    months.add(YearMonth.parse(e.entry.date.substring(0,7)));
+            SQLiteDatabase sql=db.getWritableDatabase();
+            for(YearMonth month:months) {
+                ensureBudgetPaycheckPending(month);
+                for(PaycheckMonthlyBudget.Item item:
+                        PaycheckMonthlyBudget.activeFor(allItems,month)) {
+                    long due=PaycheckMonthlyBudget.remainingDue(sql,item,month);
+                    if(due<=0||item.matchedOperationIds.contains(
+                            budgetPaycheckOperationId(item,month)))continue;
+                    String opId=budgetPaycheckOperationId(item,month);
+                    try(Cursor c=sql.rawQuery(
+                            "SELECT 1 FROM paycheck_transactions "
+                            +"WHERE operation_id=? AND status='pending' "
+                            +"AND scope='shared' AND kind=? AND amount_grosz=?",
+                            new String[]{opId,item.kind,Long.toString(due)})) {
+                        if(!c.moveToFirst())continue;
+                    }
+                    String key=bankAutoKey(month,item.kind,due);
+                    index.computeIfAbsent(key,k->new java.util.ArrayList<>())
+                        .add(new BankAutoCandidate(item,month,opId,
+                            PaycheckRecipientStore.name(recipients,item.recipientId)));
+                }
+            }
+            // Jedna pozycja Budżetu pasująca do dwóch operacji bankowych
+            // NIE jest automatycznie przypisywana do pierwszej z nich.
+            java.util.Map<String,java.util.List<BankEvidenceStore.Incoming>> eligible=
+                new java.util.HashMap<>();
+            for(BankEvidenceStore.Incoming e:imported) {
+                if("velo_pdf".equals(e.sourceKind)) {
+                    stats.review++;
+                    continue;
+                }
+                YearMonth month=YearMonth.parse(e.entry.date.substring(0,7));
+                java.util.List<BankAutoCandidate> options=index.get(
+                    bankAutoKey(month,e.entry.kind,e.entry.amountGrosz));
+                if(options==null||options.isEmpty()) {
+                    stats.review++;
+                    continue;
+                }
+                BankAutoCandidate selected=null;
+                int matches=0;
+                for(BankAutoCandidate candidate:options) {
+                    if(BankBudgetMatchRules.descriptionIdentifies(
+                            e.entry.description,candidate.item.name,
+                            candidate.recipient)) {
+                        selected=candidate;
+                        matches++;
+                    }
+                }
+                if(matches!=1) {
+                    stats.review++;
+                    continue;
+                }
+                eligible.computeIfAbsent(selected.operationId,
+                        k->new java.util.ArrayList<>()).add(e);
+            }
+            for(java.util.Map.Entry<String,
+                    java.util.List<BankEvidenceStore.Incoming>> pairing:
+                    eligible.entrySet()) {
+                java.util.List<BankEvidenceStore.Incoming> evidence=pairing.getValue();
+                if(evidence.size()!=1) {
+                    stats.review+=evidence.size();
+                    continue;
+                }
+                BankEvidenceStore.Incoming entry=evidence.get(0);
+                BankAutoCandidate candidate=null;
+                YearMonth month=YearMonth.parse(entry.entry.date.substring(0,7));
+                java.util.List<BankAutoCandidate> candidates=index.get(
+                    bankAutoKey(month,entry.entry.kind,entry.entry.amountGrosz));
+                if(candidates!=null)for(BankAutoCandidate one:candidates)
+                    if(pairing.getKey().equals(one.operationId))candidate=one;
+                if(candidate==null){stats.review++;continue;}
+                // Ponowny import już uzgodnionego pliku: bez zmiany salda.
+                try(Cursor row=sql.rawQuery(
+                        "SELECT state FROM bank_evidence_queue WHERE evidence_key=?",
+                        new String[]{entry.entry.evidenceKey})) {
+                    if(!row.moveToFirst()||!"open".equals(row.getString(0)))
+                        continue;
+                }
+                try {
+                    String result=BankEvidenceStore.match(sql,
+                        entry.entry.evidenceKey,candidate.operationId);
+                    if(!"MATCHED".equals(result)) {
+                        stats.review++;
+                        continue;
+                    }
+                    PaycheckMonthlyBudget.match(prefs,sql,
+                        candidate.item.id,candidate.operationId);
+                    stats.matched++;
+                }catch(Exception conflict) {
+                    DiagnosticLog.error("BANK_BUDGET_AUTO_MATCH",conflict);
+                    stats.review++;
+                }
+            }
+            if(stats.matched>0)
+                DiagnosticLog.event("BANK_BUDGET_AUTO_MATCHED",
+                    "matched="+stats.matched);
+            if(stats.matched>0)runOnLiveUi(()->{
+                PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
+                render();
+            });
+        }catch(Exception issue) {
+            DiagnosticLog.error("BANK_BUDGET_AUTO_RECONCILE",issue);
+            stats.review+=imported.size();
+        }
+        return stats;
     }
 
     private void showBankEvidenceQueue(int filter) {
@@ -14964,9 +15076,39 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * Pozycje Budżetu są automatycznie widoczne w PayCheck, ale nie są
-     * transakcjami bankowymi. Zgłoszenie zapłaty wymaga osobnej akcji.
+     * Plan -> pending automatycznie, po jednym wpisie na ID pozycji i miesiąc.
+     * Pending nie zmienia salda, ponowne otwarcie nie dodaje duplikatu.
+     * Wpływy i wydatki mają identyczny przebieg.
      */
+    private int ensureBudgetPaycheckPending(YearMonth month) {
+        int created=0;
+        try {
+            java.util.List<PaycheckMonthlyBudget.Item> scheduled=
+                PaycheckMonthlyBudget.activeFor(
+                    PaycheckMonthlyBudget.load(prefs),month);
+            for(PaycheckMonthlyBudget.Item item:scheduled) {
+                long due=PaycheckMonthlyBudget.remainingDue(
+                    db.getReadableDatabase(),item,month);
+                if(due<=0)continue;
+                String note="Budżet "+month+" • "+item.name;
+                if(note.length()>160)note=note.substring(0,160);
+                String result=PaycheckStore.add(
+                    db.getWritableDatabase(),budgetPaycheckOperationId(item,month),
+                    item.kind,item.category,due,note);
+                if("COMMITTED".equals(result))created++;
+            }
+            if(created>0)DiagnosticLog.event(
+                "PAYCHECK_BUDGET_PENDING_AUTO_CREATED","count="+created);
+        } catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_PENDING_AUTO",error);
+            if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())
+                note("Nie udało się przekazać wszystkich pozycji Budżetu "
+                    +"do PayCheck. Sprawdź diagnostykę.");
+        }
+        return created;
+    }
+
+    /** Pozycje planu od razu trafiają do PayCheck jako niepotwierdzone. */
     private void sharedBudgetAwaitingPaycheckConfirmation() {
         final YearMonth month=YearMonth.now();
         try {
@@ -14984,9 +15126,9 @@ public final class MainActivity extends Activity {
                 note("W tym miesiącu brak nierozliczonych pozycji Budżetu.");
                 return;
             }
-            note("To planowane wpływy i wydatki, a nie wykonane przelewy. "
-                +"Nie zmieniają salda. Po sprawdzeniu banku zgłoś operację, "
-                +"potwierdź ją w PayCheck i przypisz do rachunku.");
+            note("Pozycje z Budżetu trafiają tutaj automatycznie jako "
+                +"DO POTWIERDZENIA. Saldo nie zmienia się przy planowaniu. "
+                +"Wyciągi bankowe służą do ich uzgadniania.");
             for(PaycheckMonthlyBudget.Item item:planned) {
                 long due=PaycheckMonthlyBudget.remainingDue(
                     db.getReadableDatabase(),item,month);
@@ -15013,8 +15155,8 @@ public final class MainActivity extends Activity {
                         :"pending".equals(status)?" • DO POTWIERDZENIA"
                         :" • PRZELEW POTWIERDZONY"),14,true));
                 if(status==null) {
-                    smallButton(entry,"Zgłoś wpłatę / wydatek do PayCheck",
-                        ()->showBudgetToPaycheckDialog(item,month));
+                    smallButton(entry,"Przywróć oczekującą pozycję",
+                        ()->{ ensureBudgetPaycheckPending(month); render(); });
                 } else if(!item.matchedOperationIds.contains(opId)) {
                     final String originalStatus=status;
                     final long originalAmount=transactionAmount;
@@ -15142,6 +15284,7 @@ public final class MainActivity extends Activity {
     }
 
     private void paycheckMonthlyBudget() {
+        ensureBudgetPaycheckPending(YearMonth.now());
         header("PayCheck • Budżet miesiąca");
         button("← Wróć do PayCheck", ()->go("paycheck"));
         button("✓ Potwierdź oczekujący przelew", this::showSharedPaycheckPendingQueue);
@@ -15574,7 +15717,7 @@ public final class MainActivity extends Activity {
         }
 
         details.addView(budgetInlineButton("→ PayCheck • do potwierdzenia",
-            () -> showBudgetToPaycheckDialog(item,month)),
+            () -> { ensureBudgetPaycheckPending(month); go("paycheck"); }),
             new LinearLayout.LayoutParams(-1,dp(44)));
         details.addView(budgetInlineButton("✓ Rozlicz / przypisz przelew",
             () -> showBudgetPaymentPicker(item,month,0)),
@@ -17153,6 +17296,7 @@ public final class MainActivity extends Activity {
                                 "PAYCHECK_PRIVATE_BUDGET_ITEM_ADDED");
                         } else {
                             PaycheckMonthlyBudget.add(prefs,item);
+                            ensureBudgetPaycheckPending(YearMonth.now());
                             PaycheckBudgetReminderReceiver.schedule(this);
                             DiagnosticLog.event(
                                 "PAYCHECK_SHARED_BUDGET_ITEM_ADDED");

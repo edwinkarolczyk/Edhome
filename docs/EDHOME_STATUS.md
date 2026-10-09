@@ -6,19 +6,30 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — Android import pełnej historii: Beta 0.8.0.74/266, CI #2050 PASS, podpisany APK opublikowany, fizyczny odbiór na pliku bankowym otwarty |
+| Ostatnia aktualizacja | 2026-10-09 — Android P0 Budżet→PayCheck i dopasowanie wyciągu, kandydat 0.8.0.75/267, wymaga CI oraz odbioru telefonu |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.74 / versionCode 266**, [CI #2050 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37910463724), [podpisany APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.74/edhome-beta.apk); pełny import na realnym Androidzie nadal do odbioru. |
+| Android Beta | **0.8.0.75 / versionCode 267 — kandydat automatycznego przepływu Budżet→PayCheck i uzgadniania wyciągów; CI oraz podpisany APK do potwierdzenia**. Wcześniejsza 0.8.0.74 [CI #2050 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37910463724), [APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.74/edhome-beta.apk). |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.74/266 CI #2050 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37910463724), podpisany APK z Release beta-v0.8.0.74. Poprzedni run #2049 FAIL tylko na kontrakcie bezpiecznego wywołania UI; poprawiono callback na `runOnLiveUi` w commicie `2bfef5b`, CI #2050 sukces. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
-| Bieżący etap | **P0 Android: importer historii bankowej i paginacja poprawione w 0.8.0.74, CI PASS; użytkownik musi sprawdzić własny plik i zgodność liczby operacji.** Docelowe automatyczne uzgadnianie bank→Budżet i test 5C/LAN nadal otwarte. |
+| Bieżący etap | **P0 Android: przygotowany automatyczny plan→pending oraz konserwatywne uzgodnienie z zaimportowaną historią; wymagane CI i fizyczna kontrola prawdziwych banków, konfliktów, historii i synchronizacji.** |
 | Następny krok | Import rzeczywistego wyciągu przez Android 0.8.0.74: porównać liczbę operacji z pliku vs rozpoznane / nowe / duplikaty, przejrzeć wszystkie strony, ponownie importować (0 nowych), restart i backup/restore; na błędzie poprosić o zanonimizowaną próbkę CSV/XLSX/PDF i diagnostykę importu. Dalej osobny etap automatycznego dopasowania do Budżetu (konflikty ręcznie), test LAN i rozliczeń. Stable main bez zmian. |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
+
+## P0 — automatyczny Budżet → PayCheck → wyciąg (09.10.2026)
+
+**Doprecyzowana decyzja użytkownika:** wydatki i wpływy dodawane są wyłącznie w Budżecie; mają trafiać **automatycznie** do `PayCheck → Do potwierdzenia`. Importowane historie bankowe są porównywane i jednoznaczne operacje mają się potwierdzać i rozliczać automatycznie, a wieloznaczne pozostawać do decyzji człowieka. Bez dopisywania niezależnych transakcji ręcznie w PayCheck.
+
+**Kod Beta 0.8.0.75/267 — kandydat, nieodebrany:** 
+- `MainActivity.ensureBudgetPaycheckPending(month)` tworzy idempotentne wpisy `PaycheckStore.add(...)` ze stabilnym ID po `item.id+month` w chwili wejścia do PayCheck/Budżetu, po dodaniu pozycji Budżetu i przy weryfikacji importu za dany miesiąc; stan `pending`, bez wpływu na saldo. Główny formularz ręcznego dodawania niezależnej transakcji PayCheck ukryty/usunięty.
+- `autoSettleImportedBankEvidence` po zapisie zaimportowanej historii dopasowuje wyłącznie istniejący, stworzony z Budżetu `pending` o identycznej kwocie/znaku/miesiącu i silnym dopasowaniu nazwy odbiorcy (test `BankBudgetMatchRules`). Jedna pozycja↔jedna operacja; wielokrotne bankowe dopasowanie, identyczne kwoty różnych odbiorców, brak opisowej identyfikacji i tekstowe Velo PDF — do ręcznej weryfikacji, bez automatycznego zatwierdzenia. Nie korzysta z niepotwierdzonych powiadomień bankowych jako dowodu.
+- `BankEvidenceStore.match` jednorazowo przestawia `pending → confirmed` i rezerwuje unikalny `evidence_key`; następnie `PaycheckMonthlyBudget.match` przypisuje płatność do rachunku, nie księgując po raz drugi. Nie wprowadzać do Stable bez fizycznego testu rzeczywistych danych bankowych.
+- Otwarta uwaga: pliki wyciągów są użytkownika, nie są uwierzytelnionym API bankowym. Dopasowanie jest konserwatywne i może wymagać ręcznej decyzji także przy rzeczywistej zgodności. Jeżeli przypisanie do planu nie powiedzie się już po zatwierdzeniu księgi, raport i diagnostyka mają ujawniać problem; ręczne przypisanie potwierdzonej transakcji musi pozostać dostępne.
+- Regresja: `BankBudgetMatchSmoke.java`, `check_budget_bank_automatch_android.py` + aktualizacja kontraktu wcześniejszego przepływu. CI / podpisanie APK / test urządzenia do potwierdzenia.
 
 ## P0 — Android: import całej historii bankowej (09.10.2026)
 

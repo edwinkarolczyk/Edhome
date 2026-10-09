@@ -156,6 +156,10 @@ Warunkiem zamknięcia 0.7 jest test na fizycznym telefonie i Desktop:
 
 ---
 
+## P0 — automatyczne uzgadnianie Budżet → PayCheck → bank (09.10.2026)
+
+**Docelowa decyzja:** Budżet jest wyłącznym źródłem planowanych operacji (wydatków, wpływów, rat); PayCheck automatycznie otrzymuje `pending`, bez ręcznego dopisywania. Wyciąg bankowy próbuje rozliczyć dokładną, jednoznaczną parę: kwota + kierunek + miesiąc + silny identyfikator odbiorcy. Przy konflikcie kilku propozycji, zmianie kwoty, braku wiarygodnego opisu, PDF o niepewnym pochodzeniu albo wielu wyciągach dla jednej operacji — decyzja ręczna. Brak automatycznego podwójnego księgowania i zmiany salda od samego planu. **Kandydat Android 0.8.0.75/267; wdrożenie kodu nie oznacza odbioru bankowego.** Weryfikować na kopii danych, zachować nieautentykowane pochodzenie plików oraz wszystkie negatywne przypadki. Stable main bez zgody bez zmian.
+
 ## P0 — Import pełnej historii bankowej Android (09.10.2026)
 
 **Problem zgłoszony po Beta 0.8.0.73:** importer ograniczał CSV/mBank do 250 operacji / 256 KB, partię do 250 wpisów, bazę dowodów do 5000, a listę do pierwszych 500; XLSX do 2000 wierszy. **Kandydat 0.8.0.74/266:** zwiększenie limitów 8 MB / 25 000 operacji na plik, 50 000/partię, 200 000 w kolejce, 12 000 wierszy XLSX; przegląd i filtry całej historii stronami po 100; praca importu w tle i widoczny raport nowo zapisanych oraz duplikatów, bez automatycznego księgowania. Odrzuca nieobsługiwane lub niejednoznaczne dane — nie wolno po cichu obcinać transakcji. **Test z prawdziwym plikiem i backup pozostaje obowiązkowy; automatyczne bankowe potwierdzanie jednoznacznych dopasowań to osobny przyszły etap.** Stable `main` bez zmian.
