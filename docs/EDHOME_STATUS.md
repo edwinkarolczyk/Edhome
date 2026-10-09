@@ -6,11 +6,11 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 — etap 6 / PayCheck P0: naprawa niewidocznych list potwierdzania i blokady podwójnego przypisania, Android 0.8.0.70/262 |
+| Ostatnia aktualizacja | 2026-10-09 — etap 6 / PayCheck P0: wszystkie 10 list przelewów/odbiorców/korekt + blokada podwójnego przypisania, Android 0.8.0.71/263 |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.70 / versionCode 262 — kandydat P0 w CI #2032**. Poprzednia **0.8.0.68 / 260** — [Android CI #2023 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37884360118), według użytkownika zainstalowana; test fizyczny potwierdzania nadal otwarty. |
+| Android Beta | **0.8.0.71 / versionCode 263 — kandydat P0 w CI #2037**; poprzednia **0.8.0.70 / 262 CI #2032 PASS**, ale nie obejmuje jeszcze pozostałych ośmiu list. Według użytkownika na urządzeniu 0.8.0.68/260; test fizyczny potwierdzania nadal otwarty. |
 | Desktop Beta | **0.7.0.114** — [Desktop CI #284 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37848629781), instalator Windows Beta opublikowany |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | [run #37884360118 / #2023](https://github.com/edwinkarolczyk/Edhome/actions/runs/37884360118) — **success** dla poprzedniej wersji 0.8.0.68/260; nowa 0.8.0.69 oczekuje na osobny CI |
@@ -31,13 +31,17 @@
 
 **Korekta na wyraźne życzenie użytkownika (09.10):** osobny kafelek **QR Beta / Stable** zostaje też na głównym ekranie Aktualizacji (łącznie **5 działań**: Sprawdź, Instaluj APK, Co nowego, QR Beta / Stable, Opcje zaawansowane). Dodatkowo QR pozostaje w Opcjach zaawansowanych. Commit [`8999850`](https://github.com/edwinkarolczyk/Edhome/commit/899985019780e91c1ce80cc3b1157b68af8cb8a1) aktualizuje kod i test kontraktowy, podnosi wersję do **Android Beta 0.8.0.66/258** w celu uniknięcia konfliktu z ewentualną publikacją 0.8.0.65. Nie oznaczać jako gotowego przed CI i publikacją podpisanego APK; `main` bez zmian.
 
+**Druga poprawka P0:** przegląd tej samej klasy ujawnił jeszcze osiem okien wyboru z `setMessage` + `setItems`: rozstrzyganie kilku powiadomień o płatności, lista dopasowania wyciągu i wybór operacji, automatyczne dopasowanie przelewu do Budżetu, wybór nadpłaty, zakres zamknięcia, kartoteka odbiorców oraz korekta/zakończenie zobowiązania. Wszystkie osiem korzysta teraz z `setCustomTitle(paycheckChoiceDialogTitle(...))`, który pokazuje tytuł i do trzech wierszy instrukcji **nad klikalną listą**, bez ryzyka zasłonięcia `setItems`. Wcześniejsze dwa wybory przelewów nadal mają listę i osobny dialog świadomej zgody. Nowy test `tests/check_paycheck_choice_dialogs.py` w Android CI oraz kontrola 10 list.
+
+**Właściwy pakiet do odbioru P0:** Android Beta **0.8.0.71/263**, [CI #2037](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571) — oczekuje/w toku. Starsze 0.8.0.69 i 0.8.0.70 mają podzbiór tych poprawek. Dopiero po zielonym CI i podpisanym APK: na rzeczywistym Androidzie sprawdzić klikalność list, pending→confirmed, świadome dopasowanie i saldo 1×. **5C i etap 6 nadal bez fizycznego odbioru.**
+
 ## Etap 6 — P0 ukryte listy wyboru przelewu (09.10.2026)
 
 **Diagnoza po zgłoszeniu:** Android 0.8.0.68 wprowadził nowe listy oczekujących i wybór transakcji do rachunku, ale w `MainActivity.showSharedPaycheckPendingQueue` i `showBudgetPaymentPicker` dialogi miały jednocześnie `AlertDialog.Builder.setMessage` i `setItems`. W natywnym `AlertDialog` komunikat może zająć panel przeznaczony na listę, przez co użytkownik nie ma czego kliknąć. To istotny kandydat na rzeczywistą przyczynę niemożności potwierdzania, choć **zachowanie na urządzeniu użytkownika wymaga potwierdzenia**.
 
 **Poprawka:** usunięto `setMessage` jedynie z dwóch okien wyboru; pozostają tytuły, widoczne pozycje, stronicowanie, przycisk Zamknij, a następny osobny dialog zachowuje informację o sprawdzeniu przelewu w banku i przycisk świadomego potwierdzenia. Nie zmieniano tabel, księgowania, historii ani synchronizacji. Test regresyjny `tests/check_paycheck_pending_contract.py` pilnuje list bez komunikatu i utrzymania dialogu potwierdzenia.
 
-**Kandydat wspólny:** Android **0.8.0.70/262**, [build #2032](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888594149), łączy naprawę widoczności list i `PaycheckBudgetAllocationGuard` z 0.8.0.69. Poprzednie pośrednie buildy nie zastępują wydania 0.8.0.70. **Do czasu PASS i publikacji nie instalować jako gotowego.** Odbiór fizyczny B6 i A1–A20 nadal otwarty; Stable `main` bez zmian.
+**Kandydat finalny serii P0:** Android **0.8.0.71/263**, [build #2037](https://github.com/edwinkarolczyk/Edhome/actions/runs/37888963571), łączy naprawę 10 list i `PaycheckBudgetAllocationGuard`. Poprzednia 0.8.0.70 miała CI #2032 PASS, ale naprawiała tylko pierwsze dwa okna. Odbiór fizyczny B6 i A1–A20 nadal otwarty; Stable `main` bez zmian.
 
 ## Etap 6 — P0 powtórne wykorzystanie przelewu (09.10.2026)
 
