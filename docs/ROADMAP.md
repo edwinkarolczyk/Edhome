@@ -2,6 +2,17 @@
 
 > **Ta sekcja ma pierwszeństwo przed starszymi, datowanymi planami niżej.** Historyczne tabele pozostają w pliku jako ślad decyzji, ale nie wyznaczają już kolejności wydań. Rozwój 0.7–0.9 odbywa się wyłącznie na `beta`; `main` pozostaje chronionym Stable i nie jest zmieniana bez osobnej, wyraźnej akceptacji Edwina.
 
+## PayCheck — kwota z banku ma pierwszeństwo przed planem (09.10.2026)
+
+**Kontrakt wymagany przed odbiorem Android Beta i synchronizacji finansów:**
+- Budżet zapisuje kwotę **planowaną** i zachowuje ją w historii. Pojedyncza pozycja Budżetu tworzy jeden `pending` w PayCheck; samo planowanie nigdy nie zwiększa/zmniejsza salda.
+- Import rozpoznaje rzeczywistą kwotę transakcji (grosze, znak, miesiąc, bank i unikalny dowód). **Po zatwierdzeniu PayCheck zapisuje rzeczywistą kwotę z wyciągu**, nigdy nie zastępuje jej planem.
+- Dotyczy symetrycznie `income` i `expense`: wypłata plan +4500 zł / bank +4300 zł daje saldo +4300 zł i różnicę 200 zł; rachunek plan −300 zł / bank −280 zł daje saldo −280 zł i niewydane 20 zł; plan −150 zł / bank −170 zł daje saldo −170 zł i 20 zł nadwyżki kosztu; premia plan +500 zł / bank +650 zł daje saldo +650 zł.
+- Jednoznaczna kwota/opis/kierunek/miesiąc może przejść ostrożne automatyczne dopasowanie. **Różna kwota to przypadek wymagający decyzji użytkownika** — wybór właściwej pozycji Budżetu z listy i ekran „plan / bank / różnica”. Nie dopasowywać samą kwotą, nie zgadywać odbiorcy ani nie rozliczać PDF VeloBanku automatycznie bez wyraźnej weryfikacji.
+- Po zatwierdzeniu pojedynczy `evidence_key` rozlicza tylko jeden `pending`, a kwota salda pochodzi z potwierdzonej transakcji; import tego samego pliku nie może policzyć niczego drugi raz. Nie potwierdzać kwoty planowanej poprzez ręczny przycisk omijający źródło bankowe.
+- Dodatnia/ujemna różnica pozostaje widoczna w Budżecie i historii. Wpływ mniejszy od planu nie tworzy automatycznie zaległości u odbiorcy rachunku. Wydatki niedopłacone/nadpłacone zachowują istniejące reguły zaległości i odliczeń; żaden plan nie jest nadpisywany bez decyzji użytkownika.
+- **Weryfikacja P0:** scenariusze 4500→4300; 300→280; 150→170; 500→650; częściowe wpływy/wydatki, brak duplikatów, konflikt wielu podobnych transakcji, rzeczywisty PDF VeloBank, backup/restore, LAN Android↔Desktop. Nie ogłaszać ukończenia bez fizycznego testu.
+
 ## Punkt startowy po 0.6
 
 - **Android Beta:** 0.6.0.70 / versionCode 135 / SQLite v36 — CI zakończone sukcesem.
