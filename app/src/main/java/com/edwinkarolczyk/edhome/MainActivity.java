@@ -13760,13 +13760,13 @@ public final class MainActivity extends Activity {
     }
 
     private void selectStatementCsv() {
-        new AlertDialog.Builder(this).setTitle("Wybierz bank • PayCheck")
-            .setMessage("Wybierz bank, z którego pochodzi historia. "
-                + "mBank i tekstowy PDF VeloBanku są rozpoznawane automatycznie. "
-                + "Dla zwykłego CSV nazwa banku pomaga wykrywać duplikaty, "
-                + "więc zawsze używaj tej samej nazwy. "
-                + "Możesz wybrać do 10 plików na raz. "
-                + "Skanowane PDF bez warstwy tekstowej nie są obsługiwane.")
+        // AlertDialog.setMessage() zasłania listę setItems() na części urządzeń.
+        new AlertDialog.Builder(this)
+            .setCustomTitle(paycheckChoiceDialogTitle(
+                "Wybierz bank • PayCheck",
+                "mBank / VeloBank lub inny bank. W następnym kroku "
+                +"wskaż plik CSV, XLSX albo tekstowy PDF. "
+                +"Maksymalnie 10 plików naraz."))
             .setItems(new String[]{"mBank", "VeloBank", "Inny bank (CSV / XLSX)"},
                 (dialog,choice)->{
                     if(choice==0) {
@@ -13803,16 +13803,31 @@ public final class MainActivity extends Activity {
             return;
         }
         pendingStatementBank=label;
-        prefs.edit().putString("paycheck_csv_bank_name",label).apply();
+        prefs.edit().putString("paycheck_csv_bank_name",label)
+            .putString("paycheck_pending_bank_picker",label).apply();
         Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         picker.addCategory(Intent.CATEGORY_OPENABLE);
         picker.setType("*/*");
         picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-        try{startActivityForResult(picker,IMPORT_STATEMENT_CSV);}
-        catch(Exception error){
-            pendingStatementBank=null;
-            DiagnosticLog.event("PAYCHECK_CSV_PICKER_FAILED");
-            alert("Nie można wskazać plików historii bankowej.");
+        try {
+            startActivityForResult(picker,IMPORT_STATEMENT_CSV);
+        } catch(Exception missingDocumentProvider) {
+            // Niektóre starsze telefony mają wybierak GET_CONTENT,
+            // ale nie mają działającej obsługi OPEN_DOCUMENT.
+            Intent fallback=new Intent(Intent.ACTION_GET_CONTENT);
+            fallback.addCategory(Intent.CATEGORY_OPENABLE);
+            fallback.setType("*/*");
+            fallback.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            try {
+                startActivityForResult(Intent.createChooser(fallback,
+                    "Wybierz historię bankową"),IMPORT_STATEMENT_CSV);
+            }catch(Exception missingPicker) {
+                pendingStatementBank=null;
+                prefs.edit().remove("paycheck_pending_bank_picker").apply();
+                DiagnosticLog.error("PAYCHECK_CSV_PICKER_FAILED",missingPicker);
+                alert("Nie można otworzyć wyboru plików. "
+                    +"Sprawdź aplikację Pliki na Androidzie.");
+            }
         }
     }
 
@@ -22221,14 +22236,21 @@ public final class MainActivity extends Activity {
         }
         if (request == IMPORT_STATEMENT_CSV) {
             String bank=pendingStatementBank;
+            if(bank==null||bank.isBlank())
+                bank=prefs.getString("paycheck_pending_bank_picker","");
             pendingStatementBank=null;
-            if(result==RESULT_OK&&data!=null&&bank!=null) {
+            prefs.edit().remove("paycheck_pending_bank_picker").apply();
+            if(result==RESULT_OK) {
                 java.util.List<Uri> files=new java.util.ArrayList<>();
-                if(data.getClipData()!=null) {
+                if(data!=null&&data.getClipData()!=null) {
                     for(int i=0;i<data.getClipData().getItemCount();i++)
                         files.add(data.getClipData().getItemAt(i).getUri());
-                } else if(data.getData()!=null) files.add(data.getData());
-                if(!files.isEmpty()) importStatementCsv(files,bank);
+                } else if(data!=null&&data.getData()!=null)
+                    files.add(data.getData());
+                if(files.isEmpty())alert("Nie wybrano pliku historii bankowej.");
+                else if(bank.isEmpty())
+                    alert("Nie zapamiętano wybranego banku. Ponów import.");
+                else importStatementCsv(files,bank);
             }
             return;
         }
