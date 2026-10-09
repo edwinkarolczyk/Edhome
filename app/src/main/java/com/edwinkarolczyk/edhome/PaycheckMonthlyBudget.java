@@ -323,7 +323,7 @@ final class PaycheckMonthlyBudget {
         }
         if (target.matchedOperationIds.size()>=MAX_MATCHES_PER_ITEM)
             throw new IllegalArgumentException("Za dużo realizacji.");
-        long allocated=allocatedForOperation(items,operationId);
+        long allocated=allocatedForOperation(items,operationId,tx.amountGrosz);
         if (Math.addExact(allocated,allocationGrosz)>tx.amountGrosz)
             throw new IllegalArgumentException("Podział przekracza wartość przelewu.");
         long dueBefore=remainingDue(db,target,tx.month);
@@ -446,12 +446,20 @@ final class PaycheckMonthlyBudget {
         return result;
     }
 
-    static long allocatedForOperation(List<Item> items, String operationId) {
+    /**
+     * Suma wykorzystania jednego potwierdzonego przelewu. Pełne
+     * dopasowanie bez kwoty częściowej oznacza CAŁY przelew; uwzględniamy
+     * też nadwyżkę z podziału, żeby nie wydać jej po raz drugi.
+     */
+    static long allocatedForOperation(List<Item> items, String operationId,
+            long paymentGrosz) {
         long total = 0L;
-        for (Item item : items) {
-            Long value = item.matchedAllocationsGrosz.get(operationId);
-            if (value != null) total = Math.addExact(total, value);
-        }
+        for (Item item : items)
+            total = PaycheckBudgetAllocationGuard.addUsed(
+                total,paymentGrosz,
+                item.matchedOperationIds.contains(operationId),
+                item.matchedAllocationsGrosz.get(operationId),
+                item.splitSurplusesGrosz.get(operationId));
         return total;
     }
 
