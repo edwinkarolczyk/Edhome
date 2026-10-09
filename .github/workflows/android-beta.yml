@@ -591,7 +591,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. P0 PayCheck i Budżet: pozycje planu automatycznie trafiają do Do potwierdzenia, bez ręcznego tworzenia operacji. Import historii bankowej może potwierdzić i przypisać płatność wyłącznie przy zgodności kwoty, kierunku, miesiąca, charakterystycznego odbiorcy oraz braku konfliktu. Niejasne wpisy czekają na decyzję. Saldo tylko po uzgodnieniu, bez duplikatów. Test fizyczny nadal wymagany; Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. PayCheck: kwota planowana i kwota faktyczna są rozdzielone. Dla wypłat, innych wpływów i rachunków po zatwierdzeniu dowodu bankowego zapisuje się rzeczywistą kwotę z wyciągu, a różnicę wobec planu zachowuje się w Budżecie i historii. Przy różnej kwocie wybierz i zatwierdź właściwą pozycję; brak automatycznego zgadywania. Blokada potwierdzenia samego planu jako przelewu. Historia bankowa obejmuje wszystkie statusy, parser PDF VeloBanku obsługuje część wieloliniowych przelewów. Bez podwójnego salda. Import realnych plików i synchronizacja nadal wymagają odbioru na urządzeniu. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
