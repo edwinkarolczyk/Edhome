@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 265,
   "versionName": "0.8.0.73",
-  "changelog": "EDHOME 0.8.0.73 — Beta. P0 PayCheck: oczekujące przelewy można otworzyć także z Budżetu; kolejka z paginacją, jawne ręczne potwierdzenie, wybór konkretnego rachunku i przypisanie potwierdzonego przelewu bez ponownego księgowania. Informacja o niepowodzeniu przypisania bez ukrywania potwierdzenia. Wymaga testu fizycznego; main bez zmian.",
+  "changelog": "EDHOME 0.8.0.73 — Beta. Android PayCheck ↔ Budżet: nierozliczone pozycje bieżącego miesiąca są widoczne w PayCheck jako plan do obsłużenia, bez zmiany salda. Z pozycji Budżetu można przejść do zgłoszenia operacji PayCheck albo wybrać istniejący przelew, by uniknąć duplikatu. Zgłoszenie trafia jako oczekujące; dopiero świadome potwierdzenie po sprawdzeniu banku zmienia saldo jeden raz i przypisuje operację do rachunku. Przycisk powrotu z Budżetu do PayCheck. Pełna historia wpływów i wydatków (+/−) z 0.8.0.72 pozostaje. Test na fizycznym telefonie i synchronizacja nadal do odbioru; Stable bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.73/edhome-beta.apk",
   "sha256": "7d49e5a728f63321e5c717c829659646ada82a9d7f48481dd2cf2ce7914297ba"
 }
