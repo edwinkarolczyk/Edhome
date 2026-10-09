@@ -49,7 +49,8 @@ for token in (
     assert token in main, token
 assert 'updater.showLatestChanges()' in main
 assert 'Układ Start 3 × 3. Gdy jest więcej niż 9 kafelków' not in main
-assert main.count('updateTile(tiles,') == 5  # cztery aktywne kafelki Beta, dwa alternatywne Stable
+assert 'QR Beta /\\nStable' in main
+assert main.count('updateTile(tiles,') == 6  # pięć aktywnych kafelków Beta (QR na głównym ekranie)
 for token in (
     'public void showLatestChanges()',
     'private void cacheLatestRelease(JSONObject manifest)',

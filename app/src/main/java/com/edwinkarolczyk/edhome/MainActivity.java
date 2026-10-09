@@ -20418,6 +20418,8 @@ public final class MainActivity extends Activity {
             updateTile(tiles, "◷", "Co\nnowego", false,
                 () -> updater.openPlay());
         }
+        updateTile(tiles, "▦", "QR Beta /\nStable", false,
+            this::showUpdateDownloadQrCodes);
         updateTile(tiles, "⚙", "Opcje\nzaawansowane", false,
             () -> go("updates_advanced"));
         note(BetaUpdater.isBeta()

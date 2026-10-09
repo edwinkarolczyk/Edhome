@@ -562,7 +562,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Aktualizacje: uproszczony ekran z czterema działaniami, połączony przycisk instalacji gotowego lub wybranego APK, prawdziwe Co nowego z bieżącego manifestu kanału Beta i bezpieczne przechowywanie ostatniego opisu. QR pobierania przeniesiony do opcji zaawansowanych. Bez zmian danych i bazy. Main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Aktualizacje: uproszczony ekran z pięcioma działaniami (w tym QR Beta / Stable), połączony przycisk instalacji gotowego lub wybranego APK, prawdziwe Co nowego z bieżącego manifestu kanału Beta i bezpieczne przechowywanie ostatniego opisu. QR pobierania przeniesiony do opcji zaawansowanych. Bez zmian danych i bazy. Main bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
