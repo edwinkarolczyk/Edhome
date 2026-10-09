@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 257,
-  "versionName": "0.8.0.65",
-  "changelog": "EDHOME 0.8.0.65 — Beta. Aktualizacje: uproszczony ekran z czterema działaniami, połączony przycisk instalacji gotowego lub wybranego APK, prawdziwe Co nowego z bieżącego manifestu kanału Beta i bezpieczne przechowywanie ostatniego opisu. QR pobierania przeniesiony do opcji zaawansowanych. Bez zmian danych i bazy. Main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.65/edhome-beta.apk",
-  "sha256": "f68e1fa8b62e5ba4ef7bfce2fc5e69aba96ec2ebc869db02ebce1b91f64e48ad"
+  "versionCode": 258,
+  "versionName": "0.8.0.66",
+  "changelog": "EDHOME 0.8.0.66 — Beta. Aktualizacje: uproszczony ekran z pięcioma działaniami (w tym QR Beta / Stable), połączony przycisk instalacji gotowego lub wybranego APK, prawdziwe Co nowego z bieżącego manifestu kanału Beta i bezpieczne przechowywanie ostatniego opisu. QR pobierania przeniesiony do opcji zaawansowanych. Bez zmian danych i bazy. Main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.66/edhome-beta.apk",
+  "sha256": "c4d1a10097a36c2b6da77dbda7d78b58db9c811b5d0dac947e28c998beb45668"
 }
