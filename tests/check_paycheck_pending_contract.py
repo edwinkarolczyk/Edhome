@@ -29,10 +29,10 @@ for label,dialog in (
 assert '.setTitle("Potwierdź operację?")' in main
 assert '.setPositiveButton("Sprawdziłem — potwierdź"' in main
 assert 'transaction.put("status","pending");' in cost
-for token in ("✓ Pokaż i potwierdź oczekujące przelewy","✓ Potwierdź oczekujący przelew","✓ Rozlicz / przypisz przelew","private void showSharedPaycheckPendingQueue(int offset)","ORDER BY id DESC LIMIT ? OFFSET ?","private void showBudgetPaymentPicker(","private void confirmBudgetPaymentAssignment(","AND status IN ('pending','confirmed')","if(assigned.contains(operationId))continue;","String result=PaycheckStore.confirm(","boolean changed=PaycheckMonthlyBudget.match(","Przelew potwierdzono w PayCheck, lecz NIE przypisano",):
+for token in ("✓ Lista oczekujących przelewów","✓ Potwierdź oczekujący przelew","✓ Rozlicz / przypisz przelew","private void showSharedPaycheckPendingQueue(int offset)","ORDER BY id DESC LIMIT ? OFFSET ?","private void showBudgetPaymentPicker(","private void confirmBudgetPaymentAssignment(","AND status IN ('pending','confirmed')","if(assigned.contains(operationId))continue;","String result=PaycheckStore.confirm(","boolean changed=PaycheckMonthlyBudget.match(","Przelew potwierdzono w PayCheck, lecz NIE przypisano",):
     assert token in main, 'Brak działania P0: '+token
 
-for token in ('Do potwierdzenia • bez wpływu na saldo',
+for token in ('Do potwierdzenia z Budżetu',
               'Potwierdź / dopasuj',
               'PaycheckStore.confirm(db.getWritableDatabase()',
               'Saldo potwierdzone:',
