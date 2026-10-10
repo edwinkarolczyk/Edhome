@@ -370,11 +370,28 @@ final class BankEvidenceStore {
     static boolean deleteUnmatched(SQLiteDatabase db,String evidenceKey) {
         if(evidenceKey==null||!evidenceKey.matches("[0-9a-f]{64}"))
             throw new IllegalArgumentException("Nieprawidłowa pozycja bankowa.");
-        return db.delete("bank_evidence_queue",
-            "evidence_key=? AND state IN ('open','dismissed') "
+        // Zachowaj klucz dowodu jako tombstone: ponowny import tej samej
+        // historii nie może przywrócić świadomie usuniętego przelewu.
+        ContentValues removed=new ContentValues();
+        removed.put("state","dismissed");
+        return db.update("bank_evidence_queue",removed,
+            "evidence_key=? AND state='open' "
             +"AND NOT EXISTS (SELECT 1 FROM paycheck_transactions "
             +"WHERE statement_key=?)",
             new String[]{evidenceKey,evidenceKey})==1;
+    }
+
+    /** Masowe ukrycie nieprzypisanych dowodów, bez kasowania kluczy.
+     * Rozliczenia powiązane z Budżetem i PayCheck pozostają nienaruszone.
+     * Zachowane klucze uniemożliwiają ponowny import tych samych pozycji.
+     */
+    static int dismissAllUnmatched(SQLiteDatabase db) {
+        ContentValues v=new ContentValues();
+        v.put("state","dismissed");
+        return db.update("bank_evidence_queue",v,
+            "state='open' AND matched_operation_id IS NULL "
+            +"AND NOT EXISTS (SELECT 1 FROM paycheck_transactions t "
+            +"WHERE t.statement_key=bank_evidence_queue.evidence_key)",null);
     }
 
     static boolean dismiss(SQLiteDatabase db,String evidenceKey) {
