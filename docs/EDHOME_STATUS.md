@@ -1,3 +1,11 @@
+## 2026-10-10 — Konwerter PDF CSV Android i Windows
+
+Android Beta 0.8.0.86 / 278: dodano BankPdfConverterActivity (commit 72232b0d), osobną ikonę w AndroidManifest (2bd9c607) i podniesiono wersję (939777be). Odczyt lokalnego PDF VeloBank, podsumowanie błędów, świadomy eksport tylko poprawnych pozycji do CSV. Nie księguje automatycznie.
+
+Windows: tools/pdf_converter_windows.py (commit 732f441c), Tkinter + pdfplumber; lokalny podgląd, diagnostyka, CSV. Wymaga Python i pip install pdfplumber; EXE jeszcze nie powstał. Parser Windows jest prototypem i wymaga sprawdzenia na prawdziwym wyciągu.
+
+NIEPOTWIERDZONE: CI Android 0.8.0.86, realny PDF, poprawność wszystkich wierszy i deduplikacja przy przejściu PDF/CSV. Bez OCR, bez edycji wierszy, bez mBank PDF. P0 PayCheck pozostaje otwarte. Następnie: test CI i realnego wyciągu, korekta, EXE Windows.
+
 ## 2026-10-10 — Android Beta 0.8.0.85 / 277: wydanie testowe
 
 - Commit `c0d9ecd47c656b697e97d126ab2d7fa76ffefe37`: zwiększono `app/build.gradle` do **0.8.0.85 / 277**, aby uruchomić workflow podpisanego APK Beta.
