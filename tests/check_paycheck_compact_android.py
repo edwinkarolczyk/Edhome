@@ -46,9 +46,11 @@ assert "PaycheckStore.add(" not in due
 for text in ('"Importuj PDF / CSV / XLSX"',
              'selectStatementCsv();', 'showBankEvidenceQueue(0)',
              'showBankEvidenceArchive(0)', 'BankPdfConverterActivity.class',
-             'configureBankNotifications();', 'bankImportDiagLine()'):
+             'configureBankNotifications();', 'go("paycheck_bank_diagnostics")'):
     assert text in menu,text
 
+assert 'bankImportDiagLine()' in source
+assert 'showBankNotificationHints();' in source
 assert 'go("paycheck_goals")' in source
 assert 'case "paycheck_goals": paycheckGoals(); break;' in source
 assert 'sharedPaycheckGoals();' in goals
