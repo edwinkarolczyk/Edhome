@@ -1566,6 +1566,7 @@ public final class MainActivity extends Activity {
                 case "vehicles": vehicles(); break;
                 case "paycheck": paycheck(); break;
                 case "paycheck_budget": paycheckMonthlyBudget(); break;
+                case "paycheck_goals": paycheckGoals(); break;
                 case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
                 case "scanner": scannerHub(); break;
@@ -13022,63 +13023,76 @@ public final class MainActivity extends Activity {
         handleStorageTargetScan(target.kind, target.id, "qr");
     }
 
+    /** Bank i diagnostyka poza główną, przewijaną listą PayCheck. */
+    private void showPaycheckBankMenu() {
+        if(!BetaUpdater.isBeta()) {
+            selectStatementCsv();
+            return;
+        }
+        long open=BankEvidenceStore.count(db.getReadableDatabase(),"open",0);
+        long total=BankEvidenceStore.countAll(db.getReadableDatabase());
+        String[] options={
+            "Importuj PDF / CSV / XLSX",
+            "Do wyjaśnienia ("+open+")",
+            "Cała historia bankowa ("+total+")",
+            "Konwerter PDF → CSV",
+            "Powiadomienia z banku • ustawienia",
+            "Diagnostyka importu"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Historia bankowa")
+            .setItems(options,(dialog,which)->{
+                if(which==0)selectStatementCsv();
+                else if(which==1)showBankEvidenceQueue(0);
+                else if(which==2)showBankEvidenceArchive(0);
+                else if(which==3)startActivity(new Intent(
+                    this,BankPdfConverterActivity.class));
+                else if(which==4)configureBankNotifications();
+                else if(which==5)new AlertDialog.Builder(this)
+                    .setTitle("Diagnostyka bankowa")
+                    .setMessage("Ostatni import: "+bankImportDiagLine()
+                        +"\nNasłuch: "+(BankNotificationListener.isConnected()
+                            ?"połączony":"niepołączony")
+                        +"\nZgoda Androida: "
+                        +(bankNotificationPermissionGranted()?"TAK":"NIE"))
+                    .setPositiveButton("Zamknij",null).show();
+            })
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showPaycheckToolsMenu() {
+        new AlertDialog.Builder(this)
+            .setTitle("Narzędzia PayCheck")
+            .setItems(new String[]{
+                "Wspólne cele finansowe",
+                "Usuń wiele wpisów PayCheck",
+                "Pełna historia PayCheck"
+            },(d,which)->{
+                if(which==0)go("paycheck_goals");
+                else if(which==1)deleteSharedPaycheckEntriesBulk();
+                else if(which==2)showSharedPaycheckHistory();
+            })
+            .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void paycheckGoals() {
+        header("PayCheck • wspólne cele");
+        button("← Wróć do PayCheck",()->go("paycheck"));
+        sharedPaycheckGoals();
+    }
+
     private void paycheck() {
-        header("PayCheck • budżet");
-        note("EDHOME korzysta z jednego PayCheck i jednego Budżetu miesiąca.");
-        note("Zakup z listy i przyjęcie do spiżarni nie księgują wydatku. "
-            + "Nowe wpisy finansowe czekają na potwierdzenie; "
-            + "saldo liczy tylko potwierdzone operacje.");
-        // Każdy plan bieżącego miesiąca jest od razu pending w PayCheck.
+        header("PayCheck");
         ensureBudgetPaycheckPending(YearMonth.now());
-        title("Saldo potwierdzone: " + MoneyRules.format(
+        title("Saldo potwierdzone: "+MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
         sharedMonthlyBudgetEntry();
         sharedBudgetAwaitingPaycheckConfirmation();
-        note("Nowe wydatki i wpływy dodawaj wyłącznie w Budżecie "
-            +"miesiąca. PayCheck otrzymuje je automatycznie do potwierdzenia.");
-        if (BetaUpdater.isBeta()) {
-            button("Powiadomienia bankowe • wybierz aplikacje",
-                this::configureBankNotifications);
-            note("Nowe powiadomienia automatycznie trafiają do kolejki PayCheck "
-                +"do sprawdzenia. Utworzenie wpisu nie zmienia salda do czasu "
-                +"potwierdzenia. EDHOME zapisuje tylko kwotę, kierunek, źródło "
-                +"i czas, bez treści i kodów.");
-            showBankNotificationHints();
-        }
-        button("Import historii bankowej • CSV / mBank / XLSX / PDF", this::selectStatementCsv);
-        if(BetaUpdater.isBeta()) {
-            long bankOpen=BankEvidenceStore.count(
-                db.getReadableDatabase(),"open",0);
-            long bankMatched=BankEvidenceStore.count(
-                db.getReadableDatabase(),"matched",0);
-            long bankDismissed=BankEvidenceStore.count(
-                db.getReadableDatabase(),"dismissed",0);
-            button("Do wyjaśnienia • banki ("+bankOpen+")",
-                ()->showBankEvidenceQueue(0));
-            button("Cała historia bankowa ("+(bankOpen+bankMatched+bankDismissed)+")",
-                ()->showBankEvidenceArchive(0));
-            note("Historia bankowa: "+bankOpen+" do wyjaśnienia • "
-                +bankMatched+" uzgodnionych • "+bankDismissed+" odrzuconych. "
-                +"Lista «Do wyjaśnienia» nie pokazuje już uzgodnionych operacji.");
-            note("Diagnostyka importu: "+bankImportDiagLine());
-        }
-        note("Wczytaj CSV lub eksport mBanku (tekst w arkuszu XLSX). "
-            + "Aplikacja proponuje pary, ale saldo zmienia się dopiero po zatwierdzeniu. "
-            + "Plik nie jest automatycznie potwierdzeniem z banku.");
-        button("Usuń wiele wpisów PayCheck",
-            this::deleteSharedPaycheckEntriesBulk);
-        title("Do potwierdzenia • bez wpływu na saldo");
-        button("✓ Pokaż i potwierdź oczekujące przelewy",
+        button("✓ Lista oczekujących przelewów",
             this::showSharedPaycheckPendingQueue);
-        try (Cursor pending = db.getReadableDatabase().rawQuery(
-                "SELECT COUNT(*),COALESCE(SUM(amount_grosz),0) "
-                + "FROM paycheck_transactions WHERE scope='shared' "
-                + "AND status='pending'", null)) {
-            if (pending.moveToFirst())
-                note(pending.getInt(0) + " wpisów • "
-                    + MoneyRules.format(pending.getLong(1))
-                    + " (łączna wartość, przychody i wydatki osobno w historii)");
-        }
+        button("Historia bankowa • import i uzgodnienia",
+            this::showPaycheckBankMenu);
+        button("Narzędzia PayCheck",this::showPaycheckToolsMenu);
         title("PayCheck • ostatnie operacje");
         note("Dotknij kwoty, aby zobaczyć szczegóły. "
             +"Otwarta może być tylko jedna pozycja.");
@@ -13089,7 +13103,7 @@ public final class MainActivity extends Activity {
         try(Cursor c=db.getReadableDatabase().rawQuery(
                 "SELECT operation_id,kind,category,amount_grosz,note,created_at,status,confirmation_source,statement_key "
                 +"FROM paycheck_transactions WHERE scope='shared' "
-                +"ORDER BY id DESC LIMIT 40",null)){
+                +"ORDER BY id DESC LIMIT 12",null)){
             while(c.moveToNext()){
                 count++;
                 String operationId=c.getString(0);
@@ -13154,7 +13168,6 @@ public final class MainActivity extends Activity {
             }
         }
         if(count==0)note("Brak transakcji.");
-        sharedPaycheckGoals();
     }
 
 
@@ -15464,6 +15477,7 @@ public final class MainActivity extends Activity {
     }
 
     /** Pozycje planu od razu trafiają do PayCheck jako niepotwierdzone. */
+    /** Zwięzła lista Budżet → PayCheck: tylko jeden rozwinięty wiersz. */
     private void sharedBudgetAwaitingPaycheckConfirmation() {
         final YearMonth month=YearMonth.now();
         try {
@@ -15472,18 +15486,15 @@ public final class MainActivity extends Activity {
                     PaycheckMonthlyBudget.load(prefs),month);
             int waiting=0;
             for(PaycheckMonthlyBudget.Item item:planned) {
-                long due=PaycheckMonthlyBudget.remainingDue(
-                    db.getReadableDatabase(),item,month);
-                if(due>0)waiting++;
+                if(PaycheckMonthlyBudget.remainingDue(
+                        db.getReadableDatabase(),item,month)>0)waiting++;
             }
-            title("Z Budżetu miesiąca • do obsłużenia ("+waiting+")");
+            title("Do potwierdzenia z Budżetu ("+waiting+")");
             if(waiting==0) {
-                note("W tym miesiącu brak nierozliczonych pozycji Budżetu.");
+                note("W tym miesiącu brak nierozliczonych pozycji.");
                 return;
             }
-            note("Pozycje z Budżetu trafiają tutaj automatycznie jako "
-                +"DO POTWIERDZENIA. Saldo nie zmienia się przy planowaniu. "
-                +"Wyciągi bankowe służą do ich uzgadniania.");
+            final LinearLayout[] expanded={null};
             for(PaycheckMonthlyBudget.Item item:planned) {
                 long due=PaycheckMonthlyBudget.remainingDue(
                     db.getReadableDatabase(),item,month);
@@ -15502,40 +15513,66 @@ public final class MainActivity extends Activity {
                 }
                 LinearLayout entry=new LinearLayout(this);
                 entry.setOrientation(LinearLayout.VERTICAL);
-                entry.setPadding(dp(6),dp(5),dp(6),dp(5));
-                entry.addView(text(("income".equals(item.kind)?"+ ":"− ")
-                    +MoneyRules.format(due)+" • "+budgetItemDisplayName(item)
-                    +(item.optional?" • OPCJONALNE":"")
-                    +(status==null?" • PLAN"
-                        :"pending".equals(status)?" • DO POTWIERDZENIA"
-                        :item.matchedOperationIds.contains(opId)
-                            ?" • RÓŻNICA WOBEC PLANU"
-                            :" • PRZELEW POTWIERDZONY"),14,true));
+                body.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+                LinearLayout row=new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp(6),dp(5),dp(6),dp(5));
+                entry.addView(row,new LinearLayout.LayoutParams(-1,dp(46)));
+                TextView name=text(budgetItemDisplayName(item)
+                    +(item.optional?" • opcjonalne":""),14,false);
+                name.setSingleLine(true);
+                name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                name.setTextColor(subdued);
+                row.addView(name,new LinearLayout.LayoutParams(0,-2,1f));
+                TextView amountLabel=text(
+                    ("income".equals(item.kind)?"+ ":"− ")
+                    +MoneyRules.format(due)+"  ›",15,true);
+                amountLabel.setTextColor("income".equals(item.kind)
+                    ?0xFF168A57:0xFFBD4040);
+                row.addView(amountLabel);
+                LinearLayout details=new LinearLayout(this);
+                details.setOrientation(LinearLayout.VERTICAL);
+                details.setPadding(dp(12),dp(2),dp(12),dp(9));
+                details.setVisibility(View.GONE);
+                entry.addView(details);
+                details.addView(text(status==null?"PLAN • brak wpisu PayCheck"
+                    :"pending".equals(status)?"DO POTWIERDZENIA • saldo bez zmian"
+                    :item.matchedOperationIds.contains(opId)
+                        ?"RÓŻNICA WOBEC PLANU"
+                        :"PRZELEW POTWIERDZONY",13,false));
                 if(item.matchedOperationIds.contains(opId)
-                        && "confirmed".equals(status)) {
-                    entry.addView(text("Z banku: "
+                        &&"confirmed".equals(status))
+                    details.addView(text("Z banku: "
                         +("income".equals(item.kind)?"+ ":"− ")
                         +MoneyRules.format(transactionAmount)
-                        +" • pozostała różnica: "
-                        +MoneyRules.format(due),13,false));
-                }
+                        +" • różnica: "+MoneyRules.format(due),13,false));
                 if(status==null) {
-                    smallButton(entry,"Przywróć oczekującą pozycję",
-                        ()->{ ensureBudgetPaycheckPending(month); render(); });
+                    smallButton(details,"Przywróć oczekującą pozycję",
+                        ()->{ensureBudgetPaycheckPending(month);render();});
                 } else if(!item.matchedOperationIds.contains(opId)) {
                     final String originalStatus=status;
                     final long originalAmount=transactionAmount;
                     if("pending".equals(originalStatus))
-                        smallButton(entry,"Rozlicz z historii bankowej",
+                        smallButton(details,"Rozlicz z historii bankowej",
                             ()->showBankEvidenceQueue(0));
                     else
-                        smallButton(entry,"Przypisz potwierdzony przelew",
+                        smallButton(details,"Przypisz potwierdzony przelew",
                             ()->confirmBudgetPaymentAssignment(item,month,
                                 opId,originalStatus,originalAmount));
                 }
-                smallButton(entry,"Wybierz istniejący przelew",
+                smallButton(details,"Wybierz istniejący przelew",
                     ()->showBudgetPaymentPicker(item,month,0));
-                body.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+                row.setOnClickListener(v->{
+                    boolean open=details.getVisibility()!=View.VISIBLE;
+                    if(expanded[0]!=null&&expanded[0]!=details)
+                        expanded[0].setVisibility(View.GONE);
+                    details.setVisibility(open?View.VISIBLE:View.GONE);
+                    expanded[0]=open?details:null;
+                });
+                View divider=new View(this);
+                divider.setBackgroundColor(subdued & 0x35FFFFFF);
+                entry.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
             }
         } catch(Exception error) {
             DiagnosticLog.error("PAYCHECK_BUDGET_DUE_LIST",error);
