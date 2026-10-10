@@ -6,17 +6,17 @@
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-09 17:50 — realny VeloBank PDF: 7 błędów od daty 08.10, import w całości odrzucony; poprawki wielowierszowych kwot Android Beta **0.8.0.81/273 KANDYDAT**, CI #2097 PASS, podpisany APK 0.8.0.81/273 opublikowany (13 345 032 B, SHA-256 af4cd09d63649660bc1c46d9036d2f653313cdd404a1b054be11d5f3edb41794fee7). Test rzeczywistego PDF pozostaje P0 / NIEODEBRANY. |
+| Ostatnia aktualizacja | 2026-10-10 — VeloBank: poprawka kierunku przelewu z/na rachunek, 3-liniowego opisu i salda z rzeczywistych zrzutów; Android Beta **0.8.0.82/274**, CI #2102 PASS, podpisany APK opublikowany. Prawdziwy PDF wciąż P0/NIEODEBRANY. |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — **zakaz zmian, merge i publikowania nowego Stable bez osobnej, wyraźnej akceptacji Edwina** |
-| Android Beta | **0.8.0.81 / versionCode 273** — [CI #2097 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/37955351342), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.81/edhome-beta.apk) (13 345 032 B, SHA-256 `af4cd09d63649660bc1c46d9036d2f653313cdd404a1b054be11d5f3edb41794fee7`). Kod/testy PASS, rzeczywisty VeloBank PDF na telefonie nadal NIEODEBRANY. |
+| Android Beta | **0.8.0.82 / versionCode 274** — [CI #2102 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38025992176), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.82/edhome-beta.apk) (13 345 337 B, SHA-256 `b5e594d8a6bf0489e32f683ab9fc82fed6b2b14060d6f12b75a763aad3146b16`). Kod/testy PASS, rzeczywisty VeloBank PDF na telefonie nadal NIEODEBRANY. |
 | Desktop Beta | **0.7.0.115 — CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689); test użytkownika po LAN otwarty. |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
-| Ostatni zweryfikowany CI Android | **0.8.0.81/273, CI #2097 PASS** — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37955351342), [podpisany release](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.81), commit `1dd89e24ecc4a46a4ed9a2441c02387aff4e28fe`. Syntetyczne testy parsera PASS, nie potwierdzono kompletności prawdziwego pliku. |
+| Ostatni zweryfikowany CI Android | **0.8.0.82/274, CI #2102 PASS** — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/38025992176), [podpisany release](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.82), commit `c76414ee7ef9be305d6c790a22531d6d1e1306f6`. Syntetyczne testy parsera PASS, prawdziwy PDF nieodebrany. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
-| Bieżący etap | **P0 realny PDF VeloBank Android:** Beta 0.8.0.81/273 CI #2097 PASS; obsługa +/− bez waluty w pojedynczych wierszach, wieloliniowych przelewów, sygnalizacja błędu przy niewczytanej operacji, etap diagnostyki w oknie. Czyta plik użytkownika poprawnie? NIEPOTWIERDZONE. Nie mylić z przejściem CI |
-| Następny krok | Na telefonie zainstalować Beta 0.8.0.80, w PayCheck → Import historii bankowej → VeloBank wybrać rzeczywisty PDF. Zgłosić dokładny komunikat z etapem jeśli odrzucony, lub liczbę/datę ostatniej pozycji i brakujący przelew 09.10 jeśli wczytany. W razie dalszego niepowodzenia uzyskać zamaskowaną próbkę źródła. Nie zmieniać Stable main, nie zamykać P0 przed kompletnym testem historii, salda i duplikatów |
+| Bieżący etap | **P0 realny PDF VeloBank Android:** Beta 0.8.0.82/274 CI #2102 PASS; obsługa +/− bez waluty w pojedynczych wierszach, wieloliniowych przelewów, sygnalizacja błędu przy niewczytanej operacji, etap diagnostyki w oknie. Czyta plik użytkownika poprawnie? NIEPOTWIERDZONE. Nie mylić z przejściem CI |
+| Następny krok | Na telefonie zainstalować Beta 0.8.0.82, w PayCheck → Import historii bankowej → VeloBank wybrać rzeczywisty PDF. Zgłosić dokładny komunikat z etapem jeśli odrzucony, lub liczbę/datę ostatniej pozycji i brakujący przelew 09.10 jeśli wczytany. W razie dalszego niepowodzenia uzyskać zamaskowaną próbkę źródła. Nie zmieniać Stable main, nie zamykać P0 przed kompletnym testem historii, salda i duplikatów |
 
 **Ważne:** zielone CI dotyczy wskazanego commita, a nie automatycznie wszystkich przyszłych zmian. Wydania i funkcje wymagające testów na fizycznych urządzeniach są oznaczane jako *nieodebrane*, dopóki taki test faktycznie nie przejdzie.
 
@@ -35,6 +35,21 @@
 - Testy CI Velo to pliki tekstowe syntetyczne, a nie rzeczywisty PDF VeloBanku użytkownika.
 
 **Następny bezpieczny krok:** porównać tę samą rzeczywistą historię PDF z widocznymi w banku datami i liczbą pozycji: źródłowe operacje do 09.10 → tekst wypisany przez PDFTextStripper (może być próbka po zamaskowaniu danych) → wynik parsera 0.8.0.80 → `Cała historia bankowa`. Jeśli brak próbki, dodać najpierw diagnostykę tylko odczytu „najpóźniejsza data występująca w tekście PDF” vs „najpóźniejsza rozpoznana transakcja” (daty nagłówka ≠ transakcje, więc bez automatycznego księgowania). Dopiero potem zmieniać rozdzielanie dat lub składanie datowanych wieloliniowych rekordów. Nie zamykać P0 na podstawie CI. Stable main nietknięta.
+
+## P0 — VeloBank zrzuty stron PDF 10.10.2026: rzeczywisty opis 3-liniowy i wpływ bez plusa
+
+**Źródło:** dwa zrzuty prawdziwego wyciągu VeloBanku, NIE sam PDF ani tekst zwrócony przez `PDFTextStripper`. W tabeli są kolumny Data transakcji / Data księgowania / Opis transakcji / Kwota transakcji / Saldo po transakcji. Wśród transakcji: „Przelew z rachunku” +6 235,20 zł i +5,00 zł (kwoty dodatnie w banku bez znaku plusa), „Przelew na rachunek” −2 500,00 zł, −872,59 zł, −646,60 zł; opis przelewu zawiera w oddzielnych liniach „Nadawca”/„Odbiorca” oraz „Tytuł”. Wiersze transakcji mogą mieć dwie daty; nie zawsze data księgowania jest wypełniona. Na stronie znajduje się również wiersz zapowiadający przelew bez kwoty (same kreski) — taki przypadek ma pozostać niezaksięgowany i wymaga potwierdzenia zachowania po imporcie.
+
+**Potwierdzony defekt w kodzie 0.8.0.81:** `BankStatementVeloPdf.amount()` nie rozpoznawało zwrotu „Przelew z rachunku” jako wpływu ani „Przelew na rachunek” jako wydatku bez podpisanej kwoty. Przy dwóch dodatnich wartościach w kolumnach Kwota transakcji / Saldo po, parser dotąd oznaczał transakcję jako niejednoznaczną. Dodatkowe linie Nadawca/Odbiorca/Tytuł za wierszem zawierającym kwotę nie trafiały do opisu. To zgadza się z wcześniejszym błędem 7 nierozpoznanych operacji, ale nie jest jeszcze dowodem kompletnego odczytu całego PDF.
+
+**Wykonanie tylko na `beta`:**
+- `BankStatementVeloPdf.java`, `26c80818`: klasyfikacja wpływów „Przelew z rachunku”, wydatków „Przelew na rachunek”, zachowanie linii z nadawcą, odbiorcą i tytułem w opisie bez zmiany istniejącego klucza dowodu.
+- `BankStatementVeloPdf.java`, `728f32e4`: jeśli nagłówek jednoznacznie zawiera KWOTA TRANSAKCJI i SALDO PO TRANSAKCJI, przy niepodpisanym „Przelew z rachunku” i dokładnie dwóch kwotach wybór pierwszej jako kwoty operacji; bez tego nagłówka nadal bez zgadywania.
+- `BankStatementVeloPdfSmoke.java`, `d89e7ab5`: syntetyczne, fikcyjne dane na wzór zrzutów, testy 3-wierszowego opisu, wpływów 6235,20 i 5,00, wydatku 2500,00, salda 6275,20 jako osobnej wartości, stabilnego ID po reimporcie. **Prawdziwych numerów kont ani danych osobowych nie wpisano do repo.**
+- `app/build.gradle`, `05af84d5`: Beta `0.8.0.82 / 274`; uwagi wydania `c76414ee`.
+- **[CI #2102 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38025992176)** na `c76414ee7ef9be305d6c790a22531d6d1e1306f6`; [podpisany APK 0.8.0.82](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.82/edhome-beta.apk), 13 345 337 bajtów, SHA-256 `b5e594d8a6bf0489e32f683ab9fc82fed6b2b14060d6f12b75a763aad3146b16`. Stable `main` bez zmian.
+
+**Odbiór nadal P0:** zainstalować 0.8.0.82, reimportować ten sam prawdziwy PDF, sprawdzić liczbę/daty oraz czy wpływy są dodatnie, wydatki ujemne i salda nie zostają potraktowane jako kwoty. Żadne dane bankowe ze zdjęcia nie potwierdzają faktycznej kolejności tekstu `PDFTextStripper`; jeśli nadal wystąpi błąd, potrzebny zamaskowany oryginalny PDF lub diagnostyka bez danych osobowych. Dopóki nie zniknie błąd importu i nie ma porównania 1:1 z bankiem, nie oznaczać importu jako naprawionego na urządzeniu i nie domykać P0.
 
 ## P0 — rzeczywisty VeloBank PDF: 7 nieodczytanych operacji od 08.10 (09.10.2026, 17:50)
 
