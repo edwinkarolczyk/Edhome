@@ -105,6 +105,13 @@ final class BankStatementVeloPdf {
         int missingMoneyCount=0;
         int ambiguousMoneyCount=0;
         int directionCount=0;
+        // Nagłówek tabeli ma kolumny: KWOTA TRANSAKCJI, SALDO PO
+        // TRANSAKCJI. W takiej tabeli przy wpływie z rachunku dwie
+        // dodatnie kwoty w jednym wierszu oznaczają kwotę i saldo.
+        // Bez tego nagłówka żadnego domyślnego wyboru nie wykonujemy.
+        boolean hasBalanceColumn=Pattern.compile(
+            "(?is)kwota\\s+transakcji[\\s\\S]{0,60}saldo\\s+po\\s+transakcji")
+            .matcher(text).find();
         for(int i=0;i<lines.length;i++) {
             String line=lines[i].trim();
             if(line.isEmpty())continue;
@@ -181,7 +188,16 @@ final class BankStatementVeloPdf {
                 }
             }
             if(chosen==null) {
-                if(moneyTokens.size()!=1) {
+                // Rzeczywisty nagłówek Velo: przy wpływie pierwsza z dwóch
+                // dodatnich kwot to KWOTA TRANSAKCJI, druga to SALDO PO.
+                // Dotyczy TYLKO wyraźnego "Przelew z rachunku" i dwóch
+                // niepodpisanych wartości, inaczej odrzuć jako niejasne.
+                if(moneyTokens.size()==2&&hasBalanceColumn
+                        &&line.toLowerCase(Locale.ROOT).matches(
+                            "(?s).*przelew\\s+z\\s+rachunku.*")) {
+                    chosen=moneyTokens.get(0);
+                }
+                if(chosen==null&&moneyTokens.size()!=1) {
                     if(TRANSACTION_LINE.matcher(line).find()) {
                         if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                         unreadableCount++;
@@ -189,7 +205,7 @@ final class BankStatementVeloPdf {
                     }
                     continue;
                 }
-                chosen=moneyTokens.get(0);
+                if(chosen==null)chosen=moneyTokens.get(0);
             }
             ParsedAmount parsed;
             try {parsed=amount(chosen,line);}
