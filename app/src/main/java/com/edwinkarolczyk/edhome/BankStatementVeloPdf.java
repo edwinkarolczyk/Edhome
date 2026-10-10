@@ -207,6 +207,29 @@ final class BankStatementVeloPdf {
                 .replace(chosen," ")
                 .replaceAll("(?iu)\\b(?:PLN|zł)\\b"," ")
                 .replaceAll("\\s+"," ").trim();
+            // Zachowaj osobne linie nadawcy/odbiorcy i tytułu przelewu
+            // w opisie, również gdy kwota była już w pierwszym wierszu.
+            // NIE dodawaj ich do kanonicznego klucza: dotychczasowy import
+            // tej samej operacji musi nadal być rozpoznany jako duplikat.
+            StringBuilder extraDescription=new StringBuilder(description);
+            int details=0;
+            for(int j=i+1;j<lines.length&&j<=i+6;j++) {
+                String detail=lines[j].trim();
+                if(detail.isEmpty())continue;
+                if(DATE.matcher(detail).find()||detail.toLowerCase(Locale.ROOT)
+                        .contains("saldo")||detail.toLowerCase(Locale.ROOT)
+                        .contains("dokument wygenerowany"))break;
+                if(detail.matches("(?iu)^(?:nadawca|odbiorca|tytuł|tytul)"
+                        +"\\s*[:：].*")) {
+                    extraDescription.append(" • ").append(detail);
+                    details++;
+                } else if(details>0 && !detail.matches(
+                        "(?iu).*(?:PLN|zł|kwota|[+-]\\s*\\d+[,.]\\d{2}).*")) {
+                    extraDescription.append(" ").append(detail);
+                } else if(details==0) {
+                    break;
+                }
+            }
             if(description.length()<2)description="Operacja VeloBank";
             String canonical=booked+"|"+parsed.kind+"|"+parsed.grosz+"|"
                 +canonical(line);
@@ -216,7 +239,7 @@ final class BankStatementVeloPdf {
                     "PDF VeloBanku zawiera nierozróżnialne powtórzone wiersze. "
                     +"Nie zgaduję, czy to jedna czy kilka transakcji.");
             result.add(new BankStatementCsv.Entry(booked,parsed.kind,
-                parsed.grosz,trim(description,300),"VeloBank PDF",key));
+                parsed.grosz,trim(extraDescription.toString(),300),"VeloBank PDF",key));
             if(result.size()>BankStatementCsv.MAX_ROWS)
                 throw new IllegalArgumentException(
                     "PDF VeloBanku: maksymalnie 25 000 operacji.");
@@ -247,10 +270,15 @@ final class BankStatementVeloPdf {
         if(explicitExpense||explicitIncome)cleaned=cleaned.substring(1);
         long grosz=MoneyRules.parse(cleaned);
         String lower=context.toLowerCase(Locale.ROOT);
+        // Faktyczne etykiety z tabeli VeloBank: "Przelew z rachunku" to
+        // wpływ; "Przelew na rachunek" to wydatek. Przy wpływie bank
+        // często drukuje kwotę bez plusa. Nie zmieniaj znaku explicite.
         boolean expense=explicitExpense||lower.matches("(?s).*(?:transakcj[aeęąi]*\\s+kart|"
-            +"płatnoś|zakup|obciąż|wypłat|przelew wychodzący|przelew wysłan).*");
+            +"płatnoś|zakup|obciąż|wypłat|przelew wychodzący|przelew wysłan"
+            +"|przelew\\s+na\\s+rachunek).*");
         boolean income=explicitIncome||lower.matches("(?s).*(?:wpływ|uznan|wpłat|"
-            +"przelew przychodzący|przelew otrzymany|otrzyman).*");
+            +"przelew przychodzący|przelew otrzymany|otrzyman"
+            +"|przelew\\s+z\\s+rachunku).*");
         if(expense==income)
             throw new IllegalArgumentException("Nie można ustalić kierunku operacji VeloBank.");
         return new ParsedAmount(expense?"expense":"income",grosz);
