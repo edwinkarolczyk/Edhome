@@ -242,6 +242,30 @@ public final class BankStatementVeloPdfSmoke {
         check(layoutReport.accepted.get(0).amountGrosz==12398,"card description amount not double-counted");
         check(layoutReport.accepted.get(1).amountGrosz==250000,"transaction not account balance");
         check(layoutReport.accepted.get(2).amountGrosz==623520,"unsigned income not account balance");
+        // Realny PDF: niezaksięgowany przelew ma kreskę w dacie
+        // księgowania, a dwie kreski kwoty i salda dopiero w trzeciej linii.
+        // Nie może blokować wczytania prawidłowo zaksięgowanych operacji.
+        String pendingSeparate="VeloBank\\n"
+            +"DATA TRANSAKCJI DATA KSIĘGOWANIA OPIS TRANSAKCJI KWOTA TRANSAKCJI SALDO PO TRANSAKCJI\\n"
+            +"09.10.2026 09.10.2026 Przelew na rachunek: 16 1111 1111 1111 1111 1111 1111,\\n"
+            +"Odbiorca: Test\\nTytuł: Opłata\\n"
+            +"-2 500,00 PLN 2 256,01 PLN\\n"
+            +"05.10.2026 - Przelew na rachunek: 96 1111 1111 1111 1111 1111 1111,\\n"
+            +"Odbiorca: Test\\nTytuł: Niezaksięgowany\\n"
+            +"- -\\n"
+            +"04.10.2026 06.10.2026 Operacja kartą 5375 **** **** 2166 na kwotę 19,67 PLN w SKLEP, PL -19,67 PLN 20,49 PLN\\n";
+        BankStatementVeloPdf.ParseReport pendingReport=BankStatementVeloPdf.inspect(pendingSeparate);
+        check(pendingReport.complete(),"unbooked transfer dashes must not block statement");
+        check(pendingReport.accepted.size()==2,"skip no-amount unbooked transfer, keep both booked");
+        check(pendingReport.accepted.get(0).amountGrosz==250000,"booked transfer amount");
+        check(pendingReport.accepted.get(1).amountGrosz==1967,"booked card amount");
+
+        String missingBooked="VeloBank\\n"
+            +"09.10.2026 09.10.2026 Przelew na rachunek: 16 1111 1111 1111 1111 1111 1111,\\n"
+            +"Odbiorca: Test\\nTytuł: Kwota nieczytelna\\n"
+            +"- -\\n";
+        check(BankStatementVeloPdf.inspect(missingBooked).unreadableCount==1,
+            "booked transfer missing amount must still be reported");
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
