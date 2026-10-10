@@ -1,3 +1,9 @@
+
+## 2026-10-10 — PayCheck: bezpieczne czyszczenie historii bankowej (w trakcie)
+
+- Commit `93c4e4eebaee0efbc118b8185a32585c10de092d` na `beta`: `BankEvidenceStore.deleteUnmatched` nie kasuje już identyfikatora dowodu, tylko oznacza go `dismissed`; ponowny import pomija istniejący klucz. Dodano `dismissAllUnmatched` chroniące powiązane przelewy.
+- **NIEGOTOWE:** wywołanie masowego czyszczenia z UI, potwierdzenie użytkownika, testy regresyjne, częściowy import poprawnych pozycji PDF i osobna lista błędów. Brak nowego APK dla tego etapu. Nie uznawać za odebrane.
+
 # EDHOME — aktualny stan prac
 
 > **Stały dziennik kontynuacji projektu.** Przed rozpoczęciem pracy nad EDHOME przeczytaj najpierw ten plik, a po zakończeniu każdego etapu zaktualizuj go w tym samym repozytorium. Szczegółowe wymagania pozostają w [ROADMAP.md](ROADMAP.md); ten plik jest krótkim, aktualnym punktem wznowienia pracy.
