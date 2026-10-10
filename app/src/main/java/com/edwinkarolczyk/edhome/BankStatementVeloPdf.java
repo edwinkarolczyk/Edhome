@@ -171,6 +171,10 @@ final class BankStatementVeloPdf {
                 }
             }
             if(moneyTokens.isEmpty()) {
+                // Wiersz oczekujący z kwotą i saldem "-" nie jest
+                // zaksięgowaną operacją i nie może blokować całej historii.
+                if(TRANSACTION_LINE.matcher(line).find()
+                    &&line.matches("(?s).*\\s-\\s+-\\s*$"))continue;
                 if(TRANSACTION_LINE.matcher(line).find()) {
                     if(firstUnreadable.isEmpty())firstUnreadable=statementDate;
                     unreadableCount++;
@@ -289,10 +293,12 @@ final class BankStatementVeloPdf {
         // Faktyczne etykiety z tabeli VeloBank: "Przelew z rachunku" to
         // wpływ; "Przelew na rachunek" to wydatek. Przy wpływie bank
         // często drukuje kwotę bez plusa. Nie zmieniaj znaku explicite.
-        boolean expense=explicitExpense||lower.matches("(?s).*(?:transakcj[aeęąi]*\\s+kart|"
+        if(explicitExpense)return new ParsedAmount("expense",grosz);
+        if(explicitIncome)return new ParsedAmount("income",grosz);
+        boolean expense=lower.matches("(?s).*(?:transakcj[aeęąi]*\\s+kart|"
             +"płatnoś|zakup|obciąż|wypłat|przelew wychodzący|przelew wysłan"
             +"|przelew\\s+na\\s+rachunek).*");
-        boolean income=explicitIncome||lower.matches("(?s).*(?:wpływ|uznan|wpłat|"
+        boolean income=lower.matches("(?s).*(?:wpływ|uznan|wpłat|"
             +"przelew przychodzący|przelew otrzymany|otrzyman"
             +"|przelew\\s+z\\s+rachunku).*");
         if(expense==income)
