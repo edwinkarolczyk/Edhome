@@ -208,10 +208,19 @@ final class BankStatementVeloPdf {
                 appendLabeledMoney(moneyTokens,line);
             }
             if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
+                boolean notBookedWithoutAmount=false;
                 StringBuilder joined=new StringBuilder(line);
                 for(int next=i+1;next<lines.length&&next<=i+10;next++) {
                     String extra=lines[next].trim();
                     if(extra.isEmpty())continue;
+                    // Własny wiersz tabeli z dwiema kreskami oznacza brak
+                    // kwoty i salda. TYLKO z pustą datą księgowania jest to
+                    // niezrealizowana operacja, nie błędny przelew.
+                    if(extra.matches("-\\s+-")
+                            &&line.matches("(?iu)^\\d{2}[.]\\d{2}[.]\\d{4}\\s+-\\s+przelew.*")) {
+                        notBookedWithoutAmount=true;
+                        break;
+                    }
                     // Następnego przelewu nie wolno dołączyć do poprzedniego.
                     if(DATE.matcher(extra).find())break;
                     if(extra.toLowerCase(Locale.ROOT).contains("saldo"))
@@ -232,6 +241,7 @@ final class BankStatementVeloPdf {
                         break;
                     }
                 }
+                if(notBookedWithoutAmount)continue;
             }
             if(moneyTokens.isEmpty()) {
                 // Wiersz oczekujący z kwotą i saldem "-" nie jest
