@@ -225,7 +225,7 @@ for token in (
 for token in (
     'status=\'confirmed\'',
     'Potwierdź / dopasuj',
-    'Do potwierdzenia • bez wpływu na saldo',
+    'Do potwierdzenia z Budżetu (',
     'Sprawdziłem w banku • potwierdź',
 ):
     assert token in main, "Confirmed-ledger gate missing: " + token
