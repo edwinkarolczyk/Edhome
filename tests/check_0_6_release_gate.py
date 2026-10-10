@@ -55,7 +55,7 @@ for token in (
     'Testuj nasłuch banku przez 2 minuty',
     'Nasłuch Androida:',
     'Ostatni nierozpoznany komunikat bankowy:',
-    'Diagnostyka importu:',
+    'Ostatni import:',
 ):
     assert token in main, token
 assert 'BankNotificationListener' in beta_manifest
