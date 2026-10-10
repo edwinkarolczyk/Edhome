@@ -1,3 +1,11 @@
+## 2026-10-10 — Android Beta 0.8.0.88 / 280 — kompaktowy PayCheck (build oczekuje na PASS)
+
+- Commit `c4fc6d43`: zwiększono Android Beta do **0.8.0.88 / 280** w `app/build.gradle`. Zawiera nowy zwarty PayCheck, menu historii bankowej i osobny widok diagnostyki, bez migracji bazy ani zmian księgowania.
+- Testy kontraktowe nowego układu: `check_paycheck_compact_android.py`, `check_paycheck_history_all_android.py`, `check_budget_to_paycheck_flow_android.py`, `check_paycheck_pending_contract.py`, `check_bank_evidence_queue_contract.py`, `check_bank_statement_contract.py`, `check_0_6_release_gate.py`. Wymagania bezpieczeństwa pozostają: pending bez salda, pełna historia, bankowy dowód bez automatycznego potwierdzenia.
+- Wystąpiły niepowodzenia CI #2123–#2133 spowodowane kontrolami nazw przycisków/starych opisów po zmianie UI. Testy aktualizowane bez omijania kontroli rozliczeń. Ostatnie poprawki: `cc927cc9` i `3b1a86a1`.
+- **Na moment zapisu brak potwierdzonego zielonego CI i opublikowanego APK 0.8.0.88.** Należy sprawdzić końcowe CI, manifest Beta, podpisany instalator. Nie oznaczać jako DONE wcześniej.
+- **P0 nadal otwarte:** walidacja pełnego rzeczywistego PDF VeloBanku, import częściowy, hurtowe czyszczenie historii; nie stanowi części zakończonej wersji UI.
+
 ## 2026-10-10 — P0 PayCheck Android: przebudowa zwartego ekranu
 
 **Implementacja na `beta`:** commit `c4081d90` przebudowuje `MainActivity.paycheck()` i `sharedBudgetAwaitingPaycheckConfirmation()`. Widok ma saldo, wejście do Budżetu, zwarte nierozliczone pozycje (jeden rozwinięty wiersz w sekcji, akcje dopiero po kliknięciu), przycisk listy oczekujących, menu Historia bankowa, menu Narzędzia i 12 ostatnich operacji (zamiast 40). Wszystkie operacje, powiązania z Budżetem i historyczne zapisy pozostają w bazie; brak migracji danych.
