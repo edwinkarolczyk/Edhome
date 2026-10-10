@@ -2,6 +2,11 @@
 
 > **Stały dziennik kontynuacji projektu.** Przed rozpoczęciem pracy nad EDHOME przeczytaj najpierw ten plik, a po zakończeniu każdego etapu zaktualizuj go w tym samym repozytorium. Szczegółowe wymagania pozostają w [ROADMAP.md](ROADMAP.md); ten plik jest krótkim, aktualnym punktem wznowienia pracy.
 
+
+## P0 — 10.10.2026 08:18 — PDF VeloBank w Beta 0.8.0.82 nadal odrzucony
+
+Test użytkownika: **5 potencjalnych operacji nierozpoznanych**, pierwsza data 09.10.2026; **brak jednoznacznej kwoty 1, kilka kwot 0, nieustalony kierunek 4**. Import 0 pozycji, istniejąca historia 74 pozycji bez zmian. CI #2102 PASS nie oznacza odbioru rzeczywistego PDF. Kolejny krok: sprawdzić wynik PDFTextStripper i segmentację wierszy tabeli (kwota/saldo, wieloliniowe Nadawca/Odbiorca/Tytuł, przelew z/na rachunek); nie zgadywać kierunku ani nie zaksięgować części pliku. Stable main bez zmian.
+
 ## Metryka
 
 | Pole | Stan |
