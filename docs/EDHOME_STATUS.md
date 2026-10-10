@@ -1,3 +1,12 @@
+## 2026-10-10 — POTWIERDZONE: Android Beta 0.8.0.88 / 280 opublikowana
+
+- **CI #2134 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38066273569 . Pełny build i podpis APK Beta zakończone bez błędów.
+- **Weryfikacja publikacji:** tag `beta-v0.8.0.88`, zasób `edhome-beta.apk` (13 348 547 bajtów) istnieje na GitHub Releases; manifest `beta-manifest.json` zwraca `versionName=0.8.0.88`, `versionCode=280` i odpowiadający URL instalatora.
+- **APK:** https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.88/edhome-beta.apk
+- **SHA-256 z manifestu:** `dbba100fc118d6e7499d6f1036894eb91e6965d1a7403f8e33b36b87df1b4978`.
+- **Zawartość:** zwarty PayCheck: 12 ostatnich operacji zamiast 40, jeden rozwinięty wiersz w sekcji Budżetu, akcje po kliknięciu, bank/konwerter/diagnostyka w menu, osobny ekran celów. Dotychczasowe funkcje rozliczeń nie zostały usunięte. Stable bez zmian.
+- **NIEZWERYFIKOWANE na fizycznym urządzeniu:** układ na ekranie konkretnego telefonu, rzeczywisty plik PDF VeloBank, import wszystkich dat/kwot, podwójny import. Status P0 dla rzeczywistego PDF VeloBank pozostaje OTWARTY. Następnie test telefoniczny 0.8.0.88 z realnym PDF, sprawdzenie wierszy brakujących i importu bez duplikatów, dalsze poprawki parsera.
+
 ## 2026-10-10 — Android Beta 0.8.0.88 / 280 — kompaktowy PayCheck (build oczekuje na PASS)
 
 - Commit `c4fc6d43`: zwiększono Android Beta do **0.8.0.88 / 280** w `app/build.gradle`. Zawiera nowy zwarty PayCheck, menu historii bankowej i osobny widok diagnostyki, bez migracji bazy ani zmian księgowania.
