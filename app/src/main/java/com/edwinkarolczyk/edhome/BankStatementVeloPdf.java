@@ -30,6 +30,15 @@ final class BankStatementVeloPdf {
     // Część tekstowych PDF VeloBanku ma walutę wyłącznie w nagłówku
     // tabeli. Akceptujemy wtedy tylko jawnie podpisaną kwotę z groszami
     // (bez zgadywania salda lub kwoty z daty / numeru rachunku).
+    // W historii Velo kolumna KWOTA TRANSAKCJI stoi przed SALDO PO.
+    // Kwota "na kwotę" wewnątrz opisu karty NIE jest drugą operacją.
+    private static final Pattern VELO_TABLE_TAIL=Pattern.compile(
+        "(?iu)\\s+([-+−]?\\s*\\d{1,9}(?:[ \\u00a0]\\d{3})*[.,]\\d{2})\\s*PLN"
+        +"\\s+([-+−]?\\s*\\d{1,9}(?:[ \\u00a0]\\d{3})*[.,]\\d{2})\\s*PLN\\s*$");
+    private static final Pattern VELO_UNBOOKED_CARD=Pattern.compile(
+        "(?iu)operacja\\s+kart[aą].*?na\\s+kwot[ęa]\\s+"
+        +"\\d+[,.]\\d{2}\\s*PLN.*?\\s+"
+        +"(-\\s*\\d+[,.]\\d{2})\\s*PLN\\s+-\\s*$");
     private static final Pattern SIGNED_MONEY=Pattern.compile(
         "(?<![\\p{L}\\p{N}])([-+−]\\s*[0-9]{1,9}"
         +"(?:[ \\u00a0][0-9]{3})*[.,][0-9]{2})(?![\\p{N}])");
@@ -180,8 +189,17 @@ final class BankStatementVeloPdf {
                 }
             }
             List<String> moneyTokens=new ArrayList<>();
-            Matcher mm=MONEY.matcher(line);
-            while(mm.find())moneyTokens.add(mm.group(1).trim());
+            Matcher tableTail=VELO_TABLE_TAIL.matcher(line);
+            Matcher unbookedCard=VELO_UNBOOKED_CARD.matcher(line);
+            if(tableTail.find()) {
+                // Saldo jest wyłącznie informacją; nigdy go nie importujemy.
+                moneyTokens.add(tableTail.group(1).trim());
+            } else if(unbookedCard.find()) {
+                moneyTokens.add(unbookedCard.group(1).trim());
+            } else {
+                Matcher mm=MONEY.matcher(line);
+                while(mm.find())moneyTokens.add(mm.group(1).trim());
+            }
             if(moneyTokens.isEmpty()&&TRANSACTION_LINE.matcher(line).find()) {
                 Matcher signed=SIGNED_MONEY.matcher(line);
                 while(signed.find())moneyTokens.add(signed.group(1).trim());
