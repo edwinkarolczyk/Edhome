@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 273,
-  "versionName": "0.8.0.81",
-  "changelog": "EDHOME 0.8.0.81 — Beta. VeloBank PDF: obsługa kwoty przelewu bez symbolu waluty i bez znaku, gdy typ operacji jednoznacznie określa kierunek, dwóch dat w wierszu oraz rozdzielonych opisów i kwot do 10 wierszy; komunikat diagnostyczny rozróżnia brak kwoty, kilka kwot i nieznany kierunek. Błędny plik pozostaje całkowicie odrzucany, nie księguje salda; poprawne wcześniej transakcje mają stabilne klucze. Ważne: rzeczywisty eksport VeloBanku wymaga weryfikacji na telefonie. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.81/edhome-beta.apk",
-  "sha256": "af4cd09d63649660bc1c46d9036d2f653313cdd404a1b054be11d5f3edb41794"
+  "versionCode": 274,
+  "versionName": "0.8.0.82",
+  "changelog": "EDHOME 0.8.0.82 — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.82/edhome-beta.apk",
+  "sha256": "b5e594d8a6bf0489e32f683ab9fc82fed6b2b14060d6f12b75a763aad3146b16"
 }
