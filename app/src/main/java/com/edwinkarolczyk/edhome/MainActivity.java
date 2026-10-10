@@ -1567,6 +1567,7 @@ public final class MainActivity extends Activity {
                 case "paycheck": paycheck(); break;
                 case "paycheck_budget": paycheckMonthlyBudget(); break;
                 case "paycheck_goals": paycheckGoals(); break;
+                case "paycheck_bank_diagnostics": paycheckBankDiagnostics(); break;
                 case "paycheck_private": privatePaycheck(); break;
                 case "calendar": calendar(); break;
                 case "scanner": scannerHub(); break;
@@ -13048,16 +13049,16 @@ public final class MainActivity extends Activity {
                 else if(which==3)startActivity(new Intent(
                     this,BankPdfConverterActivity.class));
                 else if(which==4)configureBankNotifications();
-                else if(which==5)new AlertDialog.Builder(this)
-                    .setTitle("Diagnostyka bankowa")
-                    .setMessage("Ostatni import: "+bankImportDiagLine()
-                        +"\nNasłuch: "+(BankNotificationListener.isConnected()
-                            ?"połączony":"niepołączony")
-                        +"\nZgoda Androida: "
-                        +(bankNotificationPermissionGranted()?"TAK":"NIE"))
-                    .setPositiveButton("Zamknij",null).show();
+                else if(which==5)go("paycheck_bank_diagnostics");
             })
             .setNegativeButton("Zamknij",null).show();
+    }
+
+    private void paycheckBankDiagnostics() {
+        header("PayCheck • diagnostyka bankowa");
+        button("← Wróć do PayCheck",()->go("paycheck"));
+        note("Ostatni import: "+bankImportDiagLine());
+        showBankNotificationHints();
     }
 
     private void showPaycheckToolsMenu() {
