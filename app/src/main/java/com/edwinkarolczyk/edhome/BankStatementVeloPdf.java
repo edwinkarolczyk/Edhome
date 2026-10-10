@@ -53,6 +53,37 @@ final class BankStatementVeloPdf {
         +"[^0-9+−-]{0,30}([-+−]?\\s*[0-9]{1,9}(?:[ \\u00a0][0-9]{3})*(?:[.,][0-9]{2})?)"
         +"\\s*(?:PLN|zł)\\b");
 
+    /** Wynik diagnostyczny nie księguje pieniędzy ani nie ukrywa błędów. */
+    static final class ParseReport {
+        final List<BankStatementCsv.Entry> accepted;
+        final int unreadableCount;
+        final int missingMoneyCount;
+        final int ambiguousMoneyCount;
+        final int directionCount;
+        final String firstUnreadable;
+        ParseReport(List<BankStatementCsv.Entry> accepted,int unreadableCount,
+                    int missingMoneyCount,int ambiguousMoneyCount,int directionCount,
+                    String firstUnreadable) {
+            this.accepted=java.util.Collections.unmodifiableList(new ArrayList<>(accepted));
+            this.unreadableCount=unreadableCount;
+            this.missingMoneyCount=missingMoneyCount;
+            this.ambiguousMoneyCount=ambiguousMoneyCount;
+            this.directionCount=directionCount;
+            this.firstUnreadable=firstUnreadable;
+        }
+        boolean complete(){return unreadableCount==0;}
+    }
+
+    /** Dla importu częściowego: zachowuje poprawne pozycje i liczniki błędów. */
+    static ParseReport inspect(String text) {
+        if(!recognizes(text))
+            throw new IllegalArgumentException("PDF nie został rozpoznany jako dokument VeloBanku.");
+        String normalized=normalize(text);
+        if(normalized.getBytes(StandardCharsets.UTF_8).length>BankStatementCsv.MAX_BYTES)
+            throw new IllegalArgumentException("Tekst PDF VeloBanku jest za duży.");
+        return parseStatementRowsReport(normalized);
+    }
+
     private BankStatementVeloPdf(){}
 
     static boolean recognizes(String text) {
@@ -97,6 +128,20 @@ final class BankStatementVeloPdf {
     }
 
     private static List<BankStatementCsv.Entry> parseStatementRows(String text) {
+        ParseReport report=parseStatementRowsReport(text);
+        if(!report.complete())
+            throw new IllegalArgumentException(
+                "PDF VeloBanku: "+report.unreadableCount
+                +" potencjalnych operacji nie dało się poprawnie odczytać"
+                +" (pierwsza data: "+report.firstUnreadable+")."
+                +" Powody: brak jednoznacznej kwoty "+report.missingMoneyCount
+                +", kilka kwot "+report.ambiguousMoneyCount
+                +", nieustalony kierunek "+report.directionCount+". "
+                +"Import odrzucono w całości, aby nie zgubić przelewów.");
+        return report.accepted;
+    }
+
+    private static ParseReport parseStatementRowsReport(String text) {
         String[] lines=text.split("\\n");
         List<BankStatementCsv.Entry> result=new ArrayList<>();
         Set<String> unique=new HashSet<>();
@@ -264,17 +309,8 @@ final class BankStatementVeloPdf {
                 throw new IllegalArgumentException(
                     "PDF VeloBanku: maksymalnie 25 000 operacji.");
         }
-        if(unreadableCount>0)
-            throw new IllegalArgumentException(
-                "PDF VeloBanku: "+unreadableCount
-                +" potencjalnych operacji nie dało się poprawnie odczytać"
-                +" (pierwsza data: "+firstUnreadable+")."
-                +" Powody: brak jednoznacznej kwoty "+missingMoneyCount
-                +", kilka kwot "+ambiguousMoneyCount
-                +", nieustalony kierunek "+directionCount+". "
-                +"Import odrzucono w całości, aby nie zgubić przelewów. "
-                +"Jeśli błąd powtarza się, potrzebna jest zamaskowana próbka PDF.");
-        return result;
+        return new ParseReport(result,unreadableCount,missingMoneyCount,
+            ambiguousMoneyCount,directionCount,firstUnreadable);
     }
 
     private static void appendLabeledMoney(List<String> values,String line) {
