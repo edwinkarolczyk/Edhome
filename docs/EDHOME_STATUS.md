@@ -1,3 +1,7 @@
+## 2026-10-10 — Android Beta 0.8.0.87 / 279
+
+Commit 151244b6: podniesiono Android Beta do 0.8.0.87 / 279. Zawiera poprawkę parsera tabeli VeloBank (kwota operacji odróżniona od salda i kwoty w opisie) oraz prototyp konwertera PDF CSV. Testy i publikacja APK w chwili zapisu niepotwierdzone. Nie uznawać importu z prawdziwego PDF za naprawiony bez próby na telefonie. Stable bez zmian.
+
 ## 2026-10-10 — P0: znaleziono rzeczywisty PDF VeloBanku
 
 Odnaleziono wcześniejszy przesłany dokument historii rachunku z 09.10.2026. Sprawdzono lokalnie tekst z PDF (bez publikowania danych osobowych). W tabeli są równocześnie kwota w opisie karty, kolumna KWOTA TRANSAKCJI oraz SALDO PO TRANSAKCJI. Dotychczasowy parser błędnie traktował te kwoty jako konkurujące; są też niezaksięgowane wiersze z datą księgowania '-' i kwotą '-'.
