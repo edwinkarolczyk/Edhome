@@ -1,3 +1,11 @@
+## 2026-10-10 — P0 PayCheck, zakres wdrożenia po testach Beta 0.8.0.84
+
+**Test użytkownika:** Android 0.8.0.84/276 nadal odrzuca cały PDF VeloBanku przy 3 niejednoznacznych wierszach (1 kwota, 2 kierunki), 0 dodanych, 74 stare dowody pozostają. **Nie uznawać za naprawione.**
+
+**Audyt kodu:** `BankStatementVeloPdf.parseStatementRows` rzuca `IllegalArgumentException` na końcu, gdy `unreadableCount>0`, mimo że `result` zawiera już poprawnie rozpoznane operacje. Zmiana na zwykłe ignorowanie błędu byłaby niebezpieczna — potrzebny osobny wynik z listą odrzuconych pozycji i zapis atomowy rozpoznanych dowodów, bez automatycznego księgowania.
+
+**Do wykonania, jeszcze NIE WDROŻONE:** (1) strukturalny wynik parsera: poprawne/nieczytelne/duplikaty i data+powód+zamaskowany opis wiersza; (2) UI importu częściowego z potwierdzeniem i osobną kolejką błędów, bez wpływu na saldo; (3) UI masowego ukrycia nieprzypisanych operacji z potwierdzeniem i ochroną powiązań z Budżetem; (4) trwałe tombstones przy ponownym imporcie i świadome przywrócenie; (5) testy na prawdziwym PDF bez publikowania danych oraz regresja 50+5, 2 banki, ponowny import, backup/sync. Nie wypuszczać APK z deklaracją naprawy przed PASS i testem rzeczywistym.
+
 
 ## 2026-10-10 — PayCheck: bezpieczne czyszczenie historii bankowej (w trakcie)
 
