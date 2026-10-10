@@ -1,3 +1,10 @@
+## 2026-10-10 — CI #2111 PASS, import częściowy nadal niepodłączony
+
+- [CI #2111 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38044563693), commit `e7088d608aceb3da41e6d80562d40e1c47f4945d`: naprawiono test VeloBank `BankStatementVeloPdfSmoke` (dosłowne `\\n` zamiast rzeczywistych nowych linii).
+- Bieżący `app/build.gradle`: Android Beta **0.8.0.84 / versionCode 276**. Nie ma nowego numeru wydania ani potwierdzonego APK zawierającego pełne funkcje.
+- `BankStatementVeloPdf.inspect()` udostępnia `ParseReport` z poprawnymi operacjami i licznikami błędów. Dotychczasowa ścieżka importu nadal odrzuca niepełny PDF; **UI importu częściowego, kolejka błędów, potwierdzenie masowego czyszczenia nieprzypisanych i przywracanie świadomie odrzuconych nie są wdrożone**.
+- **P0 OTWARTE**. Następnie: połączyć `ParseReport` z bezpiecznym zapisem i UI, przetestować deduplikację i ochronę przypisań, uruchomić CI, wydać podpisany APK Beta. Nie deklarować ukończenia wcześniej.
+
 ## 2026-10-10 — P0 PayCheck, zakres wdrożenia po testach Beta 0.8.0.84
 
 **Test użytkownika:** Android 0.8.0.84/276 nadal odrzuca cały PDF VeloBanku przy 3 niejednoznacznych wierszach (1 kwota, 2 kierunki), 0 dodanych, 74 stare dowody pozostają. **Nie uznawać za naprawione.**
