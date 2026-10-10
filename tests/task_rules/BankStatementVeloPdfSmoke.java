@@ -201,6 +201,17 @@ public final class BankStatementVeloPdfSmoke {
             BankStatementVeloPdf.parse(threeLineVelo).get(1).evidenceKey),
             "same file imported again must keep evidence fingerprint");
 
+        // Realny układ VeloBank: BLIK "Przelew z rachunku" może
+        // mieć ujemną kwotę; znak jest ważniejszy niż etykieta.
+        String signedBlik="VeloBank\\n"
+            +"09.10.2026 09.10.2026 Przelew z rachunku: 11 1111 1111 "
+            +"1111 1111 1111 1111, -872,59 PLN 4 756,01 PLN\\n"
+            +"Nadawca: TEST\\nTytuł: BLIK\\n";
+        List<BankStatementCsv.Entry> blikRows=
+            BankStatementVeloPdf.parse(signedBlik);
+        check(blikRows.size()==1&&"expense".equals(blikRows.get(0).kind)
+            &&blikRows.get(0).amountGrosz==87259,
+            "signed BLIK debit must override 'przelew z rachunku'");
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
