@@ -1,3 +1,11 @@
+## 2026-10-10 — P0: znaleziono rzeczywisty PDF VeloBanku
+
+Odnaleziono wcześniejszy przesłany dokument historii rachunku z 09.10.2026. Sprawdzono lokalnie tekst z PDF (bez publikowania danych osobowych). W tabeli są równocześnie kwota w opisie karty, kolumna KWOTA TRANSAKCJI oraz SALDO PO TRANSAKCJI. Dotychczasowy parser błędnie traktował te kwoty jako konkurujące; są też niezaksięgowane wiersze z datą księgowania '-' i kwotą '-'.
+
+Commit 7a7bc207: preferuj kolumnę kwoty operacji, ignoruj saldo oraz kwotę powtórzoną w opisie karty. Commit 6daf001a: test regresyjny na zanonimizowanym układzie rzeczywistego wyciągu. Nie kopiowano prawdziwego PDF ani danych konta do repozytorium.
+
+Stan: CI po tych zmianach do sprawdzenia; pełny import prawdziwego PDF na Androidzie jeszcze NIEPOTWIERDZONY. Nie publikować deklaracji naprawy bez testu na rzeczywistym pliku. Konwerter Windows i Android pozostają prototypami.
+
 ## 2026-10-10 — Konwerter PDF CSV Android i Windows
 
 Android Beta 0.8.0.86 / 278: dodano BankPdfConverterActivity (commit 72232b0d), osobną ikonę w AndroidManifest (2bd9c607) i podniesiono wersję (939777be). Odczyt lokalnego PDF VeloBank, podsumowanie błędów, świadomy eksport tylko poprawnych pozycji do CSV. Nie księguje automatycznie.
