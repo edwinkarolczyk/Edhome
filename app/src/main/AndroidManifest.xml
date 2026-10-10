@@ -23,6 +23,14 @@
                 android:resource="@xml/storage_file_paths" />
         </provider>
 
+        <activity android:name=".BankPdfConverterActivity"
+            android:exported="true"
+            android:label="EDHOME Konwerter PDF">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
         <activity android:name=".PantryTakeCaptureActivity"
             android:exported="false" />
 
