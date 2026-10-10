@@ -1,3 +1,10 @@
+## 2026-10-10 — Android Beta 0.8.0.85 / 277: wydanie testowe
+
+- Commit `c0d9ecd47c656b697e97d126ab2d7fa76ffefe37`: zwiększono `app/build.gradle` do **0.8.0.85 / 277**, aby uruchomić workflow podpisanego APK Beta.
+- Poprzedni CI #2111 PASS dotyczył **0.8.0.84**, nie jest dowodem powodzenia kompilacji 0.8.0.85.
+- Zakres 0.8.0.85: parser `BankStatementVeloPdf.inspect()` + testy; **nie jest to jeszcze kompletna naprawa UI importu częściowego ani czyszczenia historii**. Dotychczasowy import może nadal odrzucać cały dokument.
+- Przed podaniem instalatora sprawdzić nowy workflow, podpis, manifest Beta i faktycznie opublikowany APK. P0 importu pozostaje OTWARTE.
+
 ## 2026-10-10 — CI #2111 PASS, import częściowy nadal niepodłączony
 
 - [CI #2111 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38044563693), commit `e7088d608aceb3da41e6d80562d40e1c47f4945d`: naprawiono test VeloBank `BankStatementVeloPdfSmoke` (dosłowne `\\n` zamiast rzeczywistych nowych linii).
