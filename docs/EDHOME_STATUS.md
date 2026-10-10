@@ -1,3 +1,13 @@
+## 2026-10-10 — P0 PayCheck Android: przebudowa zwartego ekranu
+
+**Implementacja na `beta`:** commit `c4081d90` przebudowuje `MainActivity.paycheck()` i `sharedBudgetAwaitingPaycheckConfirmation()`. Widok ma saldo, wejście do Budżetu, zwarte nierozliczone pozycje (jeden rozwinięty wiersz w sekcji, akcje dopiero po kliknięciu), przycisk listy oczekujących, menu Historia bankowa, menu Narzędzia i 12 ostatnich operacji (zamiast 40). Wszystkie operacje, powiązania z Budżetem i historyczne zapisy pozostają w bazie; brak migracji danych.
+
+**Nawigacja:** import PDF/CSV/XLSX, lista otwartych dowodów, całe archiwum banku, konwerter PDF i ustawienia powiadomień w jednym menu bankowym; pełna diagnostyka powiadomień w osobnym ekranie (commit `a479e6fe`). Wspólne cele w osobnym widoku z dotychczasowymi akcjami (tworzenie/usuwanie/odkładanie), masowe usuwanie wpisów i pełna historia w Narzędziach. Nie zmieniono reguły, że samo dodanie pozycji z Budżetu ani import dowodu nie zmienia potwierdzonego salda.
+
+**Testy:** nowe `tests/check_paycheck_compact_android.py` i krok CI (`4c542d5e`, `e1144e28`); przestawiono oczekiwania dotychczasowych kontraktów dotyczące zmienionych napisów przycisków bez usuwania kontroli bezpieczeństwa przepływu. CI #2131 w trakcie w chwili wpisu. **APK z nowym UI jeszcze niepotwierdzone**; wymagana zielona pełna regresja, nowy numer Beta, publikacja manifestu i próba na telefonie.
+
+**Otwarte P0:** prawdziwy PDF VeloBank musi być sprawdzony end-to-end, import częściowy i hurtowe czyszczenie nieprzypisanych nadal wymagają dopracowania. Stable main bez zmian.
+
 ## 2026-10-10 — Android Beta 0.8.0.87 / 279
 
 Commit 151244b6: podniesiono Android Beta do 0.8.0.87 / 279. Zawiera poprawkę parsera tabeli VeloBank (kwota operacji odróżniona od salda i kwoty w opisie) oraz prototyp konwertera PDF CSV. Testy i publikacja APK w chwili zapisu niepotwierdzone. Nie uznawać importu z prawdziwego PDF za naprawiony bez próby na telefonie. Stable bez zmian.
