@@ -164,6 +164,43 @@ public final class BankStatementVeloPdfSmoke {
         catch(IllegalArgumentException expected){balanceRejected=true;}
         check(balanceRejected,"do not treat a signed balance as transaction amount");
 
+        // Układ faktycznego wyciągu (dane rachunków zastąpione fikcyjnymi):
+        // data transakcji / księgowania / 3-liniowy opis / kwota / saldo.
+        String threeLineVelo="VeloBank\n"
+            +"DATA TRANSAKCJI DATA KSIĘGOWANIA OPIS TRANSAKCJI "
+            +"KWOTA TRANSAKCJI SALDO PO TRANSAKCJI\n"
+            +"09.10.2026 09.10.2026 Przelew na rachunek: 11 1111 1111 "
+            +"1111 1111 1111 1111 -2 500,00 PLN 2 256,01 PLN\n"
+            +"Odbiorca: OSOBA TESTOWA\n"
+            +"Tytuł: Przelew własny\n"
+            +"08.10.2026 08.10.2026 Przelew z rachunku: 22 2222 2222 "
+            +"2222 2222 2222 2222 6 235,20 PLN 6 275,20 PLN\n"
+            +"Nadawca: PRACODAWCA TESTOWY\n"
+            +"Tytuł: Wynagrodzenie za 9/2026\n"
+            +"08.10.2026 08.10.2026 Przelew z rachunku: 33 3333 3333 "
+            +"3333 3333 3333 3333 5,00 PLN 40,00 PLN\n"
+            +"Nadawca: OSOBA TESTOWA\n"
+            +"Tytuł: PRZELEW ŚRODKÓW\n";
+        List<BankStatementCsv.Entry> threeLineRows=
+            BankStatementVeloPdf.parse(threeLineVelo);
+        check(threeLineRows.size()==3,
+            "Velo must read all three transaction rows including 3-line transfers");
+        check(threeLineRows.get(0).amountGrosz==250000
+            &&"expense".equals(threeLineRows.get(0).kind),
+            "przelew na rachunek = expense");
+        check(threeLineRows.get(1).amountGrosz==623520
+            &&"income".equals(threeLineRows.get(1).kind),
+            "przelew z rachunku = unsigned income; not balance");
+        check(threeLineRows.get(2).amountGrosz==500
+            &&"income".equals(threeLineRows.get(2).kind),
+            "second unsigned income 5.00 must not use balance 40.00");
+        check(threeLineRows.get(1).description.contains("Nadawca:")
+            &&threeLineRows.get(1).description.contains("Tytuł:"),
+            "preserve multiline sender and payment title");
+        check(threeLineRows.get(1).evidenceKey.equals(
+            BankStatementVeloPdf.parse(threeLineVelo).get(1).evidenceKey),
+            "same file imported again must keep evidence fingerprint");
+
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
