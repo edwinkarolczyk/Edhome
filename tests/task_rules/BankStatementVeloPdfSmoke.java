@@ -230,12 +230,12 @@ public final class BankStatementVeloPdfSmoke {
         catch(IllegalArgumentException expected){strictStillRejects=true;}
         check(strictStillRejects,"legacy strict path must not silently import partial PDF");
         // Układ potwierdzony na prawdziwej historii PDF (dane zastępcze).
-        String actualLayout="VeloBank\\n"
-            +"DATA TRANSAKCJI DATA KSIĘGOWANIA OPIS TRANSAKCJI KWOTA TRANSAKCJI SALDO PO TRANSAKCJI\\n"
-            +"09.10.2026 - Operacja kartą 5375 **** **** 2166 na kwotę 123,98 PLN w SKLEP, PL -123,98 PLN -\\n"
-            +"09.10.2026 09.10.2026 Przelew na rachunek: 16 1111 1111 1111 1111 1111 1111, -2 500,00 PLN 2 256,01 PLN\\n"
-            +"08.10.2026 08.10.2026 Przelew z rachunku: 28 1111 1111 1111 1111 1111 1111, 6 235,20 PLN 6 275,20 PLN\\n"
-            +"05.10.2026 - Przelew na rachunek: 96 1111 1111 1111 1111 1111 1111, - -\\n";
+        String actualLayout="VeloBank\n"
+            +"DATA TRANSAKCJI DATA KSIĘGOWANIA OPIS TRANSAKCJI KWOTA TRANSAKCJI SALDO PO TRANSAKCJI\n"
+            +"09.10.2026 - Operacja kartą 5375 **** **** 2166 na kwotę 123,98 PLN w SKLEP, PL -123,98 PLN -\n"
+            +"09.10.2026 09.10.2026 Przelew na rachunek: 16 1111 1111 1111 1111 1111 1111, -2 500,00 PLN 2 256,01 PLN\n"
+            +"08.10.2026 08.10.2026 Przelew z rachunku: 28 1111 1111 1111 1111 1111 1111, 6 235,20 PLN 6 275,20 PLN\n"
+            +"05.10.2026 - Przelew na rachunek: 96 1111 1111 1111 1111 1111 1111, - -\n";
         BankStatementVeloPdf.ParseReport layoutReport=BankStatementVeloPdf.inspect(actualLayout);
         check(layoutReport.accepted.size()==3,"Velo table: three booked/card transactions");
         check(layoutReport.unreadableCount==0,"unbooked transfer is not missing money");
