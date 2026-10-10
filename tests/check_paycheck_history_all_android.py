@@ -12,7 +12,8 @@ history=(java/"PaycheckBudgetHistoryStore.java").read_text(encoding="utf-8")
 assert "private void showSharedPaycheckHistory()" in main
 assert "private void showSharedPaycheckHistoryPage(String kind,int offset)" in main
 assert "private void showSharedPaycheckHistoryEntry(String operationId)" in main
-assert 'button("Pełna historia • wpływy + / wydatki −",' in main
+assert 'button("Narzędzia PayCheck",this::showPaycheckToolsMenu);' in main
+assert 'else if(which==2)showSharedPaycheckHistory();' in main
 assert 'button("Historia PayCheck • wszystkie wpływy + / wydatki −",' in main
 assert 'new String[]{' in main and '"Tylko wpływy (+)"' in main
 assert '"Tylko wydatki (−)"' in main
@@ -31,8 +32,8 @@ for required in (
     assert required in body, required
 assert ".setMessage(" not in body, "Komunikat Android moze schowac liste"
 assert 'if (++count >= 40)' not in body
-assert 'ORDER BY id DESC LIMIT 40' in main, "Zostawiono podglad 40 wpisow"
-# Ostatnie 40 w glownym PayCheck i pełna historia bez kart;
+assert 'ORDER BY id DESC LIMIT 12' in main, "Zwięzły podgląd powinien mieć maks. 12 wpisów"
+# Ostatnie 12 w glownym PayCheck i pełna historia bez kart;
 # klik w inna kwotę zwija poprzednią pozycję.
 summary=main.split('title("PayCheck • ostatnie operacje");',1)[1].split(
     'if(count==0)note("Brak transakcji.");',1)[0]
