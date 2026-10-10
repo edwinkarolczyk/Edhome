@@ -103,7 +103,9 @@ for token in (
     assert token in backup,token
 
 assert 'static boolean deleteUnmatched(' in store
-assert "state IN ('open','dismissed')" in store
+assert 'static int dismissAllUnmatched(' in store
+assert 'removed.put("state","dismissed")' in store
+assert "state='open' AND matched_operation_id IS NULL" in store
 assert "AND NOT EXISTS (SELECT 1 FROM paycheck_transactions" in store
 assert 'private void showBankEvidenceList(boolean all,int filter,int offset)' in main
 bankview=main.split("private void showBankEvidenceList(",1)[1].split(
