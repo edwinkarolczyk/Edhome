@@ -32,7 +32,7 @@ for word in ('bankImportDiag(', 'bankImportDiagLine()',
              'diagStage="XLSX_TEXT"', 'diagStage="MBANK_PARSE"',
              'diagStage="CSV_PARSE"', 'bankImportDiag("OK"',
              'bankImportDiag("BŁĄD • "+diagStage',
-             'Diagnostyka importu:'):
+             'Ostatni import:'):
     assert word in ui,word
 # Backup compatibility continues through the current DB version; bank evidence
 # introduced in v34 must remain restorable after later pantry-only migrations.
