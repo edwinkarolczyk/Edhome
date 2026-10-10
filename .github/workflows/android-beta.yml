@@ -591,7 +591,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. VeloBank PDF: obsługa kwoty przelewu bez symbolu waluty i bez znaku, gdy typ operacji jednoznacznie określa kierunek, dwóch dat w wierszu oraz rozdzielonych opisów i kwot do 10 wierszy; komunikat diagnostyczny rozróżnia brak kwoty, kilka kwot i nieznany kierunek. Błędny plik pozostaje całkowicie odrzucany, nie księguje salda; poprawne wcześniej transakcje mają stabilne klucze. Ważne: rzeczywisty eksport VeloBanku wymaga weryfikacji na telefonie. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME ${{ steps.beta_publish.outputs.version }} — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
