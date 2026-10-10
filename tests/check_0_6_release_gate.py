@@ -71,7 +71,7 @@ for token in (
     'BankEvidenceStore.ingest(',
     'showBankEvidenceQueue(0)',
     'BankEvidenceStore.match(',
-    'Do wyjaśnienia • banki',
+    '"Do wyjaśnienia ("+open',
     'countRecentStatementMatches(signal)',
 ):
     assert token in main, token
