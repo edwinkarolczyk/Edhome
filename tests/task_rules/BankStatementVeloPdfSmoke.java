@@ -212,6 +212,23 @@ public final class BankStatementVeloPdfSmoke {
         check(blikRows.size()==1&&"expense".equals(blikRows.get(0).kind)
             &&blikRows.get(0).amountGrosz==87259,
             "signed BLIK debit must override 'przelew z rachunku'");
+        String partiallyReadable="VeloBank\\n"
+            +"05.10.2026 Operacja kartą -6,50 PLN\\n"
+            +"06.10.2026 Operacja kartą -7,50 PLN\\n"
+            +"09.10.2026 Przelew wychodzący bez kwoty\\n";
+        BankStatementVeloPdf.ParseReport report=
+            BankStatementVeloPdf.inspect(partiallyReadable);
+        check(report.accepted.size()==2,"report retains both valid operations");
+        check(report.unreadableCount==1&&report.missingMoneyCount==1,
+            "report records missing amount without silently losing it");
+        check(!report.complete(),"partial result is not complete");
+        check(report.accepted.get(0).evidenceKey.equals(
+            BankStatementVeloPdf.inspect(partiallyReadable).accepted.get(0).evidenceKey),
+            "partial report preserves deduplication key");
+        boolean strictStillRejects=false;
+        try {BankStatementVeloPdf.parse(partiallyReadable);}
+        catch(IllegalArgumentException expected){strictStillRejects=true;}
+        check(strictStillRejects,"legacy strict path must not silently import partial PDF");
         System.out.println("VeloBank text PDF parser: conservative manual-evidence candidates PASS");
     }
 }
