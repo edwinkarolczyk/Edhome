@@ -12,7 +12,7 @@ backup=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_
 gradle=Path("app/build.gradle").read_text()
 for token in (
     'case "paycheck": paycheck(); break;',
-    'PayCheck • budżet',
+    'header("PayCheck");',
     'PaycheckStore.sharedBalance(db.getReadableDatabase())',
     'PaycheckStore.add(',
     'new AlertDialog.Builder(this)',
