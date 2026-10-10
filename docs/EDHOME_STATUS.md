@@ -1,3 +1,11 @@
+## 2026-10-10 — Android Beta 0.8.0.89 / 281: PDF VeloBank, poprawka prawdziwego wyciągu
+
+- Na oryginalnym lokalnym PDF VeloBanku użytkownika (09.10.2026; bez publikowania danych bankowych) sprawdzono tekst wyciągnięty lokalnie PDFBox: 29 wierszy z kwotami i 1 przelew jeszcze **niezaksięgowany**, którego trzecia linia zawiera `- -` zamiast kwoty i salda. Dotychczasowe `parseStatementRowsReport` błędnie zgłaszało go jako „brak jednoznacznej kwoty” i blokowało pełny import.
+- Commit `a148e3df`: pomiń **wyłącznie** transfer, gdy data księgowania jest `-` i osobny wiersz kwoty/salda ma `- -`. Zaksięgowany przelew bez kwoty nadal jest błędem (zabezpieczenie przed cichym pominięciem).
+- Commit `886e44d6`: test regresyjny trójliniowej pozycji oczekującej, dwóch poprawnych kwot oraz zaksięgowanego przelewu z brakującą kwotą.
+- Commit `144ea16a`: wersja **Android Beta 0.8.0.89 / 281**. Build i publikacja APK w chwili zapisu **niepotwierdzone**; nie podawać instalatora, zanim CI PASS i manifest będą zweryfikowane.
+- **Odbiór P0 nadal otwarty:** konieczny import na fizycznym Androidzie z tym samym PDF (29 operacji z kwotami, brak blokady przez `- -`), sprawdzenie prawidłowych wpływów/wydatków, deduplikacji i ochrony istniejącej historii. Stable main bez zmian.
+
 ## 2026-10-10 — POTWIERDZONE: Android Beta 0.8.0.88 / 280 opublikowana
 
 - **CI #2134 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38066273569 . Pełny build i podpis APK Beta zakończone bez błędów.
