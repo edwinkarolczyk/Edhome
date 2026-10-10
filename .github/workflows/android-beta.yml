@@ -190,6 +190,7 @@ jobs:
           java -cp "$RUNNER_TEMP/paycheck-history-all" \
             com.edwinkarolczyk.edhome.BankStatementSignsSmoke
           python3 tests/check_paycheck_history_all_android.py
+          python3 tests/check_paycheck_compact_android.py
       - name: Monthly PayCheck plan and confirmed-actuals regression
         run: python3 tests/check_paycheck_monthly_budget_contract.py
       - name: Monthly PayCheck finance P0 behavioral regression
