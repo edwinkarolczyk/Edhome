@@ -133,6 +133,13 @@ for token in (
 ):
     assert token in main, token
 assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain supported"
+# Starsze kopie z EDHOME 0.8.0.25 mają bazę v45.
+# Przywracanie do bieżącej bazy v46 musi je akceptować;
+# nieobecne tabele budżetu v46 powstają jako puste.
+assert 'inputVersion != 44 && inputVersion != 45 && inputVersion != DB_VERSION' in source, (
+    "EDHOME backup: schema v45 must remain restorable")
+assert 'inputVersion < 46 && definition[0].startsWith("budget_")' in source, (
+    "EDHOME backup: v45 must migrate without requiring v46 budget tables")
 assert 'Map<Long,String> archivedStorageThumbs' in source
 assert 'restoredStorageThumbs.size() + archivedStorageThumbs.size() > 200' in source
 assert 'legacy_thumbs=' in main
