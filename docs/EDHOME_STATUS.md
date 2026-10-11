@@ -1,3 +1,11 @@
+## 2026-10-11 — Android Beta 0.8.0.90 / 282: propozycje dopasowań bank ↔ Budżet
+
+- **Kod w beta:** `BankBudgetMatchRules.proposalScore` (commit `3d19ac28`) ocenia dopasowania: nazwa+kwota, nazwa+inna kwota, sama kwota (słaba propozycja), brak dopasowania. Nie zmienia salda ani zapisów.
+- `MainActivity` (commit `12b3365b`): w PayCheck oraz menu Historia bankowa dodano „Dopasowania do Budżetu”. Po wczytaniu PDF/CSV/XLSX okno podsumowania ma przycisk „Dopasowania do Budżetu” i oddzielnie „Pozostałe przelewy”. Lista porównuje otwarte dowody z pozycjami aktywnego Budżetu i oczekującymi transakcjami, pokazuje kwotę bankową, planowaną i różnicę, tylko jeden wiersz rozwinięty naraz. Przekazywanie do istniejącej potwierdzanej pary `confirmBankEvidenceMatch` oraz ręczny wybór przez `openBankEvidenceRow`. Same propozycje NIC nie księgują.
+- **Ważne ograniczenie obecnego etapu:** po imporcie nadal jest okno podsumowania; użytkownik naciska w nim „Dopasowania do Budżetu”. Pełne automatyczne otwarcie bez dodatkowego naciśnięcia nie jest jeszcze wdrożone. Pozycje bez zidentyfikowanego odbiorcy albo jednoznacznej kwoty wymagają ręcznej decyzji.
+- Testy: `BankBudgetMatchSmoke` (commit `cca49e76`), `check_budget_bank_automatch_android.py` (commit `150835e3`) rozszerzone o UI i zakaz samoczynnego księgowania. Kod Beta wersja 0.8.0.90 / 282 (commit `8a338ec2`), CI #2144 oczekuje / wynik do sprawdzenia.
+- **Status P0:** weryfikacja nowych par na telefonie po zainstalowaniu 0.8.0.90, wpływy/wydatki, różnice kwot, ponowny import bez podwójnego salda, pozostaje OTWARTA. Stable main bez zmian. Nie podawać linku do APK przed zielonym CI i publikacją.
+
 ## 2026-10-11 — Android Beta 0.8.0.89 / 281: CI PASS, podpisany APK opublikowany
 
 - **CI #2139 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38125586596
