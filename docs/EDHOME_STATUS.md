@@ -1,3 +1,10 @@
+## 2026-10-11 — Beta 0.8.0.91 / 283: dopasowania otwierane automatycznie po imporcie
+
+- **Zmienione po wydaniu 0.8.0.90:** commit `298f2385`: po pomyślnym imporcie historia przechodzi bezpośrednio do listy „Dopasowania do Budżetu” (bez dodatkowego przycisku). Raport importu — liczba plików, operacji, nowych/duplikatów, wpływów/wydatków, dat, automatycznie rozliczonych i nierozpoznanych — pozostaje na górze listy. Propozycje nadal niczego nie księgują, a niepewne powiązania wymagają osobnej zgody.
+- **Test regresyjny:** `tests/check_budget_bank_automatch_android.py` z commit `602b1980` wymaga automatycznej nawigacji po imporcie i zachowania podsumowania. Android Beta podniesiono do **0.8.0.91 / 283** (commit `9457b477`).
+- **CI #2147**: https://github.com/edwinkarolczyk/Edhome/actions/runs/38130567409 — w chwili wpisu czeka na build. Nie podawać APK tej wersji przed PASS, podpisem, publikacją i weryfikacją manifestu. Po publikacji zaktualizować też opis zmian, bo workflow nadal domyślnie ma starszy opis parsera VeloBanku.
+- **P0 testów na telefonie nadal otwarte:** czy propozycje pojawiają się po prawdziwym imporcie VeloBanku, poprawne nazwy, kwoty, różnice, ochrona przed duplikatem i saldo tylko po świadomym potwierdzeniu. Stable main nietknięty.
+
 ## 2026-10-11 — POTWIERDZONE: Android Beta 0.8.0.90 / 282 opublikowana
 
 - **CI #2144 PASS**: https://github.com/edwinkarolczyk/Edhome/actions/runs/38130222540 — przeszły testy Bank CSV, Budżet ↔ bank (w tym nowe testy propozycji), PayCheck, kompilacja Android Beta i Stable oraz podpis Beta.
