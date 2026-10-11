@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 285,
-  "versionName": "0.8.0.93",
-  "changelog": "EDHOME 0.8.0.93 — Beta. Naprawiono przywracanie starszych kopii ZIP EDHOME z wersją bazy 45 (np. z aplikacji 0.8.0.25), które dotąd były odrzucane jako nieobsługiwane. Test regresyjny przywracania i kompilacja CI #2153 PASS. Konwerter PDF nadal działa w PayCheck bez drugiej ikony aplikacji (zmiana z 0.8.0.92). Uwaga: przywrócenie kopii ZASTĘPUJE aktualne dane; przed odtworzeniem starszej kopii zrób nowy backup. Odbiór przywracania na fizycznym telefonie pozostaje do sprawdzenia. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.93/edhome-beta.apk",
-  "sha256": "e4a3ad0cf8a9b5ee14119e413515042a1832f0980034dfedf8785e416a3b796d"
+  "versionCode": 286,
+  "versionName": "0.8.0.94",
+  "changelog": "EDHOME 0.8.0.94 — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.94/edhome-beta.apk",
+  "sha256": "dfb240404de8e72fbe9d2046c5b07d91b0faeeaa5695d48dbc59b1872f63d048"
 }
