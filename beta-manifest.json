@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 281,
-  "versionName": "0.8.0.89",
-  "changelog": "EDHOME 0.8.0.89 — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.89/edhome-beta.apk",
-  "sha256": "294abf4b96bbb126e19b9009bc1e4e76bb952ca9bf947c0a8fb4efdbad14e5ae"
+  "versionCode": 282,
+  "versionName": "0.8.0.90",
+  "changelog": "EDHOME 0.8.0.90 — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.90/edhome-beta.apk",
+  "sha256": "bacb5f478323048f8d2defe465b86f1440a4a0ecdc48df28fec1fa25817dcd1c"
 }
