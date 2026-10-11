@@ -1,3 +1,11 @@
+## 2026-10-11 — Beta 0.8.0.92 / 284: usunięcie drugiej ikony konwertera PDF
+
+- Zgłoszenie: po instalacji EDHOME pojawia się drugi skrót „EDHOME Konwerter PDF”, mimo że narzędzie jest dostępne w PayCheck. Przyczyna: `BankPdfConverterActivity` miało własny filtr MAIN/LAUNCHER w `app/src/main/AndroidManifest.xml`.
+- **Poprawka `ba7166af` (tylko `beta`):** usunięto drugi MAIN/LAUNCHER i ustawiono aktywność konwertera `android:exported=false`. Nie usunięto konwertera ani jego otwierania przez PayCheck → Historia bankowa → Konwerter PDF → CSV. Tylko `MainActivity` ma ikonę startową.
+- **Test `bdf4ada5`:** `tests/check_paycheck_compact_android.py` sprawdza, że istnieje dokładnie jedna aktywność launchera, konwerter jest wewnętrzny i nadal osiągalny z PayCheck.
+- **Wersja `9233ea0d`:** Android Beta 0.8.0.92 / versionCode 284. Na moment tej notatki wynik kompilacji, podpis i publikacja APK jeszcze niepotwierdzone; nie uznawać ich przed CI PASS i weryfikacją manifestu.
+- Wpływ na dane finansowe: brak zmian w parserze bankowym, saldo, bazie lub algorytmie dopasowań. Stable `main` bez zmian.
+
 ## 2026-10-11 — POTWIERDZONE: EDHOME Beta 0.8.0.91 / 283 opublikowana
 
 - **CI #2147 PASS**: https://github.com/edwinkarolczyk/Edhome/actions/runs/38130567409 — testy dopasowań, regresja Budżet/PayCheck, kompilacja Android Beta i Stable oraz podpisany instalator zakończone bez błędów.
