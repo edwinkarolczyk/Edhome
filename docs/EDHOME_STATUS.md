@@ -1,3 +1,11 @@
+## 2026-10-11 — Beta 0.8.0.93 / 285: poprawa przywracania backupu bazy v45
+
+- Użytkownik dostarczył rzeczywistą kopię `EDHOME-backup-1791294830711.zip` (stworzoną 06.10.2026 z EDHOME 0.8.0.25, schemat danych v45). Offline sprawdzono integralność ZIP: 41 pozycji manifestu, SHA-256 i rozmiary zgodne, odniesienia miniatur do Rzeczy poprawne. Archiwum ma dwie pozycje Budżetu, zero transakcji PayCheck i zero bankowych dowodów importu. Dane prywatne i plik ZIP NIE zostały wysłane do repo.
+- Zdiagnozowano konkretny błąd DataBackup.restoreJson: wersje 2–44 i bieżąca 46 dopuszczone, v45 pominięta, mimo że mechanizm migracji brakujących tabel `budget_*` dla <46 już istnieje.
+- Commit `80e99ca2`: dodana obsługa schema v45 przy restore. Commit `c39adf52`: regresja w `tests/check_backup_roundtrip_contract.py` sprawdza v45 i puste tabele v46. Commit `f0c4a442`: wydanie Android Beta 0.8.0.93 / 285 rozpoczęte.
+- **NIEPOTWIERDZONE:** ostateczne CI dla 0.8.0.93, podpis i opublikowany APK oraz rzeczywiste przywrócenie na telefonie. Nie podawać pobierania 0.8.0.93 przed publikacją. Mechanizm restore NADPISUJE istniejące dane — zawsze świeży backup przed odtworzeniem starszej kopii.
+- Osobna ikona konwertera PDF usunięta już w wydanej Beta 0.8.0.92 / 284 (CI #2150 PASS); konwerter pozostaje dostępny wewnątrz PayCheck. Stable `main` bez zmian.
+
 ## 2026-10-11 — Android Beta 0.8.0.92 / 284: konwerter bez drugiej ikony
 
 - Przyczyna: w AndroidManifest.xml BankPdfConverterActivity miała MAIN + LAUNCHER, tak jak MainActivity. Android pokazywał zatem dwie ikony dla tej samej aplikacji.
