@@ -145,4 +145,36 @@ assert all(ledger.execute("SELECT count(*) FROM tx WHERE operation_id=?",(key,))
            for key,_,_,_ in entries)
 print("PASS Budget Bank actual: 4500->4300, rachunki 300->280 i 150->170, premia 500->650; saldo tylko bank 1x")
 
+# Przegląd propozycji po imporcie ma być oddzielony od księgowania.
+suggestions=main.split("private void showBankBudgetProposals(int offset) {",1)[1].split(
+    "private void showBankEvidenceQueue(int filter)",1)[0]
+for text in (
+    'BankEvidenceStore.listPage(sql,"open",0,pageSize,first)',
+    'ensureBudgetPaycheckPending(month)',
+    'BankBudgetMatchRules.proposalScore(',
+    'if(!row.kind.equals(item.kind))continue;',
+    'status=\'pending\' ',
+    'statement_key IS NULL',
+    'details.setVisibility(show?View.VISIBLE:View.GONE)',
+    'expanded[0].setVisibility(View.GONE)',
+    'confirmBankEvidenceMatch(row,suggested,month)',
+    'openBankEvidenceRow(row)',
+    'Math.abs(diff)',
+    'showBankBudgetProposals(first+pageSize)',
+):
+    assert text in suggestions,text
+assert 'BankEvidenceStore.matchBudgetActual(' not in suggestions
+assert 'PaycheckStore.confirm(' not in suggestions
+assert 'PaycheckStore.add(' not in suggestions
+menu=main.split("private void showPaycheckBankMenu() {",1)[1].split(
+    "private void paycheckBankDiagnostics()",1)[0]
+assert '"Dopasowania do Budżetu"' in menu
+assert "else if(which==1)showBankBudgetProposals();" in menu
+assert 'this::showBankBudgetProposals' in main.split(
+    "private void paycheck() {",1)[1].split("private void ",1)[0]
+assert '.setPositiveButton("Dopasowania do Budżetu",' in worker
+assert 'showBankBudgetProposals()).show();' in worker
+assert 'proposalScore(' in rules
+print("PASS: po imporcie propozycje budżetowe, różnice, świadome zatwierdzenie, bez samoczynnego salda")
+
 print("PASS Budget Bank auto: plan pending 1x, wyciag confirm 1x, konflikty bez podwojnego salda")
