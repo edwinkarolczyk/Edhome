@@ -1,3 +1,11 @@
+## 2026-10-11 — Android Beta 0.8.0.92 / 284: konwerter bez drugiej ikony
+
+- Przyczyna: w AndroidManifest.xml BankPdfConverterActivity miała MAIN + LAUNCHER, tak jak MainActivity. Android pokazywał zatem dwie ikony dla tej samej aplikacji.
+- Commit ba7166af: usunięto drugi intent-filter launchera, activity pozostaje w tym samym APK z android:exported=false. Konwerter nadal dostępny w PayCheck / Historia bankowa / Konwerter PDF → CSV.
+- Commit bdf4ada5: test kontraktowy wymaga tylko jednej ikony .MainActivity, obecności activity konwertera i dostępu z menu PayCheck.
+- Commit 9233ea0d: Android Beta 0.8.0.92 / 284, CI #2150: https://github.com/edwinkarolczyk/Edhome/actions/runs/38134578019. Na moment wpisu CI czeka na zakończenie; publikacja podpisanego APK tej wersji niepotwierdzona. Nie ogłaszać naprawy dostępnej na urządzeniu przed publikacją.
+- Funkcje finansowe, baza danych, import PDF i dopasowania do Budżetu bez zmian. Stable main bez zmian.
+
 ## 2026-10-11 — Beta 0.8.0.92 / 284: usunięcie drugiej ikony konwertera PDF
 
 - Zgłoszenie: po instalacji EDHOME pojawia się drugi skrót „EDHOME Konwerter PDF”, mimo że narzędzie jest dostępne w PayCheck. Przyczyna: `BankPdfConverterActivity` miało własny filtr MAIN/LAUNCHER w `app/src/main/AndroidManifest.xml`.
