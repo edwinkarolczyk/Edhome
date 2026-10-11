@@ -13034,6 +13034,7 @@ public final class MainActivity extends Activity {
         long total=BankEvidenceStore.countAll(db.getReadableDatabase());
         String[] options={
             "Importuj PDF / CSV / XLSX",
+            "Dopasowania do Budżetu",
             "Do wyjaśnienia ("+open+")",
             "Cała historia bankowa ("+total+")",
             "Konwerter PDF → CSV",
@@ -13044,12 +13045,13 @@ public final class MainActivity extends Activity {
             .setTitle("Historia bankowa")
             .setItems(options,(dialog,which)->{
                 if(which==0)selectStatementCsv();
-                else if(which==1)showBankEvidenceQueue(0);
-                else if(which==2)showBankEvidenceArchive(0);
-                else if(which==3)startActivity(new Intent(
+                else if(which==1)showBankBudgetProposals();
+                else if(which==2)showBankEvidenceQueue(0);
+                else if(which==3)showBankEvidenceArchive(0);
+                else if(which==4)startActivity(new Intent(
                     this,BankPdfConverterActivity.class));
-                else if(which==4)configureBankNotifications();
-                else if(which==5)go("paycheck_bank_diagnostics");
+                else if(which==5)configureBankNotifications();
+                else if(which==6)go("paycheck_bank_diagnostics");
             })
             .setNegativeButton("Zamknij",null).show();
     }
@@ -13091,6 +13093,8 @@ public final class MainActivity extends Activity {
         sharedBudgetAwaitingPaycheckConfirmation();
         button("✓ Lista oczekujących przelewów",
             this::showSharedPaycheckPendingQueue);
+        button("Dopasowania do Budżetu • sprawdź przelewy",
+            this::showBankBudgetProposals);
         button("Historia bankowa • import i uzgodnienia",
             this::showPaycheckBankMenu);
         button("Narzędzia PayCheck",this::showPaycheckToolsMenu);
@@ -14129,8 +14133,10 @@ public final class MainActivity extends Activity {
                         +"\n\nSaldo zmieniły wyłącznie jednoznacznie "
                         +"uzgodnione płatności. Konflikty pozostają do decyzji.")
                     .setNegativeButton("Zamknij",null)
-                    .setPositiveButton("Pokaż kolejkę",
-                        (d,w)->showBankEvidenceQueue(0)).show();
+                    .setNeutralButton("Pozostałe przelewy",
+                        (d,w)->showBankEvidenceQueue(0))
+                    .setPositiveButton("Dopasowania do Budżetu",
+                        (d,w)->showBankBudgetProposals()).show();
             });
         }catch(Exception error){
             bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
@@ -14301,6 +14307,188 @@ public final class MainActivity extends Activity {
     /** Tylko odczyt. Lista kolejki otwartej nie jest pełną historią importu. */
     private void showBankEvidenceArchive(int offset) {
         showBankEvidenceList(true,0,offset);
+    }
+
+
+    /**
+     * Jedna zbiorcza lista propozycji po imporcie. Odczyt NIE księguje
+     * transakcji. Dopiero świadome potwierdzenie pary wywołuje istniejący
+     * atomowy mechanizm matchBudgetActual z kwotą z historii bankowej.
+     */
+    private void showBankBudgetProposals() {
+        showBankBudgetProposals(0);
+    }
+
+    private void showBankBudgetProposals(int offset) {
+        final int pageSize=70;
+        try {
+            SQLiteDatabase sql=db.getReadableDatabase();
+            long total=BankEvidenceStore.count(sql,"open",0);
+            int first=total==0?0:Math.min(offset,
+                (int)((total-1)/pageSize)*pageSize);
+            java.util.List<BankEvidenceStore.Row> rows=
+                BankEvidenceStore.listPage(sql,"open",0,pageSize,first);
+            java.util.Set<YearMonth> months=new java.util.HashSet<>();
+            for(BankEvidenceStore.Row row:rows) {
+                try {months.add(YearMonth.parse(row.date.substring(0,7)));}
+                catch(Exception invalid) {
+                    DiagnosticLog.error("BANK_BUDGET_PROPOSAL_DATE",invalid);
+                }
+            }
+            // Każdy aktywny plan Budżetu ma swoje jedno oczekujące ID.
+            // Zapewnienie pending NIE zmienia salda potwierdzonego.
+            for(YearMonth month:months)ensureBudgetPaycheckPending(month);
+            java.util.List<PaycheckMonthlyBudget.Item> planned=
+                PaycheckMonthlyBudget.load(prefs);
+            java.util.List<PaycheckRecipientStore.Recipient> recipients=
+                PaycheckRecipientStore.load(prefs);
+            java.util.Map<YearMonth,java.util.List<PaycheckMonthlyBudget.Item>>
+                monthPlans=new java.util.HashMap<>();
+            for(YearMonth month:months)
+                monthPlans.put(month,PaycheckMonthlyBudget.activeFor(planned,month));
+            final AlertDialog[] dialogRef={null};
+            final LinearLayout[] expanded={null};
+            LinearLayout content=new LinearLayout(this);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setPadding(dp(12),dp(8),dp(12),dp(12));
+            TextView summary=text("",14,false);
+            content.addView(summary);
+            LinearLayout proposals=new LinearLayout(this);
+            proposals.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout remaining=new LinearLayout(this);
+            remaining.setOrientation(LinearLayout.VERTICAL);
+            int proposed=0,manual=0;
+            for(BankEvidenceStore.Row row:rows) {
+                final YearMonth month;
+                try {month=YearMonth.parse(row.date.substring(0,7));}
+                catch(Exception invalid){manual++;continue;}
+                PaycheckMonthlyBudget.Item best=null;
+                long bestDue=0;
+                int bestScore=0,ties=0;
+                for(PaycheckMonthlyBudget.Item item:
+                        monthPlans.getOrDefault(month,
+                            java.util.Collections.emptyList())) {
+                    if(!row.kind.equals(item.kind))continue;
+                    String operationId=budgetPaycheckOperationId(item,month);
+                    if(item.matchedOperationIds.contains(operationId))continue;
+                    long due=PaycheckMonthlyBudget.remainingDue(sql,item,month);
+                    if(due<=0)continue;
+                    try(Cursor pending=sql.rawQuery(
+                            "SELECT 1 FROM paycheck_transactions WHERE "
+                            +"scope='shared' AND operation_id=? AND status='pending' "
+                            +"AND kind=? AND statement_key IS NULL",
+                            new String[]{operationId,row.kind})) {
+                        if(!pending.moveToFirst())continue;
+                    }
+                    int score=BankBudgetMatchRules.proposalScore(
+                        row.description,item.name,
+                        PaycheckRecipientStore.name(recipients,item.recipientId),
+                        row.amount,due);
+                    if(score>bestScore) {
+                        bestScore=score;best=item;bestDue=due;ties=1;
+                    }else if(score>0&&score==bestScore) {
+                        ties++;
+                    }
+                }
+                final PaycheckMonthlyBudget.Item suggested=best;
+                final long plannedDue=bestDue;
+                final int rank=bestScore;
+                final int alternatives=ties;
+                if(rank>0)proposed++;else manual++;
+                LinearLayout line=new LinearLayout(this);
+                line.setOrientation(LinearLayout.VERTICAL);
+                String sign="income".equals(row.kind)?"+ ":"− ";
+                String tag=rank==3?"✓ Odbiorca i kwota"
+                    :rank==2?"✓ Odbiorca • inna kwota"
+                    :rank==1?"? Tylko zgodna kwota"
+                    :"? Wymaga ręcznego wyboru";
+                if(alternatives>1)tag="? Kilka możliwych pozycji";
+                TextView headerLine=text(
+                    row.date+"  "+sign+MoneyRules.format(row.amount)
+                    +"\n"+(suggested==null?row.description:suggested.name)
+                    +" • "+tag,14,false);
+                headerLine.setPadding(dp(6),dp(10),dp(6),dp(10));
+                line.addView(headerLine);
+                LinearLayout details=new LinearLayout(this);
+                details.setOrientation(LinearLayout.VERTICAL);
+                details.setPadding(dp(10),dp(4),dp(10),dp(8));
+                details.setVisibility(View.GONE);
+                line.addView(details);
+                headerLine.setOnClickListener(v->{
+                    boolean show=details.getVisibility()!=View.VISIBLE;
+                    if(expanded[0]!=null&&expanded[0]!=details)
+                        expanded[0].setVisibility(View.GONE);
+                    details.setVisibility(show?View.VISIBLE:View.GONE);
+                    expanded[0]=show?details:null;
+                });
+                TextView bankText=text("Wyciąg: "+row.sourceLabel
+                    +" • "+row.date+"\nOpis: "+row.description,13,false);
+                details.addView(bankText);
+                if(suggested!=null) {
+                    long diff=row.amount-plannedDue;
+                    TextView difference=text(
+                        "Pozostało w planie: "+sign+MoneyRules.format(plannedDue)
+                        +"\nKwota z banku: "+sign+MoneyRules.format(row.amount)
+                        +"\nRóżnica: "+(diff==0?"0,00 zł"
+                            :(diff>0?"+ ":"− ")+MoneyRules.format(Math.abs(diff)))
+                        +(rank==1?"\nUWAGA: nazwa odbiorcy nie jest potwierdzona.":"")
+                        +(alternatives>1?"\nKilka pasujących pozycji Budżetu.":""),
+                        13,false);
+                    details.addView(difference);
+                }else {
+                    details.addView(text("Nie znaleziono pewnego dopasowania "
+                        +"nazwy ani kwoty. Wybierz odpowiednią pozycję ręcznie.",13,false));
+                }
+                if(suggested!=null&&rank>=2&&alternatives==1)
+                    smallButton(details,"Sprawdź i zatwierdź parę",()->{
+                        if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                        confirmBankEvidenceMatch(row,suggested,month);
+                    });
+                smallButton(details,"Wybierz pozycję ręcznie",()->{
+                    if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                    openBankEvidenceRow(row);
+                });
+                (rank>0?proposals:remaining).addView(line);
+                View separator=new View(this);
+                separator.setBackgroundColor(0x33888888);
+                (rank>0?proposals:remaining).addView(separator,
+                    new LinearLayout.LayoutParams(-1,dp(1)));
+            }
+            summary.setText("Otwarta historia bankowa: "+total
+                +"\nTa strona: propozycje "+proposed
+                +", do ręcznego wyboru "+manual
+                +"\nKliknij kwotę, aby rozwinąć szczegóły. "
+                +"Tylko jedna pozycja naraz. "
+                +"Propozycja sama nie zmienia salda.");
+            if(proposed>0)content.addView(text(
+                "Proponowane powiązania z Budżetem",16,true));
+            content.addView(proposals);
+            if(manual>0)content.addView(text(
+                "Pozostałe przelewy • wybierz ręcznie",16,true));
+            content.addView(remaining);
+            if(rows.isEmpty())
+                content.addView(text("Brak nierozliczonych przelewów w historii. "
+                    +"Importuj historię bankową albo sprawdź archiwum.",14,false));
+            ScrollView scroll=new ScrollView(this);
+            scroll.addView(content);
+            AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+                .setTitle("Dopasowania do Budżetu")
+                .setView(scroll)
+                .setNegativeButton("Zamknij",null);
+            if(first+pageSize<total)
+                dialog.setPositiveButton("Następna strona",(d,w)->
+                    showBankBudgetProposals(first+pageSize));
+            if(first>0)
+                dialog.setNeutralButton("Poprzednia strona",(d,w)->
+                    showBankBudgetProposals(Math.max(0,first-pageSize)));
+            else dialog.setNeutralButton("Pełna kolejka",(d,w)->
+                showBankEvidenceQueue(0));
+            dialogRef[0]=dialog.show();
+        }catch(Exception problem) {
+            DiagnosticLog.error("BANK_BUDGET_PROPOSALS",problem);
+            alert("Nie udało się odczytać dopasowań. Saldo bez zmian. "
+                +"Sprawdź diagnostykę.");
+        }
     }
 
     private void showBankEvidenceQueue(int filter) {
