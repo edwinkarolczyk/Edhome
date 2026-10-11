@@ -1,3 +1,13 @@
+## 2026-10-11 — POTWIERDZONE: Android Beta 0.8.0.94 / 286 — Styl 1 od nowej instalacji
+
+- **CI #2157 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38145707593. Testy UI i build Android Beta/Stable oraz podpisany APK ukończone.
+- **Podpisany APK opublikowany:** https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.94/edhome-beta.apk; 13 351 917 B, manifest 0.8.0.94 / 286, SHA-256 `dfb240404de8e72fbe9d2046c5b07d91b0faeeaa5695d48dbc59b1872f63d048`.
+- **Wykonano:** `EdhomeApplication` (commit `86b6a082`) ustawia `UiSkin.MODERN_LIGHT` („Nowoczesny jasny”, Styl 1) **tylko przy całkowicie pustych preferencjach**, przed pierwszym uruchomieniem `MainActivity`. Posiadacze wcześniejszych instalacji zachowują swój wybór, w tym dawny domyślny Neonowy, gdy nie ustawiono jawnie motywu. Wpis `android:name` w manifeście (commit `29e14862`). Test regresji w `check_ui_refresh_contract.py` (commit `3e1d40e5`).
+- **Konwerter PDF:** druga ikona z launchera została wcześniej usunięta w 0.8.0.92; konwerter pozostaje w PayCheck → Historia bankowa. Nie zmieniono go ponownie.
+- **Opis aktualizacji:** `beta-manifest.json` uaktualniony do rzeczywistych zmian 0.8.0.94 (commit `5fe0d056`); podpis i hash APK bez zmian.
+- **Bez zmian:** saldo, import bankowy, synchronizacja, dane, Stable `main`.
+- **Do sprawdzenia na urządzeniu:** świeża instalacja pokazuje Styl 1; aktualizacja wcześniejszej instalacji zachowuje wybrany motyw. Naprawa ZIP v45 z Beta 0.8.0.93 nadal wymaga odbioru na telefonie; przed odtworzeniem starszej kopii konieczny świeży backup.
+
 ## 2026-10-11 — POTWIERDZONE: Android Beta 0.8.0.93 / 285 opublikowana
 
 - **CI #2153 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38135518113 — w tym test `Backup schema, ZIP media and roundtrip contract` PASS, kompilacja i podpis APK.
