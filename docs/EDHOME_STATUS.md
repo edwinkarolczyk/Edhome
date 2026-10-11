@@ -1,3 +1,11 @@
+## 2026-10-11 — Android Beta 0.8.0.89 / 281: CI PASS, podpisany APK opublikowany
+
+- **CI #2139 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38125586596
+- **Potwierdzony GitHub Release:** tag beta-v0.8.0.89, plik edhome-beta.apk (13 348 709 bajtów), URL: https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.89/edhome-beta.apk
+- **Manifest beta:** versionName 0.8.0.89, versionCode 281, SHA-256 294abf4b96bbb126e19b9009bc1e4e76bb952ca9bf947c0a8fb4efdbad14e5ae.
+- Poprawiono odrzucanie historii przez niezaksięgowany wiersz VeloBank z pustą datą księgowania i kwotą/saldem oznaczonymi kreskami. Test z rzeczywistymi końcami wierszy PASS. Stare dane PayCheck pozostają bez zmian.
+- **P0 nadal otwarte:** fizyczny Android + prawdziwy PDF po instalacji 0.8.0.89: pełna lista kwot, znaki wpływ/wydatek, data 09.10, ponowny import bez duplikatów. PASS CI nie oznacza testu na telefonie. Stable main bez zmian.
+
 ## 2026-10-11 — VeloBank P0: przelew niezaksięgowany, CI #2139
 
 - Wczorajsze CI #2138 FAIL: test niezaksięgowanego przelewu. Próbka testowa miała dosłowne sekwencje końców linii zamiast prawdziwych nowych linii. Commit 5b144ace poprawia test. [CI #2139](https://github.com/edwinkarolczyk/Edhome/actions/runs/38125586596).
@@ -101,12 +109,12 @@ Test użytkownika: **5 potencjalnych operacji nierozpoznanych**, pierwsza data 0
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-10 — Android Beta **0.8.0.88/280**, zwarty ekran PayCheck, CI #2134 i #2135 PASS, podpisany APK opublikowany. Realny PDF VeloBank: **P0 NIEODEBRANY**. |
+| Ostatnia aktualizacja | 2026-10-11 — Android Beta **0.8.0.89/281**, CI #2139 PASS, signed APK opublikowany; import prawdziwego VeloBank PDF na telefonie nadal P0/NIEODEBRANY. |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
 | Stable | `main` — bez zmian bez wyraźnej akceptacji użytkownika |
-| Android Beta | **0.8.0.88 / 280** — [CI #2135 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38066299822); [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.88/edhome-beta.apk); SHA-256 `dbba100fc118d6e7499d6f1036894eb91e6965d1a7403f8e33b36b87df1b4978`. Przebudowa UI gotowa, weryfikacja na telefonie i import PDF nadal otwarte. |
-| Desktop Beta | **0.7.0.115** — wcześniejszy potwierdzony CI #292 PASS; w tej turze niezmieniony |
+| Android Beta | **0.8.0.89 / 281** — [CI #2139 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38125586596); [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.89/edhome-beta.apk); SHA-256 `294abf4b96bbb126e19b9009bc1e4e76bb952ca9bf947c0a8fb4efdbad14e5ae`. Test na telefonie i import PDF do potwierdzenia. |
+| Desktop Beta | **0.7.0.115** — wcześniejszy potwierdzony CI #292 PASS; niezmieniony |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.82/274, CI #2102 PASS** — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/38025992176), [podpisany release](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.82), commit `c76414ee7ef9be305d6c790a22531d6d1e1306f6`. Syntetyczne testy parsera PASS, prawdziwy PDF nieodebrany. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
