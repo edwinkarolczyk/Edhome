@@ -36,6 +36,19 @@ final class BankBudgetMatchRules {
         return hasSpecificName(bank,normalize(budgetName));
     }
 
+    /**
+     * Ranking WYŁĄCZNIE do wyświetlenia propozycji, bez księgowania.
+     * 3: odbiorca i kwota; 2: odbiorca, inna kwota; 1: tylko kwota;
+     * 0: nie ma wystarczających danych do propozycji.
+     */
+    static int proposalScore(String bankDescription,String budgetName,
+            String recipientName,long bankAmount,long remainingAmount) {
+        if(bankAmount<=0||remainingAmount<=0)return 0;
+        boolean named=descriptionIdentifies(bankDescription,budgetName,recipientName);
+        boolean same=bankAmount==remainingAmount;
+        return named?(same?3:2):(same?1:0);
+    }
+
     private static boolean hasSpecificName(String bank,String label) {
         if(label.isEmpty())return false;
         // Pełna nazwa, np. NETFLIX albo TAURON DYSTRYBUCJA.
