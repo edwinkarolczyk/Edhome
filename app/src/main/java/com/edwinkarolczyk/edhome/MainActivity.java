@@ -13976,6 +13976,7 @@ public final class MainActivity extends Activity {
     }
 
     private volatile boolean bankImportRunning;
+    private String bankProposalLastImportSummary="";
 
     private void importStatementCsv(java.util.List<Uri> files, String bank) {
         if(files==null||bank==null||files.isEmpty())return;
@@ -14116,27 +14117,21 @@ public final class MainActivity extends Activity {
                 bankImportRunning=false;
                 if(isFinishing()||isDestroyed())return;
                 progress.dismiss();
-                new AlertDialog.Builder(this)
-                    .setTitle("Historia bankowa wczytana")
-                    .setMessage("Pliki: "+files.size()
-                        +"\nRozpoznane operacje: "+entries.size()
-                        +"\nDaty rozpoznane: "+importedRange
-                        +"\nWpływy: "+importedIncomeCount
-                        +" • Wydatki: "+importedExpenseCount
-                        +"\nNowo zapisane: "+queue.inserted
-                        +"\nDuplikaty: "+duplicates
-                        +"\nAutomatycznie uzgodnione: "+reconciliation.matched
-                        +"\nDo wyjaśnienia: "+reconciliation.review
-                        +"\n\nJeśli w pliku są późniejsze daty lub przelewy, "
-                        +"a nie występują w rozpoznanych, parser mógł pominąć "
-                        +"wiersze PDF. Nie uznawaj importu za kompletny."
-                        +"\n\nSaldo zmieniły wyłącznie jednoznacznie "
-                        +"uzgodnione płatności. Konflikty pozostają do decyzji.")
-                    .setNegativeButton("Zamknij",null)
-                    .setNeutralButton("Pozostałe przelewy",
-                        (d,w)->showBankEvidenceQueue(0))
-                    .setPositiveButton("Dopasowania do Budżetu",
-                        (d,w)->showBankBudgetProposals()).show();
+                bankProposalLastImportSummary=
+                    "Historia bankowa wczytana"
+                    +"\nPliki: "+files.size()
+                    +"\nRozpoznane operacje: "+entries.size()
+                    +"\nDaty: "+importedRange
+                    +"\nWpływy: "+importedIncomeCount
+                    +" • Wydatki: "+importedExpenseCount
+                    +"\nNowo zapisane: "+queue.inserted
+                    +" • Duplikaty: "+duplicates
+                    +"\nAutomatycznie uzgodnione: "+reconciliation.matched
+                    +" • Do wyjaśnienia: "+reconciliation.review
+                    +"\nJeśli plik zawiera późniejsze daty niż rozpoznane, "
+                    +"sprawdź dokument. Samo wyświetlenie propozycji "
+                    +"nie zmienia salda.";
+                showBankBudgetProposals();
             });
         }catch(Exception error){
             bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
@@ -14454,7 +14449,9 @@ public final class MainActivity extends Activity {
                 (rank>0?proposals:remaining).addView(separator,
                     new LinearLayout.LayoutParams(-1,dp(1)));
             }
-            summary.setText("Otwarta historia bankowa: "+total
+            summary.setText((bankProposalLastImportSummary.isEmpty()?""
+                    :bankProposalLastImportSummary+"\n\n")
+                +"Otwarta historia bankowa: "+total
                 +"\nTa strona: propozycje "+proposed
                 +", do ręcznego wyboru "+manual
                 +"\nKliknij kwotę, aby rozwinąć szczegóły. "
