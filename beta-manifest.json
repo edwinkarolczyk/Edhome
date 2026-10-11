@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 286,
   "versionName": "0.8.0.94",
-  "changelog": "EDHOME 0.8.0.94 — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian.",
+  "changelog": "EDHOME Beta 0.8.0.94: na całkowicie nowej instalacji domyślny jest Styl 1 — Nowoczesny jasny. Aktualizacja istniejącej instalacji nie zmienia zapamiętanego ani wcześniejszego domyślnego motywu. Konwerter PDF działa wewnątrz PayCheck i nie tworzy drugiej ikony. Zachowano poprawkę przywracania backupu v45 z 0.8.0.93. Bez zmian w saldzie, PayCheck i danych użytkownika. Stable bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.94/edhome-beta.apk",
   "sha256": "dfb240404de8e72fbe9d2046c5b07d91b0faeeaa5695d48dbc59b1872f63d048"
 }
