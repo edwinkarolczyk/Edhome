@@ -1,3 +1,10 @@
+## 2026-10-11 — VeloBank P0: przelew niezaksięgowany, CI #2139
+
+- Wczorajsze CI #2138 FAIL: test niezaksięgowanego przelewu. Próbka testowa miała dosłowne sekwencje końców linii zamiast prawdziwych nowych linii. Commit 5b144ace poprawia test. [CI #2139](https://github.com/edwinkarolczyk/Edhome/actions/runs/38125586596).
+- Commit a148e3df: parser rozpoznaje wiersz przelewu z pustą datą księgowania, kwotą i saldem oznaczonymi dwiema kreskami; nie uznaje go za zaksięgowaną płatność i nie blokuje całej historii. Commit 886e44d6: regresja obejmująca ten przypadek oraz poprawnie zaksięgowane pozycje.
+- P0 NADAL OTWARTE: wynik testów CI nie potwierdza importu faktycznego PDF na telefonie. Ostatni potwierdzony APK: 0.8.0.88 / 280. Po testach nowy numer wersji, podpis, publikacja, sprawdzenie na realnym PDF i brak duplikatów.
+- Zwarty interfejs PayCheck jest już dostępny w 0.8.0.88. Stable main bez zmian.
+
 ## 2026-10-10 — Android Beta 0.8.0.89 / 281: PDF VeloBank, poprawka prawdziwego wyciągu
 
 - Na oryginalnym lokalnym PDF VeloBanku użytkownika (09.10.2026; bez publikowania danych bankowych) sprawdzono tekst wyciągnięty lokalnie PDFBox: 29 wierszy z kwotami i 1 przelew jeszcze **niezaksięgowany**, którego trzecia linia zawiera `- -` zamiast kwoty i salda. Dotychczasowe `parseStatementRowsReport` błędnie zgłaszało go jako „brak jednoznacznej kwoty” i blokowało pełny import.
