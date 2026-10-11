@@ -1,3 +1,11 @@
+## 2026-10-11 — POTWIERDZONE: Android Beta 0.8.0.90 / 282 opublikowana
+
+- **CI #2144 PASS**: https://github.com/edwinkarolczyk/Edhome/actions/runs/38130222540 — przeszły testy Bank CSV, Budżet ↔ bank (w tym nowe testy propozycji), PayCheck, kompilacja Android Beta i Stable oraz podpis Beta.
+- **Podpisany APK opublikowany:** https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.90/edhome-beta.apk — GitHub Release `beta-v0.8.0.90`, zasób `edhome-beta.apk`, rozmiar 13 352 123 bajty. Manifest Beta: `versionCode=282`, `versionName=0.8.0.90`, SHA-256 `bacb5f478323048f8d2defe465b86f1440a4a0ecdc48df28fec1fa25817dcd1c`.
+- **Wdrożone:** w PayCheck jest przycisk „Dopasowania do Budżetu”; w menu bankowym ta sama lista; po imporcie w podsumowaniu przycisk „Dopasowania do Budżetu”. Propozycje oznaczone jako nazwa+kwota, nazwa+różnica, tylko kwota (słaba), brak dopasowania. Wyświetla kwotę z banku i z planu, różnicę, jedno rozwinięcie naraz, paginacja. Nie księguje samym podglądem; zatwierdzanie przez istniejący bezpieczny mechanizm. **Jeszcze nie otwiera się samoczynnie po imporcie** — trzeba nacisnąć przycisk w podsumowaniu.
+- **Naprawa opisu aktualizacji:** manifest dla 0.8.0.90 miał stary opis VeloBanku; poprawiono na faktyczny opis dopasowań (commit `393f955b`). Plik APK i podpis pozostają bez zmian.
+- **Do sprawdzenia na fizycznym telefonie:** dopasowania po zaimportowaniu VeloBanku, planowana wypłata 4500 zł vs rzeczywiste 4300 zł, brak fałszywych dopasowań samą kwotą, ponowny import bez podwójnego księgowania i ręczne rozliczenia. **P0 test telefonu OTWARTY**. Stable main bez zmian. Desktop bez zmian.
+
 ## 2026-10-11 — Android Beta 0.8.0.90 / 282: propozycje dopasowań bank ↔ Budżet
 
 - **Kod w beta:** `BankBudgetMatchRules.proposalScore` (commit `3d19ac28`) ocenia dopasowania: nazwa+kwota, nazwa+inna kwota, sama kwota (słaba propozycja), brak dopasowania. Nie zmienia salda ani zapisów.
@@ -117,12 +125,12 @@ Test użytkownika: **5 potencjalnych operacji nierozpoznanych**, pierwsza data 0
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-11 — Android Beta **0.8.0.89/281**, CI #2139 PASS, signed APK opublikowany; import prawdziwego VeloBank PDF na telefonie nadal P0/NIEODEBRANY. |
+| Ostatnia aktualizacja | 2026-10-11 — Android Beta 0.8.0.90/282, CI #2144 PASS, podpisany APK opublikowany, dopasowania budżetowe z ręczną akceptacją; test na telefonie OTWARTY. |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
-| Stable | `main` — bez zmian bez wyraźnej akceptacji użytkownika |
-| Android Beta | **0.8.0.89 / 281** — [CI #2139 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38125586596); [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.89/edhome-beta.apk); SHA-256 `294abf4b96bbb126e19b9009bc1e4e76bb952ca9bf947c0a8fb4efdbad14e5ae`. Test na telefonie i import PDF do potwierdzenia. |
-| Desktop Beta | **0.7.0.115** — wcześniejszy potwierdzony CI #292 PASS; niezmieniony |
+| Stable | `main` — niezmieniony, bez zgody użytkownika zakaz nowych wydań |
+| Android Beta | **0.8.0.90 / 282** — [CI #2144 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38130222540), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.90/edhome-beta.apk). SHA-256: `bacb5f478323048f8d2defe465b86f1440a4a0ecdc48df28fec1fa25817dcd1c`. Test dopasowań na Androidzie do odbioru. |
+| Desktop Beta | **0.7.0.115** — wcześniejszy zweryfikowany CI #292 PASS, bez zmian w tym etapie |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.82/274, CI #2102 PASS** — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/38025992176), [podpisany release](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.82), commit `c76414ee7ef9be305d6c790a22531d6d1e1306f6`. Syntetyczne testy parsera PASS, prawdziwy PDF nieodebrany. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
