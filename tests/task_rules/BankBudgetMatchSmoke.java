@@ -26,6 +26,21 @@ final class BankBudgetMatchSmoke {
             "znaki diakrytyczne");
         check(!BankBudgetMatchRules.descriptionIdentifies(
             "Opłata za PRĄD","Prąd",""),"sama kwota/kategoria niedopuszczalna");
+        check(BankBudgetMatchRules.proposalScore(
+            "Przelew TAURON Dystrybucja","Prąd","Tauron",25000,25000)==3,
+            "nazwa i dokładna kwota: mocna propozycja");
+        check(BankBudgetMatchRules.proposalScore(
+            "Wpłata od PRACODAWCA SA","Pensja","Pracodawca",430000,450000)==2,
+            "kwota z banku 4300 przy planie 4500: propozycja do decyzji");
+        check(BankBudgetMatchRules.proposalScore(
+            "Przelew bez identyfikatora","Prąd","Tauron",25000,25000)==1,
+            "sama kwota: wyłącznie słaba propozycja, nie automatyczne rozliczenie");
+        check(BankBudgetMatchRules.proposalScore(
+            "Przelew bez identyfikatora","Prąd","Tauron",28000,25000)==0,
+            "brak zgodnej nazwy i kwoty: brak propozycji");
+        check(BankBudgetMatchRules.proposalScore(
+            "Tauron","Prąd","Tauron",0,25000)==0,
+            "brak kwoty bankowej nie tworzy propozycji");
         System.out.println("PASS budzet bank: tylko charakterystyczna nazwa odbiorcy, brak dopasowan po kwocie lub ogolnikach");
     }
 }
