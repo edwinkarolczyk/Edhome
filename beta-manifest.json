@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 283,
-  "versionName": "0.8.0.91",
-  "changelog": "EDHOME 0.8.0.91 — Beta. Po wczytaniu historii bankowej PDF/CSV/XLSX automatycznie otwiera się lista „Dopasowania do Budżetu” z podsumowaniem importu. Wiersze są zwarte, otwierasz tylko jeden naraz. Zestawienie pokazuje kwotę rzeczywistą, pozostały plan oraz różnicę, np. wypłata 4500 zł w planie i 4300 zł w banku. Propozycje według nazwy i kwoty są odróżnione od słabych dopasowań po samej kwocie; niepewne wymagają ręcznej decyzji. Samo wyświetlanie listy nie księguje pieniędzy. Wcześniejsze automatyczne uzgodnienia jednoznacznych transakcji pozostają bez zmian. Import VeloBank PDF oraz ochrona przed duplikatami zachowane. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.91/edhome-beta.apk",
-  "sha256": "2b98c95a93666ff722f2a5ac35f47e094e37d44d42e2316bcffbc1221f332e80"
+  "versionCode": 284,
+  "versionName": "0.8.0.92",
+  "changelog": "EDHOME 0.8.0.92 — Beta. Import PDF VeloBank: przelew z rachunku jest wpływem nawet bez znaku +, przelew na rachunek jest wydatkiem; opis Nadawca/Odbiorca/Tytuł może mieć kilka linii. Dwie kwoty dodatnie w tabeli KWOTA TRANSAKCJI / SALDO PO rozpoznawane są oddzielnie przy wpływach. Zachowana deduplikacja powtórnego importu i ochrona przed uznawaniem salda za przelew. Testy syntetyczne: PASS dopiero po CI. Rzeczywisty PDF VeloBanku do ponownego sprawdzenia na telefonie. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.92/edhome-beta.apk",
+  "sha256": "2b817170ee02123e29b85e0acadbb4896a671b44050308e71643aceffc42b6c1"
 }
