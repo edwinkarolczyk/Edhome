@@ -172,8 +172,10 @@ assert '"Dopasowania do Budżetu"' in menu
 assert "else if(which==1)showBankBudgetProposals();" in menu
 assert 'this::showBankBudgetProposals' in main.split(
     "private void paycheck() {",1)[1].split("private void ",1)[0]
-assert '.setPositiveButton("Dopasowania do Budżetu",' in worker
-assert 'showBankBudgetProposals()).show();' in worker
+assert 'bankProposalLastImportSummary=' in worker
+assert 'showBankBudgetProposals();' in worker
+assert '"Historia bankowa wczytana"' in worker
+assert 'bankProposalLastImportSummary+"\\n\\n"' in suggestions
 assert 'proposalScore(' in rules
 print("PASS: po imporcie propozycje budżetowe, różnice, świadome zatwierdzenie, bez samoczynnego salda")
 
