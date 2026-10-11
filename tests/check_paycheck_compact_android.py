@@ -56,4 +56,24 @@ assert 'case "paycheck_goals": paycheckGoals(); break;' in source
 assert 'sharedPaycheckGoals();' in goals
 assert 'this::deleteSharedPaycheckEntriesBulk' not in main
 assert 'deleteSharedPaycheckEntriesBulk();' in source
+# Konwerter PDF jest dostępny przez PayCheck, bez drugiej ikony aplikacji.
+import xml.etree.ElementTree as ET
+manifest=ET.parse(Path(__file__).resolve().parents[1] / "app/src/main/AndroidManifest.xml")
+android_name="{http://schemas.android.com/apk/res/android}name"
+android_exported="{http://schemas.android.com/apk/res/android}exported"
+activities=manifest.findall("./application/activity")
+launcher=[]
+for activity in activities:
+    for intent in activity.findall("intent-filter"):
+        actions={item.get(android_name) for item in intent.findall("action")}
+        categories={item.get(android_name) for item in intent.findall("category")}
+        if ("android.intent.action.MAIN" in actions
+                and "android.intent.category.LAUNCHER" in categories):
+            launcher.append(activity.get(android_name))
+assert launcher==[".MainActivity"],"Tylko EDHOME może mieć ikonę launchera: "+str(launcher)
+converter=[a for a in activities
+           if a.get(android_name)==".BankPdfConverterActivity"]
+assert len(converter)==1, "Konwerter PDF musi pozostać ekranem EDHOME"
+assert converter[0].get(android_exported)=="false", "Konwerter nie może być eksportowany"
+assert "BankPdfConverterActivity.class" in menu, "Konwerter musi pozostać dostępny z PayCheck"
 print("EDHOME PayCheck: zwięzłe wiersze, jedno rozwinięcie, bankowe menu, cele i historia PASS")
