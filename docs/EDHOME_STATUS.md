@@ -1,3 +1,10 @@
+## 2026-10-11 — POTWIERDZONE: Android Beta 0.8.0.93 / 285 opublikowana
+
+- **CI #2153 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38135518113 — w tym test `Backup schema, ZIP media and roundtrip contract` PASS, kompilacja i podpis APK.
+- **APK GitHub Releases:** https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.93/edhome-beta.apk (13 351 824 bajty); manifest Beta 0.8.0.93 / 285; SHA-256 `e4a3ad0cf8a9b5ee14119e413515042a1832f0980034dfedf8785e416a3b796d`.
+- Naprawione przyjmowanie backupów ze schematem v45 (EDHOME 0.8.0.25); kopia przesłana przez użytkownika ma poprawne sumy SHA-256, lecz pełne przywrócenie na fizycznym telefonie nadal wymaga próby. Nie nadpisuj nowszych danych bez osobnej świeżej kopii.
+- Konwerter PDF bez drugiej ikony (od Beta 0.8.0.92), nadal wewnątrz PayCheck. `beta-manifest.json` ma prawidłowy opis zmian 0.8.0.93. Stable main nietknięty.
+
 ## 2026-10-11 — Beta 0.8.0.93 / 285: poprawa przywracania backupu bazy v45
 
 - Użytkownik dostarczył rzeczywistą kopię `EDHOME-backup-1791294830711.zip` (stworzoną 06.10.2026 z EDHOME 0.8.0.25, schemat danych v45). Offline sprawdzono integralność ZIP: 41 pozycji manifestu, SHA-256 i rozmiary zgodne, odniesienia miniatur do Rzeczy poprawne. Archiwum ma dwie pozycje Budżetu, zero transakcji PayCheck i zero bankowych dowodów importu. Dane prywatne i plik ZIP NIE zostały wysłane do repo.
@@ -165,12 +172,12 @@ Test użytkownika: **5 potencjalnych operacji nierozpoznanych**, pierwsza data 0
 
 | Pole | Stan |
 |---|---|
-| Ostatnia aktualizacja | 2026-10-11 — Beta **0.8.0.91 / 283**, CI #2147 PASS, podpisany APK opublikowany, automatyczne otwieranie listy dopasowań po imporcie; odbiór na telefonie OTWARTY. |
+| Ostatnia aktualizacja | 2026-10-11 — Android Beta **0.8.0.93 / 285**, CI #2153 PASS, podpisany APK opublikowany; naprawione przyjmowanie kopii bazy v45; test przywrócenia na fizycznym telefonie otwarty. |
 | Repozytorium | `edwinkarolczyk/Edhome` |
 | Gałąź robocza | `beta` |
-| Stable | `main` — bez zmian, zakaz wydania bez wyraźnej akceptacji użytkownika |
-| Android Beta | **0.8.0.91 / 283** — [CI #2147 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38130567409), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.91/edhome-beta.apk), SHA-256 `2b98c95a93666ff722f2a5ac35f47e094e37d44d42e2316bcffbc1221f332e80`. Fizyczny test powiązań nadal wymagany. |
-| Desktop Beta | **0.7.0.115** — wcześniejszy potwierdzony CI #292 PASS, bez zmian w tym etapie |
+| Stable | `main` — bez zmian bez wyraźnej akceptacji użytkownika |
+| Android Beta | **0.8.0.93 / 285** — [CI #2153 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/38135518113), [podpisany APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.93/edhome-beta.apk). Odbiór przywrócenia starego ZIP na telefonie otwarty. |
+| Desktop Beta | **0.7.0.115** — bez zmian w tym etapie |
 | Ostatni odczytany HEAD `beta` przed utworzeniem tego pliku | `85fec69ff4a6c154d90bd9e9e0a625e20a9bb2d0` — commit wyłącznie roadmapy |
 | Ostatni zweryfikowany CI Android | **0.8.0.82/274, CI #2102 PASS** — [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/38025992176), [podpisany release](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.82), commit `c76414ee7ef9be305d6c790a22531d6d1e1306f6`. Syntetyczne testy parsera PASS, prawdziwy PDF nieodebrany. |
 | Ostatni zweryfikowany CI Desktop | **Desktop Beta 0.7.0.115, CI #292 PASS** [GitHub Actions](https://github.com/edwinkarolczyk/Edhome/actions/runs/37895745689), commit `cc56a74b3cb7595440d29d0b09e3b43ac5c466f1` |
