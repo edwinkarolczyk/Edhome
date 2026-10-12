@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 286,
-  "versionName": "0.8.0.94",
-  "changelog": "EDHOME Beta 0.8.0.94: na całkowicie nowej instalacji domyślny jest Styl 1 — Nowoczesny jasny. Aktualizacja istniejącej instalacji nie zmienia zapamiętanego ani wcześniejszego domyślnego motywu. Konwerter PDF działa wewnątrz PayCheck i nie tworzy drugiej ikony. Zachowano poprawkę przywracania backupu v45 z 0.8.0.93. Bez zmian w saldzie, PayCheck i danych użytkownika. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.94/edhome-beta.apk",
-  "sha256": "dfb240404de8e72fbe9d2046c5b07d91b0faeeaa5695d48dbc59b1872f63d048"
+  "versionCode": 287,
+  "versionName": "0.8.0.95",
+  "changelog": "EDHOME Beta 0.8.0.95 — stabilizacja P0 kopii zapasowych. ZIP v2 zawiera osobne pliki danych Projektów, Budżetu, PayCheck, Magazynu i innych modułów. Import ZIP umożliwia wybór kategorii lub pełne przywrócenie. Przed zmianami automatyczna kopia ratunkowa, możliwość cofnięcia, kontrola SHA-256, relacji i niezmienności pozostałych danych. Odczyt starszych ZIP v1/JSON zachowany, selektywny import wymaga schematu v45 lub v46; ZIP v1 z bieżącej wersji nie gwarantuje odczytu na starych aplikacjach z innym schematem bazy. Prywatny sejf wymaga osobnej kopii. CI musi przejść; fizyczny test Androida i Desktop pozostają obowiązkowe przed zamknięciem P0. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.95/edhome-beta.apk",
+  "sha256": "68f144b00859bfd831b5026cbd34c85ed6c48c77f47c35311144f2490aded6c4"
 }
