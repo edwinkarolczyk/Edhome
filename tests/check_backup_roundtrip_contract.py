@@ -111,20 +111,50 @@ for token in (
     'DataBackup.restoreJson(database, prefs, inspection.json,',
 ):
     assert token in archive, token
-# Manifest v1 zachowuje data.json, a nowy indeks kategorii nie zmienia restore.
+# Archiwum v2 ma niezależne pliki modules/*.json oraz kompatybilność odczytu v1.
+modules=Path("app/src/main/java/com/edwinkarolczyk/edhome/BackupModuleSnapshot.java").read_text(
+    encoding="utf-8")
 for token in (
+    'private static final int FORMAT_VERSION = 2;',
+    'private static final int LEGACY_FORMAT_VERSION = 1;',
     'manifest.put("categoryIndexVersion", 1)',
-    'manifest.put("categories", categories)',
+    'manifest.put("categories", BackupModuleSnapshot.index(',
     'manifest.put("files", files)',
-    'JSONObject tables = snapshot.getJSONObject("tables")',
-    'category = "projects"',
-    'category = "budget"',
-    'category = "paycheck"',
-    'category = "storage"',
+    'BackupModuleSnapshot.split(new String(data, StandardCharsets.UTF_8))',
+    'static Created createLegacy(',
+    'archiveVersion != LEGACY_FORMAT_VERSION',
+    'archiveVersion != FORMAT_VERSION',
+    'moduleHashes.keySet().equals(canonical.keySet())',
+    'calculated.sha256.equalsIgnoreCase(',
+    'BackupModuleSnapshot.allowedPath(path)',
+    'sources.add(0, new Source(DATA, data, null, "database"))',
 ):
-    assert token in archive, "Brak indeksu modułów backupu: " + token
-assert 'private static final int FORMAT_VERSION = 1;' in archive
-assert 'sources.add(0, new Source(DATA, data, null, "database"))' in archive
+    assert token in archive, "Brak kontraktu ZIP v1/v2: " + token
+for token in (
+    'static final String PREFIX = "modules/";',
+    'section.put("databaseVersion", source.getInt("databaseVersion"))',
+    'section.put("tables", group.getValue())',
+    'section.put("settings", source.getJSONObject("settings"))',
+    'category = categoryForTable(name)',
+    'return "budget";',
+    'return "paycheck";',
+    'return "projects";',
+    'return "storage";',
+    'return "vehicles";',
+    'return "pantry";',
+    'return "garden";',
+    'return "tasks";',
+    'return "calendar";',
+    'return "other";',
+):
+    assert token in modules, "Brak sekcji danych modułu: " + token
+assert 'DataBackup.restoreJson(database, prefs, inspection.json,' in archive, (
+    "Przywracanie pełnej kopii musi pozostać dostępne")
+assert 'if (archiveVersion == FORMAT_VERSION)' in archive, (
+    "Odrębne moduły muszą być sprawdzane wyłącznie w ZIP v2")
+assert 'if (archiveVersion != FORMAT_VERSION)' in archive, (
+    "Nie wolno dopuścić modules/* do starszego ZIP v1")
+assert 'private static final int FORMAT_VERSION = 2;' in archive
 
 for token in (
     'static void save(Context context, long itemId, Uri source)',
@@ -179,4 +209,4 @@ for token in (
     'hideDataBackupBusy();',
 ):
     assert token in main, "Background restore must stay serialized behind modal: "+token
-print("Backup: 49 domain tables + verified ZIP manifest/SHA-256, original storage media, thumbnail regeneration, legacy JSON and rollback contract PASS")
+print("Backup: 54 tables, module ZIP v2, legacy ZIP v1, SHA-256 cross-check, media and rollback contract PASS")
