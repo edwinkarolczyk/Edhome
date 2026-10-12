@@ -105,6 +105,9 @@ public final class LanSyncService extends Service {
             this::databaseRevision,
             this::changesSince,
             this::applyRecordPatch);
+        // Starszy protokół PC potrafi sam pobierać /changes i wysyłać
+        // /patch. Po imporcie ZIP oba kierunki wymagają zgody użytkownika.
+        server.setTransferBlocked(()->BackupSyncGate.isHeld(this));
         server.start();
         ENDPOINT_RUNNING = server.isRunning();
         watchdogHandler = new Handler(Looper.getMainLooper());
