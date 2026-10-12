@@ -438,6 +438,207 @@ final class DataBackupArchive {
         }
     }
 
+    /**
+     * P0: import wybranych modułów, z trwałą kopią bezpieczeństwa przed zmianą.
+     * Wywoływać tylko w pojedynczym wątku obsługi kopii (nie na wątku UI).
+     * Przeciążenie bez checkpointa istnieje wyłącznie dla pełnego importu.
+     */
+    static Restored restoreSelected(Context context, SQLiteDatabase database,
+            SharedPreferences prefs, File archive, Set<String> selected) throws Exception {
+        Inspection inspection = inspect(archive);
+        if (selected == null || selected.isEmpty())
+            throw new IllegalArgumentException("Nie wybrano kategorii przywracania.");
+
+        String before = DataBackup.exportJson(database, prefs);
+        String merged = BackupSelectiveMerge.merge(before, inspection.json, selected);
+        File checkpoint = recoveryCheckpoint(context, database, prefs);
+
+        String suffix = Long.toString(System.nanoTime());
+        File stageRoot = new File(context.getFilesDir(), ".edhome-selected-" + suffix);
+        File stageStorage = new File(stageRoot, StorageOriginals.DIRECTORY);
+        File stageTiles = new File(stageRoot, "edhome-custom-tile-icons");
+        File stageBudget = new File(stageRoot, PaycheckBudgetAttachmentStore.DIRECTORY);
+        DirectorySwap storageSwap = null;
+        DirectorySwap tileSwap = null;
+        DirectorySwap budgetSwap = null;
+        boolean restoreAttempted = false;
+        try {
+            if (!stageStorage.mkdirs() || !stageTiles.mkdirs() || !stageBudget.mkdirs())
+                throw new IllegalStateException("Nie utworzono katalogów przywracania.");
+            extractMedia(archive, inspection.paths, stageStorage, stageTiles, stageBudget);
+            if (selected.contains("storage"))
+                storageSwap = installDirectory(StorageOriginals.folder(context),
+                    stageStorage, suffix);
+            if (selected.contains("settings"))
+                tileSwap = installDirectory(
+                    new File(context.getFilesDir(), "edhome-custom-tile-icons"),
+                    stageTiles, suffix);
+            if (selected.contains("budget"))
+                budgetSwap = installDirectory(
+                    PaycheckBudgetAttachmentStore.folder(context),
+                    stageBudget, suffix);
+
+            Map<Long,String> photos = selected.contains("storage")
+                ? readArchivedThumbnails(archive, inspection.paths)
+                : Collections.emptyMap();
+            restoreAttempted = true;
+            DataBackup.restoreJson(database, prefs, merged, photos, false);
+            // Nie wolno zmienić ani jednego wpisu w niewybranych modułach.
+            verifyUnselected(before, DataBackup.exportJson(database, prefs), selected);
+
+            forgetPrevious(storageSwap);
+            storageSwap = null;
+            forgetPrevious(tileSwap);
+            tileSwap = null;
+            forgetPrevious(budgetSwap);
+            budgetSwap = null;
+            if (selected.contains("storage"))
+                StorageOriginals.regenerateThumbnails(context, prefs, database);
+            return new Restored(
+                selected.contains("storage") ? inspection.storageCount : 0,
+                selected.contains("storage") ? inspection.legacyThumbCount : 0,
+                0, selected.contains("settings") ? inspection.tileCount : 0,
+                selected.contains("budget") ? inspection.paycheckAttachmentCount : 0);
+        } catch (Exception failure) {
+            rollback(budgetSwap);
+            budgetSwap = null;
+            rollback(tileSwap);
+            tileSwap = null;
+            rollback(storageSwap);
+            storageSwap = null;
+            if (restoreAttempted) {
+                try {
+                    DataBackup.restoreJson(database, prefs, before,
+                        Collections.emptyMap(), false);
+                } catch (Exception undoError) {
+                    try {
+                        restoreExact(context, database, prefs, checkpoint);
+                    } catch (Exception recoveryError) {
+                        failure.addSuppressed(undoError);
+                        failure.addSuppressed(recoveryError);
+                        throw new IllegalStateException(
+                            "Przywracanie nie powiodło się i automatyczne cofnięcie "
+                            + "również. Kopia bezpieczeństwa: "
+                            + checkpoint.getAbsolutePath(), failure);
+                    }
+                }
+            }
+            throw failure;
+        } finally {
+            if (budgetSwap != null) rollback(budgetSwap);
+            if (tileSwap != null) rollback(tileSwap);
+            if (storageSwap != null) rollback(storageSwap);
+            deleteTree(stageRoot);
+            // Kopii checkpoint NIGDY nie kasujemy po przywróceniu.
+        }
+    }
+
+    /** Cofnięcie do pełnej migawki bez dopisywania historii z nowszego stanu. */
+    static Restored restoreExact(Context context, SQLiteDatabase database,
+            SharedPreferences prefs, File checkpoint) throws Exception {
+        Inspection inspection = inspect(checkpoint);
+        String suffix = Long.toString(System.nanoTime());
+        File stageRoot = new File(context.getFilesDir(), ".edhome-undo-" + suffix);
+        File storage = new File(stageRoot, StorageOriginals.DIRECTORY);
+        File tiles = new File(stageRoot, "edhome-custom-tile-icons");
+        File budget = new File(stageRoot, PaycheckBudgetAttachmentStore.DIRECTORY);
+        DirectorySwap a = null, b = null, c = null;
+        try {
+            if (!storage.mkdirs() || !tiles.mkdirs() || !budget.mkdirs())
+                throw new IllegalStateException("Nie przygotowano cofnięcia danych.");
+            extractMedia(checkpoint, inspection.paths, storage, tiles, budget);
+            a = installDirectory(StorageOriginals.folder(context), storage, suffix);
+            b = installDirectory(new File(context.getFilesDir(),
+                "edhome-custom-tile-icons"), tiles, suffix);
+            c = installDirectory(PaycheckBudgetAttachmentStore.folder(context),
+                budget, suffix);
+            DataBackup.restoreJson(database, prefs, inspection.json,
+                readArchivedThumbnails(checkpoint, inspection.paths), false);
+            forgetPrevious(a);
+            a = null;
+            forgetPrevious(b);
+            b = null;
+            forgetPrevious(c);
+            c = null;
+            return new Restored(inspection.storageCount, inspection.legacyThumbCount,
+                0, inspection.tileCount, inspection.paycheckAttachmentCount);
+        } finally {
+            if (c != null) rollback(c);
+            if (b != null) rollback(b);
+            if (a != null) rollback(a);
+            deleteTree(stageRoot);
+        }
+    }
+
+    /**
+     * Kopia zostaje w prywatnym katalogu aplikacji po zamknięciu programu.
+     * W razie awarii pełną paczkę można odzyskać przed kolejnym importem.
+     */
+    static File recoveryCheckpoint(Context context, SQLiteDatabase database,
+            SharedPreferences prefs) throws Exception {
+        File folder = new File(context.getFilesDir(), "edhome-recovery");
+        if (!folder.isDirectory() && !folder.mkdirs())
+            throw new IllegalStateException("Nie utworzono folderu kopii ratunkowych.");
+        Created snapshot = create(context, database, prefs);
+        String name = "EDHOME-przed-importem-" + System.currentTimeMillis()
+            + "-" + Long.toString(System.nanoTime()) + ".zip";
+        File completed = new File(folder, name);
+        File temporary = new File(folder, name + ".tmp");
+        try {
+            try (InputStream input = new FileInputStream(snapshot.file);
+                 FileOutputStream output = new FileOutputStream(temporary)) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) >= 0)
+                    if (count > 0) output.write(buffer, 0, count);
+                output.getFD().sync();
+            }
+            if (!temporary.renameTo(completed))
+                throw new IllegalStateException("Nie utrwalono kopii ratunkowej.");
+            // Akceptuj checkpoint dopiero po powtórnej walidacji sum SHA-256.
+            inspect(completed);
+            return completed;
+        } catch (Exception error) {
+            temporary.delete();
+            completed.delete();
+            throw error;
+        } finally {
+            snapshot.file.delete();
+        }
+    }
+
+    /** Kontrola niezmienności kategorii, których użytkownik nie wybrał. */
+    private static void verifyUnselected(String before, String after,
+            Set<String> selected) throws Exception {
+        JSONObject left = new JSONObject(before).getJSONObject("tables");
+        JSONObject right = new JSONObject(after).getJSONObject("tables");
+        for (java.util.Iterator<String> names = left.keys(); names.hasNext();) {
+            String table = names.next();
+            if (selected.contains(BackupModuleSnapshot.categoryForTable(table)))
+                continue;
+            JSONArray prior = left.getJSONArray(table);
+            JSONArray next = right.getJSONArray(table);
+            if (prior.length() != next.length())
+                throw new IllegalStateException(
+                    "Zmieniła się niewybrana kategoria: " + table);
+            for (int i = 0; i < prior.length(); i++) {
+                JSONObject a = prior.getJSONObject(i);
+                JSONObject b = next.getJSONObject(i);
+                if (a.length() != b.length())
+                    throw new IllegalStateException(
+                        "Niezgodność niewybranego modułu: " + table);
+                for (java.util.Iterator<String> columns = a.keys();
+                        columns.hasNext();) {
+                    String column = columns.next();
+                    if (!b.has(column) || !String.valueOf(a.get(column))
+                            .equals(String.valueOf(b.get(column))))
+                        throw new IllegalStateException(
+                            "Zmieniono niewybraną pozycję: " + table + "/" + column);
+                }
+            }
+        }
+    }
+
     private static Inspection inspect(File archive) throws Exception {
         if (!archive.isFile() || archive.length() <= 0
                 || archive.length() > MAX_ARCHIVE_BYTES)
