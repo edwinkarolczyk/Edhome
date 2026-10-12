@@ -486,14 +486,21 @@ final class DataBackupArchive {
             // Nie wolno zmienić ani jednego wpisu w niewybranych modułach.
             verifyUnselected(before, DataBackup.exportJson(database, prefs), selected);
 
+            // Generowanie miniatur jest odzyskiwalne z oryginałów. Ewentualny
+            // błąd nie może uruchamiać cofania PO usunięciu starych katalogów.
+            if (selected.contains("storage")) {
+                try {
+                    StorageOriginals.regenerateThumbnails(context, prefs, database);
+                } catch (Exception thumbnailError) {
+                    // Oryginały pozostają dostępne; miniatury można odtworzyć później.
+                }
+            }
             forgetPrevious(storageSwap);
             storageSwap = null;
             forgetPrevious(tileSwap);
             tileSwap = null;
             forgetPrevious(budgetSwap);
             budgetSwap = null;
-            if (selected.contains("storage"))
-                StorageOriginals.regenerateThumbnails(context, prefs, database);
             return new Restored(
                 selected.contains("storage") ? inspection.storageCount : 0,
                 selected.contains("storage") ? inspection.legacyThumbCount : 0,
