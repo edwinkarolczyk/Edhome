@@ -1,3 +1,10 @@
+## 2026-10-12 — P0 backup: użytkownik potwierdził działający import na Androidzie
+
+- **Potwierdzenie użytkownika:** „import dziala” po wydaniu Beta **0.8.0.98 / 290**. Jest to rzeczywisty pozytywny test wykonania importu ZIP na telefonie; wcześniejsze błędy związane z odczytem modułów, ich powiązaniami oraz historycznym czasem czynności nie zablokowały tego testu.
+- **Weryfikacja jeszcze otwarta:** brak oddzielnego potwierdzenia, że niewybrane dane (Budżet, PayCheck, Projekty, Magazyn, zdjęcia) pozostały bez zmian; brak testu przycisku „Cofnij ostatnie przywrócenie”, uszkodzonego ZIP, ZIP v1 z 5–6 października i synchronizacji Android ↔ Desktop po imporcie.
+- **P0:** podstawowy import na Androidzie potwierdzony jako działający; **P0 częściowo zaliczone, niezamknięte** do kontroli integralności pozostałych danych oraz cofania. Przed kolejną destrukcyjną próbą wykonać eksport ZIP poza aplikację i wyłączyć synchronizację LAN.
+- **Wersje:** ostatnie potwierdzone wydanie Android Beta 0.8.0.98 / 290 (CI #2200 PASS). Nie wprowadzono zmian w kodzie ani w Stable `main` w ramach tego wpisu.
+
 ## 2026-10-12 — P0: film Android 0.8.0.97, starsze czasy zadań projektu w backupie
 
 - **Użytkownik przesłał nagranie** `1000057488.mp4` (~22 s). Widzimy listę checkboxów ZIP, zaznaczenie Magazynu, PayCheck i bank, Projektów oraz Zadań; po sprawdzeniu powiązań EDHOME prawidłowo pokazał **„WYMAGANE DODATKOWO: Miejsca”** z przyciskami Wróć / Anuluj / Przywróć razem. Potwierdzenie przywracania zakończyło się błędem **„Czynność projektowa musi mieć co najmniej 20 minut.”** Wideo nie stanowi dowodu utraty danych; walidacja przerwała restore, wykonany checkpoint pozostał w aplikacji.
