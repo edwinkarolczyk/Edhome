@@ -21704,24 +21704,87 @@ public final class MainActivity extends Activity {
                         backupFile,true,null,categories);
                     return;
                 }
-                java.util.List<String> chosenNames=new java.util.ArrayList<>();
-                for(String key:keys)if(chosen.contains(key))
-                    chosenNames.add(backupCategoryName(key));
-                new AlertDialog.Builder(this)
-                    .setTitle("Przywrócić tylko wybrane dane?")
-                    .setMessage("Moduły: "+android.text.TextUtils.join(", ",chosenNames)
-                        +"\n\n"
-                        +"Dane pozostałych modułów muszą zostać zachowane. "
-                        +"Przed zmianą zostanie zapisana kopia umożliwiająca cofnięcie.")
-                    .setNegativeButton("Wstecz",(back,ignored)->
-                        showDataBackupRestoreConfirmation(
-                            backupFile,true,null,categories))
-                    .setPositiveButton("Przywróć",(accepted,ignored)->{
-                        showDataBackupBusy("Przywracanie wybranych danych",
-                            "Tworzę kopię bezpieczeństwa i sprawdzam zależności.");
-                        restoreDataBackupAsync(backupFile,true,null,chosen);
-                    }).show();
+                previewSelectedBackupDependencies(backupFile,categories,chosen);
             }).show();
+    }
+
+    /** Odczyt relacji wykonujemy poza wątkiem UI, przed pierwszą mutacją. */
+    private void previewSelectedBackupDependencies(java.io.File archiveFile,
+            org.json.JSONObject categories,java.util.Set<String> requested) {
+        showDataBackupBusy("Sprawdzanie powiązań",
+            "Ustalam, czy wybrane dane wymagają innych modułów.");
+        new Thread(()->{
+            try {
+                String incoming=DataBackupArchive.verifiedSnapshot(archiveFile);
+                String installed=DataBackup.exportJson(db.getReadableDatabase(),prefs);
+                java.util.Set<String> planned=BackupRestoreDependencies.resolve(
+                    installed,incoming,requested);
+                // Sprawdź dostępność wszystkich tabel i scalanie w pamięci.
+                // Nie zapisuj nic w bazie przed ostatecznym potwierdzeniem.
+                BackupSelectiveMerge.merge(installed,incoming,planned);
+                runOnLiveUi(()->{
+                    hideDataBackupBusy();
+                    confirmSelectedBackupDependencies(
+                        archiveFile,categories,requested,planned);
+                },()->archiveFile.delete());
+            } catch(Exception failure) {
+                DiagnosticLog.error("DATA_BACKUP_DEPENDENCIES",failure);
+                final String cause=failure.getMessage();
+                runOnLiveUi(()->{
+                    hideDataBackupBusy();
+                    new AlertDialog.Builder(this)
+                        .setTitle("Nie można przygotować przywracania")
+                        .setMessage(cause==null
+                            ?"Wykryto niezgodne powiązania między modułami."
+                            :cause)
+                        .setCancelable(false)
+                        .setNegativeButton("Anuluj",(d,w)->archiveFile.delete())
+                        .setPositiveButton("Wróć do wyboru",(d,w)->
+                            showDataBackupRestoreConfirmation(
+                                archiveFile,true,null,categories))
+                        .show();
+                },()->archiveFile.delete());
+            }
+        },"edhome-backup-dependencies").start();
+    }
+
+    private void confirmSelectedBackupDependencies(java.io.File archiveFile,
+            org.json.JSONObject categories,java.util.Set<String> requested,
+            java.util.Set<String> planned) {
+        java.util.List<String> chosenNames=new java.util.ArrayList<>();
+        java.util.List<String> additionalNames=new java.util.ArrayList<>();
+        for(String key:planned) {
+            if(requested.contains(key))chosenNames.add(backupCategoryName(key));
+            else additionalNames.add(backupCategoryName(key));
+        }
+        java.util.Collections.sort(chosenNames,String.CASE_INSENSITIVE_ORDER);
+        java.util.Collections.sort(additionalNames,String.CASE_INSENSITIVE_ORDER);
+        String extra=additionalNames.isEmpty()
+            ?""
+            :"\\n\\nWYMAGANE DODATKOWO: "
+                +android.text.TextUtils.join(", ",additionalNames)
+                +". Te dane również zostaną przywrócone z ZIP.";
+        new AlertDialog.Builder(this)
+            .setTitle(additionalNames.isEmpty()
+                ?"Potwierdź wybrane moduły"
+                :"Wykryto powiązania między modułami")
+            .setMessage("Wybrane: "+android.text.TextUtils.join(", ",chosenNames)
+                +extra
+                +"\\n\\nEDHOME zapisze kopię ratunkową. "
+                +"Pozostałe moduły powinny zachować dane. "
+                +"Przerwie import w razie niezgodności.")
+            .setCancelable(false)
+            .setNegativeButton("Wróć",(d,w)->
+                showDataBackupRestoreConfirmation(archiveFile,true,null,categories))
+            .setNeutralButton("Anuluj",(d,w)->archiveFile.delete())
+            .setPositiveButton(additionalNames.isEmpty()
+                    ?"Przywróć wybrane":"Przywróć razem",
+                (d,w)->{
+                    showDataBackupBusy("Przywracanie wybranych danych",
+                        "Zabezpieczam bieżące dane i sprawdzam powiązania.");
+                    restoreDataBackupAsync(archiveFile,true,null,planned);
+                })
+            .show();
     }
 
     private void confirmFullDataBackupRestore(java.io.File backupFile,
