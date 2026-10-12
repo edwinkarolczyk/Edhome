@@ -592,7 +592,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.97 — P0 przywracania danych: naprawa powiązań Projektów z Zadaniami oraz Magazynu z Miejscami. EDHOME sprawdza wymagane identyfikatory i wskazuje dodatkowe moduły przed importem. Rozszerzony zestaw danych jest przywracany tylko po wyraźnym potwierdzeniu użytkownika; przed modyfikacją powstaje zweryfikowana kopia ratunkowa. Ochrona niewybranych kategorii, blokada zmiany obcych lokalizacji, cofanie importu i obsługa ZIP v1/v2 pozostają aktywne. Wydanie po zielonym CI; test z rzeczywistą kopią i synchronizacją Desktop nadal wymagany przed zamknięciem P0. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.98 — stabilizacja P0 przywracania kopii ZIP. Poprawiono odtwarzanie historycznych zadań projektowych z czasem 1–19 minut: kopia zachowuje ich pierwotny plan i sesje pracy, zamiast odrzucać import komunikatem o minimum 20 minut. Minimum 20 minut nadal obowiązuje przy tworzeniu/edytowaniu nowych czynności. Rozszerzono test roundtrip o projekt z 10-minutową czynnością, zależnością i sesją. Nadal wymagany test selektywnego przywrócenia na telefonie i zgodności Android–Desktop; przed importem trzeba zachować zewnętrzny ZIP. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
