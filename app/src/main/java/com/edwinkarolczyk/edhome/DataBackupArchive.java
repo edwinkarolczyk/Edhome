@@ -617,8 +617,37 @@ final class DataBackupArchive {
     /** Kontrola niezmienności kategorii, których użytkownik nie wybrał. */
     private static void verifyUnselected(String before, String after,
             Set<String> selected) throws Exception {
-        JSONObject left = new JSONObject(before).getJSONObject("tables");
-        JSONObject right = new JSONObject(after).getJSONObject("tables");
+        JSONObject beforeRoot = new JSONObject(before);
+        JSONObject afterRoot = new JSONObject(after);
+        JSONObject left = beforeRoot.getJSONObject("tables");
+        JSONObject right = afterRoot.getJSONObject("tables");
+        JSONObject beforeSettings = beforeRoot.getJSONObject("settings");
+        JSONObject afterSettings = afterRoot.getJSONObject("settings");
+        Set<String> keys = new HashSet<>();
+        for (java.util.Iterator<String> names = beforeSettings.keys(); names.hasNext();)
+            keys.add(names.next());
+        for (java.util.Iterator<String> names = afterSettings.keys(); names.hasNext();)
+            keys.add(names.next());
+        for (String key : keys) {
+            boolean budgetField = "paycheckMonthlyBudget".equals(key)
+                || "paycheckRecipients".equals(key)
+                || "paycheckBudgetHistory".equals(key)
+                || "paycheckBudgetAttachments".equals(key);
+            boolean storageField = "storageThumbnails".equals(key)
+                || "storageQrHistory".equals(key);
+            if (selected.contains("settings")
+                    && (!budgetField || selected.contains("budget"))
+                    && (!storageField || selected.contains("storage"))
+                    || budgetField && selected.contains("budget")
+                    || storageField && selected.contains("storage"))
+                continue;
+            if (beforeSettings.has(key) != afterSettings.has(key)
+                    || beforeSettings.has(key)
+                        && !String.valueOf(beforeSettings.get(key))
+                            .equals(String.valueOf(afterSettings.get(key))))
+                throw new IllegalStateException(
+                    "Zmieniło się niewybrane ustawienie: " + key);
+        }
         for (java.util.Iterator<String> names = left.keys(); names.hasNext();) {
             String table = names.next();
             if (selected.contains(BackupModuleSnapshot.categoryForTable(table)))
@@ -787,7 +816,13 @@ final class DataBackupArchive {
                 || root.optInt("formatVersion", -1) != 1)
             throw new IllegalArgumentException("Nieprawidłowy data.json.");
         Set<Long> ids = new HashSet<>();
-        JSONArray rows = root.getJSONObject("tables").getJSONArray("storage_items");
+        // Najstarsze migawki nie miały jeszcze Magazynu i tabeli storage_items.
+        JSONArray rows = root.getJSONObject("tables").optJSONArray("storage_items");
+        if (rows == null) {
+            if (root.optInt("databaseVersion", -1) >= 19)
+                throw new IllegalArgumentException("Brak danych magazynu w kopii.");
+            rows = new JSONArray();
+        }
         for (int i = 0; i < rows.length(); i++) ids.add(rows.getJSONObject(i).getLong("id"));
         for (String path : paths) {
             if (path.startsWith(STORAGE_PREFIX)) {
