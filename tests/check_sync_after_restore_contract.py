@@ -113,6 +113,81 @@ for token in (
 assert 'SYNC_PHONE_REVISION_REGRESSED' in desktop
 assert 'pullFromPhone(host, secret, null, true);' in desktop
 
+# P0/P1: najpierw wyłącznie podgląd różnic i ponowna walidacja
+# obu migawek bezpośrednio przed wyborem jednej wersji.
+comparison = (app / "DesktopSyncComparison.java").read_text(encoding="utf-8")
+for token in (
+    'static Report compare(String phone,String desktop)',
+    'static String fingerprint(String snapshot)',
+    'createdAt/sourceVersion zmieniają się między eksportami.',
+    'JSONObject localTables=local.getJSONObject("tables")',
+    'JSONObject remoteTables=remote.getJSONObject("tables")',
+    'if("task_rotation_members".equals(table))',
+    'else if("project_task_dependencies".equals(table))',
+    'else if("pantry_packages".equals(table))',
+    '"paycheckMonthlyBudget","paycheckRecipients","paycheckBudgetHistory"',
+    'Inne ustawienia: różnią się między urządzeniami.',
+    'Metadane synchronizacji: różne rewizje rekordów.',
+    'Ten sam ID, różna treść:',
+    'Niezgodny format tabeli',
+    'To porównanie, nie automatyczne scalanie.'
+):
+    assert token in comparison, "Brak bezpiecznego porównania: " + token
+
+preview=section(hub,'static void compareBeforeResolve(Context context,',
+                'static void resolveDesktop(Context context)')
+assert 'BackupSyncGate.enterTransfer();' in preview
+assert '"/snapshot"' in preview
+assert 'DesktopSyncComparison.compare(local,remote.body)' in preview
+assert 'reviewedSnapshot=new ReviewedSnapshot(' in preview
+assert 'BackupSyncGate.exitTransfer();' in preview
+verify=section(hub,'private static void verifyReviewedState(Context context,',
+               'static void compareBeforeResolve(Context context,') if False else section(
+                   hub,'private static void verifyReviewedState(Context context,',
+                   'static void resolveDesktop(Context context)')
+for token in (
+    'if(!BackupSyncGate.isHeld(context))return;',
+    'REVIEW_MAX_AGE_MS',
+    'approved.desktopId.equals(prefs.getString(PREF_ID,""))',
+    'DesktopSyncComparison.fingerprint(currentPhone)',
+    'DesktopSyncComparison.fingerprint(currentDesktop)',
+    'throw new IllegalStateException('
+):
+    assert token in verify, "Nieaktualny podgląd mógłby nadpisać dane: " + token
+
+resolve_desktop=section(hub,'static void resolveDesktop(Context context)',
+                        'static void resolvePhone(Context context)')
+resolve_phone=section(hub,'static void resolvePhone(Context context)',
+                      'private static void syncQuietly(Context context)')
+assert resolve_desktop.index('verifyReviewedState(app,prefs,expectedLocal,result.body)') < \
+    resolve_desktop.index('applyServerSnapshot(app,prefs,result.body')
+assert resolve_phone.index('verifyReviewedState(app,prefs,expectedLocal,remote.body)') < \
+    resolve_phone.index('"/snapshot",expectedLocal')
+assert 'if(BackupSyncGate.isHeld(app))' in resolve_phone
+assert 'reviewedSnapshot=null;' in section(hub,
+    'static void invalidateAfterLocalRestore(Context context)',
+    'private static void clearConflict(')
+assert 'reviewedSnapshot=null;' in section(hub,
+    'private static void clearConflict(Context context,SharedPreferences prefs)',
+    'private static String conflictText(')
+
+screen=section(main,'private void showDesktopSyncComparison()',
+               'private void exportDataBackupAsync(Uri destination)')
+for token in (
+    'DesktopHubSync.compareBeforeResolve(this,report->runOnLiveUi(',
+    'report.text', 'Nic nie zmieniaj',
+    'confirmComparedDesktopChoice(false)',
+    'confirmComparedDesktopChoice(true)',
+    'To operacja zastąpienia, a nie łączenia rekordów.',
+    'DesktopHubSync.resolvePhone(this)',
+    'DesktopHubSync.resolveDesktop(this)'
+):
+    assert token in screen, "Brak świadomego zatwierdzenia: " + token
+assert 'if(BackupSyncGate.isHeld(this)) {' in main
+assert 'this::showDesktopSyncComparison' in main
+
+print("EDHOME P0: porównanie różnic + ochrona przed przedawnioną decyzją PASS")
+
 sources = root / "tests/sync_restore_gate_java"
 with tempfile.TemporaryDirectory(prefix="edhome-sync-restore-") as target:
     subprocess.run([
