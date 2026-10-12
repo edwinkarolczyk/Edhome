@@ -484,7 +484,9 @@ final class DataBackupArchive {
                 long bytes = item.getLong("bytes");
                 String hash = item.getString("sha256");
                 if (!allowedPayload(path) || !expected.add(path)
-                        || bytes < 0 || hash.length() != 64)
+                        || bytes < 0 || hash.length() != 64
+                        || (archiveVersion == FORMAT_VERSION
+                            && !sourceCategory(path).equals(item.optString("category"))))
                     throw new IllegalArgumentException("Nieprawidłowy manifest kopii.");
                 ZipEntry entry = zip.getEntry(path);
                 if (entry == null)
@@ -515,6 +517,10 @@ final class DataBackupArchive {
                 throw new IllegalArgumentException("Kopia ZIP zawiera brakujące lub obce pliki.");
             validatePayloadNamesAgainstJson(json, expected);
             if (archiveVersion == FORMAT_VERSION) {
+                if (manifest.optInt("databaseVersion", -1) !=
+                        new JSONObject(json).getInt("databaseVersion"))
+                    throw new IllegalArgumentException(
+                        "Niezgodna wersja bazy w manifeście.");
                 validateCategoryIndex(manifest.getJSONObject("categories"), json);
                 // Każdy moduł musi odtwarzać dokładnie ten sam stan co data.json.
                 // Sam hash w manifeście nie wystarcza: wykryj podmieniony moduł
