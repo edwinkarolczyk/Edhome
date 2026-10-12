@@ -74,6 +74,21 @@ final class DesktopHubSync {
     private static final AtomicBoolean SCHEDULED=new AtomicBoolean();
     private static final AtomicBoolean SYNCING=new AtomicBoolean();
     private static final AtomicBoolean KICK_PENDING=new AtomicBoolean();
+    private static final long REVIEW_MAX_AGE_MS=5*60*1000L;
+    private static volatile ReviewedSnapshot reviewedSnapshot;
+
+    private static final class ReviewedSnapshot {
+        final String desktopId;
+        final String phoneFingerprint;
+        final String desktopFingerprint;
+        final long at;
+        ReviewedSnapshot(String desktopId,DesktopSyncComparison.Report report) {
+            this.desktopId=desktopId;
+            this.phoneFingerprint=report.phoneFingerprint;
+            this.desktopFingerprint=report.desktopFingerprint;
+            this.at=System.currentTimeMillis();
+        }
+    }
 
     private DesktopHubSync(){}
 
@@ -125,6 +140,7 @@ final class DesktopHubSync {
     }
 
     static void clearPairing(Context context) {
+        reviewedSnapshot=null;
         SharedPreferences prefs=prefs(context);
         prefs.edit().remove(PREF_ID).remove(PREF_HOST).remove(PREF_HOSTS)
             .remove(PREF_TOKEN).remove(PREF_BASE_SHA).remove(PREF_LAST_SYNC)
@@ -136,6 +152,7 @@ final class DesktopHubSync {
 
     static void pair(Context context,String desktopId,String token,
             List<String> hosts) {
+        reviewedSnapshot=null;
         if(!validId(desktopId)||!validToken(token))
             throw new IllegalArgumentException("Nieprawidłowe dane Desktopu.");
         LinkedHashSet<String> validHosts=new LinkedHashSet<>();
@@ -172,6 +189,88 @@ final class DesktopHubSync {
         kick(context);
     }
 
+    /**
+     * Sam odczyt: podsumowanie liczby rekordów i rozbieżnych identyfikatorów,
+     * bez żadnego zapisu na PC lub telefonie. Migawki są weryfikowane drugi
+     * raz przy zatwierdzeniu, więc edycja po podglądzie blokuje wybór.
+     */
+    static void compareBeforeResolve(Context context,
+            java.util.function.Consumer<DesktopSyncComparison.Report> ready,
+            java.util.function.Consumer<String> failed) {
+        Context app=context.getApplicationContext();
+        EXEC.execute(()->{
+            BackupSyncGate.enterTransfer();
+            try {
+                if(!SYNCING.compareAndSet(false,true)) {
+                    failed.accept("Synchronizacja już trwa. Ponów porównanie.");
+                    return;
+                }
+                try {
+                    if(!paired(app))
+                        throw new IllegalStateException(
+                            "Najpierw sparuj Telefon z EDHOME Desktop.");
+                    SharedPreferences prefs=prefs(app);
+                    String host=resolveHost(app,prefs);
+                    if(host==null)
+                        throw new IllegalStateException(
+                            "Nie znaleziono PC w lokalnej sieci LAN.");
+                    String local;
+                    try(MainActivity.LocalDb helper=new MainActivity.LocalDb(app)) {
+                        SQLiteDatabase db=helper.getWritableDatabase();
+                        SyncRecordStore.ensureAll(db);
+                        local=DataBackup.exportJson(db,prefs);
+                    }
+                    HttpResult remote=request(app,prefs,host,"GET",
+                        "/snapshot",null,null);
+                    if(remote.code!=200)
+                        throw new IllegalStateException(
+                            "Nie pobrano migawki z PC. HTTP "+remote.code+".");
+                    DesktopSyncComparison.Report report=
+                        DesktopSyncComparison.compare(local,remote.body);
+                    reviewedSnapshot=new ReviewedSnapshot(
+                        prefs.getString(PREF_ID,""),report);
+                    DiagnosticLog.event("HUB_COMPARE_BEFORE_RECONCILE",
+                        "identical="+report.identical);
+                    ready.accept(report);
+                } finally {
+                    SYNCING.set(false);
+                }
+            } catch(Exception error) {
+                reviewedSnapshot=null;
+                DiagnosticLog.error("HUB_COMPARE_BEFORE_RECONCILE",error);
+                failed.accept("Porównanie nie powiodło się: "
+                    +shortMessage(error)
+                    +". Nie zmieniono danych. Sprawdź połączenie i ponów.");
+            } finally {
+                BackupSyncGate.exitTransfer();
+            }
+        });
+    }
+
+    /** Przed zapisem porównaj ponownie BEZPOŚREDNIO z migawkami w dialogu. */
+    private static void verifyReviewedState(Context context,
+            SharedPreferences prefs,String currentPhone,String currentDesktop)
+            throws Exception {
+        if(!BackupSyncGate.isHeld(context))return;
+        ReviewedSnapshot approved=reviewedSnapshot;
+        if(approved==null
+                ||System.currentTimeMillis()-approved.at>REVIEW_MAX_AGE_MS
+                ||!approved.desktopId.equals(prefs.getString(PREF_ID,""))) {
+            throw new IllegalStateException(
+                "Brak aktualnego porównania. Otwórz Porównaj dane telefonu i PC.");
+        }
+        String phone=DesktopSyncComparison.fingerprint(currentPhone);
+        String desktop=DesktopSyncComparison.fingerprint(currentDesktop);
+        if(!approved.phoneFingerprint.equals(phone)
+                ||!approved.desktopFingerprint.equals(desktop)) {
+            reviewedSnapshot=null;
+            DiagnosticLog.event("HUB_REVIEW_STALE_REJECTED");
+            throw new IllegalStateException(
+                "Dane zmieniły się od porównania. Nic nie nadpisano. "
+                +"Wykonaj ponowne porównanie przed wyborem wersji.");
+        }
+    }
+
     static void resolveDesktop(Context context) {
         Context app=context.getApplicationContext();
         EXEC.execute(()->{
@@ -190,6 +289,7 @@ final class DesktopHubSync {
                 HttpResult result=request(app,prefs,host,"GET","/snapshot",null,null);
                 if(result.code!=200)throw new IllegalStateException(
                     "Desktop odpowiedział HTTP "+result.code+".");
+                verifyReviewedState(app,prefs,expectedLocal,result.body);
                 // Zanim przyjmiemy wersję PC, zapisz całą lokalną historię ZIP.
                 // Jeśli użytkownik zmienił dane podczas pobierania, przerwij.
                 saveConflictBackup(app,prefs);
@@ -227,6 +327,10 @@ final class DesktopHubSync {
                 }
                 HttpResult result;
                 if(!patch.isBlank()) {
+                    if(BackupSyncGate.isHeld(app))
+                        throw new IllegalStateException(
+                            "Po imporcie ZIP niedozwolone jest wysłanie "
+                            +"starego patcha konfliktu. Porównaj ponownie dane.");
                     result=request(app,prefs,host,"POST",
                         "/resolve-phone",patch,"application/json; charset=utf-8");
                 } else {
@@ -239,6 +343,7 @@ final class DesktopHubSync {
                     if(remote.code!=200)
                         throw new IllegalStateException(
                             "Nie pobrano stanu PC przed wyborem Telefon.");
+                    verifyReviewedState(app,prefs,expectedLocal,remote.body);
                     String remoteSha=remote.sha256.isBlank()
                         ?sha256(remote.body):remote.sha256;
                     result=request(app,prefs,host,"POST",
@@ -923,6 +1028,7 @@ final class DesktopHubSync {
      * Wywoływane pod globalną blokadą BackupSyncGate.
      */
     static void invalidateAfterLocalRestore(Context context) {
+        reviewedSnapshot=null;
         SharedPreferences prefs=prefs(context);
         File baseline=baselineFile(context);
         if(baseline.isFile()&&!baseline.delete())
@@ -952,6 +1058,7 @@ final class DesktopHubSync {
     private static void clearConflict(Context context,SharedPreferences prefs) {
         // Zwolnij blokadę dopiero po zapisaniu i odebraniu wynikowej migawki.
         BackupSyncGate.allowAfterReview(context);
+        reviewedSnapshot=null;
         conflictFile(context).delete();
         prefs.edit().remove(PREF_CONFLICT).apply();
     }
