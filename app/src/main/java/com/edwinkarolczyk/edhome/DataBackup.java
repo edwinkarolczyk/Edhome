@@ -1666,10 +1666,10 @@ final class DataBackup {
             JSONArray retainedBudgetHistory = preserveLocalBudgetHistory
                 ? PaycheckBudgetSqliteStore.archivedHistory(database, null)
                 : new JSONArray();
-            JSONArray retainedBudgetCache = preserveLocalBudgetHistory
-                ? new JSONArray(prefs.getString(
-                    PaycheckBudgetHistoryStore.PREF_KEY, "[]"))
-                : new JSONArray();
+            JSONArray retainedBudgetCache = new JSONArray(
+                preserveLocalBudgetHistory
+                    ? prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY, "[]")
+                    : "[]");
             for (int i = TABLES.length - 1; i >= 0; i--)
                 database.delete(TABLES[i][0], null, null);
             for (String[] definition : TABLES) {
