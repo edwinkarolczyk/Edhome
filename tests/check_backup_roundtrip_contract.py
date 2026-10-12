@@ -111,6 +111,21 @@ for token in (
     'DataBackup.restoreJson(database, prefs, inspection.json,',
 ):
     assert token in archive, token
+# Manifest v1 zachowuje data.json, a nowy indeks kategorii nie zmienia restore.
+for token in (
+    'manifest.put("categoryIndexVersion", 1)',
+    'manifest.put("categories", categories)',
+    'manifest.put("files", files)',
+    'JSONObject tables = snapshot.getJSONObject("tables")',
+    'category = "projects"',
+    'category = "budget"',
+    'category = "paycheck"',
+    'category = "storage"',
+):
+    assert token in archive, "Brak indeksu modułów backupu: " + token
+assert 'private static final int FORMAT_VERSION = 1;' in archive
+assert 'sources.add(0, new Source(DATA, data, null, "database"))' in archive
+
 for token in (
     'static void save(Context context, long itemId, Uri source)',
     'MAX_FILE_BYTES = 32L * 1024 * 1024',
