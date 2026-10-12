@@ -108,6 +108,7 @@ final class LanSyncServer {
     private final ChangesProvider changesProvider;
     private final PatchProvider patchProvider;
     private final Object writeLock = new Object();
+    private volatile java.util.function.BooleanSupplier transferBlocked=()->false;
     private volatile boolean running;
     private volatile ServerSocket server;
     private Thread acceptThread;
@@ -121,6 +122,10 @@ final class LanSyncServer {
         this.revisionProvider = revisionProvider;
         this.changesProvider = changesProvider;
         this.patchProvider = patchProvider;
+    }
+
+    void setTransferBlocked(java.util.function.BooleanSupplier guard) {
+        transferBlocked=guard==null?()->false:guard;
     }
 
     static String ensureToken(SharedPreferences prefs) {
@@ -192,6 +197,7 @@ final class LanSyncServer {
 
     private void handle(Socket socket) {
         boolean syncTransfer = false;
+        boolean syncLockHeld = false;
         try (Socket peer = socket) {
             peer.setSoTimeout(10000);
             InetAddress remote = peer.getInetAddress();
@@ -270,7 +276,20 @@ final class LanSyncServer {
                     && ("/snapshot".equals(path) || "/changes".equals(path)))
                 || ("POST".equals(method)
                     && ("/patch".equals(path) || "/snapshot".equals(path))));
-            if (syncTransfer) beginSyncActivity();
+            if (syncTransfer) {
+                // Ten sam mutex co import ZIP i wychodzące żądania Huba:
+                // ani PC -> telefon, ani telefon -> PC nie mogą minąć restore.
+                BackupSyncGate.enterTransfer();
+                syncLockHeld = true;
+                beginSyncActivity();
+                if (transferBlocked.getAsBoolean()) {
+                    DiagnosticLog.event("PHONE_LAN_BLOCKED_AFTER_ZIP_RESTORE",
+                        "method="+method+" path="+path);
+                    reply(peer,409,
+                        "{\"error\":\"RESTORE_RECONCILIATION_REQUIRED\"}");
+                    return;
+                }
+            }
 
             if ("GET".equals(method) && "/status".equals(path)) {
                 if (!selfClient) markAttempt(remote, "połączono");
@@ -419,7 +438,8 @@ final class LanSyncServer {
         } catch (Exception error) {
             DiagnosticLog.error("DESKTOP_SYNC_CLIENT", error);
         } finally {
-            if (syncTransfer) endSyncActivity();
+            if (syncTransfer && syncLockHeld) endSyncActivity();
+            if (syncLockHeld) BackupSyncGate.exitTransfer();
         }
     }
 
