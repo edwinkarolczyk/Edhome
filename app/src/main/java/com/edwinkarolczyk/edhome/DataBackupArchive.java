@@ -495,6 +495,9 @@ final class DataBackupArchive {
                     // Oryginały pozostają dostępne; miniatury można odtworzyć później.
                 }
             }
+            // Punkt cofnięcia dotyczy tylko ZAKOŃCZONEGO powodzeniem importu.
+            // Gdy zapis znacznika zawiedzie, katalogi wciąż są cofane.
+            markSuccessfulRestore(context, checkpoint);
             forgetPrevious(storageSwap);
             storageSwap = null;
             forgetPrevious(tileSwap);
@@ -614,6 +617,70 @@ final class DataBackupArchive {
         }
     }
 
+    private static final String LAST_SUCCESSFUL_RESTORE =
+        "last-successful-restore.txt";
+
+    /**
+     * Nie wybieraj automatycznie najnowszego ZIP-a: nieudany import również
+     * tworzy checkpoint i mógłby przesłonić właściwy punkt cofnięcia.
+     */
+    static File lastSuccessfulCheckpoint(Context context) {
+        File folder = new File(context.getFilesDir(), "edhome-recovery");
+        File marker = new File(folder, LAST_SUCCESSFUL_RESTORE);
+        if (!marker.isFile() || marker.length() <= 0 || marker.length() > 256)
+            return null;
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(new FileInputStream(marker),
+                    StandardCharsets.UTF_8))) {
+            String filename = reader.readLine();
+            if (filename == null || !filename.startsWith("EDHOME-przed-importem-")
+                    || !filename.endsWith(".zip")
+                    || filename.indexOf('/') >= 0 || filename.indexOf('\\') >= 0
+                    || filename.length() > 180)
+                return null;
+            File checkpoint = new File(folder, filename);
+            if (!checkpoint.isFile() || checkpoint.length() <= 0
+                    || !checkpoint.getCanonicalFile().getParentFile().equals(
+                        folder.getCanonicalFile()))
+                return null;
+            return checkpoint;
+        } catch (Exception failure) {
+            return null;
+        }
+    }
+
+    /**
+     * Wskazanie ostatniego UDANEGO importu jest trwale zapisywane dopiero
+     * po zweryfikowanej zmianie. Atomowa zamiana pliku zachowuje stare
+     * wskazanie w razie awarii urządzenia lub błędu zapisu.
+     */
+    static void markSuccessfulRestore(Context context, File checkpoint)
+            throws Exception {
+        File folder = new File(context.getFilesDir(), "edhome-recovery");
+        if (checkpoint == null || !checkpoint.isFile()
+                || !checkpoint.getCanonicalFile().getParentFile().equals(
+                    folder.getCanonicalFile())
+                || !checkpoint.getName().startsWith("EDHOME-przed-importem-")
+                || !checkpoint.getName().endsWith(".zip"))
+            throw new IllegalArgumentException(
+                "Nieprawidłowy punkt cofnięcia importu.");
+        File marker = new File(folder, LAST_SUCCESSFUL_RESTORE);
+        File temporary = new File(folder, ".last-successful-restore-"
+            + Long.toString(System.nanoTime()) + ".tmp");
+        try {
+            try (FileOutputStream output = new FileOutputStream(temporary)) {
+                output.write((checkpoint.getName() + "\n").getBytes(
+                    StandardCharsets.UTF_8));
+                output.getFD().sync();
+            }
+            if (!temporary.renameTo(marker))
+                throw new IllegalStateException(
+                    "Nie utrwalono punktu cofnięcia importu.");
+        } finally {
+            temporary.delete();
+        }
+    }
+
     /** Kontrola niezmienności kategorii, których użytkownik nie wybrał. */
     private static void verifyUnselected(String before, String after,
             Set<String> selected) throws Exception {
@@ -643,8 +710,8 @@ final class DataBackupArchive {
                 continue;
             if (beforeSettings.has(key) != afterSettings.has(key)
                     || beforeSettings.has(key)
-                        && !String.valueOf(beforeSettings.get(key))
-                            .equals(String.valueOf(afterSettings.get(key))))
+                        && !PaycheckBudgetSqliteStore.sameJson(
+                            beforeSettings.get(key), afterSettings.get(key)))
                 throw new IllegalStateException(
                     "Zmieniło się niewybrane ustawienie: " + key);
         }
@@ -666,8 +733,8 @@ final class DataBackupArchive {
                 for (java.util.Iterator<String> columns = a.keys();
                         columns.hasNext();) {
                     String column = columns.next();
-                    if (!b.has(column) || !String.valueOf(a.get(column))
-                            .equals(String.valueOf(b.get(column))))
+                    if (!b.has(column) || !PaycheckBudgetSqliteStore.sameJson(
+                            a.get(column), b.get(column)))
                         throw new IllegalStateException(
                             "Zmieniono niewybraną pozycję: " + table + "/" + column);
                 }
