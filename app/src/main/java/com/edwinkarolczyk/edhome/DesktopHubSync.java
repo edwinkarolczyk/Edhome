@@ -102,6 +102,11 @@ final class DesktopHubSync {
 
     static String status(Context context) {
         SharedPreferences prefs=prefs(context);
+        if(BackupSyncGate.isHeld(context))
+            return "WSTRZYMANO LAN po imporcie danych ZIP. "
+                +"Telefon i PC mogą mieć różne wersje rekordów. "
+                +"Zachowaj kopie obu urządzeń i rozstrzygnij konflikt "
+                +"w sekcji Desktop / Wi-Fi przed wznowieniem synchronizacji.";
         if(!paired(context))return "Nie sparowano z EDHOME Desktop.";
         String host=prefs.getString(PREF_HOST,"");
         String state=prefs.getString(PREF_LAST_STATE,"OFFLINE");
@@ -170,7 +175,9 @@ final class DesktopHubSync {
     static void resolveDesktop(Context context) {
         Context app=context.getApplicationContext();
         EXEC.execute(()->{
-            if(!SYNCING.compareAndSet(false,true))return;
+            BackupSyncGate.enterTransfer();
+            try {
+                if(!SYNCING.compareAndSet(false,true))return;
             try {
                 SharedPreferences prefs=prefs(app);
                 String host=resolveHost(app,prefs);
@@ -196,13 +203,18 @@ final class DesktopHubSync {
             } finally {
                 SYNCING.set(false);
             }
+            } finally {
+                BackupSyncGate.exitTransfer();
+            }
         });
     }
 
     static void resolvePhone(Context context) {
         Context app=context.getApplicationContext();
         EXEC.execute(()->{
-            if(!SYNCING.compareAndSet(false,true))return;
+            BackupSyncGate.enterTransfer();
+            try {
+                if(!SYNCING.compareAndSet(false,true))return;
             try {
                 SharedPreferences prefs=prefs(app);
                 String patch=readText(conflictFile(app));
@@ -249,25 +261,43 @@ final class DesktopHubSync {
             } finally {
                 SYNCING.set(false);
             }
+            } finally {
+                BackupSyncGate.exitTransfer();
+            }
         });
     }
 
     private static void syncQuietly(Context context) {
-        if(!paired(context)||!SYNCING.compareAndSet(false,true))return;
+        if(!paired(context))return;
+        BackupSyncGate.enterTransfer();
         try {
-            syncOnce(context);
-        } catch(Exception error) {
-            SharedPreferences prefs=prefs(context);
-            prefs.edit().putString(PREF_LAST_STATE,
-                "OFFLINE • "+shortMessage(error)).apply();
-            DiagnosticLog.error("HUB_SYNC",error);
+            if(!SYNCING.compareAndSet(false,true))return;
+            try {
+                syncOnce(context);
+            } catch(Exception error) {
+                SharedPreferences prefs=prefs(context);
+                prefs.edit().putString(PREF_LAST_STATE,
+                    "OFFLINE • "+shortMessage(error)).apply();
+                DiagnosticLog.error("HUB_SYNC",error);
+            } finally {
+                SYNCING.set(false);
+            }
         } finally {
-            SYNCING.set(false);
+            BackupSyncGate.exitTransfer();
         }
     }
 
     private static void syncOnce(Context context) throws Exception {
         SharedPreferences prefs=prefs(context);
+        if(BackupSyncGate.isHeld(context)) {
+            if(prefs.getString(PREF_CONFLICT,"").isBlank())
+                rememberConflict(context,prefs,
+                    "Przywrócono ZIP: synchronizacja jest wstrzymana. "
+                    +"Zachowaj obie kopie i wybierz świadomie Telefon lub Desktop.",
+                    null);
+            DiagnosticLog.event("HUB_RESTORE_HOLD_NO_AUTO_PUSH_PULL");
+            return;
+        }
         if(!prefs.getString(PREF_CONFLICT,"").isBlank())return;
         String host=resolveHost(context,prefs);
         if(host==null)throw new IllegalStateException("Nie znaleziono EDHOME Desktop w LAN.");
@@ -886,7 +916,42 @@ final class DesktopHubSync {
         DiagnosticLog.event("HUB_CONFLICT","summary="+summary);
     }
 
+    /**
+     * Import ZIP zmienia historię rewizji poza protokołem /patch.
+     * Stara baseline jest nieważna; wymaga to świadomej decyzji, a nie
+     * wygenerowania patcha kasującego różniące się wiersze PC.
+     * Wywoływane pod globalną blokadą BackupSyncGate.
+     */
+    static void invalidateAfterLocalRestore(Context context) {
+        SharedPreferences prefs=prefs(context);
+        File baseline=baselineFile(context);
+        if(baseline.isFile()&&!baseline.delete())
+            throw new IllegalStateException(
+                "Nie usunięto starej bazy porównawczej synchronizacji.");
+        File patch=conflictFile(context);
+        if(patch.isFile()&&!patch.delete())
+            throw new IllegalStateException(
+                "Nie usunięto nieaktualnego konfliktu po przywróceniu ZIP.");
+        SharedPreferences.Editor editor=prefs.edit()
+            .remove(PREF_BASE_SHA)
+            .remove(PREF_LAST_SYNC)
+            .putString(PREF_LAST_STATE,
+                "WSTRZYMANO • dane przywrócone z ZIP, wymagane uzgodnienie z PC");
+        if(paired(context))
+            editor.putString(PREF_CONFLICT,
+                "Po przywróceniu ZIP Telefon i Desktop mogą zawierać "
+                +"inne rekordy. Automatyczna synchronizacja jest wstrzymana. "
+                +"Zachowaj obie kopie przed wyborem wersji Telefon lub Desktop.");
+        else editor.remove(PREF_CONFLICT);
+        if(!editor.commit())
+            throw new IllegalStateException(
+                "Nie utrwalono blokady i stanu synchronizacji po imporcie.");
+        DiagnosticLog.event("HUB_BASELINE_INVALIDATED_AFTER_RESTORE");
+    }
+
     private static void clearConflict(Context context,SharedPreferences prefs) {
+        // Zwolnij blokadę dopiero po zapisaniu i odebraniu wynikowej migawki.
+        BackupSyncGate.allowAfterReview(context);
         conflictFile(context).delete();
         prefs.edit().remove(PREF_CONFLICT).apply();
     }
