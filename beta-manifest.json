@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 288,
-  "versionName": "0.8.0.96",
-  "changelog": "EDHOME Beta 0.8.0.96 — poprawka P0 ekranu przywracania ZIP. Naprawiono niewidoczne pola wyboru modułów w oknie Androida: dialog AlertDialog używa teraz listy checkboxów zamiast przesłaniać ją opisem. Przy imporcie kopii pojawiają się nazwy kategorii i liczba wpisów. Zachowano ZIP v1/v2, ochronę relacji, automatyczny checkpoint i cofanie zmian z 0.8.0.95. Nowy test regresyjny blokuje ponowne ukrycie listy. Nie testowano jeszcze pełnego selektywnego odtworzenia na fizycznym telefonie: przed importem zrób kopię poza aplikacją. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.96/edhome-beta.apk",
-  "sha256": "b4e028a95999129df12bb5d798a85bfe191668ed4c0555043e6af9cb0f620573"
+  "versionCode": 289,
+  "versionName": "0.8.0.97",
+  "changelog": "EDHOME Beta 0.8.0.97 — P0 przywracania danych: naprawa powiązań Projektów z Zadaniami oraz Magazynu z Miejscami. EDHOME sprawdza wymagane identyfikatory i wskazuje dodatkowe moduły przed importem. Rozszerzony zestaw danych jest przywracany tylko po wyraźnym potwierdzeniu użytkownika; przed modyfikacją powstaje zweryfikowana kopia ratunkowa. Ochrona niewybranych kategorii, blokada zmiany obcych lokalizacji, cofanie importu i obsługa ZIP v1/v2 pozostają aktywne. Wydanie po zielonym CI; test z rzeczywistą kopią i synchronizacją Desktop nadal wymagany przed zamknięciem P0. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.97/edhome-beta.apk",
+  "sha256": "e4050bb0a3afef23903be4bcd29cd8770da462a9163193affd865026c9aa0da4"
 }
