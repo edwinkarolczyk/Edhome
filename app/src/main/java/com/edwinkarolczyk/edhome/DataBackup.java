@@ -1518,15 +1518,14 @@ final class DataBackup {
             if (assigneeId != null && !members.contains(assigneeId))
                 throw new IllegalArgumentException(
                     "Czynność wskazuje nieistniejącego domownika.");
-            Long taskProjectId=task.getAsLong("project_id");
-            Long taskMinutes=task.getAsLong("duration_minutes");
             Long taskSort=task.getAsLong("project_sort_order");
             if(taskSort==null || taskSort<0)
                 throw new IllegalArgumentException(
                     "Nieprawidłowa kolejność czynności projektu w kopii.");
-            if(taskProjectId!=null && (taskMinutes==null || taskMinutes<20))
-                throw new IllegalArgumentException(
-                    "Czynność projektowa musi mieć co najmniej 20 minut.");
+            // Minimum 20 minut obowiązuje przy tworzeniu/edycji nowej
+            // czynności projektowej. Starsze kopie mogą zawierać historyczne
+            // czasy 1–19 min. Są poprawne (1–600 sprawdzamy wyżej) i muszą
+            // wrócić bez zmiany planu oraz zapisanych sesji pracy.
         }
         Set<String> dependencyPairs = new HashSet<>();
         for (ContentValues row : parsed.get("project_task_dependencies")) {
