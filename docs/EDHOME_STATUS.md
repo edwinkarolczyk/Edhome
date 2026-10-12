@@ -1,3 +1,11 @@
+## 2026-10-12 — Stabilizacja backupu, etap 1: indeks kategorii w ZIP (KOD, NIEZWERYFIKOWANY BUILD)
+
+- Commit `ada83a8d`: w `DataBackupArchive.java` manifest ZIP otrzymał `categoryIndexVersion=1` i `categories` z liczebnością tabel według modułów (projects, budget, paycheck, storage, vehicles, pantry, garden, tasks, calendar, other). `data.json` i `formatVersion=1` pozostają bez zmian dla zgodności ze starymi importerami.
+- Commit `fd6874fd`: test kontraktowy wymaga obecności indeksu kategorii i zachowania formatu v1.
+- **Nie wdrożono jeszcze** oddzielnych plików modułów, wyboru kategorii przy przywracaniu ani eksportu selektywnego. Wspólna baza nadal przywracana w całości. Nie nazywać tego ukończonym backupem modułowym.
+- **Niepotwierdzone:** CI, kompilacja, instalator, test na urządzeniu. Stable main bez zmian.
+- Następny krok: test CI, audyt zależności tabel i implementacja bezpiecznego selektywnego restore (transakcja + kopia przed nadpisaniem).
+
 ## 2026-10-12 — WYMAGANIE P0: modułowe kopie ZIP i kompatybilność wsteczna (DO WDROŻENIA)
 
 - Jeden eksport ZIP, ale logicznie rozdzielone dane modułów: Projekty, Budżet, PayCheck i historia bankowa, Magazyn, Kalendarz/Odpady, Pojazdy, Zadania, Spiżarnia/Zakupy, ustawienia i pozostałe. Dla każdej kategorii osobne dane oraz powiązane załączniki/zdjęcia.
