@@ -21761,7 +21761,7 @@ public final class MainActivity extends Activity {
         java.util.Collections.sort(additionalNames,String.CASE_INSENSITIVE_ORDER);
         String extra=additionalNames.isEmpty()
             ?""
-            :"\\n\\nWYMAGANE DODATKOWO: "
+            :"\n\nWYMAGANE DODATKOWO: "
                 +android.text.TextUtils.join(", ",additionalNames)
                 +". Te dane również zostaną przywrócone z ZIP.";
         new AlertDialog.Builder(this)
@@ -21770,7 +21770,7 @@ public final class MainActivity extends Activity {
                 :"Wykryto powiązania między modułami")
             .setMessage("Wybrane: "+android.text.TextUtils.join(", ",chosenNames)
                 +extra
-                +"\\n\\nEDHOME zapisze kopię ratunkową. "
+                +"\n\nEDHOME zapisze kopię ratunkową. "
                 +"Pozostałe moduły powinny zachować dane. "
                 +"Przerwie import w razie niezgodności.")
             .setCancelable(false)
