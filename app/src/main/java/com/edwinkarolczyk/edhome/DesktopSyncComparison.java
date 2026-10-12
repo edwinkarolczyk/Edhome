@@ -55,6 +55,10 @@ final class DesktopSyncComparison {
         for(String table:tables) {
             JSONArray a=localTables.optJSONArray(table);
             JSONArray b=remoteTables.optJSONArray(table);
+            if((localTables.has(table)&&a==null)
+                    ||(remoteTables.has(table)&&b==null))
+                throw new IllegalArgumentException(
+                    "Niezgodny format tabeli "+table+". Nic nie nadpisano.");
             if(a==null)a=new JSONArray();
             if(b==null)b=new JSONArray();
             Map<String,JSONObject> left=rows(table,a);
@@ -117,7 +121,12 @@ final class DesktopSyncComparison {
         }
         boolean otherSettingsDifferent=
             !canonical(leftOther).equals(canonical(rightOther));
-        if(otherSettingsDifferent)details.add("Inne ustawienia: różnią się między urządzeniami.");
+        boolean metadataDifferent=!canonical(local.opt("syncRecords"))
+            .equals(canonical(remote.opt("syncRecords")));
+        if(otherSettingsDifferent)
+            details.add("Inne ustawienia: różnią się między urządzeniami.");
+        if(metadataDifferent)
+            details.add("Metadane synchronizacji: różne rewizje rekordów.");
 
         StringBuilder text=new StringBuilder();
         text.append("PORÓWNANIE PRZED SYNCHRONIZACJĄ\n\n")
@@ -144,7 +153,8 @@ final class DesktopSyncComparison {
             .append("na drugim urządzeniu. Zachowaj niezależne kopie ZIP ")
             .append("telefonu i kopię PC przed zatwierdzeniem.");
         return new Report(phoneHash,desktopHash,text.toString(),
-            details.isEmpty() && !otherSettingsDifferent);
+            details.isEmpty() && !otherSettingsDifferent
+                && !metadataDifferent);
     }
 
     static String fingerprint(String snapshot) throws Exception {
