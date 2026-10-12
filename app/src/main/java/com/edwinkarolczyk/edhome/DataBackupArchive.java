@@ -809,6 +809,11 @@ final class DataBackupArchive {
         return BackupModuleSnapshot.index(inspection.json);
     }
 
+    /** Zweryfikowana migawka tylko do planowania; bez dotykania bazy. */
+    static String verifiedSnapshot(File archive) throws Exception {
+        return inspect(archive).json;
+    }
+
     private static void validatePayloadNamesAgainstJson(String json, Set<String> paths)
             throws Exception {
         JSONObject root = new JSONObject(json);
