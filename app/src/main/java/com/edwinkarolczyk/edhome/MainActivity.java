@@ -130,6 +130,7 @@ public final class MainActivity extends Activity {
     private AlertDialog storageScannerOperationDialog;
     private AlertDialog quickStorageSetupDialog;
     private AlertDialog dataBackupBusyDialog;
+    private boolean backupLegacyExportNext;
     private TextView quickStorageSetupStatus;
     private String quickStorageSetupKind;
     private long quickStorageSetupId;
@@ -21559,6 +21560,8 @@ public final class MainActivity extends Activity {
 
 
     private void exportDataBackupAsync(Uri destination) {
+        final boolean legacyFormat=backupLegacyExportNext;
+        backupLegacyExportNext=false;
         showDataBackupBusy("Tworzenie kopii",
             "EDHOME zapisuje i sprawdza kopię ZIP. Możesz bezpiecznie poczekać na wynik.");
         DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=export");
@@ -21567,8 +21570,11 @@ public final class MainActivity extends Activity {
             String backupStage="TWORZENIE";
             String outcome;
             try {
-                created=DataBackupArchive.create(
-                    this,db.getReadableDatabase(),prefs);
+                created=legacyFormat
+                    ?DataBackupArchive.createLegacy(
+                        this,db.getReadableDatabase(),prefs)
+                    :DataBackupArchive.create(
+                        this,db.getReadableDatabase(),prefs);
                 backupStage="ZAPIS";
                 DataBackupArchive.writeToDocument(this,destination,created.file);
                 backupStage="WERYFIKACJA";
@@ -21698,10 +21704,13 @@ public final class MainActivity extends Activity {
                         backupFile,true,null,categories);
                     return;
                 }
+                java.util.List<String> chosenNames=new java.util.ArrayList<>();
+                for(String key:keys)if(chosen.contains(key))
+                    chosenNames.add(backupCategoryName(key));
                 new AlertDialog.Builder(this)
                     .setTitle("Przywrócić tylko wybrane dane?")
-                    .setMessage("Moduły: "+java.util.Arrays.toString(
-                        chosen.toArray())+"\n\n"
+                    .setMessage("Moduły: "+android.text.TextUtils.join(", ",chosenNames)
+                        +"\n\n"
                         +"Dane pozostałych modułów muszą zostać zachowane. "
                         +"Przed zmianą zostanie zapisana kopia umożliwiająca cofnięcie.")
                     .setNegativeButton("Wstecz",(back,ignored)->
@@ -21845,14 +21854,67 @@ public final class MainActivity extends Activity {
         dataBackupBusyDialog=null;
     }
 
+    private void showLastDataBackupRecovery() {
+        java.io.File folder=new java.io.File(getFilesDir(),"edhome-recovery");
+        java.io.File[] copies=folder.listFiles((dir,name)->
+            name.startsWith("EDHOME-przed-importem-") && name.endsWith(".zip"));
+        if(copies==null || copies.length==0) {
+            alert("Brak zapisanej kopii ratunkowej do cofnięcia.");
+            return;
+        }
+        java.util.Arrays.sort(copies,(a,b)->Long.compare(
+            b.lastModified(),a.lastModified()));
+        java.io.File selected=copies[0];
+        new AlertDialog.Builder(this)
+            .setTitle("Cofnąć ostatnie przywracanie?")
+            .setMessage("EDHOME przywróci pełny stan z ostatniej kopii "
+                +"ratunkowej. Przed cofnięciem utworzy także kopię bieżącego "
+                +"stanu, aby dało się ponowić operację.\n\n"
+                +"Rozmiar kopii: "+(selected.length()/1024)+" KB.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Cofnij",(dialog,which)->{
+                showDataBackupBusy("Cofanie przywracania",
+                    "Zabezpieczam aktualne dane i odtwarzam kopię ratunkową.");
+                new Thread(()->{
+                    try {
+                        DataBackupArchive.recoveryCheckpoint(
+                            this,db.getWritableDatabase(),prefs);
+                        DataBackupArchive.restoreExact(
+                            this,db.getWritableDatabase(),prefs,selected);
+                        ReminderReceiver.schedule(this);
+                        DeviceTimerReceiver.scheduleAll(this);
+                        DiagnosticLog.event("DATA_BACKUP_RESTORE_UNDO");
+                        runOnLiveUi(()->{
+                            hideDataBackupBusy();
+                            screen="home";
+                            render();
+                            alert("Przywrócono dane sprzed poprzedniego importu. "
+                                +"Aktualny stan również zachowano jako kopię.");
+                        });
+                    } catch(Exception failure) {
+                        DiagnosticLog.error("DATA_BACKUP_RESTORE_UNDO",failure);
+                        runOnLiveUi(()->{
+                            hideDataBackupBusy();
+                            alert("Nie udało się cofnąć operacji. Kopie ratunkowe "
+                                +"pozostały na urządzeniu.");
+                        });
+                    }
+                },"edhome-backup-undo").start();
+            }).show();
+    }
+
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
+        note("Jedna paczka ZIP v2 zawiera osobne dane Projektów, Budżetu, "
+            +"PayCheck, Magazynu i pozostałych modułów. Przy imporcie możesz "
+            +"wybrać konkretne kategorie lub przywrócić wszystko.");
         note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego, własne obrazy kafelków oraz zdjęcia/PDF faktur z Budżetu miesiąca.");
         note("Miniatury pozostają w data.json dla zgodności. Po przywróceniu EDHOME odtwarza je z oryginałów, gdy oryginał jest dostępny.");
         note("Starsze zdjęcia dodane przed tą zmianą mają w kopii dotychczasową miniaturę. Utraconej wcześniej pełnej jakości nie da się odtworzyć wstecz.");
         note("Po utworzeniu kopia jest sprawdzana: manifest, rozmiar i SHA-256 każdego pliku oraz ponowny odczyt całego ZIP-u z wybranego miejsca.");
         note("Kopia nie zawiera PIN-u, logów, sekretów SUPLA ani prywatnego sejfu PayCheck. Sejf ma osobny szyfrowany eksport.");
         button("Eksportuj pełną kopię (.zip)", () -> {
+            backupLegacyExportNext=false;
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
             save.setType("application/zip");
@@ -21862,6 +21924,20 @@ public final class MainActivity extends Activity {
             catch (Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_PICKER", error);
                 alert("Nie można otworzyć wyboru miejsca zapisu.");
+            }
+        });
+        button("Eksportuj ZIP zgodny ze starszym EDHOME (v1)", () -> {
+            backupLegacyExportNext=true;
+            Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            save.addCategory(Intent.CATEGORY_OPENABLE);
+            save.setType("application/zip");
+            save.putExtra(Intent.EXTRA_TITLE,
+                "EDHOME-backup-zgodny-v1-" + System.currentTimeMillis() + ".zip");
+            try { startActivityForResult(save, EXPORT_DATA_BACKUP); }
+            catch (Exception error) {
+                backupLegacyExportNext=false;
+                DiagnosticLog.error("DATA_BACKUP_PICKER_LEGACY",error);
+                alert("Nie można wybrać miejsca zapisu zgodnej kopii.");
             }
         });
         button("Przywróć kopię (.zip / starszy .json)", () -> {
@@ -21876,7 +21952,11 @@ public final class MainActivity extends Activity {
                 alert("Nie można otworzyć wyboru kopii.");
             }
         });
-        note("Przywrócenie zastępuje wspólne dane EDHOME. Przed importem wykonaj świeżą kopię obecnego stanu.");
+        button("Cofnij ostatnie przywrócenie", this::showLastDataBackupRecovery);
+        note("Przy każdym przywracaniu EDHOME automatycznie zapisuje kopię "
+            +"ratunkową obecnego stanu. Starsze kopie ZIP v1 i JSON nadal można "
+            +"otwierać. Kopia ratunkowa pozostaje w pamięci aplikacji.");
+
     }
 
     /** Prosty ekran aktualizacji; opis zmian pochodzi z aktualnego manifestu Beta. */
