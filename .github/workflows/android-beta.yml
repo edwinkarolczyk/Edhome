@@ -592,7 +592,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.95 — stabilizacja P0 kopii zapasowych. ZIP v2 zawiera osobne pliki danych Projektów, Budżetu, PayCheck, Magazynu i innych modułów. Import ZIP umożliwia wybór kategorii lub pełne przywrócenie. Przed zmianami automatyczna kopia ratunkowa, możliwość cofnięcia, kontrola SHA-256, relacji i niezmienności pozostałych danych. Odczyt starszych ZIP v1/JSON zachowany, selektywny import wymaga schematu v45 lub v46; ZIP v1 z bieżącej wersji nie gwarantuje odczytu na starych aplikacjach z innym schematem bazy. Prywatny sejf wymaga osobnej kopii. CI musi przejść; fizyczny test Androida i Desktop pozostają obowiązkowe przed zamknięciem P0. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.96 — poprawka P0 ekranu przywracania ZIP. Naprawiono niewidoczne pola wyboru modułów w oknie Androida: dialog AlertDialog używa teraz listy checkboxów zamiast przesłaniać ją opisem. Przy imporcie kopii pojawiają się nazwy kategorii i liczba wpisów. Zachowano ZIP v1/v2, ochronę relacji, automatyczny checkpoint i cofanie zmian z 0.8.0.95. Nowy test regresyjny blokuje ponowne ukrycie listy. Nie testowano jeszcze pełnego selektywnego odtworzenia na fizycznym telefonie: przed importem zrób kopię poza aplikacją. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
