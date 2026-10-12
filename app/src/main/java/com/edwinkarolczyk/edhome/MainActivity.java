@@ -21926,7 +21926,7 @@ public final class MainActivity extends Activity {
                 alert("Nie można otworzyć wyboru miejsca zapisu.");
             }
         });
-        button("Eksportuj ZIP zgodny ze starszym EDHOME (v1)", () -> {
+        button("Eksportuj ZIP w starszym formacie v1", () -> {
             backupLegacyExportNext=true;
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
@@ -21953,9 +21953,13 @@ public final class MainActivity extends Activity {
             }
         });
         button("Cofnij ostatnie przywrócenie", this::showLastDataBackupRecovery);
+        note("ZIP v1 zachowuje starszy układ plików, ale nie zmienia schematu "
+            +"bazy. Starsza wersja aplikacji może nie odczytać danych z nowszego "
+            +"wydania. Najnowszy EDHOME nadal obsługuje starsze kopie.");
         note("Przy każdym przywracaniu EDHOME automatycznie zapisuje kopię "
             +"ratunkową obecnego stanu. Starsze kopie ZIP v1 i JSON nadal można "
-            +"otwierać. Kopia ratunkowa pozostaje w pamięci aplikacji.");
+            +"otwierać. Kopia ratunkowa pozostaje w pamięci aplikacji. "
+            +"Przed odinstalowaniem wyeksportuj ZIP do osobnego folderu.");
 
     }
 
