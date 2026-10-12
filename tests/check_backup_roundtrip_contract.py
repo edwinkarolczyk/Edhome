@@ -310,7 +310,7 @@ for token in (
     'guardUnselectedPlaces(current, source, selected)',
     'PaycheckBudgetSqliteStore.sameJson(',
     'selection.add(category)',
-    'W kopii brakuje modułu wymaganego przez powiązania.',
+    'Kopia nie zawiera modułu wymaganego przez powiązania.',
 ):
     assert token in dep, "Brak kontroli zależności modułów: " + token
 for token in (
