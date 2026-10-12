@@ -21616,11 +21616,15 @@ public final class MainActivity extends Activity {
                 final boolean archive=DataBackupArchive.isArchive(backupFile);
                 final String legacyJson=archive
                     ?null:DataBackupArchive.readLegacyJson(backupFile);
+                // Sprawdź ZIP i policz kategorie PRZED otwarciem dialogu,
+                // aby nie wykonywać I/O na wątku interfejsu.
+                final org.json.JSONObject categories=archive
+                    ?DataBackupArchive.inspectCategories(backupFile):null;
                 localCopy=null; // ownership passes to the confirmation dialog
                 runOnLiveUi(() -> {
                     hideDataBackupBusy();
                     showDataBackupRestoreConfirmation(
-                        backupFile,archive,legacyJson);
+                        backupFile,archive,legacyJson,categories);
                 },()->backupFile.delete());
             } catch(Exception error) {
                 if(localCopy!=null)localCopy.delete();
@@ -21633,20 +21637,100 @@ public final class MainActivity extends Activity {
         },"edhome-backup-prepare").start();
     }
 
+    private String backupCategoryName(String key) {
+        switch (key) {
+            case "projects": return "Projekty";
+            case "budget": return "Budżet";
+            case "paycheck": return "PayCheck i bank";
+            case "storage": return "Magazyn domowy";
+            case "places": return "Miejsca";
+            case "vehicles": return "Pojazdy";
+            case "pantry": return "Spiżarnia i zakupy";
+            case "garden": return "Ogród";
+            case "tasks": return "Zadania";
+            case "calendar": return "Grafiki i kalendarz";
+            case "profiles": return "Domownicy";
+            case "audit": return "Remanent";
+            case "timers": return "Minutniki";
+            case "settings": return "Ustawienia";
+            default: return "Pozostałe";
+        }
+    }
+
     private void showDataBackupRestoreConfirmation(java.io.File backupFile,
+            boolean archive,String legacyJson,org.json.JSONObject categories) {
+        if (!archive || categories == null) {
+            confirmFullDataBackupRestore(backupFile,archive,legacyJson);
+            return;
+        }
+        java.util.List<String> keys=new java.util.ArrayList<>();
+        for(java.util.Iterator<String> entries=categories.keys();entries.hasNext();)
+            keys.add(entries.next());
+        java.util.Collections.sort(keys,(a,b)->backupCategoryName(a)
+            .compareToIgnoreCase(backupCategoryName(b)));
+        CharSequence[] labels=new CharSequence[keys.size()];
+        boolean[] checked=new boolean[keys.size()];
+        for(int i=0;i<keys.size();i++) {
+            String category=keys.get(i);
+            org.json.JSONObject counts=categories.optJSONObject(category);
+            int total=0;
+            if(counts!=null)for(java.util.Iterator<String> it=counts.keys();
+                    it.hasNext();)total+=counts.optInt(it.next(),0);
+            labels[i]=backupCategoryName(category)+" ("+total+" wpisów)";
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Co przywrócić z kopii?")
+            .setMessage("Zaznacz wybrane moduły lub wybierz całą kopię. "
+                +"EDHOME utworzy kopię ratunkową przed zmianą danych. "
+                +"Jeśli moduły mają niezgodne powiązania, import zostanie odrzucony.")
+            .setMultiChoiceItems(labels,checked,(dialog,index,value)->
+                checked[index]=value)
+            .setCancelable(false)
+            .setNegativeButton("Anuluj",(dialog,which)->backupFile.delete())
+            .setNeutralButton("Cała kopia",(dialog,which)->
+                confirmFullDataBackupRestore(backupFile,true,null))
+            .setPositiveButton("Wybrane",(dialog,which)->{
+                java.util.Set<String> chosen=new java.util.HashSet<>();
+                for(int i=0;i<checked.length;i++)
+                    if(checked[i])chosen.add(keys.get(i));
+                if(chosen.isEmpty()) {
+                    showDataBackupRestoreConfirmation(
+                        backupFile,true,null,categories);
+                    return;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("Przywrócić tylko wybrane dane?")
+                    .setMessage("Moduły: "+java.util.Arrays.toString(
+                        chosen.toArray())+"\n\n"
+                        +"Dane pozostałych modułów muszą zostać zachowane. "
+                        +"Przed zmianą zostanie zapisana kopia umożliwiająca cofnięcie.")
+                    .setNegativeButton("Wstecz",(back,ignored)->
+                        showDataBackupRestoreConfirmation(
+                            backupFile,true,null,categories))
+                    .setPositiveButton("Przywróć",(accepted,ignored)->{
+                        showDataBackupBusy("Przywracanie wybranych danych",
+                            "Tworzę kopię bezpieczeństwa i sprawdzam zależności.");
+                        restoreDataBackupAsync(backupFile,true,null,chosen);
+                    }).show();
+            }).show();
+    }
+
+    private void confirmFullDataBackupRestore(java.io.File backupFile,
             boolean archive,String legacyJson) {
         new AlertDialog.Builder(this)
             .setTitle("Zastąpić wszystkie dane?")
-            .setMessage(archive
+            .setMessage((archive
                 ?"Przywrócenie ZIP nadpisze wspólne dane i obrazy użytkownika. "
                     +"Manifest oraz sumy kontrolne zostaną sprawdzone przed zmianą."
                 :"To starsza kopia JSON. Przywrócenie nadpisze wspólne dane. "
                     +"Oryginalnych zdjęć nie ma w tym starszym formacie.")
+                +"\n\nEDHOME automatycznie zapisze kopię ratunkową aktualnej "
+                +"instalacji. Będzie można cofnąć przywrócenie.")
             .setCancelable(false)
             .setNegativeButton("Anuluj",(dialog,which)->backupFile.delete())
             .setPositiveButton("Przywróć",(dialog,which)->{
                 showDataBackupBusy("Przywracanie kopii",
-                    "Nie edytuj danych do zakończenia przywracania.");
+                    "Najpierw tworzę kopię ratunkową obecnych danych.");
                 restoreDataBackupAsync(backupFile,archive,legacyJson);
             })
             .show();
@@ -21654,16 +21738,32 @@ public final class MainActivity extends Activity {
 
     private void restoreDataBackupAsync(java.io.File backupFile,
             boolean archive,String legacyJson) {
-        DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED","mode=restore");
+        restoreDataBackupAsync(backupFile,archive,legacyJson,null);
+    }
+
+    private void restoreDataBackupAsync(java.io.File backupFile,
+            boolean archive,String legacyJson,java.util.Set<String> selected) {
+        DiagnosticLog.event("DATA_BACKUP_BACKGROUND_STARTED",
+            selected==null?"mode=restore":"mode=restore_selected");
         new Thread(() -> {
+            java.io.File checkpoint=null;
+            boolean fullRestoreAttempted=false;
             try {
                 DataBackupArchive.Restored restored=null;
-                if(archive) {
-                    restored=DataBackupArchive.restore(
-                        this,db.getWritableDatabase(),prefs,backupFile);
+                if(selected!=null) {
+                    restored=DataBackupArchive.restoreSelected(
+                        this,db.getWritableDatabase(),prefs,backupFile,selected);
                 } else {
-                    DataBackup.restoreJson(
-                        db.getWritableDatabase(),prefs,legacyJson);
+                    checkpoint=DataBackupArchive.recoveryCheckpoint(
+                        this,db.getWritableDatabase(),prefs);
+                    fullRestoreAttempted=true;
+                    if(archive) {
+                        restored=DataBackupArchive.restore(
+                            this,db.getWritableDatabase(),prefs,backupFile);
+                    } else {
+                        DataBackup.restoreJson(
+                            db.getWritableDatabase(),prefs,legacyJson);
+                    }
                 }
                 SharedPreferences.Editor reminderReset=prefs.edit();
                 for(String key:prefs.getAll().keySet()) {
@@ -21677,9 +21777,11 @@ public final class MainActivity extends Activity {
                 reminderReset.apply();
                 ReminderReceiver.schedule(this);
                 DeviceTimerReceiver.scheduleAll(this);
-                DiagnosticLog.event(archive
-                    ?"DATA_BACKUP_ZIP_RESTORED":"DATA_BACKUP_RESTORED");
+                DiagnosticLog.event(selected!=null
+                    ?"DATA_BACKUP_SELECTED_RESTORED"
+                    :archive?"DATA_BACKUP_ZIP_RESTORED":"DATA_BACKUP_RESTORED");
                 final DataBackupArchive.Restored restoredResult=restored;
+                final boolean partial=selected!=null;
                 runOnLiveUi(() -> {
                     hideDataBackupBusy();
                     screen="home";
@@ -21688,20 +21790,34 @@ public final class MainActivity extends Activity {
                     String media=restoredResult==null?""
                         :"\nOryginalne zdjęcia: "+restoredResult.storageOriginals
                             +", starsze miniatury: "
-                            +restoredResult.legacyThumbnails
-                            +", odtworzone z oryginałów: "
-                            +restoredResult.regeneratedThumbnails+".";
-                    alert((BetaUpdater.isBeta()
-                        ?"Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
-                        :"Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.")
-                        +media);
+                            +restoredResult.legacyThumbnails+".";
+                    alert((partial?"Wybrane moduły przywrócone."
+                        :BetaUpdater.isBeta()
+                            ?"Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
+                            :"Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.")
+                        +"\nKopia ratunkowa została zachowana."+media);
                 });
             } catch(Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_RESTORE",error);
+                boolean recovered=false;
+                if(selected==null && checkpoint!=null && fullRestoreAttempted) {
+                    try {
+                        DataBackupArchive.restoreExact(
+                            this,db.getWritableDatabase(),prefs,checkpoint);
+                        recovered=true;
+                    } catch(Exception recoveryError) {
+                        DiagnosticLog.error("DATA_BACKUP_ROLLBACK",recoveryError);
+                    }
+                }
+                final boolean rollbackOk=recovered;
+                final String reason=error.getMessage();
                 runOnLiveUi(() -> {
                     hideDataBackupBusy();
                     alert("Nie udało się przywrócić kopii. "
-                        +"Uszkodzony ZIP lub niespójne dane zostały odrzucone.");
+                        +(rollbackOk?"Przywrócono dane sprzed operacji. "
+                            :"Kopia ratunkowa pozostaje zapisana w aplikacji. ")
+                        +"\n"+(reason==null?"Sprawdź diagnostykę."
+                            :reason.substring(0,Math.min(180,reason.length()))));
                 });
             } finally {
                 backupFile.delete();
