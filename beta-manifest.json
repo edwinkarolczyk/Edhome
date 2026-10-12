@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 292,
-  "versionName": "0.8.0.100",
-  "changelog": "EDHOME Beta 0.8.0.100 — lepszy ekran Kopii danych. Przywróć kopię i Cofnij ostatnie przywrócenie są teraz widoczne od razu u góry, bez przewijania przez długie objaśnienia. Pusta/nowa instalacja wyraźnie informuje, że nie ma jeszcze kopii ratunkowej i nie można cofnąć importu, którego nie było. Po imporcie kopiowana jest migawka ratunkowa. Zachowano zabezpieczenia cofania, wykrywanie modułów, kopie ZIP v1/v2 i spójność danych. Test widoczności akcji dodany do CI. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.100/edhome-beta.apk",
-  "sha256": "0ff0e191a27da236c6ab7ac70faa1120e2c3400d7e9560a18ef0b03b5f6b50a2"
+  "versionCode": 293,
+  "versionName": "0.8.0.101",
+  "changelog": "EDHOME Beta 0.8.0.101 — stabilizacja P0 synchronizacji po przywróceniu ZIP. W czasie importu i cofania blokowane są równoległe transfery Android ↔ Desktop. Po imporcie stare punkty porównawcze zostają unieważnione, a automatyczne wysyłanie/pobieranie danych PC jest wstrzymane do świadomej decyzji Telefon albo Desktop; starszy serwer LAN zwraca 409 RESTORE_RECONCILIATION_REQUIRED. Ostrzeżenia wskazują ryzyko zastąpienia danych z drugiego urządzenia. Nowy test Java sprawdza trwałą blokadę także po nieudanym imporcie i restarcie. Kopie ZIP z obu urządzeń zachowaj niezależnie przed wznowieniem LAN. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.101/edhome-beta.apk",
+  "sha256": "66489c3843a223791540694fb762375bd8272dec21caa013b1e368297eb01663"
 }
