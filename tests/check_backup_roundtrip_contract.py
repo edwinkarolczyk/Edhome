@@ -268,7 +268,7 @@ for token in (
     'DataBackupArchive.recoveryCheckpoint(',
     'DataBackupArchive.restoreExact(',
     'button("Cofnij ostatnie przywrócenie"',
-    'button("Eksportuj ZIP zgodny ze starszym EDHOME (v1)"',
+    'button("Eksportuj ZIP w starszym formacie v1"',
     'created=legacyFormat',
 ):
     assert token in main, "Brak obsługi modułów w Android UI: " + token
