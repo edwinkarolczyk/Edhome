@@ -1,3 +1,12 @@
+## 2026-10-12 — WYMAGANIE P0: modułowe kopie ZIP i kompatybilność wsteczna (DO WDROŻENIA)
+
+- Jeden eksport ZIP, ale logicznie rozdzielone dane modułów: Projekty, Budżet, PayCheck i historia bankowa, Magazyn, Kalendarz/Odpady, Pojazdy, Zadania, Spiżarnia/Zakupy, ustawienia i pozostałe. Dla każdej kategorii osobne dane oraz powiązane załączniki/zdjęcia.
+- Import: całość albo wybrane kategorie; podgląd zawartości i daty przed przywróceniem, kontrola sum SHA-256, schematu, powiązań między modułami i ostrzeżenie przed nadpisaniem. Domyślnie świeża kopia stanu przed restore, możliwość cofnięcia, atomowe zastosowanie lub rollback przy błędzie.
+- Manifest zawiera wersję aplikacji i schematu, wersje modułów, identyfikatory danych, listę plików, rozmiary i sumy kontrolne; import pojedynczej kategorii nie może usuwać innych kategorii ani osierocać referencji.
+- Kompatybilność: nowe Android i Desktop muszą czytać kopie ze starszych obsługiwanych wydań, w tym monolityczne ZIP i schemat v45; migracje wersjonowane, testowane na rzeczywistych starszych kopiach. Nie obiecywać otwierania nowych schematów przez stare binaria bez odpowiedniej obsługi; zamiast tego przewidzieć eksport zgodny ze starszym formatem, jeśli technicznie możliwy i bezstratny, lub wyraźny komunikat.
+- Wymagane testy: pełny roundtrip, selektywne przywrócenie każdego modułu, brak naruszenia innych danych, migracja starych backupów, przerwany import, uszkodzony plik, duplikaty, relacje między modułami, zgodność Android ↔ Desktop.
+- Status: wymaganie zapisane; implementacja, build i testy jeszcze NIE wykonane. Stable main bez zmian.
+
 ## 2026-10-11 — POTWIERDZONE: Android Beta 0.8.0.94 / 286 — Styl 1 od nowej instalacji
 
 - **CI #2157 PASS:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38145707593. Testy UI i build Android Beta/Stable oraz podpisany APK ukończone.
