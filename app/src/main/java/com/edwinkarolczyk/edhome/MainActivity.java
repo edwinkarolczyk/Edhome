@@ -21684,11 +21684,11 @@ public final class MainActivity extends Activity {
                     it.hasNext();)total+=counts.optInt(it.next(),0);
             labels[i]=backupCategoryName(category)+" ("+total+" wpisów)";
         }
+        // Android AlertDialog nie wyświetla listy, gdy ten sam Builder
+        // dostanie setMessage() i setMultiChoiceItems(): komunikat wypiera listę.
+        // Instrukcja w tytule pozostawia całą wysokość na pola wyboru.
         new AlertDialog.Builder(this)
-            .setTitle("Co przywrócić z kopii?")
-            .setMessage("Zaznacz wybrane moduły lub wybierz całą kopię. "
-                +"EDHOME utworzy kopię ratunkową przed zmianą danych. "
-                +"Jeśli moduły mają niezgodne powiązania, import zostanie odrzucony.")
+            .setTitle("Co przywrócić z kopii? Zaznacz moduły:")
             .setMultiChoiceItems(labels,checked,(dialog,index,value)->
                 checked[index]=value)
             .setCancelable(false)
