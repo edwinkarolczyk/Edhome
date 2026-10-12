@@ -594,7 +594,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.99 — P0 bezpieczne cofanie kopii ZIP. Przycisk Cofnij wskazuje teraz ostatni import zakończony powodzeniem, nie po prostu najnowszy plik ratunkowy: nieudane próby nie przesłaniają poprawnego punktu cofania. Dla kopii ze starszych wersji możliwy jest ręczny wybór ze świadomym ostrzeżeniem. Po cofnięciu można też wrócić do stanu sprzed cofnięcia. Import wybranych modułów nie zeruje już znaczników przypomnień innych modułów. Ochrona niezmienionych danych porównuje JSON semantycznie. Dodano wykonywalny test Java kopii ratunkowych. Przed eksperymentami z cofaniem zachowaj niezależny ZIP poza aplikacją, wyłącz synchronizację LAN. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.100 — lepszy ekran Kopii danych. Przywróć kopię i Cofnij ostatnie przywrócenie są teraz widoczne od razu u góry, bez przewijania przez długie objaśnienia. Pusta/nowa instalacja wyraźnie informuje, że nie ma jeszcze kopii ratunkowej i nie można cofnąć importu, którego nie było. Po imporcie kopiowana jest migawka ratunkowa. Zachowano zabezpieczenia cofania, wykrywanie modułów, kopie ZIP v1/v2 i spójność danych. Test widoczności akcji dodany do CI. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
