@@ -1,3 +1,11 @@
+## 2026-10-12 — Wydanie EDHOME Beta 0.8.0.95 / 287: CI #2183 PASS, podpisany APK opublikowany
+
+- **GitHub Actions:** [run #2183](https://github.com/edwinkarolczyk/Edhome/actions/runs/38211825400), stan `completed/success`. Przeszły m.in. regresje SQLite/Budżet 5C, `tests/check_backup_roundtrip_contract.py`, kompilacja Beta + Stable, lint Android API 22, walidacja podpisu Beta, test obecności AndroidX, upload APK i publikacja aktualnego manifestu.
+- **APK oficjalny:** `https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.95/edhome-beta.apk` (13 361 167 B). Wydanie `beta-v0.8.0.95` opublikowane 2026-10-12 06:22:57 UTC.
+- **Manifest beta potwierdzony:** `versionName=0.8.0.95`, `versionCode=287`, SHA-256 APK `68f144b00859bfd831b5026cbd34c85ed6c48c77f47c35311144f2490aded6c4`.
+- **Naprawiony błąd CI:** build #2181 zatrzymywał się w teście Budżetu 5C z powodu zmienionego sposobu tworzenia `retainedBudgetCache`. Commit `89d4e476` przywrócił kontrakt bez utraty opcji selektywnego restore; #2182 wykazał nieaktualny test kontraktu ZIP; commit `6c646073` skorygował testy i dołożył kontrolę tombstone/append-only history. #2183 przeszedł cały workflow.
+- **Ważne P0:** wydanie APK i CI potwierdzone; **testy rzeczywistego ZIP v1/v2 i selektywnego przywracania na telefonie, połączenia Desktop oraz scenariusza uszkodzonego ZIP nadal niepotwierdzone**. P0 pozostaje otwarte do testu na fizycznych danych. Najpierw wyeksportować kopię ZIP do pliku poza aplikacją. Nie odinstalowywać starszej wersji. `main` Stable bez zmian.
+
 ## 2026-10-12 — EDHOME P0: selektywne przywracanie ZIP — KOD ANDROID WDROŻONY NA BETA, ODBIÓR OTWARTY
 
 - **Nowy format ZIP v2 + import starszych ZIP v1:** struktura `data.json` (pełny snapshot), `modules/<kategoria>.json`, załączniki i oryginały, `manifest.json` z SHA-256, kategoriami, wersją bazy i liczbą wierszy. `BackupModuleSnapshot.java` i `DataBackupArchive.java` walidują zgodność sekcji z pełnym snapshotem, przypisanie mediów i schemat. Stare ZIP v1 i JSON nadal mają ścieżki pełnego importu.
