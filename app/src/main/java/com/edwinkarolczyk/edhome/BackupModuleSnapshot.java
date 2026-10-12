@@ -37,7 +37,12 @@ final class BackupModuleSnapshot {
         if (table.startsWith("task_") || "tasks".equals(table))
             return "tasks";
         if (table.startsWith("member_")) return "calendar";
-        // places / households / profiles / audit / timers nie mogą zniknąć.
+        if ("places".equals(table)) return "places";
+        if ("household_members".equals(table) || "user_profiles".equals(table))
+            return "profiles";
+        if (table.startsWith("audit_")) return "audit";
+        if ("device_timers".equals(table)) return "timers";
+        // Dodatkowe przyszłe tabele nie mogą zniknąć z kopii.
         return "other";
     }
 
@@ -109,6 +114,10 @@ final class BackupModuleSnapshot {
             case "garden":
             case "tasks":
             case "calendar":
+            case "places":
+            case "profiles":
+            case "audit":
+            case "timers":
             case "other":
             case "settings":
                 return true;
