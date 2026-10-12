@@ -54,6 +54,12 @@ final class BackupSelectiveMerge {
         JSONObject archivedTables = old.getJSONObject("tables");
         Set<String> available = available(archived);
         Set<String> names = new HashSet<>(requested);
+        Set<String> required = BackupRestoreDependencies.resolve(
+            installed, archived, names);
+        if (!names.containsAll(required))
+            throw new IllegalArgumentException(
+                "Wybór nie obejmuje wymaganych powiązań: " + required
+                + ". Wróć do listy i zatwierdź dodatkowe moduły.");
         if (!available.containsAll(names))
             throw new IllegalArgumentException("Nie znaleziono wybranego modułu w kopii.");
         for (String name : names)
