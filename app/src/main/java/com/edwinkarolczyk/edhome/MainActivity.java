@@ -21837,18 +21837,46 @@ public final class MainActivity extends Activity {
                             db.getWritableDatabase(),prefs,legacyJson);
                     }
                 }
-                SharedPreferences.Editor reminderReset=prefs.edit();
-                for(String key:prefs.getAll().keySet()) {
-                    if(key.startsWith("reminder_fired_")
+                // Nie resetuj oznaczeń powiadomień niewybranych modułów.
+                // Poprzednio np. import samego Budżetu czyścił także
+                // znaczniki Zadań, Pojazdów i Minutników.
+                boolean tasksAffected = selected==null
+                    ||selected.contains("tasks")||selected.contains("calendar")
+                    ||selected.contains("settings");
+                boolean vehiclesAffected = selected==null
+                    ||selected.contains("vehicles")||selected.contains("settings");
+                boolean timersAffected = selected==null
+                    ||selected.contains("timers")||selected.contains("settings");
+                if(tasksAffected||vehiclesAffected||timersAffected) {
+                    SharedPreferences.Editor reminderReset=prefs.edit();
+                    for(String key:prefs.getAll().keySet()) {
+                        boolean taskKey=key.startsWith("reminder_fired_")
                             ||key.startsWith("reminder_custom_day_")
-                            ||"reminder_legacy_day".equals(key)
-                            ||key.startsWith("vehicle_reminder_fired_")
-                            ||key.startsWith("timer_notified_"))
-                        reminderReset.remove(key);
+                            ||"reminder_legacy_day".equals(key);
+                        boolean vehicleKey=key.startsWith(
+                            "vehicle_reminder_fired_");
+                        boolean timerKey=key.startsWith("timer_notified_");
+                        if((tasksAffected&&taskKey)
+                                ||(vehiclesAffected&&vehicleKey)
+                                ||(timersAffected&&timerKey))
+                            reminderReset.remove(key);
+                    }
+                    reminderReset.apply();
                 }
-                reminderReset.apply();
-                ReminderReceiver.schedule(this);
-                DeviceTimerReceiver.scheduleAll(this);
+                // Selektywny import zapisuje checkpoint sukcesu wewnątrz
+                // restoreSelected, gdy katalogi nadal da się cofnąć.
+                if(selected==null&&checkpoint!=null)
+                    DataBackupArchive.markSuccessfulRestore(this,checkpoint);
+                try {
+                    if(tasksAffected||vehiclesAffected)
+                        ReminderReceiver.schedule(this);
+                    if(timersAffected)
+                        DeviceTimerReceiver.scheduleAll(this);
+                } catch(Exception alarmError) {
+                    // Pomyślnie przywróconych danych nie cofamy z powodu
+                    // niedostępnego Android AlarmManager.
+                    DiagnosticLog.error("DATA_BACKUP_REMINDERS",alarmError);
+                }
                 DiagnosticLog.event(selected!=null
                     ?"DATA_BACKUP_SELECTED_RESTORED"
                     :archive?"DATA_BACKUP_ZIP_RESTORED":"DATA_BACKUP_RESTORED");
@@ -21918,48 +21946,109 @@ public final class MainActivity extends Activity {
     }
 
     private void showLastDataBackupRecovery() {
+        java.io.File verified=DataBackupArchive.lastSuccessfulCheckpoint(this);
+        if(verified!=null) {
+            confirmDataBackupUndo(verified,false);
+            return;
+        }
+        // Wersje <=0.8.0.98 nie zapisywały wskazania ostatniego
+        // ZAKOŃCZONEGO importu. Nie wolno wtedy automatycznie wybierać
+        // najnowszego ZIP: mógł powstać po nieudanej próbie.
         java.io.File folder=new java.io.File(getFilesDir(),"edhome-recovery");
         java.io.File[] copies=folder.listFiles((dir,name)->
-            name.startsWith("EDHOME-przed-importem-") && name.endsWith(".zip"));
-        if(copies==null || copies.length==0) {
+            name.startsWith("EDHOME-przed-importem-")&&name.endsWith(".zip"));
+        if(copies==null||copies.length==0) {
             alert("Brak zapisanej kopii ratunkowej do cofnięcia.");
             return;
         }
-        java.util.Arrays.sort(copies,(a,b)->Long.compare(
-            b.lastModified(),a.lastModified()));
-        java.io.File selected=copies[0];
+        java.util.Arrays.sort(copies,(left,right)->Long.compare(
+            right.lastModified(),left.lastModified()));
+        final java.io.File[] choices=java.util.Arrays.copyOf(
+            copies,Math.min(20,copies.length));
+        CharSequence[] labels=new CharSequence[choices.length];
+        java.text.SimpleDateFormat dateFormat=new java.text.SimpleDateFormat(
+            "yyyy-MM-dd HH:mm",java.util.Locale.getDefault());
+        for(int i=0;i<choices.length;i++)
+            labels[i]=dateFormat.format(new java.util.Date(
+                choices[i].lastModified()))+" • "+(choices[i].length()/1024)+" KB";
         new AlertDialog.Builder(this)
-            .setTitle("Cofnąć ostatnie przywracanie?")
-            .setMessage("EDHOME przywróci pełny stan z ostatniej kopii "
-                +"ratunkowej. Przed cofnięciem utworzy także kopię bieżącego "
-                +"stanu, aby dało się ponowić operację.\n\n"
-                +"Rozmiar kopii: "+(selected.length()/1024)+" KB.")
+            .setTitle("Starsze kopie ratunkowe • wybierz świadomie")
+            .setItems(labels,(dialog,index)->
+                confirmDataBackupUndo(choices[index],true))
             .setNegativeButton("Anuluj",null)
-            .setPositiveButton("Cofnij",(dialog,which)->{
+            .show();
+    }
+
+    private void confirmDataBackupUndo(java.io.File selected,
+            boolean legacyCheckpoint) {
+        new AlertDialog.Builder(this)
+            .setTitle(legacyCheckpoint
+                ?"Przywrócić ręcznie wybraną starszą kopię?"
+                :"Cofnąć ostatnie udane przywracanie?")
+            .setMessage((legacyCheckpoint
+                ?"Starsza aplikacja nie zapisywała, który import się powiódł. "
+                    +"Ta kopia może pochodzić również z nieudanej próby. "
+                    +"Sprawdź datę i wybór przed zatwierdzeniem.\n\n"
+                :"EDHOME przywróci pełny stan sprzed ostatniego udanego importu.\n\n")
+                +"Przed zmianą zabezpieczy obecny stan oddzielnym ZIP. "
+                +"Cofnięcie obejmuje WSZYSTKIE moduły i zdjęcia.\n\n"
+                +"Rozmiar wybranej kopii: "+(selected.length()/1024)+" KB.")
+            .setCancelable(false)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Przywróć i zachowaj obecny stan",(dialog,which)->{
                 showDataBackupBusy("Cofanie przywracania",
                     "Zabezpieczam aktualne dane i odtwarzam kopię ratunkową.");
                 new Thread(()->{
+                    java.io.File redo=null;
+                    boolean restoreCompleted=false;
+                    boolean recovered=false;
                     try {
-                        DataBackupArchive.recoveryCheckpoint(
+                        redo=DataBackupArchive.recoveryCheckpoint(
                             this,db.getWritableDatabase(),prefs);
                         DataBackupArchive.restoreExact(
                             this,db.getWritableDatabase(),prefs,selected);
-                        ReminderReceiver.schedule(this);
-                        DeviceTimerReceiver.scheduleAll(this);
+                        restoreCompleted=true;
+                        // Po pomyślnym cofnięciu kolejny przycisk Cofnij
+                        // pozwala bezpiecznie przywrócić stan sprzed cofania.
+                        DataBackupArchive.markSuccessfulRestore(this,redo);
+                        try {
+                            ReminderReceiver.schedule(this);
+                            DeviceTimerReceiver.scheduleAll(this);
+                        } catch(Exception alarmError) {
+                            DiagnosticLog.error("DATA_BACKUP_UNDO_REMINDERS",
+                                alarmError);
+                        }
                         DiagnosticLog.event("DATA_BACKUP_RESTORE_UNDO");
                         runOnLiveUi(()->{
                             hideDataBackupBusy();
                             screen="home";
                             render();
-                            alert("Przywrócono dane sprzed poprzedniego importu. "
-                                +"Aktualny stan również zachowano jako kopię.");
+                            alert("Przywrócono wybraną kopię ratunkową. "
+                                +"Poprzedni stan również zachowano; "
+                                +"przycisk Cofnij umożliwia jego odtworzenie.");
                         });
                     } catch(Exception failure) {
                         DiagnosticLog.error("DATA_BACKUP_RESTORE_UNDO",failure);
+                        if(restoreCompleted&&redo!=null) {
+                            // W przypadku błędu zapisu wskaźnika nie
+                            // pozostawiaj pozornie udanego cofnięcia.
+                            try {
+                                DataBackupArchive.restoreExact(
+                                    this,db.getWritableDatabase(),prefs,redo);
+                                recovered=true;
+                            } catch(Exception rollbackError) {
+                                DiagnosticLog.error("DATA_BACKUP_UNDO_ROLLBACK",
+                                    rollbackError);
+                            }
+                        }
+                        final boolean rollbackOk=recovered;
                         runOnLiveUi(()->{
                             hideDataBackupBusy();
-                            alert("Nie udało się cofnąć operacji. Kopie ratunkowe "
-                                +"pozostały na urządzeniu.");
+                            alert("Nie udało się bezpiecznie cofnąć operacji. "
+                                +(rollbackOk
+                                    ?"Odtworzono stan sprzed tej próby."
+                                    :"Kopie ratunkowe pozostały na urządzeniu. "
+                                     +"Sprawdź dane i diagnostykę."));
                         });
                     }
                 },"edhome-backup-undo").start();
