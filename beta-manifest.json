@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 291,
-  "versionName": "0.8.0.99",
-  "changelog": "EDHOME Beta 0.8.0.99 — P0 bezpieczne cofanie kopii ZIP. Przycisk Cofnij wskazuje teraz ostatni import zakończony powodzeniem, nie po prostu najnowszy plik ratunkowy: nieudane próby nie przesłaniają poprawnego punktu cofania. Dla kopii ze starszych wersji możliwy jest ręczny wybór ze świadomym ostrzeżeniem. Po cofnięciu można też wrócić do stanu sprzed cofnięcia. Import wybranych modułów nie zeruje już znaczników przypomnień innych modułów. Ochrona niezmienionych danych porównuje JSON semantycznie. Dodano wykonywalny test Java kopii ratunkowych. Przed eksperymentami z cofaniem zachowaj niezależny ZIP poza aplikacją, wyłącz synchronizację LAN. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.99/edhome-beta.apk",
-  "sha256": "f3ab95a52a673bbaf66579547ad876687dc1d489f8a745b3a8ab77cbf9191602"
+  "versionCode": 292,
+  "versionName": "0.8.0.100",
+  "changelog": "EDHOME Beta 0.8.0.100 — lepszy ekran Kopii danych. Przywróć kopię i Cofnij ostatnie przywrócenie są teraz widoczne od razu u góry, bez przewijania przez długie objaśnienia. Pusta/nowa instalacja wyraźnie informuje, że nie ma jeszcze kopii ratunkowej i nie można cofnąć importu, którego nie było. Po imporcie kopiowana jest migawka ratunkowa. Zachowano zabezpieczenia cofania, wykrywanie modułów, kopie ZIP v1/v2 i spójność danych. Test widoczności akcji dodany do CI. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.100/edhome-beta.apk",
+  "sha256": "0ff0e191a27da236c6ab7ac70faa1120e2c3400d7e9560a18ef0b03b5f6b50a2"
 }
