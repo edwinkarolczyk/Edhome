@@ -512,6 +512,7 @@ final class DataBackupArchive {
                 throw new IllegalArgumentException("Kopia ZIP zawiera brakujące lub obce pliki.");
             validatePayloadNamesAgainstJson(json, expected);
             if (archiveVersion == FORMAT_VERSION) {
+                validateCategoryIndex(manifest.getJSONObject("categories"), json);
                 // Każdy moduł musi odtwarzać dokładnie ten sam stan co data.json.
                 // Sam hash w manifeście nie wystarcza: wykryj podmieniony moduł
                 // nawet wtedy, gdy ktoś podmienił też hash w manifeście.
@@ -531,6 +532,35 @@ final class DataBackupArchive {
             return new Inspection(json,new ArrayList<>(expected),
                 storage,legacyThumbs,tiles,paycheckAttachments);
         }
+    }
+
+    /** Nie ufamy samemu indeksowi z manifestu bez porównania z migawką. */
+    private static void validateCategoryIndex(JSONObject provided, String json)
+            throws Exception {
+        JSONObject calculated = BackupModuleSnapshot.index(json);
+        if (provided.length() != calculated.length())
+            throw new IllegalArgumentException("Indeks modułów nie zgadza się z kopią.");
+        for (java.util.Iterator<String> categories = calculated.keys();
+                categories.hasNext();) {
+            String category = categories.next();
+            JSONObject expected = calculated.getJSONObject(category);
+            JSONObject actual = provided.optJSONObject(category);
+            if (actual == null || actual.length() != expected.length())
+                throw new IllegalArgumentException("Nieprawidłowy indeks: " + category);
+            for (java.util.Iterator<String> tables = expected.keys();
+                    tables.hasNext();) {
+                String table = tables.next();
+                if (actual.optInt(table, -1) != expected.getInt(table))
+                    throw new IllegalArgumentException(
+                        "Niezgodna liczba pozycji: " + category + "/" + table);
+            }
+        }
+    }
+
+    /** Podgląd kategorii dla przyszłego wyboru przywracania; niczego nie zmienia. */
+    static JSONObject inspectCategories(File archive) throws Exception {
+        Inspection inspection = inspect(archive);
+        return BackupModuleSnapshot.index(inspection.json);
     }
 
     private static void validatePayloadNamesAgainstJson(String json, Set<String> paths)
