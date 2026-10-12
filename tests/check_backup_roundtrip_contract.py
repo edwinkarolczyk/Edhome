@@ -280,4 +280,16 @@ for token in (
 ):
     assert token in main, "Brak obsługi modułów w Android UI: " + token
 
+# Android AlertDialog pokazuje listę ALBO setMessage; użycie obu w tym
+# samym kreatorze ukrywa checkboxy (regresja wykryta na filmie z telefonu).
+picker=main.split('private void showDataBackupRestoreConfirmation(',1)[1].split(
+    'private void confirmFullDataBackupRestore(',1)[0]
+list_dialog=picker.split('new AlertDialog.Builder(this)',1)[1].split(
+    '.setMultiChoiceItems(labels,checked,',1)[0]
+assert '.setTitle("Co przywrócić z kopii?' in list_dialog
+assert '.setMessage(' not in list_dialog, (
+    "P0: setMessage zasłania listę wyboru modułów w Android AlertDialog")
+assert '.setMultiChoiceItems(labels,checked,' in picker
+assert 'labels[i]=backupCategoryName(category)+" ("+total+" wpisów)"' in picker
+
 print("Backup: 54 tables, ZIP v1/v2, selective restore + rescue checkpoint static contracts PASS")
