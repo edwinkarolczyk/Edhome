@@ -1,3 +1,12 @@
+## 2026-10-12 — Backup UI P0: przycisk Cofnij niewidoczny na pustej instalacji
+
+- **Zgłoszenie użytkownika:** „Nie mam takiego przycisku w tej wersji czemu? Pusta instalacje miałem”. Potwierdzenie z kodu Beta 0.8.0.99: przycisk `button("Cofnij ostatnie przywrócenie", this::showLastDataBackupRecovery)` istniał w ekranie `backup()`, ale **występował dopiero po sześciu długich notatkach**, dwóch eksportach i imporcie. Na telefonie wymagał przewinięcia strony.
+- **Wyjaśnienie nowej instalacji:** przy nowej/pustej instalacji katalog `edhome-recovery/` nie ma wcześniejszych ratunkowych ZIP-ów, więc cofanie jest niemożliwe do czasu pierwszego importu. Samo zainstalowanie/aktualizacja APK **nie tworzy historii importów ani kopii ratunkowej**. Jeśli instalację odinstalowano, prywatne kopie mogą zostać skasowane wraz z danymi aplikacji.
+- **Naprawa UI na beta:** commity `4401d559` i `73772f05` przenoszą „Przywróć kopię” i „Cofnij ostatnie przywrócenie” na samą górę ekranu. Pod przyciskiem jest status: ostatnia zakończona próba do cofnięcia / starsze ratunkowe ZIP-y / brak kopii na pustej instalacji. Wszystkie długie opisy są poniżej przycisków.
+- **Test kontraktowy:** `tests/check_backup_undo_contract.py` pilnuje położenia przycisków przed długimi notatkami i komunikatu o pustej instalacji (commit `ea5ee269`).
+- **Wersja źródłowa:** Beta `0.8.0.100 / 292` (commit `be383d04`), notatka CI `29fe89e7`. Ostatnio publikowane i potwierdzone wydanie przed poprawką: 0.8.0.99 / 291. **W momencie wpisu CI #2213 pending; APK 0.8.0.100 niepotwierdzone, nie ogłaszać do instalacji do czasu GitHub Actions PASS i sprawdzenia release/manifestu.** `main` Stable pozostaje bez zmian.
+- **P0 nadal otwarte:** test interfejsu na telefonie, rzeczywisty Undo i spójność niewybranych modułów w scenariuszu Android↔Desktop wciąż wymagają oddzielnego sprawdzenia.
+
 ## 2026-10-12 — P0: zabezpieczenie cofania udanego importu, Beta 0.8.0.99 / 291 — CI weryfikowane
 
 - **Punkt wyjścia:** użytkownik potwierdził „import działa” na Androidzie Beta 0.8.0.98, a po oględzinach dane wydają się poprawne. Nie oznacza to zaliczenia testu Undo ani synchronizacji z Desktopem.
