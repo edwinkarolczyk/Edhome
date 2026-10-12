@@ -304,6 +304,13 @@ final class DataBackup {
 
     static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,
             Map<Long,String> archivedStorageThumbs) throws Exception {
+        restoreJson(database, prefs, json, archivedStorageThumbs, true);
+    }
+
+    /** Przywracanie konkretnego zestawu modułów nie może dopisywać niechcianych historii. */
+    static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,
+            Map<Long,String> archivedStorageThumbs, boolean preserveLocalBudgetHistory)
+            throws Exception {
         if (archivedStorageThumbs == null)
             archivedStorageThumbs = java.util.Collections.emptyMap();
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
@@ -1656,10 +1663,13 @@ final class DataBackup {
             // Etap 5C: pełny snapshot/restore nie może wymazać lokalnego
             // archiwum historii (cache prefs zawiera tylko ostatnie 6000).
             // Odczyt w tej samej transakcji chroni przed częściowym scaleniem.
-            JSONArray retainedBudgetHistory =
-                PaycheckBudgetSqliteStore.archivedHistory(database, null);
-            JSONArray retainedBudgetCache = new JSONArray(
-                prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY, "[]"));
+            JSONArray retainedBudgetHistory = preserveLocalBudgetHistory
+                ? PaycheckBudgetSqliteStore.archivedHistory(database, null)
+                : new JSONArray();
+            JSONArray retainedBudgetCache = preserveLocalBudgetHistory
+                ? new JSONArray(prefs.getString(
+                    PaycheckBudgetHistoryStore.PREF_KEY, "[]"))
+                : new JSONArray();
             for (int i = TABLES.length - 1; i >= 0; i--)
                 database.delete(TABLES[i][0], null, null);
             for (String[] definition : TABLES) {
