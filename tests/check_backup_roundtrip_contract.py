@@ -48,6 +48,19 @@ assert not missing_nullable, "Nullable fields missing: "+", ".join(missing_nulla
 
 db.execute("INSERT INTO places(id,name,kind,parent_id,icon) VALUES(1,'Dom','Dom',NULL,'places')")
 db.execute("INSERT INTO tasks(id,title,done) VALUES(1,'Kontrola',0)")
+# Historyczna czynność projektu ma 10 minut: obecne UI wymaga minimum 20
+# TYLKO przy tworzeniu/edycji. Backup musi zachować stary plan bez zmian.
+db.execute("""INSERT INTO projects(id,name,status,created_at)
+VALUES(1,'Projekt archiwalny','active',1790000000000)""")
+db.execute("""INSERT INTO tasks(id,title,done,project_id,duration_minutes,project_sort_order)
+VALUES(2,'Historyczna czynność',0,1,10,0)""")
+db.execute("""INSERT INTO tasks(id,title,done,project_id,duration_minutes,project_sort_order)
+VALUES(3,'Druga czynność',0,1,30,1)""")
+db.execute("""INSERT INTO project_task_dependencies(task_id,depends_on_task_id,created_at)
+VALUES(3,2,1790000000001)""")
+db.execute("""INSERT INTO project_task_work_sessions(
+id,task_id,started_at,ended_at,worked_minutes)
+VALUES(1,2,1790000000000,1790000300000,5)""")
 db.execute("INSERT INTO pantry(id,name,qty,category) VALUES(1,'Ryż',2,'other')")
 db.execute("INSERT INTO pantry_packages(pantry_id,unit,size_milli) VALUES(1,'szt.',1000)")
 db.execute("INSERT INTO shopping_items(id,name,qty_milli,unit,checked) VALUES(1,'Ryż',NULL,'szt.',1)")
@@ -73,6 +86,15 @@ for table,columns in manifest.items():
     found=db.execute('SELECT '+",".join(columns)+' FROM "'+table+'" ORDER BY '+order).fetchall()
     content[table]=[dict(zip(columns,row)) for row in found]
 payload=json.loads(json.dumps({"databaseVersion":35,"tables":content},ensure_ascii=False))
+archived_tasks={row["id"]:row for row in payload["tables"]["tasks"]}
+assert archived_tasks[2]["duration_minutes"]==10
+assert archived_tasks[2]["project_id"]==1
+assert payload["tables"]["project_task_dependencies"][0]["depends_on_task_id"]==2
+assert payload["tables"]["project_task_work_sessions"][0]["worked_minutes"]==5
+# Nie wolno przeliczać historycznych 10 min na 20 podczas importu.
+assert 'minutes == null || minutes < 1 || minutes > 600' in source
+assert 'taskMinutes<20' not in source
+assert 'Czynność projektowa musi mieć co najmniej 20 minut.' not in source
 price=payload["tables"]["pantry_purchase_prices"][0]
 assert (price["unit_price_grosz"],price["pantry_id"],price["quantity_milli"])==(649,None,None)
 assert payload["tables"]["storage_items"][0]["lent_to"] is None
