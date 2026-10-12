@@ -1,3 +1,14 @@
+## 2026-10-12 — Stabilizacja backupu, etap 2: modułowa paczka ZIP v2 (KOD ZAPISANY, CI NIEPOTWIERDZONE)
+
+- **Kod beta:** `BackupModuleSnapshot.java` (commit `80a1387a`, rozszerzenie `76c0475d`) dzieli `data.json` na odrębne `modules/*.json`, w tym `projects`, `budget`, `paycheck`, `storage`, `vehicles`, `pantry`, `garden`, `tasks`, `calendar`, `places`, `profiles`, `audit`, `timers`, `settings`, `other`. Każda sekcja ma własny numer formatu, źródłową wersję bazy i dane wyłącznie swojej kategorii; opcja `other` gwarantuje zachowanie nieznanych tabel.
+- **ZIP v2:** `DataBackupArchive.create` domyślnie dołącza `modules/*.json` obok istniejącego `data.json` i mediów. Manifest zawiera SHA-256 każdego pliku, kategorię mediów, indeks ilości wpisów, wersję bazy i wersję paczki. Komity m.in. `c80996ca`, `da64110c`, `0f6a2670`, `511aff30`.
+- **Odczyt starych kopii:** import nadal obsługuje ZIP v1; `createLegacy` potrafi wygenerować starszy format, ale nie ma jeszcze wyboru tej opcji w UI. Stara aplikacja nie odczyta automatycznie nowego ZIP v2. Trzeba udostępnić użytkownikowi opcję zgodnego eksportu lub zapewnić stosowną migrację, zanim uznamy kompatybilność obustronną.
+- **Integralność:** podczas inspekcji ZIP v2 sprawdzane są hash/rozmiar każdego pliku, komplet i zgodność wszystkich modułów z pełnym `data.json`, indeks liczebności, przyporządkowanie mediów oraz wersja schematu. Niespójność zatrzymuje import przed modyfikacją bazy.
+- **Podgląd:** metoda `inspectCategories(File)` zwraca zweryfikowany spis modułów także dla ZIP v1; UI wyboru modułów jeszcze nie istnieje.
+- **Testy:** rozszerzony `tests/check_backup_roundtrip_contract.py` (ostatni commit `0f7c7d3c`); w tej sesji wykonana inspekcja kodu i kontrola zapisanych zmian, lecz nie ma potwierdzenia CI PASS, kompilacji Androida, testów runtime, publikacji APK ani testu na fizycznym telefonie.
+- **NIEGOTOWE:** selektywne przywracanie, zależności transakcyjne między modułami, automatyczny backup przed importem selektywnym, interfejs wyboru i dostępny z UI eksport legacy. **Pełny restore nadal zastępuje całą bazę.**
+- **Następny etap P0:** przeprowadzić CI/kompilację i test tworzenia/odczytu v1/v2; następnie wdrożyć selektywny restore z walidacją relacji SQL i zależności w Budżecie/PayCheck/Projektach, transakcyjnym rollbackiem oraz przedimportową kopią bezpieczeństwa. Stable `main` bez zmian.
+
 ## 2026-10-12 — Stabilizacja backupu, etap 1: indeks kategorii w ZIP (KOD, NIEZWERYFIKOWANY BUILD)
 
 - Commit `ada83a8d`: w `DataBackupArchive.java` manifest ZIP otrzymał `categoryIndexVersion=1` i `categories` z liczebnością tabel według modułów (projects, budget, paycheck, storage, vehicles, pantry, garden, tasks, calendar, other). `data.json` i `formatVersion=1` pozostają bez zmian dla zgodności ze starymi importerami.
