@@ -4,6 +4,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -64,7 +67,10 @@ final class BackupSelectiveMerge {
             if (!archivedTables.has(table))
                 throw new IllegalArgumentException(
                     "Kopia nie zawiera wymaganej tabeli: " + table);
-            installedTables.put(table, archivedTables.getJSONArray(table));
+            if ("budget_history".equals(table)) {
+                installedTables.put(table, mergeBudgetHistory(
+                    installedTables.getJSONArray(table), archivedTables.getJSONArray(table)));
+            } else installedTables.put(table, archivedTables.getJSONArray(table));
         }
 
         JSONObject settings = current.getJSONObject("settings");
@@ -92,34 +98,87 @@ final class BackupSelectiveMerge {
                         "paycheckBudgetHistory", "paycheckBudgetAttachments"});
         }
 
-        // Metadane tabel nieodtwarzanych pochodzą z bieżącej instalacji.
-        // Wybrane tabele dostają identyfikatory ze źródła i nowy znacznik
-        // aktualizacji, aby synchronizacja LAN mogła rozesłać zmiany.
+        // Zachowaj tożsamości niezmienionych tabel oraz historię Budżetu,
+        // której nie wolno usuwać (append-only). Zmiany wybranych modułów
+        // trafiają do LAN z rosnącą rewizją i znacznikami usunięcia.
         JSONArray joinedSync = new JSONArray();
         JSONArray currentSync = current.getJSONArray("syncRecords");
         JSONArray backupSync = old.getJSONArray("syncRecords");
         Set<String> uuids = new HashSet<>();
+        Set<String> restoredUuids = new HashSet<>();
+        Map<String,JSONObject> liveSelected = new HashMap<>();
+        Map<String,String> retainedHistoryRows = new HashMap<>();
+
         for (int i = 0; i < currentSync.length(); i++) {
             JSONObject meta = currentSync.getJSONObject(i);
-            if (names.contains(BackupModuleSnapshot.categoryForTable(
-                    meta.getString("table")))) continue;
+            String table = meta.getString("table");
             String uuid = meta.getString("syncUuid");
+            boolean selected = names.contains(BackupModuleSnapshot.categoryForTable(table));
+            if (selected) liveSelected.put(uuid, meta);
+            boolean appendOnly = selected && "budget_history".equals(table);
+            if (appendOnly) {
+                retainedHistoryRows.put(meta.getString("rowKey"), uuid);
+            }
+            if (selected && !appendOnly) continue;
             if (!uuids.add(uuid))
                 throw new IllegalArgumentException("Zduplikowana tożsamość synchronizacji.");
             joinedSync.put(meta);
         }
+
         long now = System.currentTimeMillis();
         for (int i = 0; i < backupSync.length(); i++) {
             JSONObject from = backupSync.getJSONObject(i);
-            if (!names.contains(BackupModuleSnapshot.categoryForTable(
-                    from.getString("table")))) continue;
-            JSONObject meta = new JSONObject(from.toString());
-            if (!uuids.add(meta.getString("syncUuid")))
+            String table = from.getString("table");
+            if (!names.contains(BackupModuleSnapshot.categoryForTable(table)))
+                continue;
+            String uuid = from.getString("syncUuid");
+            if ("budget_history".equals(table)
+                    && retainedHistoryRows.containsKey(from.getString("rowKey"))) {
+                // Zachowaj lokalną tożsamość tej samej, niezmiennej operacji.
+                continue;
+            }
+            JSONObject installedMeta = liveSelected.get(uuid);
+            if (installedMeta != null
+                    && (!table.equals(installedMeta.getString("table"))
+                        || !from.getString("rowKey").equals(
+                            installedMeta.getString("rowKey"))))
                 throw new IllegalArgumentException(
-                    "Konflikt identyfikatorów synchronizacji między modułami.");
-            meta.put("revision", Math.max(1L, meta.getLong("revision") + 1L));
+                    "UUID synchronizacji wskazuje dwa różne rekordy.");
+            JSONObject meta = new JSONObject(from.toString());
+            long revision = Math.max(meta.getLong("revision"),
+                installedMeta == null ? 0L : installedMeta.getLong("revision"));
+            if (revision == Long.MAX_VALUE)
+                throw new IllegalArgumentException("Przekroczony licznik synchronizacji.");
+            meta.put("revision", revision + 1);
             meta.put("updatedAt", now);
             if (!meta.isNull("deletedAt")) meta.put("deletedAt", now);
+            if (!uuids.add(uuid))
+                throw new IllegalArgumentException(
+                    "Konflikt identyfikatorów synchronizacji między modułami.");
+            restoredUuids.add(uuid);
+            joinedSync.put(meta);
+        }
+
+        for (Map.Entry<String,JSONObject> existing : liveSelected.entrySet()) {
+            JSONObject oldMeta = existing.getValue();
+            String table = oldMeta.getString("table");
+            if ("budget_history".equals(table) || restoredUuids.contains(existing.getKey()))
+                continue;
+            // Bez tombstone inne urządzenie przy następnej synchronizacji
+            // wskrzesiłoby wpis usunięty przy odtwarzaniu modułu.
+            JSONObject meta = new JSONObject(oldMeta.toString());
+            if (meta.isNull("deletedAt")) {
+                long revision = meta.getLong("revision");
+                if (revision == Long.MAX_VALUE)
+                    throw new IllegalArgumentException(
+                        "Przekroczony licznik synchronizacji.");
+                meta.put("revision", revision + 1);
+                meta.put("updatedAt", now);
+                meta.put("deletedAt", now);
+                meta.put("rowHash", "DELETED");
+            }
+            if (!uuids.add(existing.getKey()))
+                throw new IllegalArgumentException("Powielona tożsamość usunięcia.");
             joinedSync.put(meta);
         }
         current.put("syncRecords", joinedSync);
@@ -130,6 +189,30 @@ final class BackupSelectiveMerge {
         if (merged.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 > DataBackup.MAX_BYTES)
             throw new IllegalArgumentException("Połączona kopia przekracza limit 32 MB.");
+        return merged;
+    }
+
+    /** Historia Budżetu jest nieusuwalna: zachowuj wszystkie poprawne zdarzenia. */
+    private static JSONArray mergeBudgetHistory(JSONArray installed, JSONArray archived)
+            throws Exception {
+        LinkedHashMap<String,JSONObject> rows = new LinkedHashMap<>();
+        for (JSONArray source : new JSONArray[]{installed, archived}) {
+            for (int i = 0; i < source.length(); i++) {
+                JSONObject row = source.getJSONObject(i);
+                String key = row.getString("entity_key");
+                JSONObject existing = rows.get(key);
+                if (existing != null) {
+                    if (existing.getLong("id") != row.getLong("id")
+                            || !PaycheckBudgetSqliteStore.sameJson(
+                                new JSONObject(existing.getString("payload")),
+                                new JSONObject(row.getString("payload"))))
+                        throw new IllegalArgumentException(
+                            "Historia Budżetu zawiera sprzeczne wersje zdarzenia.");
+                } else rows.put(key, row);
+            }
+        }
+        JSONArray merged = new JSONArray();
+        for (JSONObject row : rows.values()) merged.put(row);
         return merged;
     }
 
