@@ -292,4 +292,47 @@ assert '.setMessage(' not in list_dialog, (
 assert '.setMultiChoiceItems(labels,checked,' in picker
 assert 'labels[i]=backupCategoryName(category)+" ("+total+" wpisów)"' in picker
 
+# P0 — film Android 0.8.0.96: Projekty bez Zadań i Magazyn bez Miejsc.
+# Dodatkowe moduły wymagają WYRAŹNEJ zgody; żadnych cichych nadpisań.
+dep=Path("app/src/main/java/com/edwinkarolczyk/edhome/BackupRestoreDependencies.java").read_text(
+    encoding="utf-8")
+for token in (
+    'static Set<String> resolve(String installed, String archived,',
+    'selected.contains("projects")',
+    'hasRows(source, "project_task_dependencies")',
+    'hasRows(source, "project_task_work_sessions")',
+    'containsProjectTasks(source)',
+    'selected.add("tasks")',
+    'selected.contains("storage")',
+    '"storage_items", "place_id", "places", "places"',
+    '"tasks", "project_id", "projects", "projects"',
+    'selected.contains("places")',
+    'guardUnselectedPlaces(current, source, selected)',
+    'PaycheckBudgetSqliteStore.sameJson(',
+    'selection.add(category)',
+    'W kopii brakuje modułu wymaganego przez powiązania.',
+):
+    assert token in dep, "Brak kontroli zależności modułów: " + token
+for token in (
+    'BackupRestoreDependencies.resolve(',
+    'if (!names.containsAll(required))',
+    'Wybór nie obejmuje wymaganych powiązań:',
+):
+    assert token in selective, "Nieodpowiednio zabezpieczony import częściowy: " + token
+assert 'static String verifiedSnapshot(File archive)' in archive
+for token in (
+    'previewSelectedBackupDependencies(backupFile,categories,chosen)',
+    'BackupRestoreDependencies.resolve(',
+    'DataBackupArchive.verifiedSnapshot(archiveFile)',
+    'BackupSelectiveMerge.merge(installed,incoming,planned)',
+    'confirmSelectedBackupDependencies(',
+    'WYMAGANE DODATKOWO:',
+    'Przywróć razem',
+    'restoreDataBackupAsync(archiveFile,true,null,planned)',
+):
+    assert token in main, "Brak potwierdzenia powiązanych kategorii: " + token
+assert main.index('BackupRestoreDependencies.resolve(') < main.index(
+    'restoreDataBackupAsync(archiveFile,true,null,planned)'), (
+    "Relacje należy obliczyć przed importem")
+
 print("Backup: 54 tables, ZIP v1/v2, selective restore + rescue checkpoint static contracts PASS")
