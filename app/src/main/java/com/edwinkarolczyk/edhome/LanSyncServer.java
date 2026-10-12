@@ -108,7 +108,8 @@ final class LanSyncServer {
     private final ChangesProvider changesProvider;
     private final PatchProvider patchProvider;
     private final Object writeLock = new Object();
-    private volatile java.util.function.BooleanSupplier transferBlocked=()->false;
+    interface TransferBlocked { boolean isBlocked(); }
+    private volatile TransferBlocked transferBlocked=()->false;
     private volatile boolean running;
     private volatile ServerSocket server;
     private Thread acceptThread;
@@ -124,7 +125,7 @@ final class LanSyncServer {
         this.patchProvider = patchProvider;
     }
 
-    void setTransferBlocked(java.util.function.BooleanSupplier guard) {
+    void setTransferBlocked(TransferBlocked guard) {
         transferBlocked=guard==null?()->false:guard;
     }
 
@@ -282,7 +283,7 @@ final class LanSyncServer {
                 BackupSyncGate.enterTransfer();
                 syncLockHeld = true;
                 beginSyncActivity();
-                if (transferBlocked.getAsBoolean()) {
+                if (transferBlocked.isBlocked()) {
                     DiagnosticLog.event("PHONE_LAN_BLOCKED_AFTER_ZIP_RESTORE",
                         "method="+method+" path="+path);
                     reply(peer,409,
