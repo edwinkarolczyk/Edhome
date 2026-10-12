@@ -22057,14 +22057,21 @@ public final class MainActivity extends Activity {
 
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
-        note("Jedna paczka ZIP v2 zawiera osobne dane Projektów, Budżetu, "
-            +"PayCheck, Magazynu i pozostałych modułów. Przy imporcie możesz "
-            +"wybrać konkretne kategorie lub przywrócić wszystko.");
-        note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego, własne obrazy kafelków oraz zdjęcia/PDF faktur z Budżetu miesiąca.");
-        note("Miniatury pozostają w data.json dla zgodności. Po przywróceniu EDHOME odtwarza je z oryginałów, gdy oryginał jest dostępny.");
-        note("Starsze zdjęcia dodane przed tą zmianą mają w kopii dotychczasową miniaturę. Utraconej wcześniej pełnej jakości nie da się odtworzyć wstecz.");
-        note("Po utworzeniu kopia jest sprawdzana: manifest, rozmiar i SHA-256 każdego pliku oraz ponowny odczyt całego ZIP-u z wybranego miejsca.");
-        note("Kopia nie zawiera PIN-u, logów, sekretów SUPLA ani prywatnego sejfu PayCheck. Sejf ma osobny szyfrowany eksport.");
+        // Operacje pokazujemy na początku ekranu. W starszej wersji
+        // przycisk Cofnij był schowany za długimi opisami poniżej ekranu.
+        button("Przywróć kopię (.zip / starszy .json)", () -> {
+            Intent open = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            open.addCategory(Intent.CATEGORY_OPENABLE);
+            open.setType("*/*");
+            open.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"application/zip","application/json","application/octet-stream"});
+            try { startActivityForResult(open, IMPORT_DATA_BACKUP); }
+            catch (Exception error) {
+                DiagnosticLog.error("DATA_RESTORE_PICKER", error);
+                alert("Nie można otworzyć wyboru kopii.");
+            }
+        });
+        button("Cofnij ostatnie przywrócenie", this::showLastDataBackupRecovery);
         button("Eksportuj pełną kopię (.zip)", () -> {
             backupLegacyExportNext=false;
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -22092,19 +22099,29 @@ public final class MainActivity extends Activity {
                 alert("Nie można wybrać miejsca zapisu zgodnej kopii.");
             }
         });
-        button("Przywróć kopię (.zip / starszy .json)", () -> {
-            Intent open = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            open.addCategory(Intent.CATEGORY_OPENABLE);
-            open.setType("*/*");
-            open.putExtra(Intent.EXTRA_MIME_TYPES,
-                new String[]{"application/zip","application/json","application/octet-stream"});
-            try { startActivityForResult(open, IMPORT_DATA_BACKUP); }
-            catch (Exception error) {
-                DiagnosticLog.error("DATA_RESTORE_PICKER", error);
-                alert("Nie można otworzyć wyboru kopii.");
-            }
-        });
-        button("Cofnij ostatnie przywrócenie", this::showLastDataBackupRecovery);
+        java.io.File lastRestore=DataBackupArchive.lastSuccessfulCheckpoint(this);
+        java.io.File recoveryDir=new java.io.File(getFilesDir(),"edhome-recovery");
+        java.io.File[] earlierCopies=recoveryDir.listFiles((folder,name)->
+            name.startsWith("EDHOME-przed-importem-")&&name.endsWith(".zip"));
+        if(lastRestore!=null) {
+            note("Cofanie dostępne • ostatni udany import ma kopię ratunkową.");
+        } else if(earlierCopies!=null && earlierCopies.length>0) {
+            note("Znaleziono "+earlierCopies.length+" starszych kopii ratunkowych. "
+                +"Nie wiadomo, który import zakończył się sukcesem — "
+                +"po kliknięciu Cofnij sam wybierzesz właściwy plik.");
+        } else {
+            note("Brak kopii ratunkowej. Przy nowej lub pustej instalacji "
+                +"nie ma jeszcze czego cofać. Kopia ratunkowa powstanie "
+                +"automatycznie przed pierwszym przywracaniem danych.");
+        }
+        note("Jedna paczka ZIP v2 zawiera osobne dane Projektów, Budżetu, "
+            +"PayCheck, Magazynu i pozostałych modułów. Przy imporcie możesz "
+            +"wybrać konkretne kategorie lub przywrócić wszystko.");
+        note("Pełna kopia ZIP zawiera data.json, zachowane przez EDHOME oryginalne zdjęcia Magazynu domowego, własne obrazy kafelków oraz zdjęcia/PDF faktur z Budżetu miesiąca.");
+        note("Miniatury pozostają w data.json dla zgodności. Po przywróceniu EDHOME odtwarza je z oryginałów, gdy oryginał jest dostępny.");
+        note("Starsze zdjęcia dodane przed tą zmianą mają w kopii dotychczasową miniaturę. Utraconej wcześniej pełnej jakości nie da się odtworzyć wstecz.");
+        note("Po utworzeniu kopia jest sprawdzana: manifest, rozmiar i SHA-256 każdego pliku oraz ponowny odczyt całego ZIP-u z wybranego miejsca.");
+        note("Kopia nie zawiera PIN-u, logów, sekretów SUPLA ani prywatnego sejfu PayCheck. Sejf ma osobny szyfrowany eksport.");
         note("ZIP v1 zachowuje starszy układ plików, ale nie zmienia schematu "
             +"bazy. Starsza wersja aplikacji może nie odczytać danych z nowszego "
             +"wydania. Najnowszy EDHOME nadal obsługuje starsze kopie.");
