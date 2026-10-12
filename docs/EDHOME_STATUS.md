@@ -1,3 +1,11 @@
+## 2026-10-12 — Film z telefonu: P0 lista kategorii ZIP nie jest widoczna — poprawka 0.8.0.96 / 288
+
+- Użytkownik przesłał nagranie `1000057485.mp4` (~8 s) z Androida EDHOME Beta 0.8.0.95: okno **„Co przywrócić z kopii?”** pokazuje tekst i trzy przyciski, **nie pokazuje checkboxów**. Brak dowodu zmiany lub utraty danych, użytkownik nie powinien zatwierdzać pełnego restore na danych produkcyjnych.
+- Przyczyna kodowa: Android `AlertDialog.Builder.setMessage(...)` wyświetla tekst zamiast listy `setMultiChoiceItems(...)` w tym samym oknie. Minimalna poprawka `MainActivity.java` usuwa `setMessage` i przenosi krótką instrukcję do tytułu (commit `3317cbb9`). `tests/check_backup_roundtrip_contract.py` odrzuca jednoczesne użycie wiadomości i listy w tym samym builderze (commit `c1f9dfae`).
+- Wersja ustawiona w `app/build.gradle` na **Beta 0.8.0.96 / 288** (commit `bda2dad1`); opis wydania z poprawką P0 commit `28ee3490`. `main` Stable bez zmian.
+- **Status w trakcie wpisu:** GitHub CI #2187 był `pending` przez concurrency (wcześniejszy #2184 `in_progress`), APK 0.8.0.96 **jeszcze niepotwierdzone**. Dopiero CI PASS + podpisane wydanie + aktualny manifest uprawniają do linkowania nowego APK jako gotowego.
+- **Następny test na telefonie:** zaktualizować bez odinstalowania, wejść w Kopia danych → Przywróć kopię → wybrać ZIP; sprawdzić listę checkboxów i liczbę wpisów; anulować bez przywracania. Selektywne odzyskiwanie z realnymi danymi pozostaje P0 otwarte do osobnego testu.
+
 ## 2026-10-12 — Wydanie EDHOME Beta 0.8.0.95 / 287: CI #2183 PASS, podpisany APK opublikowany
 
 - **GitHub Actions:** [run #2183](https://github.com/edwinkarolczyk/Edhome/actions/runs/38211825400), stan `completed/success`. Przeszły m.in. regresje SQLite/Budżet 5C, `tests/check_backup_roundtrip_contract.py`, kompilacja Beta + Stable, lint Android API 22, walidacja podpisu Beta, test obecności AndroidX, upload APK i publikacja aktualnego manifestu.
