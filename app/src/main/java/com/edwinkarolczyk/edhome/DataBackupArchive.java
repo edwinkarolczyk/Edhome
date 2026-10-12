@@ -234,6 +234,39 @@ final class DataBackupArchive {
             files.put(entry);
         }
         manifest.put("files", files);
+        // Indeks kategorii jest dodatkiem do formatu v1. Stare importery nadal
+        // odczytują data.json, a nowsze mogą pokazać zawartość przed odtworzeniem.
+        JSONObject categories = new JSONObject();
+        JSONObject snapshot = new JSONObject(new String(data, StandardCharsets.UTF_8));
+        JSONObject tables = snapshot.getJSONObject("tables");
+        for (java.util.Iterator<String> names = tables.keys(); names.hasNext();) {
+            String table = names.next();
+            String category;
+            if (table.startsWith("budget_")) category = "budget";
+            else if (table.startsWith("paycheck_") || table.startsWith("bank_"))
+                category = "paycheck";
+            else if (table.startsWith("project_") || "projects".equals(table))
+                category = "projects";
+            else if (table.startsWith("storage_") || "nfc_links".equals(table))
+                category = "storage";
+            else if (table.startsWith("vehicle_") || "vehicles".equals(table))
+                category = "vehicles";
+            else if (table.startsWith("pantry_") || "pantry".equals(table)
+                    || table.startsWith("shopping_")) category = "pantry";
+            else if (table.startsWith("garden_")) category = "garden";
+            else if (table.startsWith("task_") || "tasks".equals(table))
+                category = "tasks";
+            else if (table.startsWith("member_")) category = "calendar";
+            else category = "other";
+            JSONObject section = categories.optJSONObject(category);
+            if (section == null) {
+                section = new JSONObject();
+                categories.put(category, section);
+            }
+            section.put(table, tables.getJSONArray(table).length());
+        }
+        manifest.put("categoryIndexVersion", 1);
+        manifest.put("categories", categories);
         byte[] manifestBytes = manifest.toString(2).getBytes(StandardCharsets.UTF_8);
 
         File archive = new File(context.getCacheDir(),
