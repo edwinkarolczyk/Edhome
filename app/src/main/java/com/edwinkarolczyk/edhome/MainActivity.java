@@ -22072,6 +22072,21 @@ public final class MainActivity extends Activity {
             }
         });
         button("Cofnij ostatnie przywrócenie", this::showLastDataBackupRecovery);
+        java.io.File lastRestore=DataBackupArchive.lastSuccessfulCheckpoint(this);
+        java.io.File recoveryDir=new java.io.File(getFilesDir(),"edhome-recovery");
+        java.io.File[] earlierCopies=recoveryDir.listFiles((folder,name)->
+            name.startsWith("EDHOME-przed-importem-")&&name.endsWith(".zip"));
+        if(lastRestore!=null) {
+            note("Cofanie dostępne • ostatni udany import ma kopię ratunkową.");
+        } else if(earlierCopies!=null && earlierCopies.length>0) {
+            note("Znaleziono "+earlierCopies.length+" starszych kopii ratunkowych. "
+                +"Nie wiadomo, który import zakończył się sukcesem — "
+                +"po kliknięciu Cofnij sam wybierzesz właściwy plik.");
+        } else {
+            note("Brak kopii ratunkowej. Przy nowej lub pustej instalacji "
+                +"nie ma jeszcze czego cofać. Kopia ratunkowa powstanie "
+                +"automatycznie przed pierwszym przywracaniem danych.");
+        }
         button("Eksportuj pełną kopię (.zip)", () -> {
             backupLegacyExportNext=false;
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -22099,21 +22114,6 @@ public final class MainActivity extends Activity {
                 alert("Nie można wybrać miejsca zapisu zgodnej kopii.");
             }
         });
-        java.io.File lastRestore=DataBackupArchive.lastSuccessfulCheckpoint(this);
-        java.io.File recoveryDir=new java.io.File(getFilesDir(),"edhome-recovery");
-        java.io.File[] earlierCopies=recoveryDir.listFiles((folder,name)->
-            name.startsWith("EDHOME-przed-importem-")&&name.endsWith(".zip"));
-        if(lastRestore!=null) {
-            note("Cofanie dostępne • ostatni udany import ma kopię ratunkową.");
-        } else if(earlierCopies!=null && earlierCopies.length>0) {
-            note("Znaleziono "+earlierCopies.length+" starszych kopii ratunkowych. "
-                +"Nie wiadomo, który import zakończył się sukcesem — "
-                +"po kliknięciu Cofnij sam wybierzesz właściwy plik.");
-        } else {
-            note("Brak kopii ratunkowej. Przy nowej lub pustej instalacji "
-                +"nie ma jeszcze czego cofać. Kopia ratunkowa powstanie "
-                +"automatycznie przed pierwszym przywracaniem danych.");
-        }
         note("Jedna paczka ZIP v2 zawiera osobne dane Projektów, Budżetu, "
             +"PayCheck, Magazynu i pozostałych modułów. Przy imporcie możesz "
             +"wybrać konkretne kategorie lub przywrócić wszystko.");
