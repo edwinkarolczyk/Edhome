@@ -21501,14 +21501,35 @@ public final class MainActivity extends Activity {
                 TextView warning=text("⚠ "+conflict,13,true);
                 warning.setTextColor(projectTimeYellow());
                 desktop.addView(warning);
-                smallButton(desktop,"Konflikt • zachowaj wersję telefonu",()->{
-                    DesktopHubSync.resolvePhone(this);
-                    alert("Wybrano wersję telefonu. EDHOME zastosuje ją przy połączeniu z PC.");
-                });
-                smallButton(desktop,"Konflikt • zachowaj wersję Desktop",()->{
-                    DesktopHubSync.resolveDesktop(this);
-                    alert("Wybrano wersję Desktop. EDHOME pobierze ją z PC.");
-                });
+                smallButton(desktop,"Konflikt • zachowaj wersję telefonu",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Zastąpić dane Desktopu stanem telefonu?")
+                        .setMessage("Po przywróceniu ZIP obie bazy mogą różnić się "
+                            +"Projektami, Magazynem i Budżetem. Wybór Telefon "
+                            +"może zastąpić dane zapisane TYLKO na PC. "
+                            +"EDHOME wykona kopię bezpieczeństwa, ale "
+                            +"nie scali automatycznie sprzecznych wpisów. "
+                            +"Przed decyzją zapisz niezależny ZIP obu urządzeń.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Zachowaj Telefon", (d,w)->{
+                            DesktopHubSync.resolvePhone(this);
+                            alert("Rozstrzyganie konfliktu uruchomione. "
+                                +"Sprawdź stan w Desktop / Wi-Fi.");
+                        }).show());
+                smallButton(desktop,"Konflikt • zachowaj wersję Desktop",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Zastąpić dane telefonu stanem Desktopu?")
+                        .setMessage("Po przywróceniu ZIP wybór Desktop może "
+                            +"zastąpić Projekty, Magazyn i Budżet odzyskane "
+                            +"TYLKO na telefonie. EDHOME zachowa lokalny ZIP "
+                            +"przed zmianą, ale nie połączy automatycznie "
+                            +"sprzecznych wpisów. Zachowaj kopię obu urządzeń.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Zachowaj Desktop", (d,w)->{
+                            DesktopHubSync.resolveDesktop(this);
+                            alert("Rozstrzyganie konfliktu uruchomione. "
+                                +"Sprawdź stan w Desktop / Wi-Fi.");
+                        }).show());
             }
             if(DesktopHubSync.paired(this))
                 smallButton(desktop,"Usuń parowanie z Desktopem",()->
@@ -22076,6 +22097,36 @@ public final class MainActivity extends Activity {
 
     private void backup() {
         header("Kopia danych • przenoszenie między instalacjami");
+        if(BackupSyncGate.isHeld(this)) {
+            note("⚠ Synchronizacja z PC jest WSTRZYMANA po przywróceniu "
+                +"kopii ZIP. To zabezpieczenie chroni odzyskane dane przed "
+                +"cichym nadpisaniem w czasie ponownego łączenia.");
+            if(DesktopHubSync.paired(this)) {
+                button("Konflikt z PC • przejdź do ustawień",()->{
+                    screen="settings";
+                    render();
+                    alert("Rozwiń Desktop / Wi-Fi i wybierz wersję Telefon "
+                        +"albo Desktop dopiero po zabezpieczeniu obu kopii.");
+                });
+            } else {
+                button("Wznów starsze połączenie LAN (po sprawdzeniu PC)",()->
+                    new AlertDialog.Builder(this)
+                        .setTitle("Wznowić synchronizację LAN po imporcie?")
+                        .setMessage("Nie ma aktywnego parowania z nowym Hubem. "
+                            +"Po odblokowaniu starszy Desktop może automatycznie "
+                            +"pobrać dane z telefonu lub wysłać zmiany do niego. "
+                            +"Upewnij się, że kopie ZIP obu urządzeń są "
+                            +"bezpiecznie zapisane poza aplikacją. "
+                            +"Nie wykonuj tej operacji przy nierozstrzygniętym "
+                            +"konflikcie danych.")
+                        .setNegativeButton("Anuluj",null)
+                        .setPositiveButton("Wznów świadomie",(d,w)->{
+                            BackupSyncGate.allowAfterReview(this);
+                            DiagnosticLog.event("BACKUP_SYNC_LEGACY_RESUMED");
+                            render();
+                        }).show());
+            }
+        }
         // Operacje pokazujemy na początku ekranu. W starszej wersji
         // przycisk Cofnij był schowany za długimi opisami poniżej ekranu.
         button("Przywróć kopię (.zip / starszy .json)", () -> {
