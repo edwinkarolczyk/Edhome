@@ -126,6 +126,10 @@ for token in (
     'archiveVersion != FORMAT_VERSION',
     'moduleHashes.keySet().equals(canonical.keySet())',
     'calculated.sha256.equalsIgnoreCase(',
+    'validateCategoryIndex(manifest.getJSONObject("categories"), json)',
+    'static JSONObject inspectCategories(File archive)',
+    'provided.length() != calculated.length()',
+    'actual.optInt(table, -1) != expected.getInt(table)',
     'BackupModuleSnapshot.allowedPath(path)',
     'sources.add(0, new Source(DATA, data, null, "database"))',
 ):
