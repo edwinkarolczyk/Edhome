@@ -235,6 +235,11 @@ for token in (
     'JSONArray currentSync = current.getJSONArray("syncRecords")',
     'JSONArray backupSync = old.getJSONArray("syncRecords")',
     'current.put("syncRecords", joinedSync)',
+    'mergeBudgetHistory(',
+    'PaycheckBudgetSqliteStore.sameJson(',
+    'meta.put("rowHash", "DELETED")',
+    'restoredUuids.contains(existing.getKey())',
+    'retainedHistoryRows.containsKey(from.getString("rowKey"))',
 ):
     assert token in selective, "Brak bezpiecznego scalania modułów: " + token
 for token in (
@@ -258,7 +263,9 @@ for token in (
 for token in (
     'boolean preserveLocalBudgetHistory',
     'JSONArray retainedBudgetHistory = preserveLocalBudgetHistory',
-    'JSONArray retainedBudgetCache = preserveLocalBudgetHistory',
+    'JSONArray retainedBudgetCache = new JSONArray(',
+    'preserveLocalBudgetHistory',
+    '? prefs.getString(PaycheckBudgetHistoryStore.PREF_KEY, "[]")',
 ):
     assert token in source, "Brak ścisłego rollbacku historii: " + token
 for token in (
