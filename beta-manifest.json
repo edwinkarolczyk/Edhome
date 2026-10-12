@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 293,
-  "versionName": "0.8.0.101",
-  "changelog": "EDHOME Beta 0.8.0.101 — stabilizacja P0 synchronizacji po przywróceniu ZIP. W czasie importu i cofania blokowane są równoległe transfery Android ↔ Desktop. Po imporcie stare punkty porównawcze zostają unieważnione, a automatyczne wysyłanie/pobieranie danych PC jest wstrzymane do świadomej decyzji Telefon albo Desktop; starszy serwer LAN zwraca 409 RESTORE_RECONCILIATION_REQUIRED. Ostrzeżenia wskazują ryzyko zastąpienia danych z drugiego urządzenia. Nowy test Java sprawdza trwałą blokadę także po nieudanym imporcie i restarcie. Kopie ZIP z obu urządzeń zachowaj niezależnie przed wznowieniem LAN. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.101/edhome-beta.apk",
-  "sha256": "66489c3843a223791540694fb762375bd8272dec21caa013b1e368297eb01663"
+  "versionCode": 294,
+  "versionName": "0.8.0.102",
+  "changelog": "EDHOME Beta 0.8.0.102 — podgląd różnic między Telefonem i Desktopem przed uzgodnieniem po przywróceniu ZIP. Porównanie identyfikatorów oraz liczby rekordów w Projektach, Magazynie, Budżecie, PayCheck i innych modułach, z rozróżnieniem wpisów tylko na telefonie, tylko na PC i różnych po obu stronach. Podgląd nie zapisuje danych; decyzja Telefon/PC wymaga dodatkowego potwierdzenia i niezależnych kopii obu urządzeń. Jeśli dowolna migawka zmieni się po przeglądzie (lub upłynie 5 minut), operacja jest odrzucana. Zabezpieczenia LAN z 0.8.0.101 pozostają aktywne. Brak automatycznego scalania konfliktowych wpisów, Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.102/edhome-beta.apk",
+  "sha256": "fe955bfdffc3c07ade06651b724e7e3dc720831818421d1e5fb14d09b9e95989"
 }
