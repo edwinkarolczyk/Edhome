@@ -21501,6 +21501,15 @@ public final class MainActivity extends Activity {
                 TextView warning=text("⚠ "+conflict,13,true);
                 warning.setTextColor(projectTimeYellow());
                 desktop.addView(warning);
+                if(BackupSyncGate.isHeld(this)) {
+                    smallButton(desktop,"Porównaj dane Telefon ↔ Desktop",
+                        this::showDesktopSyncComparison);
+                    desktop.addView(text(
+                        "Przed wyborem Telefon/PC sprawdzisz liczbę rekordów "
+                        +"oraz rozbieżne pozycje Projektów, Magazynu, Budżetu "
+                        +"i PayCheck. Dopóki nie potwierdzisz decyzji, "
+                        +"synchronizacja pozostaje wstrzymana.",12,false));
+                } else {
                 smallButton(desktop,"Konflikt • zachowaj wersję telefonu",()->
                     new AlertDialog.Builder(this)
                         .setTitle("Zastąpić dane Desktopu stanem telefonu?")
@@ -21530,6 +21539,7 @@ public final class MainActivity extends Activity {
                             alert("Rozstrzyganie konfliktu uruchomione. "
                                 +"Sprawdź stan w Desktop / Wi-Fi.");
                         }).show());
+                }
             }
             if(DesktopHubSync.paired(this))
                 smallButton(desktop,"Usuń parowanie z Desktopem",()->
@@ -21579,6 +21589,51 @@ public final class MainActivity extends Activity {
             +"nie usuwają obiektów ani ich powiązań.",12,false));
     }
 
+
+    /** Podgląd różnic nie zapisuje nic na Telefonie ani na PC. */
+    private void showDesktopSyncComparison() {
+        if(!DesktopHubSync.paired(this)) {
+            alert("Brak sparowanego EDHOME Desktop. "
+                +"Sparuj PC kodem QR i ponów porównanie.");
+            return;
+        }
+        DiagnosticLog.event("HUB_DIFF_REVIEW_OPENED");
+        DesktopHubSync.compareBeforeResolve(this,report->runOnLiveUi(()->{
+            new AlertDialog.Builder(this)
+                .setTitle("Porównanie Telefon ↔ Desktop")
+                .setMessage(report.text)
+                .setCancelable(true)
+                .setNegativeButton("Nic nie zmieniaj",null)
+                .setNeutralButton("Zachowaj Desktop",(dialog,which)->
+                    confirmComparedDesktopChoice(false))
+                .setPositiveButton("Zachowaj Telefon",(dialog,which)->
+                    confirmComparedDesktopChoice(true))
+                .show();
+        }),error->runOnLiveUi(()->alert(error)));
+    }
+
+    /** Wybór całego stanu, NIE automatyczne scalanie konfliktowych danych. */
+    private void confirmComparedDesktopChoice(boolean phone) {
+        String source=phone?"Telefon":"Desktop";
+        String target=phone?"PC":"telefon";
+        new AlertDialog.Builder(this)
+            .setTitle("Potwierdzić wersję "+source+"?")
+            .setMessage("To operacja zastąpienia, a nie łączenia rekordów. "
+                +"Dane istniejące wyłącznie na "+target
+                +" mogą zostać zastąpione.\n\n"
+                +"Przed wykonaniem zapisz osobno ZIP telefonu i backup PC. "
+                +"Jeśli dane zmienią się po porównaniu, EDHOME odmówi zapisu "
+                +"i poprosi o ponowne sprawdzenie.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Potwierdź "+source,(dialog,which)->{
+                if(phone)DesktopHubSync.resolvePhone(this);
+                else DesktopHubSync.resolveDesktop(this);
+                alert("Rozpoczęto uzgadnianie. Sprawdź stan w Desktop / Wi-Fi. "
+                    +"Jeśli zmieniono dane od podglądu, żadne zastąpienie "
+                    +"nie zostanie wykonane.");
+            })
+            .show();
+    }
 
     private void exportDataBackupAsync(Uri destination) {
         final boolean legacyFormat=backupLegacyExportNext;
@@ -22105,8 +22160,9 @@ public final class MainActivity extends Activity {
                 button("Konflikt z PC • przejdź do ustawień",()->{
                     screen="settings";
                     render();
-                    alert("Rozwiń Desktop / Wi-Fi i wybierz wersję Telefon "
-                        +"albo Desktop dopiero po zabezpieczeniu obu kopii.");
+                    alert("Rozwiń Desktop / Wi-Fi, wybierz Porównaj dane "
+                        +"Telefon ↔ Desktop i sprawdź różnice przed decyzją. "
+                        +"Zachowaj niezależne kopie obu urządzeń.");
                 });
             } else {
                 button("Wznów starsze połączenie LAN (po sprawdzeniu PC)",()->
