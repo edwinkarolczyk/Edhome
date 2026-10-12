@@ -248,6 +248,7 @@ final class DataBackupArchive {
             JSONObject entry = new JSONObject();
             entry.put("path", source.path);
             entry.put("role", source.role);
+            entry.put("category", sourceCategory(source.path));
             entry.put("bytes", digest.size);
             entry.put("sha256", digest.sha256);
             files.put(entry);
@@ -257,6 +258,8 @@ final class DataBackupArchive {
         manifest.put("categoryIndexVersion", 1);
         manifest.put("categories", BackupModuleSnapshot.index(
             new String(data, StandardCharsets.UTF_8)));
+        manifest.put("databaseVersion", new JSONObject(
+            new String(data, StandardCharsets.UTF_8)).getInt("databaseVersion"));
         byte[] manifestBytes = manifest.toString(2).getBytes(StandardCharsets.UTF_8);
 
         File archive = new File(context.getCacheDir(),
@@ -620,6 +623,18 @@ final class DataBackupArchive {
         return name != null && !name.isEmpty() && !name.startsWith("/")
             && name.indexOf('\\') < 0 && !name.contains("../") && !name.contains("/..")
             && name.length() <= 180;
+    }
+
+    private static String sourceCategory(String path) {
+        if (DATA.equals(path)) return "full";
+        if (BackupModuleSnapshot.allowedPath(path))
+            return path.substring(BackupModuleSnapshot.PREFIX.length(),
+                path.length() - 5);
+        if (path.startsWith(STORAGE_PREFIX)
+                || path.startsWith(LEGACY_THUMB_PREFIX)) return "storage";
+        if (path.startsWith(BUDGET_ATTACHMENT_PREFIX)) return "budget";
+        if (path.startsWith(TILE_PREFIX)) return "settings";
+        return "other";
     }
 
     private static boolean allowedPayload(String path) {
