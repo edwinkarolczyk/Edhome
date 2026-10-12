@@ -36,7 +36,8 @@ final class DataBackupArchive {
     private static final long MAX_EXTRACTED_BYTES = 768L * 1024 * 1024;
     private static final long MAX_MANIFEST_BYTES = 1024L * 1024;
     private static final String FORMAT = "edhome-backup-archive";
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
+    private static final int LEGACY_FORMAT_VERSION = 1;
     private static final String DATA = "data.json";
     private static final String MANIFEST = "manifest.json";
     private static final String STORAGE_PREFIX = "media/storage-originals/";
@@ -131,6 +132,17 @@ final class DataBackupArchive {
 
     static Created create(Context context, SQLiteDatabase database,
             SharedPreferences prefs) throws Exception {
+        return createInternal(context, database, prefs, true);
+    }
+
+    // Eksport v1 do starszych instalacji, gdy potrzebny jest format zgodny z nimi.
+    static Created createLegacy(Context context, SQLiteDatabase database,
+            SharedPreferences prefs) throws Exception {
+        return createInternal(context, database, prefs, false);
+    }
+
+    private static Created createInternal(Context context, SQLiteDatabase database,
+            SharedPreferences prefs, boolean modular) throws Exception {
         StorageOriginals.prune(context, database);
         List<File> originalFiles = StorageOriginals.liveFiles(context, database);
         Set<Long> originalIds = new HashSet<>();
@@ -183,6 +195,13 @@ final class DataBackupArchive {
         byte[] data = DataBackup.exportJson(database, prefs, omittedThumbnailIds)
             .getBytes(StandardCharsets.UTF_8);
         sources.add(0, new Source(DATA, data, null, "database"));
+        if (modular) {
+            for (Map.Entry<String,byte[]> part :
+                    BackupModuleSnapshot.split(new String(data, StandardCharsets.UTF_8))
+                    .entrySet()) {
+                sources.add(new Source(part.getKey(), part.getValue(), null, "module"));
+            }
+        }
 
         int originals = 0;
         for (File image : originalFiles) {
@@ -220,7 +239,7 @@ final class DataBackupArchive {
 
         JSONObject manifest = new JSONObject();
         manifest.put("format", FORMAT);
-        manifest.put("formatVersion", FORMAT_VERSION);
+        manifest.put("formatVersion", modular ? FORMAT_VERSION : LEGACY_FORMAT_VERSION);
         manifest.put("createdAt", System.currentTimeMillis());
         manifest.put("sourceVersion", BuildConfig.VERSION_NAME);
         JSONArray files = new JSONArray();
@@ -234,39 +253,10 @@ final class DataBackupArchive {
             files.put(entry);
         }
         manifest.put("files", files);
-        // Indeks kategorii jest dodatkiem do formatu v1. Stare importery nadal
-        // odczytują data.json, a nowsze mogą pokazać zawartość przed odtworzeniem.
-        JSONObject categories = new JSONObject();
-        JSONObject snapshot = new JSONObject(new String(data, StandardCharsets.UTF_8));
-        JSONObject tables = snapshot.getJSONObject("tables");
-        for (java.util.Iterator<String> names = tables.keys(); names.hasNext();) {
-            String table = names.next();
-            String category;
-            if (table.startsWith("budget_")) category = "budget";
-            else if (table.startsWith("paycheck_") || table.startsWith("bank_"))
-                category = "paycheck";
-            else if (table.startsWith("project_") || "projects".equals(table))
-                category = "projects";
-            else if (table.startsWith("storage_") || "nfc_links".equals(table))
-                category = "storage";
-            else if (table.startsWith("vehicle_") || "vehicles".equals(table))
-                category = "vehicles";
-            else if (table.startsWith("pantry_") || "pantry".equals(table)
-                    || table.startsWith("shopping_")) category = "pantry";
-            else if (table.startsWith("garden_")) category = "garden";
-            else if (table.startsWith("task_") || "tasks".equals(table))
-                category = "tasks";
-            else if (table.startsWith("member_")) category = "calendar";
-            else category = "other";
-            JSONObject section = categories.optJSONObject(category);
-            if (section == null) {
-                section = new JSONObject();
-                categories.put(category, section);
-            }
-            section.put(table, tables.getJSONArray(table).length());
-        }
+        // Indeks jest również dostępny w starym ZIP v1 bez dodatkowych plików.
         manifest.put("categoryIndexVersion", 1);
-        manifest.put("categories", categories);
+        manifest.put("categories", BackupModuleSnapshot.index(
+            new String(data, StandardCharsets.UTF_8)));
         byte[] manifestBytes = manifest.toString(2).getBytes(StandardCharsets.UTF_8);
 
         File archive = new File(context.getCacheDir(),
@@ -472,10 +462,13 @@ final class DataBackupArchive {
                 readEntry(zip, manifestEntry, MAX_MANIFEST_BYTES),
                 StandardCharsets.UTF_8);
             JSONObject manifest = new JSONObject(manifestText);
+            int archiveVersion = manifest.optInt("formatVersion", -1);
             if (!FORMAT.equals(manifest.optString("format"))
-                    || manifest.optInt("formatVersion", -1) != FORMAT_VERSION)
+                    || (archiveVersion != LEGACY_FORMAT_VERSION
+                        && archiveVersion != FORMAT_VERSION))
                 throw new IllegalArgumentException("Nieobsługiwany format kopii ZIP.");
             JSONArray files = manifest.getJSONArray("files");
+            Map<String,String> moduleHashes = new HashMap<>();
             Set<String> expected = new HashSet<>();
             expected.add(MANIFEST);
             String json = null;
@@ -504,6 +497,11 @@ final class DataBackupArchive {
                         throw new IllegalArgumentException("data.json przekracza limit.");
                     json = new String(readEntry(zip, entry, DataBackup.MAX_BYTES),
                         StandardCharsets.UTF_8);
+                } else if (BackupModuleSnapshot.allowedPath(path)) {
+                    if (archiveVersion != FORMAT_VERSION)
+                        throw new IllegalArgumentException(
+                            "Stary format kopii nie obsługuje modułów.");
+                    moduleHashes.put(path, digest.sha256);
                 } else if (path.startsWith(STORAGE_PREFIX)) storage++;
                 else if (path.startsWith(LEGACY_THUMB_PREFIX)) legacyThumbs++;
                 else if (path.startsWith(TILE_PREFIX)) tiles++;
@@ -513,6 +511,23 @@ final class DataBackupArchive {
             if (!actual.equals(expected) || json == null)
                 throw new IllegalArgumentException("Kopia ZIP zawiera brakujące lub obce pliki.");
             validatePayloadNamesAgainstJson(json, expected);
+            if (archiveVersion == FORMAT_VERSION) {
+                // Każdy moduł musi odtwarzać dokładnie ten sam stan co data.json.
+                // Sam hash w manifeście nie wystarcza: wykryj podmieniony moduł
+                // nawet wtedy, gdy ktoś podmienił też hash w manifeście.
+                Map<String,byte[]> canonical = BackupModuleSnapshot.split(json);
+                if (!moduleHashes.keySet().equals(canonical.keySet()))
+                    throw new IllegalArgumentException(
+                        "Brakujące lub nadmiarowe moduły kopii.");
+                for (Map.Entry<String,byte[]> section : canonical.entrySet()) {
+                    DigestInfo calculated = digest(new Source(section.getKey(),
+                        section.getValue(), null, "module"));
+                    if (!calculated.sha256.equalsIgnoreCase(
+                            moduleHashes.get(section.getKey())))
+                        throw new IllegalArgumentException(
+                            "Niezgodność danych modułu: " + section.getKey());
+                }
+            }
             return new Inspection(json,new ArrayList<>(expected),
                 storage,legacyThumbs,tiles,paycheckAttachments);
         }
@@ -578,7 +593,7 @@ final class DataBackupArchive {
     }
 
     private static boolean allowedPayload(String path) {
-        if (DATA.equals(path)) return true;
+        if (DATA.equals(path) || BackupModuleSnapshot.allowedPath(path)) return true;
         if (path.matches("media/storage-originals/[1-9][0-9]*\\.img")) return true;
         if (path.matches("media/storage-thumbnails/[1-9][0-9]*\\.jpg")) return true;
         if (path.startsWith(TILE_PREFIX) && path.endsWith(".png")) {
