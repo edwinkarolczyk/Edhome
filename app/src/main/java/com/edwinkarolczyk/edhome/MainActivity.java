@@ -21820,7 +21820,13 @@ public final class MainActivity extends Activity {
         new Thread(() -> {
             java.io.File checkpoint=null;
             boolean fullRestoreAttempted=false;
+            boolean restoreGateStarted=false;
+            boolean restoredData=false;
             try {
+                // Import czeka na transfer LAN; żaden nowy transfer nie
+                // ominie przywrócenia ZIP.
+                BackupSyncGate.beginRestore(this);
+                restoreGateStarted=true;
                 DataBackupArchive.Restored restored=null;
                 if(selected!=null) {
                     restored=DataBackupArchive.restoreSelected(
@@ -21837,6 +21843,7 @@ public final class MainActivity extends Activity {
                             db.getWritableDatabase(),prefs,legacyJson);
                     }
                 }
+                restoredData=true;
                 // Nie resetuj oznaczeń powiadomień niewybranych modułów.
                 // Poprzednio np. import samego Budżetu czyścił także
                 // znaczniki Zadań, Pojazdów i Minutników.
@@ -21895,7 +21902,9 @@ public final class MainActivity extends Activity {
                         :BetaUpdater.isBeta()
                             ?"Dane przywrócone. EDHOME Beta jest gotowa — bez PIN-u."
                             :"Dane przywrócone. Odblokuj aplikację swoim obecnym PIN-em.")
-                        +"\nKopia ratunkowa została zachowana."+media);
+                        +"\nKopia ratunkowa została zachowana."
+                        +"\nSynchronizacja z PC jest wstrzymana do "
+                        +"uzgodnienia odzyskanych danych."+media);
                 });
             } catch(Exception error) {
                 DiagnosticLog.error("DATA_BACKUP_RESTORE",error);
@@ -21920,6 +21929,8 @@ public final class MainActivity extends Activity {
                             :reason.substring(0,Math.min(180,reason.length()))));
                 });
             } finally {
+                if(restoreGateStarted)
+                    BackupSyncGate.finishRestore(this,restoredData);
                 backupFile.delete();
             }
         },"edhome-backup-restore").start();
@@ -22002,7 +22013,10 @@ public final class MainActivity extends Activity {
                     java.io.File redo=null;
                     boolean restoreCompleted=false;
                     boolean recovered=false;
+                    boolean restoreGateStarted=false;
                     try {
+                        BackupSyncGate.beginRestore(this);
+                        restoreGateStarted=true;
                         redo=DataBackupArchive.recoveryCheckpoint(
                             this,db.getWritableDatabase(),prefs);
                         DataBackupArchive.restoreExact(
@@ -22025,7 +22039,8 @@ public final class MainActivity extends Activity {
                             render();
                             alert("Przywrócono wybraną kopię ratunkową. "
                                 +"Poprzedni stan również zachowano; "
-                                +"przycisk Cofnij umożliwia jego odtworzenie.");
+                                +"przycisk Cofnij umożliwia jego odtworzenie."
+                                +" Synchronizacja z PC została wstrzymana.");
                         });
                     } catch(Exception failure) {
                         DiagnosticLog.error("DATA_BACKUP_RESTORE_UNDO",failure);
@@ -22050,6 +22065,10 @@ public final class MainActivity extends Activity {
                                     :"Kopie ratunkowe pozostały na urządzeniu. "
                                      +"Sprawdź dane i diagnostykę."));
                         });
+                    } finally {
+                        if(restoreGateStarted)
+                            BackupSyncGate.finishRestore(this,
+                                restoreCompleted&&!recovered);
                     }
                 },"edhome-backup-undo").start();
             }).show();
