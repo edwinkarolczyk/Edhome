@@ -221,4 +221,56 @@ for token in (
     'hideDataBackupBusy();',
 ):
     assert token in main, "Background restore must stay serialized behind modal: "+token
-print("Backup: 54 tables, module ZIP v2, legacy ZIP v1, SHA-256 cross-check, media and rollback contract PASS")
+# P0: selektywne przywracanie musi mieć checkpoint, walidację i cofanie.
+selective=Path("app/src/main/java/com/edwinkarolczyk/edhome/BackupSelectiveMerge.java").read_text(
+    encoding="utf-8")
+for token in (
+    'static String merge(String installed, String archived, Set<String> requested)',
+    'OLDEST_SELECTIVE_SCHEMA = 45;',
+    'if (!archivedTables.has(table))',
+    'installedTables.put(table, archivedTables.getJSONArray(table))',
+    'copyKeys(incomingSettings, settings,',
+    'copyKeys(settings, replacement, storageKeys)',
+    'copyKeys(settings, replacement, budgetKeys)',
+    'JSONArray currentSync = current.getJSONArray("syncRecords")',
+    'JSONArray backupSync = old.getJSONArray("syncRecords")',
+    'current.put("syncRecords", joinedSync)',
+):
+    assert token in selective, "Brak bezpiecznego scalania modułów: " + token
+for token in (
+    'static Restored restoreSelected(',
+    'BackupSelectiveMerge.merge(before, inspection.json, selected)',
+    'File checkpoint = recoveryCheckpoint(context, database, prefs)',
+    'extractMedia(archive, inspection.paths, stageStorage, stageTiles, stageBudget)',
+    'if (selected.contains("storage"))',
+    'if (selected.contains("settings"))',
+    'if (selected.contains("budget"))',
+    'DataBackup.restoreJson(database, prefs, merged, photos, false)',
+    'verifyUnselected(before, DataBackup.exportJson(database, prefs), selected)',
+    'DataBackup.restoreJson(database, prefs, before,',
+    'restoreExact(context, database, prefs, checkpoint)',
+    'output.getFD().sync()',
+    'static File recoveryCheckpoint(',
+    'static Restored restoreExact(',
+    'Nie wolno zmienić ani jednego wpisu w niewybranych modułach.',
+):
+    assert token in archive, "Brak zabezpieczenia selektywnego przywracania: " + token
+for token in (
+    'boolean preserveLocalBudgetHistory',
+    'JSONArray retainedBudgetHistory = preserveLocalBudgetHistory',
+    'JSONArray retainedBudgetCache = preserveLocalBudgetHistory',
+):
+    assert token in source, "Brak ścisłego rollbacku historii: " + token
+for token in (
+    'setMultiChoiceItems(labels,checked,',
+    'DataBackupArchive.inspectCategories(backupFile)',
+    'DataBackupArchive.restoreSelected(',
+    'DataBackupArchive.recoveryCheckpoint(',
+    'DataBackupArchive.restoreExact(',
+    'button("Cofnij ostatnie przywrócenie"',
+    'button("Eksportuj ZIP zgodny ze starszym EDHOME (v1)"',
+    'created=legacyFormat',
+):
+    assert token in main, "Brak obsługi modułów w Android UI: " + token
+
+print("Backup: 54 tables, ZIP v1/v2, selective restore + rescue checkpoint static contracts PASS")
