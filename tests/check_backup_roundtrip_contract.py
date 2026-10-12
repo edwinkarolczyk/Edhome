@@ -130,6 +130,10 @@ for token in (
     'static JSONObject inspectCategories(File archive)',
     'provided.length() != calculated.length()',
     'actual.optInt(table, -1) != expected.getInt(table)',
+    'entry.put("category", sourceCategory(source.path))',
+    '!sourceCategory(path).equals(item.optString("category"))',
+    'manifest.put("databaseVersion", new JSONObject(',
+    'new JSONObject(json).getInt("databaseVersion")',
     'BackupModuleSnapshot.allowedPath(path)',
     'sources.add(0, new Source(DATA, data, null, "database"))',
 ):
@@ -149,6 +153,10 @@ for token in (
     'return "garden";',
     'return "tasks";',
     'return "calendar";',
+    'return "places";',
+    'return "profiles";',
+    'return "audit";',
+    'return "timers";',
     'return "other";',
 ):
     assert token in modules, "Brak sekcji danych modułu: " + token
