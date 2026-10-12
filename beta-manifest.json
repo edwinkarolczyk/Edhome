@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 289,
-  "versionName": "0.8.0.97",
-  "changelog": "EDHOME Beta 0.8.0.97 — P0 przywracania danych: naprawa powiązań Projektów z Zadaniami oraz Magazynu z Miejscami. EDHOME sprawdza wymagane identyfikatory i wskazuje dodatkowe moduły przed importem. Rozszerzony zestaw danych jest przywracany tylko po wyraźnym potwierdzeniu użytkownika; przed modyfikacją powstaje zweryfikowana kopia ratunkowa. Ochrona niewybranych kategorii, blokada zmiany obcych lokalizacji, cofanie importu i obsługa ZIP v1/v2 pozostają aktywne. Wydanie po zielonym CI; test z rzeczywistą kopią i synchronizacją Desktop nadal wymagany przed zamknięciem P0. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.97/edhome-beta.apk",
-  "sha256": "e4050bb0a3afef23903be4bcd29cd8770da462a9163193affd865026c9aa0da4"
+  "versionCode": 290,
+  "versionName": "0.8.0.98",
+  "changelog": "EDHOME Beta 0.8.0.98 — stabilizacja P0 przywracania kopii ZIP. Poprawiono odtwarzanie historycznych zadań projektowych z czasem 1–19 minut: kopia zachowuje ich pierwotny plan i sesje pracy, zamiast odrzucać import komunikatem o minimum 20 minut. Minimum 20 minut nadal obowiązuje przy tworzeniu/edytowaniu nowych czynności. Rozszerzono test roundtrip o projekt z 10-minutową czynnością, zależnością i sesją. Nadal wymagany test selektywnego przywrócenia na telefonie i zgodności Android–Desktop; przed importem trzeba zachować zewnętrzny ZIP. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.98/edhome-beta.apk",
+  "sha256": "e501e87170ede4b1f1900c52ee3015a8185424a3409c78708c8492b8b037a9d5"
 }
