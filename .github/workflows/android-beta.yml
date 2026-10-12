@@ -596,7 +596,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.101 — stabilizacja P0 synchronizacji po przywróceniu ZIP. W czasie importu i cofania blokowane są równoległe transfery Android ↔ Desktop. Po imporcie stare punkty porównawcze zostają unieważnione, a automatyczne wysyłanie/pobieranie danych PC jest wstrzymane do świadomej decyzji Telefon albo Desktop; starszy serwer LAN zwraca 409 RESTORE_RECONCILIATION_REQUIRED. Ostrzeżenia wskazują ryzyko zastąpienia danych z drugiego urządzenia. Nowy test Java sprawdza trwałą blokadę także po nieudanym imporcie i restarcie. Kopie ZIP z obu urządzeń zachowaj niezależnie przed wznowieniem LAN. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.102 — podgląd różnic między Telefonem i Desktopem przed uzgodnieniem po przywróceniu ZIP. Porównanie identyfikatorów oraz liczby rekordów w Projektach, Magazynie, Budżecie, PayCheck i innych modułach, z rozróżnieniem wpisów tylko na telefonie, tylko na PC i różnych po obu stronach. Podgląd nie zapisuje danych; decyzja Telefon/PC wymaga dodatkowego potwierdzenia i niezależnych kopii obu urządzeń. Jeśli dowolna migawka zmieni się po przeglądzie (lub upłynie 5 minut), operacja jest odrzucana. Zabezpieczenia LAN z 0.8.0.101 pozostają aktywne. Brak automatycznego scalania konfliktowych wpisów, Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
