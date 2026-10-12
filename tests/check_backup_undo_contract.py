@@ -44,6 +44,24 @@ assert main.index("DataBackupArchive.lastSuccessfulCheckpoint(this)") < main.ind
 )
 assert main.index("DataBackupArchive.markSuccessfulRestore(this,redo)") > main.index(
     "DataBackupArchive.restoreExact(\n                            this,db.getWritableDatabase(),prefs,selected)")
+# Nowa instalacja ma puste edhome-recovery. Akcja Cofnij jest zawsze
+# widoczna na górze ekranu, ale musi wyjaśniać brak punktu cofnięcia.
+backup_screen = main.split('    private void backup() {', 1)[1].split(
+    '    /** Prosty ekran aktualizacji', 1)[0]
+for token in (
+    'button("Przywróć kopię (.zip / starszy .json)"',
+    'button("Cofnij ostatnie przywrócenie"',
+    'DataBackupArchive.lastSuccessfulCheckpoint(this)',
+    'Brak kopii ratunkowej. Przy nowej lub pustej instalacji',
+    'Starsze kopie ratunkowe • wybierz świadomie',
+):
+    assert token in (backup_screen + main), (
+        "Brak działania lub komunikatu dla pustej instalacji: " + token)
+assert backup_screen.index('button("Cofnij ostatnie przywrócenie"') < (
+    backup_screen.index('note("Jedna paczka ZIP v2'))
+assert backup_screen.index('button("Przywróć kopię (.zip / starszy .json)"') < (
+    backup_screen.index('button("Cofnij ostatnie przywrócenie"'))
+
 assert "last-successful-restore.txt" in ledger
 assert "output.getFD().sync()" in ledger
 assert "!temporary.renameTo(marker)" in ledger
