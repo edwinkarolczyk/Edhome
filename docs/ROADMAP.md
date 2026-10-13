@@ -1,5 +1,13 @@
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
+## P0 — po imporcie wyciągu pulsujące dopasowania 1:1 i łączone (13.10.2026)
+
+- **Wymóg użytkownika:** po każdej poprawnie zaimportowanej paczce bankowej EDHOME otwiera porównanie z Budżetem i wyraźnie pulsuje wierszami/propozycjami, które pasują, bez dodatkowego szukania w osobnej historii. Przy dopasowaniu **2 operacje bankowe (np. 200 + 300 zł) → 1 pozycja Budżetu 500 zł** oraz **1 operacja bankowa 500 zł → 2 pozycje Budżetu (200 + 300 zł)** pokazuje kwoty, daty i opisy i pyta, czy rozliczyć razem. Dotyczy symetrycznie wpływów i wydatków, ale nie wolno ich łączyć ze sobą. Sama propozycja/pulsowanie nigdy nie zmienia salda.
+- **Kandydat kodowy Beta 0.8.0.104 / 296:** `BankBudgetGroupRules` (zgodna suma, miesiąc, kierunek, maksymalnie 7 dni między dwoma przelewami), `BankBudgetGroupSettlement`, `PaycheckMonthlyBudget.matchBankParts`, pulsowanie `AlphaAnimation` i dialogi zatwierdzania w `MainActivity`. Już dostępny podział `PaycheckMonthlyBudget.allocateSplit` jest ponownie wykorzystany dla jednego bankowego przelewu do dwóch pozycji. Po stronie 2→1 każdy odrębny dowód bankowy przypisywany jest wyłącznie do jednej rzeczywistej potwierdzonej transakcji PayCheck. Propozycje obecnie analizują najwyżej 300 ostatnich otwartych operacji i pokazują najwyżej 40 kombinacji — **limit wydajnościowy do usprawnienia**, nie docelowe pomijanie starszych wyciągów.
+- **Ważny warunek P0:** zanim ogłosić funkcję gotową, obowiązkowo CI PASS oraz realne testy Android 200+300→500, 500→200+300, wpływy, konflikt kilku podobnych kombinacji, cofanie, import duplikatów, zachowanie historii i bilansu, backup ZIP, synchronizacja Android↔Desktop oraz przerwanie w połowie zapisu. Status kodu nie oznacza odbioru transakcji. Zmiany wyłącznie na `beta`, `main` bez zmian.
+- **Docelowe rozwinięcie:** wygodne pokazanie alternatywnych grup i możliwość regulacji okna dat; unikać ograniczenia analizy do ostatnich 300 rekordów przy dużych paczkach. Alternatywne kombinacje wymagają świadomego wyboru, nigdy automatycznego księgowania.
+
+
 > **Ta sekcja ma pierwszeństwo przed starszymi, datowanymi planami niżej.** Historyczne tabele pozostają w pliku jako ślad decyzji, ale nie wyznaczają już kolejności wydań. Rozwój 0.7–0.9 odbywa się wyłącznie na `beta`; `main` pozostaje chronionym Stable i nie jest zmieniana bez osobnej, wyraźnej akceptacji Edwina.
 
 ## PayCheck — kwota z banku ma pierwszeństwo przed planem (09.10.2026)
