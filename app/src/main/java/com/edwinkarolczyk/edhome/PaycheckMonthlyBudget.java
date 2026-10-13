@@ -310,6 +310,54 @@ final class PaycheckMonthlyBudget {
         return true;
     }
 
+    /**
+     * Dwie osobne potwierdzone operacje bankowe pokrywają jedną pozycję planu.
+     * Jednorazowy zapis planu i historii, bez fikcyjnego niedoboru po pierwszej racie.
+     * Księgowanie salda pozostaje wyłącznie w dwóch osobnych transakcjach PayCheck.
+     */
+    static boolean matchBankParts(SharedPreferences prefs,SQLiteDatabase db,
+            String itemId,YearMonth month,java.util.List<String> operationIds)
+            throws Exception {
+        if(month==null||operationIds==null||operationIds.size()!=2
+                ||operationIds.get(0).equals(operationIds.get(1)))
+            throw new IllegalArgumentException("Wybierz dwa różne przelewy.");
+        java.util.List<Item> items=load(prefs);
+        Item target=find(items,itemId);
+        if(!activeFor(java.util.Collections.singletonList(target),month).contains(target))
+            throw new IllegalArgumentException("Pozycja nie jest aktywna w tym miesiącu.");
+        java.util.List<SharedTransaction> parts=new java.util.ArrayList<>();
+        long total=0L;
+        for(String operationId:operationIds) {
+            SharedTransaction tx=sharedTransaction(db,operationId);
+            if(!tx.confirmed||!month.equals(tx.month)||!target.kind.equals(tx.kind))
+                throw new IllegalArgumentException("Niepotwierdzony lub obcy przelew.");
+            for(Item item:items)
+                if(item.matchedOperationIds.contains(operationId))
+                    throw new IllegalArgumentException(
+                        "Jeden z przelewów był już przypisany do Budżetu.");
+            total=Math.addExact(total,tx.amountGrosz);
+            parts.add(tx);
+        }
+        long outstanding=remainingDue(db,target,month);
+        if(total!=outstanding
+                ||target.matchedOperationIds.size()+parts.size()>MAX_MATCHES_PER_ITEM)
+            throw new IllegalArgumentException(
+                "Suma przelewów różni się od pozostałej kwoty Budżetu.");
+        java.util.List<PaycheckBudgetHistoryStore.Event> events=
+            new java.util.ArrayList<>();
+        for(SharedTransaction tx:parts) {
+            target.matchedOperationIds.add(tx.operationId);
+            events.add(PaycheckBudgetHistoryStore.make(target,month,
+                "TRANSACTION_MATCHED",tx.amountGrosz,
+                "Część grupowego dopasowania bankowego",tx.operationId,tx.date));
+            events.add(PaycheckBudgetHistoryStore.make(target,month,
+                "PAYMENT_CONFIRMED",tx.amountGrosz,
+                "Potwierdzona część wpłaty grupowej",tx.operationId,tx.date));
+        }
+        saveWithEvents(prefs,items,events);
+        return true;
+    }
+
     static boolean allocateMatch(SharedPreferences prefs,SQLiteDatabase db,
             String itemId,String operationId,long allocationGrosz) throws Exception {
         SharedTransaction tx=sharedTransaction(db,operationId);
