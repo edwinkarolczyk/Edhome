@@ -181,6 +181,8 @@ jobs:
           java -cp "$RUNNER_TEMP/budget-bank-auto" \
             com.edwinkarolczyk.edhome.BankBudgetMatchSmoke
           python3 tests/check_budget_bank_automatch_android.py
+      - name: P0 bank confirmation and partial-settlement repair regression
+        run: python3 tests/check_bank_single_settlement_p0.py
       - name: Bank group matches 200 + 300 = 500 in both directions
         run: |
           mkdir -p "$RUNNER_TEMP/budget-bank-group"
