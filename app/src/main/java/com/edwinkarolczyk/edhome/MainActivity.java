@@ -14311,6 +14311,226 @@ public final class MainActivity extends Activity {
      * transakcji. Dopiero świadome potwierdzenie pary wywołuje istniejący
      * atomowy mechanizm matchBudgetActual z kwotą z historii bankowej.
      */
+    /** Łączne propozycje po imporcie: 2 operacje -> 1 plan oraz 1 -> 2. */
+    private int appendBankBudgetGroupProposals(LinearLayout parent,
+            SQLiteDatabase sql,java.util.List<BankEvidenceStore.Row> bankRows,
+            java.util.Map<YearMonth,java.util.List<PaycheckMonthlyBudget.Item>> monthPlans,
+            final AlertDialog[] dialogRef,final LinearLayout[] expanded) {
+        final int maxSuggestions=40;
+        java.util.Map<String,Long> dues=new java.util.HashMap<>();
+        java.util.Map<String,java.util.List<PaycheckMonthlyBudget.Item>>
+            pendingPlans=new java.util.HashMap<>();
+        for(java.util.Map.Entry<YearMonth,
+                java.util.List<PaycheckMonthlyBudget.Item>> entry:monthPlans.entrySet()) {
+            YearMonth month=entry.getKey();
+            for(PaycheckMonthlyBudget.Item item:entry.getValue()) {
+                long due=PaycheckMonthlyBudget.remainingDue(sql,item,month);
+                if(due<=0)continue;
+                String opId=budgetPaycheckOperationId(item,month);
+                try(Cursor pending=sql.rawQuery(
+                        "SELECT 1 FROM paycheck_transactions "
+                        +"WHERE operation_id=? AND scope='shared' "
+                        +"AND kind=? AND status='pending' AND statement_key IS NULL",
+                        new String[]{opId,item.kind})) {
+                    if(!pending.moveToFirst())continue;
+                }
+                dues.put(month+"|"+item.id,due);
+                pendingPlans.computeIfAbsent(month+"|"+item.kind,
+                    k->new java.util.ArrayList<>()).add(item);
+            }
+        }
+        LinearLayout groupList=new LinearLayout(this);
+        groupList.setOrientation(LinearLayout.VERTICAL);
+        int matches=0;
+        // Przelew bankowy -> dwie pozycje budżetowe.
+        for(BankEvidenceStore.Row row:bankRows) {
+            if(matches>=maxSuggestions)break;
+            YearMonth month;
+            try{month=YearMonth.parse(row.date.substring(0,7));}
+            catch(Exception invalid){continue;}
+            java.util.List<PaycheckMonthlyBudget.Item> plans=
+                pendingPlans.getOrDefault(month+"|"+row.kind,
+                    java.util.Collections.emptyList());
+            for(int i=0;i<plans.size()&&matches<maxSuggestions;i++)
+                for(int j=i+1;j<plans.size()&&matches<maxSuggestions;j++) {
+                    PaycheckMonthlyBudget.Item first=plans.get(i),second=plans.get(j);
+                    long a=dues.get(month+"|"+first.id);
+                    long b=dues.get(month+"|"+second.id);
+                    if(!BankBudgetGroupRules.oneBankToTwoBudgets(
+                            row.amount,a,b,row.kind,first.kind,second.kind))
+                        continue;
+                    String amount=MoneyRules.format(row.amount);
+                    LinearLayout line=new LinearLayout(this);
+                    line.setOrientation(LinearLayout.VERTICAL);
+                    groupList.addView(line);
+                    TextView label=text("✓ MOŻLIWE ŁĄCZNE DOPASOWANIE • 1 → 2\n"
+                        +row.date+" • "+row.sourceLabel+" • "+amount+" zł"
+                        +"\nBudżet: "+first.name+" ("+MoneyRules.format(a)+") + "
+                        +second.name+" ("+MoneyRules.format(b)+")",14,true);
+                    label.setPadding(dp(6),dp(10),dp(6),dp(10));
+                    line.addView(label);
+                    pulseBankProposal(label);
+                    LinearLayout details=new LinearLayout(this);
+                    details.setOrientation(LinearLayout.VERTICAL);
+                    details.setVisibility(View.GONE);
+                    line.addView(details);
+                    label.setOnClickListener(v->{
+                        boolean show=details.getVisibility()!=View.VISIBLE;
+                        if(expanded[0]!=null&&expanded[0]!=details)
+                            expanded[0].setVisibility(View.GONE);
+                        details.setVisibility(show?View.VISIBLE:View.GONE);
+                        expanded[0]=show?details:null;
+                    });
+                    details.addView(text("Opis banku: "+row.description
+                        +"\nSumy są równe. Przed rozliczeniem sprawdź, "
+                        +"czy jeden przelew naprawdę dotyczy obu pozycji.",13,false));
+                    smallButton(details,"Sprawdź i rozlicz razem",()->{
+                        if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                        confirmOneBankForTwoBudgets(row,first,second,month);
+                    });
+                    matches++;
+                }
+        }
+        // Dwa oddzielne dowody bankowe -> jedna pozycja budżetowa.
+        for(int i=0;i<bankRows.size()&&matches<maxSuggestions;i++) {
+            BankEvidenceStore.Row first=bankRows.get(i);
+            YearMonth month;
+            try{month=YearMonth.parse(first.date.substring(0,7));}
+            catch(Exception invalid){continue;}
+            for(int j=i+1;j<bankRows.size()&&matches<maxSuggestions;j++) {
+                BankEvidenceStore.Row second=bankRows.get(j);
+                java.util.List<PaycheckMonthlyBudget.Item> plans=
+                    pendingPlans.getOrDefault(month+"|"+first.kind,
+                        java.util.Collections.emptyList());
+                for(PaycheckMonthlyBudget.Item item:plans) {
+                    if(matches>=maxSuggestions)break;
+                    long due=dues.get(month+"|"+item.id);
+                    if(!BankBudgetGroupRules.twoBankToOneBudget(
+                            first.amount,second.amount,due,first.date,second.date,
+                            first.kind,second.kind))continue;
+                    LinearLayout line=new LinearLayout(this);
+                    line.setOrientation(LinearLayout.VERTICAL);
+                    groupList.addView(line);
+                    TextView label=text("✓ MOŻLIWE ŁĄCZNE DOPASOWANIE • 2 → 1\n"
+                        +first.date+" • "+MoneyRules.format(first.amount)+" zł"
+                        +" + "+second.date+" • "+MoneyRules.format(second.amount)
+                        +" zł\nBudżet: "+item.name+" • "+MoneyRules.format(due)+" zł",14,true);
+                    label.setPadding(dp(6),dp(10),dp(6),dp(10));
+                    line.addView(label);
+                    pulseBankProposal(label);
+                    LinearLayout details=new LinearLayout(this);
+                    details.setOrientation(LinearLayout.VERTICAL);
+                    details.setVisibility(View.GONE);
+                    line.addView(details);
+                    label.setOnClickListener(v->{
+                        boolean show=details.getVisibility()!=View.VISIBLE;
+                        if(expanded[0]!=null&&expanded[0]!=details)
+                            expanded[0].setVisibility(View.GONE);
+                        details.setVisibility(show?View.VISIBLE:View.GONE);
+                        expanded[0]=show?details:null;
+                    });
+                    details.addView(text("Pierwszy: "+first.description
+                        +"\nDrugi: "+second.description
+                        +"\nDaty dzieli maksymalnie 7 dni. "
+                        +"Sprawdź, czy oba przelewy rzeczywiście dotyczą "
+                        +"jednej pozycji planu.",13,false));
+                    smallButton(details,"Sprawdź i rozlicz razem",()->{
+                        if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                        confirmTwoBanksForOneBudget(first,second,item,month);
+                    });
+                    matches++;
+                }
+            }
+        }
+        if(matches>0) {
+            parent.addView(text("PULSUJĄCE PROPOZYCJE • ROZLICZENIA ŁĄCZONE ("
+                +matches+")",16,true));
+            parent.addView(text("Dopasowano sumę i kierunek. Niektóre propozycje "
+                +"mogą być alternatywne. Każda wymaga sprawdzenia opisów "
+                +"oraz osobnego zatwierdzenia. Bez zgody saldo się nie zmienia.",
+                13,false));
+            parent.addView(groupList);
+        }
+        return matches;
+    }
+
+    /** Czytelne pulsowanie trafnej propozycji — również bez zależności od motywu. */
+    private void pulseBankProposal(View item) {
+        android.view.animation.AlphaAnimation pulse=
+            new android.view.animation.AlphaAnimation(0.55f,1.0f);
+        pulse.setDuration(900);
+        pulse.setRepeatCount(android.view.animation.Animation.INFINITE);
+        pulse.setRepeatMode(android.view.animation.Animation.REVERSE);
+        item.startAnimation(pulse);
+    }
+
+    private void confirmTwoBanksForOneBudget(BankEvidenceStore.Row a,
+            BankEvidenceStore.Row b,PaycheckMonthlyBudget.Item item,YearMonth month) {
+        new AlertDialog.Builder(this)
+            .setTitle("Rozliczyć razem dwa przelewy?")
+            .setMessage("Budżet: "+item.name+"\n"
+                +"Przelew 1: "+a.date+" • "+MoneyRules.format(a.amount)
+                +" zł\n"+a.description
+                +"\n\nPrzelew 2: "+b.date+" • "
+                +MoneyRules.format(b.amount)+" zł\n"+b.description
+                +"\n\nSuma: "+MoneyRules.format(a.amount+b.amount)
+                +" zł. Każdy dowód rozliczymy tylko raz. "
+                +"To propozycja, a nie potwierdzenie przez bank.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Rozlicz razem",(d,w)->{
+                try {
+                    BankBudgetGroupSettlement.twoBankToOneBudget(
+                        prefs,db.getWritableDatabase(),month,item.id,
+                        budgetPaycheckOperationId(item,month),
+                        a.evidenceKey,b.evidenceKey);
+                    DiagnosticLog.event("PAYCHECK_BANK_GROUP_TWO_TO_ONE");
+                    PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
+                    render();
+                    alert("Rozliczono dwa przelewy bankowe do jednej pozycji. "
+                        +"Saldo obejmuje tylko faktyczne kwoty z wyciągu.");
+                }catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_BANK_GROUP_TWO_TO_ONE_FAILED",error);
+                    alert("Nie zakończono grupowego rozliczenia. "
+                        +"Sprawdź diagnostykę i stan Budżetu przed ponowieniem.");
+                }
+            }).show();
+    }
+
+    private void confirmOneBankForTwoBudgets(BankEvidenceStore.Row row,
+            PaycheckMonthlyBudget.Item a,PaycheckMonthlyBudget.Item b,
+            YearMonth month) {
+        new AlertDialog.Builder(this)
+            .setTitle("Podzielić jeden przelew na dwie pozycje?")
+            .setMessage("Bank: "+row.date+" • "+MoneyRules.format(row.amount)
+                +" zł\n"+row.description
+                +"\n\nBudżet 1: "+a.name+" • "
+                +MoneyRules.format(PaycheckMonthlyBudget.remainingDue(
+                    db.getReadableDatabase(),a,month))+" zł"
+                +"\nBudżet 2: "+b.name+" • "
+                +MoneyRules.format(PaycheckMonthlyBudget.remainingDue(
+                    db.getReadableDatabase(),b,month))+" zł"
+                +"\n\nJedna transakcja bankowa zostanie zaksięgowana "
+                +"tylko raz i rozdzielona pomiędzy oba zobowiązania.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Rozlicz razem",(d,w)->{
+                try {
+                    BankBudgetGroupSettlement.oneBankToTwoBudgets(
+                        prefs,db.getWritableDatabase(),month,row.evidenceKey,
+                        a.id,b.id,budgetPaycheckOperationId(a,month),
+                        budgetPaycheckOperationId(b,month));
+                    DiagnosticLog.event("PAYCHECK_BANK_GROUP_ONE_TO_TWO");
+                    PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
+                    render();
+                    alert("Przelew przypisano do dwóch pozycji Budżetu. "
+                        +"Saldo PayCheck zmieniono tylko raz.");
+                }catch(Exception error) {
+                    DiagnosticLog.error("PAYCHECK_BANK_GROUP_ONE_TO_TWO_FAILED",error);
+                    alert("Nie zakończono podziału przelewu. "
+                        +"Sprawdź diagnostykę i stan Budżetu przed ponowieniem.");
+                }
+            }).show();
+    }
+
     private void showBankBudgetProposals() {
         showBankBudgetProposals(0);
     }
@@ -14324,8 +14544,14 @@ public final class MainActivity extends Activity {
                 (int)((total-1)/pageSize)*pageSize);
             java.util.List<BankEvidenceStore.Row> rows=
                 BankEvidenceStore.listPage(sql,"open",0,pageSize,first);
+            // Łączenie wymaga również przelewów z następnych stron.
+            java.util.List<BankEvidenceStore.Row> groupRows=
+                new java.util.ArrayList<>();
+            for(int cursor=0;cursor<Math.min(total,300);cursor+=100)
+                groupRows.addAll(BankEvidenceStore.listPage(
+                    sql,"open",0,100,cursor));
             java.util.Set<YearMonth> months=new java.util.HashSet<>();
-            for(BankEvidenceStore.Row row:rows) {
+            for(BankEvidenceStore.Row row:groupRows) {
                 try {months.add(YearMonth.parse(row.date.substring(0,7)));}
                 catch(Exception invalid) {
                     DiagnosticLog.error("BANK_BUDGET_PROPOSAL_DATE",invalid);
@@ -14353,6 +14579,8 @@ public final class MainActivity extends Activity {
             proposals.setOrientation(LinearLayout.VERTICAL);
             LinearLayout remaining=new LinearLayout(this);
             remaining.setOrientation(LinearLayout.VERTICAL);
+            int groupMatches=appendBankBudgetGroupProposals(
+                content,sql,groupRows,monthPlans,dialogRef,expanded);
             int proposed=0,manual=0;
             for(BankEvidenceStore.Row row:rows) {
                 final YearMonth month;
@@ -14405,6 +14633,7 @@ public final class MainActivity extends Activity {
                     +" • "+tag,14,false);
                 headerLine.setPadding(dp(6),dp(10),dp(6),dp(10));
                 line.addView(headerLine);
+                if(rank>0)pulseBankProposal(headerLine);
                 LinearLayout details=new LinearLayout(this);
                 details.setOrientation(LinearLayout.VERTICAL);
                 details.setPadding(dp(10),dp(4),dp(10),dp(8));
@@ -14453,7 +14682,9 @@ public final class MainActivity extends Activity {
             summary.setText((bankProposalLastImportSummary.isEmpty()?""
                     :bankProposalLastImportSummary+"\n\n")
                 +"Otwarta historia bankowa: "+total
-                +"\nTa strona: propozycje "+proposed
+                +"\nPropozycje łączone: "+groupMatches
+                +" (analiza maksymalnie 300 najnowszych otwartych operacji)"
+                +"\nTa strona: propozycje pojedyncze "+proposed
                 +", do ręcznego wyboru "+manual
                 +"\nKliknij kwotę, aby rozwinąć szczegóły. "
                 +"Tylko jedna pozycja naraz. "
