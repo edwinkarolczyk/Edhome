@@ -13093,6 +13093,19 @@ public final class MainActivity extends Activity {
 
     private void paycheck() {
         header("PayCheck");
+        try {
+            int recovered=BankBudgetSingleSettlement.repairUnlinked(
+                prefs,db.getWritableDatabase());
+            if(recovered>0) {
+                DiagnosticLog.event("PAYCHECK_BANK_RECOVERED","count="+recovered);
+                note("Przywrócono "+recovered+" powiązań przelewów z Budżetem. "
+                    +"Kwoty nie zostały zaksięgowane ponownie.");
+            }
+        }catch(Exception repairError) {
+            DiagnosticLog.error("PAYCHECK_BANK_RECOVERY_FAILED",repairError);
+            note("Uwaga: nie udało się sprawdzić wszystkich "
+                +"powiązań bankowych. Otwórz Diagnostykę.");
+        }
         ensureBudgetPaycheckPending(YearMonth.now());
         title("Saldo potwierdzone: "+MoneyRules.format(
             PaycheckStore.sharedBalance(db.getReadableDatabase())));
@@ -15007,52 +15020,59 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Zatwierdź parę",(d,w)->{
                 try {
-                    PaycheckMonthlyBudget.Item fresh=null;
-                    for(PaycheckMonthlyBudget.Item current:
-                            PaycheckMonthlyBudget.load(prefs))
-                        if(current.id.equals(item.id)){fresh=current;break;}
-                    if(fresh==null||!row.kind.equals(fresh.kind)
-                            ||!PaycheckMonthlyBudget.activeFor(
-                                java.util.Collections.singletonList(fresh),
-                                month).contains(fresh)
-                            ||fresh.matchedOperationIds.contains(operationId))
-                        throw new IllegalStateException(
-                            "Pozycja Budżetu zmieniła się. Otwórz parowanie ponownie.");
-                    String result=BankEvidenceStore.matchBudgetActual(
-                        db.getWritableDatabase(),row.evidenceKey,operationId);
-                    if("MATCHED".equals(result)) {
-                        try {
-                            PaycheckMonthlyBudget.match(
-                                prefs,db.getReadableDatabase(),
-                                fresh.id,operationId);
-                        }catch(Exception assignmentError) {
-                            DiagnosticLog.error(
-                                "PAYCHECK_BANK_ACTUAL_ASSIGNMENT_FAILED",
-                                assignmentError);
-                            render();
-                            alert("Kwotę bankową potwierdzono w PayCheck, "
-                                +"ale przypisanie do Budżetu się nie udało. "
-                                +"Zobacz diagnostykę i przypisz potwierdzony "
-                                +"przelew ręcznie. Nie importuj go drugi raz.");
-                            return;
-                        }
-                        DiagnosticLog.event("PAYCHECK_BANK_ACTUAL_MATCHED");
+                    BankBudgetSingleSettlement.Result result=
+                        BankBudgetSingleSettlement.confirm(
+                            prefs,db.getWritableDatabase(),row,item,month);
+                    if("MATCHED".equals(result.state)) {
+                        DiagnosticLog.event("PAYCHECK_BANK_ACTUAL_MATCHED",
+                            "before="+result.beforeGrosz
+                            +" after="+result.afterGrosz);
                         PaycheckBudgetReminderReceiver.refreshAfterSettlement(this);
                         render();
-                        alert("Potwierdzono kwotę z banku: "+sign
-                            +MoneyRules.format(row.amount)
-                            +". Różnica względem planu: "
-                            +(difference>0?"+":"")+
-                                MoneyRules.format(difference)
-                            +". Bez ponownego księgowania.");
-                    }else if("ALREADY_MATCHED".equals(result)) {
-                        alert("Ta operacja była już rozliczona. Saldo bez zmian.");
-                    }else alert("Nie uzgodniono: wpis nie jest już oczekujący "
-                        +"lub dowód został wykorzystany. Saldo bez zmian.");
+                        alert("ZATWIERDZONO PRZELEW BANKOWY"
+                            +"\nPozycja: "+item.name
+                            +"\nKwota bankowa: "+sign+MoneyRules.format(row.amount)
+                            +"\nSaldo przed: "+MoneyRules.format(result.beforeGrosz)
+                            +"\nSaldo po: "+MoneyRules.format(result.afterGrosz)
+                            +"\nStatus: uzgodnione z bankiem (✓).");
+                    }else {
+                        DiagnosticLog.event("PAYCHECK_BANK_ACTUAL_NO_CHANGE",
+                            "state="+result.state);
+                        render();
+                        alert("Nie zatwierdzono przelewu: dowód lub pozycja "
+                            +"nie są już otwarte (stan: "+result.state+"). "
+                            +"Sprawdź aktualną historię. "
+                            +"Nie zaksięgowano go ponownie.");
+                    }
+                }catch(BankBudgetSingleSettlement.PartialSettlementException partial) {
+                    DiagnosticLog.error("PAYCHECK_BANK_PARTIAL_SETTLEMENT",partial);
+                    try {
+                        int repaired=BankBudgetSingleSettlement.repairUnlinked(
+                            prefs,db.getWritableDatabase());
+                        render();
+                        if(repaired>0)
+                            alert("Wykryto przerwany zapis Budżetu. "
+                                +"Dokończono powiązanie potwierdzonego przelewu "
+                                +"bez ponownego księgowania. "
+                                +"Sprawdź saldo i historię.");
+                        else
+                            alert("Kwota bankowa może już być zaksięgowana, "
+                                +"ale przypisanie do Budżetu wymaga naprawy. "
+                                +"NIE importuj ani nie potwierdzaj jej ponownie. "
+                                +"Otwórz Diagnostykę.");
+                    }catch(Exception repairError) {
+                        DiagnosticLog.error("PAYCHECK_BANK_REPAIR_FAILED",repairError);
+                        render();
+                        alert("Kwota bankowa może już być zaksięgowana. "
+                            +"Nie udało się dokończyć przypisania Budżetu. "
+                            +"Nie importuj ponownie; pobierz diagnostykę.");
+                    }
                 }catch(Exception error) {
                     DiagnosticLog.error("PAYCHECK_BANK_ACTUAL_MATCH_FAILED",error);
-                    alert("Nie zapisano uzgodnienia. Saldo bez zmian. "
-                        +"Sprawdź diagnostykę.");
+                    render();
+                    alert("Nie zakończono potwierdzenia przelewu. "
+                        +"Sprawdź status w PayCheck i Diagnostykę przed ponowieniem. "
+                        +"Brak automatycznego drugiego księgowania.");
                 }
             }).show();
     }
