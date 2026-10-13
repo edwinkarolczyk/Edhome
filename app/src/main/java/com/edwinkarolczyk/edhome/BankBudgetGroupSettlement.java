@@ -51,7 +51,7 @@ final class BankBudgetGroupSettlement {
     }
 
     private static PaycheckMonthlyBudget.Item active(SharedPreferences prefs,
-            String itemId,YearMonth month) {
+            String itemId,YearMonth month) throws Exception {
         for(PaycheckMonthlyBudget.Item item:PaycheckMonthlyBudget.activeFor(
                 PaycheckMonthlyBudget.load(prefs),month))
             if(item.id.equals(itemId))return item;
@@ -118,16 +118,17 @@ final class BankBudgetGroupSettlement {
             if(!"MATCHED".equals(BankEvidenceStore.matchBudgetActual(
                     db,bank.key,firstOperationId)))
                 throw new IllegalStateException("Nie rozliczono przelewu bankowego.");
-            PaycheckMonthlyBudget.allocateSplit(prefs,db,
-                Arrays.asList(first.id,second.id),month,firstOperationId,bank.amount);
-            // Drugi plan jest pokryty częścią PIERWSZEJ potwierdzonej transakcji;
-            // usuń jego niepotwierdzony dublet, inaczej fałszywie zostanie na liście.
+            // Zweryfikuj i usuń oczekujący dublet PRZED zapisem planu
+            // w SharedPreferences, aby błąd SQL nie pozostawił planu bez księgi.
+            // Drugi plan pokrywa część PIERWSZEJ rzeczywistej transakcji.
             int removed=db.delete("paycheck_transactions",
                 "operation_id=? AND scope='shared' AND kind=? AND status='pending' "
                 +"AND statement_key IS NULL AND note LIKE 'Budżet %'",
                 new String[]{secondOperationId,second.kind});
             if(removed!=1)
                 throw new IllegalStateException("Nie wyczyszczono dubletu planu.");
+            PaycheckMonthlyBudget.allocateSplit(prefs,db,
+                Arrays.asList(first.id,second.id),month,firstOperationId,bank.amount);
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
