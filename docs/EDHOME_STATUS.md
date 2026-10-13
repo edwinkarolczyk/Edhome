@@ -1,3 +1,11 @@
+## 2026-10-13 — WYDANE: Android Beta 0.8.0.106 / 298 — numer wersji obok EDHOME BETA
+
+- **Ustalenie i efekt:** na prośbę użytkownika z ekranu Aktualizacje w nagłówku aplikacji `EDHOME • BETA` widać numer **faktycznie zainstalowanego APK**, np. `EDHOME • BETA 0.8.0.106`. Numer nie jest zapisany ręcznie, tylko pochodzi z `BuildConfig.VERSION_NAME`, z identyfikacją Beta/Stable przez `BetaUpdater.isBeta()`. Nagłówek wspólny `appTitleWithConnection` obejmuje Start i moduły; osobno nagłówek ekranów PIN i Aktualizacje. W alternatywnej powłoce opis `Idea by Edwin • BETA <wersja>` widoczny pod nazwą; istniejący tekst numeru kompilacji w ekranie Aktualizacje pozostał.
+- **Kod:** `MainActivity.java` commit `86aa181`; test kontraktowy `tests/check_version_header_android.py` commit `16a1b9b`; `app/build.gradle` `versionName=0.8.0.106` / `versionCode=298` commit `faed77a`; workflow i opis wydania `1260724`. W tej aktualizacji nie zmieniono modelu danych ani PayCheck/Budżetu.
+- **CI PASS:** GitHub Actions run #38368358609 completed/success, 113 zaliczonych kroków, w tym testy i kompilacja Beta/Stable, podpis oraz publikacja: https://github.com/edwinkarolczyk/Edhome/actions/runs/38368358609. Źródłowy commit buildu `1260724c04c7a4b523d5c5fb4c2614f3d573f82b`.
+- **Podpisany instalator opublikowany:** https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.106/edhome-beta.apk — 13 388 044 bajty. Manifest Beta potwierdza 0.8.0.106/298 i SHA-256 `7dc575e194e93fa80ecbef14ffa82c297fe51308a15e3a80d67665d6473e2820`; release: https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.106.
+- **Odbiór fizycznego telefonu:** po zwykłej aktualizacji z 0.8.0.105 sprawdzić nagłówek na Start, w module PayCheck i w ekranie Aktualizacje, czy pokazuje dokładnie 0.8.0.106, oraz zachowanie wcześniejszych danych. Stable `main` bez zmian.
+
 ## 2026-10-13 — WYDANE: Android Beta 0.8.0.105 / 297 — kalendarze PayCheck/Budżet CI PASS
 
 - **GitHub Actions run #38353995948 = completed/success:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38353995948, źródłowy commit `08f4257b8542afca4fca5822778949c06ac6524e`. Przeszły testy PayCheck i Budżetu, nowy `check_paycheck_budget_date_picker_android.py` (krok 33), kompilacja Beta/Stable, Android API 22 lint, podpis APK, weryfikacja certyfikatu, upload i publikacja.
