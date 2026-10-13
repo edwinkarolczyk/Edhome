@@ -179,4 +179,58 @@ assert 'bankProposalLastImportSummary+"\\n\\n"' in suggestions
 assert 'proposalScore(' in rules
 print("PASS: po imporcie propozycje budżetowe, różnice, świadome zatwierdzenie, bez samoczynnego salda")
 
+# Regresja: kliknięcie 'Potwierdź / dopasuj' w planie musi otwierać
+# wybór bankowego dowodu, a nie kończyć się wyłącznie komunikatem.
+picker=main.split(
+    "private void showBankEvidenceForBudgetPending(String operationId) {",1)[1].split(
+    "/** A manual attestation, NOT an automated bank statement verification. */",1)[0]
+guard=main.split(
+    "private void confirmSharedPaycheckEntry(String operationId,String hintKey) {",1)[1]
+assert "showBankEvidenceForBudgetPending(operationId);" in guard.split(
+    "new AlertDialog.Builder(this)",1)[0]
+assert "To plan z Budżetu, nie rzeczywisty przelew." not in guard.split(
+    "new AlertDialog.Builder(this)",1)[0]
+budget_view=main.split("private void sharedBudgetAwaitingPaycheckConfirmation() {",1)[1].split(
+    "private String budgetPaycheckOperationId(",1)[0]
+assert "showBankEvidenceForBudgetPending(opId)" in budget_view
+for key in (
+    "status='pending'", "statement_key IS NULL",
+    "budgetPaycheckOperationId(item,month).equals(operationId)",
+    "BankEvidenceStore.listBudgetCandidates(",
+    "BankEvidenceStore.countBudgetCandidates(",
+    "confirmBankEvidenceMatch(rows.get(index),budgetItem,month)",
+    "setItems(labels.toArray(new String[0])",
+):
+    assert key in picker,key
+assert ".setMessage(" not in picker.split("AlertDialog.Builder picker=",1)[1], (
+    "Picker listy nie może używać setMessage razem z setItems")
+for key in ("countBudgetCandidates(", "listBudgetCandidates(", "e.kind=?",
+            "substr(e.booking_date,1,7)=?",
+            "CASE WHEN e.amount_grosz=? THEN 0 ELSE 1 END"):
+    assert key in bank,key
+
+# SQLite: kwota zgodna wyskakuje na górę tylko z właściwego miesiąca/kierunku;
+# dowód rozliczony nie może się pojawić ponownie.
+source=sqlite3.connect(":memory:")
+source.execute("""CREATE TABLE bank_evidence_queue (
+    evidence_key TEXT PRIMARY KEY, state TEXT, kind TEXT,
+    booking_date TEXT, amount_grosz INTEGER, description TEXT)""")
+source.executemany("INSERT INTO bank_evidence_queue VALUES (?,?,?,?,?,?)",[
+    ("old","open","expense","2026-09-09",250000,"inna data"),
+    ("income","open","income","2026-10-09",250000,"wpływ"),
+    ("matched","matched","expense","2026-10-09",250000,"zużyty dowód"),
+    ("other","open","expense","2026-10-10",500,"mały wydatek"),
+    ("target","open","expense","2026-10-09",250000,"przelew na rachunek"),
+])
+query="""SELECT evidence_key FROM bank_evidence_queue e
+    WHERE e.state='open' AND e.kind=?
+      AND substr(e.booking_date,1,7)=?
+    ORDER BY CASE WHEN e.amount_grosz=? THEN 0 ELSE 1 END,
+       e.booking_date DESC,e.evidence_key DESC LIMIT ? OFFSET ?"""
+assert [x[0] for x in source.execute(query,
+    ("expense","2026-10",250000,50,0))]==["target","other"]
+assert [x[0] for x in source.execute(query,
+    ("expense","2026-10",250000,1,1))]==["other"]
+print("PASS: Budzet 2500 -> wyciag Velo 2500, picker manualny, bez pomylenia miesiaca/statusu/kierunku")
+
 print("PASS Budget Bank auto: plan pending 1x, wyciag confirm 1x, konflikty bez podwojnego salda")
