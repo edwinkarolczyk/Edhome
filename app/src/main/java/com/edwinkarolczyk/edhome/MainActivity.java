@@ -15061,6 +15061,104 @@ public final class MainActivity extends Activity {
         picker.show();
     }
 
+    /** Wybór realnego dowodu bankowego dla konkretnego planu Budżetu. */
+    private void showBankEvidenceForBudgetPending(String operationId) {
+        showBankEvidenceForBudgetPending(operationId,0);
+    }
+
+    private void showBankEvidenceForBudgetPending(String operationId,int offset) {
+        try {
+            SQLiteDatabase sql=db.getReadableDatabase();
+            String noteText,kind;
+            long pendingAmount;
+            try(Cursor pending=sql.rawQuery(
+                    "SELECT note,kind,amount_grosz FROM paycheck_transactions "
+                    +"WHERE scope='shared' AND operation_id=? AND status='pending' "
+                    +"AND statement_key IS NULL",
+                    new String[]{operationId})) {
+                if(!pending.moveToFirst()) {
+                    alert("Ta pozycja nie jest już oczekująca. Saldo bez zmian.");
+                    return;
+                }
+                noteText=pending.getString(0);
+                kind=pending.getString(1);
+                pendingAmount=pending.getLong(2);
+            }
+            if(noteText==null||!noteText.startsWith("Budżet ")
+                    ||noteText.length()<"Budżet ".length()+7) {
+                alert("Nie znaleziono miesiąca tej pozycji Budżetu.");
+                return;
+            }
+            YearMonth month=YearMonth.parse(
+                noteText.substring("Budżet ".length(),"Budżet ".length()+7));
+            PaycheckMonthlyBudget.Item target=null;
+            for(PaycheckMonthlyBudget.Item item:PaycheckMonthlyBudget.activeFor(
+                    PaycheckMonthlyBudget.load(prefs),month)) {
+                if(budgetPaycheckOperationId(item,month).equals(operationId)
+                        &&kind.equals(item.kind)) {target=item;break;}
+            }
+            if(target==null||target.matchedOperationIds.contains(operationId)
+                    ||PaycheckMonthlyBudget.remainingDue(sql,target,month)<=0) {
+                alert("Pozycja Budżetu została zmieniona lub rozliczona. "
+                    +"Odśwież PayCheck. Saldo bez zmian.");
+                return;
+            }
+            final PaycheckMonthlyBudget.Item budgetItem=target;
+            final int pageSize=50;
+            long total=BankEvidenceStore.countBudgetCandidates(
+                sql,month.toString(),kind);
+            int first=total==0?0:Math.min(offset,
+                (int)((total-1)/pageSize)*pageSize);
+            java.util.List<BankEvidenceStore.Row> rows=
+                BankEvidenceStore.listBudgetCandidates(sql,month.toString(),
+                    kind,pendingAmount,pageSize,first);
+            if(rows.isEmpty()) {
+                new AlertDialog.Builder(this)
+                    .setTitle("Brak bankowego potwierdzenia")
+                    .setMessage("Nie ma otwartego przelewu z miesiąca "
+                        +month+" i tego samego kierunku. "
+                        +"Nie zmieniono salda. Sprawdź import oraz datę.")
+                    .setNegativeButton("Zamknij",null)
+                    .setPositiveButton("Historia bankowa",(d,w)->
+                        showBankBudgetProposals()).show();
+                return;
+            }
+            java.util.List<String> labels=new java.util.ArrayList<>();
+            for(BankEvidenceStore.Row row:rows) {
+                String description=row.description==null?"":row.description;
+                if(description.length()>80)
+                    description=description.substring(0,80)+"…";
+                labels.add((row.amount==pendingAmount
+                        ?"✓ Zgodna kwota • ":"? Inna kwota • ")
+                    +row.date+" • "+row.sourceLabel+" • "
+                    +("income".equals(row.kind)?"+ ":"− ")
+                    +MoneyRules.format(row.amount)
+                    +(description.isBlank()?"":"\n"+description));
+            }
+            AlertDialog.Builder picker=new AlertDialog.Builder(this)
+                .setTitle("Wybierz przelew do: "+budgetItem.name
+                    +" • "+month+" ("+total+")")
+                .setItems(labels.toArray(new String[0]),(d,index)->
+                    confirmBankEvidenceMatch(rows.get(index),budgetItem,month))
+                .setNegativeButton("Zamknij",null);
+            if(first+rows.size()<total)
+                picker.setPositiveButton("Następne 50",(d,w)->
+                    showBankEvidenceForBudgetPending(operationId,first+pageSize));
+            if(first>0)
+                picker.setNeutralButton("Poprzednie 50",(d,w)->
+                    showBankEvidenceForBudgetPending(operationId,
+                        Math.max(0,first-pageSize)));
+            else
+                picker.setNeutralButton("Wszystkie propozycje",(d,w)->
+                    showBankBudgetProposals());
+            picker.show();
+        }catch(Exception error) {
+            DiagnosticLog.error("PAYCHECK_BUDGET_BANK_PICKER_FAILED",error);
+            alert("Nie udało się wyświetlić przelewów do dopasowania. "
+                +"Saldo bez zmian. Sprawdź diagnostykę.");
+        }
+    }
+
     /** A manual attestation, NOT an automated bank statement verification. */
     private void confirmSharedPaycheckEntry(String operationId) {
         confirmSharedPaycheckEntry(operationId,null);
@@ -15072,9 +15170,7 @@ public final class MainActivity extends Activity {
                 +"operation_id=? AND status='pending'",
                 new String[]{operationId})) {
             if(planned.moveToFirst() && planned.getString(0).startsWith("Budżet ")) {
-                alert("To plan z Budżetu, nie rzeczywisty przelew. "
-                    +"Wybierz odpowiadającą mu operację z wyciągu bankowego, "
-                    +"aby zaksięgować faktyczną kwotę.");
+                showBankEvidenceForBudgetPending(operationId);
                 return;
             }
         }catch(Exception failed) {
@@ -15742,7 +15838,7 @@ public final class MainActivity extends Activity {
                     final long originalAmount=transactionAmount;
                     if("pending".equals(originalStatus))
                         smallButton(details,"Rozlicz z historii bankowej",
-                            ()->showBankEvidenceQueue(0));
+                            ()->showBankEvidenceForBudgetPending(opId));
                     else
                         smallButton(details,"Przypisz potwierdzony przelew",
                             ()->confirmBudgetPaymentAssignment(item,month,
