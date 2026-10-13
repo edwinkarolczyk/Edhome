@@ -16797,6 +16797,66 @@ public final class MainActivity extends Activity {
     }
 
     /** Jedno zobowiązanie cykliczne, osobne faktury i kwoty dla każdego miesiąca. */
+    /**
+     * Pola terminów PayCheck i Budżetu otwierają kalendarz Androida.
+     * Nie pokazujemy klawiatury, a zapis pozostaje w formacie YYYY-MM-DD.
+     * Opcjonalne daty można usunąć bez ręcznego edytowania tekstu.
+     */
+    private void attachPaycheckBudgetDateCalendar(EditText input,
+            java.time.LocalDate fallback,boolean optional) {
+        input.setFocusable(false);
+        input.setClickable(true);
+        input.setOnClickListener(v->{
+            java.time.LocalDate selected=fallback==null
+                ?java.time.LocalDate.now():fallback;
+            try {
+                selected=java.time.LocalDate.parse(
+                    input.getText().toString().trim());
+            }catch(Exception ignored) { }
+            DatePickerDialog dialog=new DatePickerDialog(this,
+                (picker,year,month,day)->input.setText(
+                    java.time.LocalDate.of(year,month+1,day).toString()),
+                selected.getYear(),selected.getMonthValue()-1,
+                selected.getDayOfMonth());
+            dialog.setTitle("Wybierz datę");
+            if(optional)
+                dialog.setButton(AlertDialog.BUTTON_NEUTRAL,"Wyczyść",
+                    (button,which)->input.setText(""));
+            dialog.show();
+        });
+    }
+
+    /**
+     * Miesiąc zobowiązania/raty jest wybierany w kalendarzu; dzień pomijamy.
+     * Nie zmieniamy istniejącego schematu YearMonth ani liczenia rat.
+     */
+    private void attachPaycheckBudgetMonthCalendar(EditText input,
+            EditText startMonth,YearMonth fallback,boolean optional) {
+        input.setFocusable(false);
+        input.setClickable(true);
+        input.setOnClickListener(v->{
+            YearMonth selected=fallback==null?YearMonth.now():fallback;
+            if(startMonth!=null) {
+                try {
+                    selected=YearMonth.parse(
+                        startMonth.getText().toString().trim());
+                }catch(Exception ignored) { }
+            }
+            try {
+                selected=YearMonth.parse(input.getText().toString().trim());
+            }catch(Exception ignored) { }
+            DatePickerDialog dialog=new DatePickerDialog(this,
+                (picker,year,month,day)->input.setText(
+                    YearMonth.of(year,month+1).toString()),
+                selected.getYear(),selected.getMonthValue()-1,1);
+            dialog.setTitle("Wybierz miesiąc • dzień jest pomijany");
+            if(optional)
+                dialog.setButton(AlertDialog.BUTTON_NEUTRAL,"Wyczyść",
+                    (button,which)->input.setText(""));
+            dialog.show();
+        });
+    }
+
     private void showBudgetInvoiceDialog(PaycheckMonthlyBudget.Item item,
             YearMonth month) {
         LinearLayout form = new LinearLayout(this);
@@ -16820,11 +16880,17 @@ public final class MainActivity extends Activity {
         due.setHint("Termin faktury YYYY-MM-DD");
         java.time.LocalDate oldDue=PaycheckMonthlyBudget.invoiceDueDate(item,month);
         if (oldDue!=null) due.setText(oldDue.toString());
+        attachPaycheckBudgetDateCalendar(due,
+            oldDue==null?month.atDay(1):oldDue,false);
         form.addView(due);
 
         EditText plan = new EditText(this);
         plan.setSingleLine(true);
         plan.setHint("Zapłać dnia YYYY-MM-DD (opcjonalnie)");
+        String savedPlan=item.plannedPaymentDates.get(month.toString());
+        if(savedPlan!=null)plan.setText(savedPlan);
+        attachPaycheckBudgetDateCalendar(plan,
+            PaycheckBudgetInvoiceDates.planned(month,item.dueDay,oldDue),true);
         form.addView(plan);
         TextView preview = text("Planowana zapłata: "
             + PaycheckBudgetInvoiceDates.planned(month,item.dueDay,oldDue),
@@ -17844,6 +17910,10 @@ public final class MainActivity extends Activity {
         EditText invoiceDueDate = new EditText(this);
         invoiceDueDate.setSingleLine(true);
         invoiceDueDate.setHint("Termin faktury YYYY-MM-DD (opcjonalnie)");
+        YearMonth defaultInvoiceMonth=paycheckBudgetMonth==null
+            ?YearMonth.now():paycheckBudgetMonth;
+        attachPaycheckBudgetDateCalendar(invoiceDueDate,
+            defaultInvoiceMonth.atDay(1),true);
         form.addView(invoiceDueDate);
 
         TextView plannedPaymentPreview = text(
@@ -17906,11 +17976,15 @@ public final class MainActivity extends Activity {
         startMonth.setHint("Start YYYY-MM");
         startMonth.setText((paycheckBudgetMonth == null
             ? YearMonth.now() : paycheckBudgetMonth).toString());
+        attachPaycheckBudgetMonthCalendar(startMonth,null,
+            paycheckBudgetMonth==null?YearMonth.now():paycheckBudgetMonth,false);
         form.addView(startMonth);
 
         EditText endMonth = new EditText(this);
         endMonth.setSingleLine(true);
         endMonth.setHint("Koniec YYYY-MM • dla rat zamiast liczby rat");
+        attachPaycheckBudgetMonthCalendar(endMonth,startMonth,
+            paycheckBudgetMonth==null?YearMonth.now():paycheckBudgetMonth,true);
         form.addView(endMonth);
 
         EditText installmentCount = new EditText(this);
