@@ -15,7 +15,9 @@ for token in ('values.put("status","pending");','status=\'confirmed\'',
 # ukryć klikalną listę przelewów. Dwa widoki wyboru muszą być bez message.
 pending_picker=main.split(
     'private void showSharedPaycheckPendingQueue(int offset)',1)[1].split(
-    'private void confirmSharedPaycheckEntry(',1)[0]
+    'private void showBankEvidenceForBudgetPending(String operationId)',1)[0]
+# The bank-evidence picker is a separate dialog with its own confirmation
+# messages. Check only the pending-queue method, not the next methods.
 budget_picker=main.split(
     'private void showBudgetPaymentPicker(PaycheckMonthlyBudget.Item item,',1)[1].split(
     'private void confirmBudgetPaymentAssignment(',1)[0]
