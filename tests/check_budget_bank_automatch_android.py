@@ -199,9 +199,21 @@ for key in (
     "BankEvidenceStore.listBudgetCandidates(",
     "BankEvidenceStore.countBudgetCandidates(",
     "confirmBankEvidenceMatch(rows.get(index),budgetItem,month)",
-    "setItems(labels.toArray(new String[0])",
+    "setItems(labels.toArray(new CharSequence[0])",
 ):
     assert key in picker,key
+# Dostępne kolory semantyczne w natywnej liście wyboru bankowych dowodów.
+# Zgodna kwota jest ZIELONA, inne kwoty ŻÓŁTE; opis pozostaje neutralny.
+for code in (
+    "java.util.List<CharSequence> labels=",
+    "android.text.SpannableString styled=",
+    "android.text.style.ForegroundColorSpan(",
+    "exactAmount?0xFF087B47:0xFF966100",
+    "android.text.style.StyleSpan(Typeface.BOLD)",
+):
+    assert code in picker,code
+assert "if(rank>0)pulseBankProposal(headerLine);" in main
+assert "rank==3&&alternatives==1" in main
 assert ".setMessage(" not in picker.split("AlertDialog.Builder picker=",1)[1], (
     "Picker listy nie może używać setMessage razem z setItems")
 for key in ("countBudgetCandidates(", "listBudgetCandidates(", "e.kind=?",
