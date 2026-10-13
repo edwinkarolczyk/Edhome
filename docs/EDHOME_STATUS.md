@@ -1,3 +1,9 @@
+## 2026-10-13 — Android Beta 0.8.0.110 / 302: zbiorcze usuwanie banku z podglądem (P0)
+
+- **Kod:** checkbox przy każdym otwartym dowodzie oraz „Zaznacz stronę”, „Usuń zaznaczone” (maks. 100 widocznych przelewów), jeden dialog potwierdzenia. Kliknięcie obok checkboxa (data/kwota) nadal otwiera jeden podgląd naraz z pełnym opisem, nazwą banku, datą i przyciskami dopasowania/tworzenia Budżetu.
+- **Bezpieczeństwo:** `BankEvidenceStore.deleteSelectedUnmatched` w jednej transakcji waliduje każdy wybrany klucz, stan open, brak powiązania z księgą. Przy jakimkolwiek konflikcie żadna pozycja nie zostaje odrzucona. Tylko `state=dismissed` (możliwe „Przywróć” z Całej historii; reimport nie ożywia); saldo bez zmian. Test statycznego kontraktu dopisany w istniejącym teście CI.
+- **Wydanie:** Gradle 0.8.0.110 / 302, opis wydania zaktualizowany. **CI/publikacja do sprawdzenia po push**, nie oznaczać jeszcze PASS. Odbiór fizyczny: checkbox kontra otwieranie szczegółów, wielokrotny wybór, przywracanie, brak zmiany salda, ponowny import i ZIP. Desktop wymaga równoległego uzupełnienia. Stable main bez zmian.
+
 ## 2026-10-13 — WYDANE: Android Beta 0.8.0.109 / 301, bank → Budżet, CI PASS
 
 - **Publikacja potwierdzona:** GitHub Actions run #38418722653 `completed/success`, 115 kroków sukcesu: https://github.com/edwinkarolczyk/Edhome/actions/runs/38418722653 (commit buildu `736f5b8a792232656c8f04ab965c940d766b9190`). Podpisany APK https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.109/edhome-beta.apk (13 393 352 bajty), release https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.109. Opublikowany `beta-manifest.json`: `versionName=0.8.0.109`, `versionCode=301`, `sha256=5dae1fd7cdca2696afa593f6360a6e30171ee35e01209a3d7e680a152221211a`.

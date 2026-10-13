@@ -124,4 +124,32 @@ assert '.setMessage("Wybierz bank' not in picker
 assert '.setItems(new String[]{"mBank", "VeloBank"' in picker
 assert 'Intent.ACTION_GET_CONTENT' in main, "Brak awaryjnego wyboru plikow"
 
+
+# Wybór wielu operacji bez utraty podglądu po kliknięciu kwoty lub daty.
+bulk=store.split("static int deleteSelectedUnmatched(",1)[1].split(
+    "static int dismissAllUnmatched(",1)[0]
+for token in ("db.beginTransaction();", "db.setTransactionSuccessful();",
+              "db.endTransaction();", "eligible!=keys.length",
+              "changed!=keys.length", "state='open'",
+              "matched_operation_id IS NULL",
+              "NOT EXISTS (SELECT 1 FROM paycheck_transactions",
+              'removed.put("state","dismissed")'):
+    assert token in bulk,token
+view=main.split("private void showBankEvidenceList(",1)[1].split(
+    "private void showCreateBudgetFromBank(",1)[0]
+for token in ('CheckBox selectAll=new CheckBox(this);',
+              'selectAll.setOnCheckedChangeListener(',
+              'selectionBoxes.add(choose);',
+              'selectedKeys.add(row.evidenceKey)',
+              'BankEvidenceStore.deleteSelectedUnmatched(',
+              '"Usunąć zaznaczone przelewy?"',
+              'header.setOnClickListener(v->',
+              'details.setVisibility(open?View.VISIBLE:View.GONE)',
+              'smallButton(details,"Dopasuj do Budżetu"',
+              'smallButton(details,"Dodaj do Budżetu"',
+              'smallButton(details,"Przywróć"'):
+    assert token in view,token
+assert view.index('choose.setOnCheckedChangeListener(') < view.index(
+    'header.setOnClickListener(v->')
+
 print("Bank evidence queue: persistent v35 schema, state constraints, dedup, UI and backup PASS")

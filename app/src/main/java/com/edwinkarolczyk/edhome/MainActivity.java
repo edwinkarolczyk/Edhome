@@ -14785,6 +14785,76 @@ public final class MainActivity extends Activity {
         LinearLayout list=new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(10),dp(4),dp(10),dp(6));
+
+        // Osobny checkbox służy do zaznaczania; naciśnięcie daty lub kwoty
+        // nadal rozwija szczegóły jednego przelewu (maks. 100 na stronie).
+        java.util.LinkedHashSet<String> selectedKeys=new java.util.LinkedHashSet<>();
+        java.util.List<CheckBox> selectionBoxes=new java.util.ArrayList<>();
+        CheckBox selectAll=new CheckBox(this);
+        selectAll.setText("Zaznacz stronę");
+        selectAll.setTextSize(13);
+        selectAll.setTextColor(ink);
+        selectAll.setButtonTintList(ColorStateList.valueOf(accent));
+        Button removeSelected=new Button(this);
+        removeSelected.setText("Usuń zaznaczone (0)");
+        removeSelected.setTextSize(12);
+        removeSelected.setAllCaps(false);
+        removeSelected.setTextColor(skin.accentInk);
+        removeSelected.setBackground(skin.pill(this,accent));
+        removeSelected.setEnabled(false);
+        final boolean[] updatingSelectAll={false};
+        Runnable refreshSelection=()->{
+            removeSelected.setText("Usuń zaznaczone ("+selectedKeys.size()+")");
+            removeSelected.setEnabled(!selectedKeys.isEmpty());
+            updatingSelectAll[0]=true;
+            selectAll.setChecked(!selectionBoxes.isEmpty()
+                &&selectedKeys.size()==selectionBoxes.size());
+            updatingSelectAll[0]=false;
+        };
+        int eligibleOnPage=0;
+        for(BankEvidenceStore.Row candidate:rows)
+            if("open".equals(candidate.state))eligibleOnPage++;
+        if(eligibleOnPage>0) {
+            LinearLayout bulkActions=new LinearLayout(this);
+            bulkActions.setOrientation(LinearLayout.HORIZONTAL);
+            bulkActions.setGravity(Gravity.CENTER_VERTICAL);
+            bulkActions.addView(selectAll,new LinearLayout.LayoutParams(0,dp(46),1f));
+            bulkActions.addView(removeSelected,new LinearLayout.LayoutParams(0,dp(43),1.3f));
+            list.addView(bulkActions);
+        }
+        selectAll.setOnCheckedChangeListener((button,checked)->{
+            if(updatingSelectAll[0])return;
+            for(CheckBox box:selectionBoxes)box.setChecked(checked);
+        });
+        removeSelected.setOnClickListener(v->{
+            if(selectedKeys.isEmpty())return;
+            java.util.List<String> toRemove=new java.util.ArrayList<>(selectedKeys);
+            new AlertDialog.Builder(this)
+                .setTitle("Usunąć zaznaczone przelewy?")
+                .setMessage("Wybrano "+toRemove.size()+" nierozliczonych operacji. "
+                    +"Znikną z „Do wyjaśnienia”, ale będzie można je przywrócić "
+                    +"z pełnej historii. Ponowny import nie utworzy duplikatów. "
+                    +"Saldo PayCheck i Budżet nie zmienią się.")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Usuń zaznaczone",(d,w)->{
+                    try {
+                        int removed=BankEvidenceStore.deleteSelectedUnmatched(
+                            db.getWritableDatabase(),toRemove);
+                        if(removed!=toRemove.size()) {
+                            if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                            alert("Nie usunięto niczego: jeden z przelewów został "
+                                +"już rozliczony lub zmieniony. Odśwież listę.");
+                            return;
+                        }
+                        DiagnosticLog.event("PAYCHECK_BANK_BULK_DISMISSED");
+                        if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                        showBankEvidenceList(all,filter,first);
+                    }catch(Exception problem) {
+                        alert("Nie udało się usunąć zaznaczonych przelewów: "
+                            +problem.getMessage());
+                    }
+                }).show();
+        });
         if(rows.isEmpty()) {
             TextView empty=text("Brak pozycji w tym widoku. "
                 +"Możesz wczytać historię bankową przyciskiem Importuj.",14,false);
@@ -14812,6 +14882,20 @@ public final class MainActivity extends Activity {
             header.setGravity(Gravity.CENTER_VERTICAL);
             header.setPadding(dp(5),dp(5),dp(5),dp(5));
             entry.addView(header,new LinearLayout.LayoutParams(-1,dp(43)));
+            if("open".equals(row.state)) {
+                CheckBox choose=new CheckBox(this);
+                choose.setText("");
+                choose.setButtonTintList(ColorStateList.valueOf(accent));
+                choose.setContentDescription("Zaznacz przelew z "+row.date
+                    +" na kwotę "+MoneyRules.format(row.amount));
+                header.addView(choose,new LinearLayout.LayoutParams(dp(44),dp(43)));
+                selectionBoxes.add(choose);
+                choose.setOnCheckedChangeListener((button,checked)->{
+                    if(checked)selectedKeys.add(row.evidenceKey);
+                    else selectedKeys.remove(row.evidenceKey);
+                    refreshSelection.run();
+                });
+            }
             TextView date=text(row.date+"  "+row.sourceLabel,13,false);
             date.setSingleLine(true);
             date.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -14889,6 +14973,7 @@ public final class MainActivity extends Activity {
             divider.setBackgroundColor(subdued & 0x35FFFFFF);
             entry.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
         }
+        refreshSelection.run();
         if(first>0)smallButton(list,"← Poprzednie 100",()->{
             if(dialogRef[0]!=null)dialogRef[0].dismiss();
             showBankEvidenceList(all,filter,Math.max(0,first-pageSize));

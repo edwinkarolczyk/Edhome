@@ -430,6 +430,48 @@ final class BankEvidenceStore {
             new String[]{evidenceKey,evidenceKey})==1;
     }
 
+
+    /** Atomowe odrzucenie wybranych dowodów: albo wszystkie, albo żaden.
+     * Zachowanie stanu dismissed zabezpiecza przed ponownym importem.
+     */
+    static int deleteSelectedUnmatched(SQLiteDatabase db,
+            java.util.List<String> evidenceKeys) {
+        if(evidenceKeys==null||evidenceKeys.isEmpty())return 0;
+        java.util.LinkedHashSet<String> unique=new java.util.LinkedHashSet<>(evidenceKeys);
+        if(unique.size()!=evidenceKeys.size()||unique.size()>100)
+            throw new IllegalArgumentException("Zaznacz maksymalnie 100 różnych operacji.");
+        for(String key:unique)
+            if(key==null||!key.matches("[0-9a-f]{64}"))
+                throw new IllegalArgumentException("Nieprawidłowa pozycja bankowa.");
+        StringBuilder placeholders=new StringBuilder();
+        for(int i=0;i<unique.size();i++) {
+            if(i>0)placeholders.append(",");
+            placeholders.append("?");
+        }
+        String[] keys=unique.toArray(new String[0]);
+        String where="evidence_key IN ("+placeholders+") AND state='open' "
+            +"AND matched_operation_id IS NULL "
+            +"AND NOT EXISTS (SELECT 1 FROM paycheck_transactions t "
+            +"WHERE t.statement_key=bank_evidence_queue.evidence_key)";
+        db.beginTransaction();
+        try {
+            long eligible;
+            try(Cursor count=db.rawQuery(
+                    "SELECT COUNT(*) FROM bank_evidence_queue WHERE "+where,keys)) {
+                eligible=count.moveToFirst()?count.getLong(0):0;
+            }
+            if(eligible!=keys.length)return 0;
+            ContentValues removed=new ContentValues();
+            removed.put("state","dismissed");
+            int changed=db.update("bank_evidence_queue",removed,where,keys);
+            if(changed!=keys.length)return 0;
+            db.setTransactionSuccessful();
+            return changed;
+        }finally {
+            db.endTransaction();
+        }
+    }
+
     /** Masowe ukrycie nieprzypisanych dowodów, bez kasowania kluczy.
      * Rozliczenia powiązane z Budżetem i PayCheck pozostają nienaruszone.
      * Zachowane klucze uniemożliwiają ponowny import tych samych pozycji.
