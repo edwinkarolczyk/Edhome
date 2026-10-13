@@ -179,6 +179,15 @@ jobs:
           java -cp "$RUNNER_TEMP/budget-bank-auto" \
             com.edwinkarolczyk.edhome.BankBudgetMatchSmoke
           python3 tests/check_budget_bank_automatch_android.py
+      - name: Bank group matches 200 + 300 = 500 in both directions
+        run: |
+          mkdir -p "$RUNNER_TEMP/budget-bank-group"
+          javac -d "$RUNNER_TEMP/budget-bank-group" \
+            app/src/main/java/com/edwinkarolczyk/edhome/BankBudgetGroupRules.java \
+            tests/task_rules/BankBudgetGroupSmoke.java
+          java -cp "$RUNNER_TEMP/budget-bank-group" \
+            com.edwinkarolczyk.edhome.BankBudgetGroupSmoke
+          python3 tests/check_budget_bank_group_android.py
       - name: All Android PayCheck history pages and bank amount signs
         run: |
           mkdir -p "$RUNNER_TEMP/paycheck-history-all"
