@@ -2824,11 +2824,12 @@ public final class EdhomeDesktop extends JFrame {
         actions.setLayout(new BorderLayout(10, 10));
         actions.setBorder(new EmptyBorder(12, 14, 12, 14));
 
-        JPanel buttons = new JPanel(new GridLayout(2, 5, 8, 8));
+        JPanel buttons = new JPanel(new GridLayout(0, 5, 8, 8));
         buttons.setOpaque(false);
         JButton importBank = actionButton("＋ Import banku");
         JButton queue = actionButton("Banki i potwierdzenia");
         JButton futureBudget = actionButton("Budżet miesiąca");
+        JButton proposals = actionButton("Bank ↔ Budżet • propozycje");
         JButton analysis = actionButton("Analiza 12 mies.");
         JButton goals = actionButton("Cele");
         JButton bulk = actionButton("Masowa edycja");
@@ -2840,6 +2841,7 @@ public final class EdhomeDesktop extends JFrame {
         buttons.add(importBank);
         buttons.add(queue);
         buttons.add(futureBudget);
+        buttons.add(proposals);
         buttons.add(analysis);
         buttons.add(goals);
         buttons.add(bulk);
@@ -2862,6 +2864,7 @@ public final class EdhomeDesktop extends JFrame {
 
         importBank.addActionListener(e -> importBankStatement());
         queue.addActionListener(e -> showBankEvidenceQueue());
+        proposals.addActionListener(e -> showBankBudgetSuggestions(null));
         futureBudget.addActionListener(e -> {
             JsonObject syncedSettings=snapshot!=null && snapshot.has("settings")
                 && snapshot.get("settings").isJsonObject()
@@ -4066,6 +4069,11 @@ public final class EdhomeDesktop extends JFrame {
                             + (summary.archivedPdf == null ? ""
                                 : "\nPDF zachowany lokalnie:\n" + summary.archivedPdf),
                         "EDHOME Desktop • PayCheck", JOptionPane.INFORMATION_MESSAGE);
+                    java.util.Set<String> importedKeys=new java.util.HashSet<>();
+                    for(DesktopBankImporter.Entry entry:result.entries)
+                        importedKeys.add(entry.evidenceKey);
+                    if(!importedKeys.isEmpty())
+                        showBankBudgetSuggestions(importedKeys);
                 } catch (Exception error) {
                     JOptionPane.showMessageDialog(EdhomeDesktop.this,
                         "Nie zaimportowano wyciągu:\n" + rootMessage(error),
@@ -4175,6 +4183,112 @@ public final class EdhomeDesktop extends JFrame {
         tx.add("statement_date", com.google.gson.JsonNull.INSTANCE);
         mutableTable("paycheck_transactions").add(tx);
         return tx;
+    }
+
+
+    /**
+     * Tylko odczyt: żadnych zmian w saldzie ani potwierdzeń bankowych.
+     * Wyszukiwanie pracuje poza wątkiem interfejsu; wyniki są stronicowane.
+     */
+    private void showBankBudgetSuggestions(java.util.Set<String> focusKeys) {
+        if(snapshot==null||!snapshot.has("settings")||
+                !DesktopBudgetMirror.hasSharedBudget(
+                    snapshot.getAsJsonObject("settings"))) {
+            JOptionPane.showMessageDialog(this,
+                "Najpierw zsynchronizuj wspólny Budżet z Androidem.",
+                "Propozycje przelewów",JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        final JsonObject source=snapshot;
+        final java.util.Set<String> keys=focusKeys==null
+            ?null:new java.util.HashSet<>(focusKeys);
+        new SwingWorker<java.util.List<DesktopBankBudgetSuggestions.Proposal>,Void>() {
+            @Override protected java.util.List<DesktopBankBudgetSuggestions.Proposal>
+                    doInBackground() {
+                return DesktopBankBudgetSuggestions.find(source.deepCopy(),keys);
+            }
+            @Override protected void done() {
+                try {
+                    java.util.List<DesktopBankBudgetSuggestions.Proposal> matches=get();
+                    if(matches.isEmpty()) {
+                        JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                            "Brak propozycji do wspólnego Budżetu. "+
+                            "Historia bankowa nie została zmieniona.",
+                            "Bank ↔ Budżet",JOptionPane.INFORMATION_MESSAGE);
+                        return;
+                    }
+                    int page=0;
+                    final int pageSize=60;
+                    while(true) {
+                        int start=page*pageSize;
+                        int stop=Math.min(matches.size(),start+pageSize);
+                        javax.swing.table.DefaultTableModel rows=
+                            new javax.swing.table.DefaultTableModel(
+                                new String[]{"Ocena","Data","Przelew bankowy",
+                                    "Pozycja Budżetu","Plan","Bank"},0) {
+                                @Override public boolean isCellEditable(int r,int c) {
+                                    return false;
+                                }
+                            };
+                        for(int i=start;i<stop;i++) {
+                            DesktopBankBudgetSuggestions.Proposal p=matches.get(i);
+                            rows.addRow(new Object[]{
+                                p.confident?"ZGODNE":"SPRAWDŹ",p.date,
+                                p.description,p.budgetName,
+                                ("income".equals(p.kind)?"+ ":"− ")+
+                                    money(Long.toString(p.plannedGrosz)),
+                                ("income".equals(p.kind)?"+ ":"− ")+
+                                    money(Long.toString(p.actualGrosz))
+                            });
+                        }
+                        JTable view=new JTable(rows);
+                        view.setAutoCreateRowSorter(true);
+                        view.setRowHeight(Math.max(25,view.getRowHeight()));
+                        view.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+                        view.setDefaultRenderer(Object.class,
+                            new javax.swing.table.DefaultTableCellRenderer() {
+                                @Override public Component getTableCellRendererComponent(
+                                        JTable table,Object value,boolean selected,
+                                        boolean focused,int row,int column) {
+                                    Component result=super.getTableCellRendererComponent(
+                                        table,value,selected,focused,row,column);
+                                    if(!selected) {
+                                        int actualRow=table.convertRowIndexToModel(row);
+                                        boolean green="ZGODNE".equals(
+                                            table.getModel().getValueAt(actualRow,0));
+                                        result.setForeground(green?
+                                            new Color(8,123,71):new Color(150,97,0));
+                                    }
+                                    return result;
+                                }
+                            });
+                        JScrollPane scroll=new JScrollPane(view);
+                        scroll.setPreferredSize(new Dimension(960,380));
+                        JPanel panel=new JPanel(new BorderLayout(0,8));
+                        panel.add(new JLabel("<html><b>Propozycje "+
+                            (start+1)+"–"+stop+" z "+matches.size()+
+                            "</b> • Zielony: unikalna kwota + opis + termin."+
+                            " Żółty: wymaga sprawdzenia."+
+                            " Tylko podgląd — bez zmiany salda.</html>"),
+                            BorderLayout.NORTH);
+                        panel.add(scroll,BorderLayout.CENTER);
+                        Object[] options={"‹ Poprzednia strona",
+                            "Następna strona ›","Zamknij"};
+                        int choice=JOptionPane.showOptionDialog(EdhomeDesktop.this,
+                            panel,"PayCheck • propozycje Bank ↔ Budżet",
+                            JOptionPane.DEFAULT_OPTION,JOptionPane.PLAIN_MESSAGE,
+                            null,options,options[2]);
+                        if(choice==0&&page>0)page--;
+                        else if(choice==1&&stop<matches.size())page++;
+                        else break;
+                    }
+                }catch(Exception error) {
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie można przygotować propozycji:\n"+rootMessage(error),
+                        "Bank ↔ Budżet",JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     private void showBankEvidenceQueue() {
