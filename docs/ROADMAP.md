@@ -5,7 +5,7 @@
 
 **Zasada:** jedna księga Budżetu dla Android ↔ Desktop, synchronizacja LAN per UUID, historia append-only, kontrola konfliktów, brak podwójnego salda i utraty starszych danych. Desktop ma umożliwiać pełną obsługę Budżetu bez telefonu przy każdej edycji, a później przesłać zmiany po połączeniu. Stable main bez zmian.
 
-### Pierwszy wdrożony zakres kodowy (Desktop Beta 0.7.0.116, CI/odbiór nie przesądzone)
+### Pierwszy wdrożony zakres kodowy (Desktop Beta 0.7.0.116, Windows CI PASS; odbiór fizyczny otwarty)
 - Dodawanie wpływu lub wydatku **do wspólnego Budżetu** z PC: nazwa, kwota, kategoria, odbiorca z istniejącej kartoteki, termin, miesiąc startu/końca, cykl 1×/1/2/3/6/12 mies., kwota stała/zmienna, pozycja opcjonalna i raty.
 - Zapis nowego snapshotu (settings.paycheckMonthlyBudget, budget_items, paycheckBudgetHistory, budget_history), walidacja sidecar, historia ITEM_CREATED, oddzielne UUID, brak nowych operacji paycheck_transactions przy utworzeniu planu. Delta po UUID przy wysyłaniu PC→Android. Nie używać starego lokalnego pliku paycheck-budget-plan.json jako równoległego budżetu.
 - Testy JUnit tworzenia planu, cykli, rat, odrzucenia duplikatu, nienaruszalności salda oraz generacji delty. Numer wydania nie oznacza testu fizycznego.
