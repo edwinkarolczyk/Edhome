@@ -279,6 +279,35 @@ final class PaycheckMonthlyBudget {
         }
     }
 
+    /**
+     * Walidacja PRZED uznaniem dowodu bankowego w SQLite. Chroni przed
+     * rozliczeniem pieniędzy bez możliwości przypisania ich do planu.
+     * Nie zmienia SharedPreferences ani salda.
+     */
+    static void preflightBankMatch(SharedPreferences prefs, SQLiteDatabase db,
+            String itemId, String operationId, String kind, YearMonth month)
+            throws Exception {
+        if(month==null||itemId==null||operationId==null)
+            throw new IllegalArgumentException("Brak danych dopasowania.");
+        List<Item> items=load(prefs);
+        Item target=find(items,itemId);
+        if(!target.kind.equals(kind)
+                ||!activeFor(java.util.Collections.singletonList(target),month)
+                    .contains(target))
+            throw new IllegalArgumentException(
+                "Pozycja Budżetu nie jest aktywna w wybranym miesiącu.");
+        if(target.matchedOperationIds.size()>=MAX_MATCHES_PER_ITEM)
+            throw new IllegalArgumentException(
+                "Pozycja Budżetu ma już maksymalną liczbę przypisań.");
+        for(Item other:items)
+            if(other.matchedOperationIds.contains(operationId))
+                throw new IllegalArgumentException(
+                    "Operacja jest już przypisana do pozycji Budżetu.");
+        if(remainingDue(db,target,month)<=0)
+            throw new IllegalArgumentException(
+                "Pozycja Budżetu nie ma już kwoty do rozliczenia.");
+    }
+
     static boolean match(SharedPreferences prefs, SQLiteDatabase db,
             String itemId, String operationId) throws Exception {
         SharedTransaction tx=sharedTransaction(db,operationId);
