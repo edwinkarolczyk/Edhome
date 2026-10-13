@@ -478,6 +478,8 @@ jobs:
           java -cp "$RUNNER_TEMP/private-paycheck" com.edwinkarolczyk.edhome.PrivatePaycheckCryptoSmoke
           python3 tests/check_private_paycheck_contract.py
           python3 tests/check_private_backup_contract.py
+      - name: Android version displayed in EDHOME Beta and Stable headers
+        run: python3 tests/check_version_header_android.py
       - name: Update installer single-flight and polling regression
         run: python3 tests/check_updater_contract.py
       - name: EDHOME 0.6 preserved-contract gate
@@ -607,7 +609,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.105 — PayCheck i Budżet miesiąca: pięć pól dat zostało podłączonych do kalendarza Androida. Po dotknięciu terminu faktury (nowa pozycja i edycja faktury), planowanego dnia zapłaty oraz miesiąca startu/końca zobowiązania i rat otwiera się kalendarz, zamiast klawiatury. Pola opcjonalne mają Wyczyść, miesiące zapisują tylko YYYY-MM, a przeliczenie liczby rat działa nadal. Edycja faktury zachowuje już zapisaną planowaną datę zapłaty. Nie zmieniono księgowania, planowania i stanu PayCheck. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.106 — numer faktycznie zainstalowanej wersji jest widoczny przy EDHOME • BETA w nagłówku aplikacji, modułów i ekranu Aktualizacje. Numer pochodzi automatycznie z BuildConfig.VERSION_NAME, bez wpisywania go na stałe; po kolejnej aktualizacji zmieni się sam. W alternatywnym stylu widać go pod nazwą edhome, obok informacji o kanale. Zachowano dotychczasową kartę szczegółów wersji i numeru kompilacji. Dane użytkownika, import, PayCheck i Budżet bez zmian. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
