@@ -1,5 +1,23 @@
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
+
+## Desktop PayCheck/Budżet — równoległość Androida i Windows (13.10.2026)
+
+**Zasada:** jedna księga Budżetu dla Android ↔ Desktop, synchronizacja LAN per UUID, historia append-only, kontrola konfliktów, brak podwójnego salda i utraty starszych danych. Desktop ma umożliwiać pełną obsługę Budżetu bez telefonu przy każdej edycji, a później przesłać zmiany po połączeniu. Stable main bez zmian.
+
+### Pierwszy wdrożony zakres kodowy (Desktop Beta 0.7.0.116, CI/odbiór nie przesądzone)
+- Dodawanie wpływu lub wydatku **do wspólnego Budżetu** z PC: nazwa, kwota, kategoria, odbiorca z istniejącej kartoteki, termin, miesiąc startu/końca, cykl 1×/1/2/3/6/12 mies., kwota stała/zmienna, pozycja opcjonalna i raty.
+- Zapis nowego snapshotu (settings.paycheckMonthlyBudget, budget_items, paycheckBudgetHistory, budget_history), walidacja sidecar, historia ITEM_CREATED, oddzielne UUID, brak nowych operacji paycheck_transactions przy utworzeniu planu. Delta po UUID przy wysyłaniu PC→Android. Nie używać starego lokalnego pliku paycheck-budget-plan.json jako równoległego budżetu.
+- Testy JUnit tworzenia planu, cykli, rat, odrzucenia duplikatu, nienaruszalności salda oraz generacji delty. Numer wydania nie oznacza testu fizycznego.
+
+### Otwarte P0 — doprowadzenie Desktop do funkcjonalności Android Beta 0.8.0.108
+1. Ręczna i bankowa ścieżka PayCheck pending→confirmed, wybór rachunku, rzeczywista kwota z banku i różnica do planu; nie potwierdzać planu jako fikcyjnej transakcji.
+2. Automatyczne porównanie po imporcie PDF/CSV, pulsujące propozycje 1:1 oraz grupy 200+300=500 / 500→200+300, zielony/żółty/czerwony, lista konfliktów i ręczna akceptacja; zachowanie kompletu importu, paginacji i unikalnych dowodów.
+3. Jednolite rozliczanie nadpłat, niedopłat, zaległości, przeniesień i korekt, audyt, anulowanie/undo oraz ochrona przed powtórnym importem i podwójnym księgowaniem.
+4. Pełny CRUD wspólnego Budżetu i kartoteki odbiorców: zmiana zakresu kwoty tylko ten miesiąc / od miesiąca, zakończenie pojedyncze/cały cykl, usuwanie/archiwizacja, planowane daty, kalendarz, raty, historia.
+5. Nowa opcja z niepowiązanego przelewu bankowego: „Dodaj do Budżetu” (tylko raz / cyklicznie / pomiń), sugestie powtarzalności; bez automatycznego powielania i bez zmiany salda już zaksięgowanej operacji.
+6. Backup ZIP/restore, migracje starszych wersji, konflikty offline i pełny test LAN Android→PC i PC→Android z rozłączonym łączem i restartami. Wersję uznaje się za gotową po zielonym Desktop+Android CI **oraz** teście dwóch urządzeń, nie po samym wydaniu EXE.
+
 ## P0 — po imporcie wyciągu pulsujące dopasowania 1:1 i łączone (13.10.2026)
 
 - **Wymóg użytkownika:** po każdej poprawnie zaimportowanej paczce bankowej EDHOME otwiera porównanie z Budżetem i wyraźnie pulsuje wierszami/propozycjami, które pasują, bez dodatkowego szukania w osobnej historii. Przy dopasowaniu **2 operacje bankowe (np. 200 + 300 zł) → 1 pozycja Budżetu 500 zł** oraz **1 operacja bankowa 500 zł → 2 pozycje Budżetu (200 + 300 zł)** pokazuje kwoty, daty i opisy i pyta, czy rozliczyć razem. Dotyczy symetrycznie wpływów i wydatków, ale nie wolno ich łączyć ze sobą. Sama propozycja/pulsowanie nigdy nie zmienia salda.
