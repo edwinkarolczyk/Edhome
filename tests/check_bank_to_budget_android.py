@@ -25,7 +25,7 @@ for required in (
     'new String[]{row.kind,row.evidenceKey}', 
     'if(!current.moveToFirst()', 
     'existing.name.equalsIgnoreCase(itemName)', 
-    'MoneyRules.format(row.amount)', 'MoneyRules.parse(',
+    'MoneyRules.format(row.amount).replace(" zł","")', 'MoneyRules.parse(',
     'repetition.getSelectedItemPosition()==1?1:0',
     'setPositiveButton("Sprawdź przelew"',
     'setNegativeButton("Później"',
