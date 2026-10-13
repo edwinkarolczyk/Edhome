@@ -8,7 +8,7 @@
 
 - **Kod:** checkbox przy każdym otwartym dowodzie oraz „Zaznacz stronę”, „Usuń zaznaczone” (maks. 100 widocznych przelewów), jeden dialog potwierdzenia. Kliknięcie obok checkboxa (data/kwota) nadal otwiera jeden podgląd naraz z pełnym opisem, nazwą banku, datą i przyciskami dopasowania/tworzenia Budżetu.
 - **Bezpieczeństwo:** `BankEvidenceStore.deleteSelectedUnmatched` w jednej transakcji waliduje każdy wybrany klucz, stan open, brak powiązania z księgą. Przy jakimkolwiek konflikcie żadna pozycja nie zostaje odrzucona. Tylko `state=dismissed` (możliwe „Przywróć” z Całej historii; reimport nie ożywia); saldo bez zmian. Test statycznego kontraktu dopisany w istniejącym teście CI.
-- **Wydanie:** Gradle 0.8.0.110 / 302, opis wydania zaktualizowany. **CI/publikacja do sprawdzenia po push**, nie oznaczać jeszcze PASS. Odbiór fizyczny: checkbox kontra otwieranie szczegółów, wielokrotny wybór, przywracanie, brak zmiany salda, ponowny import i ZIP. Desktop wymaga równoległego uzupełnienia. Stable main bez zmian.
+- **Wydanie zweryfikowane:** Gradle 0.8.0.110 / 302; **CI PASS** (GitHub Actions #38427227681, `completed/success`) https://github.com/edwinkarolczyk/Edhome/actions/runs/38427227681. Podpisany Android APK opublikowany: https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.110/edhome-beta.apk (13 394 718 bajtów). Odbiór fizyczny nadal otwarty: checkbox kontra otwieranie szczegółów, wielokrotny wybór, przywracanie, brak zmiany salda, ponowny import i ZIP. Desktop otrzymał równoległy kod w 0.7.0.118 i czeka na CI Windows. Stable main bez zmian.
 
 ## 2026-10-13 — WYDANE: Android Beta 0.8.0.109 / 301, bank → Budżet, CI PASS
 
