@@ -1,3 +1,10 @@
+## 2026-10-13 — WYDANE: Android Beta 0.8.0.109 / 301, bank → Budżet, CI PASS
+
+- **Publikacja potwierdzona:** GitHub Actions run #38418722653 `completed/success`, 115 kroków sukcesu: https://github.com/edwinkarolczyk/Edhome/actions/runs/38418722653 (commit buildu `736f5b8a792232656c8f04ab965c940d766b9190`). Podpisany APK https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.109/edhome-beta.apk (13 393 352 bajty), release https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.109. Opublikowany `beta-manifest.json`: `versionName=0.8.0.109`, `versionCode=301`, `sha256=5dae1fd7cdca2696afa593f6360a6e30171ee35e01209a3d7e680a152221211a`.
+- **Zakres:** z otwartego dowodu bankowego w PayCheck → nowa pozycja wspólnego Budżetu; jednorazowo lub miesięcznie, wstępnie wypełniona kwota, nazwa, odbiorca, kierunek i data. Użytkownik zatwierdza osobno bankowe rozliczenie, więc dodanie planu nie zmienia potwierdzonego salda.
+- **Regresje przed publikacją:** smoke `BankToBudgetSmoke` i `tests/check_bank_to_budget_android.py`, dotychczasowe regresje historii, migracji, kopii oraz kompilacja Android. Test kontraktowy `check_budget_bank_automatch_android.py` poprawiono tak, aby odnosił się do ręcznego kreatora Budżetu, a nie nowego kreatora bankowego; testy nie zostały wyłączone.
+- **Odbiór telefonu nadal otwarty:** sprawdzić import VeloBank, ręczną edycję podpowiedzi, dodanie jednorazowego i comiesięcznego planu, propozycję powtarzalności z wielu miesięcy, a następnie świadome rozliczenie i brak duplikatu salda; przed testem zalecany backup ZIP. Po odbiorze ocenić potrzebę usunięcia limitu przeglądu 2000 dowodów i zapewnienie zgodności Desktop. Stable `main` bez zmian.
+
 ## 2026-10-13 — Android Beta 0.8.0.109 / 301: z przelewu do Budżetu (P0)
 
 - **Prośba:** EDHOME miał umożliwiać odwrotny kierunek **historia bankowa w PayCheck → nowa pozycja Budżetu**, nie tylko wybór istniejącej pozycji. Dotyczy wydatków i wpływów, jednorazowych i cyklicznych. Podobne przelewy z różnych miesięcy mają sugerować comiesięczny plan, ale decyzja musi należeć do użytkownika.
