@@ -2880,7 +2880,11 @@ public final class EdhomeDesktop extends JFrame {
                     }
                 });
             else
-                DesktopBudgetPlanner.show(this, table("paycheck_transactions"));
+                JOptionPane.showMessageDialog(this,
+                    "Brak wspólnego Budżetu w danych PC. Najpierw połącz Android "+
+                    "z Desktopem i wykonaj synchronizację LAN.\n"+
+                    "Nie utworzono osobnego planu ani nie zmieniono salda.",
+                    "PayCheck • Budżet miesiąca",JOptionPane.WARNING_MESSAGE);
         });
         analysis.addActionListener(e -> showPaycheckAnalysis());
         goals.addActionListener(e -> showPaycheckGoals());
