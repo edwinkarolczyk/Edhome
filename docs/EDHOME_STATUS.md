@@ -1,3 +1,10 @@
+## 2026-10-13 — WYDANE: Android Beta 0.8.0.105 / 297 — kalendarze PayCheck/Budżet CI PASS
+
+- **GitHub Actions run #38353995948 = completed/success:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38353995948, źródłowy commit `08f4257b8542afca4fca5822778949c06ac6524e`. Przeszły testy PayCheck i Budżetu, nowy `check_paycheck_budget_date_picker_android.py` (krok 33), kompilacja Beta/Stable, Android API 22 lint, podpis APK, weryfikacja certyfikatu, upload i publikacja.
+- **Podpisany APK:** https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.105/edhome-beta.apk, wielkość 13 387 854 B. Release https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.105. Manifest `beta-manifest.json`: versionName=0.8.0.105, versionCode=297, sha256=`ec1181f58793eba7b90903b3243a9a8b3e55a0be3af35c106bf7220c774b47d7`.
+- **Zmiany:** pięć pełnych pól dat/miesięcy otwiera kalendarz Androida zamiast klawiatury, opcjonalne terminy można wyczyścić. Pola liczbowego dnia zapłaty 1–31 nie zmieniano. Edycja faktury wczytuje wcześniej zapisaną datę planowanej zapłaty. Zachowano schemat danych YYYY-MM-DD / YYYY-MM oraz obliczenia rat. `main` Stable bez zmian.
+- **Odbiór na telefonie nadal do wykonania:** dotknąć pięciu pól w istniejącej instalacji po aktualizacji, sprawdzić daty historycznych faktur, opcję Wyczyść, przeliczanie końca rat oraz brak utraty danych. Zewnętrzna kopia ZIP przed aktualizacją zalecana.
+
 ## 2026-10-13 — Audyt pól dat PayCheck/Budżet: Beta 0.8.0.105 / 297 (do odbioru CI)
 
 - **Ustalenie po audycie kodu Android:** w `MainActivity.java` pięć pełnych dat/miesięcy stanowiło zwykłe, edytowalne `EditText` bez `DatePickerDialog`: (1) termin faktury przy tworzeniu pozycji Budżetu, (2) termin faktury przy aktualizacji faktury miesiąca, (3) planowana data zapłaty faktury, (4) miesiąc rozpoczęcia zobowiązania/rat, (5) miesiąc zakończenia zobowiązania/ostatniej raty. Inne moduły (m.in. pojazdy) miały już natywny kalendarz. Pola „dzień zapłaty 1–31” są liczbowym dniem powtarzania, a nie konkretną datą i pozostają liczbowe.
