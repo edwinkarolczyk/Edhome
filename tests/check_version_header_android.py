@@ -31,8 +31,8 @@ assert "version.addView(text(BuildConfig.VERSION_NAME" in src, (
 # Weryfikuj bieżące wersjonowanie, nie konkretny numer starego wydania.
 # Dzięki temu test dalej działa po kolejnych aktualizacjach EDHOME.
 import re
-codes=re.findall(r"(?m)^\\s*versionCode\\s+(\\d+)\\s*$",gradle)
-names=re.findall(r"(?m)^\\s*versionName\\s+'(\\d+\\.\\d+\\.\\d+)'\\s*$",gradle)
+codes=re.findall(r"(?m)^\s*versionCode\s+(\d+)\s*$",gradle)
+names=re.findall(r"(?m)^\s*versionName\s+'(\d+\.\d+\.\d+\.\d+)'\s*$",gradle)
 assert len(codes)==1 and int(codes[0])>0,"Brak poprawnego versionCode"
 assert len(names)==1,"Brak poprawnego numeru wersji Android"
 
