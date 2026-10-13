@@ -91,15 +91,30 @@ for required in (
     'finished.put("state","matched");',
 ):
     assert required in actual_match,required
+single=(src/"BankBudgetSingleSettlement.java").read_text(encoding="utf-8")
 for required in (
     'PaycheckMonthlyBudget.plannedAmount(item,month)',
     'PaycheckMonthlyBudget.remainingDue(',
-    'BankEvidenceStore.matchBudgetActual(',
-    'PaycheckMonthlyBudget.match(',
+    'BankBudgetSingleSettlement.confirm(',
+    'BankBudgetSingleSettlement.PartialSettlementException',
+    'BankBudgetSingleSettlement.repairUnlinked(',
     'row.amount',
     'Zatwierdź parę',
+    'Saldo przed:',
+    'Saldo po:',
 ):
     assert required in budget_action,required
+for required in (
+    'PaycheckMonthlyBudget.preflightBankMatch(',
+    'BankEvidenceStore.matchBudgetActual(',
+    'PaycheckMonthlyBudget.match(',
+    'status=\'confirmed\'',
+    'PaycheckStore.sharedBalance(db)',
+):
+    assert required in single,required
+assert single.index('PaycheckMonthlyBudget.preflightBankMatch(') < single.index(
+    'BankEvidenceStore.matchBudgetActual(') < single.index(
+    'PaycheckMonthlyBudget.match('), "Najpierw preflight, potem SQL i budżet"
 assert 'amount_grosz=?' not in budget_selector, "Nie wybieraj tylko identycznych kwot"
 assert 'BankBudgetMatchRules.descriptionIdentifies(' in budget_selector
 assert 'ensureBudgetPaycheckPending(month);' in budget_selector
