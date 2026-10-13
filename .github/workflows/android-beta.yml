@@ -609,7 +609,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.106 — numer faktycznie zainstalowanej wersji jest widoczny przy EDHOME • BETA w nagłówku aplikacji, modułów i ekranu Aktualizacje. Numer pochodzi automatycznie z BuildConfig.VERSION_NAME, bez wpisywania go na stałe; po kolejnej aktualizacji zmieni się sam. W alternatywnym stylu widać go pod nazwą edhome, obok informacji o kanale. Zachowano dotychczasową kartę szczegółów wersji i numeru kompilacji. Dane użytkownika, import, PayCheck i Budżet bez zmian. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.107 — PayCheck/Budżet: przelewy z kwotą zgodną z planem są podświetlone na zielono, a propozycje z innymi kwotami na żółto; opisy zachowują neutralny kolor. Na liście automatycznych dopasowań zielony oznacza zgodność odbiorcy i kwoty, żółty wymaga weryfikacji. Pulsowanie i ręczne zatwierdzanie pozostają. Sam kolor zgodnej kwoty nie oznacza potwierdzenia przelewu ani odbiorcy. Test koloru dopisany do regresji. Stabilizacja potwierdzenia bankowego nadal do odbioru na telefonie, bez zmiany księgowania, bazy danych, kopii ani synchronizacji. Dźwięków i powiadomień nie zmieniano. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
