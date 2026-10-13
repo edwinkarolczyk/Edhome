@@ -607,7 +607,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.104 — po imporcie historii bankowej PayCheck otwiera propozycje i pulsowaniem oznacza dopasowania. Dodano propozycje grupowe: dwa przelewy (np. 200 i 300 zł) do jednej pozycji 500 zł oraz jeden przelew 500 zł do dwóch pozycji 200 i 300 zł. W obu kierunkach wyświetlane są kwoty, daty i opisy do sprawdzenia, a rozliczenie następuje tylko po osobnym zatwierdzeniu. Daty dwóch przelewów muszą być w tym samym miesiącu i maksymalnie 7 dni od siebie, znak i suma muszą się zgadzać. Każdy dowód bankowy można zużyć tylko raz; podział przelewu nie księguje go podwójnie. Propozycje z ostatnich maksymalnie 300 otwartych operacji, analiza grup ograniczona do 40 wskazań; to nie jest dowód automatycznej poprawności importu. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.105 — PayCheck i Budżet miesiąca: pięć pól dat zostało podłączonych do kalendarza Androida. Po dotknięciu terminu faktury (nowa pozycja i edycja faktury), planowanego dnia zapłaty oraz miesiąca startu/końca zobowiązania i rat otwiera się kalendarz, zamiast klawiatury. Pola opcjonalne mają Wyczyść, miesiące zapisują tylko YYYY-MM, a przeliczenie liczby rat działa nadal. Edycja faktury zachowuje już zapisaną planowaną datę zapłaty. Nie zmieniono księgowania, planowania i stanu PayCheck. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
