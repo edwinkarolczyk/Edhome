@@ -596,7 +596,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.102 — podgląd różnic między Telefonem i Desktopem przed uzgodnieniem po przywróceniu ZIP. Porównanie identyfikatorów oraz liczby rekordów w Projektach, Magazynie, Budżecie, PayCheck i innych modułach, z rozróżnieniem wpisów tylko na telefonie, tylko na PC i różnych po obu stronach. Podgląd nie zapisuje danych; decyzja Telefon/PC wymaga dodatkowego potwierdzenia i niezależnych kopii obu urządzeń. Jeśli dowolna migawka zmieni się po przeglądzie (lub upłynie 5 minut), operacja jest odrzucana. Zabezpieczenia LAN z 0.8.0.101 pozostają aktywne. Brak automatycznego scalania konfliktowych wpisów, Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.103 — poprawione parowanie planu Budżetu z rzeczywistymi przelewami. Potwierdź / dopasuj otwiera teraz filtrowaną listę wyciągów tego samego miesiąca i kierunku, z kwotami identycznymi na początku (np. 2500 zł). Pozostałe kwoty też można wskazać i potwierdzić po sprawdzeniu różnicy. Sam wybór nie zmienia salda; dopiero osobny dialog zatwierdzenia rozlicza faktyczną kwotę, z ochroną przed duplikatami. ZIP, synchronizacja oraz Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
