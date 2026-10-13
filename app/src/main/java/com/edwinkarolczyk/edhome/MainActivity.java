@@ -14980,7 +14980,7 @@ public final class MainActivity extends Activity {
         amount.setHint("Kwota planowana");
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        amount.setText(MoneyRules.format(row.amount));
+        amount.setText(MoneyRules.format(row.amount).replace(" zł",""));
         form.addView(amount);
         Spinner category=new Spinner(this);
         category.setAdapter(lightDialogSpinnerAdapter(
