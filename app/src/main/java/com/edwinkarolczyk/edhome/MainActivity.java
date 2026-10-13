@@ -14551,6 +14551,12 @@ public final class MainActivity extends Activity {
                 groupRows.addAll(BankEvidenceStore.listPage(
                     sql,"open",0,100,cursor));
             java.util.Set<YearMonth> months=new java.util.HashSet<>();
+            for(BankEvidenceStore.Row row:rows) {
+                try {months.add(YearMonth.parse(row.date.substring(0,7)));}
+                catch(Exception invalid) {
+                    DiagnosticLog.error("BANK_BUDGET_PROPOSAL_DATE",invalid);
+                }
+            }
             for(BankEvidenceStore.Row row:groupRows) {
                 try {months.add(YearMonth.parse(row.date.substring(0,7)));}
                 catch(Exception invalid) {
