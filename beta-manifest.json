@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 298,
-  "versionName": "0.8.0.106",
-  "changelog": "EDHOME Beta 0.8.0.106 — numer faktycznie zainstalowanej wersji jest widoczny przy EDHOME • BETA w nagłówku aplikacji, modułów i ekranu Aktualizacje. Numer pochodzi automatycznie z BuildConfig.VERSION_NAME, bez wpisywania go na stałe; po kolejnej aktualizacji zmieni się sam. W alternatywnym stylu widać go pod nazwą edhome, obok informacji o kanale. Zachowano dotychczasową kartę szczegółów wersji i numeru kompilacji. Dane użytkownika, import, PayCheck i Budżet bez zmian. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.106/edhome-beta.apk",
-  "sha256": "7dc575e194e93fa80ecbef14ffa82c297fe51308a15e3a80d67665d6473e2820"
+  "versionCode": 299,
+  "versionName": "0.8.0.107",
+  "changelog": "EDHOME Beta 0.8.0.107 — PayCheck/Budżet: przelewy z kwotą zgodną z planem są podświetlone na zielono, a propozycje z innymi kwotami na żółto; opisy zachowują neutralny kolor. Na liście automatycznych dopasowań zielony oznacza zgodność odbiorcy i kwoty, żółty wymaga weryfikacji. Pulsowanie i ręczne zatwierdzanie pozostają. Sam kolor zgodnej kwoty nie oznacza potwierdzenia przelewu ani odbiorcy. Test koloru dopisany do regresji. Stabilizacja potwierdzenia bankowego nadal do odbioru na telefonie, bez zmiany księgowania, bazy danych, kopii ani synchronizacji. Dźwięków i powiadomień nie zmieniano. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.107/edhome-beta.apk",
+  "sha256": "6fa405391e6195c03f4ea90c54c23e946149e7c8f820ee7661997a8e68d19666"
 }
