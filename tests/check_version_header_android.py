@@ -28,6 +28,12 @@ for method,marker in (
     assert "appHeaderLabel()" in section, method
 assert "version.addView(text(BuildConfig.VERSION_NAME" in src, (
     "Wersja i kompilacja w ekranie aktualizacji muszą pozostać dostępne")
-assert "versionCode 298" in gradle
-assert "versionName '0.8.0.106'" in gradle
+# Weryfikuj bieżące wersjonowanie, nie konkretny numer starego wydania.
+# Dzięki temu test dalej działa po kolejnych aktualizacjach EDHOME.
+import re
+codes=re.findall(r"(?m)^\\s*versionCode\\s+(\\d+)\\s*$",gradle)
+names=re.findall(r"(?m)^\\s*versionName\\s+'(\\d+\\.\\d+\\.\\d+)'\\s*$",gradle)
+assert len(codes)==1 and int(codes[0])>0,"Brak poprawnego versionCode"
+assert len(names)==1,"Brak poprawnego numeru wersji Android"
+
 print("PASS: EDHOME Beta / Stable + dynamiczna wersja na Start, modułach, PIN i Aktualizacjach")
