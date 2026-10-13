@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 301,
-  "versionName": "0.8.0.109",
-  "changelog": "EDHOME Beta 0.8.0.109 — PayCheck: w otwartej historii bankowej i na ekranie propozycji można teraz wybrać Dodaj do Budżetu. Formularz pobiera z realnej transakcji nazwę, odbiorcę, kierunek, kwotę i dzień, pozwala utworzyć pozycję jednorazową lub comiesięczną; podobne opisy z różnych miesięcy sugerują cykliczność, nigdy jej nie zatwierdzają automatycznie. Przed tworzeniem sprawdza, czy dowód jest otwarty i czy nie ma już identycznego planu na ten miesiąc. Po zapisaniu planu pyta o osobne sprawdzenie i potwierdzenie przelewu. Sam plan nigdy nie księguje pieniędzy drugi raz. Test regresyjny bank -> Budżet i test wykrywania powtarzalności. Zachowano stabilizację P0, kolory i kopie. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.109/edhome-beta.apk",
-  "sha256": "5dae1fd7cdca2696afa593f6360a6e30171ee35e01209a3d7e680a152221211a"
+  "versionCode": 302,
+  "versionName": "0.8.0.110",
+  "changelog": "EDHOME Beta 0.8.0.110 — PayCheck: checkboxy obok kwot w historii bankowej, zaznaczanie do 100 otwartych dowodów z aktualnej strony i jedno zbiorcze usunięcie. Dotknięcie daty lub kwoty nadal otwiera podgląd: opis, bank, datę, akcje Dopasuj do Budżetu i Dodaj do Budżetu. Usunięcie jest atomowe, bez zmiany salda, tylko otwartych i niezaksięgowanych. Odrzucone dowody można przywrócić w Całej historii; ponowny import nie tworzy dubletów. Zachowano poprzednie funkcje i zgodność kopii ZIP. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.110/edhome-beta.apk",
+  "sha256": "d42276e361d98f423ab9dd5af609d0a8ec8f960c04898e8bc61a349c71547cc2"
 }
