@@ -14707,6 +14707,10 @@ public final class MainActivity extends Activity {
                     if(dialogRef[0]!=null)dialogRef[0].dismiss();
                     openBankEvidenceRow(row);
                 });
+                smallButton(details,"Dodaj nową pozycję Budżetu",()->{
+                    if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                    showCreateBudgetFromBank(row);
+                });
                 (rank>0?proposals:remaining).addView(line);
                 View separator=new View(this);
                 separator.setBackgroundColor(0x33888888);
@@ -14836,6 +14840,10 @@ public final class MainActivity extends Activity {
                     if(dialogRef[0]!=null)dialogRef[0].dismiss();
                     openBankEvidenceRow(row);
                 });
+                smallButton(details,"Dodaj do Budżetu",()->{
+                    if(dialogRef[0]!=null)dialogRef[0].dismiss();
+                    showCreateBudgetFromBank(row);
+                });
             } else if("dismissed".equals(row.state)) {
                 smallButton(details,"Przywróć",()->{
                     if(BankEvidenceStore.reopen(
@@ -14910,6 +14918,175 @@ public final class MainActivity extends Activity {
      * Weryfikacja dowodu bankowego z rzeczywistą kwotą, również różną od planu.
      * Nie dobieramy operacji tylko po kwocie: każdą parę zatwierdza użytkownik.
      */
+    /** Bank -> nowy plan Budżetu. Plan nie księguje pieniędzy samodzielnie. */
+    private void showCreateBudgetFromBank(BankEvidenceStore.Row row) {
+        if(row==null||!"open".equals(row.state)) {
+            alert("Przelew nie jest otwarty. Nie zmieniono Budżetu ani salda.");
+            return;
+        }
+        final YearMonth bankMonth;
+        final int day;
+        try {
+            java.time.LocalDate date=java.time.LocalDate.parse(row.date);
+            bankMonth=YearMonth.from(date);
+            day=date.getDayOfMonth();
+        }catch(Exception invalid) {
+            alert("Nieprawidłowa data operacji bankowej.");
+            return;
+        }
+        String suggested=BankToBudgetRules.suggestedName(row.description);
+        java.util.List<String> dates=new java.util.ArrayList<>();
+        java.util.List<String> descriptions=new java.util.ArrayList<>();
+        dates.add(row.date);
+        descriptions.add(row.description);
+        try(Cursor previous=db.getReadableDatabase().rawQuery(
+                "SELECT booking_date,description FROM bank_evidence_queue "
+                +"WHERE kind=? AND evidence_key<>? "
+                +"ORDER BY booking_date DESC LIMIT 2000",
+                new String[]{row.kind,row.evidenceKey})) {
+            while(previous.moveToNext()) {
+                dates.add(previous.getString(0));
+                descriptions.add(previous.getString(1));
+            }
+        }catch(Exception error) {
+            DiagnosticLog.error("BANK_TO_BUDGET_REPEAT_HINT",error);
+        }
+        int months=BankToBudgetRules.matchingMonths(suggested,dates,descriptions);
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(12),dp(16),dp(12));
+        TextView proof=text("Z wyciągu: "+row.sourceLabel+" • "+row.date
+            +"\n"+("income".equals(row.kind)?"+ ":"− ")
+            +MoneyRules.format(row.amount)+" zł"
+            +"\n"+row.description
+            +"\n\nKwota i nazwa to podpowiedzi. Sprawdź je przed zapisem.",13,false);
+        form.addView(proof);
+        EditText name=new EditText(this);
+        name.setSingleLine(true);
+        name.setHint("Nazwa pozycji w Budżecie");
+        name.setText(suggested);
+        name.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(80)});
+        form.addView(name);
+        EditText recipient=new EditText(this);
+        recipient.setSingleLine(true);
+        recipient.setHint("Odbiorca / źródło (opcjonalnie)");
+        recipient.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(80)});
+        recipient.setText(suggested);
+        form.addView(recipient);
+        EditText amount=new EditText(this);
+        amount.setSingleLine(true);
+        amount.setHint("Kwota planowana");
+        amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        amount.setText(MoneyRules.format(row.amount));
+        form.addView(amount);
+        Spinner category=new Spinner(this);
+        category.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
+        form.addView(category);
+        Spinner repetition=new Spinner(this);
+        repetition.setAdapter(lightDialogSpinnerAdapter(
+            java.util.Arrays.asList("Jednorazowo • "+bankMonth,
+                "Powtarzaj co miesiąc od "+bankMonth)));
+        repetition.setSelection(months>=2?1:0);
+        form.addView(repetition);
+        form.addView(text(months>=2
+            ?"Wykryto podobne przelewy w "+months
+                +" miesiącach (w ostatnich 2000 wpisach). "
+                +"Proponuję cykliczność, ale wybór należy do Ciebie."
+            :"Nie wykryto potwierdzonej powtarzalności. "
+                +"Możesz mimo to ustawić comiesięczny plan.",13,false));
+        form.addView(text("Kierunek: "
+            +("income".equals(row.kind)?"wpływ +":"wydatek −")
+            +" • planowany dzień: "+day
+            +"\nUtworzenie planu nie zmienia salda. "
+            +"Powiązanie bankowe wymaga osobnego potwierdzenia.",13,false));
+        lightDialogForm(form);
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Dodaj przelew do Budżetu")
+            .setView(scroll)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz do Budżetu",null)
+            .create();
+        dialog.setOnShowListener(d->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    // Nie pozwalaj utworzyć planu z dowodu już wykorzystanego.
+                    try(Cursor current=db.getReadableDatabase().rawQuery(
+                            "SELECT state,kind,amount_grosz,booking_date "
+                            +"FROM bank_evidence_queue WHERE evidence_key=?",
+                            new String[]{row.evidenceKey})) {
+                        if(!current.moveToFirst()
+                                ||!"open".equals(current.getString(0))
+                                ||!row.kind.equals(current.getString(1))
+                                ||row.amount!=current.getLong(2)
+                                ||!row.date.equals(current.getString(3)))
+                            throw new IllegalArgumentException(
+                                "Operacja bankowa została już zmieniona. "
+                                +"Odśwież historię.");
+                    }
+                    String itemName=name.getText().toString().trim();
+                    if(itemName.isEmpty())
+                        throw new IllegalArgumentException("Wpisz nazwę pozycji.");
+                    long planned=MoneyRules.parse(
+                        amount.getText().toString().trim());
+                    // Świadoma blokada niezamierzonych duplikatów planu.
+                    for(PaycheckMonthlyBudget.Item existing:
+                        PaycheckMonthlyBudget.activeFor(
+                            PaycheckMonthlyBudget.load(prefs),bankMonth)) {
+                        if(existing.kind.equals(row.kind)
+                                &&existing.name.equalsIgnoreCase(itemName)
+                                &&PaycheckMonthlyBudget.plannedAmount(
+                                    existing,bankMonth)==planned)
+                            throw new IllegalArgumentException(
+                                "Taka pozycja już istnieje w Budżecie tego "
+                                +"miesiąca. Wybierz Dopasuj do Budżetu, "
+                                +"żeby nie tworzyć duplikatu.");
+                    }
+                    PaycheckMonthlyBudget.Item item=PaycheckMonthlyBudget.newItem(
+                        itemName,row.kind,MoneyRules.CATEGORIES[
+                            category.getSelectedItemPosition()],
+                        planned,"fixed",bankMonth.toString(),"",
+                        repetition.getSelectedItemPosition()==1?1:0,
+                        day,false,false,0,"");
+                    String recipientName=recipient.getText().toString().trim();
+                    if(!recipientName.isEmpty())
+                        item.recipientId=PaycheckRecipientStore.getOrCreate(
+                            prefs,recipientName).id;
+                    PaycheckMonthlyBudget.add(prefs,item);
+                    ensureBudgetPaycheckPending(bankMonth);
+                    PaycheckBudgetReminderReceiver.schedule(this);
+                    DiagnosticLog.event("BANK_TO_BUDGET_ITEM_CREATED");
+                    dialog.dismiss();
+                    // Dopiero teraz oferuj księgowanie rzeczywistego dowodu.
+                    new AlertDialog.Builder(this)
+                        .setTitle("Pozycja dodana do Budżetu")
+                        .setMessage(item.name+" • "+bankMonth
+                            +"\nCzy chcesz teraz powiązać ją z operacją "
+                            +row.sourceLabel+" "+row.date+" na "
+                            +MoneyRules.format(row.amount)+" zł?"
+                            +"\n\nTylko potwierdzenie pary zmieni saldo.")
+                        .setNegativeButton("Później",(a,b)->render())
+                        .setPositiveButton("Sprawdź przelew",(a,b)->
+                            confirmBankEvidenceMatch(row,item,bankMonth))
+                        .show();
+                }catch(IllegalArgumentException invalid) {
+                    alert(invalid.getMessage()==null?
+                        "Sprawdź dane pozycji Budżetu.":invalid.getMessage());
+                }catch(Exception error) {
+                    DiagnosticLog.error("BANK_TO_BUDGET_CREATE_FAILED",error);
+                    alert("Nie udało się ukończyć dodawania. "
+                        +"Sprawdź Budżet przed ponowieniem, "
+                        +"aby nie stworzyć duplikatu.");
+                }
+            }));
+        dialog.show();
+    }
+
     private void openBankEvidenceRow(BankEvidenceStore.Row row) {
         final YearMonth month;
         try {month=YearMonth.parse(row.date.substring(0,7));}
@@ -14969,12 +15146,14 @@ public final class MainActivity extends Activity {
                     +"tego miesiąca. Niczego nie zaksięgowano. "
                     +"Sprawdź miesiąc, pozycje Budżetu i bank.")
                 .setNegativeButton("Powrót",null)
-                .setPositiveButton("Odrzuć dowód",(d,w)->{
+                .setNeutralButton("Odrzuć dowód",(d,w)->{
                     if(!BankEvidenceStore.dismiss(db.getWritableDatabase(),
                             row.evidenceKey))
                         alert("Nie odrzucono wpisu.");
                     showBankEvidenceQueue(0);
-                }).show();
+                })
+                .setPositiveButton("Dodaj do Budżetu",(d,w)->
+                    showCreateBudgetFromBank(row)).show();
             return;
         }
         new AlertDialog.Builder(this)
@@ -14991,7 +15170,9 @@ public final class MainActivity extends Activity {
                     alert("Nie odrzucono wpisu.");
                 showBankEvidenceQueue(0);
             })
-            .setNegativeButton("Powrót",null).show();
+            .setNegativeButton("Powrót",null)
+            .setPositiveButton("Nowa pozycja Budżetu",(d,w)->
+                showCreateBudgetFromBank(row)).show();
     }
 
     private void confirmBankEvidenceMatch(BankEvidenceStore.Row row,
