@@ -1,3 +1,11 @@
+## 2026-10-13 — Desktop Beta 0.7.0.117 — podgląd propozycji Bank ↔ Budżet (P0 etap 2)
+
+- **Zrealizowany fragment:** po imporcie wyciągu Windows pokazuje automatycznie propozycje przelewów do wspólnego Budżetu Android↔Desktop; można je ponownie wywołać z przycisku „Bank ↔ Budżet • propozycje” w PayCheck. Analiza wszystkich dostępnych otwartych dowodów, filtr bieżącej paczki po imporcie, stronicowanie po 60 propozycji, obliczanie w SwingWorker poza EDT. Bez limitu do ostatnich 40 czy 300 rekordów w tym przeglądzie.
+- **Bezpieczny zakres:** P0 najpierw TRYB TYLKO PODGLĄDU, bez potwierdzania, modyfikowania przelewów, zapisu salda lub budżetu. Silnik propozycji (DesktopBankBudgetSuggestions) porównuje ten sam miesiąc, typ, kwotę, opis i odległość terminu do 14 dni; zielony przy jednoznacznej kombinacji kwota+odbiorca+termin do 7 dni, żółty przy kwocie różnej bądź kilku pasujących kandydatach. Nie dopasowuje wpływu do wydatku ani zużytego dowodu. Różnica plan 4500 zł vs bank 4300 zł jest prezentowana, ale nigdy nie księgowana na podstawie sugestii.
+- **Zmiany:** silnik `94d7520`, interfejs i pokazywanie po imporcie `5f43fc9`, 5 regresji JUnit `2b5a21b`. Wersja w Desktop, Gradle, workflow podniesiona do 0.7.0.117: `bd20bf3`, `7c24097`, `720629f`.
+- **CI:** https://github.com/edwinkarolczyk/Edhome/actions/runs/38409002179 — uruchomiony, końcowy wynik jeszcze niezweryfikowany w chwili wpisu. **Nie podawać instalatora 0.7.0.117 jako gotowego, dopóki CI i publikacja nie przejdą.** Stable main nietknięta; Android Beta 0.8.0.108 bez zmian.
+- **OTWARTE i nie udawać wdrożonych:** grupy bank 200+300→Budżet 500 i odwrotnie, automatyczne miganie wierszy, fizyczne testy importu PDF/CSV, pełne ręczne zatwierdzanie w obu księgach z odzyskiwaniem po błędzie, test LAN PC↔Android, rzeczywiste salda, backup. Następny P0: bezpieczne potwierdzanie wybranej pary z walidacją planu/źródła i jednym księgowaniem; grupy w osobnym kroku po bazowych rozliczeniach.
+
 ## 2026-10-13 — Desktop Beta 0.7.0.116 — tworzenie wspólnego Budżetu (P0, do odbioru)
 
 - **Priorytet użytkownika:** prace na Desktopie i funkcje PayCheck/Budżet mają nadążać za Android 0.8.0.108; użytkownik musi móc dodawać Budżet bezpośrednio na PC.
