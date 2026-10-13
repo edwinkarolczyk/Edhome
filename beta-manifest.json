@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 300,
-  "versionName": "0.8.0.108",
-  "changelog": "EDHOME Beta 0.8.0.108 — P0 PayCheck: poprawiono kontrolę rozliczenia bankowego z Budżetem, m.in. w przypadku przelewu 33,81 zł. Przed zmianą salda aplikacja sprawdza, czy plan przyjmie powiązanie, a po zatwierdzeniu odczytuje rzeczywisty stan SQLite i Budżetu oraz pokazuje saldo przed/po i potwierdzenie ✓. Jeśli zapis bankowy się powiódł, lecz zapis powiązania do Budżetu został przerwany, EDHOME może bezpiecznie dokończyć brakujące powiązanie bez drugiego księgowania. Rozróżnia błędy, częściowe zapisy i przelewy już wykorzystane; nie zaleca ponownego importowania przelewu. Nowy test regresyjny 2500 zł + 33,81 zł, retry bez duplikatu i kontrola preflight. Saldo bierze wyłącznie rzeczywiste kwoty bankowe. Kolory z 107 zachowane. Test na fizycznym telefonie nadal wymagany. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.108/edhome-beta.apk",
-  "sha256": "026c287fe80cd1257d108c5df3037616a0a47464470875243ce67f4b8ef8392d"
+  "versionCode": 301,
+  "versionName": "0.8.0.109",
+  "changelog": "EDHOME Beta 0.8.0.109 — PayCheck: w otwartej historii bankowej i na ekranie propozycji można teraz wybrać Dodaj do Budżetu. Formularz pobiera z realnej transakcji nazwę, odbiorcę, kierunek, kwotę i dzień, pozwala utworzyć pozycję jednorazową lub comiesięczną; podobne opisy z różnych miesięcy sugerują cykliczność, nigdy jej nie zatwierdzają automatycznie. Przed tworzeniem sprawdza, czy dowód jest otwarty i czy nie ma już identycznego planu na ten miesiąc. Po zapisaniu planu pyta o osobne sprawdzenie i potwierdzenie przelewu. Sam plan nigdy nie księguje pieniędzy drugi raz. Test regresyjny bank -> Budżet i test wykrywania powtarzalności. Zachowano stabilizację P0, kolory i kopie. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.109/edhome-beta.apk",
+  "sha256": "5dae1fd7cdca2696afa593f6360a6e30171ee35e01209a3d7e680a152221211a"
 }
