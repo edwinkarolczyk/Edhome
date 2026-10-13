@@ -1760,7 +1760,7 @@ public final class MainActivity extends Activity {
     }
 
     private void setupPin() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        body.addView(text(appHeaderLabel(), 20, true));
         note("Pierwsze uruchomienie. Ustaw lokalny PIN 4–8 cyfr.");
         EditText a = field("PIN", true);
         EditText b = field("Powtórz PIN", true);
@@ -1792,7 +1792,7 @@ public final class MainActivity extends Activity {
     }
 
     private void unlockPin() {
-        title("EDHOME  •  " + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"));
+        body.addView(text(appHeaderLabel(), 20, true));
         note("Odblokuj lokalną instalację.");
         EditText input = field("PIN", true);
         button("Odblokuj", () -> {
@@ -1863,6 +1863,12 @@ public final class MainActivity extends Activity {
             .show();
     }
 
+    /** Nagłówek zawsze pokazuje rzeczywiście zainstalowaną wersję APK. */
+    private String appHeaderLabel() {
+        return "EDHOME  •  " + (BetaUpdater.isBeta() ? "BETA" : "STABLE")
+            + "  " + BuildConfig.VERSION_NAME;
+    }
+
     private void appTitleWithConnection() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -1874,7 +1880,9 @@ public final class MainActivity extends Activity {
             TextView appTitle = text("⌂  edhome", 21, true);
             appTitle.setPadding(0, 0, 0, 0);
             brand.addView(appTitle);
-            TextView idea = text("Idea by Edwin", 10, false);
+            TextView idea = text("Idea by Edwin • "
+                + (BetaUpdater.isBeta() ? "BETA " : "STABLE ")
+                + BuildConfig.VERSION_NAME, 10, false);
             idea.setTextColor(subdued);
             idea.setPadding(dp(29), 0, 0, 0);
             brand.addView(idea);
@@ -1906,9 +1914,7 @@ public final class MainActivity extends Activity {
             bellParams.setMargins(0, 0, dp(7), 0);
             row.addView(bell, bellParams);
         } else {
-            TextView appTitle = text("EDHOME  •  "
-                + (BuildConfig.DIAGNOSTICS_ENABLED ? "BETA" : "PROTOTYP"),
-                21, true);
+            TextView appTitle = text(appHeaderLabel(), 18, true);
             row.addView(appTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         }
 
@@ -22667,7 +22673,7 @@ public final class MainActivity extends Activity {
 
     /** Prosty ekran aktualizacji; opis zmian pochodzi z aktualnego manifestu Beta. */
     private void updates() {
-        title("EDHOME  •  " + (BetaUpdater.isBeta() ? "BETA" : "STABLE"));
+        body.addView(text(appHeaderLabel(), 20, true));
         note("Aktualizacje aplikacji");
         button("⌂ Panel główny", this::goHome);
 
