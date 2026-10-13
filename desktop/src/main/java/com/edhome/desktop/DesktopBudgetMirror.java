@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * Wspólny, bezpieczny podgląd definicji budżetu z synchronizacji Android ↔ PC.
  * Nie tworzy drugiego budżetu i nie nadpisuje starszego lokalnego pliku.
- * Zapis na Desktopie zostanie włączony dopiero po wdrożeniu rekordów delta.
+ * Edycja i dodawanie zapisują wspólne rekordy z historią przez deltę UUID.
  */
 final class DesktopBudgetMirror {
     private DesktopBudgetMirror() { }
@@ -296,8 +296,8 @@ final class DesktopBudgetMirror {
             body.add(scroll,BorderLayout.CENTER);
             boolean editable=sharedSnapshot!=null&&onSave!=null;
             body.add(new JLabel(editable
-                ? "<html>Wspólny Budżet Android ↔ PC. Edycja nazwy i kwoty "
-                    +"wybranego miesiąca. Zmiany zapiszą się lokalnie i przejdą "
+                ? "<html>Wspólny Budżet Android ↔ PC. Dodawanie jednorazowych i cyklicznych "
+                    +"pozycji oraz edycja nazwy i kwoty. Zmiany zapiszą się lokalnie i przejdą "
                     +"synchronizację z kontrolą konfliktu. "
                     +"Stary plik planu PC pozostaje bez zmian.</html>"
                 : "<html>Ten sam Budżet co na Androidzie "
@@ -307,7 +307,7 @@ final class DesktopBudgetMirror {
             Object[] options=editable
                 ?new Object[]{"‹ Poprzedni","Następny ›",
                     "Bieżący miesiąc","Odbiorcy",
-                    "Edytuj pozycję","Zamknij"}
+                    "Dodaj pozycję","Dodaj pozycję","Edytuj pozycję","Zamknij"}
                 :new Object[]{"‹ Poprzedni","Następny ›",
                     "Bieżący miesiąc","Odbiorcy","Zamknij"};
             int action=JOptionPane.showOptionDialog(owner,body,
@@ -336,7 +336,24 @@ final class DesktopBudgetMirror {
                         "Budżet miesiąca",JOptionPane.ERROR_MESSAGE);
                 }
             }
+
             else if(editable&&action==4) {
+                try {
+                    JsonObject edited=createItemDialog(owner,sharedSnapshot,
+                        recipients,current);
+                    if(edited!=null) {
+                        onSave.accept(edited);
+                        sharedSnapshot=edited;
+                        settings=edited.getAsJsonObject("settings");
+                        items=loadShared(settings);
+                    }
+                } catch(Exception invalid) {
+                    JOptionPane.showMessageDialog(owner,
+                        "Nie dodano pozycji: "+invalid.getMessage(),
+                        "Budżet miesiąca",JOptionPane.ERROR_MESSAGE);
+                }
+            }
+            else if(editable&&action==5) {
                 int selected=table.getSelectedRow();
                 if(selected<0) {
                     JOptionPane.showMessageDialog(owner,
@@ -384,6 +401,108 @@ final class DesktopBudgetMirror {
                 }
             } else return;
         }
+    }
+
+
+
+    private static JsonObject createItemDialog(Component owner,
+            JsonObject snapshot,JsonArray recipients,YearMonth current)
+            throws Exception {
+        String[] categories={
+            "Zakupy","Żywność","Subskrypcje","Media • prąd / woda / gaz",
+            "Rachunki","Dom","Domowe","Pojazdy","Paliwo","Transport",
+            "Zdrowie","Higiena","Odzież","Restauracje","Rozrywka",
+            "Edukacja","Dzieci","Zwierzęta","Ubezpieczenia",
+            "Kredyty i raty","Wynagrodzenie","Świadczenia",
+            "Oszczędności / inwestycje","Przelewy / transfery","Inne"};
+        String[] categoryIds={
+            "shopping","food","subscriptions","utilities","bills","home",
+            "household","vehicle","fuel","transport","health","beauty",
+            "clothing","restaurants","entertainment","education","children",
+            "pet","insurance","loans","salary","benefits","savings",
+            "transfers","other"};
+        String[] cycles={"Jednorazowo","Co miesiąc","Co 2 miesiące",
+            "Co kwartał","Co 6 miesięcy","Co rok"};
+        int[] cycleMonths={0,1,2,3,6,12};
+        JTextField name=new JTextField(28);
+        JTextField amount=new JTextField(14);
+        JComboBox<String> kind=new JComboBox<>(new String[]{
+            "Wydatek (−)","Wpływ (+)"});
+        JComboBox<String> category=new JComboBox<>(categories);
+        category.setSelectedItem("Rachunki");
+        JComboBox<String> mode=new JComboBox<>(new String[]{
+            "Stała kwota","Zmienna / prognoza"});
+        JComboBox<String> cycle=new JComboBox<>(cycles);
+        JTextField start=new JTextField(current.toString());
+        JTextField end=new JTextField();
+        javax.swing.JSpinner dueDay=new javax.swing.JSpinner(
+            new javax.swing.SpinnerNumberModel(
+                Math.min(java.time.LocalDate.now().getDayOfMonth(),28),1,31,1));
+        JCheckBox optional=new JCheckBox("Pozycja opcjonalna");
+        JCheckBox installment=new JCheckBox("Raty (tylko miesięczne wydatki)");
+        JTextField installmentCount=new JTextField("12");
+        java.util.List<String> recipientIds=new ArrayList<>();
+        java.util.List<String> recipientNames=new ArrayList<>();
+        recipientIds.add("");
+        recipientNames.add("(bez odbiorcy)");
+        for(JsonElement e:recipients)if(e.isJsonObject()) {
+            JsonObject item=e.getAsJsonObject();
+            String id=str(item,"id","");
+            if(!id.isBlank()) {
+                recipientIds.add(id);
+                recipientNames.add(str(item,"name","Bez nazwy"));
+            }
+        }
+        JComboBox<String> recipient=new JComboBox<>(
+            recipientNames.toArray(new String[0]));
+        JPanel fields=new JPanel(new GridLayout(0,2,8,7));
+        fields.add(new JLabel("Nazwa:")); fields.add(name);
+        fields.add(new JLabel("Wpływ / wydatek:")); fields.add(kind);
+        fields.add(new JLabel("Kwota planowana (zł):")); fields.add(amount);
+        fields.add(new JLabel("Kategoria:")); fields.add(category);
+        fields.add(new JLabel("Kwota:")); fields.add(mode);
+        fields.add(new JLabel("Powtarzanie:")); fields.add(cycle);
+        fields.add(new JLabel("Od miesiąca (RRRR-MM):")); fields.add(start);
+        fields.add(new JLabel("Do miesiąca (opcjonalnie):")); fields.add(end);
+        fields.add(new JLabel("Dzień płatności (1–31):")); fields.add(dueDay);
+        fields.add(new JLabel("Odbiorca:")); fields.add(recipient);
+        fields.add(new JLabel("Opcjonalna:")); fields.add(optional);
+        fields.add(new JLabel("Rozliczaj jako raty:")); fields.add(installment);
+        fields.add(new JLabel("Liczba rat, jeśli zaznaczono:"));
+        fields.add(installmentCount);
+        JPanel panel=new JPanel(new BorderLayout(0,8));
+        panel.add(new JLabel("<html>Dodajesz do WSPÓLNEGO Budżetu "
+            +"Android ↔ PC. Nie księguje to przelewu ani nie zmienia salda."
+            +"<br/>Dla rat pozostaw pusty miesiąc końca, wpisz liczbę rat."
+            +"</html>"),BorderLayout.NORTH);
+        panel.add(fields,BorderLayout.CENTER);
+        if(JOptionPane.showConfirmDialog(owner,new JScrollPane(panel),
+                "Nowa pozycja • wspólny Budżet",
+                JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE)
+                !=JOptionPane.OK_OPTION)return null;
+        String raw=amount.getText().trim().replace("\u00a0","")
+            .replace(" ","").replace(',','.');
+        if(!raw.matches("[0-9]{1,9}([.][0-9]{1,2})?"))
+            throw new IllegalArgumentException(
+                "Kwota musi być dodatnia, z maksymalnie dwoma miejscami po przecinku.");
+        long grosz=new java.math.BigDecimal(raw).movePointRight(2)
+            .longValueExact();
+        YearMonth first=YearMonth.parse(start.getText().trim());
+        String endRaw=end.getText().trim();
+        YearMonth last=endRaw.isEmpty()?null:YearMonth.parse(endRaw);
+        int cycleValue=cycleMonths[cycle.getSelectedIndex()];
+        boolean raty=installment.isSelected();
+        int count=raty?Integer.parseInt(installmentCount.getText().trim()):0;
+        if(raty&&(kind.getSelectedIndex()!=0||cycleValue!=1))
+            throw new IllegalArgumentException(
+                "Raty wymagają miesięcznego wydatku.");
+        return DesktopSharedBudgetEdits.createItem(snapshot,name.getText(),
+            kind.getSelectedIndex()==1?"income":"expense",
+            categoryIds[category.getSelectedIndex()],grosz,
+            mode.getSelectedIndex()==0?"fixed":"estimate",first,last,
+            cycleValue,((Number)dueDay.getValue()).intValue(),
+            optional.isSelected(),raty,count,
+            recipientIds.get(recipient.getSelectedIndex()));
     }
 
 }
