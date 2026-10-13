@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.117";
+    private static final String DESKTOP_VERSION = "0.7.0.118";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -4291,74 +4291,193 @@ public final class EdhomeDesktop extends JFrame {
         }.execute();
     }
 
+    /** Dwie oddzielne czynności: kliknięcie wiersza pokazuje podgląd,
+     * checkbox w pierwszej kolumnie wybiera operację do grupowego usunięcia.
+     */
     private void showBankEvidenceQueue() {
-        java.util.List<JsonObject> openRows = new ArrayList<>();
-        DefaultListModel<Choice> model = new DefaultListModel<>();
-        for (JsonElement element : table("bank_evidence_queue")) {
-            if (!element.isJsonObject()) continue;
-            JsonObject row = element.getAsJsonObject();
-            if (!"open".equals(value(row, "state"))) continue;
-            openRows.add(row);
-            int candidates = pendingMatches(row).size();
-            String shown = value(row, "booking_date") + " • "
-                + ("expense".equals(value(row, "kind")) ? "Wydatek − " : "Wpływ + ")
-                + money(value(row, "amount_grosz")) + " • "
-                + value(row, "description") + " • " + value(row, "source_label")
-                + (candidates == 0 ? " • brak dopasowania"
-                    : " • pasujących: " + candidates);
-            model.addElement(new Choice(Integer.toString(openRows.size()-1), shown));
+        showBankEvidenceQueue(0);
+    }
+
+    private void showBankEvidenceQueue(int offset) {
+        java.util.List<JsonObject> allOpen=new ArrayList<>();
+        for(JsonElement element:table("bank_evidence_queue")) {
+            if(!element.isJsonObject())continue;
+            JsonObject row=element.getAsJsonObject();
+            if("open".equals(value(row,"state")))allOpen.add(row);
         }
-        if (openRows.isEmpty()) {
+        if(allOpen.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                "Brak otwartych pozycji bankowych do potwierdzenia.");
+                "Brak nierozliczonych przelewów bankowych.");
             return;
         }
-
-        JList<Choice> list = new JList<>(model);
-        list.setVisibleRowCount(Math.min(14, model.size()));
-        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setSelectedIndex(0);
-        JScrollPane pane = new JScrollPane(list);
-        pane.setPreferredSize(new Dimension(820, 360));
-
-        int ok = JOptionPane.showConfirmDialog(this, pane,
-            "Banki i potwierdzenia • wybierz operację",
-            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (ok != JOptionPane.OK_OPTION || list.getSelectedValue() == null) return;
-
-        int index = Integer.parseInt(list.getSelectedValue().value);
-        JsonObject evidence = openRows.get(index);
-        Object[] actions = {
-            "Dopasuj i potwierdź",
-            "Utwórz brakujący oczekujący",
-            "Odrzuć dowód",
-            "Zamknij"
+        final int pageSize=100;
+        int first=Math.min(Math.max(0,offset),
+            ((allOpen.size()-1)/pageSize)*pageSize);
+        java.util.List<JsonObject> page=allOpen.subList(first,
+            Math.min(allOpen.size(),first+pageSize));
+        boolean[] checked=new boolean[page.size()];
+        JLabel selectionStatus=new JLabel("Zaznaczone: 0 z "+page.size());
+        JCheckBox selectPage=new JCheckBox("Zaznacz stronę");
+        AbstractTableModel model=new AbstractTableModel() {
+            private final String[] columns={"Wybór","Data","Kwota","Opis przelewu","Bank"};
+            @Override public int getRowCount(){return page.size();}
+            @Override public int getColumnCount(){return columns.length;}
+            @Override public String getColumnName(int col){return columns[col];}
+            @Override public Class<?> getColumnClass(int col){
+                return col==0?Boolean.class:String.class;
+            }
+            @Override public boolean isCellEditable(int row,int col){
+                return col==0;
+            }
+            @Override public Object getValueAt(int r,int c) {
+                JsonObject evidence=page.get(r);
+                switch(c) {
+                    case 0:return checked[r];
+                    case 1:return value(evidence,"booking_date");
+                    case 2:return ("income".equals(value(evidence,"kind"))?"+ ":"− ")
+                        +money(value(evidence,"amount_grosz"));
+                    case 3:return value(evidence,"description");
+                    default:return value(evidence,"source_label");
+                }
+            }
+            @Override public void setValueAt(Object next,int row,int column){
+                if(column!=0)return;
+                checked[row]=Boolean.TRUE.equals(next);
+                fireTableCellUpdated(row,column);
+                int selected=0;
+                for(boolean item:checked)if(item)selected++;
+                selectionStatus.setText("Zaznaczone: "+selected+" z "+page.size());
+                selectPage.setSelected(selected==page.size());
+            }
         };
-        int action = JOptionPane.showOptionDialog(this,
-            value(evidence, "description") + "\n"
-                + value(evidence, "booking_date") + " • "
-                + money(value(evidence, "amount_grosz")),
-            "EDHOME Desktop • bank", JOptionPane.DEFAULT_OPTION,
-            JOptionPane.QUESTION_MESSAGE, null, actions, actions[0]);
-
-        if (action == 0) matchBankEvidence(evidence);
-        else if (action == 1) {
-            java.util.List<JsonObject> existing = pendingMatches(evidence);
-            if (!existing.isEmpty()) {
+        JTable transfers=new JTable(model);
+        transfers.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        transfers.setRowHeight(30);
+        transfers.setAutoCreateRowSorter(false);
+        transfers.getColumnModel().getColumn(0).setPreferredWidth(50);
+        transfers.getColumnModel().getColumn(1).setPreferredWidth(100);
+        transfers.getColumnModel().getColumn(2).setPreferredWidth(120);
+        transfers.getColumnModel().getColumn(3).setPreferredWidth(440);
+        transfers.getColumnModel().getColumn(4).setPreferredWidth(150);
+        JTextArea details=new JTextArea(5,70);
+        details.setEditable(false);
+        details.setLineWrap(true);
+        details.setWrapStyleWord(true);
+        transfers.getSelectionModel().addListSelectionListener(event->{
+            if(event.getValueIsAdjusting())return;
+            int index=transfers.getSelectedRow();
+            if(index<0)return;
+            JsonObject evidence=page.get(transfers.convertRowIndexToModel(index));
+            details.setText("Data: "+value(evidence,"booking_date")
+                +"\nBank: "+value(evidence,"source_label")
+                +"\nKwota: "+("income".equals(value(evidence,"kind"))?"+ ":"− ")
+                    +money(value(evidence,"amount_grosz"))
+                +"\nStatus: Do wyjaśnienia"
+                +"\nOpis przelewu: "+value(evidence,"description"));
+            details.setCaretPosition(0);
+        });
+        selectPage.addActionListener(event->{
+            java.util.Arrays.fill(checked,selectPage.isSelected());
+            model.fireTableDataChanged();
+            int selected=selectPage.isSelected()?checked.length:0;
+            selectionStatus.setText("Zaznaczone: "+selected+" z "+page.size());
+        });
+        JPanel controls=new JPanel(new BorderLayout());
+        controls.add(selectPage,BorderLayout.WEST);
+        controls.add(selectionStatus,BorderLayout.EAST);
+        JPanel panel=new JPanel(new BorderLayout(6,6));
+        panel.add(controls,BorderLayout.NORTH);
+        JScrollPane listScroll=new JScrollPane(transfers);
+        listScroll.setPreferredSize(new Dimension(870,370));
+        panel.add(listScroll,BorderLayout.CENTER);
+        panel.add(new JScrollPane(details),BorderLayout.SOUTH);
+        transfers.setRowSelectionInterval(0,0);
+        java.util.List<String> options=new ArrayList<>();
+        options.add("Otwórz przelew");
+        options.add("Usuń zaznaczone");
+        if(first>0)options.add("← Poprzednie 100");
+        if(first+page.size()<allOpen.size())options.add("Następne 100 →");
+        options.add("Zamknij");
+        Object[] buttons=options.toArray();
+        int selection=JOptionPane.showOptionDialog(this,panel,
+            "PayCheck • przelewy do wyjaśnienia: "+(first+1)+"–"
+                +(first+page.size())+" z "+allOpen.size(),
+            JOptionPane.DEFAULT_OPTION,JOptionPane.PLAIN_MESSAGE,
+            null,buttons,buttons[buttons.length-1]);
+        if(selection<0)return;
+        String picked=options.get(selection);
+        if("Zamknij".equals(picked))return;
+        if("← Poprzednie 100".equals(picked)){
+            showBankEvidenceQueue(Math.max(0,first-pageSize));return;
+        }
+        if("Następne 100 →".equals(picked)){
+            showBankEvidenceQueue(first+pageSize);return;
+        }
+        if("Usuń zaznaczone".equals(picked)) {
+            java.util.LinkedHashSet<String> keys=new java.util.LinkedHashSet<>();
+            for(int i=0;i<checked.length;i++)
+                if(checked[i])keys.add(value(page.get(i),"evidence_key"));
+            if(keys.isEmpty()){
                 JOptionPane.showMessageDialog(this,
-                    "Istnieje już oczekujący wpis o tej kwocie i typie. "
-                        + "Użyj „Dopasuj i potwierdź”, aby uniknąć duplikatu.");
-            } else {
+                    "Zaznacz checkboxem przynajmniej jeden nierozliczony przelew.");
+                showBankEvidenceQueue(first);return;
+            }
+            int yes=JOptionPane.showConfirmDialog(this,
+                "Odrzucić "+keys.size()+" wybranych przelewów?\n"
+                    +"Saldo PayCheck i Budżet się nie zmienią.\n"
+                    +"Wpisy zachowają klucze i nie wrócą po ponownym imporcie.",
+                "Usunąć zaznaczone?",JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if(yes==JOptionPane.YES_OPTION) {
+                int removed=DesktopBankEvidenceBulk.dismissSelected(
+                    mutableTable("bank_evidence_queue"),
+                    table("paycheck_transactions"),keys);
+                if(removed==keys.size()){
+                    markDirty();
+                    showSection("PayCheck");
+                }else JOptionPane.showMessageDialog(this,
+                    "Nie usunięto żadnego przelewu: któryś został już "
+                        +"rozliczony lub zmienił status.",
+                    "Sprawdź przelewy",JOptionPane.WARNING_MESSAGE);
+            }
+            showBankEvidenceQueue(first);return;
+        }
+        int highlighted=transfers.getSelectedRow();
+        if(highlighted<0)return;
+        JsonObject evidence=page.get(transfers.convertRowIndexToModel(highlighted));
+        Object[] actions={"Dopasuj i potwierdź",
+            "Utwórz brakujący oczekujący","Odrzuć dowód","Zamknij"};
+        int action=JOptionPane.showOptionDialog(this,
+            "Bank: "+value(evidence,"source_label")
+                +"\nData: "+value(evidence,"booking_date")
+                +"\nKwota: "+("income".equals(value(evidence,"kind"))?"+ ":"− ")
+                    +money(value(evidence,"amount_grosz"))
+                +"\nOpis: "+value(evidence,"description"),
+            "EDHOME Desktop • szczegóły przelewu",
+            JOptionPane.DEFAULT_OPTION,JOptionPane.QUESTION_MESSAGE,
+            null,actions,actions[0]);
+        if(action==0)matchBankEvidence(evidence);
+        else if(action==1) {
+            java.util.List<JsonObject> existing=pendingMatches(evidence);
+            if(!existing.isEmpty())JOptionPane.showMessageDialog(this,
+                "Istnieje już oczekujący wpis o tej kwocie i typie. "
+                    +"Użyj „Dopasuj i potwierdź”, aby uniknąć duplikatu.");
+            else {
                 createPendingFromEvidence(evidence);
                 markDirty();
                 JOptionPane.showMessageDialog(this,
-                    "Utworzono oczekujący wpis wspólny. Nie zmienia salda do czasu potwierdzenia.");
+                    "Utworzono oczekujący wpis wspólny. "
+                        +"Nie zmienia salda do czasu potwierdzenia.");
             }
-        } else if (action == 2) {
-            evidence.addProperty("state", "dismissed");
-            evidence.add("matched_operation_id", com.google.gson.JsonNull.INSTANCE);
-            evidence.add("matched_at", com.google.gson.JsonNull.INSTANCE);
-            markDirty();
+        }else if(action==2) {
+            int removed=DesktopBankEvidenceBulk.dismissSelected(
+                mutableTable("bank_evidence_queue"),
+                table("paycheck_transactions"),
+                java.util.Collections.singleton(value(evidence,"evidence_key")));
+            if(removed==1)markDirty();
+            else JOptionPane.showMessageDialog(this,
+                "Ten przelew jest już rozliczony lub niedostępny.",
+                "Odrzucenie przelewu",JOptionPane.WARNING_MESSAGE);
         }
         showSection("PayCheck");
     }

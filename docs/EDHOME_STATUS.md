@@ -1,3 +1,9 @@
+## 2026-10-13 — Desktop Beta 0.7.0.118: checkboxy i podgląd banku (P0)
+
+- **Kod:** `EdhomeDesktop.showBankEvidenceQueue` pokazuje tabelę na 100 nierozliczonych dowodów/stronę. Pierwsza kolumna checkboxów, zaznaczanie strony, jedno potwierdzenie masowego odrzucenia. Kliknięcie dowolnego wiersza pokazuje z boku/poniżej pełne informacje: bank, datę, kwotę, kierunek i opis. „Otwórz przelew” zachowuje dotychczasowe działania (dopasowanie, utworzenie pending, odrzucenie pojedynczego).
+- **Ochrona księgi:** nowy `DesktopBankEvidenceBulk.dismissSelected` nie zmienia żadnej pozycji, jeśli choć jeden wybrany dowód nie jest open, ma już powiązanie z PayCheck lub brak klucza. Zmienia wyłącznie status na `dismissed`, nie saldo, pozostawia dowód w eksporcie LAN/ZIP i chroni przed reimportem. Regresje JUnit `DesktopBankEvidenceBulkTest` pokrywają częściowy wybór, zablokowane potwierdzenia oraz brak mutacji przy konflikcie.
+- **Wersja:** Desktop `0.7.0.118` w klasie aplikacji, Gradle i CI Windows. **CI/instalator do potwierdzenia po push.** Wymagany fizyczny odbiór podglądu, zaznaczania, LAN PC↔Android, przywracania dowodu na telefonie i braku zmiany salda. Stable main bez zmian.
+
 ## 2026-10-13 — Android Beta 0.8.0.110 / 302: zbiorcze usuwanie banku z podglądem (P0)
 
 - **Kod:** checkbox przy każdym otwartym dowodzie oraz „Zaznacz stronę”, „Usuń zaznaczone” (maks. 100 widocznych przelewów), jeden dialog potwierdzenia. Kliknięcie obok checkboxa (data/kwota) nadal otwiera jeden podgląd naraz z pełnym opisem, nazwą banku, datą i przyciskami dopasowania/tworzenia Budżetu.
