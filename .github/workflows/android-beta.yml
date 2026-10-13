@@ -611,7 +611,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.107 — PayCheck/Budżet: przelewy z kwotą zgodną z planem są podświetlone na zielono, a propozycje z innymi kwotami na żółto; opisy zachowują neutralny kolor. Na liście automatycznych dopasowań zielony oznacza zgodność odbiorcy i kwoty, żółty wymaga weryfikacji. Pulsowanie i ręczne zatwierdzanie pozostają. Sam kolor zgodnej kwoty nie oznacza potwierdzenia przelewu ani odbiorcy. Test koloru dopisany do regresji. Stabilizacja potwierdzenia bankowego nadal do odbioru na telefonie, bez zmiany księgowania, bazy danych, kopii ani synchronizacji. Dźwięków i powiadomień nie zmieniano. Stable bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.108 — P0 PayCheck: poprawiono kontrolę rozliczenia bankowego z Budżetem, m.in. w przypadku przelewu 33,81 zł. Przed zmianą salda aplikacja sprawdza, czy plan przyjmie powiązanie, a po zatwierdzeniu odczytuje rzeczywisty stan SQLite i Budżetu oraz pokazuje saldo przed/po i potwierdzenie ✓. Jeśli zapis bankowy się powiódł, lecz zapis powiązania do Budżetu został przerwany, EDHOME może bezpiecznie dokończyć brakujące powiązanie bez drugiego księgowania. Rozróżnia błędy, częściowe zapisy i przelewy już wykorzystane; nie zaleca ponownego importowania przelewu. Nowy test regresyjny 2500 zł + 33,81 zł, retry bez duplikatu i kontrola preflight. Saldo bierze wyłącznie rzeczywiste kwoty bankowe. Kolory z 107 zachowane. Test na fizycznym telefonie nadal wymagany. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
