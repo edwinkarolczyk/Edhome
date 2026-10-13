@@ -33,7 +33,7 @@ for title in sections:
 # Kolejka i ręczny wybór z Budżetu też nie łączą message i listy.
 queue=src.split(
     "private void showSharedPaycheckPendingQueue(int offset)",1)[1].split(
-    "private void confirmSharedPaycheckEntry(",1)[0]
+    "private void showBankEvidenceForBudgetPending(String operationId)",1)[0]
 picker=src.split(
     "private void showBudgetPaymentPicker(PaycheckMonthlyBudget.Item item,",1)[1].split(
     "private void confirmBudgetPaymentAssignment(",1)[0]
