@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 297,
-  "versionName": "0.8.0.105",
-  "changelog": "EDHOME Beta 0.8.0.105 — PayCheck i Budżet miesiąca: pięć pól dat zostało podłączonych do kalendarza Androida. Po dotknięciu terminu faktury (nowa pozycja i edycja faktury), planowanego dnia zapłaty oraz miesiąca startu/końca zobowiązania i rat otwiera się kalendarz, zamiast klawiatury. Pola opcjonalne mają Wyczyść, miesiące zapisują tylko YYYY-MM, a przeliczenie liczby rat działa nadal. Edycja faktury zachowuje już zapisaną planowaną datę zapłaty. Nie zmieniono księgowania, planowania i stanu PayCheck. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.105/edhome-beta.apk",
-  "sha256": "ec1181f58793eba7b90903b3243a9a8b3e55a0be3af35c106bf7220c774b47d7"
+  "versionCode": 298,
+  "versionName": "0.8.0.106",
+  "changelog": "EDHOME Beta 0.8.0.106 — numer faktycznie zainstalowanej wersji jest widoczny przy EDHOME • BETA w nagłówku aplikacji, modułów i ekranu Aktualizacje. Numer pochodzi automatycznie z BuildConfig.VERSION_NAME, bez wpisywania go na stałe; po kolejnej aktualizacji zmieni się sam. W alternatywnym stylu widać go pod nazwą edhome, obok informacji o kanale. Zachowano dotychczasową kartę szczegółów wersji i numeru kompilacji. Dane użytkownika, import, PayCheck i Budżet bez zmian. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.106/edhome-beta.apk",
+  "sha256": "7dc575e194e93fa80ecbef14ffa82c297fe51308a15e3a80d67665d6473e2820"
 }
