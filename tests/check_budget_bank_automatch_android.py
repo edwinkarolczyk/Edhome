@@ -15,7 +15,7 @@ rules=(src/"BankBudgetMatchRules.java").read_text(encoding="utf-8")
 flow=main.split("private void paycheck() {",1)[1].split("private void ",1)[0]
 assert "ensureBudgetPaycheckPending(YearMonth.now());" in flow
 assert 'button("Dodaj transakcję do PayCheck"' not in flow
-add=main.split("PaycheckMonthlyBudget.add(prefs,item);",1)[1][:220]
+add=main.split("private void showBudgetItemDialog(boolean privateScope) {",1)[1].split("PaycheckMonthlyBudget.add(prefs,item);",1)[1][:250]
 assert "ensureBudgetPaycheckPending(YearMonth.now());" in add
 auto=main.split("private int ensureBudgetPaycheckPending(",1)[1].split(
     "private void sharedBudgetAwaitingPaycheckConfirmation()",1)[0]
