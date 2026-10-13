@@ -31,10 +31,21 @@ final class DesktopSharedBudgetEditsTest {
         JsonObject settings=new JsonObject();
         settings.addProperty("paycheckMonthlyBudget",items.toString());
         settings.addProperty("paycheckBudgetHistory","[]");
+        settings.addProperty("paycheckRecipients","[]");
         JsonObject tables=new JsonObject();
         tables.add("budget_items",dbItems);
         tables.add("budget_occurrences",new JsonArray());
         tables.add("budget_history",new JsonArray());
+        tables.add("budget_recipients",new JsonArray());
+        JsonArray transactions=new JsonArray();
+        JsonObject bank=new JsonObject();
+        bank.addProperty("operation_id","22222222-2222-4222-8222-222222222222");
+        bank.addProperty("amount_grosz",9000L);
+        bank.addProperty("status","confirmed");
+        bank.addProperty("scope","shared");
+        bank.addProperty("kind","income");
+        transactions.add(bank);
+        tables.add("paycheck_transactions",transactions);
         JsonObject root=new JsonObject();
         root.add("settings",settings);
         root.add("tables",tables);
@@ -82,4 +93,104 @@ final class DesktopSharedBudgetEditsTest {
         assertEquals(0,before.getAsJsonObject("tables")
             .getAsJsonArray("budget_history").size());
     }
+
+    @Test void desktopCanCreateRecurringBudgetWithoutChangingBankBalance()
+            throws Exception {
+        JsonObject before=initial();
+        JsonArray oldTransactions=before.getAsJsonObject("tables")
+            .getAsJsonArray("paycheck_transactions").deepCopy();
+        JsonObject after=DesktopSharedBudgetEdits.createItem(
+            before,"Internet","expense","subscriptions",7999L,"estimate",
+            YearMonth.of(2026,10),null,1,12,false,false,0,"");
+
+        assertEquals(1,DesktopBudgetMirror.month(
+            DesktopBudgetMirror.loadShared(before.getAsJsonObject("settings")),
+            new JsonArray(),YearMonth.of(2026,10)).rows.getRowCount());
+        JsonArray newItems=DesktopBudgetMirror.loadShared(
+            after.getAsJsonObject("settings"));
+        assertEquals(2,newItems.size());
+        JsonObject newItem=newItems.get(1).getAsJsonObject();
+        assertEquals(7999L,newItem.get("amountGrosz").getAsLong());
+        assertEquals("estimate",newItem.get("amountMode").getAsString());
+        assertEquals(12,newItem.get("templateDueDay").getAsInt());
+        assertTrue(newItem.getAsJsonArray("matches").isEmpty());
+        assertEquals("ITEM_CREATED",JsonParser.parseString(
+            after.getAsJsonObject("tables").getAsJsonArray("budget_history")
+                .get(0).getAsJsonObject().get("payload").getAsString())
+            .getAsJsonObject().get("type").getAsString());
+        assertEquals(2,after.getAsJsonObject("tables")
+            .getAsJsonArray("budget_items").size());
+        assertEquals(1,after.getAsJsonObject("tables")
+            .getAsJsonArray("budget_history").size());
+        assertEquals(oldTransactions,after.getAsJsonObject("tables")
+            .getAsJsonArray("paycheck_transactions"));
+        assertEquals(oldTransactions,before.getAsJsonObject("tables")
+            .getAsJsonArray("paycheck_transactions"));
+        assertEquals(2,DesktopBudgetMirror.month(newItems,new JsonArray(),
+            YearMonth.of(2026,11)).rows.getRowCount());
+        DesktopBudgetIntegrity.assertSidecars(after);
+        DesktopBudgetOutboundDelta.Result delta=
+            DesktopBudgetOutboundDelta.build(before,after);
+        assertNotNull(delta);
+        assertEquals(2,delta.changes); // pozycja i zdarzenie historii
+    }
+
+    @Test void desktopCreatesSingleIncomeOnlyInSelectedMonth()
+            throws Exception {
+        JsonObject after=DesktopSharedBudgetEdits.createItem(
+            initial(),"Premia","income","salary",40000L,"fixed",
+            YearMonth.of(2026,11),null,0,18,false,false,0,"");
+        JsonArray items=DesktopBudgetMirror.loadShared(
+            after.getAsJsonObject("settings"));
+        assertEquals(1,DesktopBudgetMirror.month(items,new JsonArray(),
+            YearMonth.of(2026,10)).rows.getRowCount());
+        assertEquals(2,DesktopBudgetMirror.month(items,new JsonArray(),
+            YearMonth.of(2026,11)).rows.getRowCount());
+        assertEquals(1,DesktopBudgetMirror.month(items,new JsonArray(),
+            YearMonth.of(2026,12)).rows.getRowCount());
+        DesktopBudgetIntegrity.assertSidecars(after);
+    }
+
+    @Test void desktopRejectsDuplicatesAndInvalidInstallmentsWithoutSideEffects()
+            throws Exception {
+        JsonObject before=initial();
+        JsonObject created=DesktopSharedBudgetEdits.createItem(
+            before,"Woda","expense","utilities",4500L,"fixed",
+            YearMonth.of(2026,10),null,1,5,false,false,0,"");
+        assertThrows(IllegalArgumentException.class,
+            ()->DesktopSharedBudgetEdits.createItem(
+                created,"WODA","expense","utilities",4500L,"fixed",
+                YearMonth.of(2026,10),null,1,5,false,false,0,""));
+        assertThrows(IllegalArgumentException.class,
+            ()->DesktopSharedBudgetEdits.createItem(
+                before,"Rata","income","loans",30000L,"fixed",
+                YearMonth.of(2026,10),null,1,5,false,true,12,""));
+        assertThrows(IllegalArgumentException.class,
+            ()->DesktopSharedBudgetEdits.createItem(
+                before,"Rachunek","expense","bills",2000L,"fixed",
+                YearMonth.of(2026,10),null,1,5,false,false,0,
+                "33333333-3333-4333-8333-333333333333"));
+        assertEquals(1,before.getAsJsonObject("tables")
+            .getAsJsonArray("budget_items").size());
+        assertEquals(0,before.getAsJsonObject("tables")
+            .getAsJsonArray("budget_history").size());
+    }
+
+    @Test void desktopCreatesInstallmentWithAndroidCompatibleFields()
+            throws Exception {
+        JsonObject after=DesktopSharedBudgetEdits.createItem(
+            initial(),"Rata lodówki","expense","loans",15000L,"fixed",
+            YearMonth.of(2026,10),null,1,21,false,true,10,"");
+        JsonObject item=DesktopBudgetMirror.loadShared(
+            after.getAsJsonObject("settings")).get(1).getAsJsonObject();
+        assertTrue(item.get("installment").getAsBoolean());
+        assertEquals(10,item.get("installmentCount").getAsInt());
+        assertEquals(2,DesktopBudgetMirror.month(
+            DesktopBudgetMirror.loadShared(after.getAsJsonObject("settings")),
+            new JsonArray(),YearMonth.of(2027,7)).rows.getRowCount());
+        assertEquals(1,DesktopBudgetMirror.month(
+            DesktopBudgetMirror.loadShared(after.getAsJsonObject("settings")),
+            new JsonArray(),YearMonth.of(2027,8)).rows.getRowCount());
+    }
+
 }
