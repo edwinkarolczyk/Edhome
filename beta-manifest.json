@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 296,
-  "versionName": "0.8.0.104",
-  "changelog": "EDHOME Beta 0.8.0.104 — po imporcie historii bankowej PayCheck otwiera propozycje i pulsowaniem oznacza dopasowania. Dodano propozycje grupowe: dwa przelewy (np. 200 i 300 zł) do jednej pozycji 500 zł oraz jeden przelew 500 zł do dwóch pozycji 200 i 300 zł. W obu kierunkach wyświetlane są kwoty, daty i opisy do sprawdzenia, a rozliczenie następuje tylko po osobnym zatwierdzeniu. Daty dwóch przelewów muszą być w tym samym miesiącu i maksymalnie 7 dni od siebie, znak i suma muszą się zgadzać. Każdy dowód bankowy można zużyć tylko raz; podział przelewu nie księguje go podwójnie. Propozycje z ostatnich maksymalnie 300 otwartych operacji, analiza grup ograniczona do 40 wskazań; to nie jest dowód automatycznej poprawności importu. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.104/edhome-beta.apk",
-  "sha256": "10f9ca7a871d0dcbc053dcc1c0cb12f465d8002096f70efb048366514063701b"
+  "versionCode": 297,
+  "versionName": "0.8.0.105",
+  "changelog": "EDHOME Beta 0.8.0.105 — PayCheck i Budżet miesiąca: pięć pól dat zostało podłączonych do kalendarza Androida. Po dotknięciu terminu faktury (nowa pozycja i edycja faktury), planowanego dnia zapłaty oraz miesiąca startu/końca zobowiązania i rat otwiera się kalendarz, zamiast klawiatury. Pola opcjonalne mają Wyczyść, miesiące zapisują tylko YYYY-MM, a przeliczenie liczby rat działa nadal. Edycja faktury zachowuje już zapisaną planowaną datę zapłaty. Nie zmieniono księgowania, planowania i stanu PayCheck. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.105/edhome-beta.apk",
+  "sha256": "ec1181f58793eba7b90903b3243a9a8b3e55a0be3af35c106bf7220c774b47d7"
 }
