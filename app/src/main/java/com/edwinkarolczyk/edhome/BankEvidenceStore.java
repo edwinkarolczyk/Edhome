@@ -211,6 +211,55 @@ final class BankEvidenceStore {
         return result;
     }
 
+    /**
+     * Wybór dowodu bankowego dla jednej oczekującej pozycji Budżetu.
+     * Filtr miesiąca/kierunku jest w SQLite PRZED LIMIT, żeby nie zgubić
+     * pasującego przelewu po pierwszych 100 operacjach.
+     * Sama lista nigdy nie zmienia salda.
+     */
+    static long countBudgetCandidates(SQLiteDatabase db,String month,String kind) {
+        validateBudgetCandidateFilter(month,kind);
+        try(Cursor c=db.rawQuery(
+                "SELECT COUNT(*) FROM bank_evidence_queue e "
+                +"WHERE e.state='open' AND e.kind=? "
+                +"AND substr(e.booking_date,1,7)=?",
+                new String[]{kind,month})) {
+            return c.moveToFirst()?c.getLong(0):0;
+        }
+    }
+
+    static List<Row> listBudgetCandidates(SQLiteDatabase db,String month,
+            String kind,long plannedAmount,int limit,int offset) {
+        validateBudgetCandidateFilter(month,kind);
+        if(plannedAmount<=0||limit<1||limit>100||offset<0)
+            throw new IllegalArgumentException("Nieprawidłowy zakres dopasowania.");
+        List<Row> result=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT e.id,e.evidence_key,e.source_kind,e.source_label,e.kind,"
+                +"e.amount_grosz,e.booking_date,e.description,e.imported_at,"
+                +"e.state,e.matched_operation_id,e.matched_at "
+                +"FROM bank_evidence_queue e WHERE e.state='open' AND e.kind=? "
+                +"AND substr(e.booking_date,1,7)=? "
+                +"ORDER BY CASE WHEN e.amount_grosz=? THEN 0 ELSE 1 END,"
+                +"e.booking_date DESC,e.id DESC LIMIT ? OFFSET ?",
+                new String[]{kind,month,Long.toString(plannedAmount),
+                    Integer.toString(limit),Integer.toString(offset)})) {
+            while(c.moveToNext())
+                result.add(new Row(c.getLong(0),c.getString(1),c.getString(2),
+                    c.getString(3),c.getString(4),c.getLong(5),c.getString(6),
+                    c.getString(7),c.getLong(8),c.getString(9),
+                    c.isNull(10)?null:c.getString(10),
+                    c.isNull(11)?null:c.getLong(11)));
+        }
+        return result;
+    }
+
+    private static void validateBudgetCandidateFilter(String month,String kind) {
+        if(month==null||!month.matches("[0-9]{4}-(0[1-9]|1[0-2])")
+                ||!("income".equals(kind)||"expense".equals(kind)))
+            throw new IllegalArgumentException("Nieprawidłowy miesiąc lub kierunek.");
+    }
+
     /** Pełna historia dowodów: otwarte, uzgodnione i odrzucone, bez zmiany salda. */
     static long countAll(SQLiteDatabase db) {
         try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM bank_evidence_queue",null)) {
