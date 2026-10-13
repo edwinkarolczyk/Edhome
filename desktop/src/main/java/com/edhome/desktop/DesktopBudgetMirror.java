@@ -307,7 +307,7 @@ final class DesktopBudgetMirror {
             Object[] options=editable
                 ?new Object[]{"‹ Poprzedni","Następny ›",
                     "Bieżący miesiąc","Odbiorcy",
-                    "Dodaj pozycję","Dodaj pozycję","Edytuj pozycję","Zamknij"}
+                    "Dodaj pozycję","Edytuj pozycję","Zamknij"}
                 :new Object[]{"‹ Poprzedni","Następny ›",
                     "Bieżący miesiąc","Odbiorcy","Zamknij"};
             int action=JOptionPane.showOptionDialog(owner,body,
