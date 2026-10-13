@@ -14644,6 +14644,15 @@ public final class MainActivity extends Activity {
                     +"\n"+(suggested==null?row.description:suggested.name)
                     +" • "+tag,14,false);
                 headerLine.setPadding(dp(6),dp(10),dp(6),dp(10));
+                // Zielony: pewna para odbiorca+kwota. Żółty: weryfikacja.
+                if(rank>0) {
+                    int brightness=(android.graphics.Color.red(surface)*299
+                        +android.graphics.Color.green(surface)*587
+                        +android.graphics.Color.blue(surface)*114)/1000;
+                    headerLine.setTextColor(rank==3&&alternatives==1
+                        ?(brightness<128?0xFF83E2B2:0xFF087B47)
+                        :(brightness<128?0xFFFFD28B:0xFF966100));
+                }
                 line.addView(headerLine);
                 if(rank>0)pulseBankProposal(headerLine);
                 LinearLayout details=new LinearLayout(this);
@@ -15366,22 +15375,30 @@ public final class MainActivity extends Activity {
                         showBankBudgetProposals()).show();
                 return;
             }
-            java.util.List<String> labels=new java.util.ArrayList<>();
+            java.util.List<CharSequence> labels=new java.util.ArrayList<>();
             for(BankEvidenceStore.Row row:rows) {
                 String description=row.description==null?"":row.description;
                 if(description.length()>80)
                     description=description.substring(0,80)+"…";
-                labels.add((row.amount==pendingAmount
+                boolean exactAmount=row.amount==pendingAmount;
+                String firstLine=(exactAmount
                         ?"✓ Zgodna kwota • ":"? Inna kwota • ")
                     +row.date+" • "+row.sourceLabel+" • "
                     +("income".equals(row.kind)?"+ ":"− ")
-                    +MoneyRules.format(row.amount)
-                    +(description.isBlank()?"":"\n"+description));
+                    +MoneyRules.format(row.amount);
+                android.text.SpannableString styled=new android.text.SpannableString(
+                    firstLine+(description.isBlank()?"":"\n"+description));
+                styled.setSpan(new android.text.style.ForegroundColorSpan(
+                        exactAmount?0xFF087B47:0xFF966100),
+                    0,firstLine.length(),android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                styled.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
+                    0,firstLine.length(),android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                labels.add(styled);
             }
             AlertDialog.Builder picker=new AlertDialog.Builder(this)
                 .setTitle("Wybierz przelew do: "+budgetItem.name
                     +" • "+month+" ("+total+")")
-                .setItems(labels.toArray(new String[0]),(d,index)->
+                .setItems(labels.toArray(new CharSequence[0]),(d,index)->
                     confirmBankEvidenceMatch(rows.get(index),budgetItem,month))
                 .setNegativeButton("Zamknij",null);
             if(first+rows.size()<total)
