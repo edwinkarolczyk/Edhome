@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 294,
-  "versionName": "0.8.0.102",
-  "changelog": "EDHOME Beta 0.8.0.102 — podgląd różnic między Telefonem i Desktopem przed uzgodnieniem po przywróceniu ZIP. Porównanie identyfikatorów oraz liczby rekordów w Projektach, Magazynie, Budżecie, PayCheck i innych modułach, z rozróżnieniem wpisów tylko na telefonie, tylko na PC i różnych po obu stronach. Podgląd nie zapisuje danych; decyzja Telefon/PC wymaga dodatkowego potwierdzenia i niezależnych kopii obu urządzeń. Jeśli dowolna migawka zmieni się po przeglądzie (lub upłynie 5 minut), operacja jest odrzucana. Zabezpieczenia LAN z 0.8.0.101 pozostają aktywne. Brak automatycznego scalania konfliktowych wpisów, Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.102/edhome-beta.apk",
-  "sha256": "fe955bfdffc3c07ade06651b724e7e3dc720831818421d1e5fb14d09b9e95989"
+  "versionCode": 296,
+  "versionName": "0.8.0.104",
+  "changelog": "EDHOME Beta 0.8.0.104 — po imporcie historii bankowej PayCheck otwiera propozycje i pulsowaniem oznacza dopasowania. Dodano propozycje grupowe: dwa przelewy (np. 200 i 300 zł) do jednej pozycji 500 zł oraz jeden przelew 500 zł do dwóch pozycji 200 i 300 zł. W obu kierunkach wyświetlane są kwoty, daty i opisy do sprawdzenia, a rozliczenie następuje tylko po osobnym zatwierdzeniu. Daty dwóch przelewów muszą być w tym samym miesiącu i maksymalnie 7 dni od siebie, znak i suma muszą się zgadzać. Każdy dowód bankowy można zużyć tylko raz; podział przelewu nie księguje go podwójnie. Propozycje z ostatnich maksymalnie 300 otwartych operacji, analiza grup ograniczona do 40 wskazań; to nie jest dowód automatycznej poprawności importu. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.104/edhome-beta.apk",
+  "sha256": "10f9ca7a871d0dcbc053dcc1c0cb12f465d8002096f70efb048366514063701b"
 }
