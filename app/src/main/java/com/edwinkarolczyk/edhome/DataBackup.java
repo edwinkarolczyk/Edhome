@@ -1817,6 +1817,10 @@ final class DataBackup {
 
     private static boolean isNumberColumn(String column) {
         return "id".equals(column) || "done".equals(column)
+            || "frost_risk".equals(column) || "protect_frost".equals(column)
+            || "start_month".equals(column) || "start_day".equals(column)
+            || "lead_days".equals(column) || "remind_start".equals(column)
+            || "remind_before".equals(column)
             || "checked".equals(column) || "qty_milli".equals(column)
             || "qty".equals(column)
             || "repeat_every".equals(column) || "duration_minutes".equals(column)

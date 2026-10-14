@@ -303,6 +303,8 @@ jobs:
           python3 tests/check_bank_statement_contract.py
           python3 tests/check_bank_evidence_queue_contract.py
           python3 tests/check_bank_large_history_android.py
+      - name: Frost preparation and backup regression
+        run: python3 tests/check_frost_contract.py
       - name: PayCheck provenance and backup regression
         run: python3 tests/check_paycheck_provenance_contract.py
       - name: SQLite migration and backup contract
