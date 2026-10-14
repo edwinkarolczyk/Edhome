@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 303,
-  "versionName": "0.8.0.111",
-  "changelog": "EDHOME Beta 0.8.0.111 — Ochrona przed mrozem: Miejsca mają flagę Narażone na mróz, rzeczy i pudełka Chronić przed mrozem, dziedziczenie ryzyka i ostrzeżenia przy przenoszeniu QR/NFC/ręcznie. Czynności: coroczna lista zabezpieczeń z lokalizacjami i odznaczaniem, terminy domyślnie 1 grudnia minus 30 dni, konfiguracja i powiadomienia sezonowe. Migracja SQLite 46→47, rozszerzony ZIP i LAN. Stable main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.111/edhome-beta.apk",
-  "sha256": "c003ff4f7bcf447806e74316812862037b1d2f01a20a1769e9ee58c70aabb64b"
+  "versionCode": 304,
+  "versionName": "0.8.0.112",
+  "changelog": "EDHOME Beta 0.8.0.112 — P0: poprawione przywracanie starszych kopii ZIP/JSON SQLite v45/v46 w schemacie v47. Domyślna konfiguracja ochrony przed mrozem po starym archiwum, selektywny import kategorii na nowej bazie i ochrona aktualnych danych zimowych przed skasowaniem. Bez zmian gałęzi Stable.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.112/edhome-beta.apk",
+  "sha256": "11ee8ab5f74f091a65129e58fbb011cbea6801f79e53d7a6f2c4fde592118e03"
 }
