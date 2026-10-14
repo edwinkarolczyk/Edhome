@@ -29,8 +29,9 @@ for token in (
     'NFC_TAG_ASSIGNED',
     'NFC_TAG_UNLINKED',
     'NFC_TARGET_SCANNED',
-    'Przypisać teraz tag NFC?',
-    'beginNfcAssignment(kind,newId,newName)',
+    'NFC • Przypisz / zmień tag',
+    'showQuickStorageSetup(kind,id)',
+    'beginNfcAssignment(kind,id,name)',
 ):
     assert token in main, token
 
