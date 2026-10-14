@@ -8,9 +8,9 @@ text=src.split("database.beginTransaction();",1)[1].split(
 # Czytaj osobne wywołania execSQL; komentarze i sąsiednie instrukcje
 # nie mogą zostać połączone, gdy dochodzi kolejne zapytanie migracji.
 parts=re.findall(
-    r'database\\.execSQL\\(((?:\\s*"(?:\\\\.|[^"\\\\])*"\\s*\\+?\\s*)+)\\);',
+    r'database\.execSQL\(((?:\s*"(?:\\.|[^"\\])*"\s*\+?\s*)+)\);',
     text,re.S)
-sql=["".join(json.loads(c) for c in re.findall(r'"(?:\\\\.|[^"\\\\])*"',part))
+sql=["".join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"',part))
      for part in parts]
 sql=[statement for statement in sql if "sqlite_sequence" in statement]
 assert len(sql)==2
