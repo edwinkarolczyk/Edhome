@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 302,
-  "versionName": "0.8.0.110",
-  "changelog": "EDHOME Beta 0.8.0.110 — PayCheck: checkboxy obok kwot w historii bankowej, zaznaczanie do 100 otwartych dowodów z aktualnej strony i jedno zbiorcze usunięcie. Dotknięcie daty lub kwoty nadal otwiera podgląd: opis, bank, datę, akcje Dopasuj do Budżetu i Dodaj do Budżetu. Usunięcie jest atomowe, bez zmiany salda, tylko otwartych i niezaksięgowanych. Odrzucone dowody można przywrócić w Całej historii; ponowny import nie tworzy dubletów. Zachowano poprzednie funkcje i zgodność kopii ZIP. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.110/edhome-beta.apk",
-  "sha256": "d42276e361d98f423ab9dd5af609d0a8ec8f960c04898e8bc61a349c71547cc2"
+  "versionCode": 303,
+  "versionName": "0.8.0.111",
+  "changelog": "EDHOME Beta 0.8.0.111 — Ochrona przed mrozem: Miejsca mają flagę Narażone na mróz, rzeczy i pudełka Chronić przed mrozem, dziedziczenie ryzyka i ostrzeżenia przy przenoszeniu QR/NFC/ręcznie. Czynności: coroczna lista zabezpieczeń z lokalizacjami i odznaczaniem, terminy domyślnie 1 grudnia minus 30 dni, konfiguracja i powiadomienia sezonowe. Migracja SQLite 46→47, rozszerzony ZIP i LAN. Stable main bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.111/edhome-beta.apk",
+  "sha256": "c003ff4f7bcf447806e74316812862037b1d2f01a20a1769e9ee58c70aabb64b"
 }
