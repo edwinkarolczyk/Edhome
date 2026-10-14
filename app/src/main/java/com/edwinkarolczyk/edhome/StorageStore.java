@@ -20,6 +20,7 @@ final class StorageStore {
             + "name TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('thing','box')), "
             + "parent_box_id INTEGER, place_id INTEGER, "
             + "lent_to TEXT, lent_at INTEGER, created_at INTEGER NOT NULL, "
+            +"protect_frost INTEGER NOT NULL DEFAULT 0, "
             + "CHECK(parent_box_id IS NULL OR place_id IS NULL))");
         db.execSQL("CREATE TABLE storage_events ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, "
@@ -45,20 +46,22 @@ final class StorageStore {
         final Long boxId;
         final Long placeId;
         final String lentTo;
+        final boolean protectFrost;
         Item(long id, String name, String kind, Long boxId, Long placeId,
-                String lentTo) {
+                String lentTo,boolean protectFrost) {
             this.id=id; this.name=name; this.kind=kind;
             this.boxId=boxId; this.placeId=placeId; this.lentTo=lentTo;
+            this.protectFrost=protectFrost;
         }
     }
 
     static Item find(SQLiteDatabase db, long id) {
-        try (Cursor c=db.rawQuery("SELECT id,name,kind,parent_box_id,place_id,lent_to "
+        try (Cursor c=db.rawQuery("SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost "
                 + "FROM storage_items WHERE id=?", new String[]{Long.toString(id)})) {
             return c.moveToFirst()
                 ? new Item(c.getLong(0),c.getString(1),c.getString(2),
                     c.isNull(3)?null:c.getLong(3),
-                    c.isNull(4)?null:c.getLong(4),c.getString(5)) : null;
+                    c.isNull(4)?null:c.getLong(4),c.getString(5),c.getInt(6)==1) : null;
         }
     }
 
@@ -69,13 +72,13 @@ final class StorageStore {
     static List<Item> listAll(SQLiteDatabase db) {
         List<Item> items=new ArrayList<>();
         try (Cursor c=db.rawQuery(
-                "SELECT id,name,kind,parent_box_id,place_id,lent_to "
+                "SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost "
                     + "FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
                 null)) {
             while(c.moveToNext())
                 items.add(new Item(c.getLong(0),c.getString(1),c.getString(2),
                     c.isNull(3)?null:c.getLong(3),
-                    c.isNull(4)?null:c.getLong(4),c.getString(5)));
+                    c.isNull(4)?null:c.getLong(4),c.getString(5),c.getInt(6)==1));
         }
         return items;
     }
@@ -309,7 +312,7 @@ final class StorageStore {
     static Map<Long,String> locations(SQLiteDatabase db,List<Item> targets) {
         Map<Long,Item> items=new HashMap<>();
         try(Cursor cursor=db.rawQuery(
-                "SELECT id,name,kind,parent_box_id,place_id,lent_to FROM storage_items",
+                "SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost FROM storage_items",
                 null)) {
             while(cursor.moveToNext()) {
                 Item item=new Item(cursor.getLong(0),cursor.getString(1),

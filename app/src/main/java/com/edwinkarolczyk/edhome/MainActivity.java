@@ -23897,7 +23897,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 46);
+            super(context, "edhome-beta-preview.db", null, 47);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -23925,6 +23925,7 @@ public final class MainActivity extends Activity {
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            FrostStore.create(database);
             ProjectStore.create(database);
             ProjectPlanningStore.create(database);
             addNfcLinks(database);
@@ -23957,7 +23958,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 46) {
+            if (oldVersion < 1 || newVersion > 47) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -24209,6 +24210,10 @@ public final class MainActivity extends Activity {
                 PaycheckBudgetSqliteStore.create(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_45_TO_46_PAYCHECK_BUDGET");
             }
+            if(oldVersion < 47) {
+                FrostStore.upgrade47(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_46_TO_47_FROST");
+            }
             if(newVersion >= 36) {
                 try {
                     // Synchronizację uzupełniamy dopiero po wszystkich zmianach schematu.
@@ -24243,6 +24248,7 @@ public final class MainActivity extends Activity {
             database.execSQL("CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL COLLATE NOCASE, kind TEXT NOT NULL DEFAULT '', "
                 + "parent_id INTEGER, icon TEXT NOT NULL DEFAULT 'places', "
+                + "frost_risk INTEGER NOT NULL DEFAULT 0, "
                 + "CHECK(parent_id IS NULL OR parent_id!=id))");
             addPlaceSiblingIndex(database);
         }
@@ -24966,6 +24972,12 @@ public final class MainActivity extends Activity {
 
         boolean savePlace(Long id, String name, String kind,
                 Long parentId, String icon) {
+            return savePlace(id,name,kind,parentId,icon,id!=null
+                &&FrostStore.explicitRisk(getReadableDatabase(),id));
+        }
+
+        boolean savePlace(Long id, String name, String kind,
+                Long parentId, String icon,boolean frostRisk) {
             name = TextEntryRules.capitalizeLabel(name);
             String error = PlaceRules.validateFields(name, kind, icon);
             if (error != null) throw new IllegalArgumentException(error);
@@ -24998,6 +25010,7 @@ public final class MainActivity extends Activity {
                 values.put("name", name);
                 values.put("kind", kind);
                 values.put("icon", icon);
+                values.put("frost_risk",frostRisk?1:0);
                 if (parentId == null) values.putNull("parent_id");
                 else values.put("parent_id", parentId);
                 if (id == null) database.insertOrThrow("places", null, values);

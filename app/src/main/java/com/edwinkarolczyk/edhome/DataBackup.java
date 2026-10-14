@@ -24,14 +24,14 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 46;
+    private static final int DB_VERSION = 47;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
     };
     // Keep all existing tables, including pending and completed remanents.
     private static final String[][] TABLES = {
-        {"places", "id", "name", "kind", "parent_id", "icon"},
+        {"places", "id", "name", "kind", "parent_id", "icon", "frost_risk"},
         {"household_members", "id", "name"},
         {"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"},
         {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
@@ -64,7 +64,10 @@ final class DataBackup {
             "name_snapshot", "unit", "quantity_milli", "unit_price_grosz",
             "shop", "happened_at"},
         {"storage_items", "id", "name", "kind", "parent_box_id", "place_id",
-            "lent_to", "lent_at", "created_at"},
+            "lent_to", "lent_at", "created_at","protect_frost"},
+        {"frost_settings", "id","start_month","start_day","lead_days",
+            "remind_start","remind_before"},
+        {"frost_checks", "id","season_year","item_id","done","changed_at"},
         {"storage_events", "id", "item_id", "name_snapshot", "action",
             "details", "happened_at"},
         {"nfc_links", "id", "uid", "target_kind", "target_id", "created_at"},
@@ -554,6 +557,7 @@ final class DataBackup {
                         || "member_project_windows".equals(definition[0])
                         || "project_task_blockers".equals(definition[0])))
                 || (inputVersion < 46 && definition[0].startsWith("budget_"))
+                || (inputVersion < 47 && definition[0].startsWith("frost_"))
                 ? new JSONArray() : tables.getJSONArray(definition[0]);
             if (items.length() > 20000)
                 throw new IllegalArgumentException("Zbyt wiele rekordów w kopii.");
@@ -565,6 +569,14 @@ final class DataBackup {
                 for (int j = 1; j < definition.length; j++) {
                     String key = definition[j];
                     if (!item.has(key)) {
+                        if(inputVersion < 47 && "frost_risk".equals(key)
+                                &&"places".equals(definition[0])){
+                            values.put(key,0);continue;
+                        }
+                        if(inputVersion < 47 && "protect_frost".equals(key)
+                                &&"storage_items".equals(definition[0])){
+                            values.put(key,0);continue;
+                        }
                         if (inputVersion == 2 && "tasks".equals(definition[0])) {
                             if ("due_date".equals(key)) { values.putNull(key); continue; }
                             if ("repeat_rule".equals(key)) { values.put(key, "once"); continue; }
