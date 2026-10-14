@@ -15,7 +15,7 @@ import java.util.Set;
  * Nie zapisuje niczego do bazy. Całą migawkę waliduje DataBackup.restoreJson.
  */
 final class BackupSelectiveMerge {
-    private static final int CURRENT_SCHEMA = 46;
+    private static final int CURRENT_SCHEMA = 47;
     private static final int OLDEST_SELECTIVE_SCHEMA = 45;
 
     private BackupSelectiveMerge() { }
@@ -70,12 +70,29 @@ final class BackupSelectiveMerge {
         for (Iterator<String> tables = installedTables.keys(); tables.hasNext();) {
             String table = tables.next();
             if (!names.contains(BackupModuleSnapshot.categoryForTable(table))) continue;
-            if (!archivedTables.has(table))
+            if (!archivedTables.has(table)) {
+                // W archiwach sprzed v47 nie istnieją jeszcze tabele zimowe.
+                // Zachowaj obecne odznaczenia i ustawienia, zamiast je usuwać.
+                if (sourceVersion < 47 && table.startsWith("frost_")) continue;
                 throw new IllegalArgumentException(
                     "Kopia nie zawiera wymaganej tabeli: " + table);
+            }
             if ("budget_history".equals(table)) {
                 installedTables.put(table, mergeBudgetHistory(
                     installedTables.getJSONArray(table), archivedTables.getJSONArray(table)));
+            } else if (sourceVersion < 47
+                    && ("places".equals(table) || "storage_items".equals(table))) {
+                // Schema v45/v46 nie zna flag mrozu. Uzupełnij je wyłącznie
+                // w przywracanej kategorii, bez naruszania pozostałych modułów.
+                JSONArray migrated = new JSONArray();
+                JSONArray legacy = archivedTables.getJSONArray(table);
+                String flag = "places".equals(table) ? "frost_risk" : "protect_frost";
+                for (int i = 0; i < legacy.length(); i++) {
+                    JSONObject row = new JSONObject(legacy.getJSONObject(i).toString());
+                    if (!row.has(flag)) row.put(flag, 0);
+                    migrated.put(row);
+                }
+                installedTables.put(table, migrated);
             } else installedTables.put(table, archivedTables.getJSONArray(table));
         }
 
@@ -119,7 +136,10 @@ final class BackupSelectiveMerge {
             JSONObject meta = currentSync.getJSONObject(i);
             String table = meta.getString("table");
             String uuid = meta.getString("syncUuid");
-            boolean selected = names.contains(BackupModuleSnapshot.categoryForTable(table));
+            // Nie oznaczaj nowych rekordów frost_* jako usunięte przy imporcie
+            // starego modułu „Inne”: kopia v46 nie mogła ich zawierać.
+            boolean selected = names.contains(BackupModuleSnapshot.categoryForTable(table))
+                && !(sourceVersion < 47 && table.startsWith("frost_"));
             if (selected) liveSelected.put(uuid, meta);
             boolean appendOnly = selected && "budget_history".equals(table);
             if (appendOnly) {

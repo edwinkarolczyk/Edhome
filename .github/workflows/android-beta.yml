@@ -623,7 +623,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.111 — Ochrona przed mrozem: Miejsca mają flagę Narażone na mróz, rzeczy i pudełka Chronić przed mrozem, dziedziczenie ryzyka i ostrzeżenia przy przenoszeniu QR/NFC/ręcznie. Czynności: coroczna lista zabezpieczeń z lokalizacjami i odznaczaniem, terminy domyślnie 1 grudnia minus 30 dni, konfiguracja i powiadomienia sezonowe. Migracja SQLite 46→47, rozszerzony ZIP i LAN. Stable main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.112 — P0: poprawione przywracanie starszych kopii ZIP/JSON SQLite v45/v46 w schemacie v47. Domyślna konfiguracja ochrony przed mrozem po starym archiwum, selektywny import kategorii na nowej bazie i ochrona aktualnych danych zimowych przed skasowaniem. Bez zmian gałęzi Stable."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

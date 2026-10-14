@@ -322,7 +322,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -1688,6 +1688,10 @@ final class DataBackup {
                     database.insertOrThrow(definition[0], null, values);
             }
             if (inputVersion < 17) PantryPackageStore.fillLegacy(database);
+            // Archiwa v46 i starsze nie miały tabel zimowych. Po pełnym
+            // przywróceniu zachowaj domyślną konfigurację sezonu 1.12/30 dni.
+            if (inputVersion < 47)
+                database.execSQL("INSERT OR IGNORE INTO frost_settings(id) VALUES(1)");
             UserProfileStore.ensureAll(database);
             UserProfileStore.assertIntegrity(database);
             ProjectPlanningStore.assertIntegrity(database);

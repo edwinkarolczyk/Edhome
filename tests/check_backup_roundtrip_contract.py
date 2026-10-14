@@ -214,10 +214,12 @@ for token in (
     assert token in main, token
 assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain supported"
 # Starsze kopie z EDHOME 0.8.0.25 mają bazę v45.
-# Przywracanie do bieżącej bazy v46 musi je akceptować;
-# nieobecne tabele budżetu v46 powstają jako puste.
-assert 'inputVersion != 44 && inputVersion != 45 && inputVersion != DB_VERSION' in source, (
-    "EDHOME backup: schema v45 must remain restorable")
+# Kopie v45 i v46 muszą być obsługiwane w SQLite v47.
+# Brakujące tabele budżetu/frost powstają podczas importu, bez czyszczenia historii.
+assert 'inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != DB_VERSION' in source, (
+    "EDHOME backup: schemas v45/v46 must remain restorable")
+assert 'if (inputVersion < 47)' in source
+assert 'INSERT OR IGNORE INTO frost_settings(id) VALUES(1)' in source
 assert 'inputVersion < 46 && definition[0].startsWith("budget_")' in source, (
     "EDHOME backup: v45 must migrate without requiring v46 budget tables")
 assert 'Map<Long,String> archivedStorageThumbs' in source
@@ -251,6 +253,10 @@ for token in (
     'static String merge(String installed, String archived, Set<String> requested)',
     'OLDEST_SELECTIVE_SCHEMA = 45;',
     'if (!archivedTables.has(table))',
+    'CURRENT_SCHEMA = 47;',
+    'sourceVersion < 47 && table.startsWith("frost_")',
+    'String flag = "places".equals(table) ? "frost_risk" : "protect_frost";',
+    'if (!row.has(flag)) row.put(flag, 0);',
     'installedTables.put(table, archivedTables.getJSONArray(table))',
     'copyKeys(incomingSettings, settings,',
     'copyKeys(settings, replacement, storageKeys)',
