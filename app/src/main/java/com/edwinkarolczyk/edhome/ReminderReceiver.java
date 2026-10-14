@@ -112,6 +112,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         // Vehicle and PayCheck reminders have their own scheduling rules.
         VehicleReminderReceiver.schedule(context);
         PaycheckBudgetReminderReceiver.schedule(context);
+        FrostReminderReceiver.schedule(context);
         AlarmManager manager = (AlarmManager) context.getSystemService(
             Context.ALARM_SERVICE);
         if (manager == null) return;

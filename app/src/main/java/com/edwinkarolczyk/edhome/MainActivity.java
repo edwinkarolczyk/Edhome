@@ -6294,6 +6294,92 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
+
+    private void showFrostPreparation() {
+        int year=LocalDate.now().getYear();
+        FrostStore.Settings cfg=FrostStore.settings(db.getReadableDatabase());
+        java.util.List<FrostStore.Entry>items=FrostStore.entries(db.getReadableDatabase(),year);
+        LinearLayout panel=new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(14),dp(10),dp(14),dp(10));
+        int pending=0;
+        for(FrostStore.Entry e:items)if(!e.done)pending++;
+        panel.addView(text("❄ Zabezpiecz rzeczy przed zimą",18,true));
+        panel.addView(text("Termin: "+FrostStore.due(cfg,year)
+            +" • Pozostało "+pending+" z "+items.size(),14,false));
+        smallButton(panel,"⚙ Terminy i przypomnienia",this::showFrostSettings);
+        if(items.isEmpty())panel.addView(text(
+            "Brak oznaczonych rzeczy. W Magazynie zaznacz „Chronić przed mrozem”.",
+            13,false));
+        for(FrostStore.Entry item:items) {
+            CheckBox box=new CheckBox(this);
+            box.setText((item.box?"📦 ":"")+"❄ "+item.name
+                +"\n"+item.location.replace(" / "," → "));
+            box.setTextColor(ink);
+            box.setTextSize(13);
+            box.setChecked(item.done);
+            box.setButtonTintList(ColorStateList.valueOf(accent));
+            panel.addView(box);
+            box.setOnCheckedChangeListener((v,checked)->{
+                try {
+                    FrostStore.checked(db.getWritableDatabase(),year,item.id,checked);
+                    DiagnosticLog.event("FROST_CHECK_UPDATED");
+                    ReminderReceiver.schedule(this);
+                }catch(Exception problem){
+                    box.setOnCheckedChangeListener(null);
+                    box.setChecked(!checked);
+                    alert("Nie zapisano zabezpieczenia: "+problem.getMessage());
+                }
+            });
+        }
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(panel);
+        new AlertDialog.Builder(this).setTitle("Czynności • Przed zimą")
+            .setView(scroll).setNegativeButton("Zamknij",null).show();
+    }
+
+    private void showFrostSettings() {
+        FrostStore.Settings cfg=FrostStore.settings(db.getReadableDatabase());
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(14),dp(10),dp(14),dp(10));
+        EditText start=new EditText(this);
+        start.setText(String.format(Locale.ROOT,"%02d-%02d",cfg.month,cfg.day));
+        start.setFocusable(false);
+        form.addView(text("Początek zimy • miesiąc i dzień",14,true));
+        form.addView(start);
+        start.setOnClickListener(v->new DatePickerDialog(this,(picker,y,m,day)->
+            start.setText(String.format(Locale.ROOT,"%02d-%02d",m+1,day)),
+            LocalDate.now().getYear(),cfg.month-1,cfg.day).show());
+        EditText lead=new EditText(this);
+        lead.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        lead.setText(Integer.toString(cfg.lead));
+        form.addView(text("Przygotowanie przed zimą • ile dni? (1–90)",14,true));
+        form.addView(lead);
+        CheckBox first=new CheckBox(this);
+        first.setText("Przypomnij w dniu przygotowań");
+        first.setChecked(cfg.remindStart);
+        CheckBox dayBefore=new CheckBox(this);
+        dayBefore.setText("Przypomnij dzień wcześniej");
+        dayBefore.setChecked(cfg.remindBefore);
+        form.addView(first);form.addView(dayBefore);
+        lightDialogForm(form);
+        new AlertDialog.Builder(this).setTitle("❄ Ustawienia sezonu")
+            .setView(form).setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",(d,w)->{
+                try {
+                    String[]p=start.getText().toString().split("-");
+                    FrostStore.saveSettings(db.getWritableDatabase(),
+                        Integer.parseInt(p[0]),Integer.parseInt(p[1]),
+                        Integer.parseInt(lead.getText().toString()),
+                        first.isChecked(),dayBefore.isChecked());
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("FROST_SETTINGS_UPDATED");
+                    showFrostPreparation();
+                }catch(Exception e){alert("Nie zapisano dat: "+e.getMessage());}
+            }).show();
+    }
+
     private void tasks() {
         header("Czynności • plan i wykonania");
 
@@ -6310,6 +6396,7 @@ public final class MainActivity extends Activity {
         compactAction(row3, "+ Nowa czynność",
             () -> editTask(null, "", "", "once", 1));
         compactAction(row3, "▦ Kalendarz", () -> go("calendar"));
+        button("❄ Przygotowanie do zimy",this::showFrostPreparation);
 
         note("Zaległe: " + db.overdueTasks()
             + " • wykonanie cyklicznej wyznacza kolejny termin.");
@@ -9258,6 +9345,10 @@ public final class MainActivity extends Activity {
                     + tasks.getInt(0), 13, false));
         }
         box.addView(text("Podmiejsca: " + childCount, 13, false));
+        if(FrostStore.placeRisk(db.getReadableDatabase(),entry.id))
+            box.addView(text("❄ Narażone na mróz"+
+                (FrostStore.explicitRisk(db.getReadableDatabase(),entry.id)
+                    ?"":" • odziedziczone"),13,true));
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         box.addView(actions);
@@ -9369,6 +9460,13 @@ public final class MainActivity extends Activity {
         type.setHintTextColor(subdued);
         type.setHint("np. pomieszczenie, półka, szafka, regał");
         layout.addView(type);
+        CheckBox frostRisk=new CheckBox(this);
+        frostRisk.setText("❄ Narażone na mróz");
+        frostRisk.setTextColor(ink);
+        frostRisk.setButtonTintList(ColorStateList.valueOf(accent));
+        frostRisk.setChecked(id!=null&&FrostStore.explicitRisk(
+            db.getReadableDatabase(),id));
+        layout.addView(frostRisk);
         layout.addView(text("Ikona", 16, true));
         Spinner icon = new Spinner(this);
         icon.setAdapter(themeSpinnerAdapter(
@@ -9450,7 +9548,7 @@ public final class MainActivity extends Activity {
                     }
                     try {
                         if (!db.savePlace(id, value, category,
-                                parentId, iconId)) {
+                                parentId, iconId,frostRisk.isChecked())) {
                             input.setError("Ta nazwa już istnieje w "
                                 + "wybranej lokalizacji.");
                             return;
@@ -10681,6 +10779,7 @@ public final class MainActivity extends Activity {
 
                 Bitmap thumbnail=StorageThumbs.read(prefs,item.id);
                 if(thumbnail!=null)bindStorageThumbnailPeek(tile,thumbnail);
+                if(item.protectFrost)tile.addView(text("❄",16,true));
                 if(thumbnail!=null) {
                     ImageView image=new ImageView(this);
                     image.setImageBitmap(thumbnail);
@@ -10747,6 +10846,7 @@ public final class MainActivity extends Activity {
             details.addView(image,new LinearLayout.LayoutParams(-1,dp(220)));
         }
         details.addView(storageKindText("thing",item.name,20,true));
+        if(item.protectFrost)details.addView(text("❄ Chronić przed mrozem",14,true));
         TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
             .replace(" / "," → "),13,false);
         where.setTextColor(subdued);
@@ -11015,6 +11115,9 @@ public final class MainActivity extends Activity {
             summary.addView(info,ip);
             if(!isBox)info.addView(storageKindText(
                 "thing","◉ "+item.name,16,true));
+            if(item.protectFrost||isBox
+                    &&FrostStore.sensitive(db.getReadableDatabase(),item.id))
+                info.addView(text("❄ Chronić przed mrozem",12,true));
             TextView location=text(
                 StorageStore.location(db.getReadableDatabase(),item),12,false);
             location.setTextColor(subdued);
@@ -12623,6 +12726,22 @@ public final class MainActivity extends Activity {
 
     private boolean applyStorageDestination(long itemId,String targetKind,long targetId,
             String source) {
+        return applyStorageDestination(itemId,targetKind,targetId,source,false);
+    }
+
+    private void withFrostPlacementWarning(boolean risky,Runnable move){
+        if(!risky){move.run();return;}
+        new AlertDialog.Builder(this)
+            .setTitle("❄ Ostrzeżenie przed mrozem")
+            .setMessage("Rzecz lub zawartość pudełka wymaga ochrony przed mrozem, "
+                +"a lokalizacja docelowa jest narażona. Przenieść mimo ryzyka?")
+            .setNegativeButton("Wybierz inne miejsce",null)
+            .setPositiveButton("Przenieś mimo ryzyka",(d,w)->move.run())
+            .show();
+    }
+
+    private boolean applyStorageDestination(long itemId,String targetKind,long targetId,
+            String source,boolean frostConfirmed) {
         StorageStore.Item moving=StorageStore.find(db.getReadableDatabase(),itemId);
         if(moving==null) {
             alert("Rzecz albo pudełko już nie istnieje.");
@@ -12663,6 +12782,12 @@ public final class MainActivity extends Activity {
             if(isQuickThingBatchTarget(itemId))
                 quickThingBatchAdvance(itemId,source);
             return true;
+        }
+        if(!frostConfirmed&&FrostStore.moveRisk(db.getReadableDatabase(),itemId,
+                nextBox,nextPlace)) {
+            withFrostPlacementWarning(true,()->
+                applyStorageDestination(itemId,targetKind,targetId,source,true));
+            return false;
         }
         try {
             if("box".equals(targetKind))
@@ -12740,49 +12865,56 @@ public final class MainActivity extends Activity {
         layout.addView(text("Położenie (rzeczy w pudełku dziedziczą jego miejsce)",
             14,false));
         layout.addView(destination);
+        CheckBox protect=new CheckBox(this);
+        protect.setText("❄ Chronić przed mrozem");
+        protect.setTextColor(ink);
+        protect.setButtonTintList(ColorStateList.valueOf(accent));
+        protect.setChecked(existing!=null&&existing.protectFrost);
+        layout.addView(protect);
         lightDialogForm(layout);
         new AlertDialog.Builder(this)
             .setTitle(existing==null?"Dodaj do magazynu":"Przenieś")
             .setView(layout).setNegativeButton("Anuluj",null)
             .setPositiveButton(existing==null?"Dodaj":"Przenieś",(d,w)->{
-                try{
-                    int i=destination.getSelectedItemPosition();
-                    long createdId=0L;
-                    String createdName=name.getText().toString().trim();
-                    Long selectedBox=boxIds.get(i);
-                    Long selectedPlace=placeIds.get(i);
-                    if(existing==null)createdId=StorageStore.create(
-                        db.getWritableDatabase(),createdName,kind,
-                        selectedBox,selectedPlace);
-                    else {
-                        if(StorageStore.sameDestination(
-                                existing,selectedBox,selectedPlace)) {
-                            alert("Już znajduje się tutaj.");
-                            return;
+                int index=destination.getSelectedItemPosition();
+                Long box=boxIds.get(index),place=placeIds.get(index);
+                boolean changed=existing==null||!StorageStore.sameDestination(
+                    existing,box,place);
+                boolean sensitive=protect.isChecked()||(existing!=null
+                    &&"box".equals(existing.kind)
+                    &&FrostStore.sensitive(db.getReadableDatabase(),existing.id));
+                boolean risk=changed&&sensitive&&FrostStore.riskAtDestination(
+                    db.getReadableDatabase(),box,place);
+                withFrostPlacementWarning(risk,()->{
+                    try {
+                        long createdId=0L;
+                        String createdName=name.getText().toString().trim();
+                        if(existing==null)
+                            createdId=StorageStore.create(db.getWritableDatabase(),
+                                createdName,kind,box,place);
+                        else if(changed)
+                            StorageStore.move(db.getWritableDatabase(),existing.id,box,place);
+                        FrostStore.setProtection(db.getWritableDatabase(),
+                            existing==null?createdId:existing.id,protect.isChecked());
+                        DiagnosticLog.event(existing==null?"STORAGE_CREATED":"STORAGE_EDITED");
+                        render();
+                        if(existing!=null)refreshQuickStorageSetupStatus(
+                            existing.kind,existing.id);
+                        if(existing==null) {
+                            final long targetId=createdId;
+                            new AlertDialog.Builder(this)
+                                .setTitle("box".equals(kind)?"Pudełko dodane":"Rzecz dodana")
+                                .setMessage("QR jest przypisany automatycznie.\n\nPrzypisać NFC?")
+                                .setNegativeButton("Później",null)
+                                .setPositiveButton("Przypisz NFC",(nd,nw)->
+                                    beginNfcAssignment(kind,targetId,createdName))
+                                .show();
                         }
-                        StorageStore.move(db.getWritableDatabase(),existing.id,
-                            selectedBox,selectedPlace);
+                    }catch(Exception problem) {
+                        DiagnosticLog.error("STORAGE_FROST_EDITOR",problem);
+                        alert(problem.getMessage()==null?"Nie zapisano rzeczy.":problem.getMessage());
                     }
-                    DiagnosticLog.event(existing==null?
-                        "STORAGE_CREATED":"STORAGE_MOVED");
-                    render();
-                    if(existing!=null)
-                        refreshQuickStorageSetupStatus(existing.kind,existing.id);
-                    if(existing==null) {
-                        final long newId=createdId;
-                        final String newName=createdName;
-                        new AlertDialog.Builder(this)
-                            .setTitle("box".equals(kind)
-                                ?"Pudełko dodane":"Rzecz dodana")
-                            .setMessage("QR jest już przypisany automatycznie i "
-                                +"pozostaje unikalny dla tego obiektu.\n\n"
-                                +"Przypisać teraz tag NFC?")
-                            .setNegativeButton("Później",null)
-                            .setPositiveButton("Przypisz NFC",(nd,nw)->
-                                beginNfcAssignment(kind,newId,newName))
-                            .show();
-                    }
-                }catch(Exception problem){alert(problem.getMessage());}
+                });
             }).show();
     }
 
