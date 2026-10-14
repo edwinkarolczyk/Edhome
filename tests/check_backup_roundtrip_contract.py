@@ -14,7 +14,8 @@ originals=Path("app/src/main/java/com/edwinkarolczyk/edhome/StorageOriginals.jav
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
 definitions=ctx["table_defs"]
 manifest={table:re.findall(r'"([^"]+)"', columns) for table,columns in definitions}
-assert len(manifest)==54, "Nieoczekiwana liczba tabel backupu: "+str(len(manifest))
+assert len(manifest)==56, "Nieoczekiwana liczba tabel backupu: "+str(len(manifest))
+assert {"frost_settings", "frost_checks"}.issubset(manifest), "Brak tabel ochrony przed mrozem w kopii"
 assert {"budget_items","budget_occurrences","budget_recipients",
         "budget_credits","budget_history"}.issubset(manifest), (
     "Brak tabel budżetu w kopii zapasowej")
