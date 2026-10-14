@@ -36,7 +36,7 @@ for token in (
 ):
     assert token in main,token
 for token in (
-    "private static final int DB_VERSION = 46;",
+    "private static final int DB_VERSION = 47;",
     '"notes",\n            "goal_id"',
     'inputVersion < 27',
     '"vehicle_policies".equals(definition[0])',
