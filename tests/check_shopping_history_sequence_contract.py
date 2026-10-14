@@ -5,10 +5,15 @@ import sqlite3, re, json
 src=Path("app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text()
 text=src.split("database.beginTransaction();",1)[1].split(
     "private static void reserveQrIdentitySequences",1)[0]
-parts=re.findall(r'database\.execSQL\((.*?sqlite_sequence.*?)\);',text,re.S)
-assert len(parts)==2
-sql=["".join(json.loads(c) for c in re.findall(r'"(?:\\.|[^"\\])*"',part))
+# Czytaj osobne wywołania execSQL; komentarze i sąsiednie instrukcje
+# nie mogą zostać połączone, gdy dochodzi kolejne zapytanie migracji.
+parts=re.findall(
+    r'database\\.execSQL\\(((?:\\s*"(?:\\\\.|[^"\\\\])*"\\s*\\+?\\s*)+)\\);',
+    text,re.S)
+sql=["".join(json.loads(c) for c in re.findall(r'"(?:\\\\.|[^"\\\\])*"',part))
      for part in parts]
+sql=[statement for statement in sql if "sqlite_sequence" in statement]
+assert len(sql)==2
 assert "shopping_receipts" in sql[1] and "pantry_purchase_prices" in sql[1]
 assert text.index("database.insertOrThrow(definition[0], null, values);") < text.index(
     'database.execSQL("INSERT INTO sqlite_sequence')
