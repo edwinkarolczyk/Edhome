@@ -1,3 +1,9 @@
+## 2026-10-14 — Implementacja ochrony przed mrozem • gałąź beta
+
+- Android Beta **0.8.0.111 / 303**: schemat SQLite v47 (Miejsca, Rzeczy/Pudełka, ustawienia sezonu, roczne potwierdzenia), formularze i oznaczenia ❄, ostrzeżenia przed przeniesieniem także QR/NFC, widok Czynności z listą i ustawieniami 1.12/30 dni, powiadomienia lokalne uwzględniające ciszę nocną; rozszerzenie ZIP i LAN. **Status: CI w toku, potrzebne testy fizyczne**.
+- Desktop Beta **0.7.0.119**: formularze edycji flag, lista zimowa z postępem per rok, ustawienia sezonu, ostrzeżenia przy pojedynczym i zbiorczym przeniesieniu, ten sam model JSON i testy JUnit. **Status: CI w toku, pakiety do sprawdzenia**.
+- Nadal wymagany audyt: starszy ZIP 46→47, realny LAN w dwie strony, odbiór QR/NFC/galerii, brak kasowania historii, powiadomienia z włączonymi uprawnieniami. Main Stable bez zmian.
+
 ## 2026-10-13 — Desktop Beta 0.7.0.118: checkboxy i podgląd banku (P0)
 
 - **Kod:** `EdhomeDesktop.showBankEvidenceQueue` pokazuje tabelę na 100 nierozliczonych dowodów/stronę. Pierwsza kolumna checkboxów, zaznaczanie strony, jedno potwierdzenie masowego odrzucenia. Kliknięcie dowolnego wiersza pokazuje z boku/poniżej pełne informacje: bank, datę, kwotę, kierunek i opis. „Otwórz przelew” zachowuje dotychczasowe działania (dopasowanie, utworzenie pending, odrzucenie pojedynczego).

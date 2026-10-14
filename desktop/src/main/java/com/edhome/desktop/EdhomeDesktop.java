@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.118";
+    private static final String DESKTOP_VERSION = "0.7.0.119";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -947,20 +947,122 @@ public final class EdhomeDesktop extends JFrame {
         return null;
     }
 
+
+    private JComponent frostSection(JComponent original) {
+        JPanel wrapper=new JPanel(new BorderLayout(6,6));
+        JButton frost=actionButton("❄ Przygotowanie do zimy");
+        frost.addActionListener(e->showDesktopFrost());
+        JPanel toolbar=new JPanel(new FlowLayout(FlowLayout.LEFT));
+        toolbar.add(frost);
+        DesktopFrost.Settings cfg=DesktopFrost.settings(snapshot);
+        toolbar.add(new JLabel("Termin: "+DesktopFrost.due(cfg,LocalDate.now().getYear())));
+        wrapper.add(toolbar,BorderLayout.NORTH);
+        wrapper.add(original,BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private void showDesktopFrost() {
+        int year=LocalDate.now().getYear();
+        DesktopFrost.Settings cfg=DesktopFrost.settings(snapshot);
+        java.util.List<DesktopFrost.Entry> rows=DesktopFrost.entries(snapshot,year);
+        int pending=0;for(DesktopFrost.Entry entry:rows)if(!entry.done)pending++;
+        JLabel count=new JLabel("Termin: "+DesktopFrost.due(cfg,year)
+            +"   Do zabezpieczenia: "+pending+" z "+rows.size());
+        javax.swing.table.AbstractTableModel model=new javax.swing.table.AbstractTableModel() {
+            private final boolean[] checked=new boolean[rows.size()];
+            {
+                for(int i=0;i<rows.size();i++)checked[i]=rows.get(i).done;
+            }
+            public int getRowCount(){return rows.size();}
+            public int getColumnCount(){return 4;}
+            public String getColumnName(int col){
+                return new String[]{"Gotowe","Rzecz / pudełko","Położenie","Stan"}[col];
+            }
+            public Class<?> getColumnClass(int col){
+                return col==0?Boolean.class:String.class;
+            }
+            public boolean isCellEditable(int row,int col){return col==0;}
+            public Object getValueAt(int row,int col){
+                DesktopFrost.Entry item=rows.get(row);
+                if(col==0)return checked[row];
+                if(col==1)return (item.box?"📦 ":"")+item.name;
+                if(col==2)return item.place;
+                return checked[row]?"Zabezpieczono":"Do zabezpieczenia";
+            }
+            public void setValueAt(Object value,int row,int col) {
+                if(col!=0)return;
+                boolean done=Boolean.TRUE.equals(value);
+                try {
+                    DesktopFrost.check(snapshot,year,rows.get(row).id,done);
+                    checked[row]=done;
+                    fireTableRowsUpdated(row,row);
+                    int left=0;for(boolean flag:checked)if(!flag)left++;
+                    count.setText("Termin: "+DesktopFrost.due(cfg,year)
+                        +"   Do zabezpieczenia: "+left+" z "+rows.size());
+                    markDirty();
+                }catch(Exception error){JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                    "Nie zapisano pozycji: "+rootMessage(error));}
+            }
+        };
+        JTable table=new JTable(model);
+        table.setRowHeight(28);
+        table.getColumnModel().getColumn(0).setMaxWidth(75);
+        table.getColumnModel().getColumn(1).setPreferredWidth(260);
+        table.getColumnModel().getColumn(2).setPreferredWidth(400);
+        JPanel panel=new JPanel(new BorderLayout(6,6));
+        panel.add(count,BorderLayout.NORTH);
+        JScrollPane scroll=new JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(790,350));
+        panel.add(scroll,BorderLayout.CENTER);
+        if(rows.isEmpty())panel.add(new JLabel(
+            "Zaznacz „Chronić przed mrozem” na rzeczy lub pudełku."),BorderLayout.SOUTH);
+        Object[]buttons={"⚙ Ustawienia sezonu","Zamknij"};
+        int choice=JOptionPane.showOptionDialog(this,panel,
+            "Czynności • Przed zimą • "+year,JOptionPane.DEFAULT_OPTION,
+            JOptionPane.PLAIN_MESSAGE,null,buttons,buttons[1]);
+        if(choice==0)showDesktopFrostSettings();
+    }
+
+    private void showDesktopFrostSettings() {
+        DesktopFrost.Settings cfg=DesktopFrost.settings(snapshot);
+        JSpinner month=new JSpinner(new SpinnerNumberModel(cfg.month,1,12,1));
+        JSpinner day=new JSpinner(new SpinnerNumberModel(cfg.day,1,28,1));
+        JSpinner lead=new JSpinner(new SpinnerNumberModel(cfg.lead,1,90,1));
+        JCheckBox first=new JCheckBox("Przypomnij w dniu przygotowań",cfg.first);
+        JCheckBox before=new JCheckBox("Przypomnij dzień wcześniej",cfg.before);
+        JPanel p=new JPanel(new GridLayout(0,2,6,6));
+        p.add(new JLabel("Początek zimy • miesiąc"));p.add(month);
+        p.add(new JLabel("Dzień"));p.add(day);
+        p.add(new JLabel("Przygotowanie • dni wcześniej"));p.add(lead);
+        p.add(first);p.add(before);
+        if(JOptionPane.showConfirmDialog(this,p,"Terminy zimowe",
+                JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE)
+                !=JOptionPane.OK_OPTION)return;
+        try{
+            DesktopFrost.updateSettings(snapshot,(Integer)month.getValue(),
+                (Integer)day.getValue(),(Integer)lead.getValue(),
+                first.isSelected(),before.isSelected());
+            markDirty();
+            showSection(current);
+        }catch(Exception e){JOptionPane.showMessageDialog(this,
+            "Nie zapisano terminów: "+rootMessage(e));}
+    }
+
     private JComponent section(String name) {
         if ("Pulpit".equals(name)) return dashboard();
         if ("Dzisiaj".equals(name)) return today();
-        if ("Kalendarz".equals(name)) return calendar();
+        if ("Kalendarz".equals(name)) return frostSection(calendar());
         if ("Zadania".equals(name)) return tablePage("Zadania", "tasks",
             cols("Tytuł","title","Termin","due_date","Priorytet","priority",
                  "Wykonane","done","Osoba","assignee_id"));
-        if ("Czynności".equals(name)) return tablePage("Czynności", "tasks",
+        if ("Czynności".equals(name)) return frostSection(tablePage("Czynności", "tasks",
             cols("Nazwa","title","Typ","task_kind","Powtarzanie","repeat_rule",
-                 "Co ile","repeat_every","Miejsce","place_id"));
+                 "Co ile","repeat_every","Miejsce","place_id")));
         if ("Projekty".equals(name)) return desktopProjects();
-        if ("Magazyn".equals(name)) return tablePage("Magazyn", "storage_items",
+        if ("Magazyn".equals(name)) return frostSection(tablePage("Magazyn", "storage_items",
             cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
-                 "Miejsce","place_id","Wypożyczone","lent_to"));
+                 "Miejsce","place_id","Wypożyczone","lent_to",
+                 "Chronić przed mrozem","protect_frost")));
         if ("Pomieszczenia".equals(name)) return rooms();
         if ("Mapa".equals(name)) return floorMap();
         if ("Spiżarnia".equals(name)) return tablePage("Spiżarnia", "pantry",
@@ -982,8 +1084,9 @@ public final class EdhomeDesktop extends JFrame {
         if ("SUPLA".equals(name)) return placeholderPage("SUPLA",
             "Miejsce na podgląd pralki, suszarki i automatyki domowej. "
             + "W pierwszym desktop MVP integracja nie odpytuje jeszcze SUPLA.");
-        if ("Miejsca".equals(name)) return tablePage("Miejsca", "places",
-            cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id"));
+        if ("Miejsca".equals(name)) return frostSection(tablePage("Miejsca", "places",
+            cols("Nazwa","name","Typ","kind","Nadrzędne","parent_id",
+                 "Narażone na mróz","frost_risk")));
         if ("Skaner".equals(name)) return scanner();
         return settings();
     }
@@ -7309,6 +7412,21 @@ public final class EdhomeDesktop extends JFrame {
                 validateDesktopStorageRow(row);
             }
 
+            int frostWarnings=0;
+            for(JsonObject row:selected)
+                if(DesktopFrost.riskyDestination(snapshot,row))frostWarnings++;
+            if(frostWarnings>0){
+                int accepted=JOptionPane.showConfirmDialog(this,
+                    "❄ "+frostWarnings+" pozycji może ucierpieć przez mróz. "
+                        +"Przenieść mimo ryzyka?",
+                    "Ostrzeżenie o mrozie",JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+                if(accepted!=JOptionPane.YES_OPTION){
+                    for(java.util.Map.Entry<JsonObject,JsonObject> previous:before.entrySet())
+                        restoreJsonObject(previous.getKey(),previous.getValue());
+                    return;
+                }
+            }
             for (JsonObject row : selected) {
                 JsonObject old = before.get(row);
                 boolean moved = !value(old, "parent_box_id").equals(
@@ -8392,6 +8510,7 @@ public final class EdhomeDesktop extends JFrame {
             row.add("lent_to", com.google.gson.JsonNull.INSTANCE);
             row.add("lent_at", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("created_at", now);
+            row.addProperty("protect_frost",0);
             return row;
         }
         if ("vehicles".equals(tableName)) {
@@ -8412,6 +8531,7 @@ public final class EdhomeDesktop extends JFrame {
             row.addProperty("kind", "");
             row.add("parent_id", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("icon", "places");
+            row.addProperty("frost_risk",0);
             return row;
         }
         return null;
@@ -8825,6 +8945,18 @@ public final class EdhomeDesktop extends JFrame {
                 if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())
                     throw new IllegalArgumentException(
                         "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
+                if(storageRowLive&&moved
+                        &&DesktopFrost.riskyDestination(snapshot,row)) {
+                    int accepted=JOptionPane.showConfirmDialog(this,
+                        "❄ Rzecz lub pudełko wymaga ochrony, a docelowe "
+                            +"miejsce jest narażone na mróz.\nPrzenieść mimo ryzyka?",
+                        "Uwaga na mróz",JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+                    if(accepted!=JOptionPane.YES_OPTION){
+                        restoreJsonObject(row,before);
+                        return false;
+                    }
+                }
                 if(storageRowLive&&moved)
                     appendDesktopStorageMove(row,before);
             }
@@ -9021,6 +9153,7 @@ public final class EdhomeDesktop extends JFrame {
     private java.util.List<Choice> choicesFor(String key, JsonObject row) {
         java.util.List<Choice> out = new ArrayList<>();
         if ("done".equals(key) || "checked".equals(key)
+                || "frost_risk".equals(key) || "protect_frost".equals(key)
                 || "mounted".equals(key) || "current".equals(key)) {
             out.add(new Choice("0", "Nie"));
             out.add(new Choice("1", "Tak"));
@@ -9148,6 +9281,7 @@ public final class EdhomeDesktop extends JFrame {
 
     private static boolean isNumericKey(String key) {
         return "done".equals(key) || "checked".equals(key)
+            || "frost_risk".equals(key) || "protect_frost".equals(key)
             || "repeat_every".equals(key) || "duration_minutes".equals(key)
             || "qty".equals(key) || "qty_milli".equals(key)
             || "amount_grosz".equals(key) || "mileage".equals(key)
