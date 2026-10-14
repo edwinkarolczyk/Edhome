@@ -95,7 +95,7 @@ for token in (
     assert token in main,token
 
 for token in (
-    'private static final int DB_VERSION = 46;',
+    'private static final int DB_VERSION = 47;',
     '{"bank_evidence_queue", "id", "evidence_key"',
     'inputVersion < 34 && "bank_evidence_queue".equals(definition[0])',
     '"bank_evidence_queue".equals(definition[0])',
