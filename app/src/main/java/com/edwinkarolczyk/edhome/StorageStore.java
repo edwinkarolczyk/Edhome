@@ -319,7 +319,7 @@ final class StorageStore {
                     cursor.getString(2),
                     cursor.isNull(3)?null:cursor.getLong(3),
                     cursor.isNull(4)?null:cursor.getLong(4),
-                    cursor.getString(5));
+                    cursor.getString(5),cursor.getInt(6)==1);
                 items.put(item.id,item);
             }
         }

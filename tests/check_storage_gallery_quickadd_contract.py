@@ -52,7 +52,8 @@ assert 'STORAGE_GALLERY_BATCH' in main
 assert 'StorageStore.locations(db.getReadableDatabase(),things)' in main
 assert 'renderStorageGalleryGrid(grid,things,\"\")' not in main
 assert 'static Map<Long,String> locations(SQLiteDatabase db,List<Item> targets)' in store
-assert 'SELECT id,name,kind,parent_box_id,place_id,lent_to FROM storage_items' in store
+assert 'SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost FROM storage_items' in store
+assert re.search(r'cursor\.getString\(5\)\s*,\s*cursor\.getInt\(6\)\s*==\s*1',store)
 assert 'SELECT id,name,parent_id FROM places' in store
 assert 'for(int slot=0;slot<3;slot++)' in main
 assert 'if("thing".equals(storageTemporaryKind)) {' in main
