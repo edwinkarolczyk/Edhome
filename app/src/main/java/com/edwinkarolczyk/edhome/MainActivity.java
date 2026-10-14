@@ -7444,6 +7444,14 @@ public final class MainActivity extends Activity {
             }
         }
 
+        FrostStore.Settings frostCfg=FrostStore.settings(db.getReadableDatabase());
+        LocalDate frostDue=FrostStore.due(frostCfg,month.getYear());
+        if(!frostDue.isBefore(gridStart)&&!frostDue.isAfter(gridEnd)
+                &&FrostStore.pending(db.getReadableDatabase(),month.getYear())>0)
+            events.computeIfAbsent(frostDue.toString(),
+                key->new java.util.ArrayList<>()).add(
+                    new String[]{"❄ Zabezpiecz przed mrozem","frost"});
+
         LinearLayout headings = new LinearLayout(this);
         headings.setOrientation(LinearLayout.HORIZONTAL);
         headings.setGravity(Gravity.CENTER_VERTICAL);
@@ -7525,6 +7533,10 @@ public final class MainActivity extends Activity {
                         bar.setTextSize(8);
                         bar.setContentDescription(event[0] + ", " + iso);
                         bar.setOnClickListener(v -> {
+                            if("frost".equals(event[1])) {
+                                showFrostPreparation();
+                                return;
+                            }
                             calendarDay = iso;
                             calendarMonth = YearMonth.from(day).toString();
                             calendarView = "day";
@@ -7589,6 +7601,7 @@ public final class MainActivity extends Activity {
             return;
         }
         header("Kalendarz • czynności i pojazdy");
+        button("❄ Przed zimą • lista zabezpieczeń",this::showFrostPreparation);
         note(month.getMonth().getDisplayName(TextStyle.FULL_STANDALONE,
             new Locale("pl", "PL")) + " " + month.getYear());
         LinearLayout views = new LinearLayout(this);
