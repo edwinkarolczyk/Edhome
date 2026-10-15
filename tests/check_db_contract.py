@@ -131,7 +131,7 @@ project40 = statements(section(project_store, "static void create(SQLiteDatabase
 project41 = statements(section(project_store, "static void upgrade41(SQLiteDatabase db)",
                                "static void upgrade43(").replace("db.execSQL(", "database.execSQL("))
 project43 = statements(section(project_store, "static void upgrade43(SQLiteDatabase db)",
-                               "static Project find(").replace("db.execSQL(", "database.execSQL("))
+                               "static void upgrade48(").replace("db.execSQL(", "database.execSQL("))
 user42 = statements(section(user_profile_store, "static void create(SQLiteDatabase db)",
                              "static void ensureAll").replace("db.execSQL(", "database.execSQL("))
 step42 = user42.copy()
