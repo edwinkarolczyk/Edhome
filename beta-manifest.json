@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 304,
-  "versionName": "0.8.0.112",
-  "changelog": "EDHOME Beta 0.8.0.112 — P0: poprawione przywracanie starszych kopii ZIP/JSON SQLite v45/v46 w schemacie v47. Domyślna konfiguracja ochrony przed mrozem po starym archiwum, selektywny import kategorii na nowej bazie i ochrona aktualnych danych zimowych przed skasowaniem. Bez zmian gałęzi Stable.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.112/edhome-beta.apk",
-  "sha256": "11ee8ab5f74f091a65129e58fbb011cbea6801f79e53d7a6f2c4fde592118e03"
+  "versionCode": 305,
+  "versionName": "0.8.0.113",
+  "changelog": "EDHOME Beta 0.8.0.113 — jeden skrót Szybka czynność pod ikoną aplikacji Android Beta. Krótki formularz nazwy i terminu, zapis w Czynnościach z przypomnieniami; bez drugiej ikony. Bez zmian gałęzi Stable.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.113/edhome-beta.apk",
+  "sha256": "6cec4c9cf361a0b2767333336708848fc82e1843c9776010e094a26e25527d0a"
 }
