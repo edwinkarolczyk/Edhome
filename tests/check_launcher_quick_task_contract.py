@@ -40,7 +40,7 @@ form=Path("app/src/main/java/com/edwinkarolczyk/edhome/QuickTaskShortcut.java").
 for token in ("root.post(() -> openLauncherQuickTask(getIntent()));",
               "if (openLauncherQuickTask(intent)) return;",
               "intent.setAction(Intent.ACTION_MAIN);",
-              'db.saveTask(null, title, due, "once", 1,',
+              'db.saveTask(null,title,due,"once",1,',
               "ReminderReceiver.schedule(this);",
               'DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");'):
     assert token in main, token
