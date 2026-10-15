@@ -144,7 +144,7 @@ public final class MainActivity extends Activity {
         if (launcherQuickTaskDialog != null && launcherQuickTaskDialog.isShowing())
             return true;
         launcherQuickTaskDialog = QuickTaskShortcut.show(this, minutes -> {
-            final long member=selectedMemberId;
+            final long member=activeMemberId();
             if(member<=0)return java.util.Collections.emptyList();
             return TimeSuggestions.proposeFreeDays(java.time.LocalDateTime.now(),
                 minutes,
@@ -170,7 +170,7 @@ public final class MainActivity extends Activity {
         }, (title,due,minutes,reminder) -> {
             db.saveTask(null,title,due,"once",1,
                 null,"normal",minutes,
-                selectedMemberId>0?selectedMemberId:null,reminder,0,
+                activeMemberId()>0?activeMemberId():null,reminder,0,
                 new java.util.ArrayList<>(),null);
             ReminderReceiver.schedule(this);
             DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");

@@ -51,7 +51,7 @@ for token in ('"Dzisiaj","Jutro","Bez terminu",',
               "title.requestFocus();", "SOFT_INPUT_STATE_ALWAYS_VISIBLE"):
     assert token in form,token
 gradle=Path("app/build.gradle").read_text(encoding="utf-8")
-assert "versionCode 307" in gradle and "versionName '0.8.0.115'" in gradle
+assert "versionCode 308" in gradle and "versionName '0.8.0.116'" in gradle
 scanner=Path("app/src/beta/java/com/edwinkarolczyk/edhome/NfcShortcutScannerActivity.java").read_text(encoding="utf-8")
 for token in (
     "NfcAdapter.getDefaultAdapter(this)", "adapter.isEnabled()",
@@ -69,3 +69,6 @@ assert "SELECT 1 FROM tasks WHERE done=0 AND due_date=? LIMIT 1" in main
 assert 'SELECT 1 FROM device_timers WHERE start_at<? AND end_at>?' in main
 assert "interface BusyDaySource" in Path("app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java").read_text(encoding="utf-8")
 print("Szybka czynność: trzy propozycje wolnych dni, grafik i przypomnienie OK")
+
+assert "final long member=activeMemberId();" in main
+assert "selectedMemberId>0?selectedMemberId:null,reminder,0" not in main
