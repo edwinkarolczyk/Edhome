@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 305,
-  "versionName": "0.8.0.113",
+  "versionCode": 306,
+  "versionName": "0.8.0.114",
   "changelog": "EDHOME Beta 0.8.0.113 — jeden skrót Szybka czynność pod ikoną aplikacji Android Beta. Krótki formularz nazwy i terminu, zapis w Czynnościach z przypomnieniami; bez drugiej ikony. Bez zmian gałęzi Stable.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.113/edhome-beta.apk",
-  "sha256": "6cec4c9cf361a0b2767333336708848fc82e1843c9776010e094a26e25527d0a"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.114/edhome-beta.apk",
+  "sha256": "bb9e764cd371d1704a0c76cc4de4d6236623cf783af3943e06138b032bec4201"
 }
