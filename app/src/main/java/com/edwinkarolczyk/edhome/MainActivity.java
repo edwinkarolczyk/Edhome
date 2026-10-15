@@ -5473,25 +5473,23 @@ public final class MainActivity extends Activity {
                     +"pracę jako przekroczenie.",12,false));
 
             check.setOnCheckedChangeListener((v,value)->{
-                if(value&&(ProjectStore.openDependencyCount(
-                        db.getReadableDatabase(),taskId)>0
-                        ||ProjectPlanningStore.openHardCount(
-                            db.getReadableDatabase(),taskId)>0)) {
-                    check.setChecked(false);
-                    showProjectBlockedDialog(taskId,taskName);
+                if(!value) {
+                    check.setOnCheckedChangeListener(null);
+                    check.setChecked(true);
+                    requestReopenTask(taskId);
                     return;
                 }
-                if(value&&ProjectStore.activeWorkStartedAt(
-                        db.getReadableDatabase(),taskId)!=null) {
+                try {
+                    db.completeTask(taskId);
+                    ReminderReceiver.schedule(this);
+                    DiagnosticLog.event("PROJECT_TASK_COMPLETED","task="+taskId);
+                    render();
+                } catch(Exception error) {
+                    check.setOnCheckedChangeListener(null);
                     check.setChecked(false);
-                    alert("Najpierw zatrzymaj pomiar czasu tej czynności.");
-                    return;
+                    alert(error.getMessage()==null
+                        ?"Nie można zakończyć czynności projektu.":error.getMessage());
                 }
-                if(value)db.completeTask(taskId);else db.reopenTask(taskId);
-                ReminderReceiver.schedule(this);
-                DiagnosticLog.event(value?"PROJECT_TASK_COMPLETED":
-                    "PROJECT_TASK_REOPENED","task="+taskId);
-                render();
             });
 
             LinearLayout work=compactActionRow();
@@ -5549,17 +5547,14 @@ public final class MainActivity extends Activity {
                 try(Cursor row=db.getReadableDatabase().rawQuery(
                         "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
                         new String[]{Long.toString(taskId)})) {
-                    if(row.moveToFirst())
+                    if(row.moveToFirst()) {
+                        taskEditorProjectPreset=project.id;
                         editTask(taskId,taskName,due,row.getString(0),row.getInt(1));
+                    }
                 }
             });
             if(done)
-                compactAction(editRow,"↶ Cofnij",()->{
-                    db.reopenTask(taskId);
-                    ReminderReceiver.schedule(this);
-                    DiagnosticLog.event("PROJECT_TASK_REOPENED","task="+taskId);
-                    render();
-                });
+                compactAction(editRow,"↶ Cofnij",()->requestReopenTask(taskId));
             compactAction(editRow,"Usuń",
                 ()->confirmDeleteProjectTask(taskId,taskName));
         }
@@ -6558,6 +6553,41 @@ public final class MainActivity extends Activity {
         container.addView(b,params);
     }
 
+    private void requestReopenTask(long taskId) {
+        java.util.List<ProjectStore.TaskRef> affected=
+            ProjectStore.completedDependents(db.getReadableDatabase(),taskId);
+        Runnable apply=()->{
+            try {
+                if(affected.isEmpty())db.reopenTask(taskId);
+                else db.reopenTaskCascade(taskId);
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event("TASK_REOPENED_WITH_DEPENDENTS",
+                    "task="+taskId+" affected="+affected.size());
+                render();
+            } catch(Exception error) {
+                alert(error.getMessage()==null
+                    ?"Nie udało się cofnąć czynności.":error.getMessage());
+                render();
+            }
+        };
+        if(affected.isEmpty()){apply.run();return;}
+        StringBuilder message=new StringBuilder(
+            "Od tej czynności zależą zakończone prace. "
+                +"Cofnięcie musi objąć również je, aby zachować kolejność prac:\n");
+        for(int i=0;i<Math.min(5,affected.size());i++)
+            message.append("\n• ").append(affected.get(i).title);
+        if(affected.size()>5)
+            message.append("\n• +").append(affected.size()-5).append(" kolejnych");
+        message.append("\n\nHistoria poprzednich wykonań pozostanie zachowana.");
+        new AlertDialog.Builder(this)
+            .setTitle("Cofnąć powiązane wykonania?")
+            .setMessage(message.toString())
+            .setNegativeButton("Anuluj",(dialog,which)->render())
+            .setPositiveButton("Cofnij razem",(dialog,which)->apply.run())
+            .setOnCancelListener(ignored->render())
+            .show();
+    }
+
     private void drawTask(long id, String name, boolean done, String due,
             String rule, int every) {
         LinearLayout box = card();
@@ -6597,15 +6627,23 @@ public final class MainActivity extends Activity {
         meta.setTextColor(subdued);
         box.addView(meta);
         check.setOnCheckedChangeListener((v, value) -> {
-            if (value) {
+            if(!value) {
+                check.setOnCheckedChangeListener(null);
+                check.setChecked(true);
+                requestReopenTask(id);
+                return;
+            }
+            try {
                 db.completeTask(id);
                 DiagnosticLog.event("TASK_COMPLETED");
-            } else {
-                db.reopenTask(id);
-                DiagnosticLog.event("TASK_REOPENED");
+                ReminderReceiver.schedule(this);
+                render();
+            } catch(Exception error) {
+                check.setOnCheckedChangeListener(null);
+                check.setChecked(false);
+                alert(error.getMessage()==null
+                    ?"Nie można zakończyć tej czynności.":error.getMessage());
             }
-            ReminderReceiver.schedule(this);
-            render();
         });
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -6950,19 +6988,30 @@ public final class MainActivity extends Activity {
         form.addView(text("Projekt (opcjonalnie)",15,true));
         java.util.ArrayList<Long> projectIds=new java.util.ArrayList<>();
         java.util.ArrayList<String> projectNames=new java.util.ArrayList<>();
-        projectIds.add(null);
-        projectNames.add("Bez projektu");
+        final Long projectScope=taskEditorProjectPreset;
+        taskEditorProjectPreset=null;
+        final java.util.Set<Long> permittedProjects=projectScope==null
+            ?null:ProjectStore.descendantIds(db.getReadableDatabase(),projectScope);
+        if(projectScope==null) {
+            projectIds.add(null);
+            projectNames.add("Bez projektu");
+        } else {
+            form.addView(text("Wybierz bieżący projekt lub jego podprojekt. "
+                +"Inne projekty są niedostępne w tym formularzu.",12,false));
+        }
         try(Cursor projects=db.getReadableDatabase().rawQuery(
                 "SELECT id,name FROM projects ORDER BY name COLLATE NOCASE,id",null)) {
             while(projects.moveToNext()) {
-                projectIds.add(projects.getLong(0));
-                projectNames.add(projects.getString(1));
+                long candidate=projects.getLong(0);
+                if(permittedProjects!=null&&!permittedProjects.contains(candidate))
+                    continue;
+                projectIds.add(candidate);
+                projectNames.add(projectPath(candidate));
             }
         }
         Spinner chosenProject=new Spinner(this);
         chosenProject.setAdapter(themeSpinnerAdapter(projectNames));
-        Long initialProject=id==null?taskEditorProjectPreset:db.taskProjectId(id);
-        taskEditorProjectPreset=null;
+        Long initialProject=id==null?projectScope:db.taskProjectId(id);
         if(initialProject!=null)
             for(int i=1;i<projectIds.size();i++)
                 if(initialProject.equals(projectIds.get(i))) {
@@ -7140,6 +7189,12 @@ public final class MainActivity extends Activity {
                 }
                 Long selectedProjectId=projectIds.get(
                     chosenProject.getSelectedItemPosition());
+                if(permittedProjects!=null &&
+                        (selectedProjectId==null
+                            ||!permittedProjects.contains(selectedProjectId))) {
+                    alert("Wybierz projekt lub podprojekt z bieżącej gałęzi.");
+                    return;
+                }
                 if(id!=null) {
                     Long previousProject=db.taskProjectId(id);
                     boolean movingAcrossRoots=false;
@@ -7152,6 +7207,11 @@ public final class MainActivity extends Activity {
                             db.getReadableDatabase(),previousProject)
                             !=ProjectStore.rootProjectId(
                                 db.getReadableDatabase(),selectedProjectId);
+                    if(movingAcrossRoots&&previousProject!=null) {
+                        alert("Przeniesienie poza projekt główny jest niedozwolone. "
+                            +"Utwórz osobną czynność w innym projekcie.");
+                        return;
+                    }
                     if(movingAcrossRoots) {
                         try(Cursor dependencies=db.getReadableDatabase().rawQuery(
                                 "SELECT 1 FROM project_task_dependencies "
@@ -24658,6 +24718,14 @@ public final class MainActivity extends Activity {
                     "Aktualny wykonawca musi należeć do rotacji.");
             if (!java.util.Arrays.asList(TASK_PRIORITIES).contains(priority))
                 throw new IllegalArgumentException("Nieznany priorytet czynności.");
+            if(id!=null) {
+                Long currentProject=taskProjectId(id);
+                if(currentProject!=null&&(projectId==null
+                    ||ProjectStore.rootProjectId(getReadableDatabase(),currentProject)
+                        !=ProjectStore.rootProjectId(getReadableDatabase(),projectId)))
+                    throw new IllegalArgumentException(
+                        "Nie można przenieść czynności poza jej projekt główny.");
+            }
             int minimumMinutes=projectId==null
                 ?MIN_TASK_MINUTES:PROJECT_MIN_TASK_MINUTES;
             if (durationMinutes < minimumMinutes || durationMinutes > MAX_TASK_MINUTES)
@@ -24827,13 +24895,13 @@ public final class MainActivity extends Activity {
         void completeTask(long id) {
             SQLiteDatabase database = getWritableDatabase();
             database.beginTransaction();
-            if(ProjectStore.activeWorkStartedAt(database,id)!=null)
-                ProjectStore.stopWork(database,id);
             try (Cursor cursor = database.rawQuery(
                     "SELECT title,done,due_date,repeat_rule,repeat_every,assignee_id "
                     + "FROM tasks WHERE id=?",
                     new String[]{Long.toString(id)})) {
                 if (!cursor.moveToFirst() || cursor.getInt(1) != 0) return;
+                String block=ProjectStore.completionBlockReason(database,id);
+                if(!block.isEmpty())throw new IllegalArgumentException(block);
                 String title = cursor.getString(0);
                 String due = cursor.isNull(2) ? null : cursor.getString(2);
                 String rule = cursor.getString(3);
@@ -24883,10 +24951,38 @@ public final class MainActivity extends Activity {
         }
 
         void reopenTask(long id) {
+            SQLiteDatabase database=getWritableDatabase();
+            if(!ProjectStore.completedDependents(database,id).isEmpty())
+                throw new IllegalArgumentException(
+                    "Późniejsze czynności są już zakończone. Cofnij je razem.");
             ContentValues values = new ContentValues();
             values.put("done", 0);
-            getWritableDatabase().update("tasks", values,
-                "id=? AND repeat_rule='once'", new String[]{Long.toString(id)});
+            database.update("tasks",values,
+                "id=? AND repeat_rule='once'",new String[]{Long.toString(id)});
+        }
+
+        void reopenTaskCascade(long id) {
+            SQLiteDatabase database=getWritableDatabase();
+            database.beginTransaction();
+            try {
+                java.util.List<ProjectStore.TaskRef> dependents=
+                    ProjectStore.completedDependents(database,id);
+                java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+                ids.add(id);
+                for(ProjectStore.TaskRef task:dependents)ids.add(task.id);
+                ContentValues changed=new ContentValues();
+                changed.put("done",0);
+                for(Long taskId:ids) {
+                    if(database.update("tasks",changed,
+                            "id=? AND done=1 AND repeat_rule='once'",
+                            new String[]{Long.toString(taskId)})!=1)
+                        throw new IllegalArgumentException(
+                            "Nie można cofnąć jednej z powiązanych czynności. "
+                            +"Sprawdź stan zadań i spróbuj ponownie.");
+                }
+                // Historii wykonania nie kasujemy: pozostaje zapisem audytowym.
+                database.setTransactionSuccessful();
+            } finally {database.endTransaction();}
         }
 
         void deleteTask(long id) {

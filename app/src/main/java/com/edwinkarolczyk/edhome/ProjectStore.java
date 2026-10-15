@@ -503,6 +503,47 @@ final class ProjectStore {
         return "";
     }
 
+    static String completionBlockReason(SQLiteDatabase db,long taskId) {
+        if(taskProjectId(db,taskId)==null)return "";
+        String projectBlock=projectWorkBlockReason(db,taskId);
+        if(!projectBlock.isEmpty())return projectBlock;
+        if(openDependencyCount(db,taskId)>0)
+            return "Najpierw zakończ wcześniejsze czynności, od których zależy ta praca.";
+        String hardBlock=ProjectPlanningStore.startBlockReason(db,taskId);
+        if(!hardBlock.isEmpty())return hardBlock;
+        if(activeWorkStartedAt(db,taskId)!=null)
+            return "Najpierw zatrzymaj pomiar czasu tej czynności.";
+        return "";
+    }
+
+    /** Follow all descendants, including through not-yet-completed intermediate tasks. */
+    static List<TaskRef> completedDependents(SQLiteDatabase db,long taskId) {
+        ArrayList<TaskRef> completed=new ArrayList<>();
+        java.util.ArrayDeque<Long> pending=new java.util.ArrayDeque<>();
+        HashSet<Long> visited=new HashSet<>();
+        pending.add(taskId);
+        visited.add(taskId);
+        while(!pending.isEmpty()) {
+            long prerequisite=pending.removeFirst();
+            try(Cursor c=db.rawQuery(
+                    "SELECT t.id,t.project_id,t.title,t.done FROM project_task_dependencies d "
+                        +"JOIN tasks t ON t.id=d.task_id WHERE d.depends_on_task_id=? "
+                        +"ORDER BY t.id",
+                    new String[]{Long.toString(prerequisite)})) {
+                while(c.moveToNext()) {
+                    long id=c.getLong(0);
+                    if(!visited.add(id))continue;
+                    pending.addLast(id);
+                    if(c.getInt(3)!=0 && !c.isNull(1))
+                        completed.add(new TaskRef(id,c.getLong(1),c.getString(2)));
+                }
+            }
+            if(visited.size()>20000)
+                throw new IllegalStateException("Zbyt wiele powiązanych czynności.");
+        }
+        return Collections.unmodifiableList(completed);
+    }
+
     static long rootProjectId(SQLiteDatabase db,long projectId) {
         Project current=find(db,projectId);
         if(current==null)throw new IllegalArgumentException("Projekt nie istnieje.");

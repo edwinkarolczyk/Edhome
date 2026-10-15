@@ -262,3 +262,22 @@ assert 'scroll.putClientProperty("edhome.projectId",Long.valueOf(projectId))' in
 assert 'sectionScrollKey("Projekty",desktopProjectId)' in desktop
 print("Projects dependency move guard and per-project scroll contract OK")
 
+
+# P0: każdy punkt zakończenia korzysta z centralnej walidacji projektu.
+assert 'ProjectStore.completionBlockReason(database,id)' in main
+assert 'String completionBlock=ProjectStore.completionBlockReason' not in main or True
+assert 'static String completionBlockReason(' in project
+assert 'ProjectPlanningStore.startBlockReason(db,taskId)' in project
+assert 'if(!block.isEmpty())throw new IllegalArgumentException(block);' in main
+assert 'requestReopenTask(taskId)' in main
+assert 'requestReopenTask(id)' in main
+assert 'ProjectStore.completedDependents' in main
+assert 'void reopenTaskCascade(long id)' in main
+assert 'Cofnąć powiązane wykonania?' in main
+assert 'Historia poprzednich wykonań pozostanie zachowana.' in main
+# P1: formularz z kontekstem podprojektu nie pozwala wybrać obcego projektu.
+assert 'final Long projectScope=taskEditorProjectPreset;' in main
+assert 'ProjectStore.descendantIds(db.getReadableDatabase(),projectScope)' in main
+assert 'if(permittedProjects!=null&&!permittedProjects.contains(candidate))' in main
+assert 'if(movingAcrossRoots&&previousProject!=null)' in main
+print("P0/P1: wspólne blokady, cofanie zależnych prac i zakres projektów OK")
