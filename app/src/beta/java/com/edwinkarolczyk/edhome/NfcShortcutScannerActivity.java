@@ -20,13 +20,13 @@ public final class NfcShortcutScannerActivity extends Activity {
         "com.edwinkarolczyk.edhome.action.QUICK_NFC";
     private static final long SCAN_WINDOW_MS = 7_000L;
 
+    private boolean handled;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable timeout = () -> {
         if (!handled) finish();
     };
     private NfcAdapter adapter;
     private boolean armed;
-    private boolean handled;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
