@@ -299,3 +299,8 @@ assert 'static void deleteProjectTree' in project
 assert 'SyncRecordStore.ensureAll(db);' in project
 assert 'thumbnail_base64' in project and 'thumbnail_base64' in backup
 assert 'ProjectStore.upgrade48(database)' in main
+
+assert 'deleteDesktopProject(project)' in desktop
+assert 'desktopProjectThumbnailIcon' in desktop
+assert 'chooseDesktopProjectThumbnail' in desktop
+assert 'removeRowsByLong("project_costs","project_id",id);' in desktop

@@ -1101,11 +1101,15 @@ public final class EdhomeDesktop extends JFrame {
         JButton addProject = actionButton("＋ Projekt");
         JButton addSubproject = actionButton("＋ Podprojekt");
         JButton editProject = actionButton("Edytuj projekt");
+        JButton projectPhoto = actionButton("Miniaturka projektu");
+        JButton deleteProject = actionButton("Usuń projekt");
         JButton addTask = actionButton("＋ Czynność");
         JButton pasteTasks = actionButton("Wklej czynności");
         toolbar.add(addProject);
         toolbar.add(addSubproject);
         toolbar.add(editProject);
+        toolbar.add(projectPhoto);
+        toolbar.add(deleteProject);
         toolbar.add(addTask);
         toolbar.add(pasteTasks);
         root.add(toolbar,BorderLayout.NORTH);
@@ -1138,7 +1142,22 @@ public final class EdhomeDesktop extends JFrame {
         tree.setShowsRootHandles(true);
         tree.setBackground(APP_SURFACE);
         tree.setForeground(APP_TEXT);
-        tree.setRowHeight(24);
+        tree.setRowHeight(58);
+        tree.setCellRenderer(new javax.swing.tree.DefaultTreeCellRenderer(){
+            @Override public Component getTreeCellRendererComponent(
+                    JTree t,Object value,boolean selected,boolean expanded,
+                    boolean leaf,int row,boolean focus){
+                super.getTreeCellRendererComponent(t,value,selected,expanded,leaf,row,focus);
+                if(value instanceof javax.swing.tree.DefaultMutableTreeNode){
+                    Object data=((javax.swing.tree.DefaultMutableTreeNode)value).getUserObject();
+                    if(data instanceof DesktopProjectRef){
+                        ImageIcon icon=desktopProjectThumbnailIcon(((DesktopProjectRef)data).row,42);
+                        if(icon!=null)setIcon(icon);
+                    }
+                }
+                return this;
+            }
+        });
         tree.getSelectionModel().setSelectionMode(
             javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
 
@@ -1169,6 +1188,28 @@ public final class EdhomeDesktop extends JFrame {
                 if(tasks!=null)
                     tasks.getVerticalScrollBar().setValue(Math.max(0,previous));
             });
+        });
+
+        tree.addMouseListener(new java.awt.event.MouseAdapter(){
+            private void menu(java.awt.event.MouseEvent event){
+                if(!event.isPopupTrigger())return;
+                javax.swing.tree.TreePath path=tree.getPathForLocation(event.getX(),event.getY());
+                if(path==null)return;
+                tree.setSelectionPath(path);
+                Object data=((javax.swing.tree.DefaultMutableTreeNode)
+                    path.getLastPathComponent()).getUserObject();
+                if(!(data instanceof DesktopProjectRef))return;
+                JsonObject project=((DesktopProjectRef)data).row;
+                JPopupMenu popup=new JPopupMenu();
+                JMenuItem edit=new JMenuItem("Edytuj");
+                JMenuItem delete=new JMenuItem("Usuń");
+                edit.addActionListener(e->showDesktopProjectEditor(project,null));
+                delete.addActionListener(e->deleteDesktopProject(project));
+                popup.add(edit);popup.add(delete);
+                popup.show(tree,event.getX(),event.getY());
+            }
+            @Override public void mousePressed(java.awt.event.MouseEvent e){menu(e);}
+            @Override public void mouseReleased(java.awt.event.MouseEvent e){menu(e);}
         });
 
         if (desktopProjectId > 0 && nodes.containsKey(desktopProjectId)) {
@@ -1208,6 +1249,16 @@ public final class EdhomeDesktop extends JFrame {
                 return;
             }
             showDesktopProjectEditor(selected,null);
+        });
+        projectPhoto.addActionListener(e->{
+            JsonObject selected=desktopProjectById(desktopProjectId);
+            if(selected==null)JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+            else chooseDesktopProjectThumbnail(selected);
+        });
+        deleteProject.addActionListener(e->{
+            JsonObject selected=desktopProjectById(desktopProjectId);
+            if(selected==null)JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
+            else deleteDesktopProject(selected);
         });
         addTask.addActionListener(e -> addDesktopProjectTask(desktopProjectId));
         pasteTasks.addActionListener(e -> pasteDesktopProjectTasks(desktopProjectId));
@@ -1253,6 +1304,12 @@ public final class EdhomeDesktop extends JFrame {
         title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD,20f));
         head.add(title,BorderLayout.NORTH);
+        ImageIcon projectIcon=desktopProjectThumbnailIcon(project,76);
+        if(projectIcon!=null){
+            JLabel preview=new JLabel(projectIcon);
+            preview.setBorder(new EmptyBorder(0,0,0,12));
+            head.add(preview,BorderLayout.WEST);
+        }
         String due = value(project,"due_date");
         String budget = value(project,"budget_grosz");
         JLabel meta = new JLabel("<html>Status: <b>"
@@ -2056,6 +2113,114 @@ public final class EdhomeDesktop extends JFrame {
         showSection("Projekty");
         JOptionPane.showMessageDialog(this,
             "Dodano czynności: " + added + ". Domyślny czas: 30 min.");
+    }
+
+
+    /** Miniatury są zapisane w projekcie, więc wędrują przez ZIP i synchronizację. */
+    private ImageIcon desktopProjectThumbnailIcon(JsonObject project,int edge) {
+        String value=value(project,"thumbnail_base64");
+        if(value.isEmpty()||value.length()>360000)return null;
+        try {
+            byte[] data=Base64.getDecoder().decode(value);
+            if(data.length>256*1024)return null;
+            BufferedImage source=ImageIO.read(new ByteArrayInputStream(data));
+            if(source==null)return null;
+            double scale=Math.min(edge/(double)source.getWidth(),
+                edge/(double)source.getHeight());
+            int w=Math.max(1,(int)Math.round(source.getWidth()*scale));
+            int h=Math.max(1,(int)Math.round(source.getHeight()*scale));
+            return new ImageIcon(source.getScaledInstance(w,h,Image.SCALE_SMOOTH));
+        }catch(Exception invalid){return null;}
+    }
+
+    private void chooseDesktopProjectThumbnail(JsonObject project){
+        JFileChooser picker=new JFileChooser();
+        picker.setDialogTitle("Wybierz zdjęcie projektu");
+        if(picker.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        try {
+            Path path=picker.getSelectedFile().toPath();
+            if(Files.size(path)>12*1024*1024)
+                throw new IllegalArgumentException("Wybierz zdjęcie mniejsze niż 12 MB.");
+            BufferedImage image=ImageIO.read(path.toFile());
+            if(image==null)throw new IllegalArgumentException("To nie jest obsługiwane zdjęcie.");
+            double scale=Math.min(1.0,256.0/Math.max(image.getWidth(),image.getHeight()));
+            int w=Math.max(1,(int)Math.round(image.getWidth()*scale));
+            int h=Math.max(1,(int)Math.round(image.getHeight()*scale));
+            BufferedImage small=new BufferedImage(w,h,BufferedImage.TYPE_INT_RGB);
+            Graphics2D graphics=small.createGraphics();
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.drawImage(image,0,0,w,h,null);
+            graphics.dispose();
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            ImageIO.write(small,"jpg",bytes);
+            if(bytes.size()>256*1024)
+                throw new IllegalArgumentException("Nie udało się zmniejszyć zdjęcia.");
+            project.addProperty("thumbnail_base64",
+                Base64.getEncoder().encodeToString(bytes.toByteArray()));
+            markDirty();
+            showSection("Projekty");
+        }catch(Exception error){
+            JOptionPane.showMessageDialog(this,rootMessage(error),
+                "EDHOME • zdjęcie projektu",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /** Usuń całe drzewo, ale pozostaw samodzielne rzeczy/pudełka w Magazynie. */
+    private void deleteDesktopProject(JsonObject root){
+        long projectId=longValue(root,"id");
+        java.util.Set<Long> projects=new java.util.LinkedHashSet<>();
+        projects.add(projectId);
+        for(JsonElement element:table("projects")){
+            if(!element.isJsonObject())continue;
+            long candidate=longValue(element.getAsJsonObject(),"id");
+            if(desktopProjectDescendsFrom(candidate,projectId))projects.add(candidate);
+        }
+        java.util.Set<Long> tasks=new java.util.LinkedHashSet<>();
+        for(JsonElement element:table("tasks")){
+            if(!element.isJsonObject())continue;
+            JsonObject task=element.getAsJsonObject();
+            if(projects.contains(longValue(task,"project_id")))
+                tasks.add(longValue(task,"id"));
+        }
+        for(JsonElement element:table("project_task_work_sessions")){
+            if(!element.isJsonObject())continue;
+            JsonObject session=element.getAsJsonObject();
+            if(tasks.contains(longValue(session,"task_id"))
+                    &&value(session,"ended_at").isBlank()){
+                JOptionPane.showMessageDialog(this,
+                    "Najpierw zatrzymaj aktywny pomiar czasu w projekcie.");
+                return;
+            }
+        }
+        int answer=JOptionPane.showConfirmDialog(this,
+            "Usunąć projekt „"+value(root,"name")+"”?\n\n"
+                +"Usunięte zostaną także podprojekty ("+(projects.size()-1)
+                +"), czynności ("+tasks.size()
+                +"), koszty, wymagania, zależności i zapis czasu.\n"
+                +"Rzeczy i pudełka w Magazynie pozostaną bez zmian.\n"
+                +"Tej operacji nie można cofnąć.",
+            "Usuń projekt",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+        if(answer!=JOptionPane.YES_OPTION)return;
+        for(Long taskId:tasks){
+            removeRowsByLong("project_task_dependencies","task_id",taskId);
+            removeRowsByLong("project_task_dependencies","depends_on_task_id",taskId);
+            removeRowsByLong("project_task_work_sessions","task_id",taskId);
+            removeRowsByLong("project_task_blockers","task_id",taskId);
+            removeRowsByLong("task_rotation_members","task_id",taskId);
+            removeRowsByLong("task_history","task_id",taskId);
+            removeRowsByLong("tasks","id",taskId);
+        }
+        for(Long id:projects){
+            removeRowsByLong("project_resources","project_id",id);
+            removeRowsByLong("project_costs","project_id",id);
+            removeRowsByLong("projects","id",id);
+        }
+        desktopProjectId=0L;
+        markDirty();
+        DesktopDiagnosticLog.event("PROJECT_TREE_DELETED",
+            "id="+projectId+" projects="+projects.size()+" tasks="+tasks.size());
+        showSection("Projekty");
     }
 
     private void showDesktopProjectEditor(JsonObject existing,Long parentPreset) {
