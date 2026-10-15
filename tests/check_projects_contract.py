@@ -59,7 +59,7 @@ assert 'bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted)' in main
 assert 'view.postDelayed(refresh[0],1000L);' in main
 assert 'projectTimeRed()' in main and 'projectTimeYellow()' in main and 'projectTimeGreen()' in main
 assert 'addProjectTimeProgress(summary,stats);' in main
-assert 'addProjectTimeProgress(box,stats);' in main
+assert 'addProjectTimeProgress(info,stats);' in main
 assert 'stats.activeWork?projectTimeRed():projectTimeYellow()' in main
 assert 'boolean timeOverrun()' in project and 'int timePct()' in project
 assert 'Czas przekroczony, praca nadal trwa.' in main
