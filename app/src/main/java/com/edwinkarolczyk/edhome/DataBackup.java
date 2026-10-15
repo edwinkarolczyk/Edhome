@@ -35,7 +35,7 @@ final class DataBackup {
         {"household_members", "id", "name"},
         {"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"},
         {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
-            "status", "due_date", "budget_grosz", "created_at", "thumbnail_base64"},
+            "status", "due_date", "budget_grosz", "thumbnail_base64", "created_at"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"member_shift_hours", "id", "member_id", "shift", "start_time", "end_time"},
