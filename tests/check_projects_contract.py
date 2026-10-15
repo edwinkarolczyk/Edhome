@@ -281,3 +281,11 @@ assert 'ProjectStore.descendantIds(db.getReadableDatabase(),projectScope)' in ma
 assert 'if(permittedProjects!=null&&!permittedProjects.contains(candidate))' in main
 assert 'if(movingAcrossRoots&&previousProject!=null)' in main
 print("P0/P1: wspólne blokady, cofanie zależnych prac i zakres projektów OK")
+
+# Desktop: cofanie zakończonych zależności jest transakcyjną decyzją użytkownika w UI.
+assert "private java.util.List<JsonObject> desktopCompletedDependents(" in desktop
+assert 'Cofnąć zależne wykonania?' in desktop
+assert 'desktopCompletedDependents(id)' in desktop
+assert 'dependent.addProperty("done",0)' in desktop
+assert 'Historia wykonania pozostanie zachowana.' in desktop
+print("Desktop dependent completion undo cascade guard OK")

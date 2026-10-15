@@ -1895,6 +1895,32 @@ public final class EdhomeDesktop extends JFrame {
         showSection("Projekty");
     }
 
+    /** Walk the dependency graph also through unfinished intermediate tasks. */
+    private java.util.List<JsonObject> desktopCompletedDependents(long taskId) {
+        java.util.ArrayList<JsonObject> completed=new java.util.ArrayList<>();
+        java.util.ArrayDeque<Long> pending=new java.util.ArrayDeque<>();
+        java.util.HashSet<Long> visited=new java.util.HashSet<>();
+        pending.add(taskId);
+        visited.add(taskId);
+        while(!pending.isEmpty()) {
+            long prerequisite=pending.removeFirst();
+            for(JsonElement element:table("project_task_dependencies")) {
+                if(!element.isJsonObject())continue;
+                JsonObject link=element.getAsJsonObject();
+                if(longValue(link,"depends_on_task_id")!=prerequisite)continue;
+                long dependentId=longValue(link,"task_id");
+                if(!visited.add(dependentId))continue;
+                JsonObject dependent=desktopTaskById(dependentId);
+                if(dependent==null)continue;
+                pending.addLast(dependentId);
+                if(intValue(dependent,"done")!=0)completed.add(dependent);
+            }
+            if(visited.size()>20000)
+                throw new IllegalStateException("Zbyt wiele powiązanych czynności.");
+        }
+        return completed;
+    }
+
     private void toggleDesktopProjectCompletion(JsonObject task) {
         long id=longValue(task,"id");
         boolean done=intValue(task,"done")!=0;
@@ -1919,6 +1945,32 @@ public final class EdhomeDesktop extends JFrame {
             if(!projectBlock.isBlank()) {
                 JOptionPane.showMessageDialog(this,projectBlock);
                 return;
+            }
+        } else {
+            java.util.List<JsonObject> cascade=desktopCompletedDependents(id);
+            for(JsonObject dependent:cascade) {
+                if(!"once".equals(value(dependent,"repeat_rule"))) {
+                    JOptionPane.showMessageDialog(this,
+                        "Jedna z zależnych czynności jest cykliczna. "
+                            +"Nie można bezpiecznie cofnąć całego łańcucha.");
+                    return;
+                }
+            }
+            if(!cascade.isEmpty()) {
+                StringBuilder msg=new StringBuilder(
+                    "Cofnięcie tej czynności wymaga też cofnięcia "
+                        +cascade.size()+" zakończonych prac:\n");
+                for(int i=0;i<Math.min(cascade.size(),5);i++)
+                    msg.append("\n• ").append(value(cascade.get(i),"title"));
+                if(cascade.size()>5)
+                    msg.append("\n• +").append(cascade.size()-5).append(" kolejnych");
+                msg.append("\n\nHistoria wykonania pozostanie zachowana.");
+                int decision=JOptionPane.showConfirmDialog(this,msg.toString(),
+                    "Cofnąć zależne wykonania?",
+                    JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+                if(decision!=JOptionPane.YES_OPTION)return;
+                for(JsonObject dependent:cascade)
+                    dependent.addProperty("done",0);
             }
         }
         task.addProperty("done",done?0:1);
