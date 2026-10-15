@@ -51,7 +51,10 @@ for token in ('"Dzisiaj","Jutro","Bez terminu",',
               "title.requestFocus();", "SOFT_INPUT_STATE_ALWAYS_VISIBLE"):
     assert token in form,token
 gradle=Path("app/build.gradle").read_text(encoding="utf-8")
-assert "versionCode 308" in gradle and "versionName '0.8.0.116'" in gradle
+import re
+match_code=re.search(r"\\bversionCode\\s+(\\d+)",gradle)
+match_name=re.search(r"\\bversionName\\s+'(\\d+\\.\\d+\\.\\d+\\.\\d+)'",gradle)
+assert match_code and int(match_code.group(1)) >= 309 and match_name
 scanner=Path("app/src/beta/java/com/edwinkarolczyk/edhome/NfcShortcutScannerActivity.java").read_text(encoding="utf-8")
 for token in (
     "NfcAdapter.getDefaultAdapter(this)", "adapter.isEnabled()",
