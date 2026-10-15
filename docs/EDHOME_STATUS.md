@@ -1,3 +1,10 @@
+## 2026-10-15 — WYMAGANIE: „Znajdź odpowiedni wolny termin” w Szybkiej czynności (DO WDROŻENIA)
+
+- Życzenie użytkownika: po przytrzymaniu ikony EDHOME Beta → **Szybka czynność** formularz ma mieć **czwartą opcję „Znajdź wolny termin”**, a dotychczasowe ręczne **„Wybierz datę…”** przesunąć na pozycję piątą. Pozostałe: Dzisiaj / Jutro / Bez terminu.
+- Automatyczna propozycja powinna uwzględniać osobę, czas trwania czynności, jej grafik/wyjątki i okna dostępności, odpoczynek po zmianie, istniejące terminy Czynności/Projektów i wydarzenia kalendarza oraz już zaplanowane propozycje. Pokazać najlepiej trzy konkretne daty i godziny, do wyboru lub edycji; **nie zapisywać bez potwierdzenia** i nie oznaczać przedziału jako „wolny”, gdy brakuje danych o kolizjach lub grafiku. Gdy brak wyniku, wyjaśnić przyczynę i udostępnić wybór ręczny.
+- **Uwaga techniczna:** istniejący `TimeSuggestions` podpowiada godziny z grafiku/okien, ale nie gwarantuje braku kolizji; obecny skrót w wersji 0.8.0.113 zapisuje tylko `due_date` i domyślne 30 min, bez godziny rezerwacji. Pełny zapis przedziału oraz sprawdzanie konfliktów wymaga osobnego wdrożenia w harmonogramowaniu/DB i testów regresji/backup/LAN. Nie wolno pozorować wyszukania wolnego terminu przez wybór samej daty.
+- **Stan: zaplanowane, niewdrożone.** Android Beta 0.8.0.113 / 305 pozostaje bez zmian funkcjonalnych w tym wpisie. Nie wydano nowej APK. Stable `main` bez zmian.
+
 ## 2026-10-15 — Android Beta 0.8.0.113 / 305: jeden skrót „Szybka czynność”
 
 - W Beta dodano statyczny skrót po przytrzymaniu ikony aplikacji: **Szybka czynność**. Wymaga Androida 7.1+ i obsługującego launchera; starszy Android działa bez skrótu. Bez dodatkowej ikony i instalowania osobnego programu.
