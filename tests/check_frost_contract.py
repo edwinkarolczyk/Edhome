@@ -8,7 +8,7 @@ storage=(root/"StorageStore.java").read_text(encoding="utf-8")
 frost=(root/"FrostStore.java").read_text(encoding="utf-8")
 backup=(root/"DataBackup.java").read_text(encoding="utf-8")
 reminder=(root/"FrostReminderReceiver.java").read_text(encoding="utf-8")
-for token in ('super(context, "edhome-beta-preview.db", null, 47)',
+for token in ('super(context, "edhome-beta-preview.db", null, 48)',
               'FrostStore.upgrade47(database);',
               'FrostStore.create(database);',
               'frostRisk.setText("❄ Narażone na mróz")',
