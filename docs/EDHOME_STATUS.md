@@ -1,8 +1,8 @@
-## 2026-10-15 — Android Beta 0.8.0.114 / 306: bezpośredni skrót „Skanuj NFC” (KOD, CI DO POTWIERDZENIA)
+## 2026-10-15 — Android Beta 0.8.0.114 / 306: bezpośredni skrót „Skanuj NFC” (CI PASS / APK WYDANA)
 
 - Dodano drugi skrót launchera **Skanuj NFC** obok **Szybka czynność**, wyłącznie w Beta. Uruchamia lekką aktywność bez dodatkowych dialogów, przez 7 sekund włącza foreground ReaderMode (A/B/F/V), po dotknięciu tagu przekazuje prawdziwy Tag do istniejącej obsługi `MainActivity` / `NfcLinkStore` i otwiera przypisany obiekt zgodnie z dotychczasową akcją skanowania NFC.
 - Wyłączenie ReaderMode w `onPause`, po odczycie i po upływie limitu. Systemowe NFC nie jest wyłączane ani przełączane; Android nie udostępnia takiej operacji zwykłej aplikacji. ReaderMode tymczasowo kieruje wykryte tagi wyłącznie do EDHOME, następnie system przywraca standardową obsługę NFC. Przy wyłączonym NFC/nieobsługiwanym telefonie krótki komunikat i zakończenie.
-- Kod w `app/src/beta/java`, brak migracji danych i zmian `main` Stable. Rozszerzono kontrakt launchera o oba skróty i czasowy odczyt. Wydanie 0.8.0.114/306 deklarowane w Gradle. **CI, podpisaną paczkę i zachowanie na fizycznym telefonie należy dopiero potwierdzić** — nie deklarować PASS bez zakończonego przebiegu.
+- Kod w `app/src/beta/java`, brak migracji danych i zmian `main` Stable. Rozszerzono kontrakt launchera o oba skróty i czasowy odczyt. **CI PASS:** [GitHub Actions #38689736836](https://github.com/edwinkarolczyk/Edhome/actions/runs/38689736836), `completed/success`, po naprawie inicjalizacji pola (`41883cb`). **Podpisane APK opublikowano:** [EDHOME Beta 0.8.0.114 / 306](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.114/edhome-beta.apk), 13 408 336 B; commit wydaniowy `0336419`. **Test fizyczny: nadal otwarty** — potwierdzić siedmiosekundowy ReaderMode, obsługę znanych UID, nieprzypisane tagi oraz powrót normalnego NFC telefonu po zakończeniu.
 - Przyszły `Znajdź wolny termin` w Szybkiej czynności pozostaje odrębnym, niewdrożonym wymaganiem.
 
 ## 2026-10-15 — WYMAGANIE: „Znajdź odpowiedni wolny termin” w Szybkiej czynności (DO WDROŻENIA)
