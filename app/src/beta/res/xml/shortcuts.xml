@@ -9,4 +9,13 @@
             android:targetPackage="com.edwinkarolczyk.edhome.beta"
             android:targetClass="com.edwinkarolczyk.edhome.MainActivity" />
     </shortcut>
+    <shortcut android:shortcutId="quick_nfc"
+        android:enabled="true"
+        android:icon="@drawable/ic_edhome_brand"
+        android:shortcutShortLabel="@string/shortcut_nfc_short"
+        android:shortcutLongLabel="@string/shortcut_nfc_long">
+        <intent android:action="com.edwinkarolczyk.edhome.action.QUICK_NFC"
+            android:targetPackage="com.edwinkarolczyk.edhome.beta"
+            android:targetClass="com.edwinkarolczyk.edhome.NfcShortcutScannerActivity" />
+    </shortcut>
 </shortcuts>

@@ -43,7 +43,11 @@
             android:authorities="${applicationId}.updates"
             android:exported="false"
             android:grantUriPermissions="true" />
-        <!-- Jedyny skrót po przytrzymaniu ikony EDHOME Beta. -->
+        <!-- Dwa skróty EDHOME Beta: szybka czynność i czasowy skan NFC. -->
+        <activity
+            android:name=".NfcShortcutScannerActivity"
+            android:exported="true" />
+        <!-- Skróty statyczne po przytrzymaniu ikony aplikacji. -->
         <activity android:name=".MainActivity" android:launchMode="singleTask">
             <meta-data android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />

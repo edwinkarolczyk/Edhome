@@ -2,4 +2,6 @@
 <resources>
     <string name="shortcut_quick_task_short">Szybka czynność</string>
     <string name="shortcut_quick_task_long">Szybko dodaj czynność</string>
+    <string name="shortcut_nfc_short">Skanuj NFC</string>
+    <string name="shortcut_nfc_long">Szybkie skanowanie NFC</string>
 </resources>
