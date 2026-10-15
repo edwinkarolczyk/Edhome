@@ -108,6 +108,39 @@ final class TimeSuggestions {
         return Collections.unmodifiableList(options);
     }
 
+
+    interface BusyDaySource {
+        boolean isBusy(LocalDate date);
+    }
+
+    /** Conservative day-level availability, not an hourly calendar reservation. */
+    static List<Option> proposeFreeDays(LocalDateTime now,int durationMinutes,
+            WindowSource source,BusyDaySource busy) {
+        if(now==null||source==null||busy==null||
+                durationMinutes<1||durationMinutes>600)
+            throw new IllegalArgumentException("Nieprawidłowe dane terminu.");
+        ArrayList<Option> result=new ArrayList<>();
+        for(int d=0;d<28&&result.size()<3;d++) {
+            LocalDate date=now.toLocalDate().plusDays(d);
+            if(busy.isBusy(date))continue;
+            List<Window> windows=source.windows(date);
+            if(windows==null)continue;
+            for(Window w:windows) {
+                LocalDateTime start=date.atTime(w.start);
+                if(!start.isAfter(now))
+                    start=ceilQuarterHour(now.plusMinutes(1));
+                LocalDateTime end=start.plusMinutes(durationMinutes);
+                if(start.toLocalDate().equals(date)
+                        &&!start.isBefore(date.atTime(w.start))
+                        &&!end.isAfter(date.atTime(w.end))) {
+                    result.add(new Option(date,start.toLocalTime(),end.toLocalTime()));
+                    break;
+                }
+            }
+        }
+        return Collections.unmodifiableList(result);
+    }
+
     private static LocalDateTime ceilQuarterHour(LocalDateTime value) {
         LocalDateTime rounded=value.withSecond(0).withNano(0);
         int remainder=rounded.getMinute()%15;

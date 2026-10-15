@@ -143,10 +143,35 @@ public final class MainActivity extends Activity {
         if (!BetaUpdater.isBeta() || !unlocked || root == null) return true;
         if (launcherQuickTaskDialog != null && launcherQuickTaskDialog.isShowing())
             return true;
-        launcherQuickTaskDialog = QuickTaskShortcut.show(this, (title, due) -> {
-            db.saveTask(null, title, due, "once", 1,
-                null, "normal", 30, null, null, 0,
-                new java.util.ArrayList<>(), null);
+        launcherQuickTaskDialog = QuickTaskShortcut.show(this, minutes -> {
+            final long member=selectedMemberId;
+            if(member<=0)return java.util.Collections.emptyList();
+            return TimeSuggestions.proposeFreeDays(java.time.LocalDateTime.now(),
+                minutes,
+                day->ProjectPlanningStore.windows(db.getReadableDatabase(),
+                    member,db.effectiveShift(member,day.toString())),
+                day->{
+                    try(Cursor c=db.getReadableDatabase().rawQuery(
+                        "SELECT 1 FROM tasks WHERE done=0 AND due_date=? LIMIT 1",
+                        new String[]{day.toString()})) {
+                        if(c.moveToFirst())return true;
+                    }
+                    long start=day.atStartOfDay(java.time.ZoneId.systemDefault())
+                        .toInstant().toEpochMilli();
+                    long end=day.plusDays(1).atStartOfDay(
+                        java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+                    try(Cursor timers=db.getReadableDatabase().rawQuery(
+                        "SELECT 1 FROM device_timers WHERE start_at<? AND end_at>? "
+                            +"LIMIT 1",
+                        new String[]{Long.toString(end),Long.toString(start)})) {
+                        return timers.moveToFirst();
+                    }
+                });
+        }, (title,due,minutes,reminder) -> {
+            db.saveTask(null,title,due,"once",1,
+                null,"normal",minutes,
+                selectedMemberId>0?selectedMemberId:null,reminder,0,
+                new java.util.ArrayList<>(),null);
             ReminderReceiver.schedule(this);
             DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");
             tasksFilter = "all";

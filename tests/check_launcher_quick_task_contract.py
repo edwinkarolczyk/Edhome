@@ -44,13 +44,14 @@ for token in ("root.post(() -> openLauncherQuickTask(getIntent()));",
               "ReminderReceiver.schedule(this);",
               'DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");'):
     assert token in main, token
-for token in ('"Dzisiaj", "Jutro", "Bez terminu", "Wybierz datę…"',
-              'TaskRules.validate(name, due, "once", 1)',
-              "onSave.save(name, due);", "dialog.dismiss();",
+for token in ('"Dzisiaj","Jutro","Bez terminu",',
+              '"Znajdź wolny termin","Wybierz datę…"',
+              'TaskRules.validate(name,due,"once",1)',
+              "onSave.save(name,due,", "dialog.dismiss();",
               "title.requestFocus();", "SOFT_INPUT_STATE_ALWAYS_VISIBLE"):
     assert token in form,token
 gradle=Path("app/build.gradle").read_text(encoding="utf-8")
-assert "versionCode 306" in gradle and "versionName '0.8.0.114'" in gradle
+assert "versionCode 307" in gradle and "versionName '0.8.0.115'" in gradle
 scanner=Path("app/src/beta/java/com/edwinkarolczyk/edhome/NfcShortcutScannerActivity.java").read_text(encoding="utf-8")
 for token in (
     "NfcAdapter.getDefaultAdapter(this)", "adapter.isEnabled()",
@@ -62,3 +63,9 @@ for token in (
     assert token in scanner,token
 assert "android.nfc.action.TAG_DISCOVERED" in Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 print("Launcher Beta: dwa skróty, szybka czynność i czasowy NFC ReaderMode — kontrakt OK")
+
+assert "TimeSuggestions.proposeFreeDays(" in main
+assert "SELECT 1 FROM tasks WHERE done=0 AND due_date=? LIMIT 1" in main
+assert 'SELECT 1 FROM device_timers WHERE start_at<? AND end_at>?' in main
+assert "interface BusyDaySource" in Path("app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java").read_text(encoding="utf-8")
+print("Szybka czynność: trzy propozycje wolnych dni, grafik i przypomnienie OK")

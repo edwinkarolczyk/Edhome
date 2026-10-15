@@ -66,6 +66,18 @@ public final class TimeSuggestionsSmoke {
             invalid = true;
         }
         check(invalid, "Reject invalid estimated duration.");
+        List<TimeSuggestions.Option> free=TimeSuggestions.proposeFreeDays(
+            monday.atTime(7,0),30,
+            d -> d.equals(monday.plusDays(1))
+                ? java.util.Collections.emptyList()
+                : java.util.Collections.singletonList(
+                    new TimeSuggestions.Window(LocalTime.of(9,0),LocalTime.of(12,0))),
+            d -> d.equals(monday));
+        check(free.size()==3,"Should find three distinct free dates.");
+        check(free.get(0).date.equals(monday.plusDays(2)),
+            "Never recommend a busy day or day without windows.");
+        check(free.get(0).start.equals(LocalTime.of(9,0)),
+            "Preserve time suggestion.");
         System.out.println("Time suggestions: unknown/off/day/night/rest,"
             + " 3 distinct dates, now and duration boundaries: PASS");
     }
