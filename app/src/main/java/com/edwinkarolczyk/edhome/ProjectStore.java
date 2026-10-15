@@ -99,6 +99,7 @@ final class ProjectStore {
             +"status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','paused','done')),"
             +"due_date TEXT,"
             +"budget_grosz INTEGER,"
+            +"thumbnail_base64 TEXT,"
             +"created_at INTEGER NOT NULL,"
             +"CHECK(parent_id IS NULL OR parent_id!=id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS projects_parent_idx "
@@ -155,6 +156,106 @@ final class ProjectStore {
             +"ON project_task_work_sessions(task_id,id)");
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS project_task_work_sessions_active_idx "
             +"ON project_task_work_sessions(task_id) WHERE ended_at IS NULL");
+    }
+
+
+    /** Migracja istniejących baz bez utraty danych projektów. */
+    static void upgrade48(SQLiteDatabase db) {
+        boolean present=false;
+        try(Cursor c=db.rawQuery("PRAGMA table_info(projects)",null)) {
+            while(c.moveToNext())if("thumbnail_base64".equals(c.getString(1)))present=true;
+        }
+        if(!present)db.execSQL("ALTER TABLE projects ADD COLUMN thumbnail_base64 TEXT");
+    }
+
+    static String thumbnail(SQLiteDatabase db,long id) {
+        try(Cursor c=db.rawQuery("SELECT thumbnail_base64 FROM projects WHERE id=?",
+                new String[]{Long.toString(id)})) {
+            return c.moveToFirst()&&!c.isNull(0)?c.getString(0):"";
+        }
+    }
+
+    static void setThumbnail(SQLiteDatabase db,long id,String encoded) {
+        if(find(db,id)==null)throw new IllegalArgumentException("Projekt już nie istnieje.");
+        if(encoded!=null&&encoded.length()>StorageThumbs.MAX_BASE64_CHARS)
+            throw new IllegalArgumentException("Zdjęcie projektu jest za duże.");
+        ContentValues v=new ContentValues();
+        if(encoded==null||encoded.isEmpty())v.putNull("thumbnail_base64");
+        else v.put("thumbnail_base64",encoded);
+        db.update("projects",v,"id=?",new String[]{Long.toString(id)});
+    }
+
+    /** Edycja zachowuje identyfikator i wszystkie powiązania projektu. */
+    static void updateProject(SQLiteDatabase db,long id,String rawName,
+            Long placeId,Long assigneeId,String dueDate,Long budgetGrosz,String status) {
+        if(find(db,id)==null)throw new IllegalArgumentException("Projekt już nie istnieje.");
+        String name=TextEntryRules.capitalizeLabel(rawName);
+        if(name.isEmpty()||name.length()>160)
+            throw new IllegalArgumentException("Podaj nazwę projektu 1–160 znaków.");
+        String due=dueDate==null?"":dueDate.trim();
+        if(!due.isEmpty())try{java.time.LocalDate.parse(due);}
+        catch(Exception invalid){throw new IllegalArgumentException("Nieprawidłowy termin projektu.");}
+        if(budgetGrosz!=null&&budgetGrosz<0)
+            throw new IllegalArgumentException("Budżet nie może być ujemny.");
+        db.beginTransaction();
+        try {
+            setStatus(db,id,status);
+            ContentValues v=new ContentValues();
+            v.put("name",name);
+            if(placeId==null)v.putNull("place_id");else v.put("place_id",placeId);
+            if(assigneeId==null)v.putNull("assignee_id");else v.put("assignee_id",assigneeId);
+            if(due.isEmpty())v.putNull("due_date");else v.put("due_date",due);
+            if(budgetGrosz==null)v.putNull("budget_grosz");else v.put("budget_grosz",budgetGrosz);
+            if(db.update("projects",v,"id=?",new String[]{Long.toString(id)})!=1)
+                throw new IllegalStateException("Projekt już nie istnieje.");
+            db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
+    }
+
+    static List<Long> projectTaskIds(SQLiteDatabase db,long projectId) {
+        Set<Long> ids=descendantIds(db,projectId);
+        ArrayList<Long> out=new ArrayList<>();
+        for(Long id:ids)try(Cursor c=db.rawQuery(
+                "SELECT id FROM tasks WHERE project_id=?",
+                new String[]{Long.toString(id)})) {
+            while(c.moveToNext())out.add(c.getLong(0));
+        }
+        return out;
+    }
+
+    /** Usuwa jedynie dane projektu. Nie usuwa magazynowych rzeczy ani pudełek. */
+    static void deleteProjectTree(SQLiteDatabase db,long projectId) throws Exception {
+        Set<Long> ids=descendantIds(db,projectId);
+        if(ids.isEmpty())throw new IllegalArgumentException("Projekt już nie istnieje.");
+        List<Long> tasks=projectTaskIds(db,projectId);
+        for(Long taskId:tasks)try(Cursor c=db.rawQuery(
+                "SELECT 1 FROM project_task_work_sessions "
+                    +"WHERE task_id=? AND ended_at IS NULL LIMIT 1",
+                new String[]{Long.toString(taskId)})) {
+            if(c.moveToFirst())throw new IllegalStateException(
+                "Najpierw zatrzymaj aktywny pomiar czasu w projekcie.");
+        }
+        db.beginTransaction();
+        try {
+            for(Long taskId:tasks) {
+                String key=Long.toString(taskId);
+                db.delete("project_task_dependencies",
+                    "task_id=? OR depends_on_task_id=?",new String[]{key,key});
+                db.delete("project_task_blockers","task_id=?",new String[]{key});
+                db.delete("project_task_work_sessions","task_id=?",new String[]{key});
+                db.delete("task_rotation_members","task_id=?",new String[]{key});
+                db.delete("task_history","task_id=?",new String[]{key});
+                db.delete("tasks","id=?",new String[]{key});
+            }
+            for(Long id:ids) {
+                String key=Long.toString(id);
+                db.delete("project_resources","project_id=?",new String[]{key});
+                db.delete("project_costs","project_id=?",new String[]{key});
+                db.delete("projects","id=?",new String[]{key});
+            }
+            SyncRecordStore.ensureAll(db);
+            db.setTransactionSuccessful();
+        } finally {db.endTransaction();}
     }
 
     static Project find(SQLiteDatabase db,long id) {

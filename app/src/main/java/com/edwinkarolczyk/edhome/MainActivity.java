@@ -88,6 +88,8 @@ public final class MainActivity extends Activity {
     private static final int TAKE_SCANNER_RESULT = 1216;
     private static final int IMPORT_STATEMENT_CSV = 1217;
     private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
+    private static final int IMPORT_PROJECT_THUMBNAIL = 1234;
+    private long pendingProjectThumbnailId;
     private static final int PICK_BANK_APP_SYSTEM = 1219;
     private static final int IMPORT_AI_3D_PACK = 1220;
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
@@ -5153,24 +5155,129 @@ public final class MainActivity extends Activity {
     }
 
     private void renderProjectSummaryCard(ProjectStore.Project project) {
-        ProjectStore.Stats stats=ProjectStore.stats(
-            db.getReadableDatabase(),project.id);
+        ProjectStore.Stats stats=ProjectStore.stats(db.getReadableDatabase(),project.id);
         LinearLayout box=card();
-        box.addView(text(project.name,19,true));
-        box.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
-            +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",
-            13,false));
-        addProjectTimeProgress(box,stats);
-        box.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.TOP);
+        String photo=ProjectStore.thumbnail(db.getReadableDatabase(),project.id);
+        android.view.View miniature;
+        android.graphics.Bitmap bitmap=projectThumbnailBitmap(photo);
+        if(bitmap!=null) {
+            android.widget.ImageView image=new android.widget.ImageView(this);
+            image.setImageBitmap(bitmap);
+            image.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            image.setBackground(rounded(surface));
+            image.setClipToOutline(true);
+            miniature=image;
+        } else {
+            TextView empty=text("▧",31,true);
+            empty.setGravity(android.view.Gravity.CENTER);
+            empty.setBackground(rounded(surface));
+            miniature=empty;
+        }
+        LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(dp(82),dp(104));
+        imageParams.setMargins(0,0,dp(12),0);
+        row.addView(miniature,imageParams);
+        LinearLayout info=new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.addView(text(project.name,19,true));
+        info.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
+            +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",13,false));
+        addProjectTimeProgress(info,stats);
+        info.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
             +(project.budgetGrosz==null?"":" / budżet "
                 +MoneyRules.format(project.budgetGrosz)),13,false));
+        row.addView(info,new LinearLayout.LayoutParams(0,-2,1f));
+        box.addView(row);
         box.setClickable(true);
         box.setFocusable(true);
         touchFeedback(box);
         box.setOnClickListener(v->openProject(project.id));
+        box.setOnLongClickListener(v->{
+            android.widget.PopupMenu menu=new android.widget.PopupMenu(this,box);
+            menu.getMenu().add("Edytuj");
+            menu.getMenu().add("Usuń");
+            menu.setOnMenuItemClickListener(item->{
+                if("Edytuj".contentEquals(item.getTitle()))editProject(project.id);
+                else confirmDeleteProject(project);
+                return true;
+            });
+            menu.show();
+            return true;
+        });
+    }
+
+    private android.graphics.Bitmap projectThumbnailBitmap(String encoded) {
+        if(encoded==null||encoded.isEmpty()
+                ||encoded.length()>StorageThumbs.MAX_BASE64_CHARS)return null;
+        try {
+            byte[] bytes=android.util.Base64.decode(encoded,android.util.Base64.NO_WRAP);
+            if(bytes.length>StorageThumbs.MAX_JPEG_BYTES)return null;
+            android.graphics.BitmapFactory.Options opts=new android.graphics.BitmapFactory.Options();
+            opts.inJustDecodeBounds=true;
+            android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length,opts);
+            opts.inSampleSize=Math.max(1,Math.max(opts.outWidth,opts.outHeight)/256);
+            opts.inJustDecodeBounds=false;
+            return android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length,opts);
+        }catch(Exception invalid){return null;}
+    }
+
+    private void selectProjectThumbnail(long id) {
+        if(ProjectStore.find(db.getReadableDatabase(),id)==null)return;
+        pendingProjectThumbnailId=id;
+        Intent picker=new Intent(Intent.ACTION_GET_CONTENT);
+        picker.setType("image/*");
+        try{startActivityForResult(picker,IMPORT_PROJECT_THUMBNAIL);}
+        catch(Exception error){
+            pendingProjectThumbnailId=0;
+            alert("Nie można otworzyć wyboru zdjęcia.");
+        }
+    }
+
+    private void editProject(long id) {
+        ProjectStore.Project existing=ProjectStore.find(db.getReadableDatabase(),id);
+        if(existing!=null)showProjectEditor(existing.parentId,id);
+    }
+
+    private void confirmDeleteProject(ProjectStore.Project project) {
+        java.util.Set<Long> ids=ProjectStore.descendantIds(
+            db.getReadableDatabase(),project.id);
+        java.util.List<Long> tasks=ProjectStore.projectTaskIds(
+            db.getReadableDatabase(),project.id);
+        new AlertDialog.Builder(this)
+            .setTitle("Usuń projekt")
+            .setMessage("Czy na pewno usunąć „"+project.name+"”?\n\n"
+                +"Znikną także podprojekty ("+(ids.size()-1)+"), czynności ("
+                +tasks.size()+"), koszty, wymagania, zależności i zapis czasu. "
+                +"Rzeczy i pudełka w Magazynie pozostaną bez zmian. "
+                +"Tej operacji nie można cofnąć.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń",(dialog,which)->{
+                try {
+                    ProjectStore.deleteProjectTree(db.getWritableDatabase(),project.id);
+                    for(Long taskId:tasks) {
+                        ReminderReceiver.cancelTask(this,taskId);
+                        ProjectWorkNotification.cancel(this,taskId);
+                    }
+                    selectedProjectId=0;
+                    DiagnosticLog.event("PROJECT_TREE_DELETED",
+                        "id="+project.id+" projects="+ids.size()+" tasks="+tasks.size());
+                    render();
+                }catch(Exception error){
+                    alert(error.getMessage()==null
+                        ?"Nie udało się usunąć projektu.":error.getMessage());
+                }
+            }).show();
     }
 
     private void showProjectEditor(Long parentId) {
+        showProjectEditor(parentId,null);
+    }
+
+    private void showProjectEditor(Long parentId,Long editId) {
+        ProjectStore.Project existing=editId==null?null:
+            ProjectStore.find(db.getReadableDatabase(),editId);
         ProjectStore.Project parent=parentId==null?null:
             ProjectStore.find(db.getReadableDatabase(),parentId);
         LinearLayout form=new LinearLayout(this);
@@ -5184,6 +5291,7 @@ public final class MainActivity extends Activity {
         name.setHint(parent==null?"Nazwa projektu":"Nazwa podprojektu");
         form.addView(text("Nazwa",14,true));
         form.addView(name);
+        if(existing!=null)name.setText(existing.name);
 
         EditText due=new EditText(this);
         due.setSingleLine(true);
@@ -5198,6 +5306,7 @@ public final class MainActivity extends Activity {
         });
         form.addView(text("Termin projektu",14,true));
         form.addView(due);
+        if(existing!=null)due.setText(existing.dueDate);
         smallButton(form,"Wybierz termin",()->due.performClick());
 
         EditText budget=new EditText(this);
@@ -5207,6 +5316,8 @@ public final class MainActivity extends Activity {
             |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(text("Budżet projektu",14,true));
         form.addView(budget);
+        if(existing!=null&&existing.budgetGrosz!=null)
+            budget.setText(MoneyRules.format(existing.budgetGrosz).replace(" zł","").replace(" ",""));
 
         java.util.ArrayList<Long> placeIds=new java.util.ArrayList<>();
         java.util.ArrayList<String> placeNames=new java.util.ArrayList<>();
@@ -5216,9 +5327,10 @@ public final class MainActivity extends Activity {
         }
         Spinner place=new Spinner(this);
         place.setAdapter(lightDialogSpinnerAdapter(placeNames));
-        if(parent!=null&&parent.placeId!=null)
+        Long initialPlace=existing!=null?existing.placeId:parent==null?null:parent.placeId;
+        if(initialPlace!=null)
             for(int i=1;i<placeIds.size();i++)
-                if(parent.placeId.equals(placeIds.get(i)))place.setSelection(i);
+                if(initialPlace.equals(placeIds.get(i)))place.setSelection(i);
         form.addView(text("Domyślne miejsce",14,true));form.addView(place);
 
         java.util.ArrayList<Long> memberIds=new java.util.ArrayList<>();
@@ -5232,29 +5344,60 @@ public final class MainActivity extends Activity {
         }
         Spinner member=new Spinner(this);
         member.setAdapter(lightDialogSpinnerAdapter(memberNames));
-        if(parent!=null&&parent.assigneeId!=null)
+        Long initialMember=existing!=null?existing.assigneeId:parent==null?null:parent.assigneeId;
+        if(initialMember!=null)
             for(int i=1;i<memberIds.size();i++)
-                if(parent.assigneeId.equals(memberIds.get(i)))member.setSelection(i);
+                if(initialMember.equals(memberIds.get(i)))member.setSelection(i);
         form.addView(text("Domyślny wykonawca",14,true));form.addView(member);
+        Spinner status=new Spinner(this);
+        status.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+            "W trakcie","Wstrzymany","Zakończony")));
+        if(existing!=null)status.setSelection("done".equals(existing.status)?2:
+            "paused".equals(existing.status)?1:0);
+        if(existing!=null){
+            form.addView(text("Status projektu",14,true));form.addView(status);
+        }
         lightDialogForm(form);
 
         AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle(parent==null?"Nowy projekt":"Nowy podprojekt")
+            .setTitle(existing!=null?"Edytuj projekt":parent==null?"Nowy projekt":"Nowy podprojekt")
             .setView(form).setNegativeButton("Anuluj",null)
-            .setPositiveButton("Utwórz",null).create();
+            .setPositiveButton(existing!=null?"Zapisz":"Utwórz",null).create();
+        if(existing!=null){
+            smallButton(form,"📷 Zmień miniaturkę projektu",()->{
+                dialog.dismiss();selectProjectThumbnail(existing.id);
+            });
+            if(!ProjectStore.thumbnail(db.getReadableDatabase(),existing.id).isEmpty())
+                smallButton(form,"Usuń miniaturkę",()->{
+                    ProjectStore.setThumbnail(db.getWritableDatabase(),existing.id,null);
+                    dialog.dismiss();render();
+                });
+        }
         dialog.setOnShowListener(x->
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
                 try {
                     Long budgetGrosz=budget.getText().toString().trim().isEmpty()
                         ?null:MoneyRules.parse(budget.getText().toString());
-                    long id=ProjectStore.addProject(db.getWritableDatabase(),
-                        name.getText().toString(),parentId,
-                        placeIds.get(place.getSelectedItemPosition()),
-                        memberIds.get(member.getSelectedItemPosition()),
-                        due.getText().toString(),budgetGrosz);
-                    DiagnosticLog.event("PROJECT_CREATED","id="+id);
+                    long id;
+                    if(existing!=null){
+                        id=existing.id;
+                        String value=ProjectStore.STATUSES[status.getSelectedItemPosition()];
+                        ProjectStore.updateProject(db.getWritableDatabase(),id,
+                            name.getText().toString(),
+                            placeIds.get(place.getSelectedItemPosition()),
+                            memberIds.get(member.getSelectedItemPosition()),
+                            due.getText().toString(),budgetGrosz,value);
+                        DiagnosticLog.event("PROJECT_UPDATED","id="+id);
+                    }else{
+                        id=ProjectStore.addProject(db.getWritableDatabase(),
+                            name.getText().toString(),parentId,
+                            placeIds.get(place.getSelectedItemPosition()),
+                            memberIds.get(member.getSelectedItemPosition()),
+                            due.getText().toString(),budgetGrosz);
+                        DiagnosticLog.event("PROJECT_CREATED","id="+id);
+                        selectedProjectId=id;
+                    }
                     dialog.dismiss();
-                    selectedProjectId=id;
                     render();
                 } catch(Exception error) {
                     name.setError(error.getMessage()==null
@@ -23733,6 +23876,21 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if(request==IMPORT_PROJECT_THUMBNAIL){
+            long id=pendingProjectThumbnailId;
+            pendingProjectThumbnailId=0;
+            if(result==RESULT_OK&&id>0&&data!=null&&data.getData()!=null){
+                try{
+                    String jpeg=StorageThumbs.compress(getContentResolver(),data.getData());
+                    ProjectStore.setThumbnail(db.getWritableDatabase(),id,jpeg);
+                    DiagnosticLog.event("PROJECT_THUMBNAIL_SAVED","id="+id);
+                    render();
+                }catch(Exception error){
+                    alert(error.getMessage()==null?"Nie udało się zapisać zdjęcia.":error.getMessage());
+                }
+            }
+            return;
+        }
         if (request == IMPORT_PAYCHECK_ATTACHMENT) {
             String itemId=pendingBudgetAttachmentItemId;
             YearMonth invoiceMonth=pendingBudgetAttachmentMonth;
@@ -24161,7 +24319,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 47);
+            super(context, "edhome-beta-preview.db", null, 48);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -24222,7 +24380,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 47) {
+            if (oldVersion < 1 || newVersion > 48) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -24477,6 +24635,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 47) {
                 FrostStore.upgrade47(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_46_TO_47_FROST");
+            }
+            if(oldVersion < 48) {
+                ProjectStore.upgrade48(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_47_TO_48_PROJECT_THUMBNAILS");
             }
             if(newVersion >= 36) {
                 try {

@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 47;
+    private static final int DB_VERSION = 48;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -35,7 +35,7 @@ final class DataBackup {
         {"household_members", "id", "name"},
         {"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"},
         {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
-            "status", "due_date", "budget_grosz", "created_at"},
+            "status", "due_date", "budget_grosz", "created_at", "thumbnail_base64"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"member_shift_hours", "id", "member_id", "shift", "start_time", "end_time"},
@@ -569,6 +569,10 @@ final class DataBackup {
                 for (int j = 1; j < definition.length; j++) {
                     String key = definition[j];
                     if (!item.has(key)) {
+                        if(inputVersion < 48 && "projects".equals(definition[0])
+                                &&"thumbnail_base64".equals(key)){
+                            values.putNull(key);continue;
+                        }
                         if(inputVersion < 47 && "frost_risk".equals(key)
                                 &&"places".equals(definition[0])){
                             values.put(key,0);continue;

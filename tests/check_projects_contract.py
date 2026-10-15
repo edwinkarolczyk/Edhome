@@ -289,3 +289,13 @@ assert 'desktopCompletedDependents(id)' in desktop
 assert 'dependent.addProperty("done",0)' in desktop
 assert 'Historia wykonania pozostanie zachowana.' in desktop
 print("Desktop dependent completion undo cascade guard OK")
+
+# Miniaturka, edycja i kasowanie drzew projektów muszą pozostać w kontrakcie.
+assert 'setOnLongClickListener(v->{' in main
+assert 'confirmDeleteProject(project)' in main
+assert 'selectProjectThumbnail(existing.id)' in main
+assert 'ProjectStore.deleteProjectTree' in main
+assert 'static void deleteProjectTree' in project
+assert 'SyncRecordStore.ensureAll(db);' in project
+assert 'thumbnail_base64' in project and 'thumbnail_base64' in backup
+assert 'ProjectStore.upgrade48(database)' in main
