@@ -16,6 +16,11 @@ assert intent.attrib[android+"targetClass"]=="com.edwinkarolczyk.edhome.MainActi
 assert intent.attrib[android+"action"]=="com.edwinkarolczyk.edhome.action.QUICK_TASK"
 entry=overlay.find("./application/activity")
 assert entry.attrib[android+"launchMode"]=="singleTask"
+assert "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" in Path(
+    "app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
+assert overlay.find("./application/service[@"+android+"name"+'=".BankNotificationListener"]') is not None
+assert overlay.find("./application/service[@"+android+"name"+'=".LanSyncService"]') is not None
+assert len(overlay.findall("./application/provider")) == 2
 assert entry.find("meta-data").attrib[android+"resource"]=="@xml/shortcuts"
 assert not Path("app/src/stable/res/xml/shortcuts.xml").exists()
 main=Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")

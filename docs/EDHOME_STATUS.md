@@ -2,7 +2,7 @@
 
 - W Beta dodano statyczny skrót po przytrzymaniu ikony aplikacji: **Szybka czynność**. Wymaga Androida 7.1+ i obsługującego launchera; starszy Android działa bez skrótu. Bez dodatkowej ikony i instalowania osobnego programu.
 - Krótki dialog otwiera się przy zimnym/ciepłym starcie MainActivity; nazwa oraz termin Dzisiaj/Jutro/Bez terminu/Wybierz datę. Wspólny walidator i zapis `LocalDb.saveTask` (jednorazowa, 30 min), planowanie przypomnień i przejście do Czynności. Niezapisany formularz nie modyfikuje bazy.
-- Regresja `tests/check_launcher_quick_task_contract.py` w CI; **publikacja i test fizyczny skrótu do potwierdzenia**. Stable `main` bez zmian.
+- Regresja `tests/check_launcher_quick_task_contract.py` w CI; **publikacja i test fizyczny skrótu do potwierdzenia**. Pierwszy przebieg CI wykrył nadpisanie manifestu Beta (utrata uprawnienia BankNotificationListener). Poprawiono: zachowano oryginalne usługi, uprawnienia oraz dostawców, dodając tylko aktywność ze skrótem; test regresyjny chroni te deklaracje. Stable `main` bez zmian.
 
 ## 2026-10-15 — Przygotowanie do zimy dostępne; Supla/temperatura na późniejszy etap (BACKLOG)
 
