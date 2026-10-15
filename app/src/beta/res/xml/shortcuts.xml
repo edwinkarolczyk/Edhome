@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="quick_task"
+        android:enabled="true"
+        android:icon="@drawable/ic_edhome_brand"
+        android:shortcutShortLabel="@string/shortcut_quick_task_short"
+        android:shortcutLongLabel="@string/shortcut_quick_task_long">
+        <intent android:action="com.edwinkarolczyk.edhome.action.QUICK_TASK"
+            android:targetPackage="com.edwinkarolczyk.edhome.beta"
+            android:targetClass="com.edwinkarolczyk.edhome.MainActivity" />
+    </shortcut>
+</shortcuts>

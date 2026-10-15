@@ -1,3 +1,9 @@
+## 2026-10-15 — Android Beta 0.8.0.113 / 305: jeden skrót „Szybka czynność”
+
+- W Beta dodano statyczny skrót po przytrzymaniu ikony aplikacji: **Szybka czynność**. Wymaga Androida 7.1+ i obsługującego launchera; starszy Android działa bez skrótu. Bez dodatkowej ikony i instalowania osobnego programu.
+- Krótki dialog otwiera się przy zimnym/ciepłym starcie MainActivity; nazwa oraz termin Dzisiaj/Jutro/Bez terminu/Wybierz datę. Wspólny walidator i zapis `LocalDb.saveTask` (jednorazowa, 30 min), planowanie przypomnień i przejście do Czynności. Niezapisany formularz nie modyfikuje bazy.
+- Regresja `tests/check_launcher_quick_task_contract.py` w CI; **publikacja i test fizyczny skrótu do potwierdzenia**. Stable `main` bez zmian.
+
 ## 2026-10-15 — Przygotowanie do zimy dostępne; Supla/temperatura na późniejszy etap (BACKLOG)
 
 - **Odbiór użytkownika:** użytkownik zgłasza, że funkcja „Przygotowanie do zimy” jest już dostępna w EDHOME. Traktować to jako potwierdzenie dostępności funkcji, **nie** jako zakończenie testów E2E, starszych backupów ZIP, powiadomień, QR/NFC i synchronizacji dwukierunkowej. Ostatnie potwierdzone wydania odnotowane w statusie: Android Beta **0.8.0.112 / 304**, Desktop Beta **0.7.0.119**.

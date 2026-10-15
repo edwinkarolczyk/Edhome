@@ -130,6 +130,34 @@ public final class MainActivity extends Activity {
     private AlertDialog storageScannerOperationDialog;
     private AlertDialog quickStorageSetupDialog;
     private AlertDialog dataBackupBusyDialog;
+    private AlertDialog launcherQuickTaskDialog;
+    private static final String ACTION_QUICK_TASK =
+        "com.edwinkarolczyk.edhome.action.QUICK_TASK";
+
+    /** Jeden skrót ikony aplikacji: szybkie dodanie do tej samej tabeli tasks. */
+    private boolean openLauncherQuickTask(Intent intent) {
+        if (intent == null || !ACTION_QUICK_TASK.equals(intent.getAction()))
+            return false;
+        // Zapobiegaj ponownemu otwarciu po rotacji lub powrocie do aplikacji.
+        intent.setAction(Intent.ACTION_MAIN);
+        if (!BetaUpdater.isBeta() || !unlocked || root == null) return true;
+        if (launcherQuickTaskDialog != null && launcherQuickTaskDialog.isShowing())
+            return true;
+        launcherQuickTaskDialog = QuickTaskShortcut.show(this, (title, due) -> {
+            db.saveTask(null, title, due, "once", 1,
+                null, "normal", 30, null, null, 0,
+                new java.util.ArrayList<>(), null);
+            ReminderReceiver.schedule(this);
+            DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");
+            tasksFilter = "all";
+            tasksPage = 0;
+            go("tasks");
+        });
+        launcherQuickTaskDialog.setOnDismissListener(ignored ->
+            launcherQuickTaskDialog = null);
+        return true;
+    }
+
     private boolean backupLegacyExportNext;
     private TextView quickStorageSetupStatus;
     private String quickStorageSetupKind;
@@ -386,6 +414,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
+        root.post(() -> openLauncherQuickTask(getIntent()));
         root.post(() -> handleNfcIntent(getIntent()));
         new Thread(() -> {
             int migrated=TileArtLibrary.migrateExistingCustomArt(this,prefs);
@@ -463,6 +492,10 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (launcherQuickTaskDialog != null) {
+            launcherQuickTaskDialog.dismiss();
+            launcherQuickTaskDialog = null;
+        }
         if(dataBackupBusyDialog!=null) {
             dataBackupBusyDialog.dismiss();
             dataBackupBusyDialog=null;
@@ -547,6 +580,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (openLauncherQuickTask(intent)) return;
         if(applyProjectTaskIntent(intent,true)) {
             handleNfcIntent(intent);
             return;

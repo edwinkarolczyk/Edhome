@@ -46,6 +46,8 @@ jobs:
           gradle-version: "8.10.2"
       - name: Verify update-channel scripts
         run: python3 -m py_compile .github/scripts/publish_public_channel.py
+      - name: Android launcher quick task shortcut regression
+        run: python3 tests/check_launcher_quick_task_contract.py
       - name: Task calendar recurrence regression
         run: |
           mkdir -p "$RUNNER_TEMP/task-check"
@@ -623,7 +625,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.112 — P0: poprawione przywracanie starszych kopii ZIP/JSON SQLite v45/v46 w schemacie v47. Domyślna konfiguracja ochrony przed mrozem po starym archiwum, selektywny import kategorii na nowej bazie i ochrona aktualnych danych zimowych przed skasowaniem. Bez zmian gałęzi Stable."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.113 — jeden skrót Szybka czynność pod ikoną aplikacji Android Beta. Krótki formularz nazwy i terminu, zapis w Czynnościach z przypomnieniami; bez drugiej ikony. Bez zmian gałęzi Stable."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
