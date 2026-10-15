@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Beta launcher: jeden skrót, wspólny zapis, walidacja, obsługa zimnego i ciepłego startu."""
+"""Beta launcher: dwa skróty, wspólny zapis czynności i czasowy NFC ReaderMode."""
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -23,7 +23,8 @@ assert intent is not None
 assert intent.attrib[android+"targetPackage"]=="com.edwinkarolczyk.edhome.beta"
 assert intent.attrib[android+"targetClass"]=="com.edwinkarolczyk.edhome.MainActivity"
 assert intent.attrib[android+"action"]=="com.edwinkarolczyk.edhome.action.QUICK_TASK"
-entry=overlay.find("./application/activity")
+entry=overlay.find("./application/activity[@"+android+"name"+'=".MainActivity"]')
+assert entry is not None
 assert entry.attrib[android+"launchMode"]=="singleTask"
 scan_entry=overlay.find("./application/activity[@"+android+"name"+'=".NfcShortcutScannerActivity"]')
 assert scan_entry is not None and scan_entry.attrib[android+"exported"]=="true"
@@ -60,4 +61,4 @@ for token in (
 ):
     assert token in scanner,token
 assert "android.nfc.action.TAG_DISCOVERED" in Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
-print("Launcher Beta: jeden skrót, zapis istniejących czynności, dialog i regresja OK")
+print("Launcher Beta: dwa skróty, szybka czynność i czasowy NFC ReaderMode — kontrakt OK")
