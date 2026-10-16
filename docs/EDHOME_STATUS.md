@@ -1,3 +1,12 @@
+## 2026-10-16 — Etap 2 Projektów P0: weryfikacja kodu i testy regresji (bez testu urządzeń)
+
+- **Użytkownik:** Etap 1 na telefonie zaliczony; czasowo brak dostępu do Desktopu, zatem test rzeczywistego Android ↔ Desktop pozostaje otwarty, bez blokowania prac niezależnych od urządzeń.
+- **Audyt kodu:** potwierdzono istniejące mechanizmy transakcyjnego kasowania drzewa projektu i tombstone w Androidzie, generowania patcha usunięcia i odczytu tombstone na Desktopie, oraz zapisywania miniatur w tabeli projects i w kopiach ZIP/JSON. To nie potwierdza zachowania po realnym rozłączeniu ani restore.
+- **Dodane testy:** rozszerzony tests/check_projects_contract.py o P0: komplet kaskady, blokadę przy aktywnym Start/Stop, zachowanie rzeczy w Magazynie, transakcyjne tombstones, usuwanie przy synchronizacji PC oraz import starych ZIP v47 bez miniaturek. Commit b90fdc2561 (gałąź beta). Testy są statycznym kontraktem, nie symulacją połączenia urządzeń.
+- **Weryfikacja CI:** GitHub Actions Android Beta #38850917432 uruchomiony po zmianach testowych; do zamknięcia dopiero po potwierdzeniu wyniku.
+- **Wersje aplikacji bez zmian:** Android Beta 0.8.0.117/309; Desktop Beta 0.7.0.121. Nie trzeba niczego teraz instalować. Stable main bez zmian.
+- **Następny krok:** wynik CI, następnie P0 ZIP restore na środowisku testowym. Później, gdy Desktop będzie dostępny, dwukierunkowy LAN: zdjęcie/edycja/usunięcie i brak odtworzenia skasowanego projektu.
+
 ## 2026-10-16 — Projekty: Etap 1 PASS na Androidzie, Etap 2 P0 w toku
 
 - **Etap 1 (potwierdzenie użytkownika): PASS.** Na telefonie działają miniaturki projektów, przytrzymanie z Edytuj/Usuń, edycja i usuwanie w EDHOME Beta 0.8.0.117/309. Brak jeszcze niezależnej weryfikacji synchronizacji i kopii.
