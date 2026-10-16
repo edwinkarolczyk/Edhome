@@ -498,8 +498,8 @@ assert 'localport=45823' in desktop and 'localport=45822' in desktop
 print("desktop hub v2 API/client/discovery/first-backup/conflict contract OK")
 
 
-// P0: zdjęcie projektu (JPEG Base64) musi zmieścić się w patchu Desktop -> Android.
-// Pozostałe teksty nadal obowiązuje ścisły limit 20 000 znaków.
+# P0: zdjęcie projektu (JPEG Base64) musi zmieścić się w patchu Desktop -> Android.
+# Pozostałe teksty nadal obowiązuje ścisły limit 20 000 znaków.
 row_rules=sync_store.split('private static ContentValues rowValues(',1)[1].split(
     'private static void refreshOne(',1)[0]
 assert 'boolean projectThumbnail="projects".equals(table)' in row_rules
