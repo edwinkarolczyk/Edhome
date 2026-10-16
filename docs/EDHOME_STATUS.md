@@ -1,3 +1,11 @@
+## 2026-10-16 — Stabilizacja P0 Projektów: limit miniaturek przy synchronizacji LAN
+
+- **Wykryty i naprawiony P0:** Androidowy SyncRecordStore.applyPatch/rowValues dopuszczał tekst do 20 000 znaków i rekord do 256 KiB, podczas gdy miniatura projektu JPEG/Base64 mogła mieć do 360 000 znaków. Wysyłanie zdjęć Desktop → Android mogło kończyć się odrzuceniem patcha.
+- **Poprawka:** tylko dla `projects.thumbnail_base64` dopuszczono limit `StorageThumbs.MAX_BASE64_CHARS` oraz rekord projektu do 512 KiB, z walidacją Base64, nagłówka JPEG i maksymalnej wielkości pliku JPEG `StorageThumbs.MAX_JPEG_BYTES`. Dla wszystkich pozostałych pól zachowano wcześniejsze, ostrzejsze ograniczenia. Kod 1fec1ab230, poprawka składni testu 5aa6944e.
+- **Testy:** dodatkowy kontrakt regresyjny `tests/check_desktop_sync_contract.py`; Android Beta [CI PASS #38852538496](https://github.com/edwinkarolczyk/Edhome/actions/runs/38852538496) i Desktop Beta [CI PASS #38852538547](https://github.com/edwinkarolczyk/Edhome/actions/runs/38852538547). Testy automatyczne i build nie zastępują próby fizycznego LAN.
+- **Opublikowana nowa wersja Android:** Beta **0.8.0.118 / 310**, podpisana APK [pobierz](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.118/edhome-beta.apk). Desktop pozostaje **0.7.0.121** (uruchomiono ponowną weryfikację CI). Stable `main` bez zmian.
+- **Pozostałe do potwierdzenia:** na prawdziwym Android/Desktop przesłanie większego zdjęcia w obu kierunkach, usunięcie projektu i brak wskrzeszenia po LAN, przywracanie ZIP v47/v48. Użytkownik chwilowo nie ma dostępu do Desktopu; zadania nie wymagają teraz jego udziału.
+
 ## 2026-10-16 — Etap 2 Projektów P0: weryfikacja kodu i testy regresji (bez testu urządzeń)
 
 - **Użytkownik:** Etap 1 na telefonie zaliczony; czasowo brak dostępu do Desktopu, zatem test rzeczywistego Android ↔ Desktop pozostaje otwarty, bez blokowania prac niezależnych od urządzeń.

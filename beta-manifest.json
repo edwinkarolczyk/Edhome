@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 310,
   "versionName": "0.8.0.118",
-  "changelog": "EDHOME Beta 0.8.0.113 — jeden skrót Szybka czynność pod ikoną aplikacji Android Beta. Krótki formularz nazwy i terminu, zapis w Czynnościach z przypomnieniami; bez drugiej ikony. Bez zmian gałęzi Stable.",
+  "changelog": "EDHOME Beta 0.8.0.118 — stabilizacja Projektów P0: naprawiono synchronizację większych miniaturek JPEG z Desktopu na Androida (LAN), dodano kontrolę formatu i rozmiaru zdjęć oraz testy regresyjne. Dotychczasowe funkcje projektów i dane pozostają zachowane. Stable bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.118/edhome-beta.apk",
   "sha256": "1cf45c553e82960e0b72b237ed51520bcb59f9b5b8579ee3a8cc085df1a08ea3"
 }
