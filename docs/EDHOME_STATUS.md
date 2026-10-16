@@ -1020,3 +1020,12 @@ Test użytkownika: **5 potencjalnych operacji nierozpoznanych**, pierwsza data 0
 7. **Bez fikcyjnej automatyzacji:** plik aktualizuje się podczas faktycznie wykonanych prac z dostępem do GitHub, **nie w tle bez uruchomionej sesji/zadania**.
 
 **Źródła szczegółowych decyzji:** [ROADMAP.md](ROADMAP.md), historia commitów i uruchomienia GitHub Actions. W razie sprzeczności najnowszy sprawdzony stan kodu i testów ma pierwszeństwo przed nieaktualnym opisem historycznym, natomiast decyzje o zakresie muszą być zgodne z ustaleniami użytkownika.
+
+## 2026-10-16 — powrót do stabilizacji przed 1.0
+
+- **Potwierdzona Beta Android:** `0.8.0.120 / 312`, CI PASS (run `38924334338`), opublikowane APK. Użytkownik potwierdził zrzutem, że aktualizator na zainstalowanej `0.8.0.119 / 311` widzi nowsze `0.8.0.120 / 312`; nie jest to błąd wersji aplikacji.
+- **Późniejszy kod Beta:** `3506ab4` — ostrzeżenie dźwiękowe także przy błędzie zatrzymania licznika. Run `38927501054` FAIL na bramce publikacji: wydanie `0.8.0.120` już istnieje, a kod Androida się zmienił. Przy następnej gotowej paczce należy podnieść `versionCode` i `versionName`, bez ponownego publikowania starego numeru.
+- **Priorytety P0 do Stable 1.0:** (1) Budżet ↔ PayCheck: importy, potwierdzenia, częściowe wpłaty, nadpłaty/zaległości, brak duplikatów; (2) Projekty: licznik, przypomnienie o dalszej pracy i bezpieczna pauza, zależności; (3) backup ZIP/restore i zgodność wsteczna; (4) dwukierunkowa synchronizacja Android/Desktop; (5) regresja i test migracji danych przed scaleniem.
+- **Pozostałe wymagania przed promocją:** zdjęcia czynności, przełączniki dźwięku/wibracji, ustawienia PIN. Wdrożenie i testy niepotwierdzone.
+- **Scalenie:** PR #6 `beta` → `main` nadal `mergeable=false`. Nie scalać na siłę; zachować commity specyficzne dla `main`, najpierw rozwiązać konflikty i przejść testy.
+- **Następny krok:** poprawki kodu P0 Budżet/PayCheck wraz z testami; kolejne APK wydać pod nowym numerem dopiero po zebraniu poprawek.
