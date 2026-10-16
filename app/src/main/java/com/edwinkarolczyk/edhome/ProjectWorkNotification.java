@@ -2,6 +2,7 @@ package com.edwinkarolczyk.edhome;
 
 import android.Manifest;
 import android.app.Notification;
+import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -19,6 +20,9 @@ import java.util.List;
 final class ProjectWorkNotification {
     static final String ACTION_START =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_START";
+    static final String ACTION_CHECK =
+        "com.edwinkarolczyk.edhome.PROJECT_WORK_CHECK";
+    private static final long CHECK_MS = 60L * 60L * 1000L;
     static final String ACTION_STOP =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_STOP";
     private static final String CHANNEL_ID = "edhome-project-work";
@@ -78,6 +82,83 @@ final class ProjectWorkNotification {
             PendingIntent.FLAG_UPDATE_CURRENT|LegacyCompat.immutableFlag());
     }
 
+    private static PendingIntent checkAction(Context context, long taskId) {
+        Intent intent = new Intent(context, ReminderReceiver.class)
+            .setAction(ACTION_CHECK).putExtra("task_id", taskId);
+        return PendingIntent.getBroadcast(context,
+            4100000 + (int)(taskId % 800000), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+    }
+
+    private static void scheduleCheck(Context context, long taskId, long started) {
+        AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarm == null) return;
+        LegacyCompat.setAndAllowWhileIdle(alarm, AlarmManager.RTC_WAKEUP,
+            Math.max(System.currentTimeMillis() + 1000L, started + CHECK_MS),
+            checkAction(context, taskId));
+    }
+
+    private static void cancelCheck(Context context, long taskId) {
+        AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        PendingIntent pending = checkAction(context, taskId);
+        if (alarm != null) alarm.cancel(pending);
+        pending.cancel();
+    }
+
+    /** Po godzinie bez potwierdzenia kończy sesję na granicy 60 minut. */
+    static void handleCheckAction(Context context, long taskId) {
+        File file = context.getDatabasePath(DATABASE);
+        if (!file.isFile()) return;
+        boolean paused = false;
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
+                file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+             Cursor cursor = db.rawQuery(
+                "SELECT id,started_at FROM project_task_work_sessions "
+                    + "WHERE task_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1",
+                new String[]{Long.toString(taskId)})) {
+            if (!cursor.moveToFirst()) return;
+            long id = cursor.getLong(0);
+            long started = cursor.getLong(1);
+            if (System.currentTimeMillis() < started + CHECK_MS) {
+                scheduleCheck(context, taskId, started);
+                return;
+            }
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put("ended_at", started + CHECK_MS);
+            values.put("worked_minutes", 60);
+            paused = db.update("project_task_work_sessions", values,
+                "id=? AND ended_at IS NULL", new String[]{Long.toString(id)}) == 1;
+        } catch (Exception problem) {
+            DiagnosticLog.error("PROJECT_WORK_AUTO_PAUSE", problem);
+        }
+        if (!paused) return;
+        cancel(context, taskId);
+        FeedbackSignals.warning(context);
+        if (!canNotify(context)) return;
+        NotificationManager manager = (NotificationManager)
+            context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        LegacyCompat.ensureChannel(manager, CHANNEL_ID,
+            "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_DEFAULT,
+            null, true, true, false);
+        Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_edhome)
+            .setContentTitle("Czy nadal wykonujesz tę czynność?")
+            .setContentText("Po 60 minutach licznik wstrzymano. Wznów lub zakończ.")
+            .setAutoCancel(true)
+            .addAction(android.R.drawable.ic_media_play, "Tak, pracuję",
+                startAction(context, taskId))
+            .addAction(android.R.drawable.ic_media_pause, "Nie, zakończ",
+                stopNoticeAction(context, taskId))
+            .build();
+        manager.notify(notificationId(taskId), notification);
+        DiagnosticLog.event("PROJECT_WORK_AUTO_PAUSED", "task=" + taskId);
+    }
+
+    private static PendingIntent stopNoticeAction(Context context, long taskId) {
+        return openAction(context, 0L, taskId);
+    }
+
     static boolean isActive(Context context, long taskId) {
         File file = context.getDatabasePath(DATABASE);
         if (!file.isFile()) return false;
@@ -133,13 +214,13 @@ final class ProjectWorkNotification {
                     : problem.getMessage());
             return;
         }
+        cancelCheck(context, taskId);
         cancel(context, taskId);
         showStopped(context, taskId, minutes);
         FeedbackSignals.stopped(context);
     }
 
     static void showActive(Context context, long taskId) {
-        if (!canNotify(context)) return;
         File file = context.getDatabasePath(DATABASE);
         if (!file.isFile()) return;
 
@@ -189,6 +270,8 @@ final class ProjectWorkNotification {
             return;
         }
 
+        scheduleCheck(context, taskId, activeStarted);
+        if (!canNotify(context)) return;
         NotificationManager manager = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
