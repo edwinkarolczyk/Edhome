@@ -20,6 +20,8 @@ import java.util.List;
 final class ProjectWorkNotification {
     static final String ACTION_START =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_START";
+    static final String ACTION_DISMISS =
+        "com.edwinkarolczyk.edhome.PROJECT_WORK_DISMISS";
     static final String ACTION_CHECK =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_CHECK";
     private static final long CHECK_MS = 60L * 60L * 1000L;
@@ -156,7 +158,11 @@ final class ProjectWorkNotification {
     }
 
     private static PendingIntent stopNoticeAction(Context context, long taskId) {
-        return openAction(context, 0L, taskId);
+        Intent intent = new Intent(context, ReminderReceiver.class)
+            .setAction(ACTION_DISMISS).putExtra("task_id", taskId);
+        return PendingIntent.getBroadcast(context,
+            5100000 + (int)(taskId % 800000), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
     }
 
     static boolean isActive(Context context, long taskId) {
