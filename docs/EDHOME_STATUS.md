@@ -1,3 +1,10 @@
+## 2026-10-16 — Wydanie Android Beta 0.8.0.122 / 314: naprawa P0 rozliczeń grupowych, CI PASS
+
+- **Publikacja potwierdzona:** [EDHOME Beta 0.8.0.122 / 314 — podpisana APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.122/edhome-beta.apk), plik `edhome-beta.apk` **13 423 050 bajtów**. [Release GitHub](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.122), SHA-256 `f111c87851c964143416ec6eb02d596208cbaa36f7ab37ea817b2d458da2988a`. `beta-manifest.json` automatycznie wskazuje wersję 0.8.0.122/314 i prawidłowy link do wydania.
+- **Testy i kompilacja:** [GitHub Actions #38940933758](https://github.com/edwinkarolczyk/Edhome/actions/runs/38940933758) **completed/success, 117/117 kroków**; testy grupowe i crash-recovery, kompilacja, lint API22, podpis, publikacja. Poprzedni CI ujawnił przestarzały test kontraktowy; aktualizacja testu commit `15182f3` umożliwiła czysty przebieg.
+- **Zakres:** dziennik i wznowienie przerwanego 2→1/1→2 w PayCheck, księga zatwierdzana przed stanem Budżetu, blokowanie widoku finansowego przy niemożliwym odzyskaniu. **Nie wykonano jeszcze fizycznego testu awarii ani testu z prawdziwymi wyciągami banków**; CI nie jest potwierdzeniem tych scenariuszy.
+- **Otwarty P0 przed 1.0:** zgodność dziennika `bank_group_settlement_recovery` z eksportem/przywracaniem ZIP. Dziennik jest lokalny i nie znajduje się w `DataBackup.TABLES`; wymaga osobnego zabezpieczenia w etapie Backup/Restore. Nadal wymagane testy nadpłat, długiej historii i synchronizacji z Desktopem. Stable `main` bez zmian.
+
 ## 2026-10-16 — Etap P0 Budżet/PayCheck: dziennik awarii rozliczeń grupowych 2→1 i 1→2
 
 - **Zmiana kodowa na beta:** `BankBudgetGroupSettlement` zapisuje potwierdzenia i dziennik `bank_group_settlement_recovery` w jednej transakcji SQLite, kończy commit SQL, a **dopiero potem** wykonuje `PaycheckMonthlyBudget.matchBankParts` (2→1) lub `allocateSplit` (1→2) zapisujące plan/historię do SharedPreferences. To usuwa ryzyko wcześniejszego planu przy niezatwierdzonym jeszcze SQL.
