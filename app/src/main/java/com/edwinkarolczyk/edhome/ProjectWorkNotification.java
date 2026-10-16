@@ -134,7 +134,7 @@ final class ProjectWorkNotification {
         }
         cancel(context, taskId);
         showStopped(context, taskId, minutes);
-        FeedbackSignals.success(context);
+        FeedbackSignals.stopped(context);
     }
 
     static void showActive(Context context, long taskId) {
