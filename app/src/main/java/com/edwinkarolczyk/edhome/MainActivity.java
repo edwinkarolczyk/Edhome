@@ -13585,8 +13585,11 @@ public final class MainActivity extends Activity {
             }
         }catch(Exception repairError) {
             DiagnosticLog.error("PAYCHECK_BANK_RECOVERY_FAILED",repairError);
-            note("Uwaga: nie udało się sprawdzić wszystkich "
-                +"powiązań bankowych. Otwórz Diagnostykę.");
+            note("UWAGA: wykryto nieukończone rozliczenie bankowe. "
+                +"PayCheck zablokowany do czasu naprawy; nie importuj "
+                +"i nie potwierdzaj ponownie tych samych przelewów. "
+                +"Otwórz Diagnostykę i wykonaj kopię danych.");
+            return;
         }
         ensureBudgetPaycheckPending(YearMonth.now());
         title("Saldo potwierdzone: "+MoneyRules.format(
