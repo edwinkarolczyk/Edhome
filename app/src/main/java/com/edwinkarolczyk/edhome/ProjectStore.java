@@ -549,6 +549,30 @@ final class ProjectStore {
         return minutes;
     }
 
+    /** Zatrzymaj sesję na granicy limitu, bez doliczania opóźnienia alarmu. */
+    static int pauseWorkAt(SQLiteDatabase db, long taskId, long expectedStarted,
+            long limitMillis) {
+        long id;
+        try (Cursor cursor = db.rawQuery(
+                "SELECT id,started_at FROM project_task_work_sessions "
+                    + "WHERE task_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1",
+                new String[]{Long.toString(taskId)})) {
+            if (!cursor.moveToFirst() || cursor.getLong(1) != expectedStarted)
+                return 0;
+            id = cursor.getLong(0);
+        }
+        long ended = Math.min(System.currentTimeMillis(),
+            expectedStarted + Math.max(60000L, limitMillis));
+        if (ended < expectedStarted + Math.max(60000L, limitMillis)) return 0;
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put("ended_at", ended);
+        int minutes = (int) Math.max(1L, Math.round((ended - expectedStarted) / 60000.0));
+        values.put("worked_minutes", minutes);
+        return db.update("project_task_work_sessions", values,
+            "id=? AND ended_at IS NULL", new String[]{Long.toString(id)}) == 1
+                ? minutes : 0;
+    }
+
     static String timeClass(SQLiteDatabase db,long projectId,long taskId) {
         Set<Long> ids=descendantIds(db,projectId);
         if(ids.isEmpty())return "";
