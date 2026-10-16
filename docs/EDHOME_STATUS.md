@@ -1,3 +1,13 @@
+## 2026-10-16 — Audyt Budżet/PayCheck przed pracami 17 października (bez wyciągów użytkownika)
+
+- **Raport:** [EDHOME_PAYCHECK_BUDZET_AUDYT_2026-10-16.md](EDHOME_PAYCHECK_BUDZET_AUDYT_2026-10-16.md) — przegląd kodu Android/Desktop, parserów VeloBank/mBank, dopasowań 1:1, 2→1 i 1→2, salda, nadpłat, idempotencji oraz istniejących testów. Bazowe wydanie Android Beta 0.8.0.119/311 i Desktop Beta 0.7.0.121 bez zmian.
+- **Potwierdzone zabezpieczenia:** kwota z wyciągu, potwierdzenie przed zmianą salda, `evidence_key` przeciw duplikatom, świadoma zgoda dla rozliczeń łączonych, ochrona alokacji i nadpłat, `repairUnlinked` po przerwanym 1→1. Testy CI same nie dowodzą działania na rzeczywistych plikach i urządzeniu.
+- **AUD-FIN-01 — P0 ryzyko, nie odtworzony błąd:** w rozliczeniach grupowych 2→1/1→2 plan i historia zapisują się w `SharedPreferences.commit()` wewnątrz transakcji SQLite. Te magazyny nie mają wspólnej atomowej granicy; przed 1.0 przetestować przerwanie po każdym etapie i zapewnić mechanizm odzyskiwania.
+- **AUD-FIN-02 — P1 potwierdzone ograniczenie:** propozycje grupowe czytają tylko pierwszych 300 otwartych transakcji i wyświetlają najwyżej 40 propozycji; pełen import może być zapisany, lecz starsze pasujące pary niewidoczne. Wymagana paginacja po miesiącu i test 301+ transakcji.
+- **AUD-FIN-03/04 — P1 parsery:** VeloBank PDF celowo nie jest automatycznie uzgadniany; wymaga tekstowego PDF i kontroli na oryginalnych próbkach. Generyczny CSV wymaga stabilnego ID. mBank rozpoznaje określony nagłówek/kolumny. Potrzebne realne pliki oraz weryfikacja ilości, sum i dat.
+- **AUD-FIN-05/06:** różne kryteria propozycji na Desktop/Android, otwarte testy E2E i ZIP/aktualizacji. Nie zgłaszać FIN P0 jako naprawionego przed testem.
+- **Prace wykonane w tym etapie:** tylko audyt i dokumentacja, bez poprawiania kodu aplikacji, migracji, wersji czy tworzenia nowej APK. **Następny krok:** weryfikacja ryzyka P0, testy grupowe i porównanie plików banków, które użytkownik przygotowuje. Stable `main` bez zmian.
+
 ## 2026-10-16 — EDHOME 1.0: termin wydania 25 października 2026 (9 dni)
 
 - **Decyzja użytkownika:** wejście w wersję 1.0.0 w terminie 9 dni, przed zakończeniem płatnego dostępu do ChatGPT. Termin docelowy: **2026-10-25**. Priorytet: stabilność i dane, bez rozbudowy o nowe moduły. Termin jest planem GO/NO-GO, nie obietnicą wypuszczenia nieprzetestowanej wersji.
