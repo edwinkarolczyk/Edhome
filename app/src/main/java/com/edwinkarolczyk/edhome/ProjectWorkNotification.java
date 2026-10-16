@@ -22,8 +22,8 @@ final class ProjectWorkNotification {
         "com.edwinkarolczyk.edhome.PROJECT_WORK_START";
     static final String ACTION_DISMISS =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_DISMISS";
-    static final String ACTION_DISMISS =
-        "com.edwinkarolczyk.edhome.PROJECT_WORK_DISMISS";
+    static final String ACTION_CHECK =
+        "com.edwinkarolczyk.edhome.PROJECT_WORK_CHECK";
     static final String ACTION_TIMEOUT =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_TIMEOUT";
     private static final long CHECK_MS = 60L * 60L * 1000L;
