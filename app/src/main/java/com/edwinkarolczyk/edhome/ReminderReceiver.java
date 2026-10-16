@@ -170,6 +170,12 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 context, intent.getLongExtra("task_id", -1L));
             return;
         }
+        if (ProjectWorkNotification.ACTION_TIMEOUT.equals(action)) {
+            ProjectWorkNotification.handleTimeout(context,
+                intent.getLongExtra("task_id", -1L),
+                intent.getLongExtra("started_at", -1L));
+            return;
+        }
         if (ProjectWorkNotification.ACTION_START.equals(action)) {
             ProjectWorkNotification.handleStartAction(
                 context, intent.getLongExtra("task_id", -1L));
