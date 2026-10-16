@@ -304,3 +304,60 @@ assert 'deleteDesktopProject(project)' in desktop
 assert 'desktopProjectThumbnailIcon' in desktop
 assert 'chooseDesktopProjectThumbnail' in desktop
 assert 'removeRowsByLong("project_costs","project_id",id);' in desktop
+
+
+# P0: kasowanie projektu nie może ożywić danych po późniejszej synchronizacji.
+android_delete=project.split("static void deleteProjectTree(",1)[1].split(
+    "static Project find(",1)[0]
+for table in (
+    "project_task_dependencies", "project_task_blockers",
+    "project_task_work_sessions", "task_rotation_members", "task_history",
+    "tasks", "project_resources", "project_costs", "projects",
+):
+    assert 'db.delete("'+table+'"' in android_delete, "Android cascade: "+table
+assert 'ended_at IS NULL LIMIT 1' in android_delete
+assert android_delete.index("db.beginTransaction();") < android_delete.index(
+    "SyncRecordStore.ensureAll(db);") < android_delete.index(
+    "db.setTransactionSuccessful();"), "Android tombstones must be transactional"
+assert 'db.delete("storage_items"' not in android_delete, (
+    "Kasowanie projektu nie może usuwać rzeczy z Magazynu")
+
+desktop_delete=desktop.split(
+    "private void deleteDesktopProject(JsonObject root)",1)[1].split(
+    "private void showDesktopProjectEditor(",1)[0]
+for table in (
+    "project_task_dependencies", "project_task_blockers",
+    "project_task_work_sessions", "task_rotation_members", "task_history",
+    "tasks", "project_resources", "project_costs", "projects",
+):
+    assert 'removeRowsByLong("'+table+'"' in desktop_delete, (
+        "Desktop cascade: "+table)
+assert 'value(session,"ended_at").isBlank()' in desktop_delete
+assert 'markDirty();' in desktop_delete
+assert 'removeRowsByLong("storage_items"' not in desktop_delete
+
+# Tombstone is sent by the phone and respected by the desktop; deletes
+# sent by the desktop must become record patches rather than silent removal.
+ensure_sync=sync.split("static void ensureAll(SQLiteDatabase db)",1)[1].split(
+    "static JSONArray exportMetadata(",1)[0]
+assert 'values.put("deleted_at", now);' in ensure_sync
+assert 'values.put("row_hash", "DELETED");' in ensure_sync
+desktop_patch=desktop.split(
+    "private static RecordPatchPlan buildRecordPatchV2(",1)[1].split(
+    "private static RecordPatchPlan buildLegacyRecordPatch(",1)[0]
+assert 'operation.addProperty("action", "delete");' in desktop_patch
+desktop_pull=desktop.split(
+    "private static int applyPhoneChanges(",1)[1].split(
+    "private static int syncMetaIndexByUuid(",1)[0]
+assert 'remoteMeta.has("deletedAt")' in desktop_pull
+assert 'if (rowIndex >= 0) rows.remove(rowIndex);' in desktop_pull
+assert 'metadata.set(metaIndex, remoteMeta.deepCopy())' in desktop_pull
+
+# New thumbnails must survive JSON/ZIP/LAN; old v47 archives lacked this field.
+assert '"thumbnail_base64", "created_at"' in backup
+assert 'inputVersion < 48 && "projects".equals(definition[0])' in backup
+selective=(root / "app/src/main/java/com/edwinkarolczyk/edhome/BackupSelectiveMerge.java").read_text(
+    encoding="utf-8")
+assert 'if ("projects".equals(table) && sourceVersion < 48)' in selective
+assert 'project.put("thumbnail_base64",JSONObject.NULL)' in selective
+print("P0 Projekty: cascade, aktywne sesje, tombstones, ZIP v47-v48 — kontrakty PASS")
