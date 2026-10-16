@@ -161,6 +161,11 @@ public final class ReminderReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         String action = intent.getAction();
+        if (ProjectWorkNotification.ACTION_CHECK.equals(action)) {
+            ProjectWorkNotification.handleCheckAction(
+                context, intent.getLongExtra("task_id", -1L));
+            return;
+        }
         if (ProjectWorkNotification.ACTION_START.equals(action)) {
             ProjectWorkNotification.handleStartAction(
                 context, intent.getLongExtra("task_id", -1L));
