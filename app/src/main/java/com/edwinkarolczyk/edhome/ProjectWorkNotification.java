@@ -3,7 +3,6 @@ package com.edwinkarolczyk.edhome;
 import android.Manifest;
 import android.app.Notification;
 import android.app.AlarmManager;
-import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -23,9 +22,6 @@ final class ProjectWorkNotification {
         "com.edwinkarolczyk.edhome.PROJECT_WORK_START";
     static final String ACTION_DISMISS =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_DISMISS";
-    static final String ACTION_CHECK =
-        "com.edwinkarolczyk.edhome.PROJECT_WORK_CHECK";
-    private static final long CHECK_MS = 60L * 60L * 1000L;
     static final String ACTION_DISMISS =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_DISMISS";
     static final String ACTION_TIMEOUT =
