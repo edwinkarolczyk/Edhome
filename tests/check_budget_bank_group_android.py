@@ -45,8 +45,12 @@ for key in (
     "PaycheckStore.add(", "db.delete(", 'state',
 ):
     assert key in settle,key
-assert 'Arrays.asList(budgetOperationId,childId)' in settle
-assert 'Arrays.asList(first.id,second.id)' in settle
+# Rozliczenia planu wykonuje nowy mechanizm recovery po commit SQLite.
+assert 'Arrays.asList(firstOp,secondOp)' in settle
+assert 'Arrays.asList(firstId,secondId)' in settle
+assert 'journal(db,a.key,"two_to_one"' in settle
+assert 'journal(db,bank.key,"one_to_two"' in settle
+assert 'repairInterrupted(prefs,db);' in settle
 assert 'MAX_BANK_PAIR_DAYS' in rules
 assert "saveWithEvents(prefs,items,events);" in budget.split(
     "static boolean matchBankParts(",1)[1].split(
