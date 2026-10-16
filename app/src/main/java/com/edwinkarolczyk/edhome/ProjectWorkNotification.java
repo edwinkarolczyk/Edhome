@@ -126,6 +126,7 @@ final class ProjectWorkNotification {
                 "task=" + taskId + " minutes=" + minutes);
         } catch (Exception problem) {
             DiagnosticLog.error("PROJECT_WORK_STOP_NOTIFICATION", problem);
+            FeedbackSignals.warning(context);
             showActionError(context, taskId,
                 problem.getMessage() == null
                     ? "Nie udało się zatrzymać pomiaru."
