@@ -104,6 +104,7 @@ final class ProjectWorkNotification {
                 "task=" + taskId);
         } catch (Exception problem) {
             DiagnosticLog.error("PROJECT_WORK_START_NOTIFICATION", problem);
+            FeedbackSignals.warning(context);
             showActionError(context, taskId,
                 problem.getMessage() == null
                     ? "Nie udało się rozpocząć pomiaru."
@@ -111,6 +112,7 @@ final class ProjectWorkNotification {
             return;
         }
         showActive(context, taskId);
+        FeedbackSignals.success(context);
     }
 
     static void handleStopAction(Context context, long taskId) {
@@ -132,6 +134,7 @@ final class ProjectWorkNotification {
         }
         cancel(context, taskId);
         showStopped(context, taskId, minutes);
+        FeedbackSignals.success(context);
     }
 
     static void showActive(Context context, long taskId) {
