@@ -1,3 +1,11 @@
+## 2026-10-16 — EDHOME 1.0: termin wydania 25 października 2026 (9 dni)
+
+- **Decyzja użytkownika:** wejście w wersję 1.0.0 w terminie 9 dni, przed zakończeniem płatnego dostępu do ChatGPT. Termin docelowy: **2026-10-25**. Priorytet: stabilność i dane, bez rozbudowy o nowe moduły. Termin jest planem GO/NO-GO, nie obietnicą wypuszczenia nieprzetestowanej wersji.
+- **Plan wykonawczy:** [docs/EDHOME_1_0_PLAN.md](EDHOME_1_0_PLAN.md), GitHub issue [#5](https://github.com/edwinkarolczyk/Edhome/issues/5). Dni: 16 X freeze i P0; 17 X PayCheck/Budżet; 18 X backup i migracje; 19 X Projekty/Czynności; 20 X QR/NFC/Kalendarz; 21 X Desktop/LAN; 22 X Ustawienia/wydajność; 23–24 X RC, weryfikacja; 25 X decyzja 1.0.
+- **Wersje wejściowe:** Android Beta **0.8.0.119 / 311** (CI PASS), Desktop Beta **0.7.0.121**. Android 1.0.0 wymaga `versionCode>311`. Stable `main` bez zmian do zatwierdzonej promocji. Nie zmieniano dziś numeru wersji na 1.0, bo nie zakończono kontroli bezpieczeństwa.
+- **Bramka obowiązkowa:** 0 błędów P0, sprawdzona aktualizacja bez utraty danych, pełny i selektywny restore ZIP, CI/build/podpis, obsługa finansów bez błędnych sald, podstawowe czynności/projekty, dostępność offline. Desktop 1.0 tylko z uczciwym oznaczeniem i po niezbędnych testach; prawdziwy LAN na dwóch urządzeniach nie był testowany i użytkownik chwilowo nie ma dostępu do PC.
+- **Poza 1.0 / 1.1:** Supla ostrzeżenia temperaturowe, nowe funkcje i upiększanie niezwiązane z błędami. Kontynuować aktualizację tego statusu po każdym faktycznie wykonanym etapie. Wszelkie otwarte P0 25 X = RC z raportem blokad zamiast pozorowanej wersji stabilnej.
+
 ## 2026-10-16 — Android Beta: Czynności (checkbox, zielony status 1 s) i Ustawienia
 
 - **Wdrożono w kodzie gałęzi beta:** w Czynnościach i czynnościach Projektów checkbox jest oddzielony od nazwy. Dotknięcie nazwy w ogólnych Czynnościach rozwija działania, ale nie zmienia stanu. Tylko checkbox oznacza wykonanie/cofnięcie. Zachowana centralna walidacja zakończenia zadań projektowych, blokady i potwierdzenie kaskadowego cofania zależności.
