@@ -1311,6 +1311,37 @@ public final class MainActivity extends Activity {
         return box;
     }
 
+    // Ukończona czynność ma subtelne zielone tło dopasowane do motywu.
+    private int completedTaskSurface() {
+        int green = Color.rgb(57, 167, 96);
+        float tint = skin.light ? 0.16f : 0.24f;
+        return Color.rgb(
+            Math.round(Color.red(surface) * (1f - tint) + Color.red(green) * tint),
+            Math.round(Color.green(surface) * (1f - tint) + Color.green(green) * tint),
+            Math.round(Color.blue(surface) * (1f - tint) + Color.blue(green) * tint));
+    }
+
+    // Animacja trwa sekundę; odświeżenie następuje dopiero po jej zakończeniu.
+    private void animateTaskCompletion(LinearLayout card, boolean completed,
+            Runnable afterAnimation) {
+        int from = completed ? surface : completedTaskSurface();
+        int to = completed ? completedTaskSurface() : surface;
+        GradientDrawable background = skin.panel(this, from, 22);
+        card.setBackground(background);
+        android.animation.ValueAnimator animation =
+            android.animation.ValueAnimator.ofArgb(from, to);
+        animation.setDuration(1000L);
+        animation.addUpdateListener(value ->
+            background.setColor((Integer) value.getAnimatedValue()));
+        animation.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator unused) {
+                if (afterAnimation != null && !isFinishing())
+                    afterAnimation.run();
+            }
+        });
+        animation.start();
+    }
+
     private static final String AUTO_ACTION_ROW_TAG =
         "edhome:auto-action-row";
     private static final String AUTO_SMALL_ACTION_ROW_TAG =
@@ -5556,6 +5587,7 @@ public final class MainActivity extends Activity {
             final boolean completionBlocked=blockers>0||hardRequirements>0;
 
             LinearLayout box=card();
+            if(done)box.setBackground(skin.panel(this,completedTaskSurface(),22));
             if(taskId==pendingProjectTaskFocusId) {
                 box.setBackground(skin.panel(this,skin.tileTop,22));
                 box.setElevation(dp(6));
@@ -5565,15 +5597,25 @@ public final class MainActivity extends Activity {
                 pendingProjectTaskFocusId=0L;
             }
 
+            LinearLayout taskHeader=new LinearLayout(this);
+            taskHeader.setOrientation(LinearLayout.HORIZONTAL);
+            taskHeader.setGravity(Gravity.CENTER_VERTICAL);
             CheckBox check=new CheckBox(this);
-            check.setText(taskName);
-            check.setTextColor(done?subdued:ink);
+            check.setText("");
             check.setChecked(done);
+            check.setButtonTintList(ColorStateList.valueOf(
+                done?Color.rgb(69,165,95):accent));
             check.setEnabled(done||!completionBlocked);
+            check.setContentDescription((done?"Cofnij wykonanie: ":"Wykonaj: ")
+                +taskName);
             if(completionBlocked&&!done)
                 check.setContentDescription(taskName
                     +". Zablokowane. Najpierw zakończ zależności i spełnij wymagania.");
-            box.addView(check);
+            taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)));
+            TextView taskTitle=text(taskName,17,true);
+            taskTitle.setTextColor(done?subdued:ink);
+            taskHeader.addView(taskTitle,new LinearLayout.LayoutParams(0,-2,1f));
+            box.addView(taskHeader);
 
             String timeLine="Plan: "+projectTimeText(minutes)
                 +" • wykonano: "+projectTimeText(worked)
@@ -5644,14 +5686,18 @@ public final class MainActivity extends Activity {
                 if(!value) {
                     check.setOnCheckedChangeListener(null);
                     check.setChecked(true);
-                    requestReopenTask(taskId);
+                    requestReopenTask(taskId,()->{
+                        check.setChecked(false);
+                        animateTaskCompletion(box,false,this::render);
+                    });
                     return;
                 }
                 try {
                     db.completeTask(taskId);
                     ReminderReceiver.schedule(this);
                     DiagnosticLog.event("PROJECT_TASK_COMPLETED","task="+taskId);
-                    render();
+                    check.setEnabled(false);
+                    animateTaskCompletion(box,true,this::render);
                 } catch(Exception error) {
                     check.setOnCheckedChangeListener(null);
                     check.setChecked(false);
@@ -6722,6 +6768,10 @@ public final class MainActivity extends Activity {
     }
 
     private void requestReopenTask(long taskId) {
+        requestReopenTask(taskId,null);
+    }
+
+    private void requestReopenTask(long taskId,Runnable afterSuccess) {
         java.util.List<ProjectStore.TaskRef> affected=
             ProjectStore.completedDependents(db.getReadableDatabase(),taskId);
         Runnable apply=()->{
@@ -6731,7 +6781,8 @@ public final class MainActivity extends Activity {
                 ReminderReceiver.schedule(this);
                 DiagnosticLog.event("TASK_REOPENED_WITH_DEPENDENTS",
                     "task="+taskId+" affected="+affected.size());
-                render();
+                if(afterSuccess!=null)afterSuccess.run();
+                else render();
             } catch(Exception error) {
                 alert(error.getMessage()==null
                     ?"Nie udało się cofnąć czynności.":error.getMessage());
@@ -6759,13 +6810,21 @@ public final class MainActivity extends Activity {
     private void drawTask(long id, String name, boolean done, String due,
             String rule, int every) {
         LinearLayout box = card();
+        if(done)box.setBackground(skin.panel(this,completedTaskSurface(),22));
+        LinearLayout taskHeader=new LinearLayout(this);
+        taskHeader.setOrientation(LinearLayout.HORIZONTAL);
+        taskHeader.setGravity(Gravity.CENTER_VERTICAL);
         CheckBox check = new CheckBox(this);
-        check.setText(name);
+        check.setText("");
         check.setChecked(done);
-        check.setTextSize(17);
-        check.setTextColor(done ? subdued : ink);
-        check.setButtonTintList(ColorStateList.valueOf(accent));
-        box.addView(check);
+        check.setContentDescription((done?"Cofnij wykonanie: ":"Wykonaj: ")+name);
+        check.setButtonTintList(ColorStateList.valueOf(
+            done?Color.rgb(69,165,95):accent));
+        taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        TextView taskTitle=text(name,17,true);
+        taskTitle.setTextColor(done?subdued:ink);
+        taskHeader.addView(taskTitle,new LinearLayout.LayoutParams(0,-2,1f));
+        box.addView(taskHeader);
         String[] planning = db.taskPlanning(id);
         String description = (due.isEmpty() ? "Bez terminu" : "Termin: " + due)
             + " • " + TaskRules.label(rule, every)
@@ -6798,14 +6857,18 @@ public final class MainActivity extends Activity {
             if(!value) {
                 check.setOnCheckedChangeListener(null);
                 check.setChecked(true);
-                requestReopenTask(id);
+                requestReopenTask(id,()->{
+                    check.setChecked(false);
+                    animateTaskCompletion(box,false,this::render);
+                });
                 return;
             }
             try {
                 db.completeTask(id);
                 DiagnosticLog.event("TASK_COMPLETED");
                 ReminderReceiver.schedule(this);
-                render();
+                check.setEnabled(false);
+                animateTaskCompletion(box,true,this::render);
             } catch(Exception error) {
                 check.setOnCheckedChangeListener(null);
                 check.setChecked(false);
@@ -6840,6 +6903,8 @@ public final class MainActivity extends Activity {
                 ? ". Opcje są widoczne. Dotknij kartę, aby je schować."
                 : ". Dotknij kartę, aby pokazać opcje."));
         });
+        // Nazwa pokazuje opcje; checkbox jest jedynym miejscem zmiany stanu.
+        taskTitle.setOnClickListener(v -> box.performClick());
     }
 
     private void taskAction(LinearLayout row, String label, Runnable run) {
@@ -21974,8 +22039,16 @@ public final class MainActivity extends Activity {
             boolean openByDefault) {
         LinearLayout shell=card();
         boolean open=prefs.getBoolean("settings_open_"+key,openByDefault);
-        TextView heading=text((open?"▾ ":"▸ ")+title,19,true);
-        heading.setMinHeight(dp(46));
+        String categoryIcon =
+            "general".equals(key)?"⌂": "users".equals(key)?"♙":
+            "nfc".equals(key)?"◈": "storage".equals(key)?"▣":
+            "scanner".equals(key)?"▦": "appearance".equals(key)?"◉":
+            "notifications".equals(key)?"♧": "supla".equals(key)?"⌁":
+            "desktop".equals(key)?"↔": "data".equals(key)?"▤":"⚙";
+        String categoryTitle=categoryIcon+"  "+title;
+        shell.setBackground(skin.panel(this,skin.tileTop,18));
+        TextView heading=text((open?"▾ ":"▸ ")+categoryTitle,18,true);
+        heading.setMinHeight(dp(48));
         heading.setGravity(Gravity.CENTER_VERTICAL);
         shell.addView(heading);
         TextView description=text(summary,13,false);
@@ -21989,11 +22062,12 @@ public final class MainActivity extends Activity {
         Runnable toggle=()->{
             boolean nowOpen=content.getVisibility()!=View.VISIBLE;
             content.setVisibility(nowOpen?View.VISIBLE:View.GONE);
-            heading.setText((nowOpen?"▾ ":"▸ ")+title);
+            heading.setText((nowOpen?"▾ ":"▸ ")+categoryTitle);
             prefs.edit().putBoolean("settings_open_"+key,nowOpen).apply();
         };
         heading.setOnClickListener(v->toggle.run());
         description.setOnClickListener(v->toggle.run());
+        shell.setOnClickListener(v->toggle.run());
         shell.setContentDescription(title+(open?" • Zwiń":" • Rozwiń"));
         return content;
     }
@@ -22296,7 +22370,8 @@ public final class MainActivity extends Activity {
 
     private void settings() {
         header("Ustawienia");
-        note("Sekcje są zwijane. Zmiany widoku nie usuwają danych.");
+        note("Wybierz kategorię ustawień. Dotknij karty, aby ją rozwinąć; "
+            +"ustawienia i dane pozostają bez zmian.");
 
         LinearLayout general=settingsAccordion("general","Ogólne",
             "Nazwa gospodarstwa i podstawowe ustawienia.",false);
