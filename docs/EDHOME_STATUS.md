@@ -1,3 +1,12 @@
+## 2026-10-16 — Zatwierdzona pełna promocja Beta → Stable i nowe wymagania
+
+- **Decyzja użytkownika:** przenieść CAŁĄ gałąź `beta` do `main` po wdrożeniu zmian i sprawdzeniu migracji. PR [#6](https://github.com/edwinkarolczyk/Edhome/pull/6) utworzony jako draft. Porównanie GitHub: gałęzie rozbieżne (`beta` 1108 commitów przed `main`, `main` 11 commitów przed `beta`), GitHub zgłasza konflikt. Nie używać force push; zachować zmiany main i rozwiązać konflikty świadomie.
+- **Czynności projektowe i zwykłe:** wiele zdjęć z aparatu/galerii, podgląd, usuwanie, obsługa offline, backup ZIP i LAN, zgodność danych.
+- **PIN Stable:** Ustawienia → „Wymagaj PIN-u”, wyłączenie po potwierdzeniu aktualnego PIN-u; ponowne włączenie w dowolnej chwili.
+- **Czas pracy:** konfigurowalny interwał potwierdzania dalszej pracy (propozycja 60 minut); po czasie pytanie „Czy nadal pracujesz nad tą czynnością?”, kontynuuj/zakończ; bez odpowiedzi auto-pauza i możliwość korekty czasu. Wymaga przetestowania procesu w tle i po restarcie.
+- **Dźwięki i wibracje:** osobne przełączniki w Ustawieniach; delikatne potwierdzenie czynności, sygnał błędu, alarm końca czasu, przypomnienia, potwierdzenie QR/NFC; przestrzegać trybu cichego, ciszy nocnej, uprawnień Androida i ustawień kanałów powiadomień. Istniejący kanał aktywnej pracy ma IMPORTANCE_LOW — nie jest potwierdzeniem pełnej obsługi dźwięków.
+- **Bramka wydania:** P0 PayCheck/Budżet, migracje i restore ZIP, synchronizacja LAN, testy Android/Desktop i podpisane wydania. Na dzień tego wpisu funkcje z tej sekcji NIE są potwierdzone jako zaimplementowane; Stable nie został scalony. Nie deklarować nowej APK bez potwierdzonego CI i release.
+
 ## 2026-10-16 — Audyt Budżet/PayCheck przed pracami 17 października (bez wyciągów użytkownika)
 
 - **Raport:** [EDHOME_PAYCHECK_BUDZET_AUDYT_2026-10-16.md](EDHOME_PAYCHECK_BUDZET_AUDYT_2026-10-16.md) — przegląd kodu Android/Desktop, parserów VeloBank/mBank, dopasowań 1:1, 2→1 i 1→2, salda, nadpłat, idempotencji oraz istniejących testów. Bazowe wydanie Android Beta 0.8.0.119/311 i Desktop Beta 0.7.0.121 bez zmian.
