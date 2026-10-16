@@ -204,6 +204,7 @@ jobs:
           java -cp "$RUNNER_TEMP/budget-bank-group" \
             com.edwinkarolczyk.edhome.BankBudgetGroupSmoke
           python3 tests/check_budget_bank_group_android.py
+          python3 tests/check_bank_group_recovery_p0.py
       - name: All Android PayCheck history pages and bank amount signs
         run: |
           mkdir -p "$RUNNER_TEMP/paycheck-history-all"
@@ -625,7 +626,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.119 — Czynności: po wykonaniu delikatne zielone tło z płynną animacją 1 s, zmiana stanu tylko przez checkbox; dotknięcie nazwy pokazuje opcje. Projekty: te same zasady ukończenia i cofania zależnych czynności. Ustawienia: czytelniejsze, klikane karty kategorii. Bez migracji bazy i bez zmian Stable."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.122 / 314 — P0 Budżet/PayCheck: trwały dziennik rozliczeń grupowych 2→1 i 1→2, zapis księgi SQLite przed zapisem planu, naprawa po przerwaniu bez ponownego naliczania salda, blokada PayCheck jeśli nie da się odzyskać spójności. Testy regresyjne awarii; bez zmian Stable. Nie usuwać starej aplikacji przy aktualizacji."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
