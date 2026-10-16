@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 313,
-  "versionName": "0.8.0.121",
-  "changelog": "EDHOME Beta 0.8.0.121 / 313 — Projekty: przypomnienie „Czy nadal wykonujesz tę czynność?” po 60 minutach pracy, automatyczna pauza licznika po osiągnięciu limitu oraz przyciski „Tak, pracuję” (nowa sesja) i „Nie, zakończ”. Poprawki obsługi alarmu i kompilacji. Wersja do testów na Androidzie; bez migracji bazy, Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.121/edhome-beta.apk",
-  "sha256": "a6fbe8e275a5008050d310887cbd2e3167e8ffb889155a2913ecc0a05b0c1867"
+  "versionCode": 314,
+  "versionName": "0.8.0.122",
+  "changelog": "EDHOME Beta 0.8.0.122 / 314 — P0 Budżet/PayCheck: trwały dziennik rozliczeń grupowych 2→1 i 1→2, zapis księgi SQLite przed zapisem planu, naprawa po przerwaniu bez ponownego naliczania salda, blokada PayCheck jeśli nie da się odzyskać spójności. Testy regresyjne awarii; bez zmian Stable. Nie usuwać starej aplikacji przy aktualizacji.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.122/edhome-beta.apk",
+  "sha256": "f111c87851c964143416ec6eb02d596208cbaa36f7ab37ea817b2d458da2988a"
 }
