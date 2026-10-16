@@ -426,7 +426,8 @@ final class SyncRecordStore {
         JSONObject row = op.optJSONObject("row");
         if (row == null || !rowKey.equals(rowKey(table, row)))
             throw new IllegalArgumentException("Klucz rekordu nie zgadza się z operacją.");
-        if (row.toString().getBytes(StandardCharsets.UTF_8).length > 256 * 1024)
+        if (row.toString().getBytes(StandardCharsets.UTF_8).length >
+                ("projects".equals(table) ? 512 * 1024 : 256 * 1024))
             throw new IllegalArgumentException("Rekord synchronizacji jest za duży.");
         return row;
     }
@@ -456,8 +457,27 @@ final class SyncRecordStore {
                 values.put(column, number.longValueExact());
             } else if (value instanceof String) {
                 String text = (String) value;
-                if (text.indexOf('\0') >= 0 || text.length() > 20000)
-                    throw new IllegalArgumentException("Nieprawidłowy tekst w polu " + column + ".");
+                boolean projectThumbnail="projects".equals(table)
+                    && "thumbnail_base64".equals(column);
+                int maxChars=projectThumbnail
+                    ? StorageThumbs.MAX_BASE64_CHARS : 20000;
+                if (text.indexOf('\0') >= 0 || text.length() > maxChars)
+                    throw new IllegalArgumentException(
+                        "Nieprawidłowy tekst w polu " + column + ".");
+                if(projectThumbnail&&!text.isEmpty()){
+                    byte[] jpeg;
+                    try {
+                        jpeg=android.util.Base64.decode(text,android.util.Base64.NO_WRAP);
+                    } catch(IllegalArgumentException invalid){
+                        throw new IllegalArgumentException(
+                            "Nieprawidłowy format miniaturki projektu.",invalid);
+                    }
+                    if(jpeg.length < 4 || jpeg.length > StorageThumbs.MAX_JPEG_BYTES
+                            || (jpeg[0]&0xff)!=0xff || (jpeg[1]&0xff)!=0xd8
+                            || (jpeg[2]&0xff)!=0xff)
+                        throw new IllegalArgumentException(
+                            "Miniaturka projektu musi być poprawnym obrazem JPEG.");
+                }
                 values.put(column, text);
             } else {
                 throw new IllegalArgumentException("Nieprawidłowy typ pola " + column + ".");

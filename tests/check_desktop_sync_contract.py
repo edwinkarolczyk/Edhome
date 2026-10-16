@@ -496,3 +496,19 @@ assert 'API działa' in desktop
 assert 'hubFirewallReady' in desktop
 assert 'localport=45823' in desktop and 'localport=45822' in desktop
 print("desktop hub v2 API/client/discovery/first-backup/conflict contract OK")
+
+
+// P0: zdjęcie projektu (JPEG Base64) musi zmieścić się w patchu Desktop -> Android.
+// Pozostałe teksty nadal obowiązuje ścisły limit 20 000 znaków.
+row_rules=sync_store.split('private static ContentValues rowValues(',1)[1].split(
+    'private static void refreshOne(',1)[0]
+assert 'boolean projectThumbnail="projects".equals(table)' in row_rules
+assert '"thumbnail_base64".equals(column)' in row_rules
+assert 'StorageThumbs.MAX_BASE64_CHARS : 20000' in row_rules
+assert 'StorageThumbs.MAX_JPEG_BYTES' in row_rules
+assert 'android.util.Base64.decode(text,android.util.Base64.NO_WRAP)' in row_rules
+assert '(jpeg[0]&0xff)!=0xff' in row_rules
+assert 'text.indexOf' in row_rules and 'maxChars' in row_rules
+assert '("projects".equals(table) ? 512 * 1024 : 256 * 1024)' in sync_store
+assert 'DataBackup.MAX_BYTES' in server
+print("P0: duże zdjęcie projektu Desktop → Android LAN, walidacja JPEG i limitów: PASS")
