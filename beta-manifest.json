@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 312,
-  "versionName": "0.8.0.120",
-  "changelog": "EDHOME Beta 0.8.0.120 / 312 — poprawki obsługi dźwięków i wibracji licznika pracy w projektach: krótki sygnał Start, ciągły sygnał Stop przez 3 sekundy oraz ostrzeżenie przy błędzie. Zachowane wcześniejsze zmiany czynności i ustawień z wersji 0.8.0.119. Bez migracji bazy; Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.120/edhome-beta.apk",
-  "sha256": "bdd3345c2d3d889d6f2005373dfe4579497e9838272a0e0b0377a9325fcd9000"
+  "versionCode": 313,
+  "versionName": "0.8.0.121",
+  "changelog": "EDHOME Beta 0.8.0.119 — Czynności: po wykonaniu delikatne zielone tło z płynną animacją 1 s, zmiana stanu tylko przez checkbox; dotknięcie nazwy pokazuje opcje. Projekty: te same zasady ukończenia i cofania zależnych czynności. Ustawienia: czytelniejsze, klikane karty kategorii. Bez migracji bazy i bez zmian Stable.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.121/edhome-beta.apk",
+  "sha256": "a6fbe8e275a5008050d310887cbd2e3167e8ffb889155a2913ecc0a05b0c1867"
 }
