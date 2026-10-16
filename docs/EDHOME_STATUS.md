@@ -1,3 +1,12 @@
+## 2026-10-16 — Android Beta: Czynności (checkbox, zielony status 1 s) i Ustawienia
+
+- **Wdrożono w kodzie gałęzi beta:** w Czynnościach i czynnościach Projektów checkbox jest oddzielony od nazwy. Dotknięcie nazwy w ogólnych Czynnościach rozwija działania, ale nie zmienia stanu. Tylko checkbox oznacza wykonanie/cofnięcie. Zachowana centralna walidacja zakończenia zadań projektowych, blokady i potwierdzenie kaskadowego cofania zależności.
+- **Efekt wizualny:** po poprawnym zapisie oznaczenia ukończenia karta przez 1000 ms płynnie zmienia kolor na subtelną zieleń dopasowaną do jasnego/ciemnego motywu. Ukończone karty pozostają zielonkawe po ponownym otwarciu; cofnięcie odwraca animację. Zapis danych następuje przed animacją, a pełne odświeżenie dopiero po jej zakończeniu.
+- **Ustawienia:** czytelniejsze karty z ikoną kategorii, możliwością rozwijania również po dotknięciu wolnego obszaru i objaśnieniem działania. Bez migracji bazy i usuwania wcześniejszych opcji. To zmiana układu istniejących sekcji, nie wymiana wszystkich ekranów ustawień.
+- **Wersja przygotowana:** Android Beta **0.8.0.119 / 311** (kod `63705e4`, regresja `e1c5547`, numer wydania `ebaac75` i opis `f737897`). Stable `main` bez zmian; Desktop bez zmiany wersji i UI w tym etapie.
+- **CI i urządzenie:** pierwsza próba ujawniła stary, nieaktualny kontrakt testowy; test dopasowano i rozbudowano o kontrolę sekundy/checkboxa. CI ostatecznej wersji 0.8.0.119 wymaga potwierdzenia; paczki nie uznawać za wydaną do czasu zielonego przebiegu i podpisu. Zachowanie na fizycznym Androidzie do sprawdzenia (tap w nazwę/checkbox, cofanie zależnych i kolor wszystkich motywów).
+- **Następny krok:** domknąć CI, opublikować 0.8.0.119, a potem test dotykowy na telefonie. Nie testować synchronizacji Android↔Desktop bez dostępnego PC.
+
 ## 2026-10-16 — Stabilizacja P0 Projektów: limit miniaturek przy synchronizacji LAN
 
 - **Wykryty i naprawiony P0:** Androidowy SyncRecordStore.applyPatch/rowValues dopuszczał tekst do 20 000 znaków i rekord do 256 KiB, podczas gdy miniatura projektu JPEG/Base64 mogła mieć do 360 000 znaków. Wysyłanie zdjęć Desktop → Android mogło kończyć się odrzuceniem patcha.
