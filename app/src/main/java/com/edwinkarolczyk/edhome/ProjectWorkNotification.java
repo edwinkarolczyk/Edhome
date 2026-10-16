@@ -26,6 +26,8 @@ final class ProjectWorkNotification {
     static final String ACTION_CHECK =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_CHECK";
     private static final long CHECK_MS = 60L * 60L * 1000L;
+    static final String ACTION_DISMISS =
+        "com.edwinkarolczyk.edhome.PROJECT_WORK_DISMISS";
     static final String ACTION_TIMEOUT =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_TIMEOUT";
     private static final long CHECK_MS = 60L * 60L * 1000L;
@@ -201,6 +203,10 @@ final class ProjectWorkNotification {
         }
     }
 
+    static void dismissPaused(Context context, long taskId) {
+        cancel(context, taskId);
+    }
+
     static void handleTimeout(Context context, long taskId, long started) {
         if (taskId < 0 || started <= 0) return;
         File file = context.getDatabasePath(DATABASE);
@@ -228,8 +234,12 @@ final class ProjectWorkNotification {
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_media_play, "Tak, pracuję",
                 startAction(context, taskId))
-            .addAction(android.R.drawable.ic_media_pause, "Zakończ",
-                stopAction(context, taskId))
+            .addAction(android.R.drawable.ic_media_pause, "Nie, zakończ",
+                PendingIntent.getBroadcast(context,
+                    5100000 + (int) (taskId % 800000),
+                    new Intent(context, ReminderReceiver.class)
+                        .setAction(ACTION_DISMISS).putExtra("task_id", taskId),
+                    PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag()))
             .build();
         manager.notify(notificationId(taskId), notification);
         FeedbackSignals.warning(context);
