@@ -625,7 +625,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.113 — jeden skrót Szybka czynność pod ikoną aplikacji Android Beta. Krótki formularz nazwy i terminu, zapis w Czynnościach z przypomnieniami; bez drugiej ikony. Bez zmian gałęzi Stable."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.119 — Czynności: po wykonaniu delikatne zielone tło z płynną animacją 1 s, zmiana stanu tylko przez checkbox; dotknięcie nazwy pokazuje opcje. Projekty: te same zasady ukończenia i cofania zależnych czynności. Ustawienia: czytelniejsze, klikane karty kategorii. Bez migracji bazy i bez zmian Stable."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
