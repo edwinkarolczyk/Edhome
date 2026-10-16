@@ -13566,6 +13566,16 @@ public final class MainActivity extends Activity {
     private void paycheck() {
         header("PayCheck");
         try {
+            // Napraw grupy przed 1:1: pierwsza część grupy nie może zostać
+            // błędnie przypisana samodzielnie po przerwanym zapisie.
+            int groupRecovered=BankBudgetGroupSettlement.repairInterrupted(
+                prefs,db.getWritableDatabase());
+            if(groupRecovered>0) {
+                DiagnosticLog.event("PAYCHECK_BANK_GROUP_RECOVERED",
+                    "count="+groupRecovered);
+                note("Odzyskano "+groupRecovered+" grupowych rozliczeń bankowych "
+                    +"bez ponownego księgowania salda.");
+            }
             int recovered=BankBudgetSingleSettlement.repairUnlinked(
                 prefs,db.getWritableDatabase());
             if(recovered>0) {
