@@ -269,8 +269,10 @@ assert 'String completionBlock=ProjectStore.completionBlockReason' not in main o
 assert 'static String completionBlockReason(' in project
 assert 'ProjectPlanningStore.startBlockReason(db,taskId)' in project
 assert 'if(!block.isEmpty())throw new IllegalArgumentException(block);' in main
-assert 'requestReopenTask(taskId)' in main
-assert 'requestReopenTask(id)' in main
+assert 'requestReopenTask(taskId,()->' in main
+assert 'requestReopenTask(id,()->' in main
+assert 'private void requestReopenTask(long taskId,Runnable afterSuccess)' in main
+assert 'if(afterSuccess!=null)afterSuccess.run();' in main
 assert 'ProjectStore.completedDependents' in main
 assert 'void reopenTaskCascade(long id)' in main
 assert 'Cofnąć powiązane wykonania?' in main
@@ -281,6 +283,29 @@ assert 'ProjectStore.descendantIds(db.getReadableDatabase(),projectScope)' in ma
 assert 'if(permittedProjects!=null&&!permittedProjects.contains(candidate))' in main
 assert 'if(movingAcrossRoots&&previousProject!=null)' in main
 print("P0/P1: wspólne blokady, cofanie zależnych prac i zakres projektów OK")
+
+# P1 UI: tylko wydzielony checkbox zatwierdza zadanie; sekundowa animacja
+# nie omija walidacji, a po cofnięciu zależne prace nadal są obsługiwane.
+project_checks=main.split("private void renderProjectTasks(",1)[1].split(
+    "private void showProjectDependentsDialog(",1)[0]
+regular_checks=main.split("private void drawTask(",1)[1].split(
+    "private void taskAction(",1)[0]
+assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)))' in project_checks
+assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)))' in regular_checks
+assert 'check.setText(taskName)' not in project_checks
+assert 'check.setText(name)' not in regular_checks
+assert 'check.setText("");' in project_checks and 'check.setText("");' in regular_checks
+assert 'db.completeTask(taskId);' in project_checks
+assert 'db.completeTask(id);' in regular_checks
+assert 'animateTaskCompletion(box,true,this::render);' in project_checks
+assert 'animateTaskCompletion(box,true,this::render);' in regular_checks
+assert 'animateTaskCompletion(box,false,this::render);' in project_checks
+assert 'animateTaskCompletion(box,false,this::render);' in regular_checks
+assert 'animation.setDuration(1000L);' in main
+assert 'if(done)box.setBackground(skin.panel(this,completedTaskSurface(),22));' in main
+assert 'taskTitle.setOnClickListener(v -> box.performClick());' in regular_checks
+print("Task checkbox-only interaction and green animation contract OK")
+
 
 # Desktop: cofanie zakończonych zależności jest transakcyjną decyzją użytkownika w UI.
 assert "private java.util.List<JsonObject> desktopCompletedDependents(" in desktop
