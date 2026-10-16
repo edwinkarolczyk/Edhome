@@ -1,3 +1,11 @@
+## 2026-10-16 — Projekty: Etap 1 PASS na Androidzie, Etap 2 P0 w toku
+
+- **Etap 1 (potwierdzenie użytkownika): PASS.** Na telefonie działają miniaturki projektów, przytrzymanie z Edytuj/Usuń, edycja i usuwanie w EDHOME Beta 0.8.0.117/309. Brak jeszcze niezależnej weryfikacji synchronizacji i kopii.
+- **Etap 2 P0, testy LAN:** projekt testowy ze zdjęciem i podprojektem — Android → Desktop; edycja Desktop → Android; usunięcie projektu testowego i całego jego drzewa — brak powrotu po dwukierunkowym sync i ponownym uruchomieniu. Sprawdzić też blokadę usunięcia przy aktywnej sesji Start/Stop.
+- **Test ZIP:** przed testem wykonać aktualną kopię; przywracanie ZIP v47/v48 tylko w odizolowanym środowisku lub po zabezpieczeniu bieżących danych. Nie testować destrukcyjnego przywrócenia na jedynej kopii produkcyjnej.
+- **Audyt kodowy:** Android usuwa transakcyjnie i oznacza rekordy usunięte w metadanych synchronizacji; Desktop ma patche usunięcia rekordów. Nie jest to jeszcze potwierdzenie zachowania na urządzeniach.
+- **Wersje bez zmian:** Android Beta 0.8.0.117 / 309, Desktop 0.7.0.121. Stable main bez zmian. Oczekiwany wynik Etapu 2: dwukierunkowa synchronizacja oraz poprawne odtworzenie ZIP.
+
 ## 2026-10-15 — Projekty: miniaturki, Edytuj / Usuń (Android 0.8.0.117 / 309, Desktop 0.7.0.121)
 
 - **Android Beta:** w liście Projektów i Podprojektów miniaturka JPEG (lub grafika zastępcza), przytrzymanie karty → **Edytuj / Usuń**, w edycji wybór lub usunięcie zdjęcia, zmiana nazwy/terminu/budżetu/miejsca/wykonawcy/statusu. Miniaturka jest kolumną `projects.thumbnail_base64`; schema 47→48, dane istniejących projektów pozostają nienaruszone.
