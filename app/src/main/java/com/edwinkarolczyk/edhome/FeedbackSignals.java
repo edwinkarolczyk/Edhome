@@ -8,7 +8,7 @@ import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 
-/** Krótkie sygnały UI. Nie odtwarza dźwięku w trybie cichym. */
+/** Sygnały UI. Nie odtwarza dźwięku w trybie cichym. */
 final class FeedbackSignals {
     private static final String PREFS = "edhome_beta_prefs";
     static final String SOUNDS_ENABLED = "feedback_sounds_enabled";
@@ -18,6 +18,11 @@ final class FeedbackSignals {
 
     static void success(Context context) {
         signal(context, ToneGenerator.TONE_PROP_ACK, 65, 35);
+    }
+
+    /** Ciągły, trzysekundowy sygnał zakończenia pomiaru. */
+    static void stopped(Context context) {
+        signal(context, ToneGenerator.TONE_PROP_BEEP, 3000, 450);
     }
 
     static void warning(Context context) {
