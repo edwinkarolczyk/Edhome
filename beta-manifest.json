@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 314,
-  "versionName": "0.8.0.122",
-  "changelog": "EDHOME Beta 0.8.0.122 / 314 — P0 Budżet/PayCheck: trwały dziennik rozliczeń grupowych 2→1 i 1→2, zapis księgi SQLite przed zapisem planu, naprawa po przerwaniu bez ponownego naliczania salda, blokada PayCheck jeśli nie da się odzyskać spójności. Testy regresyjne awarii; bez zmian Stable. Nie usuwać starej aplikacji przy aktualizacji.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.122/edhome-beta.apk",
-  "sha256": "f111c87851c964143416ec6eb02d596208cbaa36f7ab37ea817b2d458da2988a"
+  "versionCode": 315,
+  "versionName": "0.8.0.123",
+  "changelog": "EDHOME Beta 0.8.0.123 / 315 — Projekty: stawka robocizny w zł/h, naliczanie grosz po groszu w trakcie START, koszty czynności i podprojektów, historyczna stawka przypisana sesji. Migracja bazy v49 i zgodność ZIP; robocizna nie zmienia PayCheck. Wydanie testowe Beta, wymagany test fizyczny telefonu oraz LAN z Desktopem. Aktualizuj bez odinstalowania dotychczasowej aplikacji.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.123/edhome-beta.apk",
+  "sha256": "8bc150ca017bb6308c0d4bc1a26dd6739515259e08020f5c4f39dac27f11f619"
 }
