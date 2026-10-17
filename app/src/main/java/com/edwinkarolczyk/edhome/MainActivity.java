@@ -13393,6 +13393,11 @@ public final class MainActivity extends Activity {
         layout.addView(protect);
         CheckBox returnRule=null;
         Spinner daysSpinner=null;
+        final java.util.List<Integer> returnDayOptions=new java.util.ArrayList<>(
+            java.util.Arrays.asList(1,2,3,7,14,30));
+        if(existing!=null&&!returnDayOptions.contains(existing.returnAfterDays)
+                &&existing.returnAfterDays>=1&&existing.returnAfterDays<=365)
+            returnDayOptions.add(existing.returnAfterDays);
         if("thing".equals(kind)) {
             returnRule=new CheckBox(this);
             returnRule.setText("Powinna wracać na swoje miejsce");
@@ -13402,12 +13407,13 @@ public final class MainActivity extends Activity {
             layout.addView(returnRule);
             layout.addView(text("Przypomnij po ilu dniach (potem raz dziennie)",12,false));
             daysSpinner=new Spinner(this);
-            daysSpinner.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
-                "1 dzień", "2 dni", "3 dni", "7 dni", "14 dni", "30 dni")));
-            int[] options={1,2,3,7,14,30};
+            java.util.List<String> dayLabels=new java.util.ArrayList<>();
+            for(int value:returnDayOptions)
+                dayLabels.add(value==1?"1 dzień":value+" dni");
+            daysSpinner.setAdapter(lightDialogSpinnerAdapter(dayLabels));
             int selected=existing==null?1:existing.returnAfterDays;
-            for(int i=0;i<options.length;i++)if(options[i]==selected)
-                daysSpinner.setSelection(i);
+            for(int i=0;i<returnDayOptions.size();i++)
+                if(returnDayOptions.get(i)==selected)daysSpinner.setSelection(i);
             layout.addView(daysSpinner);
         }
         final CheckBox required=returnRule;
@@ -13438,11 +13444,10 @@ public final class MainActivity extends Activity {
                         FrostStore.setProtection(db.getWritableDatabase(),
                             existing==null?createdId:existing.id,protect.isChecked());
                         if(required!=null) {
-                            int[] chosenDays={1,2,3,7,14,30};
                             StorageStore.setReturnRule(db.getWritableDatabase(),
                                 existing==null?createdId:existing.id,
                                 required.isChecked(),
-                                chosenDays[dueDays.getSelectedItemPosition()]);
+                                returnDayOptions.get(dueDays.getSelectedItemPosition()));
                             StorageHomeReminderReceiver.schedule(this);
                         }
                         DiagnosticLog.event(existing==null?"STORAGE_CREATED":"STORAGE_EDITED");
