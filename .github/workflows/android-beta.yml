@@ -628,7 +628,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.122 / 314 — P0 Budżet/PayCheck: trwały dziennik rozliczeń grupowych 2→1 i 1→2, zapis księgi SQLite przed zapisem planu, naprawa po przerwaniu bez ponownego naliczania salda, blokada PayCheck jeśli nie da się odzyskać spójności. Testy regresyjne awarii; bez zmian Stable. Nie usuwać starej aplikacji przy aktualizacji."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.123 / 315 — Projekty: stawka robocizny w zł/h, naliczanie grosz po groszu w trakcie START, koszty czynności i podprojektów, historyczna stawka przypisana sesji. Migracja bazy v49 i zgodność ZIP; robocizna nie zmienia PayCheck. Wydanie testowe Beta, wymagany test fizyczny telefonu oraz LAN z Desktopem. Aktualizuj bez odinstalowania dotychczasowej aplikacji."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
