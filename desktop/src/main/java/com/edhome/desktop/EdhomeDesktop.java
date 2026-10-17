@@ -1091,7 +1091,34 @@ public final class EdhomeDesktop extends JFrame {
         return settings();
     }
 
+    /** Stare snapshoty Desktop sprzed v49 nie mają kolumn kosztu godzinowego. */
+    private void ensureDesktopLaborColumns() {
+        boolean touched=false;
+        for(JsonElement element:table("projects")) {
+            if(!element.isJsonObject())continue;
+            JsonObject row=element.getAsJsonObject();
+            if(!row.has("labor_rate_grosz")) {
+                row.add("labor_rate_grosz",com.google.gson.JsonNull.INSTANCE);
+                touched=true;
+            }
+        }
+        for(JsonElement element:table("project_task_work_sessions")) {
+            if(!element.isJsonObject())continue;
+            JsonObject row=element.getAsJsonObject();
+            if(!row.has("hourly_rate_grosz")) {
+                row.add("hourly_rate_grosz",com.google.gson.JsonNull.INSTANCE);
+                touched=true;
+            }
+            if(!row.has("worker_id")) {
+                row.add("worker_id",com.google.gson.JsonNull.INSTANCE);
+                touched=true;
+            }
+        }
+        if(touched)markDirty();
+    }
+
     private JComponent desktopProjects() {
+        ensureDesktopLaborColumns();
         JPanel page = page("Projekty • szybka edycja");
         JPanel root = new JPanel(new BorderLayout(10,10));
         root.setBackground(APP_BG);
