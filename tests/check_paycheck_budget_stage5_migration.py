@@ -32,9 +32,9 @@ assert "static List<Event> loadAll(SQLiteDatabase db" in history
 assert "unique.putIfAbsent(event.id,event)" in history
 assert "PaycheckBudgetHistoryStore.loadAll(" in main
 
-assert 'DB_VERSION = 48' in backup
-assert 'null, 48);' in main
-assert 'newVersion > 48' in main
+assert 'DB_VERSION = 49' in backup
+assert 'null, 49);' in main
+assert 'newVersion > 49' in main
 assert 'if(oldVersion < 46)' in main
 assert "PaycheckBudgetSqliteStore.create(database);" in main
 assert "PaycheckBudgetSqliteStore.configure(this);" in main
