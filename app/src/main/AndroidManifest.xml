@@ -66,6 +66,7 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".FrostReminderReceiver" android:exported="false" />
+        <receiver android:name=".StorageHomeReminderReceiver" android:exported="false" />
         <receiver
             android:name=".PaycheckBudgetReminderReceiver"
             android:exported="false">
