@@ -473,6 +473,8 @@ jobs:
           java -cp "$RUNNER_TEMP/edhome-storage-qr" \
             com.edwinkarolczyk.edhome.StorageQrSmoke
           python3 tests/check_storage_qr_contract.py
+      - name: Storage item home-return daily reminder and backup regression
+        run: python3 tests/check_storage_home_reminder_contract.py
       - name: Storage location and place deletion regression
         run: python3 tests/check_storage_integrity_contract.py
       - name: Storage Android-Desktop stabilization gate
