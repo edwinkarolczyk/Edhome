@@ -93,7 +93,15 @@ pantry17_v38 = [sql.replace(
 receipts18 = statements(section(receipt_store, "static void create(SQLiteDatabase db)", "static boolean received(").replace("db.execSQL(", "database.execSQL("))
 storage19 = statements(section(storage_store, "static void createTables(SQLiteDatabase db)", "static final class Item").replace("db.execSQL(", "database.execSQL("))
 storage_before47 = [sql.replace(", protect_frost INTEGER NOT NULL DEFAULT 0", "")
+                    .replace(", return_required INTEGER NOT NULL DEFAULT 0 CHECK(return_required IN (0,1))", "")
+                    .replace(", return_after_days INTEGER NOT NULL DEFAULT 1 CHECK(return_after_days BETWEEN 1 AND 365)", "")
+                    .replace(", taken_at INTEGER CHECK(taken_at IS NULL OR taken_at>0)", "")
                     for sql in storage19]
+storage_step50 = [
+    "ALTER TABLE storage_items ADD COLUMN return_required INTEGER NOT NULL DEFAULT 0 CHECK(return_required IN (0,1))",
+    "ALTER TABLE storage_items ADD COLUMN return_after_days INTEGER NOT NULL DEFAULT 1 CHECK(return_after_days BETWEEN 1 AND 365)",
+    "ALTER TABLE storage_items ADD COLUMN taken_at INTEGER CHECK(taken_at IS NULL OR taken_at>0)"
+]
 frost47 = statements(section(frost_store, "static void create(SQLiteDatabase db)",
                              "static void upgrade47(").replace("db.execSQL(", "database.execSQL("))
 step47 = ["ALTER TABLE places ADD COLUMN frost_risk INTEGER NOT NULL DEFAULT 0",
@@ -197,7 +205,7 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 49, "Database version and backup format differ"
+assert version == backup_version == 50, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42 + project43 + planning44 + budget46 + frost47)
@@ -292,6 +300,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step45)  # v44 to v45, trwała kolejność czynności Projektów
     execute(db, budget46)  # v45 to v46, archiwum i tabele Budżetu
     execute(db, step47)  # v46 to v47, ochrony przed mrozem
+    execute(db, storage_step50)  # v49 to v50, zwrot rzeczy na miejsce
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
