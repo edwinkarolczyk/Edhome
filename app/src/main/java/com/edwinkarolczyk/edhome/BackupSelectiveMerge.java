@@ -15,7 +15,7 @@ import java.util.Set;
  * Nie zapisuje niczego do bazy. Całą migawkę waliduje DataBackup.restoreJson.
  */
 final class BackupSelectiveMerge {
-    private static final int CURRENT_SCHEMA = 48;
+    private static final int CURRENT_SCHEMA = 49;
     private static final int OLDEST_SELECTIVE_SCHEMA = 45;
 
     private BackupSelectiveMerge() { }
@@ -77,14 +77,24 @@ final class BackupSelectiveMerge {
                 throw new IllegalArgumentException(
                     "Kopia nie zawiera wymaganej tabeli: " + table);
             }
-            if ("projects".equals(table) && sourceVersion < 48) {
+            if (sourceVersion < 49 && ("projects".equals(table)
+                    || "project_task_work_sessions".equals(table))) {
                 // Starszy eksport projektów nie posiada miniaturek.
                 JSONArray migrated=new JSONArray();
                 JSONArray legacy=archivedTables.getJSONArray(table);
                 for(int i=0;i<legacy.length();i++){
                     JSONObject project=new JSONObject(legacy.getJSONObject(i).toString());
-                    if(!project.has("thumbnail_base64"))
+                    if("projects".equals(table)&&sourceVersion<48
+                            &&!project.has("thumbnail_base64"))
                         project.put("thumbnail_base64",JSONObject.NULL);
+                    if("projects".equals(table)&&!project.has("labor_rate_grosz"))
+                        project.put("labor_rate_grosz",JSONObject.NULL);
+                    if("project_task_work_sessions".equals(table)) {
+                        if(!project.has("hourly_rate_grosz"))
+                            project.put("hourly_rate_grosz",JSONObject.NULL);
+                        if(!project.has("worker_id"))
+                            project.put("worker_id",JSONObject.NULL);
+                    }
                     migrated.put(project);
                 }
                 installedTables.put(table,migrated);
