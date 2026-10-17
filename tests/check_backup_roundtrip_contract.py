@@ -216,7 +216,7 @@ assert 'DataBackup.restoreJson(' in main, "legacy JSON import must remain suppor
 # Starsze kopie z EDHOME 0.8.0.25 mają bazę v45.
 # Kopie v45 i v46 muszą być obsługiwane w SQLite v47.
 # Brakujące tabele budżetu/frost powstają podczas importu, bez czyszczenia historii.
-assert 'inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != DB_VERSION' in source, (
+assert 'inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != DB_VERSION' in source, (
     "EDHOME backup: schemas v45/v46 must remain restorable")
 assert 'if (inputVersion < 47)' in source
 assert 'INSERT OR IGNORE INTO frost_settings(id) VALUES(1)' in source
