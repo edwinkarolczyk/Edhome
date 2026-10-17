@@ -630,7 +630,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.124 / 316 — Połączenie z PC: widoczny przycisk na ekranie głównym, jeden ekran parowania QR i sprawdzenia połączenia, prawdziwy status DesktopHubSync zamiast starego serwera, czytelne instrukcje i rozróżnienie parowania od synchronizacji. Nie odinstalowuj poprzedniej wersji. Stable main bez zmian."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.125 / 317 — Magazyn: na wybranej rzeczy zaznacz Powinna wracać na swoje miejsce, ustaw 1/2/3/7/14/30 dni, oznacz Wzięte i Odłożone. Dzienne powiadomienia do zwrotu, cisza nocna, lokalne dane, backup ZIP i synchronizacja LAN; baza v50. Domyślnie przypomnienia odłożenia wyłączone dla rzeczy. Instaluj bez odinstalowania poprzedniej wersji. Stable bez zmian."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
