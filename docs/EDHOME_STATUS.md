@@ -1,3 +1,10 @@
+## 2026-10-17 — Projekty: nowe wymaganie kosztu roboczogodziny (plan, bez zmian aplikacji)
+
+- **Zgłoszenie i analiza:** [GitHub #7](https://github.com/edwinkarolczyk/Edhome/issues/7): stawka zł/h projektu (opcjonalnie czynności/wykonawcy), koszt robocizny aktualizowany na żywo podczas Start, suma wszystkich czynności, sesji i podprojektów; widok czasu i kwoty obok kosztów zakupów.
+- **Stan:** **niezaimplementowane** — jedynie uzgodnienie kierunku i analiza obecnego `ProjectStore`, bez migracji, APK ani nowej wersji Desktop.
+- **Ważne ryzyka:** bieżące `ProjectStore.stats.workedMinutes` dla zakończonych zadań bywa podniesione do czasu planowanego, a `stopWork` zaokrągla sesję minimum do 1 min; koszt trzeba liczyć z timestampów realnych sesji, z kontrolą duplikatów przy kilku aktywnych czynnościach i różnych wykonawcach.
+- **Plan:** po P0 1.0 jako kandydat do **1.1**; Android i Desktop oraz migracja/ZIP/LAN przed oznaczeniem funkcji jako dostępnej. `main` i wydania pozostają bez zmian.
+
 ## 2026-10-16 — Wydanie Android Beta 0.8.0.122 / 314: naprawa P0 rozliczeń grupowych, CI PASS
 
 - **Publikacja potwierdzona:** [EDHOME Beta 0.8.0.122 / 314 — podpisana APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.122/edhome-beta.apk), plik `edhome-beta.apk` **13 423 050 bajtów**. [Release GitHub](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.0.122), SHA-256 `f111c87851c964143416ec6eb02d596208cbaa36f7ab37ea817b2d458da2988a`. `beta-manifest.json` automatycznie wskazuje wersję 0.8.0.122/314 i prawidłowy link do wydania.
