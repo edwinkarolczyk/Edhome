@@ -488,6 +488,29 @@ final class ProjectStore {
         return (int)Math.min(Integer.MAX_VALUE,total);
     }
 
+    /**
+     * Biezaca wycena robocizny calego drzewa projektow przy stawce podanej
+     * przez ekran. Metoda jest tylko do odczytu; nie ksieguje wydatkow.
+     * Wersja pierwsza: jedna stawka dla wszystkich sesji. Zapis osobnych
+     * stawek i zamrozenie stawki przy START wymaga osobnej migracji.
+     */
+    static ProjectLaborCalculator.Summary laborPreview(SQLiteDatabase db,
+            long rootProjectId, long hourlyRateGrosz, long now) {
+        Set<Long> ids=descendantIds(db,rootProjectId);
+        ArrayList<ProjectLaborCalculator.Session> sessions=new ArrayList<>();
+        if(ids.isEmpty())return ProjectLaborCalculator.calculate(sessions,now);
+        String in=inClause(ids);
+        try(Cursor c=db.rawQuery(
+                "SELECT t.id,s.started_at,s.ended_at,t.assignee_id "
+                +"FROM project_task_work_sessions s JOIN tasks t ON t.id=s.task_id "
+                +"WHERE t.project_id IN ("+in+")",args(ids))) {
+            while(c.moveToNext())sessions.add(new ProjectLaborCalculator.Session(
+                c.getLong(0),c.getLong(1),c.isNull(2)?null:c.getLong(2),
+                hourlyRateGrosz,c.isNull(3)?0L:c.getLong(3)));
+        }
+        return ProjectLaborCalculator.calculate(sessions,now);
+    }
+
     static int remainingMinutes(SQLiteDatabase db,long taskId,int plannedMinutes) {
         return Math.max(0,plannedMinutes-workedMinutes(db,taskId,true));
     }
