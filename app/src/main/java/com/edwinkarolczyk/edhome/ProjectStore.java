@@ -100,6 +100,7 @@ final class ProjectStore {
             +"due_date TEXT,"
             +"budget_grosz INTEGER,"
             +"thumbnail_base64 TEXT,"
+            +"labor_rate_grosz INTEGER CHECK(labor_rate_grosz IS NULL OR labor_rate_grosz BETWEEN 0 AND 100000000),"
             +"created_at INTEGER NOT NULL,"
             +"CHECK(parent_id IS NULL OR parent_id!=id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS projects_parent_idx "
@@ -148,6 +149,8 @@ final class ProjectStore {
             +"started_at INTEGER NOT NULL,"
             +"ended_at INTEGER,"
             +"worked_minutes INTEGER,"
+            +"hourly_rate_grosz INTEGER CHECK(hourly_rate_grosz IS NULL OR hourly_rate_grosz BETWEEN 0 AND 100000000),"
+            +"worker_id INTEGER,"
             +"CHECK(ended_at IS NULL OR ended_at>=started_at),"
             +"CHECK((ended_at IS NULL AND worked_minutes IS NULL) OR "
                 +"(ended_at IS NOT NULL AND worked_minutes IS NOT NULL "
@@ -166,6 +169,58 @@ final class ProjectStore {
             while(c.moveToNext())if("thumbnail_base64".equals(c.getString(1)))present=true;
         }
         if(!present)db.execSQL("ALTER TABLE projects ADD COLUMN thumbnail_base64 TEXT");
+    }
+
+    /** Idempotentna migracja istniejących baz v48 oraz wczytanych danych. */
+    static void upgrade49(SQLiteDatabase db) {
+        ensureColumn(db,"projects","labor_rate_grosz",
+            "INTEGER CHECK(labor_rate_grosz IS NULL OR labor_rate_grosz BETWEEN 0 AND 100000000)");
+        ensureColumn(db,"project_task_work_sessions","hourly_rate_grosz",
+            "INTEGER CHECK(hourly_rate_grosz IS NULL OR hourly_rate_grosz BETWEEN 0 AND 100000000)");
+        ensureColumn(db,"project_task_work_sessions","worker_id","INTEGER");
+    }
+
+    private static void ensureColumn(SQLiteDatabase db,String table,String column,String definition) {
+        try(Cursor cursor=db.rawQuery("PRAGMA table_info("+table+")",null)) {
+            while(cursor.moveToNext())if(column.equals(cursor.getString(1)))return;
+        }
+        db.execSQL("ALTER TABLE "+table+" ADD COLUMN "+column+" "+definition);
+    }
+
+    /** Null oznacza dziedziczenie stawki po projekcie nadrzędnym. */
+    static void setLaborRate(SQLiteDatabase db,long projectId,Long rateGrosz) {
+        if(find(db,projectId)==null)throw new IllegalArgumentException("Nie ma takiego projektu.");
+        if(rateGrosz!=null&&(rateGrosz<0
+                ||rateGrosz>ProjectLaborCalculator.MAX_HOURLY_RATE_GROSZ))
+            throw new IllegalArgumentException("Stawka robocizny jest za wysoka.");
+        ContentValues row=new ContentValues();
+        if(rateGrosz==null)row.putNull("labor_rate_grosz");
+        else row.put("labor_rate_grosz",rateGrosz);
+        if(db.update("projects",row,"id=?",new String[]{Long.toString(projectId)})!=1)
+            throw new IllegalStateException("Nie udało się zapisać stawki.");
+    }
+
+    static Long ownLaborRate(SQLiteDatabase db,long projectId) {
+        try(Cursor c=db.rawQuery("SELECT labor_rate_grosz FROM projects WHERE id=?",
+                new String[]{Long.toString(projectId)})) {
+            return c.moveToFirst()&&!c.isNull(0)?c.getLong(0):null;
+        }
+    }
+
+    /** Stawka konkretnego projektu wygrywa, w innym przypadku rodzic. */
+    static long effectiveLaborRate(SQLiteDatabase db,long projectId) {
+        HashSet<Long> seen=new HashSet<>();
+        long id=projectId;
+        for(int depth=0;id>0&&depth<128;depth++) {
+            if(!seen.add(id))throw new IllegalStateException("Błędna hierarchia projektów.");
+            try(Cursor c=db.rawQuery("SELECT parent_id,labor_rate_grosz FROM projects WHERE id=?",
+                    new String[]{Long.toString(id)})) {
+                if(!c.moveToFirst())throw new IllegalArgumentException("Projekt nie istnieje.");
+                if(!c.isNull(1))return c.getLong(1);
+                id=c.isNull(0)?0L:c.getLong(0);
+            }
+        }
+        return 0L;
     }
 
     static String thumbnail(SQLiteDatabase db,long id) {
@@ -494,19 +549,24 @@ final class ProjectStore {
      * Wersja pierwsza: jedna stawka dla wszystkich sesji. Zapis osobnych
      * stawek i zamrozenie stawki przy START wymaga osobnej migracji.
      */
+    /**
+     * Wycena historycznych i aktywnych sesji. Stawka jest zamrażana w START,
+     * więc zmiana cennika nie przelicza wstecz zakończonej pracy.
+     * Starsze sesje (sprzed migracji 49) są na razie niewycenione.
+     */
     static ProjectLaborCalculator.Summary laborPreview(SQLiteDatabase db,
-            long rootProjectId, long hourlyRateGrosz, long now) {
+            long rootProjectId,long now) {
         Set<Long> ids=descendantIds(db,rootProjectId);
         ArrayList<ProjectLaborCalculator.Session> sessions=new ArrayList<>();
         if(ids.isEmpty())return ProjectLaborCalculator.calculate(sessions,now);
         String in=inClause(ids);
         try(Cursor c=db.rawQuery(
-                "SELECT t.id,s.started_at,s.ended_at,t.assignee_id "
+                "SELECT t.id,s.started_at,s.ended_at,s.hourly_rate_grosz,s.worker_id "
                 +"FROM project_task_work_sessions s JOIN tasks t ON t.id=s.task_id "
                 +"WHERE t.project_id IN ("+in+")",args(ids))) {
             while(c.moveToNext())sessions.add(new ProjectLaborCalculator.Session(
                 c.getLong(0),c.getLong(1),c.isNull(2)?null:c.getLong(2),
-                hourlyRateGrosz,c.isNull(3)?0L:c.getLong(3)));
+                c.isNull(3)?0L:c.getLong(3),c.isNull(4)?0L:c.getLong(4)));
         }
         return ProjectLaborCalculator.calculate(sessions,now);
     }
@@ -541,8 +601,26 @@ final class ProjectStore {
             throw new IllegalArgumentException(blocker);
         if(activeWorkStartedAt(db,taskId)!=null)
             throw new IllegalArgumentException("Ta czynność jest już uruchomiona.");
+        long rate=effectiveLaborRate(db,project);
+        Long worker=null;
+        try(Cursor c=db.rawQuery("SELECT assignee_id FROM tasks WHERE id=?",
+                new String[]{Long.toString(taskId)})) {
+            if(c.moveToFirst()&&!c.isNull(0))worker=c.getLong(0);
+        }
+        if(worker!=null&&worker>0) {
+            try(Cursor c=db.rawQuery(
+                    "SELECT s.task_id FROM project_task_work_sessions s "
+                    +"WHERE s.ended_at IS NULL AND s.worker_id=? AND s.task_id!=? LIMIT 1",
+                    new String[]{Long.toString(worker),Long.toString(taskId)})) {
+                if(c.moveToFirst())
+                    throw new IllegalArgumentException(
+                        "Ta osoba ma już uruchomiony inny licznik. Zatrzymaj go przed START.");
+            }
+        }
         ContentValues v=new ContentValues();
         v.put("task_id",taskId);
+        v.put("hourly_rate_grosz",rate);
+        if(worker==null)v.putNull("worker_id");else v.put("worker_id",worker);
         v.put("started_at",System.currentTimeMillis());
         v.putNull("ended_at");
         v.putNull("worked_minutes");
