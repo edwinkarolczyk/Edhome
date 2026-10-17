@@ -13,7 +13,7 @@ store = (root / "app/src/main/java/com/edwinkarolczyk/edhome/ProjectStore.java")
 assert "static ProjectLaborCalculator.Summary laborPreview(" in store
 assert "FROM project_task_work_sessions s JOIN tasks t" in store
 assert "t.project_id IN (" in store
-assert "t.assignee_id" in store
+assert "s.worker_id" in store
 assert "ProjectLaborCalculator.calculate(sessions,now)" in store
 assert "worked_minutes" not in store.split("static ProjectLaborCalculator.Summary laborPreview(", 1)[1].split("static int remainingMinutes", 1)[0]
 assert "db.insert" not in store.split("static ProjectLaborCalculator.Summary laborPreview(", 1)[1].split("static int remainingMinutes", 1)[0]
