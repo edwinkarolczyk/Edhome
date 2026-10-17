@@ -7042,12 +7042,14 @@ public final class EdhomeDesktop extends JFrame {
             BufferedImage image=qrImage(hubServer.qrText(),320);
             JLabel qr=new JLabel(new ImageIcon(image));
             qr.setHorizontalAlignment(SwingConstants.CENTER);
-            JLabel status=new JLabel("Zeskanuj QR w EDHOME Android.");
+            JLabel status=new JLabel("Telefon: ekran główny → Połącz z komputerem → Skanuj QR.");
             status.setHorizontalAlignment(SwingConstants.CENTER);
             JLabel info=new JLabel(
-                "<html><center>Telefon zapisze ID Desktopu i token. "
-                +"Po zmianie IP odnajdzie ten sam komputer automatycznie.<br>"
-                +"PC może być po kablu LAN, a telefon po Wi‑Fi.</center></html>");
+                "<html><center><b>1.</b> Na telefonie uruchom EDHOME Beta."
+                +"<br><b>2.</b> Na ekranie głównym wybierz Połącz z komputerem."
+                +"<br><b>3.</b> Naciśnij Skanuj QR z komputera."
+                +"<br><br>PC może być po kablu LAN, a telefon po Wi-Fi."
+                +" Oba urządzenia muszą korzystać z tej samej sieci.</center></html>");
             info.setHorizontalAlignment(SwingConstants.CENTER);
             JPanel body=new JPanel(new BorderLayout(10,10));
             body.setBorder(new EmptyBorder(14,18,14,18));
@@ -7066,7 +7068,7 @@ public final class EdhomeDesktop extends JFrame {
                     pairState.setText("Połączono • "+phone.userName
                         +" • Android "+phone.version);
                     pairState.setForeground(APP_ACCENT);
-                    status.setText("✓ Połączono. Synchronizacja działa przez API Desktopu.");
+                    status.setText("✓ Telefon wykryty. Sprawdź stan synchronizacji na telefonie.");
                     watch.stop();
                     javax.swing.Timer close=new javax.swing.Timer(900,x->dialog.dispose());
                     close.setRepeats(false);
