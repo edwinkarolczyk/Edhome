@@ -1,3 +1,10 @@
+## 2026-10-17 — Magazyn: przypomnienia o rzeczach czasowo wyjętych (nowe wymaganie, NIE zaimplementowano)
+
+- **Ustalony mechanizm:** osobna czynność **Wyjmij czasowo** dostępna z karty rzeczy / skanera QR lub NFC. Zapamiętaj oryginalne pudełko/miejsce, datę/czas wydania; po konfigurowalnym czasie pierwsze przypomnienie oraz kolejne, dopóki nie zostanie zatwierdzony zwrot. Przycisk **Zwróć na miejsce** kończy przypominanie; lista **Poza miejscem** pokazuje rzeczy oczekujące. Proponowane domyślne 2h do pierwszego przypomnienia i 1h pomiędzy kolejnymi; do regulacji w UI.
+- **Nie mylić z przeniesieniem:** `StorageStore.move()` jest trwałą zmianą lokalizacji i nie powinien niejawnie uruchamiać przypomnienia; bez skanu/przycisku EDHOME nie wykryje fizycznego wyjęcia. `lend/returned` pozostają oddzielnym przepływem.
+- **Do zrobienia:** migracja/tabela historii wyjęć i zwrotów, notyfikacje Android respektujące ciszę nocną i restart, powtarzanie do zwrotu bez duplikatów, panel Desktop, backup ZIP/restore starszych wersji, LAN sync i testy, brak zmian Stable. **Nie twierdzić, że jest już w APK.**
+- [Zadanie #9](https://github.com/edwinkarolczyk/Edhome/issues/9).
+
 ## 2026-10-17 — Połączenie Android↔Desktop: czytelny ekran parowania, prawidłowy status PC
 
 - **Problem użytkownika:** brak wyraźnej opcji połączenia i niejasny stan „połączono/niepołączono”. **Potwierdzona przyczyna w kodzie:** stary wskaźnik `MainActivity.appTitleWithConnection` czytał `LanSyncServer.hasRecentClient()`, choć bieżąca synchronizacja z Desktopem odbywa się przez `DesktopHubSync`.
