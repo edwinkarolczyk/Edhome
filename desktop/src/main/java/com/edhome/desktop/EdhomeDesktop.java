@@ -9622,6 +9622,7 @@ public final class EdhomeDesktop extends JFrame {
         java.util.List<Choice> out = new ArrayList<>();
         if ("done".equals(key) || "checked".equals(key)
                 || "frost_risk".equals(key) || "protect_frost".equals(key)
+                || "return_required".equals(key)
                 || "mounted".equals(key) || "current".equals(key)) {
             out.add(new Choice("0", "Nie"));
             out.add(new Choice("1", "Tak"));
@@ -9750,6 +9751,7 @@ public final class EdhomeDesktop extends JFrame {
     private static boolean isNumericKey(String key) {
         return "done".equals(key) || "checked".equals(key)
             || "frost_risk".equals(key) || "protect_frost".equals(key)
+            || "return_required".equals(key) || "return_after_days".equals(key)
             || "repeat_every".equals(key) || "duration_minutes".equals(key)
             || "qty".equals(key) || "qty_milli".equals(key)
             || "amount_grosz".equals(key) || "mileage".equals(key)
