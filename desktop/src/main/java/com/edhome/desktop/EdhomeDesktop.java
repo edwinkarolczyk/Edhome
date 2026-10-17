@@ -9030,6 +9030,8 @@ public final class EdhomeDesktop extends JFrame {
             } else if ("shopping_items".equals(tableName)) {
                 table("shopping_items").remove(row);
             } else if ("storage_items".equals(tableName)) {
+                if (!value(row, "taken_at").isBlank())
+                    throw new IllegalStateException("Najpierw odłóż rzecz na miejsce.");
                 if (!value(row, "lent_to").isBlank())
                     throw new IllegalStateException("Najpierw odnotuj zwrot wypożyczonej rzeczy.");
                 if (hasReference("storage_items", "parent_box_id", id))
