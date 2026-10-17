@@ -5109,6 +5109,7 @@ public final class MainActivity extends Activity {
             +projectTimeText(stats.doneMinutes)+" / "
             +projectTimeText(stats.totalMinutes),14,false));
         addProjectTimeProgress(summary,stats);
+        bindProjectLaborSummary(summary,project.id);
         summary.addView(text("Pozostało: "+projectTimeText(stats.remainingMinutes())
             +(stats.overdueTasks>0?" • zaległe: "+stats.overdueTasks:""),14,false));
         summary.addView(text("Koszt planowany: "
@@ -5150,6 +5151,54 @@ public final class MainActivity extends Activity {
         renderProjectTasks(project);
         renderProjectResources(project.id);
         renderProjectCosts(project.id);
+    }
+
+    /** Wycena na żywo, bez zapisywania groszy do bazy co klatkę. */
+    private void bindProjectLaborSummary(LinearLayout parent,long projectId) {
+        TextView label=text("",13,true);
+        parent.addView(label);
+        final Runnable[] refresh=new Runnable[1];
+        refresh[0]=()->{
+            if(!label.isAttachedToWindow()||isFinishing()||isDestroyed()||db==null)return;
+            try {
+                ProjectLaborCalculator.Summary calculation=ProjectStore.laborPreview(
+                    db.getReadableDatabase(),projectId,System.currentTimeMillis());
+                long rate=ProjectStore.effectiveLaborRate(db.getReadableDatabase(),projectId);
+                String info="Robocizna: "+MoneyRules.format(calculation.costGrosz)
+                    +" • czas "+projectLiveTimeText(calculation.elapsedMillis/1000L);
+                info+=rate>0L?" • "+MoneyRules.format(rate)+"/h":
+                    " • stawka nieustawiona";
+                if(calculation.overlappingWorkerSessions)
+                    info+=" • ⚠ Nachodzące sesje";
+                label.setText(info);
+                label.setTextColor(calculation.activeSessions>0?projectTimeGreen():subdued);
+                if(calculation.activeSessions>0)label.postDelayed(refresh[0],250L);
+            }catch(Exception error) {
+                label.setText("Koszt robocizny jest chwilowo niedostępny.");
+            }
+        };
+        label.post(refresh[0]);
+    }
+
+    private void bindProjectTaskLabor(TextView label,long projectId,long taskId,
+            boolean started) {
+        final Runnable[] refresh=new Runnable[1];
+        refresh[0]=()->{
+            if(!label.isAttachedToWindow()||isFinishing()||isDestroyed()||db==null)return;
+            try {
+                ProjectLaborCalculator.Summary result=ProjectStore.laborPreview(
+                    db.getReadableDatabase(),projectId,System.currentTimeMillis());
+                Long gross=result.taskCostsGrosz.get(taskId);
+                label.setText("Robocizna czynności: "+MoneyRules.format(gross==null?0L:gross));
+                label.setTextColor(started?projectTimeGreen():subdued);
+                if(started&&ProjectStore.activeWorkStartedAt(
+                        db.getReadableDatabase(),taskId)!=null)
+                    label.postDelayed(refresh[0],250L);
+            }catch(Exception error) {
+                label.setText("Nie udało się przeliczyć kosztu czynności.");
+            }
+        };
+        label.post(refresh[0]);
     }
 
     private void addProjectTimeProgress(LinearLayout box,ProjectStore.Stats stats) {
@@ -5216,6 +5265,7 @@ public final class MainActivity extends Activity {
         info.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
             +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",13,false));
         addProjectTimeProgress(info,stats);
+        bindProjectLaborSummary(info,project.id);
         info.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
             +(project.budgetGrosz==null?"":" / budżet "
                 +MoneyRules.format(project.budgetGrosz)),13,false));
@@ -5349,6 +5399,19 @@ public final class MainActivity extends Activity {
         form.addView(budget);
         if(existing!=null&&existing.budgetGrosz!=null)
             budget.setText(MoneyRules.format(existing.budgetGrosz).replace(" zł","").replace(" ",""));
+        EditText laborRate=new EditText(this);
+        laborRate.setSingleLine(true);
+        laborRate.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        laborRate.setHint(parent==null?"np. 60,00":"Puste = stawka projektu nadrzędnego");
+        form.addView(text("Stawka robocizny (zł/h)",14,true));
+        form.addView(laborRate);
+        if(existing!=null) {
+            Long savedRate=ProjectStore.ownLaborRate(db.getReadableDatabase(),existing.id);
+            if(savedRate!=null)laborRate.setText(MoneyRules.format(savedRate)
+                .replace(" zł","").replace(" ",""));
+        }
+        form.addView(text("Zmiana stawki dotyczy kolejnego START; historia nie jest przeliczana.",12,false));
 
         java.util.ArrayList<Long> placeIds=new java.util.ArrayList<>();
         java.util.ArrayList<String> placeNames=new java.util.ArrayList<>();
@@ -5409,6 +5472,12 @@ public final class MainActivity extends Activity {
                 try {
                     Long budgetGrosz=budget.getText().toString().trim().isEmpty()
                         ?null:MoneyRules.parse(budget.getText().toString());
+                    String rawRate=laborRate.getText().toString().trim();
+                    Long hourlyRate=rawRate.isEmpty()?null:
+                        ("0".equals(rawRate)||"0,00".equals(rawRate)||"0.00".equals(rawRate))
+                        ?0L:MoneyRules.parse(rawRate);
+                    if(hourlyRate!=null&&hourlyRate>ProjectLaborCalculator.MAX_HOURLY_RATE_GROSZ)
+                        throw new IllegalArgumentException("Stawka może wynosić maksymalnie 1 000 000 zł/h.");
                     long id;
                     if(existing!=null){
                         id=existing.id;
@@ -5428,6 +5497,7 @@ public final class MainActivity extends Activity {
                         DiagnosticLog.event("PROJECT_CREATED","id="+id);
                         selectedProjectId=id;
                     }
+                    ProjectStore.setLaborRate(db.getWritableDatabase(),id,hourlyRate);
                     dialog.dismiss();
                     render();
                 } catch(Exception error) {
@@ -5624,6 +5694,9 @@ public final class MainActivity extends Activity {
             TextView projectTime=text(timeLine,12,false);
             bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted);
             box.addView(projectTime);
+            TextView taskLabor=text("",12,false);
+            box.addView(taskLabor);
+            bindProjectTaskLabor(taskLabor,project.id,taskId,activeStarted!=null);
             box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
                     project.id,taskId)
                 +(due.isEmpty()?"":" • termin "+due),12,false));
@@ -24407,7 +24480,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 48);
+            super(context, "edhome-beta-preview.db", null, 49);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -24437,6 +24510,7 @@ public final class MainActivity extends Activity {
             StorageStore.createTables(database);
             FrostStore.create(database);
             ProjectStore.create(database);
+            ProjectStore.upgrade49(database);
             ProjectPlanningStore.create(database);
             addNfcLinks(database);
             PaycheckStore.create(database);
@@ -24468,7 +24542,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 48) {
+            if (oldVersion < 1 || newVersion > 49) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -24727,6 +24801,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 48) {
                 ProjectStore.upgrade48(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_47_TO_48_PROJECT_THUMBNAILS");
+            }
+            if(oldVersion < 49) {
+                ProjectStore.upgrade49(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_48_TO_49_PROJECT_LABOR");
             }
             if(newVersion >= 36) {
                 try {
