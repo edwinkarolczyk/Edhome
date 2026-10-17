@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.121"
+  DESKTOP_VERSION: "0.7.0.122"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
@@ -106,4 +106,4 @@ jobs:
             gh release create $tag --repo $repo --target "${{ github.sha }}" --prerelease --title "EDHOME Desktop Beta • latest" --notes "Publiczna paczka używana przez aktualizację jednym przyciskiem w EDHOME Desktop."
           }
           gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Setup.exe desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
-          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION. ZALECANE: EDHOME-Desktop-Beta-Setup.exe — normalna instalacja z dołączonym runtime. Portable ZIP pozostaje dla aktualizacji 1-klik i zastosowań przenośnych; nie wolno uruchamiać samego EXE bez folderów app i runtime."
+          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION. Projekty: stawki roboczogodziny, naliczanie kosztu START/STOP na żywo i sumowanie wielu czynności; poprawka starszych danych. ZALECANE: EDHOME-Desktop-Beta-Setup.exe — normalna instalacja z dołączonym runtime. Portable ZIP pozostaje dla aktualizacji 1-klik i zastosowań przenośnych; nie wolno uruchamiać samego EXE bez folderów app i runtime."
