@@ -11315,6 +11315,12 @@ public final class MainActivity extends Activity {
         }
         details.addView(storageKindText("thing",item.name,20,true));
         if(item.protectFrost)details.addView(text("❄ Chronić przed mrozem",14,true));
+        if(item.returnRequired) {
+            String homeState=item.takenAt==null?"✓ Na swoim miejscu":
+                "⚠ Poza miejscem od "+java.time.Instant.ofEpochMilli(item.takenAt)
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+            details.addView(text(homeState,14,true));
+        }
         TextView where=text(StorageStore.location(db.getReadableDatabase(),item)
             .replace(" / "," → "),13,false);
         where.setTextColor(subdued);
@@ -11340,7 +11346,16 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             showStorageMoveOptions(item);
         });
-        if(item.boxId!=null)
+        if(item.returnRequired) {
+            smallButton(details,item.takenAt==null
+                ?"Wzięte • przypominaj o odłożeniu"
+                :"✓ Odłożone na swoje miejsce",()->{
+                dialog.dismiss();
+                if(item.takenAt==null)storageMarkTaken(item.id);
+                else storageMarkReturned(item.id);
+            });
+        }
+        if(item.boxId!=null&&!item.returnRequired)
             smallButton(details,"↥ Wyjmij z pudełka",()->{
                 dialog.dismiss();
                 takeStorageThingOut(item);
@@ -11357,7 +11372,7 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             showStorageQr(item);
         });
-        smallButton(details,"Edytuj położenie ręcznie",()->{
+        smallButton(details,"⚙ Edytuj rzecz / przypomnienia",()->{
             dialog.dismiss();
             storageEditor(item.kind,item.id);
         });
@@ -11590,6 +11605,17 @@ public final class MainActivity extends Activity {
                 StorageStore.location(db.getReadableDatabase(),item),12,false);
             location.setTextColor(subdued);
             info.addView(location);
+            if(!isBox&&item.returnRequired) {
+                String label=item.takenAt==null?"✓ Na swoim miejscu":
+                    "⚠ Poza miejscem od "+java.time.Instant.ofEpochMilli(item.takenAt)
+                        .atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+                info.addView(text(label,12,true));
+                smallButton(details,item.takenAt==null
+                    ?"Wzięte":"✓ Odłożone na miejsce",()->{
+                    if(item.takenAt==null)storageMarkTaken(item.id);
+                    else storageMarkReturned(item.id);
+                });
+            }
             if(item.lentTo!=null) {
                 TextView lent=text("Wypożyczono: "+item.lentTo,13,false);
                 lent.setTextColor(subdued);
@@ -12736,6 +12762,28 @@ public final class MainActivity extends Activity {
         showStorageMoveOptions(item);
     }
 
+    private void storageMarkTaken(long itemId) {
+        try {
+            StorageStore.takeTemporarily(db.getWritableDatabase(),itemId);
+            StorageHomeReminderReceiver.schedule(this);
+            DiagnosticLog.event("STORAGE_HOME_TAKEN","id="+itemId);
+            render();
+        }catch(Exception error) {
+            alert(error.getMessage()==null?"Nie zapisano wyjęcia rzeczy.":error.getMessage());
+        }
+    }
+
+    private void storageMarkReturned(long itemId) {
+        try {
+            StorageStore.putBack(db.getWritableDatabase(),itemId);
+            StorageHomeReminderReceiver.schedule(this);
+            DiagnosticLog.event("STORAGE_HOME_RETURNED","id="+itemId);
+            render();
+        }catch(Exception error) {
+            alert(error.getMessage()==null?"Nie zapisano odłożenia.":error.getMessage());
+        }
+    }
+
     private void takeStorageThingOut(StorageStore.Item item) {
         StorageStore.Item current=item==null?null:
             StorageStore.find(db.getReadableDatabase(),item.id);
@@ -12751,6 +12799,10 @@ public final class MainActivity extends Activity {
             db.getReadableDatabase(),current.boxId);
         if(box==null||!"box".equals(box.kind)) {
             alert("Pudełko tej rzeczy już nie istnieje.");
+            return;
+        }
+        if(current.returnRequired) {
+            storageMarkTaken(current.id);
             return;
         }
         Long place=StorageStore.effectivePlaceId(db.getReadableDatabase(),box);
@@ -13339,6 +13391,27 @@ public final class MainActivity extends Activity {
         protect.setButtonTintList(ColorStateList.valueOf(accent));
         protect.setChecked(existing!=null&&existing.protectFrost);
         layout.addView(protect);
+        CheckBox returnRule=null;
+        Spinner daysSpinner=null;
+        if("thing".equals(kind)) {
+            returnRule=new CheckBox(this);
+            returnRule.setText("Powinna wracać na swoje miejsce");
+            returnRule.setTextColor(ink);
+            returnRule.setButtonTintList(ColorStateList.valueOf(accent));
+            returnRule.setChecked(existing!=null&&existing.returnRequired);
+            layout.addView(returnRule);
+            layout.addView(text("Przypomnij po ilu dniach (potem raz dziennie)",12,false));
+            daysSpinner=new Spinner(this);
+            daysSpinner.setAdapter(lightDialogSpinnerAdapter(java.util.Arrays.asList(
+                "1 dzień", "2 dni", "3 dni", "7 dni", "14 dni", "30 dni")));
+            int[] options={1,2,3,7,14,30};
+            int selected=existing==null?1:existing.returnAfterDays;
+            for(int i=0;i<options.length;i++)if(options[i]==selected)
+                daysSpinner.setSelection(i);
+            layout.addView(daysSpinner);
+        }
+        final CheckBox required=returnRule;
+        final Spinner dueDays=daysSpinner;
         lightDialogForm(layout);
         new AlertDialog.Builder(this)
             .setTitle(existing==null?"Dodaj do magazynu":"Przenieś")
@@ -13364,6 +13437,14 @@ public final class MainActivity extends Activity {
                             StorageStore.move(db.getWritableDatabase(),existing.id,box,place);
                         FrostStore.setProtection(db.getWritableDatabase(),
                             existing==null?createdId:existing.id,protect.isChecked());
+                        if(required!=null) {
+                            int[] chosenDays={1,2,3,7,14,30};
+                            StorageStore.setReturnRule(db.getWritableDatabase(),
+                                existing==null?createdId:existing.id,
+                                required.isChecked(),
+                                chosenDays[dueDays.getSelectedItemPosition()]);
+                            StorageHomeReminderReceiver.schedule(this);
+                        }
                         DiagnosticLog.event(existing==null?"STORAGE_CREATED":"STORAGE_EDITED");
                         render();
                         if(existing!=null)refreshQuickStorageSetupStatus(
@@ -24538,7 +24619,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 49);
+            super(context, "edhome-beta-preview.db", null, 50);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -24566,6 +24647,7 @@ public final class MainActivity extends Activity {
             addShopping(database);
             ShoppingReceiptStore.create(database);
             StorageStore.createTables(database);
+            StorageStore.upgrade50(database);
             FrostStore.create(database);
             ProjectStore.create(database);
             ProjectStore.upgrade49(database);
@@ -24600,7 +24682,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 49) {
+            if (oldVersion < 1 || newVersion > 50) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -24863,6 +24945,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 49) {
                 ProjectStore.upgrade49(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_48_TO_49_PROJECT_LABOR");
+            }
+            if(oldVersion < 50) {
+                StorageStore.upgrade50(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_49_TO_50_STORAGE_HOME");
             }
             if(newVersion >= 36) {
                 try {
