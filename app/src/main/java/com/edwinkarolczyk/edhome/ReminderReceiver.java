@@ -113,6 +113,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         VehicleReminderReceiver.schedule(context);
         PaycheckBudgetReminderReceiver.schedule(context);
         FrostReminderReceiver.schedule(context);
+        StorageHomeReminderReceiver.schedule(context);
         AlarmManager manager = (AlarmManager) context.getSystemService(
             Context.ALARM_SERVICE);
         if (manager == null) return;
