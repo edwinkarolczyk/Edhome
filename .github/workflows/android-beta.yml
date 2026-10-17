@@ -315,6 +315,8 @@ jobs:
       - name: User profiles, local PIN and sync contract
         run: python3 tests/check_user_profiles_contract.py
       - name: Projects hierarchy, dependencies and planning contract
+        run: python3 tests/check_project_labor_cost.py
+      - name: Projekty — regresja
         run: python3 tests/check_projects_contract.py
       - name: Capitalized names and titles contract
         run: python3 tests/check_text_entry_capitalization_contract.py
