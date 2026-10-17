@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 316,
-  "versionName": "0.8.0.124",
-  "changelog": "EDHOME Beta 0.8.0.124 / 316 — Połączenie z PC: widoczny przycisk na ekranie głównym, jeden ekran parowania QR i sprawdzenia połączenia, prawdziwy status DesktopHubSync zamiast starego serwera, czytelne instrukcje i rozróżnienie parowania od synchronizacji. Nie odinstalowuj poprzedniej wersji. Stable main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.124/edhome-beta.apk",
-  "sha256": "f38a1afbb3f2d38186bf804e51bdadc8888118bbe6bb2a35cc831c4ef8733b28"
+  "versionCode": 317,
+  "versionName": "0.8.0.125",
+  "changelog": "EDHOME Beta 0.8.0.125 / 317 — Magazyn: na wybranej rzeczy zaznacz Powinna wracać na swoje miejsce, ustaw 1/2/3/7/14/30 dni, oznacz Wzięte i Odłożone. Dzienne powiadomienia do zwrotu, cisza nocna, lokalne dane, backup ZIP i synchronizacja LAN; baza v50. Domyślnie przypomnienia odłożenia wyłączone dla rzeczy. Instaluj bez odinstalowania poprzedniej wersji. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.125/edhome-beta.apk",
+  "sha256": "926101aed0c63eca77ec8cdca6508e00b9570d41004e2ee5ccec7637451e8336"
 }
