@@ -99,8 +99,12 @@ public final class StorageHomeReminderReceiver extends BroadcastReceiver {
                 prefs.getString("quiet_hours_end",QuietHoursRules.DEFAULT_END)))
             return;
 
+        NotificationManager mgr=(NotificationManager)context.getSystemService(
+            Context.NOTIFICATION_SERVICE);
+        if(mgr==null||!LegacyCompat.notificationsEnabled(mgr))return;
         long today=now.toLocalDate().toEpochDay();
         List<String> waiting=new ArrayList<>();
+        List<Long> waitingIds=new ArrayList<>();
         File file=context.getDatabasePath(DB);
         if(!file.isFile())return;
         try(SQLiteDatabase db=SQLiteDatabase.openDatabase(file.getAbsolutePath(),
@@ -120,13 +124,10 @@ public final class StorageHomeReminderReceiver extends BroadcastReceiver {
                 if(today-start<days)continue;
                 if(prefs.getLong("storage_home_notice_"+itemId,-1L)==today)continue;
                 waiting.add(name);
-                prefs.edit().putLong("storage_home_notice_"+itemId,today).apply();
+                waitingIds.add(itemId);
             }
         }
         if(waiting.isEmpty())return;
-        NotificationManager mgr=(NotificationManager)context.getSystemService(
-            Context.NOTIFICATION_SERVICE);
-        if(mgr==null||!LegacyCompat.notificationsEnabled(mgr))return;
         LegacyCompat.ensureChannel(mgr,CHANNEL,"Rzeczy do odłożenia",
             NotificationManager.IMPORTANCE_DEFAULT,null,true,true,false);
         Intent open=new Intent(context,MainActivity.class)
@@ -145,6 +146,9 @@ public final class StorageHomeReminderReceiver extends BroadcastReceiver {
             .setAutoCancel(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE).build();
         mgr.notify(NOTICE,notice);
+        SharedPreferences.Editor remembered=prefs.edit();
+        for(Long id:waitingIds)remembered.putLong("storage_home_notice_"+id,today);
+        remembered.apply();
         DiagnosticLog.event("STORAGE_HOME_REMINDER",
             "overdue="+waiting.size());
     }
