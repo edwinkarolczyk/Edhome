@@ -1,3 +1,10 @@
+## 2026-10-17 — Robocizna projektów: rozpoczęty backend (NIE gotowa APK)
+
+- **Kod `beta`:** `ProjectLaborCalculator.java` (commit `a51a06b`, zgodność API22 poprawka `3fff75f`), `ProjectStore.laborPreview` (`1094726`); rzeczywista dokładność czasu z `started_at/ended_at`, naliczanie do grosza, suma wielu sesji/czynności/podprojektów, wykrywanie nakładania sesji jednego przypisanego wykonawcy.
+- **Testy:** `ProjectLaborCalculatorSmoke.java`, `check_project_labor_cost.py`, krok workflow `2c17ecc`. Wyniku nowego CI jeszcze nie uznano za PASS; trwa sprawdzenie kompilacji i API22.
+- **Ważne:** aktualna wycena wymaga przekazania stawki do metody; nie ma jeszcze GUI Android, trwałego zapisu stawek ani zamrożenia stawki przy starcie sesji. Bez tych elementów użytkownik **nie może jeszcze naliczać robocizny w zainstalowanej aplikacji**. Nie publikowano nowego numeru APK.
+- **Następny krok:** GUI stawki i licznik na żywo (grosz po groszu), migracja stawek historycznych, backup/restore ZIP, LAN Android↔Desktop i testy ręczne; bez wpływu na PayCheck. [Issue #7](https://github.com/edwinkarolczyk/Edhome/issues/7). `main` Stable bez zmian.
+
 ## 2026-10-17 — Projekty: nowe wymaganie kosztu roboczogodziny (plan, bez zmian aplikacji)
 
 - **Zgłoszenie i analiza:** [GitHub #7](https://github.com/edwinkarolczyk/Edhome/issues/7): stawka zł/h projektu (opcjonalnie czynności/wykonawcy), koszt robocizny aktualizowany na żywo podczas Start, suma wszystkich czynności, sesji i podprojektów; widok czasu i kwoty obok kosztów zakupów.
