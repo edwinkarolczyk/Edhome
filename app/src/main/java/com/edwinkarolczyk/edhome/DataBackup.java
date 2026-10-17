@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 49;
+    private static final int DB_VERSION = 50;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -64,7 +64,8 @@ final class DataBackup {
             "name_snapshot", "unit", "quantity_milli", "unit_price_grosz",
             "shop", "happened_at"},
         {"storage_items", "id", "name", "kind", "parent_box_id", "place_id",
-            "lent_to", "lent_at", "created_at","protect_frost"},
+            "lent_to", "lent_at", "created_at","protect_frost",
+            "return_required","return_after_days","taken_at"},
         {"frost_settings", "id","start_month","start_day","lead_days",
             "remind_start","remind_before"},
         {"frost_checks", "id","season_year","item_id","done","changed_at"},
@@ -322,7 +323,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -569,6 +570,11 @@ final class DataBackup {
                 for (int j = 1; j < definition.length; j++) {
                     String key = definition[j];
                     if (!item.has(key)) {
+                        if(inputVersion < 50 && "storage_items".equals(definition[0])) {
+                            if("return_required".equals(key)){values.put(key,0);continue;}
+                            if("return_after_days".equals(key)){values.put(key,1);continue;}
+                            if("taken_at".equals(key)){values.putNull(key);continue;}
+                        }
                         if(inputVersion < 49 && "projects".equals(definition[0])
                                 &&"labor_rate_grosz".equals(key)){
                             values.putNull(key);continue;
@@ -745,6 +751,7 @@ final class DataBackup {
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
                             || "project_id".equals(key) || "budget_grosz".equals(key)
                             || "thumbnail_base64".equals(key)
+                            || "taken_at".equals(key)
                             || "labor_rate_grosz".equals(key)
                             || "hourly_rate_grosz".equals(key)
                             || "worker_id".equals(key)
@@ -1105,6 +1112,9 @@ final class DataBackup {
                     String person = values.getAsString("lent_to");
                     Long lentAt = values.getAsLong("lent_at");
                     Long created = values.getAsLong("created_at");
+                    Integer homeRequired=values.getAsInteger("return_required");
+                    Integer afterDays=values.getAsInteger("return_after_days");
+                    Long takenAt=values.getAsLong("taken_at");
                     Long box = values.getAsLong("parent_box_id");
                     Long place = values.getAsLong("place_id");
                     if (name == null || name.trim().isEmpty() || name.length() > 160
@@ -1115,7 +1125,13 @@ final class DataBackup {
                                 || person.length() > 80 || !"thing".equals(kind))
                             || (person == null) != (lentAt == null)
                             || lentAt != null && lentAt <= 0
-                            || created == null || created <= 0)
+                            || created == null || created <= 0
+                            || homeRequired==null || (homeRequired!=0&&homeRequired!=1)
+                            || afterDays==null || afterDays<1 || afterDays>365
+                            || takenAt!=null&&(takenAt<=0 || homeRequired!=1
+                                || !"thing".equals(kind)||person!=null
+                                || box==null&&place==null)
+                            || "box".equals(kind)&&homeRequired!=0)
                         throw new IllegalArgumentException("Nieprawidłowa rzecz lub pudełko.");
                 }
                 if ("storage_events".equals(definition[0])) {
@@ -1843,6 +1859,8 @@ final class DataBackup {
     private static boolean isNumberColumn(String column) {
         return "id".equals(column) || "done".equals(column)
             || "frost_risk".equals(column) || "protect_frost".equals(column)
+            || "return_required".equals(column) || "return_after_days".equals(column)
+            || "taken_at".equals(column)
             || "start_month".equals(column) || "start_day".equals(column)
             || "lead_days".equals(column) || "remind_start".equals(column)
             || "remind_before".equals(column)
