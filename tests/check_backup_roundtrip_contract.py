@@ -253,7 +253,7 @@ for token in (
     'static String merge(String installed, String archived, Set<String> requested)',
     'OLDEST_SELECTIVE_SCHEMA = 45;',
     'if (!archivedTables.has(table))',
-    'CURRENT_SCHEMA = 48;',
+    'CURRENT_SCHEMA = 49;',
     'sourceVersion < 47 && table.startsWith("frost_")',
     'String flag = "places".equals(table) ? "frost_risk" : "protect_frost";',
     'if (!row.has(flag)) row.put(flag, 0);',
