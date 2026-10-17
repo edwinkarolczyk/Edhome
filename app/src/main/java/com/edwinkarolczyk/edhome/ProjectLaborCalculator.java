@@ -83,18 +83,31 @@ final class ProjectLaborCalculator {
                 ? Math.max(now, session.startedAt) : session.endedAt;
             if (session.endedAt == null) activeSessions++;
             long duration = end - session.startedAt;
-            elapsedMillis = Math.addExact(elapsedMillis, duration);
+            if (duration > Long.MAX_VALUE - elapsedMillis)
+                throw new IllegalArgumentException("Zbyt dlugi czas projektu.");
+            elapsedMillis += duration;
             BigInteger weighted = BigInteger.valueOf(duration)
                 .multiply(BigInteger.valueOf(session.hourlyRateGrosz));
-            taskWeightedMillis.merge(session.taskId, weighted, BigInteger::add);
-            if (session.workerId > 0 && duration > 0)
-                workers.computeIfAbsent(session.workerId, ignored -> new ArrayList<>())
-                    .add(new Interval(session.startedAt, end));
+            BigInteger previous = taskWeightedMillis.get(session.taskId);
+            taskWeightedMillis.put(session.taskId,
+                previous == null ? weighted : previous.add(weighted));
+            if (session.workerId > 0 && duration > 0) {
+                List<Interval> intervals = workers.get(session.workerId);
+                if (intervals == null) {
+                    intervals = new ArrayList<>();
+                    workers.put(session.workerId, intervals);
+                }
+                intervals.add(new Interval(session.startedAt, end));
+            }
         }
 
         boolean overlap = false;
         for (List<Interval> intervals : workers.values()) {
-            intervals.sort(Comparator.comparingLong(i -> i.start));
+            Collections.sort(intervals, new Comparator<Interval>() {
+                @Override public int compare(Interval a, Interval b) {
+                    return Long.compare(a.start, b.start);
+                }
+            });
             long previousEnd = Long.MIN_VALUE;
             for (Interval interval : intervals) {
                 if (interval.start < previousEnd) overlap = true;
@@ -106,10 +119,15 @@ final class ProjectLaborCalculator {
         long totalGrosz = 0L;
         for (Map.Entry<Long, BigInteger> item : taskWeightedMillis.entrySet()) {
             // Dodatnie liczby: zaokraglenie matematyczne do pelnego grosza.
-            long amount = item.getValue().add(MILLIS_PER_HOUR.shiftRight(1))
-                .divide(MILLIS_PER_HOUR).longValueExact();
+            BigInteger rounded = item.getValue().add(MILLIS_PER_HOUR.shiftRight(1))
+                .divide(MILLIS_PER_HOUR);
+            if (rounded.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0)
+                throw new IllegalArgumentException("Koszt projektu przekracza zakres.");
+            long amount = rounded.longValue();
             costs.put(item.getKey(), amount);
-            totalGrosz = Math.addExact(totalGrosz, amount);
+            if (amount > Long.MAX_VALUE - totalGrosz)
+                throw new IllegalArgumentException("Koszt projektu przekracza zakres.");
+            totalGrosz += amount;
         }
         return new Summary(elapsedMillis, totalGrosz, activeSessions, overlap, costs);
     }
