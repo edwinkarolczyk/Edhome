@@ -379,7 +379,7 @@ assert 'if (rowIndex >= 0) rows.remove(rowIndex);' in desktop_pull
 assert 'metadata.set(metaIndex, remoteMeta.deepCopy())' in desktop_pull
 
 # New thumbnails must survive JSON/ZIP/LAN; old v47 archives lacked this field.
-assert '"thumbnail_base64", "created_at"' in backup
+assert '"thumbnail_base64", "labor_rate_grosz", "created_at"' in backup
 assert 'inputVersion < 48 && "projects".equals(definition[0])' in backup
 selective=(root / "app/src/main/java/com/edwinkarolczyk/edhome/BackupSelectiveMerge.java").read_text(
     encoding="utf-8")
