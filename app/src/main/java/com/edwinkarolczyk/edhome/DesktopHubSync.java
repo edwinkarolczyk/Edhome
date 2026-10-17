@@ -115,6 +115,47 @@ final class DesktopHubSync {
             &&validToken(prefs.getString(PREF_TOKEN,""));
     }
 
+    /**
+     * Stan faktycznego klienta DesktopHubSync (nie starszego serwera LAN
+     * telefonu). "Połączono" wymaga świeżej udanej wymiany z PC.
+     */
+    static String connectionState(Context context) {
+        if(BackupSyncGate.isHeld(context) || !conflict(context).isEmpty())
+            return "KONFLIKT";
+        if(!paired(context))return "NIESPAROWANO";
+        if(SYNCING.get())return "ŁĄCZENIE";
+        SharedPreferences prefs=prefs(context);
+        String state=prefs.getString(PREF_LAST_STATE,"OFFLINE");
+        long at=prefs.getLong(PREF_LAST_SYNC,0L);
+        long age=System.currentTimeMillis()-at;
+        if(state.startsWith("ONLINE") && at>0L && age>=0L
+                && age<=3L*POLL_SECONDS*1000L)
+            return "POŁĄCZONO";
+        if(state.startsWith("PAROWANIE"))return "ŁĄCZENIE";
+        return "ROZŁĄCZONO";
+    }
+
+    static String connectionAdvice(Context context) {
+        String state=connectionState(context);
+        if("NIESPAROWANO".equals(state))
+            return "Na PC otwórz EDHOME Desktop → Ustawienia → "
+                +"Połącz telefon przez QR, a następnie zeskanuj kod tutaj.";
+        if("KONFLIKT".equals(state))
+            return "Połączenie wymaga decyzji o danych telefonu i PC. "
+                +"Otwórz Ustawienia → Desktop / Wi-Fi → Porównaj dane. "
+                +"Nie wybieraj nadpisania bez sprawdzenia kopii.";
+        if("POŁĄCZONO".equals(state))
+            return "Telefon i EDHOME Desktop wymieniły dane. "
+                +"Synchronizacja odbywa się też automatycznie.";
+        if("ŁĄCZENIE".equals(state))
+            return "Sprawdzam komputer. Włącz EDHOME Desktop i "
+                +"pozostaw oba urządzenia w tej samej sieci lokalnej.";
+        return "Nie ma potwierdzonego połączenia. Sprawdź, czy EDHOME Desktop "
+            +"jest uruchomiony, oba urządzenia korzystają z tej samej sieci "
+            +"oraz czy Zapora Windows nie blokuje aplikacji. "
+            +"Na PC: Ustawienia → Napraw połączenie telefonu / zaporę Windows.";
+    }
+
     static String status(Context context) {
         SharedPreferences prefs=prefs(context);
         if(BackupSyncGate.isHeld(context))
