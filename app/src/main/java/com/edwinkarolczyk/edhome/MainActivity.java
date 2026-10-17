@@ -1666,6 +1666,7 @@ public final class MainActivity extends Activity {
                 case "scanner": scannerHub(); break;
                 case "audit": audit(); break;
                 case "settings": settings(); break;
+                case "desktop_connection": desktopConnectionScreen(); break;
                 case "supla": supla(); break;
                 case "updates": updates(); break;
                 case "updates_advanced": updatesAdvanced(); break;
@@ -1934,25 +1935,84 @@ public final class MainActivity extends Activity {
             + (remote == null || remote.isEmpty() ? "" : " • " + remote);
     }
 
+    /** Jeden ekran parowania zamiast starego statusu serwera telefonu. */
     private void showDesktopConnectionStatus() {
-        boolean online = LanSyncServer.hasRecentClient();
-        boolean syncing = online && LanSyncServer.isSyncing();
-        String state = syncing ? "SYNCHRONIZACJA"
-            : (online ? "POŁĄCZONO" : "NIEPOŁĄCZONE");
-        String message = "Stan: " + state
-            + "\nSerwer LAN telefonu: "
-            + (LanSyncService.endpointRunning() ? "DZIAŁA" : "NIE DZIAŁA / URUCHAMIA SIĘ")
-            + "\nOstatnia próba PC: " + desktopLastAttempt()
-            + "\nOstatnia wymiana danych: " + desktopLastSyncTime()
-            + (online
-                ? "\n\nTelefon i EDHOME Desktop widzą się w sieci lokalnej."
-                : "\n\nEDHOME czeka na komputer w tej samej sieci Wi‑Fi/LAN.");
-        new AlertDialog.Builder(this)
-            .setTitle("EDHOME Desktop")
-            .setMessage(message)
-            .setNegativeButton("Zamknij", null)
-            .setPositiveButton("Ustawienia połączenia", (d, w) -> go("settings"))
-            .show();
+        go("desktop_connection");
+    }
+
+    private void desktopConnectionScreen() {
+        header("Połączenie z komputerem");
+        note("EDHOME działa bez internetu i bez chmury. Komputer może być "
+            +"po kablu LAN, a telefon przez Wi-Fi — oba w tej samej sieci.");
+
+        LinearLayout box=card();
+        box.addView(text("Komputer EDHOME • stan połączenia",18,true));
+        TextView state=text("",17,true);
+        box.addView(state);
+        TextView detail=text("",13,false);
+        box.addView(detail);
+        TextView help=text("",13,false);
+        box.addView(help);
+
+        final Runnable[] refresh=new Runnable[1];
+        refresh[0]=()->{
+            if(!state.isAttachedToWindow()||db==null||isFinishing()||isDestroyed())return;
+            String current=DesktopHubSync.connectionState(this);
+            String title="POŁĄCZONO".equals(current)?"✓ Połączono z komputerem":
+                "ŁĄCZENIE".equals(current)?"● Trwa sprawdzanie połączenia":
+                "KONFLIKT".equals(current)?"⚠ Trzeba uzgodnić dane":
+                "NIESPAROWANO".equals(current)?"● Nie połączono jeszcze PC":
+                "● Brak kontaktu z komputerem";
+            state.setText(title);
+            state.setTextColor("POŁĄCZONO".equals(current)
+                ?desktopConnectionGreen():"ŁĄCZENIE".equals(current)
+                ||"KONFLIKT".equals(current)?projectTimeYellow():desktopConnectionRed());
+            detail.setText(DesktopHubSync.status(this));
+            help.setText(DesktopHubSync.connectionAdvice(this));
+            state.postDelayed(refresh[0],1200L);
+        };
+        state.post(refresh[0]);
+
+        title("Połącz telefon z komputerem");
+        note("1. Na PC otwórz EDHOME Desktop → Ustawienia → "
+            +"Połącz telefon przez QR. Zostaw kod na ekranie.");
+        note("2. Na telefonie naciśnij poniżej „Skanuj QR z komputera”.");
+        note("3. Po skanowaniu poczekaj na zielony napis „Połączono”. "
+            +"Sam zeskanowany QR nie oznacza jeszcze synchronizacji.");
+        button("1. Skanuj QR z komputera",this::scanDesktopPairQr);
+        button("2. Sprawdź połączenie teraz",()->{
+            if(!DesktopHubSync.paired(this)) {
+                alert("Najpierw zeskanuj kod QR wyświetlany w EDHOME Desktop.");
+                return;
+            }
+            DesktopHubSync.kick(this);
+            alert("Wysłano żądanie sprawdzenia. Wynik pojawi się powyżej. "
+                +"Jeśli nie ma kontaktu, sprawdź zaporę Windows i sieć.");
+        });
+        if(BackupSyncGate.isHeld(this)||!DesktopHubSync.conflict(this).isEmpty()) {
+            button("⚠ Porównaj dane telefonu i PC",this::showDesktopSyncComparison);
+            note("Nie wybieraj zastępowania danych bez sprawdzenia kopii "
+                +"z obu urządzeń.");
+        }
+        button("Ustawienia zaawansowane / rozłącz",()->{
+            prefs.edit().putBoolean("settings_open_desktop",true).apply();
+            go("settings");
+        });
+        note("Gdy PC jest włączony, ale nadal czerwono: na komputerze "
+            +"przejdź do Ustawienia → Napraw połączenie telefonu / zaporę Windows. "
+            +"Wyłącz VPN i sieć gościnną na czas parowania. Nie usuwaj danych "
+            +"ani parowania tylko dlatego, że połączenie chwilowo nie działa.");
+    }
+
+    private void homeDesktopConnectionAction() {
+        if(!BetaUpdater.isBeta())return;
+        String current=DesktopHubSync.connectionState(this);
+        String caption="POŁĄCZONO".equals(current)?"✓ Komputer połączony":
+            "KONFLIKT".equals(current)?"⚠ Komputer: uzgodnij dane":
+            "ŁĄCZENIE".equals(current)?"● Komputer: łączenie":
+            "NIESPAROWANO".equals(current)?"🖥 Połącz z komputerem":
+            "🖥 Komputer: brak połączenia";
+        smallButton(body,caption,this::showDesktopConnectionStatus);
     }
 
     /** Nagłówek zawsze pokazuje rzeczywiście zainstalowaną wersję APK. */
@@ -2020,38 +2080,30 @@ public final class MainActivity extends Activity {
             touchFeedback(badge);
 
             Runnable refresh = new Runnable() {
-                private boolean pulse;
                 @Override public void run() {
-                    if (!badge.isAttachedToWindow()) return;
-                    boolean online = LanSyncServer.hasRecentClient();
-                    boolean syncing = online && LanSyncServer.isSyncing();
-                    if (skin.showcase()) {
-                        GradientDrawable avatar = new GradientDrawable();
-                        avatar.setShape(GradientDrawable.OVAL);
-                        avatar.setColor(surface);
-                        avatar.setStroke(dp(2), online
-                            ? desktopConnectionGreen() : desktopConnectionRed());
-                        badge.setBackground(avatar);
-                        badge.setText(syncing
-                            ? (pulse ? "E›" : "‹E") : "E");
-                        pulse = syncing && !pulse;
-                    } else if (syncing) {
-                        badge.setBackground(skin.panel(MainActivity.this, surface, 22));
-                        badge.setText(pulse ? "●  →   PC" : "●    ← PC");
-                        pulse = !pulse;
-                    } else {
-                        badge.setBackground(skin.panel(MainActivity.this, surface, 22));
-                        badge.setText("●  ⇄ PC");
-                        pulse = false;
-                    }
-                    badge.setTextColor(structuredInterfaceShell() ? ink : (online
-                        ? desktopConnectionGreen() : desktopConnectionRed()));
-                    badge.setContentDescription(syncing
-                        ? "EDHOME Desktop synchronizuje dane."
-                        : (online
-                            ? "EDHOME Desktop połączony."
-                            : "EDHOME Desktop niepołączony."));
-                    badge.postDelayed(this, syncing ? 320L : 1200L);
+                    if(!badge.isAttachedToWindow())return;
+                    String current=DesktopHubSync.connectionState(MainActivity.this);
+                    boolean online="POŁĄCZONO".equals(current);
+                    boolean pending="ŁĄCZENIE".equals(current)
+                        ||"KONFLIKT".equals(current);
+                    int statusColor=online?desktopConnectionGreen()
+                        :pending?projectTimeYellow():desktopConnectionRed();
+                    badge.setText(skin.showcase()?"PC":online?"● PC OK":
+                        "KONFLIKT".equals(current)?"● PC: konflikt":
+                        "ŁĄCZENIE".equals(current)?"● PC: łączenie":
+                        "NIESPAROWANO".equals(current)?"● PC: QR":"● PC: brak");
+                    if(skin.showcase()) {
+                        GradientDrawable ring=new GradientDrawable();
+                        ring.setShape(GradientDrawable.OVAL);
+                        ring.setColor(surface);
+                        ring.setStroke(dp(2),statusColor);
+                        badge.setBackground(ring);
+                    } else badge.setBackground(
+                        skin.panel(MainActivity.this,surface,22));
+                    badge.setTextColor(statusColor);
+                    badge.setContentDescription("Komputer: "+current
+                        +". Dotknij, żeby połączyć lub sprawdzić stan.");
+                    badge.postDelayed(this,1200L);
                 }
             };
             LinearLayout.LayoutParams badgeParams = skin.showcase()
@@ -2245,6 +2297,7 @@ public final class MainActivity extends Activity {
 
     private void homeConcept5() {
         appTitleWithConnection();
+        homeDesktopConnectionAction();
         String date=LocalDate.now().format(DateTimeFormatter.ofPattern(
             "EEEE, d MMMM yyyy",Locale.forLanguageTag("pl-PL")));
         TextView day=text(date,13,false);
@@ -2291,6 +2344,7 @@ public final class MainActivity extends Activity {
 
     private void homeConcept8() {
         appTitleWithConnection();
+        homeDesktopConnectionAction();
         conceptTodayCard(3);
         conceptActionRow();
 
@@ -2623,6 +2677,7 @@ public final class MainActivity extends Activity {
             return;
         }
         appTitleWithConnection();
+        homeDesktopConnectionAction();
         int overdue = db.overdueTasks();
         if (skin.showcase()) {
             String date = LocalDate.now().format(DateTimeFormatter.ofPattern(
@@ -21862,9 +21917,9 @@ public final class MainActivity extends Activity {
                     new java.util.ArrayList<>(pairHosts));
                 DiagnosticLog.event("DESKTOP_HUB_QR_PAIRED",
                     "desktop="+desktopId);
-                alert("QR Desktopu zapisany. Sprawdzam teraz połączenie z API. "
-                    +"Stan zobaczysz w Desktop / Wi‑Fi.");
-                render();
+                go("desktop_connection");
+                alert("QR zapisany. Sprawdzam połączenie z komputerem. "
+                    +"Zielony status oznacza dopiero potwierdzoną wymianę danych.");
                 return;
             }
             if(!"1".equals(qrVersion))
@@ -22772,7 +22827,10 @@ public final class MainActivity extends Activity {
 
         if(BetaUpdater.isBeta()){
             LinearLayout desktop=settingsAccordion("desktop","Desktop / Wi‑Fi",
-                "Telefon jest klientem lokalnego API EDHOME Desktop.",false);
+                "Połączenie telefonu z EDHOME Desktop przez QR i lokalną sieć.",
+                !DesktopHubSync.paired(this));
+            smallButton(desktop,"🖥 Otwórz połączenie z komputerem",
+                this::showDesktopConnectionStatus);
             desktop.addView(text(DesktopHubSync.status(this),13,false));
             smallButton(desktop,"Skanuj QR z ekranu PC",this::scanDesktopPairQr);
             smallButton(desktop,"Synchronizuj teraz",()->{
