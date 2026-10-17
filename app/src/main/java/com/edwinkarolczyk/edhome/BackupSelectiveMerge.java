@@ -15,7 +15,7 @@ import java.util.Set;
  * Nie zapisuje niczego do bazy. Całą migawkę waliduje DataBackup.restoreJson.
  */
 final class BackupSelectiveMerge {
-    private static final int CURRENT_SCHEMA = 49;
+    private static final int CURRENT_SCHEMA = 50;
     private static final int OLDEST_SELECTIVE_SCHEMA = 45;
 
     private BackupSelectiveMerge() { }
@@ -77,8 +77,9 @@ final class BackupSelectiveMerge {
                 throw new IllegalArgumentException(
                     "Kopia nie zawiera wymaganej tabeli: " + table);
             }
-            if (sourceVersion < 49 && ("projects".equals(table)
-                    || "project_task_work_sessions".equals(table))) {
+            if (sourceVersion < 50 && ("projects".equals(table)
+                    || "project_task_work_sessions".equals(table)
+                    || "storage_items".equals(table))) {
                 // Starszy eksport projektów nie posiada miniaturek.
                 JSONArray migrated=new JSONArray();
                 JSONArray legacy=archivedTables.getJSONArray(table);
@@ -89,6 +90,13 @@ final class BackupSelectiveMerge {
                         project.put("thumbnail_base64",JSONObject.NULL);
                     if("projects".equals(table)&&!project.has("labor_rate_grosz"))
                         project.put("labor_rate_grosz",JSONObject.NULL);
+                    if("storage_items".equals(table)) {
+                        if(sourceVersion<47&&!project.has("protect_frost"))
+                            project.put("protect_frost",0);
+                        if(!project.has("return_required"))project.put("return_required",0);
+                        if(!project.has("return_after_days"))project.put("return_after_days",1);
+                        if(!project.has("taken_at"))project.put("taken_at",JSONObject.NULL);
+                    }
                     if("project_task_work_sessions".equals(table)) {
                         if(!project.has("hourly_rate_grosz"))
                             project.put("hourly_rate_grosz",JSONObject.NULL);
