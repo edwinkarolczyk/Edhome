@@ -1059,10 +1059,15 @@ public final class EdhomeDesktop extends JFrame {
             cols("Nazwa","title","Typ","task_kind","Powtarzanie","repeat_rule",
                  "Co ile","repeat_every","Miejsce","place_id")));
         if ("Projekty".equals(name)) return desktopProjects();
-        if ("Magazyn".equals(name)) return frostSection(tablePage("Magazyn", "storage_items",
-            cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
-                 "Miejsce","place_id","Wypożyczone","lent_to",
-                 "Chronić przed mrozem","protect_frost")));
+        if ("Magazyn".equals(name)) {
+            ensureDesktopStorageHomeFields();
+            return frostSection(tablePage("Magazyn", "storage_items",
+                cols("Nazwa","name","Typ","kind","Pudełko","parent_box_id",
+                    "Miejsce","place_id","Wypożyczone","lent_to",
+                    "Chronić przed mrozem","protect_frost",
+                    "Powinna wracać na swoje miejsce","return_required",
+                    "Przypomnij po ilu dniach","return_after_days")));
+        }
         if ("Pomieszczenia".equals(name)) return rooms();
         if ("Mapa".equals(name)) return floorMap();
         if ("Spiżarnia".equals(name)) return tablePage("Spiżarnia", "pantry",
@@ -7816,6 +7821,8 @@ public final class EdhomeDesktop extends JFrame {
                 boolean moved = !value(old, "parent_box_id").equals(
                         value(row, "parent_box_id"))
                     || !value(old, "place_id").equals(value(row, "place_id"));
+                if (moved&&!value(old,"taken_at").isBlank())
+                    throw new IllegalArgumentException("Najpierw odłóż rzecz na miejsce.");
                 if (moved) appendDesktopStorageMove(row, old);
             }
             markDirty();
@@ -7897,6 +7904,36 @@ public final class EdhomeDesktop extends JFrame {
         JButton edit = compactActionButton("Edytuj");
         edit.addActionListener(e -> editRow(row, columns));
         rowActions.add(edit);
+        if("storage_items".equals(tableName)&&"thing".equals(value(row,"kind"))) {
+            JButton take=compactActionButton(
+                value(row,"taken_at").isBlank()?"Wzięte":"✓ Odłożone");
+            take.addActionListener(e->{
+                try {
+                    if(value(row,"taken_at").isBlank()) {
+                        if(intValue(row,"return_required")!=1)
+                            throw new IllegalArgumentException(
+                                "Zaznacz w Edytuj: Powinna wracać na swoje miejsce.");
+                        if(value(row,"parent_box_id").isBlank()
+                                &&value(row,"place_id").isBlank())
+                            throw new IllegalArgumentException("Najpierw przypisz miejsce.");
+                        if(!value(row,"lent_to").isBlank())
+                            throw new IllegalArgumentException("Rzecz jest wypożyczona.");
+                        row.addProperty("taken_at",System.currentTimeMillis());
+                        appendDesktopStorageHomeEvent(row,
+                            "Wzięte czasowo; ma wrócić na swoje miejsce");
+                    }else{
+                        row.add("taken_at",com.google.gson.JsonNull.INSTANCE);
+                        appendDesktopStorageHomeEvent(row,"Odłożono na swoje miejsce");
+                    }
+                    markDirty();
+                    showSection("Magazyn");
+                }catch(Exception error) {
+                    JOptionPane.showMessageDialog(this,rootMessage(error),
+                        "EDHOME • powrót rzeczy",JOptionPane.WARNING_MESSAGE);
+                }
+            });
+            rowActions.add(take);
+        }
         if ("storage_items".equals(tableName) || "places".equals(tableName)) {
             JButton qr = compactActionButton("QR");
             qr.setToolTipText("QR / etykieta");
@@ -8895,6 +8932,9 @@ public final class EdhomeDesktop extends JFrame {
             row.add("lent_at", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("created_at", now);
             row.addProperty("protect_frost",0);
+            row.addProperty("return_required",0);
+            row.addProperty("return_after_days",1);
+            row.add("taken_at",com.google.gson.JsonNull.INSTANCE);
             return row;
         }
         if ("vehicles".equals(tableName)) {
@@ -9326,6 +9366,8 @@ public final class EdhomeDesktop extends JFrame {
                 boolean moved=!value(before,"parent_box_id").equals(
                         value(row,"parent_box_id"))
                     ||!value(before,"place_id").equals(value(row,"place_id"));
+                if(storageRowLive&&moved&&!value(before,"taken_at").isBlank())
+                    throw new IllegalArgumentException("Najpierw odłóż rzecz na miejsce.");
                 if(storageRowLive&&moved&&!value(before,"lent_to").isBlank())
                     throw new IllegalArgumentException(
                         "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
@@ -9384,6 +9426,38 @@ public final class EdhomeDesktop extends JFrame {
             target.add(entry.getKey(),entry.getValue().deepCopy());
     }
 
+    private void ensureDesktopStorageHomeFields() {
+        boolean changed=false;
+        for(JsonElement element:table("storage_items")) {
+            if(!element.isJsonObject())continue;
+            JsonObject item=element.getAsJsonObject();
+            if(!item.has("return_required")){
+                item.addProperty("return_required",0);
+                changed=true;
+            }
+            if(!item.has("return_after_days")){
+                item.addProperty("return_after_days",1);
+                changed=true;
+            }
+            if(!item.has("taken_at")){
+                item.add("taken_at",com.google.gson.JsonNull.INSTANCE);
+                changed=true;
+            }
+        }
+        if(changed)markDirty();
+    }
+
+    private void appendDesktopStorageHomeEvent(JsonObject row,String note) {
+        JsonObject event=new JsonObject();
+        event.addProperty("id",nextId("storage_events"));
+        event.addProperty("item_id",longValue(row,"id"));
+        event.addProperty("name_snapshot",value(row,"name"));
+        event.addProperty("action",note.startsWith("Wzięte")?"moved":"returned");
+        event.addProperty("details",note);
+        event.addProperty("happened_at",System.currentTimeMillis());
+        table("storage_events").add(event);
+    }
+
     private boolean isDesktopStorageRow(JsonObject row) {
         return row!=null&&row.has("parent_box_id")&&row.has("place_id")
             &&row.has("created_at")&&row.has("kind");
@@ -9414,6 +9488,16 @@ public final class EdhomeDesktop extends JFrame {
         if(lent.isBlank()!=lentAt.isBlank())
             throw new IllegalArgumentException(
                 "Wypożyczenie zmieniaj przez akcję Wypożycz / Zwrot.");
+        int returns=intValue(row,"return_required");
+        int days=intValue(row,"return_after_days");
+        String taken=value(row,"taken_at");
+        if(returns<0||returns>1||days<1||days>365)
+            throw new IllegalArgumentException("Przypominanie tylko po 1–365 dniach.");
+        if("box".equals(kind)&&returns!=0)
+            throw new IllegalArgumentException("Przypominanie dotyczy wyłącznie rzeczy.");
+        if(!taken.isBlank()&&(returns!=1||!"thing".equals(kind)
+                ||!lent.isBlank()||parent.isBlank()&&place.isBlank()))
+            throw new IllegalArgumentException("Najpierw potwierdź odłożenie rzeczy.");
         if(!parent.isBlank()) {
             JsonObject box;
             try{box=scannerRowById("storage_items",Long.parseLong(parent));}
