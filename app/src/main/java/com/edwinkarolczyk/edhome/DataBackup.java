@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 48;
+    private static final int DB_VERSION = 49;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -35,7 +35,7 @@ final class DataBackup {
         {"household_members", "id", "name"},
         {"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"},
         {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
-            "status", "due_date", "budget_grosz", "thumbnail_base64", "created_at"},
+            "status", "due_date", "budget_grosz", "thumbnail_base64", "labor_rate_grosz", "created_at"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"member_shift_hours", "id", "member_id", "shift", "start_time", "end_time"},
@@ -50,7 +50,7 @@ final class DataBackup {
             "unit_price_grosz", "status", "note", "created_at"},
         {"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"},
         {"project_task_work_sessions", "id", "task_id", "started_at",
-            "ended_at", "worked_minutes"},
+            "ended_at", "worked_minutes", "hourly_rate_grosz", "worker_id"},
         {"project_task_blockers", "id", "task_id", "kind", "label", "hard",
             "resolved", "available_on", "created_at"},
         {"task_rotation_members", "task_id", "member_id", "position"},
@@ -569,6 +569,14 @@ final class DataBackup {
                 for (int j = 1; j < definition.length; j++) {
                     String key = definition[j];
                     if (!item.has(key)) {
+                        if(inputVersion < 49 && "projects".equals(definition[0])
+                                &&"labor_rate_grosz".equals(key)){
+                            values.putNull(key);continue;
+                        }
+                        if(inputVersion < 49 && "project_task_work_sessions".equals(definition[0])
+                                &&("hourly_rate_grosz".equals(key)||"worker_id".equals(key))){
+                            values.putNull(key);continue;
+                        }
                         if(inputVersion < 48 && "projects".equals(definition[0])
                                 &&"thumbnail_base64".equals(key)){
                             values.putNull(key);continue;
@@ -1565,6 +1573,11 @@ final class DataBackup {
             Long started=row.getAsLong("started_at");
             Long ended=row.getAsLong("ended_at");
             Long worked=row.getAsLong("worked_minutes");
+            Long rate=row.getAsLong("hourly_rate_grosz");
+            Long worker=row.getAsLong("worker_id");
+            if(rate!=null && (rate<0L || rate>ProjectLaborCalculator.MAX_HOURLY_RATE_GROSZ)
+                    ||worker!=null&&worker<=0L)
+                throw new IllegalArgumentException("Nieprawidłowa stawka lub wykonawca sesji.");
             if(taskId==null || !tasks.contains(taskId)
                     || started==null || started<=0
                     || (ended==null)!=(worked==null)
@@ -1842,7 +1855,9 @@ final class DataBackup {
             || "task_id".equals(column) || "depends_on_task_id".equals(column)
             || "place_id".equals(column) || "parent_id".equals(column) || "assignee_id".equals(column)
             || "project_id".equals(column) || "target_id".equals(column)
-            || "budget_grosz".equals(column) || "unit_price_grosz".equals(column)
+            || "budget_grosz".equals(column) || "labor_rate_grosz".equals(column)
+            || "hourly_rate_grosz".equals(column) || "worker_id".equals(column)
+            || "unit_price_grosz".equals(column)
             || "member_id".equals(column) || "position".equals(column) || "weekday".equals(column)
             || "slot".equals(column) || "enabled".equals(column)
             || "hard".equals(column) || "resolved".equals(column)
