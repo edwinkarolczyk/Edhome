@@ -21,6 +21,9 @@ final class StorageStore {
             + "parent_box_id INTEGER, place_id INTEGER, "
             + "lent_to TEXT, lent_at INTEGER, created_at INTEGER NOT NULL, "
             +"protect_frost INTEGER NOT NULL DEFAULT 0, "
+            +"return_required INTEGER NOT NULL DEFAULT 0 CHECK(return_required IN (0,1)), "
+            +"return_after_days INTEGER NOT NULL DEFAULT 1 CHECK(return_after_days BETWEEN 1 AND 365), "
+            +"taken_at INTEGER CHECK(taken_at IS NULL OR taken_at>0), "
             + "CHECK(parent_box_id IS NULL OR place_id IS NULL))");
         db.execSQL("CREATE TABLE storage_events ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, "
@@ -47,21 +50,29 @@ final class StorageStore {
         final Long placeId;
         final String lentTo;
         final boolean protectFrost;
+        final boolean returnRequired;
+        final int returnAfterDays;
+        final Long takenAt;
         Item(long id, String name, String kind, Long boxId, Long placeId,
-                String lentTo,boolean protectFrost) {
+                String lentTo,boolean protectFrost,boolean returnRequired,
+                int returnAfterDays,Long takenAt) {
             this.id=id; this.name=name; this.kind=kind;
             this.boxId=boxId; this.placeId=placeId; this.lentTo=lentTo;
             this.protectFrost=protectFrost;
+            this.returnRequired=returnRequired;
+            this.returnAfterDays=returnAfterDays;
+            this.takenAt=takenAt;
         }
     }
 
     static Item find(SQLiteDatabase db, long id) {
-        try (Cursor c=db.rawQuery("SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost "
+        try (Cursor c=db.rawQuery("SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost,return_required,return_after_days,taken_at "
                 + "FROM storage_items WHERE id=?", new String[]{Long.toString(id)})) {
             return c.moveToFirst()
                 ? new Item(c.getLong(0),c.getString(1),c.getString(2),
                     c.isNull(3)?null:c.getLong(3),
-                    c.isNull(4)?null:c.getLong(4),c.getString(5),c.getInt(6)==1) : null;
+                    c.isNull(4)?null:c.getLong(4),c.getString(5),c.getInt(6)==1,c.getInt(7)==1,c.getInt(8),
+                    c.isNull(9)?null:c.getLong(9)) : null;
         }
     }
 
@@ -72,13 +83,14 @@ final class StorageStore {
     static List<Item> listAll(SQLiteDatabase db) {
         List<Item> items=new ArrayList<>();
         try (Cursor c=db.rawQuery(
-                "SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost "
+                "SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost,return_required,return_after_days,taken_at "
                     + "FROM storage_items ORDER BY kind,name COLLATE NOCASE,id",
                 null)) {
             while(c.moveToNext())
                 items.add(new Item(c.getLong(0),c.getString(1),c.getString(2),
                     c.isNull(3)?null:c.getLong(3),
-                    c.isNull(4)?null:c.getLong(4),c.getString(5),c.getInt(6)==1));
+                    c.isNull(4)?null:c.getLong(4),c.getString(5),c.getInt(6)==1,c.getInt(7)==1,c.getInt(8),
+                    c.isNull(9)?null:c.getLong(9)));
         }
         return items;
     }
@@ -186,6 +198,8 @@ final class StorageStore {
             if(item==null)throw new IllegalArgumentException("Rzecz nie istnieje.");
             if(item.lentTo!=null)throw new IllegalArgumentException(
                 "Najpierw odnotuj zwrot wypożyczonej rzeczy.");
+            if(item.takenAt!=null)throw new IllegalArgumentException(
+                "Najpierw oznacz odłożenie rzeczy. Potem przenieś ją na stałe.");
             validKindDestination(item.kind,box,place);
             validDestination(db,box,place,id);
             if(sameDestination(item,box,place)) {
@@ -214,6 +228,8 @@ final class StorageStore {
                 throw new IllegalArgumentException("Wypożyczamy tylko istniejące rzeczy.");
             if(item.lentTo!=null)
                 throw new IllegalArgumentException("Rzecz jest już wypożyczona.");
+            if(item.takenAt!=null)
+                throw new IllegalArgumentException("Najpierw odłóż rzecz na miejsce.");
             ContentValues values=new ContentValues();
             values.put("lent_to",recipient);
             values.put("lent_at",System.currentTimeMillis());
@@ -248,6 +264,8 @@ final class StorageStore {
             if(item==null)throw new IllegalArgumentException("Rzecz nie istnieje.");
             if(item.lentTo!=null)
                 throw new IllegalArgumentException("Najpierw odnotuj zwrot.");
+            if(item.takenAt!=null)
+                throw new IllegalArgumentException("Najpierw oznacz odłożenie rzeczy.");
             try(Cursor c=db.rawQuery(
                     "SELECT 1 FROM storage_items WHERE parent_box_id=? LIMIT 1",
                     new String[]{Long.toString(id)})) {
@@ -261,6 +279,93 @@ final class StorageStore {
                 throw new IllegalStateException("Nie usunięto.");
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
+    }
+
+    /** Domyślnie wyłączone; przypomnienie po pełnych dniach kalendarzowych. */
+    static void setReturnRule(SQLiteDatabase db,long id,boolean required,int days) {
+        if(days<1||days>365)throw new IllegalArgumentException(
+            "Termin odłożenia musi wynosić 1–365 dni.");
+        Item item=find(db,id);
+        if(item==null||!"thing".equals(item.kind))
+            throw new IllegalArgumentException("Nie znaleziono rzeczy.");
+        if(!required&&item.takenAt!=null)
+            throw new IllegalArgumentException(
+                "Najpierw odłóż rzecz na miejsce, potem wyłącz przypomnienia.");
+        ContentValues fields=new ContentValues();
+        fields.put("return_required",required?1:0);
+        fields.put("return_after_days",days);
+        if(db.update("storage_items",fields,"id=?",
+                new String[]{Long.toString(id)})!=1)
+            throw new IllegalStateException("Nie zapisano ustawień rzeczy.");
+    }
+
+    /** Zachowujemy oryginalne powiązanie z miejscem/pudełkiem. */
+    static void takeTemporarily(SQLiteDatabase db,long id) {
+        db.beginTransaction();
+        try {
+            Item item=find(db,id);
+            if(item==null||!"thing".equals(item.kind))
+                throw new IllegalArgumentException("Rzecz nie istnieje.");
+            if(!item.returnRequired)
+                throw new IllegalArgumentException("Włącz ustawienie powrotu w edycji rzeczy.");
+            if(item.takenAt!=null)
+                throw new IllegalArgumentException("Ta rzecz jest już poza miejscem.");
+            if(item.boxId==null&&item.placeId==null)
+                throw new IllegalArgumentException("Najpierw przypisz rzecz do miejsca.");
+            if(item.lentTo!=null)
+                throw new IllegalArgumentException("Najpierw odnotuj zwrot wypożyczenia.");
+            ContentValues fields=new ContentValues();
+            fields.put("taken_at",System.currentTimeMillis());
+            if(db.update("storage_items",fields,"id=? AND taken_at IS NULL",
+                    new String[]{Long.toString(id)})!=1)
+                throw new IllegalStateException("Nie zapisano wyjęcia rzeczy.");
+            log(db,item,"moved","Wzięte czasowo; ma wrócić na swoje miejsce");
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+
+    /** Zwrot kończy przypomnienia, ale nie zmienia stałej lokalizacji. */
+    static void putBack(SQLiteDatabase db,long id) {
+        db.beginTransaction();
+        try {
+            Item item=find(db,id);
+            if(item==null||item.takenAt==null)
+                throw new IllegalArgumentException("Rzecz nie jest oznaczona jako wzięta.");
+            if(item.boxId!=null) {
+                Item box=find(db,item.boxId);
+                if(box==null||!"box".equals(box.kind))
+                    throw new IllegalArgumentException("Pudełko nie istnieje. Wybierz nowe miejsce.");
+            }else if(item.placeId!=null) {
+                try(Cursor c=db.rawQuery("SELECT 1 FROM places WHERE id=?",
+                        new String[]{Long.toString(item.placeId)})) {
+                    if(!c.moveToFirst())
+                        throw new IllegalArgumentException("Miejsce nie istnieje. Wybierz nowe.");
+                }
+            }
+            ContentValues fields=new ContentValues();
+            fields.putNull("taken_at");
+            if(db.update("storage_items",fields,"id=? AND taken_at IS NOT NULL",
+                    new String[]{Long.toString(id)})!=1)
+                throw new IllegalStateException("Nie zapisano odłożenia.");
+            log(db,item,"returned","Odłożono na swoje miejsce");
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+
+    /** Idempotentna migracja bazy 49→50. */
+    static void upgrade50(SQLiteDatabase db) {
+        ensureColumn(db,"return_required",
+            "INTEGER NOT NULL DEFAULT 0 CHECK(return_required IN (0,1))");
+        ensureColumn(db,"return_after_days",
+            "INTEGER NOT NULL DEFAULT 1 CHECK(return_after_days BETWEEN 1 AND 365)");
+        ensureColumn(db,"taken_at","INTEGER CHECK(taken_at IS NULL OR taken_at>0)");
+    }
+
+    private static void ensureColumn(SQLiteDatabase db,String name,String definition) {
+        try(Cursor c=db.rawQuery("PRAGMA table_info(storage_items)",null)) {
+            while(c.moveToNext())if(name.equals(c.getString(1)))return;
+        }
+        db.execSQL("ALTER TABLE storage_items ADD COLUMN "+name+" "+definition);
     }
 
     static void assertIntegrity(SQLiteDatabase db) {
@@ -312,7 +417,7 @@ final class StorageStore {
     static Map<Long,String> locations(SQLiteDatabase db,List<Item> targets) {
         Map<Long,Item> items=new HashMap<>();
         try(Cursor cursor=db.rawQuery(
-                "SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost FROM storage_items",
+                "SELECT id,name,kind,parent_box_id,place_id,lent_to,protect_frost,return_required,return_after_days,taken_at FROM storage_items",
                 null)) {
             while(cursor.moveToNext()) {
                 Item item=new Item(cursor.getLong(0),cursor.getString(1),
