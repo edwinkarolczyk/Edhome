@@ -424,7 +424,8 @@ final class StorageStore {
                     cursor.getString(2),
                     cursor.isNull(3)?null:cursor.getLong(3),
                     cursor.isNull(4)?null:cursor.getLong(4),
-                    cursor.getString(5),cursor.getInt(6)==1);
+                    cursor.getString(5),cursor.getInt(6)==1,cursor.getInt(7)==1,
+                    cursor.getInt(8),cursor.isNull(9)?null:cursor.getLong(9));
                 items.put(item.id,item);
             }
         }
