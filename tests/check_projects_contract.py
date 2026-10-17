@@ -383,6 +383,6 @@ assert '"thumbnail_base64", "labor_rate_grosz", "created_at"' in backup
 assert 'inputVersion < 48 && "projects".equals(definition[0])' in backup
 selective=(root / "app/src/main/java/com/edwinkarolczyk/edhome/BackupSelectiveMerge.java").read_text(
     encoding="utf-8")
-assert 'if (sourceVersion < 49 && ("projects".equals(table)' in selective
+assert 'if (sourceVersion < 50 && ("projects".equals(table)' in selective
 assert 'project.put("thumbnail_base64",JSONObject.NULL)' in selective
 print("P0 Projekty: cascade, aktywne sesje, tombstones, ZIP v47-v48 — kontrakty PASS")
