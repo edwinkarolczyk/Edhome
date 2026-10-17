@@ -100,9 +100,18 @@ assert 'LAST_SYNC_ACTIVITY_AT' in server
 assert 'ACTIVE_SYNC_COUNT' in server
 assert 'beginSyncActivity()' in server
 assert 'endSyncActivity()' in server
-assert '●  ⇄ PC' in main
-assert '●  →   PC' in main
-assert '●    ← PC' in main
+# The PC badge must show the modern DesktopHubSync state, not a legacy server flag.
+assert 'DesktopHubSync.connectionState(MainActivity.this)' in main
+assert 'case "desktop_connection": desktopConnectionScreen(); break;' in main
+assert 'homeDesktopConnectionAction();' in main
+assert 'Skanuj QR z komputera' in main
+assert 'Sprawdź połączenie teraz' in main
+assert 'Zielony status oznacza dopiero potwierdzoną wymianę danych.' in main
+assert 'static String connectionState(Context context)' in hub_client
+assert 'static String connectionAdvice(Context context)' in hub_client
+assert 'age<=3L*POLL_SECONDS*1000L' in hub_client
+headerBadge=main.split('private void appTitleWithConnection() {',1)[1].split('private void showShowcaseJump()',1)[0]
+assert 'LanSyncServer.hasRecentClient()' not in headerBadge
 assert 'desktopConnectionGreen()' in main
 assert 'desktopConnectionRed()' in main
 assert 'desktopLastSyncTime()' in main
