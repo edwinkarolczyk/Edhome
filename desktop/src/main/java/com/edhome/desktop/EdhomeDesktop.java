@@ -1102,6 +1102,7 @@ public final class EdhomeDesktop extends JFrame {
         JButton addSubproject = actionButton("＋ Podprojekt");
         JButton editProject = actionButton("Edytuj projekt");
         JButton projectPhoto = actionButton("Miniaturka projektu");
+        JButton laborRateButton = actionButton("Stawka robocizny");
         JButton deleteProject = actionButton("Usuń projekt");
         JButton addTask = actionButton("＋ Czynność");
         JButton pasteTasks = actionButton("Wklej czynności");
@@ -1109,6 +1110,7 @@ public final class EdhomeDesktop extends JFrame {
         toolbar.add(addSubproject);
         toolbar.add(editProject);
         toolbar.add(projectPhoto);
+        toolbar.add(laborRateButton);
         toolbar.add(deleteProject);
         toolbar.add(addTask);
         toolbar.add(pasteTasks);
@@ -1250,6 +1252,11 @@ public final class EdhomeDesktop extends JFrame {
             }
             showDesktopProjectEditor(selected,null);
         });
+        laborRateButton.addActionListener(e->{
+            JsonObject selected=desktopProjectById(desktopProjectId);
+            if(selected==null)JOptionPane.showMessageDialog(this,"Wybierz projekt.");
+            else showDesktopProjectLaborRate(selected);
+        });
         projectPhoto.addActionListener(e->{
             JsonObject selected=desktopProjectById(desktopProjectId);
             if(selected==null)JOptionPane.showMessageDialog(this,"Najpierw wybierz projekt.");
@@ -1322,6 +1329,11 @@ public final class EdhomeDesktop extends JFrame {
             + "</html>");
         meta.setForeground(APP_MUTED);
         head.add(meta,BorderLayout.CENTER);
+        JLabel laborCost=new JLabel();
+        laborCost.setForeground(APP_ACCENT);
+        laborCost.setFont(laborCost.getFont().deriveFont(Font.BOLD,13f));
+        head.add(laborCost,BorderLayout.SOUTH);
+        bindDesktopLaborCost(laborCost,projectId,0L);
 
         java.util.List<JsonObject> selectedTasks = new ArrayList<>();
         java.util.List<JCheckBox> selectors = new ArrayList<>();
@@ -1586,6 +1598,10 @@ public final class EdhomeDesktop extends JFrame {
         meta.setForeground(APP_MUTED);
         meta.setFont(meta.getFont().deriveFont(11f));
         detail.add(meta);
+        JLabel laborTask=new JLabel();
+        laborTask.setForeground(APP_ACCENT);
+        detail.add(laborTask);
+        bindDesktopLaborCost(laborTask,longValue(task,"project_id"),taskId);
 
         java.util.List<String> waiting=desktopOpenDependencyTitles(taskId);
         String hard=desktopHardBlockReason(taskId);
@@ -1845,6 +1861,110 @@ public final class EdhomeDesktop extends JFrame {
         return "";
     }
 
+    private long desktopProjectLaborRate(long projectId) {
+        java.util.Set<Long> seen=new java.util.HashSet<>();
+        long id=projectId;
+        for(int i=0;i<128&&id>0L;i++) {
+            if(!seen.add(id))throw new IllegalArgumentException("Błędna hierarchia projektu.");
+            JsonObject project=desktopProjectById(id);
+            if(project==null)break;
+            String value=value(project,"labor_rate_grosz");
+            if(!value.isBlank()) {
+                long rate=Long.parseLong(value);
+                if(rate<0L||rate>100_000_000L)
+                    throw new IllegalArgumentException("Nieprawidłowa stawka robocizny.");
+                return rate;
+            }
+            id=longValue(project,"parent_id");
+        }
+        return 0L;
+    }
+
+    private void showDesktopProjectLaborRate(JsonObject project) {
+        String current=value(project,"labor_rate_grosz");
+        String raw=JOptionPane.showInputDialog(this,
+            "Stawka robocizny za godzinę w zł (np. 60,00).\n"
+            +"Puste = dziedzicz po projekcie nadrzędnym.\n"
+            +"Zmiana obowiązuje od kolejnego START, bez przeliczenia historii.",
+            current.isBlank()?"":money(current).replace(" zł","").trim());
+        if(raw==null)return;
+        try {
+            String input=raw.trim();
+            Long rate=input.isEmpty()?null:("0".equals(input)||"0,00".equals(input)
+                ||"0.00".equals(input))?0L:
+                new java.math.BigDecimal(input.replace(',','.')).movePointRight(2)
+                    .longValueExact();
+            if(rate!=null&&(rate<0||rate>100_000_000L))
+                throw new IllegalArgumentException("Maksymalna stawka to 1 000 000 zł/h.");
+            if(rate==null)project.add("labor_rate_grosz",com.google.gson.JsonNull.INSTANCE);
+            else project.addProperty("labor_rate_grosz",rate);
+            markDirty();
+            showSection("Projekty");
+        }catch(Exception error) {
+            JOptionPane.showMessageDialog(this,"Nieprawidłowa stawka PLN. Użyj np. 60,00.",
+                "EDHOME • Robocizna",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /** Łączna wycena to suma zaokrąglonych do grosza kosztów poszczególnych czynności. */
+    private long desktopLaborCost(long projectId,long singleTaskId,long now) {
+        java.util.Map<Long,java.math.BigInteger> weights=new java.util.HashMap<>();
+        java.math.BigInteger hour=java.math.BigInteger.valueOf(3_600_000L);
+        for(JsonElement element:table("project_task_work_sessions")) {
+            if(!element.isJsonObject())continue;
+            JsonObject session=element.getAsJsonObject();
+            long taskId=longValue(session,"task_id");
+            if(singleTaskId>0&&taskId!=singleTaskId)continue;
+            JsonObject task=desktopTaskById(taskId);
+            if(task==null)continue;
+            long taskProject=longValue(task,"project_id");
+            if(taskProject!=projectId&&!desktopProjectDescendsFrom(taskProject,projectId))
+                continue;
+            long start=longValue(session,"started_at");
+            long end=value(session,"ended_at").isBlank()
+                ?Math.max(now,start):longValue(session,"ended_at");
+            long rate=longValue(session,"hourly_rate_grosz");
+            if(start<0||end<start||rate<0||rate>100_000_000L)
+                throw new IllegalArgumentException("Nieprawidłowa sesja pracy.");
+            java.math.BigInteger weight=java.math.BigInteger.valueOf(end-start)
+                .multiply(java.math.BigInteger.valueOf(rate));
+            java.math.BigInteger old=weights.get(taskId);
+            weights.put(taskId,old==null?weight:old.add(weight));
+        }
+        long result=0L;
+        for(java.math.BigInteger amount:weights.values()) {
+            java.math.BigInteger rounded=amount.add(hour.divide(java.math.BigInteger.valueOf(2)))
+                .divide(hour);
+            result=Math.addExact(result,rounded.longValueExact());
+        }
+        return result;
+    }
+
+    private void bindDesktopLaborCost(JLabel label,long projectId,long taskId) {
+        java.util.function.Consumer<Boolean> update=ignore->{
+            try {
+                String prefix=taskId>0?"Robocizna czynności: ":"Robocizna projektu: ";
+                String content=prefix+money(Long.toString(desktopLaborCost(
+                    projectId,taskId,System.currentTimeMillis())));
+                if(taskId==0L)
+                    content+=" • stawka "+money(Long.toString(
+                        desktopProjectLaborRate(projectId)))+"/h";
+                label.setText(content);
+            }catch(Exception error) {
+                label.setText("Koszt robocizny: błąd odczytu");
+            }
+        };
+        update.accept(false);
+        javax.swing.Timer timer=new javax.swing.Timer(250,null);
+        timer.addActionListener(e->{
+            if(!label.isShowing()||!"Projekty".equals(current)){
+                timer.stop();return;
+            }
+            update.accept(true);
+        });
+        timer.start();
+    }
+
     private void startDesktopProjectWork(JsonObject task) {
         long taskId = longValue(task,"id");
         if (taskId <= 0 || desktopTaskById(taskId) == null) {
@@ -1882,6 +2002,24 @@ public final class EdhomeDesktop extends JFrame {
         JsonObject session = new JsonObject();
         session.addProperty("id",nextId("project_task_work_sessions"));
         session.addProperty("task_id",taskId);
+        long worker=longValue(task,"assignee_id");
+        if(worker>0L) {
+            for(JsonElement item:table("project_task_work_sessions")) {
+                if(!item.isJsonObject())continue;
+                JsonObject other=item.getAsJsonObject();
+                if(value(other,"ended_at").isBlank()
+                    &&longValue(other,"worker_id")==worker
+                    &&longValue(other,"task_id")!=taskId) {
+                    JOptionPane.showMessageDialog(this,
+                        "Ta osoba ma już uruchomioną inną czynność. Najpierw STOP.");
+                    return;
+                }
+            }
+        }
+        if(worker>0L)session.addProperty("worker_id",worker);
+        else session.add("worker_id",com.google.gson.JsonNull.INSTANCE);
+        session.addProperty("hourly_rate_grosz",desktopProjectLaborRate(
+            longValue(task,"project_id")));
         session.addProperty("started_at",System.currentTimeMillis());
         session.add("ended_at",com.google.gson.JsonNull.INSTANCE);
         session.add("worked_minutes",com.google.gson.JsonNull.INSTANCE);
