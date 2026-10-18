@@ -1,3 +1,10 @@
+## 2026-10-18 — Projekty: niebieskie miganie aktywnej czynności co sekundę (Android i Desktop Beta)
+
+- **Android Beta 0.8.0.131 / 323:** w kartach Projektów aktywna sesja Start/Stop podświetla całe tło na niebiesko przez sekundę i przywraca zwykłe tło przez następną sekundę. Pętla współdzieli istniejące `bindProjectTimeStatus` (1000 ms), nie wymaga nowego timera ani przebudowy wszystkich kart co sekundę. Po Stop, automatycznej pauzie po 60 minutach lub zakończeniu sesji inną drogą karta wraca do zwykłego tła; render odświeża akcję Stop/Start. Kolory dopasowane do motywu jasnego i ciemnego.
+- **Desktop Beta 0.7.0.126:** odpowiednik w Swing `desktopProjectTaskCard`, wykorzystujący obecny `javax.swing.Timer(1000)` zegara czynności; `RoundedPanel.setFillColor` zmienia tło bez re-renderu panelu. Przycisk Stop przywraca tło i aktualizuje interfejs.
+- **Testy:** `tests/task_rules/ProjectTaskPulseSmoke.java` wykonuje regułę naprzemiennych faz 0/1/2 i kontrast dla dwóch motywów. `tests/check_project_task_pulse_contract.py` sprawdza integrację Android i Windows (bez drugiego timera). Kontrakty włączone do Android/Windows CI.
+- **Bez zmian:** SQLite, dane, backup ZIP, LAN/synchronizacja, mechanizm Start/Stop, osobna gałąź Stable `main`. Przed wydaniem kontrola podpisanej APK, Windows Setup EXE oraz testy na urządzeniach. **Status odbioru: kod zapisany w beta, wyniki CI i test fizyczny do potwierdzenia.**
+
 ## 2026-10-18 — Inteligentne przeplanowanie czynności, punkty 1–3 (kod Beta 0.8.0.130 / 322; CI do potwierdzenia)
 
 - **Punkt 1 — wykrycie i 3 propozycje:** nowy `SmartTaskPlanner` analizuje zaległe jednorazowe czynności offline w horyzoncie 28 dni. Sprawdza okna aktywnego/przypisanego domownika, czas pozostały z sesji Start/Stop, blokady i niezakończone zależności. Nie przenosi terminu w tle — każda zmiana wymaga wybrania konkretnego przedziału i potwierdzenia. Ponowna walidacja tuż przed transakcyjnym zapisem chroni przed wybraniem już zajętego przedziału lub nadpisaniem innej daty.
