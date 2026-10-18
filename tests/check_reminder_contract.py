@@ -29,7 +29,16 @@ for expected in (
 ):
     assert expected in main, "Missing reminder persistence contract: " + expected
 assert '"remind_time", "reminder_lead_days"' in backup
+# Regresja 2026-10-18: nie wolno planować alarmu na 08:00
+# i odrzucać go w odbiorniku przed 09:00.
 assert 'next.set(Calendar.HOUR_OF_DAY, 8);' in receiver
+assert 'now.getHour() < 9' not in receiver
+assert 'pref.getString("reminder_legacy_day", "")' in receiver
+assert 'next.setTimeInMillis(epoch(ReminderRules.nextAllowed(' in receiver
+assert 'QuietHoursRules.validWindow(quietStart, quietEnd)' in receiver
+assert 'int overdue = 0;' in receiver
+assert 'tasks.getString(3).compareTo(today.toString()) < 0' in receiver
+assert '"Zaległe: " + overdue' in receiver
 assert 'daily inexact 08:00 alarm' in receiver
 assert 'Standardowo ok. 08:00' in main
 assert '? "08:00" : savedReminder[0]' in main

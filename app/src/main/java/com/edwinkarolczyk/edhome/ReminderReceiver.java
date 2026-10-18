@@ -154,6 +154,21 @@ public final class ReminderReceiver extends BroadcastReceiver {
         next.set(Calendar.MILLISECOND, 0);
         if (next.getTimeInMillis() <= System.currentTimeMillis())
             next.add(Calendar.DAY_OF_MONTH, 1);
+        // Jeśli 08:00 wypada w ciszy nocnej, zaczekaj do jej końca.
+        // Codzienne przypomnienie nie może zostać pominięte bez śladu.
+        String quietStart = pref.getString("quiet_hours_start",
+            QuietHoursRules.DEFAULT_START);
+        String quietEnd = pref.getString("quiet_hours_end",
+            QuietHoursRules.DEFAULT_END);
+        if (!QuietHoursRules.validWindow(quietStart, quietEnd)) {
+            quietStart = QuietHoursRules.DEFAULT_START;
+            quietEnd = QuietHoursRules.DEFAULT_END;
+        }
+        LocalDateTime planned = LocalDateTime.ofInstant(
+            java.time.Instant.ofEpochMilli(next.getTimeInMillis()),
+            ZoneId.systemDefault());
+        next.setTimeInMillis(epoch(ReminderRules.nextAllowed(
+            planned, quietStart, quietEnd)));
         manager.setInexactRepeating(AlarmManager.RTC_WAKEUP,
             next.getTimeInMillis(), AlarmManager.INTERVAL_DAY, daily);
         DiagnosticLog.event("REMINDER_SCHEDULED");
@@ -223,6 +238,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
             return;
         }
         int due = 0;
+        int overdue = 0;
         int waste = 0;
         String firedKey = null;
         String firedValue = null;
@@ -235,7 +251,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
             if (legacy) {
                 // Daily digest is independent of customized on-time alerts.
                 // Overdue personalized tasks still appear on later days.
-                if (now.getHour() < 9 || today.toString().equals(
+                // Alarm uruchamia się około 08:00. Warunek godziny 09:00
+                // blokował wszystkie powiadomienia, które dotarły punktualnie.
+                if (today.toString().equals(
                         pref.getString("reminder_legacy_day", ""))) return;
                 try (Cursor tasks = database.rawQuery(
                         "SELECT id,task_kind,remind_time,due_date FROM tasks "
@@ -249,6 +267,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                                     ""))) continue;
                         } else if (!tasks.isNull(2)) continue;
                         due++;
+                        if (tasks.getString(3).compareTo(today.toString()) < 0)
+                            overdue++;
                         if ("waste".equals(tasks.getString(1))) waste++;
                     }
                 }
@@ -323,10 +343,13 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     : "EDHOME • czynności")
             .setContentText(!legacy && singleProjectTask
                 ? "Czynność projektu • możesz uruchomić pomiar czasu"
-                : (waste > 0
-                    ? "Odpady do wystawienia: " + waste
-                        + " • pozostałe czynności: " + (due - waste)
-                    : "Czynności do wykonania: " + due))
+                : (overdue > 0
+                    ? "Zaległe: " + overdue + " • na dziś: " + (due - overdue)
+                        + (waste > 0 ? " • odpady: " + waste : "")
+                    : (waste > 0
+                        ? "Odpady do wystawienia: " + waste
+                            + " • pozostałe czynności: " + (due - waste)
+                        : "Czynności do wykonania: " + due)))
             .setContentIntent(open)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true);
