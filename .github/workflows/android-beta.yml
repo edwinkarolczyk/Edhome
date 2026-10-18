@@ -333,6 +333,7 @@ jobs:
             tests/task_rules/ProjectTaskPulseSmoke.java
           java -cp "$RUNNER_TEMP/project-task-pulse" \
             com.edwinkarolczyk.edhome.ProjectTaskPulseSmoke
+          python3 tests/check_project_task_pulse_contract.py
       - name: Projekty — regresja
         run: python3 tests/check_projects_contract.py
       - name: Capitalized names and titles contract
