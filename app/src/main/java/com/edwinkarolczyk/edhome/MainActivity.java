@@ -7571,13 +7571,8 @@ public final class MainActivity extends Activity {
             }
             int minutes=parsedMinutes;
             java.util.List<TimeSuggestions.Option> candidates =
-                proposalProject==null
-                    ?TimeSuggestions.propose(java.time.LocalDateTime.now(),minutes,
-                        day->db.effectiveShift(chosen,day.toString()))
-                    :TimeSuggestions.proposeAvailability(
-                        java.time.LocalDateTime.now(),minutes,
-                        day->ProjectPlanningStore.windows(db.getReadableDatabase(),
-                            chosen,db.effectiveShift(chosen,day.toString())));
+                SmartTaskPlanner.proposeNew(db.getReadableDatabase(),
+                    chosen,minutes,java.time.LocalDateTime.now());
             if (candidates.isEmpty()) {
                 proposals.addView(text("Brak potwierdzonych okien w grafiku "
                     + "tej osoby przez 28 dni. Ustaw dni pracy/wolne i wyjątki "
