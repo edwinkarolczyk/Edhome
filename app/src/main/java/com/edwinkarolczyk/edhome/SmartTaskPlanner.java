@@ -39,7 +39,7 @@ final class SmartTaskPlanner {
             this.start=start;this.end=end;
         }
         boolean overlaps(LocalDateTime a,LocalDateTime b) {
-            return a.isBefore(end) && b.isAfter(start);
+            return TimeSlotRules.overlaps(a,b,start,end);
         }
     }
 
@@ -140,7 +140,7 @@ final class SmartTaskPlanner {
             if(!loadBusy(db,memberId,excludedTask,date,busy))continue;
             for(TimeSuggestions.Window window:windows) {
                 LocalDateTime candidate=date.atTime(window.start);
-                if(!candidate.isAfter(now))candidate=ceilQuarter(now.plusSeconds(1));
+                if(!candidate.isAfter(now))candidate=TimeSlotRules.ceilQuarter(now.plusSeconds(1));
                 if(candidate.isBefore(date.atTime(window.start)))
                     candidate=date.atTime(window.start);
                 for(;!candidate.plusMinutes(duration).isAfter(date.atTime(window.end));
@@ -161,13 +161,6 @@ final class SmartTaskPlanner {
             }
         }
         return Collections.unmodifiableList(options);
-    }
-
-    private static LocalDateTime ceilQuarter(LocalDateTime now) {
-        LocalDateTime result=now.withSecond(0).withNano(0);
-        int excess=result.getMinute()%15;
-        if(excess!=0)return result.plusMinutes(15-excess);
-        return result.equals(now)?result:result.plusMinutes(15);
     }
 
     /** Nieznany harmonogram nie oznacza dnia wolnego. */
