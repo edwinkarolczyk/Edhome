@@ -126,7 +126,8 @@ final class SmartTaskPlanner {
     /** Projektowe propozycje weryfikują też istniejące rezerwacje godzinowe. */
     static List<TimeSuggestions.Option> proposeForProject(SQLiteDatabase db,
             long memberId,long taskId,int remainingMinutes,LocalDateTime earliest) {
-        return calculate(db,memberId,taskId,remainingMinutes,earliest,null);
+        return calculate(db,memberId,taskId,remainingMinutes,
+            earliest.minusSeconds(1),null);
     }
 
     private static List<TimeSuggestions.Option> calculate(SQLiteDatabase db,
