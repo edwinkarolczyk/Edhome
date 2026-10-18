@@ -39,6 +39,9 @@ assert '"remind_time", "reminder_lead_days"' in backup
 assert 'super(context, "edhome-beta-preview.db", null, 50' in main
 for token in (
     "SmartTaskPlanner.proposeNew(",
+    "SmartTaskPlanner.proposeForProject(",
+    "plannedStarts.put(taskId,chosen.start.toString())",
+    'values.put("remind_time",plannedStarts.get(item.getKey()))',
     "private boolean openOverduePlanIntent(Intent intent)",
     'intent.removeExtra("open_overdue_plan")',
     "private void showOverduePlanList()",
@@ -59,5 +62,6 @@ for token in (
 ):
     assert token in receiver, "Brak bezpiecznego powiadomienia: "+token
 assert "aStart.isBefore(bEnd)&&aEnd.isAfter(bStart)" in slots
+assert "TimeSuggestions.proposeAvailability(" not in main
 assert "rounded.plusMinutes(15)" in slots
 print("Smart planner: 28 dni, 3 propozycje, kolizje, zatwierdzenie, alarm i backup v50 PASS")
