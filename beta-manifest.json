@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 322,
   "versionName": "0.8.0.130",
-  "changelog": "EDHOME Beta 0.8.0.126 / 318 — Magazyn: przy konkretnej rzeczy ustaw Powinna wracać na swoje miejsce, przypominaj po liczbie dni; Wzięte i Odłożone, powiadomienia raz dziennie do zwrotu. Poprawiono zachowanie także niestandardowej liczby dni wpisanej na Desktopie. Baza v50, kompatybilne kopie ZIP i LAN. Stable bez zmian. Nie odinstalowuj aplikacji przed aktualizacją.",
+  "changelog": "EDHOME Beta 0.8.0.130 / 322 — Inteligentny planer Czynności: zaległe zadania mają do 3 propozycji nowych terminów w 28 dni, znalezionych automatycznie podczas porannej kontroli przypomnień. Powiadomienie kieruje do listy propozycji, a data zmienia się tylko po zatwierdzeniu. Planowanie co 15 minut sprawdza grafik, przypisaną osobę, pozostały czas, inne czynności, lokalne minutniki, wymagania i zależności. Dokładniejszy planer działa w Szybkiej czynności, pełnym formularzu i Projektach. Czynności cykliczne zachowują istniejące reguły. CI PASS; dostarczenie na fizycznym telefonie wymaga sprawdzenia. Zainstaluj na istniejącej aplikacji, bez odinstalowania.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.130/edhome-beta.apk",
   "sha256": "cfb0c91f4f3d6d062f12f4e4d9b5fb3dcf7c8e082cb5e6758057dfb0c23403aa"
 }
