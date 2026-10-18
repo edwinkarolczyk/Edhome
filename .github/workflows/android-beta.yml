@@ -325,6 +325,14 @@ jobs:
         run: python3 tests/check_user_profiles_contract.py
       - name: Projects hierarchy, dependencies and planning contract
         run: python3 tests/check_project_labor_cost.py
+      - name: Aktywna czynność projektu — niebieskie pulsowanie 1 s
+        run: |
+          mkdir -p "$RUNNER_TEMP/project-task-pulse"
+          javac -d "$RUNNER_TEMP/project-task-pulse" \
+            app/src/main/java/com/edwinkarolczyk/edhome/ProjectTaskPulse.java \
+            tests/task_rules/ProjectTaskPulseSmoke.java
+          java -cp "$RUNNER_TEMP/project-task-pulse" \
+            com.edwinkarolczyk.edhome.ProjectTaskPulseSmoke
       - name: Projekty — regresja
         run: python3 tests/check_projects_contract.py
       - name: Capitalized names and titles contract
@@ -639,7 +647,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.130 / 322 — Inteligentny planer Czynności: automatyczne wykrywanie zaległości, do 3 nowych terminów w 28 dni, kontrola godzinowych kolizji co 15 minut, grafik, zależności, pozostały czas i lokalne minutniki. Propozycje w powiadomieniu, Szybkiej czynności, pełnym formularzu i Projektach. Zmiana terminu tylko po akceptacji; czynności cykliczne bez automatycznego przenoszenia. CI PASS. Nie odinstalowuj EDHOME przed aktualizacją."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.131 / 323 — Projekty: czynność z uruchomionym licznikiem Start/Stop miga niebieskim tłem raz na sekundę. Kolor jest dopasowany do motywu jasnego i ciemnego; po zatrzymaniu lub automatycznej pauzie karta wraca do zwykłego wyglądu. Animacja korzysta z istniejącego odświeżania licznika, bez dodatkowego timera i przebudowy ekranu co sekundę. Inteligentne wyszukiwanie terminów z 0.8.0.130 zostaje zachowane. Aktualizuj bez odinstalowywania EDHOME."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
