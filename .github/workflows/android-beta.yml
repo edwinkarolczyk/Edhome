@@ -63,6 +63,15 @@ jobs:
             tests/task_rules/TimeSuggestionsSmoke.java
           java -cp "$RUNNER_TEMP/time-suggestions" \
             com.edwinkarolczyk.edhome.TimeSuggestionsSmoke
+      - name: Smart overdue planner collision and approval regressions
+        run: |
+          mkdir -p "$RUNNER_TEMP/smart-planner"
+          javac -d "$RUNNER_TEMP/smart-planner" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TimeSlotRules.java \
+            tests/task_rules/TimeSlotRulesSmoke.java
+          java -cp "$RUNNER_TEMP/smart-planner" \
+            com.edwinkarolczyk.edhome.TimeSlotRulesSmoke
+          python3 tests/check_smart_overdue_planner_contract.py
       - name: Offline shopping rules regression
         run: |
           mkdir -p "$RUNNER_TEMP/shopping"
