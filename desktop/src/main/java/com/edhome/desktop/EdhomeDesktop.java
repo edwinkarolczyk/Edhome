@@ -69,12 +69,13 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.125";
+    private static final String DESKTOP_VERSION = "0.7.0.126";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
     private static final Color APP_SURFACE = new Color(29, 35, 45);
     private static final Color APP_SURFACE_2 = new Color(37, 44, 56);
+    private static final Color APP_TASK_RUNNING_BLUE = new Color(25, 76, 132);
     private static final Color APP_TEXT = new Color(239, 243, 247);
     private static final Color APP_MUTED = new Color(164, 174, 188);
     private static final Color APP_ACCENT = new Color(87, 214, 181);
@@ -1607,7 +1608,7 @@ public final class EdhomeDesktop extends JFrame {
         boolean done=intValue(task,"done")!=0;
         JsonObject activeSession=desktopActiveProjectWorkSession(taskId);
 
-        JPanel card=new RoundedPanel(APP_SURFACE,16);
+        RoundedPanel card=new RoundedPanel(APP_SURFACE,16);
         card.setLayout(new BorderLayout(8,5));
         card.setBorder(new EmptyBorder(9,11,9,11));
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE,210));
@@ -1671,7 +1672,7 @@ public final class EdhomeDesktop extends JFrame {
             clock.setForeground(APP_ACCENT);
             clock.setFont(clock.getFont().deriveFont(Font.BOLD,13f));
             detail.add(clock);
-            bindDesktopProjectClock(clock,taskId,duration);
+            bindDesktopProjectClock(clock,card,taskId,duration);
         }
         card.add(detail,BorderLayout.CENTER);
 
@@ -1794,14 +1795,27 @@ public final class EdhomeDesktop extends JFrame {
                 + "   •   Trwa " + desktopProjectClockText(elapsed));
     }
 
-    private void bindDesktopProjectClock(JLabel clock,long taskId,int plannedMinutes) {
+    private void bindDesktopProjectClock(JLabel clock,RoundedPanel card,
+            long taskId,int plannedMinutes) {
         updateDesktopProjectClock(clock,taskId,plannedMinutes);
+        // Jeden 1-sekundowy Timer Swing obsługuje stoper i niebieskie miganie.
+        // Nie uruchamiamy drugiej pętli ani nie przeładowujemy całej strony.
+        card.setFillColor(APP_TASK_RUNNING_BLUE);
+        final boolean[] blue={true};
         javax.swing.Timer timer = new javax.swing.Timer(1000,null);
         timer.addActionListener(e -> {
             if (!clock.isShowing() || !"Projekty".equals(current)) {
                 timer.stop();
                 return;
             }
+            if (desktopActiveProjectWorkSession(taskId)==null) {
+                card.setFillColor(APP_SURFACE);
+                timer.stop();
+                showSection("Projekty"); // Stop z innego urządzenia: odśwież przyciski.
+                return;
+            }
+            blue[0]=!blue[0];
+            card.setFillColor(blue[0]?APP_TASK_RUNNING_BLUE:APP_SURFACE);
             updateDesktopProjectClock(clock,taskId,plannedMinutes);
         });
         timer.setInitialDelay(1000);
@@ -10606,12 +10620,18 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private static final class RoundedPanel extends JPanel {
-        private final Color fill;
+        private Color fill;
         private final int arc;
         RoundedPanel(Color fill, int arc) {
             this.fill = fill;
             this.arc = arc;
             setOpaque(false);
+        }
+        void setFillColor(Color color) {
+            if (!fill.equals(color)) {
+                fill=color;
+                repaint();
+            }
         }
         @Override protected void paintComponent(Graphics graphics) {
             Graphics2D g = (Graphics2D) graphics.create();
