@@ -67,10 +67,11 @@ for token in (
 assert "android.nfc.action.TAG_DISCOVERED" in Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 print("Launcher Beta: dwa skróty, szybka czynność i czasowy NFC ReaderMode — kontrakt OK")
 
-assert "TimeSuggestions.proposeFreeDays(" in main
-assert "SELECT 1 FROM tasks WHERE done=0 AND due_date=? LIMIT 1" in main
-assert 'SELECT 1 FROM device_timers WHERE start_at<? AND end_at>?' in main
-assert "interface BusyDaySource" in Path("app/src/main/java/com/edwinkarolczyk/edhome/TimeSuggestions.java").read_text(encoding="utf-8")
+assert "SmartTaskPlanner.proposeNew(" in main
+planner=Path("app/src/main/java/com/edwinkarolczyk/edhome/SmartTaskPlanner.java").read_text(encoding="utf-8")
+assert "SELECT remind_time,duration_minutes FROM tasks" in planner
+assert "SELECT start_at,end_at FROM device_timers" in planner
+assert "ProjectPlanningStore.windows(" in planner
 print("Szybka czynność: trzy propozycje wolnych dni, grafik i przypomnienie OK")
 
 assert "final long member=activeMemberId();" in main
