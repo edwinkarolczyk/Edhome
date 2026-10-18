@@ -30,7 +30,7 @@ for marker in (
     "showProjectBlockers",
     "showAddProjectBlockerDialog",
     "Termin minął • zostało",
-    "TimeSuggestions.proposeAvailability",
+    "SmartTaskPlanner.proposeForProject",
     "ProjectPlanningStore.windows",
     "PROJECT_BLOCKER_ADDED",
     "MEMBER_PROJECT_WINDOWS_SAVED",
@@ -68,7 +68,7 @@ planner=main.split("private void showProjectPlanSuggestions",1)[1].split(
 assert "ProjectStore.remainingMinutes" in planner
 assert "hasUndatedHardBlocker" in planner
 assert "planningNotBefore" in planner
-assert "proposeAvailability" in planner
+assert "proposeForProject" in planner
 assert "chosen.date.atTime(chosen.end)" in planner
 
 print("Project planning availability/blockers/admin-role contract: PASS")
