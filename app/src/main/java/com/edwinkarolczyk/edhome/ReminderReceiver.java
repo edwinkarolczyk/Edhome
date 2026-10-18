@@ -331,10 +331,27 @@ public final class ReminderReceiver extends BroadcastReceiver {
         LegacyCompat.ensureChannel(notifications, CHANNEL_ID,
             "Przypomnienia o czynnościach", NotificationManager.IMPORTANCE_DEFAULT,
             null, true, true, false);
-        PendingIntent open = PendingIntent.getActivity(context, 0,
-            new Intent(context, MainActivity.class).setFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        // Rano same sprawdzamy, czy istnieje możliwe przeplanowanie.
+        // Wyświetlenie propozycji i zmiana daty nastąpią po akceptacji.
+        boolean proposalsReady = false;
+        boolean openOverdue = legacy && overdue > 0 && BetaUpdater.isBeta();
+        if (openOverdue) {
+            try (SQLiteDatabase planning = SQLiteDatabase.openDatabase(
+                    file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY)) {
+                proposalsReady = SmartTaskPlanner.hasProposals(planning,
+                    pref.getLong("active_member_id", 0L));
+                if (proposalsReady)
+                    DiagnosticLog.event("TASK_OVERDUE_SUGGESTIONS_READY");
+            } catch (Exception problem) {
+                DiagnosticLog.error("TASK_OVERDUE_SEARCH", problem);
+            }
+        }
+        Intent destination=new Intent(context, MainActivity.class).setFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        if (openOverdue) destination.putExtra("open_overdue_plan",true);
+        PendingIntent open = PendingIntent.getActivity(context, 0,destination,
             PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        final boolean foundTerms=proposalsReady;
         Notification.Builder builder = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle(!legacy && singleProjectTask
@@ -345,6 +362,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 ? "Czynność projektu • możesz uruchomić pomiar czasu"
                 : (overdue > 0
                     ? "Zaległe: " + overdue + " • na dziś: " + (due - overdue)
+                        + (foundTerms ? " • znaleziono nowe terminy"
+                            : " • sprawdź terminy")
                         + (waste > 0 ? " • odpady: " + waste : "")
                     : (waste > 0
                         ? "Odpady do wystawienia: " + waste
@@ -353,6 +372,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
             .setContentIntent(open)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true);
+        if (openOverdue)
+            builder.addAction(android.R.drawable.ic_menu_today,
+                "Znajdź nowe terminy", open);
         if (!legacy && singleProjectTask)
             builder.addAction(android.R.drawable.ic_media_play,
                 "▶ Start", ProjectWorkNotification.startAction(
