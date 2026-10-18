@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 320,
-  "versionName": "0.8.0.128",
+  "versionCode": 321,
+  "versionName": "0.8.0.129",
   "changelog": "EDHOME Beta 0.8.0.126 / 318 — Magazyn: przy konkretnej rzeczy ustaw Powinna wracać na swoje miejsce, przypominaj po liczbie dni; Wzięte i Odłożone, powiadomienia raz dziennie do zwrotu. Poprawiono zachowanie także niestandardowej liczby dni wpisanej na Desktopie. Baza v50, kompatybilne kopie ZIP i LAN. Stable bez zmian. Nie odinstalowuj aplikacji przed aktualizacją.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.128/edhome-beta.apk",
-  "sha256": "9f1f3a6bd6400d5273638a6432ac431e75dc59e13c946f4150f228362d90493b"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.129/edhome-beta.apk",
+  "sha256": "a53f961a88974ae268f2556e8a1b81e7aa6736eb45874ed85f01aed15acf8822"
 }
