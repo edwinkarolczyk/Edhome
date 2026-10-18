@@ -148,27 +148,8 @@ public final class MainActivity extends Activity {
         launcherQuickTaskDialog = QuickTaskShortcut.show(this, minutes -> {
             final long member=activeMemberId();
             if(member<=0)return java.util.Collections.emptyList();
-            return TimeSuggestions.proposeFreeDays(java.time.LocalDateTime.now(),
-                minutes,
-                day->ProjectPlanningStore.windows(db.getReadableDatabase(),
-                    member,db.effectiveShift(member,day.toString())),
-                day->{
-                    try(Cursor c=db.getReadableDatabase().rawQuery(
-                        "SELECT 1 FROM tasks WHERE done=0 AND due_date=? LIMIT 1",
-                        new String[]{day.toString()})) {
-                        if(c.moveToFirst())return true;
-                    }
-                    long start=day.atStartOfDay(java.time.ZoneId.systemDefault())
-                        .toInstant().toEpochMilli();
-                    long end=day.plusDays(1).atStartOfDay(
-                        java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
-                    try(Cursor timers=db.getReadableDatabase().rawQuery(
-                        "SELECT 1 FROM device_timers WHERE start_at<? AND end_at>? "
-                            +"LIMIT 1",
-                        new String[]{Long.toString(end),Long.toString(start)})) {
-                        return timers.moveToFirst();
-                    }
-                });
+            return SmartTaskPlanner.proposeNew(db.getReadableDatabase(),
+                member,minutes,java.time.LocalDateTime.now());
         }, (title,due,minutes,reminder) -> {
             db.saveTask(null,title,due,"once",1,
                 null,"normal",minutes,
@@ -183,6 +164,93 @@ public final class MainActivity extends Activity {
         launcherQuickTaskDialog.setOnDismissListener(ignored ->
             launcherQuickTaskDialog = null);
         return true;
+    }
+
+
+    /** Powiadomienie wraca do głównej aktywności, żeby nie omijać blokady PIN. */
+    private boolean openOverduePlanIntent(Intent intent) {
+        if(intent==null || !intent.getBooleanExtra("open_overdue_plan",false))
+            return false;
+        intent.removeExtra("open_overdue_plan");
+        if(!BetaUpdater.isBeta() || !unlocked || root==null)return true;
+        tasksFilter="overdue";
+        tasksPage=0;
+        go("tasks");
+        showOverduePlanList();
+        return true;
+    }
+
+    /** Zaległości nie zmieniają dat, zanim domownik zatwierdzi nową propozycję. */
+    private void showOverduePlanList() {
+        if(!unlocked)return;
+        java.util.List<SmartTaskPlanner.Task> items=
+            SmartTaskPlanner.overdue(db.getReadableDatabase(),80);
+        if(items.isEmpty()) {
+            alert("Nie ma zaległych jednorazowych czynności do przeplanowania.");
+            return;
+        }
+        String[] choices=new String[items.size()];
+        for(int i=0;i<items.size();i++) {
+            SmartTaskPlanner.Task task=items.get(i);
+            choices[i]=task.title+" • termin "+task.due
+                +("once".equals(task.repeatRule)?"":" • cykliczna");
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Zaległe czynności • wybierz do przeplanowania")
+            .setItems(choices,(dialog,index)->showOverduePlanOptions(items.get(index)))
+            .setNegativeButton("Później",null).show();
+    }
+
+    private void showOverduePlanOptions(SmartTaskPlanner.Task task) {
+        final long member=activeMemberId();
+        String blocker=SmartTaskPlanner.reason(db.getReadableDatabase(),task,member);
+        if(!blocker.isEmpty()) {
+            alert(task.title+" — "+blocker);
+            return;
+        }
+        java.util.List<TimeSuggestions.Option> options=
+            SmartTaskPlanner.propose(db.getReadableDatabase(),task.id,
+                member,java.time.LocalDateTime.now());
+        if(options.isEmpty()) {
+            alert("Dla „"+task.title+"” nie znaleziono bezkolizyjnego "
+                +"przedziału na kolejne 28 dni. Uzupełnij grafik, "
+                +"ustaw godziny innych czynności lub wybierz datę ręcznie.");
+            return;
+        }
+        String[] labels=new String[options.size()];
+        for(int i=0;i<options.size();i++) {
+            TimeSuggestions.Option option=options.get(i);
+            labels[i]=option.date+" • "+option.start+"–"+option.end;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(task.title+" • wybierz nowy termin")
+            .setMessage("EDHOME sprawdził grafik, godziny innych czynności "
+                +"oraz minutniki. Termin zmieni się dopiero po potwierdzeniu.")
+            .setItems(labels,(dialog,index)->{
+                final TimeSuggestions.Option chosen=options.get(index);
+                new AlertDialog.Builder(this)
+                    .setTitle("Zatwierdzić nowy termin?")
+                    .setMessage(task.title+"\\nPoprzedni: "+task.due
+                        +"\\nNowy: "+labels[index]
+                        +"\\nZostanie również ustawione przypomnienie.")
+                    .setNegativeButton("Anuluj",null)
+                    .setPositiveButton("Zatwierdź",(confirm,which)->{
+                        try {
+                            SmartTaskPlanner.approve(db.getWritableDatabase(),
+                                task.id,task.due,chosen,member);
+                            ReminderReceiver.schedule(this);
+                            DiagnosticLog.event("TASK_PLAN_USER_APPROVED",
+                                "task="+task.id);
+                            tasksFilter="all";
+                            tasksPage=0;
+                            go("tasks");
+                            alert("Nowy termin zapisany: "+labels[index]);
+                        }catch(Exception error) {
+                            alert("Nie zmieniono terminu: "+error.getMessage());
+                        }
+                    }).show();
+            })
+            .setNegativeButton("Nie teraz",null).show();
     }
 
     private boolean backupLegacyExportNext;
@@ -442,6 +510,7 @@ public final class MainActivity extends Activity {
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
         root.post(() -> openLauncherQuickTask(getIntent()));
+        root.post(() -> openOverduePlanIntent(getIntent()));
         root.post(() -> handleNfcIntent(getIntent()));
         new Thread(() -> {
             int migrated=TileArtLibrary.migrateExistingCustomArt(this,prefs);
@@ -608,6 +677,7 @@ public final class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (openLauncherQuickTask(intent)) return;
+        if (openOverduePlanIntent(intent)) return;
         if(applyProjectTaskIntent(intent,true)) {
             handleNfcIntent(intent);
             return;
@@ -6768,6 +6838,8 @@ public final class MainActivity extends Activity {
             () -> editTask(null, "", "", "once", 1));
         compactAction(row3, "▦ Kalendarz", () -> go("calendar"));
         button("❄ Przygotowanie do zimy",this::showFrostPreparation);
+        if(db.overdueTasks()>0)
+            button("↻ Znajdź nowe terminy zaległych",this::showOverduePlanList);
 
         note("Zaległe: " + db.overdueTasks()
             + " • wykonanie cyklicznej wyznacza kolejny termin.");
