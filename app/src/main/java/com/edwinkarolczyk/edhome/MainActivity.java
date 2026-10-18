@@ -6606,6 +6606,7 @@ public final class MainActivity extends Activity {
             db.getReadableDatabase(),projectId);
         if(project==null)return;
         java.util.LinkedHashMap<Long,String> suggestions=new java.util.LinkedHashMap<>();
+        java.util.HashMap<Long,String> plannedStarts=new java.util.HashMap<>();
         java.util.HashMap<Long,java.time.LocalDateTime> plannedEnds=
             new java.util.HashMap<>();
         java.util.HashMap<Long,java.time.LocalDateTime> memberCursors=
@@ -6686,10 +6687,8 @@ public final class MainActivity extends Activity {
 
                 final long plannerMember=member;
                 java.util.List<TimeSuggestions.Option> options=
-                    TimeSuggestions.proposeAvailability(cursor,minutes,
-                        day->ProjectPlanningStore.windows(db.getReadableDatabase(),
-                            plannerMember,db.effectiveShift(
-                                plannerMember,day.toString())));
+                    SmartTaskPlanner.proposeForProject(db.getReadableDatabase(),
+                        plannerMember,taskId,minutes,cursor);
                 if(options.isEmpty()) {
                     lines.add("• "+prefix
                         +" — brak dostępnego okna projektowego w 28 dniach");
@@ -6697,6 +6696,7 @@ public final class MainActivity extends Activity {
                 }
                 TimeSuggestions.Option chosen=options.get(0);
                 suggestions.put(taskId,chosen.date.toString());
+                plannedStarts.put(taskId,chosen.start.toString());
                 java.time.LocalDateTime chosenEnd=chosen.date.atTime(chosen.end);
                 plannedEnds.put(taskId,chosenEnd);
                 memberCursors.put(member,chosenEnd);
@@ -6712,15 +6712,18 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Propozycja planu projektu")
             .setMessage(message+"\n\nPlan używa pozostałego czasu po Start/Stop, "
                 +"grafiku użytkownika, ustawionych okien projektowych, zależności "
-                +"oraz twardych wymagań. Nie zmienia terminów bez Twojej akceptacji.")
+                +"oraz twardych wymagań. Sprawdza konflikty godzinowe. "
+                +"Akceptacja zapisze nową datę i godzinę przypomnienia.")
             .setNegativeButton("Zostaw bez zmian",null)
-            .setPositiveButton("Ustaw proponowane daty",(d,w)->{
+            .setPositiveButton("Ustaw daty i godziny",(d,w)->{
                 SQLiteDatabase database=db.getWritableDatabase();
                 database.beginTransaction();
                 try {
                     for(java.util.Map.Entry<Long,String> item:suggestions.entrySet()) {
                         ContentValues values=new ContentValues();
                         values.put("due_date",item.getValue());
+                        values.put("remind_time",plannedStarts.get(item.getKey()));
+                        values.put("reminder_lead_days",0);
                         database.update("tasks",values,"id=? AND done=0",
                             new String[]{Long.toString(item.getKey())});
                     }
