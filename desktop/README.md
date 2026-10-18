@@ -37,7 +37,10 @@ Funkcja może mieć inną formę na PC i telefonie, jeżeli rezultat danych i re
 
 Pipeline wydania uruchamia `EDHOME-Desktop-Beta.exe --smoke-test` z gotowego app-image przed utworzeniem i publikacją instalatora, aby wykryć problemy z uruchomieniem JVM.
 
-## Aktualny stan Desktop — 0.7.0.100
+## Aktualny stan Desktop — 0.7.0.126
+
+- **Projekty / Czynności:** aktywna karta Start/Stop na Windows pulsuje niebieskim tłem co 1 sekundę; stan Stop wraca do zwykłego tła. Używa istniejącego `javax.swing.Timer(1000)` odpowiedzialnego za wyświetlanie czasu, bez drugiej pętli. Android Beta 0.8.0.131 / 323 korzysta z analogicznego efektu.
+
 
 - Zgodność Huba: **Android Beta 0.8.0.42 / 234**.
 - Naprawiony pierwszy bootstrap: świeży Desktop bez snapshotu zwraca `initialized=false`, dzięki czemu telefon może wysłać pierwszy pełny stan.
