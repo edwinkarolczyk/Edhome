@@ -3,7 +3,7 @@
 - **Przyczyna:** odbiornik zbiorczych przypomnień ignorował uruchomienia przed 09:00, mimo że AlarmManager planował je na 08:00. Poprzednia Stable planowała 09:00; regresja występowała w Beta.
 - **Poprawka w kodzie `beta`:** usunięto sprzeczny próg 09:00, zachowano deduplikację raz dziennie i pomijanie zakończonych zadań, uwzględniono koniec ciszy nocnej w harmonogramie oraz pokazano „Zaległe: X • na dziś: Y” w zbiorczym powiadomieniu. Sposób włączania przypomnień i uprawnienia Androida bez zmian.
 - **Test:** w `tests/check_reminder_contract.py` dodano kontrakt zabezpieczający przed ponownym ustawieniem 08:00 + blokady przed 09:00 oraz kontrolę licznika zaległych i ciszy nocnej.
-- **Wersja przygotowana do CI:** Android Beta 0.8.0.127 / 319; wynik GitHub Actions, podpisany APK i test na telefonie wymagają osobnego potwierdzenia. Stable `main` bez zmian. Nie odinstalowywać EDHOME przed aktualizacją.
+- **Wersja wydana:** Android Beta **0.8.0.127 / 319**, [CI PASS #39103808159](https://github.com/edwinkarolczyk/Edhome/actions/runs/39103808159), podpisana [APK](https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.127/edhome-beta.apk), SHA-256 `35c57ce3f14a185df9138968ba957db0ccb51f0ea86e98e9908599266c3b196d`. Test doręczenia rzeczywistego alarmu na telefonie wciąż otwarty; CI nie potwierdza zachowania systemu Android/ograniczeń baterii. Stable `main` bez zmian. Nie odinstalowywać EDHOME przed aktualizacją.
 - **Pozostaje do odrębnego etapu UI:** czerwone oznaczenia zaległych w listach i na pulpicie oraz otwieranie konkretnej zaległej czynności z powiadomienia (obecny alarm zbiorczy otwiera aplikację).
 
 ## 2026-10-17 — Powrót rzeczy na miejsce: funkcja dzienna, Android/Windows Beta (issue #9)
