@@ -224,8 +224,6 @@ public final class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this)
             .setTitle(task.title+" • wybierz nowy termin")
-            .setMessage("EDHOME sprawdził grafik, godziny innych czynności "
-                +"oraz minutniki. Termin zmieni się dopiero po potwierdzeniu.")
             .setItems(labels,(dialog,index)->{
                 final TimeSuggestions.Option chosen=options.get(index);
                 new AlertDialog.Builder(this)
