@@ -67,7 +67,7 @@ assert 'Czas przekroczony, pomiar zatrzymany.' in main
 assert '?projectTimeRed():projectTimeGreen()' in main
 assert 'overrun>0?projectTimeYellow():projectTimeGreen()' in main
 assert 'ProjectStore.remainingMinutes' in main
-assert 'TimeSuggestions.proposeAvailability' in main
+assert 'SmartTaskPlanner.proposeForProject' in main
 assert 'ProjectPlanningStore.windows' in main
 assert 'ProjectPlanningStore.startBlockReason' in project
 assert 'project_task_blockers' in main
