@@ -5815,7 +5815,7 @@ public final class MainActivity extends Activity {
                 +" • zostało: "+projectTimeText(remaining);
             if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
             TextView projectTime=text(timeLine,12,false);
-            bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted);
+            bindProjectTimeStatus(projectTime,box,taskId,minutes,activeStarted);
             box.addView(projectTime);
             TextView taskLabor=text("",12,false);
             box.addView(taskLabor);
@@ -6095,7 +6095,7 @@ public final class MainActivity extends Activity {
         return rest+" s";
     }
 
-    private void bindProjectTimeStatus(TextView view,long taskId,
+    private void bindProjectTimeStatus(TextView view,LinearLayout card,long taskId,
             int plannedMinutes,Long activeStarted) {
         if(activeStarted==null) {
             int worked=ProjectStore.workedMinutes(
@@ -6108,13 +6108,28 @@ public final class MainActivity extends Activity {
             return;
         }
 
+        // Ten sam cykl 1000 ms aktualizuje stoper i miganie karty.
+        // Jedna instancja drawable: bez ponownego tworzenia widoków co sekundę.
+        final GradientDrawable pulseBackground=skin.panel(this,surface,22);
+        final int ordinarySurface=surface;
+        final int blueSurface=ProjectTaskPulse.blueSurface(surface,skin.light);
+        final long[] pulseTick={0L};
+        card.setBackground(pulseBackground);
         final Runnable[] refresh=new Runnable[1];
         refresh[0]=()->{
-            if(view==null||!view.isAttachedToWindow()
+            if(!view.isAttachedToWindow()||!card.isAttachedToWindow()
                     ||db==null||isFinishing()||isDestroyed())return;
             Long started=ProjectStore.activeWorkStartedAt(
                 db.getReadableDatabase(),taskId);
-            if(started==null)return;
+            if(started==null) {
+                pulseBackground.setColor(ordinarySurface);
+                // Stop również z powiadomienia lub automatyczna pauza po godzinie.
+                // Przerysuj tylko raz, aby zaktualizować przycisk Stop -> Start.
+                if("projects".equals(screen)&&selectedProjectId>0)render();
+                return;
+            }
+            pulseBackground.setColor(ProjectTaskPulse.color(
+                ordinarySurface,blueSurface,pulseTick[0]++));
 
             int closedMinutes=ProjectStore.workedMinutes(
                 db.getReadableDatabase(),taskId,false);
