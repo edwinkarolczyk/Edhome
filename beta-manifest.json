@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 319,
-  "versionName": "0.8.0.127",
-  "changelog": "EDHOME Beta 0.8.0.127 / 319 — Naprawiono codzienne powiadomienia o zaległych czynnościach: alarm o 08:00 działa bez blokady 09:00, uwzględnia ciszę nocną, pokazuje liczbę zadań zaległych oraz na dziś. Dodano test regresyjny. Włącz przypomnienia w ustawieniach EDHOME i powiadomienia Androida. Stable bez zmian. Aktualizuj bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.127/edhome-beta.apk",
-  "sha256": "35c57ce3f14a185df9138968ba957db0ccb51f0ea86e98e9908599266c3b196d"
+  "versionCode": 320,
+  "versionName": "0.8.0.128",
+  "changelog": "EDHOME Beta 0.8.0.126 / 318 — Magazyn: przy konkretnej rzeczy ustaw Powinna wracać na swoje miejsce, przypominaj po liczbie dni; Wzięte i Odłożone, powiadomienia raz dziennie do zwrotu. Poprawiono zachowanie także niestandardowej liczby dni wpisanej na Desktopie. Baza v50, kompatybilne kopie ZIP i LAN. Stable bez zmian. Nie odinstalowuj aplikacji przed aktualizacją.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.128/edhome-beta.apk",
+  "sha256": "9f1f3a6bd6400d5273638a6432ac431e75dc59e13c946f4150f228362d90493b"
 }
