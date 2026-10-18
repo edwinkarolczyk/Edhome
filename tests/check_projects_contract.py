@@ -55,7 +55,11 @@ assert 'minutesBox.addView(text("Minuty",12,false))' in main
 assert 'automatycznie ustawi na 20 min' in main
 assert '0,5 • 1 • 1,5' not in main
 assert 'PROJECT_WORK_STARTED' in main and 'PROJECT_WORK_STOPPED' in main
-assert 'bindProjectTimeStatus(projectTime,taskId,minutes,activeStarted)' in main
+assert 'bindProjectTimeStatus(projectTime,box,taskId,minutes,activeStarted)' in main
+assert 'ProjectTaskPulse.color(' in main
+assert 'pulseBackground.setColor(ordinarySurface);' in main
+assert 'view.postDelayed(refresh[0],1000L);' in main
+assert 'if(!view.isAttachedToWindow()||!card.isAttachedToWindow()' in main
 assert 'view.postDelayed(refresh[0],1000L);' in main
 assert 'projectTimeRed()' in main and 'projectTimeYellow()' in main and 'projectTimeGreen()' in main
 assert 'addProjectTimeProgress(summary,stats);' in main
