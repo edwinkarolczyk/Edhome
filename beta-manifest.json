@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 323,
-  "versionName": "0.8.0.131",
-  "changelog": "EDHOME Beta 0.8.0.131 / 323 — Projekty: czynność z uruchomionym licznikiem Start/Stop miga niebieskim tłem raz na sekundę. Kolor jest dopasowany do motywu jasnego i ciemnego; po zatrzymaniu lub automatycznej pauzie karta wraca do zwykłego wyglądu. Animacja korzysta z istniejącego odświeżania licznika, bez dodatkowego timera i przebudowy ekranu co sekundę. Inteligentne wyszukiwanie terminów z 0.8.0.130 zostaje zachowane. Aktualizuj bez odinstalowywania EDHOME.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.131/edhome-beta.apk",
-  "sha256": "9d94cc6e7f406fb35c106f6dafd1daa645b3db942ea1acd6cf6d0d275edb306f"
+  "versionCode": 324,
+  "versionName": "0.8.0.132",
+  "changelog": "EDHOME Beta 0.8.0.132 / 324 — Czynności: przeplanowanie kilku zaległych terminów w jednym ciągu, bez powrotu do ekranu głównego po każdej zmianie. Lista odświeża się automatycznie i pokazuje liczbę pozostałych czynności. Przy propozycjach terminów i w szybkim dodawaniu wyświetlane są polskie nazwy dni tygodnia. Daty w bazie i synchronizacja bez zmian. Aktualizuj bez odinstalowywania EDHOME.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.132/edhome-beta.apk",
+  "sha256": "5adcf82026dca3e6fd8458d613bdd4f67ed9056822a0023a454e594a6e78aee7"
 }
