@@ -1,3 +1,10 @@
+## 2026-10-19 — Czynności: seryjna zmiana terminów i polskie dni tygodnia (Android Beta 0.8.0.132 / 324)
+
+- **Naprawa okna:** po zatwierdzeniu jednej zaległej czynności widok się odświeża i otwiera od razu listę kolejnych do przeplanowania; ekran nie wraca automatycznie do zakładki Czynności. Tytuł pokazuje liczbę pozostałych zadań. Po ostatnim zapisie użytkownik otrzymuje komunikat zakończenia. Powrót z propozycji do listy oraz z potwierdzenia do propozycji nie zrywa procesu.
+- **Język dat:** daty przy zaległych czynnościach, trzech bezkolizyjnych propozycjach, w szybkim dodawaniu, formularzu Czynności i propozycji zbiorczej Projektu pokazują pełną polską nazwę dnia, np. „poniedziałek, 19.10.2026”. W bazie, backupach i LAN pozostają daty ISO yyyy-MM-dd.
+- **Bezpieczeństwo:** seryjna zmiana uwzględnia tylko jednorazowe zaległości; zadania cykliczne zachowują reguły powtarzania. Każdy termin jest ponownie weryfikowany przed zapisaniem w SmartTaskPlanner.approve; po zapisie ponownie planowane są przypomnienia.
+- **Regresje:** zaktualizowano tests/check_smart_overdue_planner_contract.py; dodano TaskDateLabelsSmoke.java do Android CI. **Status:** zmiany zapisane w beta, build/CI i paczka APK wymagają potwierdzenia. Stable main bez zmian.
+
 ## 2026-10-18 — Projekty: niebieskie miganie aktywnej czynności co sekundę (Android i Desktop Beta)
 
 ## 2026-10-19 — Roadmapa EDHOME 1.0 Plus: pełny Budżet z arkusza
