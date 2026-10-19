@@ -164,6 +164,23 @@ public final class DiagnosticLog {
         }
     }
 
+    /** Immutable snapshot: ID and body always refer to exactly the same bytes. */
+    static final class Transfer {
+        final String body;
+        final String id;
+        Transfer(String body,String id) {
+            this.body=body;
+            this.id=id;
+        }
+    }
+
+    static Transfer captureTransfer() {
+        synchronized (LOCK) {
+            String snapshot=readFullText();
+            return new Transfer(snapshot,snapshot.isBlank()?"":sha256(snapshot));
+        }
+    }
+
     /** Stable content identifier used by Desktop's download-then-ack protocol. */
     public static String transferId() {
         if (!enabled()) return "";
