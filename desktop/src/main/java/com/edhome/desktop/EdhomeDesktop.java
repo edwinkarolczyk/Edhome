@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.126";
+    private static final String DESKTOP_VERSION = "0.7.0.127";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -6170,16 +6170,18 @@ public final class EdhomeDesktop extends JFrame {
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(5, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(6, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
         JButton repairHub = actionButton("Napraw połączenie telefonu / zaporę Windows");
         JButton updateDesktop = actionButton("Aktualizuj EDHOME Desktop — 1 klik");
-        JButton copyDesktopLogs = actionButton("Zapisz diagnostykę Desktop na Pulpit");
+        JButton allLogs = actionButton("Pobierz logi Desktop i Android (TXT)");
+        JButton copyDesktopLogs = actionButton("Pobierz logi Desktop (TXT)");
         JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
         actions.add(repairHub);
         actions.add(updateDesktop);
+        actions.add(allLogs);
         actions.add(copyDesktopLogs);
         actions.add(openBackups);
         content.add(actions);
@@ -6212,6 +6214,7 @@ public final class EdhomeDesktop extends JFrame {
             showSection("Ustawienia");
         });
         updateDesktop.addActionListener(e -> oneClickDesktopUpdate(updateDesktop));
+        allLogs.addActionListener(e -> saveHubDiagnosticsToDesktop(allLogs));
         copyDesktopLogs.addActionListener(e -> {
             Path target=diagnosticsDesktopFolder().resolve(
                 "EDHOME-Desktop-diagnostyka-"
@@ -6231,6 +6234,51 @@ public final class EdhomeDesktop extends JFrame {
 
         page.add(content, BorderLayout.NORTH);
         return page;
+    }
+
+    /** Jeden przycisk do dwóch osobnych plików, także przy konflikcie danych. */
+    private void saveHubDiagnosticsToDesktop(JButton trigger) {
+        trigger.setEnabled(false);
+        DesktopDiagnosticLog.event("HUB_DIAGNOSTICS_EXPORT_REQUESTED");
+        new SwingWorker<String,Void>() {
+            @Override protected String doInBackground() throws Exception {
+                Path folder=diagnosticsDesktopFolder();
+                Files.createDirectories(folder);
+                String stamp=DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
+                    .withZone(ZoneId.systemDefault()).format(Instant.now());
+                Path pc=folder.resolve("EDHOME-Desktop-logi-"+stamp+".txt");
+                Files.writeString(pc,desktopDiagnosticsText(),StandardCharsets.UTF_8);
+                StringBuilder result=new StringBuilder("Zapisano logi Desktop:\n")
+                    .append(pc.toAbsolutePath());
+                if(DesktopDiagnosticLog.hasPhoneDiagnostics()) {
+                    Path phone=folder.resolve("EDHOME-Android-logi-"+stamp+".txt");
+                    Files.writeString(phone,DesktopDiagnosticLog.readPhoneDiagnostics(),
+                        StandardCharsets.UTF_8);
+                    result.append("\n\nZapisano ostatnie logi telefonu:\n")
+                        .append(phone.toAbsolutePath());
+                } else {
+                    result.append("\n\nBrak logów telefonu na PC. W EDHOME Android "
+                        +"otwórz Ustawienia → Dane i diagnostyka → "
+                        +"Prześlij logi Android do Desktopu. "
+                        +"To działa również przy konflikcie baz.");
+                }
+                DesktopDiagnosticLog.event("HUB_DIAGNOSTICS_EXPORT_SAVED",
+                    "phone="+DesktopDiagnosticLog.hasPhoneDiagnostics());
+                return result.toString();
+            }
+            @Override protected void done() {
+                trigger.setEnabled(true);
+                try {
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,get(),
+                        "EDHOME Desktop • logi",JOptionPane.INFORMATION_MESSAGE);
+                } catch(Exception error) {
+                    DesktopDiagnosticLog.error("HUB_DIAGNOSTICS_EXPORT",error);
+                    JOptionPane.showMessageDialog(EdhomeDesktop.this,
+                        "Nie udało się zapisać logów: "+rootMessage(error),
+                        "EDHOME Desktop",JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     private String desktopDiagnosticsText() {
