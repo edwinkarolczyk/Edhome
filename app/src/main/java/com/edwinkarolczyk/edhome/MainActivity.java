@@ -23019,10 +23019,16 @@ public final class MainActivity extends Activity {
                 this::showDesktopConnectionStatus);
             desktop.addView(text(DesktopHubSync.status(this),13,false));
             smallButton(desktop,"Skanuj QR z ekranu PC",this::scanDesktopPairQr);
-            smallButton(desktop,"Synchronizuj teraz",()->{
+            smallButton(desktop,"Sprawdź połączenie / synchronizuj",()->{
                 DesktopHubSync.kick(this);
-                alert("Synchronizacja uruchomiona. Jeśli PC jest wyłączony, "
-                    +"EDHOME nadrobi zmiany po jego powrocie.");
+                if(BackupSyncGate.isHeld(this)
+                        ||!DesktopHubSync.conflict(this).isEmpty()) {
+                    alert("Sprawdzam połączenie z PC. Dane nie są synchronizowane, "
+                        +"dopóki nie porównasz i nie uzgodnisz obu baz.");
+                } else {
+                    alert("Sprawdzam połączenie i zmiany. Jeśli komputer jest "
+                        +"wyłączony, EDHOME ponowi próbę po jego powrocie.");
+                }
             });
             String conflict=DesktopHubSync.conflict(this);
             if(!conflict.isEmpty()) {
@@ -23110,6 +23116,12 @@ public final class MainActivity extends Activity {
                     });
                 },"edhome-hub-diagnostics").start();
             });
+            smallButton(data,"Pobierz pełne logi Android (.txt)",
+                this::exportDiagnosticLogsToFile);
+            smallButton(data,"Prześlij logi Android do Desktopu (LAN)",()->
+                DesktopHubSync.sendDiagnosticsNow(this,
+                    message->runOnLiveUi(()->alert(message)),
+                    error->runOnLiveUi(()->alert(error))));
             smallButton(data,"Otwórz pełną diagnostykę BETA",
                 ()->go("diagnostics"));
         }
@@ -24213,25 +24225,30 @@ public final class MainActivity extends Activity {
                     + limit + "). Wklej do czatu. Pełną historię wyeksportuj jako .txt.");
             } else alert("Schowek jest niedostępny.");
         });
-        button("Eksportuj pełne logi (.txt)", () -> {
-            DiagnosticLog.event("DIAGNOSTICS_EXPORT_REQUESTED");
-            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("text/plain");
-            intent.putExtra(Intent.EXTRA_TITLE, DiagnosticLog.exportName());
-            try {
-                startActivityForResult(intent, EXPORT_DIAGNOSTICS);
-            } catch (Exception error) {
-                DiagnosticLog.error("EXPORT_PICKER", error);
-                alert("Nie można otworzyć zapisywania pliku.");
-            }
-        });
+        button("Eksportuj pełne logi (.txt)",
+            this::exportDiagnosticLogsToFile);
         String log = DiagnosticLog.readText();
         note("Podgląd ostatnich wpisów: " + log.length()
             + " znaków; eksport .txt obejmuje oba pełne segmenty.");
         TextView preview = text(log.substring(Math.max(0, log.length() - 5000)), 11, false);
         preview.setTextIsSelectable(true);
         card().addView(preview);
+    }
+
+    /** Ten sam eksport TXT jest dostępny bezpośrednio w Ustawieniach. */
+    private void exportDiagnosticLogsToFile() {
+        if(!DiagnosticLog.enabled())return;
+        DiagnosticLog.event("DIAGNOSTICS_EXPORT_REQUESTED");
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TITLE,DiagnosticLog.exportName());
+        try {
+            startActivityForResult(intent,EXPORT_DIAGNOSTICS);
+        } catch(Exception error) {
+            DiagnosticLog.error("EXPORT_PICKER",error);
+            alert("Nie można otworzyć zapisywania pliku.");
+        }
     }
 
     /** Verify exactly the bytes written by the document provider; never log backup data. */
