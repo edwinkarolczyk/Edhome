@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.126"
+  DESKTOP_VERSION: "0.7.0.127"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
@@ -20,6 +20,7 @@ on:
       - "tests/check_desktop_sync_contract.py"
       - "tests/check_storage_stabilization_gate.py"
       - "tests/check_desktop_settings_contract.py"
+      - "tests/check_hub_diagnostics_contract.py"
   workflow_dispatch:
 
 jobs:
@@ -47,6 +48,7 @@ jobs:
           python tests/check_paycheck_budget_stage5c_sync_contract.py
           python tests/check_paycheck_budget_stage5c_reverse_patch.py
           python tests/check_hub_repair_history_safety.py
+          python tests/check_hub_diagnostics_contract.py
           python tests/check_paycheck_budget_stage6_desktop.py
           python tests/check_storage_stabilization_gate.py
           python tests/check_desktop_settings_contract.py
