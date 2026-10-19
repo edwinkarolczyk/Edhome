@@ -173,7 +173,25 @@ final class DesktopHubServerRuntimeTest {
             HttpURLConnection accepted=open("POST","/diagnostics-upload",
                 "{\"log\":\"EDHOME TEST LOG\"}");
             assertEquals(200,accepted.getResponseCode());
+            String success=read(accepted);
             accepted.disconnect();
+            String receipt=java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(
+                    "EDHOME TEST LOG".getBytes(StandardCharsets.UTF_8)));
+            assertTrue(success.contains("\"transferId\":\""+receipt+"\""),
+                "Zapisany SHA musi wrócić w odpowiedzi zanim Android usunie logi.");
+            java.nio.file.Path archive=DesktopDiagnosticLog.phoneArchiveDirectory()
+                .resolve("runtime-smoke-"+receipt+".txt");
+            assertTrue(java.nio.file.Files.isRegularFile(archive),
+                "Trwałe archiwum Desktop musi istnieć przed potwierdzeniem.");
+            String firstContents=java.nio.file.Files.readString(archive);
+            HttpURLConnection repeated=open("POST","/diagnostics-upload",
+                "{\"log\":\"EDHOME TEST LOG\"}");
+            assertEquals(200,repeated.getResponseCode());
+            assertTrue(read(repeated).contains(receipt));
+            repeated.disconnect();
+            assertEquals(firstContents,java.nio.file.Files.readString(archive),
+                "Ponowienie tego samego transferu nie może uszkodzić archiwum.");
             assertEquals(0,writes.get(),"Logi nie mogą zapisywać migawki danych.");
             assertTrue(DesktopDiagnosticLog.hasPhoneDiagnostics());
             assertTrue(DesktopDiagnosticLog.readPhoneDiagnostics()
