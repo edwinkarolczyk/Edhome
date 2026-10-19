@@ -6196,7 +6196,7 @@ public final class EdhomeDesktop extends JFrame {
           + "<b>Logi Android:</b> telefon automatycznie przekazuje logi mniej więcej co minutę. "
           + "Desktop zachowuje je w archiwum; po potwierdzeniu zapisu Android "
           + "usuwa wyłącznie przekazane wpisy.<br><br>"
-          + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie 
+          + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie "
           + "w folderze EDHOME\\Backup.</html>");
         help.setForeground(APP_MUTED);
         content.add(help);
