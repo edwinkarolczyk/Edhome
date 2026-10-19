@@ -266,6 +266,21 @@ final class DesktopHubServer implements AutoCloseable {
                 reply(peer,200,"{\"ok\":true}",null);
                 return;
             }
+            // Diagnostyka nie dotyka stanu danych ani blokady konfliktu.
+            // Telefon jest klientem Huba także podczas uzgadniania baz.
+            if("POST".equals(method)&&"/diagnostics-upload".equals(path)) {
+                if(body.getBytes(StandardCharsets.UTF_8).length>3*1024*1024) {
+                    reply(peer,413,"{\"error\":\"DIAGNOSTICS_TOO_LARGE\"}",null);
+                    return;
+                }
+                JsonObject received=JsonParser.parseString(body).getAsJsonObject();
+                String log=received.has("log")&&received.get("log").isJsonPrimitive()
+                    ?received.get("log").getAsString():"";
+                DesktopDiagnosticLog.receivePhoneDiagnostics(
+                    client.deviceId,client.version,log);
+                reply(peer,200,"{\"ok\":true}",null);
+                return;
+            }
             if("GET".equals(method)&&"/snapshot".equals(path)) {
                 String snapshot=host.snapshot();
                 reply(peer,200,snapshot,sha256(snapshot));
