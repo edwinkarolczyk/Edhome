@@ -64,4 +64,28 @@ for token in (
 assert "aStart.isBefore(bEnd)&&aEnd.isAfter(bStart)" in slots
 assert "TimeSuggestions.proposeAvailability(" not in main
 assert "rounded.plusMinutes(15)" in slots
-print("Smart planner: 28 dni, 3 propozycje, kolizje, zatwierdzenie, alarm i backup v50 PASS")
+
+# Zbiorcze przeplanowanie nie opuszcza okna po pierwszej z kilku zmian.
+flow=main.split("private void showOverduePlanOptions(",1)[1].split(
+    "private boolean backupLegacyExportNext;",1)[0]
+list_flow=main.split("private void showOverduePlanList()",1)[1].split(
+    "private void showOverduePlanOptions(",1)[0]
+assert "pendingOverduePlanTasks()" in list_flow
+assert '"once".equals(task.repeatRule)' in main
+assert 'pozostało: "+items.size()' in list_flow
+assert "if(pendingOverduePlanTasks().isEmpty())" in flow
+assert "showOverduePlanList();" in flow
+assert "render();" in flow
+assert 'go("tasks");' not in flow
+assert '"Wróć do listy"' in flow
+assert '"Wróć do terminów"' in flow
+
+# Nazwy dni to tylko etykiety; przechowywane daty ISO nie są konwertowane.
+labels=(base/"TaskDateLabels.java").read_text(encoding="utf-8")
+shortcut=(base/"QuickTaskShortcut.java").read_text(encoding="utf-8")
+assert 'Locale.forLanguageTag("pl-PL")' in labels
+assert 'DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy"' in labels
+assert "TaskDateLabels.format(task.due)" in main
+assert "TaskDateLabels.format(option.date)" in main
+assert "TaskDateLabels.format(o.date)" in shortcut
+print("Smart planner: wiele terminów w jednym przebiegu, polskie dni tygodnia i backup v50 PASS")
