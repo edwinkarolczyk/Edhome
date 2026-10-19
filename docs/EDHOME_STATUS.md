@@ -1,3 +1,11 @@
+## 2026-10-19 — Automatyczne archiwizowanie logów Android → Desktop (Beta)
+
+- **Ustalenie:** użytkownik oczekuje automatycznego pobierania logów na PC i usuwania ich z Androida jak w starszych wydaniach; ręczne pobieranie TXT nadal pozostaje dostępną opcją awaryjną.
+- **Potwierdzenie z logów urządzeń (18:40):** Android Beta 0.8.0.133 oraz Desktop 0.7.0.127 komunikują się po LAN: telefon 192.168.100.13, PC 192.168.100.22:45823. Na PC zapisano zdarzenia HUB_PHONE_DIAGNOSTICS_RECEIVED; konflikt dotyczy synchronizacji baz, nie łączności API.
+- **Nowy automat w beta:** przy aktywnym parowaniu klient Android okresowo wysyła diagnostykę przez autoryzowany Hub (najwyżej jedna automatyczna próba na minutę, łącznie z nieudanymi). PC zapisuje każdą unikatową porcję do `.edhome/logs/android-archive` oraz najnowszą do `.edhome/logs/edhome-android-last.txt`. Każda archiwalna paczka ma nazwę z SHA-256, ponowna wysyłka tej samej paczki nie tworzy duplikatu.
+- **Potwierdzenie przed kasowaniem:** PC odpowiada z `transferId` (SHA-256 dokładnie zapisanej treści) dopiero po zapisie plików; Android porównuje identyfikator z atomową migawką logów i wywołuje `DiagnosticLog.clearIfTransferred`. Gdy raport zmienił się podczas transferu lub PC nie potwierdził, Android niczego nie usuwa. Logi na PC nie są kasowane przy eksporcie ani automatycznie. Synchronizacja danych pozostaje zabezpieczona przed bezmyślnym nadpisaniem.
+- **Wersje w przygotowaniu:** Android Beta 0.8.0.134 / 326, Desktop Beta 0.7.0.128. Dodatkowy test runtime obejmuje poprawny token, SHA-256, istnienie archiwum na PC, bezpieczny retry i brak modyfikacji danych. CI / podpisane paczki: oczekują na weryfikację. Stable main bez zmian.
+
 ## 2026-10-19 — LAN Android ↔ Desktop: diagnostyka i bezpieczne rozpoznanie konfliktu (Beta)
 
 - **Zgłoszenie użytkownika:** Android 0.8.0.132 / 324 pokazuje „PC: konflikt”, zapamiętany adres 192.168.100.22:45823, „parowanie • szukam API”, ostatnia synchronizacja „nigdy”. Sam konflikt oznacza możliwą rozbieżność baz i świadomą blokadę zmian, nie potwierdza braku łączności TCP; brak dowodu faktycznej utraty danych.
