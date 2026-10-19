@@ -132,6 +132,56 @@ final class DesktopHubServerRuntimeTest {
         }
     }
 
+    @Test
+    void acceptsAndroidLogsWhileSynchronizationIsBlockedWithoutTouchingData()
+            throws Exception {
+        java.util.concurrent.atomic.AtomicInteger writes=
+            new java.util.concurrent.atomic.AtomicInteger();
+        DesktopHubServer.Host host=new DesktopHubServer.Host() {
+            @Override public String snapshot() { throw new AssertionError("NO_SNAPSHOT"); }
+            @Override public String bootstrap(String data,DesktopHubServer.ClientInfo info) {
+                writes.incrementAndGet();return data;
+            }
+            @Override public String patch(String data,DesktopHubServer.ClientInfo info,
+                    boolean phoneWins) {
+                writes.incrementAndGet();return data;
+            }
+            @Override public String replace(String data,String sha,
+                    DesktopHubServer.ClientInfo info) {
+                writes.incrementAndGet();return data;
+            }
+            @Override public long revision(){return 0L;}
+            @Override public boolean initialized(){return true;}
+            @Override public void registered(DesktopHubServer.ClientInfo info){}
+        };
+        try(DesktopHubServer server=new DesktopHubServer(
+                DESKTOP_ID,"0.7.0.127",TOKEN,host)) {
+            server.start();
+            HttpURLConnection denied=new java.net.URL(
+                "http://127.0.0.1:"+DesktopHubServer.PORT
+                +"/diagnostics-upload").openConnection() instanceof HttpURLConnection c
+                    ?c:null;
+            assertNotNull(denied);
+            denied.setRequestMethod("POST");
+            denied.setRequestProperty("X-EDHOME-TOKEN","incorrect");
+            denied.setDoOutput(true);
+            try(java.io.OutputStream out=denied.getOutputStream()) {
+                out.write("{\"log\":\"secret\"}".getBytes(StandardCharsets.UTF_8));
+            }
+            assertEquals(401,denied.getResponseCode());
+            denied.disconnect();
+
+            HttpURLConnection accepted=open("POST","/diagnostics-upload",
+                "{\"log\":\"EDHOME TEST LOG \\n HUB_UNAVAILABLE\n\"}");
+            assertEquals(200,accepted.getResponseCode());
+            accepted.disconnect();
+            assertEquals(0,writes.get(),"Logi nie mogą zapisywać migawki danych.");
+            assertTrue(DesktopDiagnosticLog.hasPhoneDiagnostics());
+            assertTrue(DesktopDiagnosticLog.readPhoneDiagnostics()
+                .contains("EDHOME TEST LOG"));
+        }
+    }
+
     private static HttpURLConnection open(String method,String path,String body)
             throws Exception {
         HttpURLConnection connection=(HttpURLConnection)new URL(
