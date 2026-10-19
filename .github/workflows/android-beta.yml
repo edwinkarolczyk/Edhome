@@ -654,7 +654,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.132 / 324 — Czynności: przeplanowanie kilku zaległych terminów w jednym ciągu, bez powrotu do ekranu głównego po każdej zmianie. Lista odświeża się automatycznie i pokazuje liczbę pozostałych czynności. Przy propozycjach terminów i w szybkim dodawaniu wyświetlane są polskie nazwy dni tygodnia. Daty w bazie i synchronizacja bez zmian. Aktualizuj bez odinstalowywania EDHOME."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.133 / 325 — Ustawienia: bezpośredni eksport pełnych logów Android do TXT i wysyłka przez aktualne API Desktopu. Logi docierają również przy konflikcie danych; synchronizacja pozostaje wstrzymana do porównania baz. Stan pokazuje, gdy API odpowiada, ale dane nie są jeszcze uzgodnione. Na PC w Ustawieniach pobierzesz osobne logi telefonu i Desktopu. Aktualizuj bez odinstalowywania EDHOME."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
