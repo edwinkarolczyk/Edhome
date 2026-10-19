@@ -201,8 +201,7 @@ public final class MainActivity extends Activity {
         String[] choices=new String[items.size()];
         for(int i=0;i<items.size();i++) {
             SmartTaskPlanner.Task task=items.get(i);
-            choices[i]=task.title+" • termin "+TaskDateLabels.format(task.due)
-;
+            choices[i]=task.title+" • termin "+TaskDateLabels.format(task.due);
         }
         new AlertDialog.Builder(this)
             .setTitle("Zaległe czynności • pozostało: "+items.size())
