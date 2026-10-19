@@ -112,7 +112,7 @@ final class QuickTaskShortcut {
                     String[] labels=new String[slots.size()];
                     for(int i=0;i<slots.size();i++) {
                         TimeSuggestions.Option o=slots.get(i);
-                        labels[i]=o.date+" • "+o.start+"–"+o.end;
+                        labels[i]=TaskDateLabels.format(o.date)+" • "+o.start+"–"+o.end;
                     }
                     new AlertDialog.Builder(activity)
                         .setTitle("Wybierz proponowany termin")
