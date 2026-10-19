@@ -181,10 +181,19 @@ public final class MainActivity extends Activity {
     }
 
     /** Zaległości nie zmieniają dat, zanim domownik zatwierdzi nową propozycję. */
+    private java.util.List<SmartTaskPlanner.Task> pendingOverduePlanTasks() {
+        java.util.List<SmartTaskPlanner.Task> pending=new java.util.ArrayList<>();
+        for(SmartTaskPlanner.Task task:
+                SmartTaskPlanner.overdue(db.getReadableDatabase(),80)) {
+            // Reguły powtarzania pozostają bez zmian; zmieniamy tylko jednorazowe.
+            if("once".equals(task.repeatRule))pending.add(task);
+        }
+        return pending;
+    }
+
     private void showOverduePlanList() {
         if(!unlocked)return;
-        java.util.List<SmartTaskPlanner.Task> items=
-            SmartTaskPlanner.overdue(db.getReadableDatabase(),80);
+        java.util.List<SmartTaskPlanner.Task> items=pendingOverduePlanTasks();
         if(items.isEmpty()) {
             alert("Nie ma zaległych jednorazowych czynności do przeplanowania.");
             return;
@@ -192,11 +201,11 @@ public final class MainActivity extends Activity {
         String[] choices=new String[items.size()];
         for(int i=0;i<items.size();i++) {
             SmartTaskPlanner.Task task=items.get(i);
-            choices[i]=task.title+" • termin "+task.due
-                +("once".equals(task.repeatRule)?"":" • cykliczna");
+            choices[i]=task.title+" • termin "+TaskDateLabels.format(task.due)
+;
         }
         new AlertDialog.Builder(this)
-            .setTitle("Zaległe czynności • wybierz do przeplanowania")
+            .setTitle("Zaległe czynności • pozostało: "+items.size())
             .setItems(choices,(dialog,index)->showOverduePlanOptions(items.get(index)))
             .setNegativeButton("Później",null).show();
     }
@@ -220,7 +229,7 @@ public final class MainActivity extends Activity {
         String[] labels=new String[options.size()];
         for(int i=0;i<options.size();i++) {
             TimeSuggestions.Option option=options.get(i);
-            labels[i]=option.date+" • "+option.start+"–"+option.end;
+            labels[i]=TaskDateLabels.format(option.date)+" • "+option.start+"–"+option.end;
         }
         new AlertDialog.Builder(this)
             .setTitle(task.title+" • wybierz nowy termin")
@@ -228,10 +237,11 @@ public final class MainActivity extends Activity {
                 final TimeSuggestions.Option chosen=options.get(index);
                 new AlertDialog.Builder(this)
                     .setTitle("Zatwierdzić nowy termin?")
-                    .setMessage(task.title+"\\nPoprzedni: "+task.due
+                    .setMessage(task.title+"\\nPoprzedni: "+TaskDateLabels.format(task.due)
                         +"\\nNowy: "+labels[index]
                         +"\\nZostanie również ustawione przypomnienie.")
-                    .setNegativeButton("Anuluj",null)
+                    .setNegativeButton("Wróć do terminów",
+                        (confirm,which)->showOverduePlanOptions(task))
                     .setPositiveButton("Zatwierdź",(confirm,which)->{
                         try {
                             SmartTaskPlanner.approve(db.getWritableDatabase(),
@@ -239,16 +249,24 @@ public final class MainActivity extends Activity {
                             ReminderReceiver.schedule(this);
                             DiagnosticLog.event("TASK_PLAN_USER_APPROVED",
                                 "task="+task.id);
-                            tasksFilter="all";
-                            tasksPage=0;
-                            go("tasks");
-                            alert("Nowy termin zapisany: "+labels[index]);
+                            render();
+                            android.widget.Toast.makeText(this,
+                                "Zapisano: "+labels[index],
+                                android.widget.Toast.LENGTH_SHORT).show();
+                            if(pendingOverduePlanTasks().isEmpty()) {
+                                alert("Wszystkie zaległe jednorazowe czynności "
+                                    +"mają już nowe terminy.");
+                            } else {
+                                // Zostań w przeplanowaniu: 3 → 2 → 1 bez szukania przycisku.
+                                showOverduePlanList();
+                            }
                         }catch(Exception error) {
                             alert("Nie zmieniono terminu: "+error.getMessage());
                         }
                     }).show();
             })
-            .setNegativeButton("Nie teraz",null).show();
+            .setNegativeButton("Wróć do listy",
+                (dialog,which)->showOverduePlanList()).show();
     }
 
     private boolean backupLegacyExportNext;
@@ -6715,7 +6733,7 @@ public final class MainActivity extends Activity {
                 java.time.LocalDateTime chosenEnd=chosen.date.atTime(chosen.end);
                 plannedEnds.put(taskId,chosenEnd);
                 memberCursors.put(member,chosenEnd);
-                lines.add("• "+prefix+" — "+chosen.date+" • "
+                lines.add("• "+prefix+" — "+TaskDateLabels.format(chosen.date)+" • "
                     +chosen.start+"–"+chosen.end+" • zostało "
                     +projectTimeText(minutes));
             }
@@ -7594,7 +7612,7 @@ public final class MainActivity extends Activity {
                     + "lub wybierz termin ręcznie.", 13, false));
             } else {
                 for (TimeSuggestions.Option option : candidates) {
-                    String caption = option.date
+                    String caption = TaskDateLabels.format(option.date)
                         + " • orientacyjnie " + option.start
                         + "–" + option.end;
                     smallButton(proposals, "Wybierz " + caption, () -> {
