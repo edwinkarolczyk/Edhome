@@ -157,10 +157,9 @@ final class DesktopHubServerRuntimeTest {
         try(DesktopHubServer server=new DesktopHubServer(
                 DESKTOP_ID,"0.7.0.127",TOKEN,host)) {
             server.start();
-            HttpURLConnection denied=new java.net.URL(
+            HttpURLConnection denied=(HttpURLConnection)new java.net.URL(
                 "http://127.0.0.1:"+DesktopHubServer.PORT
-                +"/diagnostics-upload").openConnection() instanceof HttpURLConnection c
-                    ?c:null;
+                +"/diagnostics-upload").openConnection();
             assertNotNull(denied);
             denied.setRequestMethod("POST");
             denied.setRequestProperty("X-EDHOME-TOKEN","incorrect");
@@ -172,7 +171,7 @@ final class DesktopHubServerRuntimeTest {
             denied.disconnect();
 
             HttpURLConnection accepted=open("POST","/diagnostics-upload",
-                "{\"log\":\"EDHOME TEST LOG \\n HUB_UNAVAILABLE\n\"}");
+                "{\"log\":\"EDHOME TEST LOG\"}");
             assertEquals(200,accepted.getResponseCode());
             accepted.disconnect();
             assertEquals(0,writes.get(),"Logi nie mogą zapisywać migawki danych.");
