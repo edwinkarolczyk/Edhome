@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.127";
+    private static final String DESKTOP_VERSION = "0.7.0.128";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -6193,7 +6193,10 @@ public final class EdhomeDesktop extends JFrame {
           + "ID Desktopu i token; po zmianie IP telefon odnajduje ten sam PC po ID.<br><br>"
           + "<b>Synchronizacja:</b> telefon sprawdza stan co około 60 s i po zmianach. "
           + "Przy pierwszym połączeniu wykonywany jest backup przed scaleniem.<br><br>"
-          + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie "
+          + "<b>Logi Android:</b> telefon automatycznie przekazuje logi mniej więcej co minutę. "
+          + "Desktop zachowuje je w archiwum; po potwierdzeniu zapisu Android "
+          + "usuwa wyłącznie przekazane wpisy.<br><br>"
+          + "<b>Backup PC:</b> EDHOME zapisuje bieżącą kopię automatycznie 
           + "w folderze EDHOME\\Backup.</html>");
         help.setForeground(APP_MUTED);
         content.add(help);
@@ -6299,7 +6302,8 @@ public final class EdhomeDesktop extends JFrame {
             + "Java: " + System.getProperty("java.version") + "\n"
             + "Stan telefonu: " + (connected ? "ONLINE" : "OFFLINE") + "\n"
             + "Adres telefonu: " + (host.isBlank() ? "brak" : host) + "\n"
-            + "Katalog logów: " + DesktopDiagnosticLog.logDirectory() + "\n\n"
+            + "Katalog logów: " + DesktopDiagnosticLog.logDirectory() + "\n"
+            + "Archiwum logów telefonu: " + DesktopDiagnosticLog.phoneArchiveDirectory() + "\n\n"
             + "--- LOG EDHOME DESKTOP ---\n"
             + DesktopDiagnosticLog.readFullText();
     }
