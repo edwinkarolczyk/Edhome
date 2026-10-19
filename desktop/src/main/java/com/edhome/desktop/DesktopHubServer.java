@@ -276,9 +276,11 @@ final class DesktopHubServer implements AutoCloseable {
                 JsonObject received=JsonParser.parseString(body).getAsJsonObject();
                 String log=received.has("log")&&received.get("log").isJsonPrimitive()
                     ?received.get("log").getAsString():"";
-                DesktopDiagnosticLog.receivePhoneDiagnostics(
+                String receipt = DesktopDiagnosticLog.receivePhoneDiagnostics(
                     client.deviceId,client.version,log);
-                reply(peer,200,"{\"ok\":true}",null);
+                // Receipt is tied to persisted bytes; phone must verify it
+                // before deleting the matching local diagnostic segment.
+                reply(peer,200,"{\"ok\":true,\"transferId\":\""+receipt+"\"}",null);
                 return;
             }
             if("GET".equals(method)&&"/snapshot".equals(path)) {
