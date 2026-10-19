@@ -285,7 +285,7 @@ for marker in ('transferId()', 'clearIfTransferred(String expectedId)',
 # Current approved UX: one button saves Desktop diagnostics and only new
 # phone diagnostics to the Windows Desktop. The phone log is acknowledged
 # (and removed on Android) only after the PC file was written successfully.
-for marker in ('Zapisz diagnostykę Desktop na Pulpit',
+for marker in ('Pobierz logi Desktop i Android (TXT)',
                'desktopDiagnosticsText()',
                'diagnosticsDesktopFolder()',
                'EDHOME-Desktop-diagnostyka-',
@@ -329,7 +329,7 @@ print("desktop new-record local persistence contract OK")
 # Desktop Hub settings: diagnostics are local to the Hub. Phone-side logs remain
 # available in Android diagnostics, while Desktop writes its own report to Windows Desktop.
 for marker in (
-    'Zapisz diagnostykę Desktop na Pulpit',
+    'Pobierz logi Desktop i Android (TXT)',
     'diagnosticsDesktopFolder()',
     'desktopDiagnosticsText()',
     'HUB_API_STARTED',
