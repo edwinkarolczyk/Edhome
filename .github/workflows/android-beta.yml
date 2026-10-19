@@ -72,6 +72,7 @@ jobs:
           java -cp "$RUNNER_TEMP/smart-planner" \
             com.edwinkarolczyk.edhome.TimeSlotRulesSmoke
           python3 tests/check_smart_overdue_planner_contract.py
+          python3 tests/check_hub_diagnostics_contract.py
           javac -encoding UTF-8 -d "$RUNNER_TEMP/smart-planner" \
             app/src/main/java/com/edwinkarolczyk/edhome/TaskDateLabels.java \
             tests/task_rules/TaskDateLabelsSmoke.java
