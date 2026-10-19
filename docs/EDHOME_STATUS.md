@@ -1,3 +1,12 @@
+## 2026-10-19 — Diagnostyka po instalacji Android 0.8.0.134 / Desktop 0.7.0.128
+
+- **Dostarczone raporty urządzeń:** EDHOME-Desktop-logi-2026-10-19_19-29-31.txt oraz EDHOME-Android-logi-2026-10-19_19-29-31.txt.
+- **Automatyczne logi PASS na urządzeniach:** Desktop Hub archiwizował 5 paczek Androida w bieżącej sesji: około 19:12:55, 19:13:55, 19:14:55, 19:15:55 i 19:28:53 czasu lokalnego. W logu PC: HUB_PHONE_DIAGNOSTICS_ARCHIVED (488113, 1274, 728, 770 i 1528 bajtów). Nazwa i SHA-256 ostatniej paczki w raporcie Android potwierdzają ostatni odbiór. Log telefonu zawiera tylko świeże wpisy, co jest spójne z kasowaniem wpisów po ACK; utrata wpisów NIE została wykazana.
+- **Sieć:** Android zgłasza SocketTimeoutException przy 192.168.100.22:45823 o 19:20:08, ale HUB_HOST_OK o 19:28:56 z poprawną wersją Desktop 0.7.0.128. To przerwa w osiągalności LAN/PC, nie trwała awaria parowania.
+- **Stan danych:** log PC potwierdza dawne HUB_FULL_SNAPSHOT_APPLIED wraz z wcześniejszymi backupami 19.10 o 15:20 i 15:28; po aktualizacji 0.7.0.128 nie ma wpisu potwierdzającego nową pełną synchronizację bazy. Bez bezpośredniego porównania danych NIE należy wybierać automatycznie źródła prawdy ani wymuszać nadpisania.
+- **Błąd prezentacji:** diagnostyka Desktop 0.7.0.128 wypisuje „Stan telefonu: OFFLINE” z flagi starszego protokołu PC→telefon, chociaż Hub API rejestruje i obsługuje telefon. Dodatkowo wpis `expected=0.8.0.44` w logu oznacza minimalną kompatybilność, a nie wersję, którą telefon powinien mieć.
+- **Poprawka Desktop Beta 0.7.0.129:** osobne etykiety statusu Hub API, świeżości kontaktu telefonu (3 min), potwierdzonej synchronizacji danych i starszego protokołu; loguje `minCompatible` zamiast `expected`. Test kontraktowy w check_hub_diagnostics_contract.py. **Status:** kod w beta; CI i instalator oczekują na weryfikację. Stable main bez zmian.
+
 ## 2026-10-19 — Automatyczne archiwizowanie logów Android → Desktop (Beta)
 
 - **Ustalenie:** użytkownik oczekuje automatycznego pobierania logów na PC i usuwania ich z Androida jak w starszych wydaniach; ręczne pobieranie TXT nadal pozostaje dostępną opcją awaryjną.
