@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 325,
-  "versionName": "0.8.0.133",
-  "changelog": "EDHOME Beta 0.8.0.133 / 325 — Ustawienia: bezpośredni eksport pełnych logów Android do TXT i wysyłka przez aktualne API Desktopu. Logi docierają również przy konflikcie danych; synchronizacja pozostaje wstrzymana do porównania baz. Stan pokazuje, gdy API odpowiada, ale dane nie są jeszcze uzgodnione. Na PC w Ustawieniach pobierzesz osobne logi telefonu i Desktopu. Aktualizuj bez odinstalowywania EDHOME.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.133/edhome-beta.apk",
-  "sha256": "2e2d0be4122a3a6a0e923b3cc43cbf91b75919eb00bceae3f1d6bb94a0224819"
+  "versionCode": 326,
+  "versionName": "0.8.0.134",
+  "changelog": "EDHOME Beta 0.8.0.134 / 326 — Diagnostyka: automatyczny transfer logów do Desktopu co około minutę, potwierdzenie SHA-256 trwałego zapisu na PC przed skasowaniem dokładnie przekazanych wpisów z Androida. Gdy PC jest wyłączony lub logi zmieniły się w trakcie wysyłki, pozostają na telefonie. Ustawienia: bezpośredni eksport pełnych logów Android do TXT i wysyłka przez aktualne API Desktopu. Logi docierają również przy konflikcie danych; synchronizacja pozostaje wstrzymana do porównania baz. Stan pokazuje, gdy API odpowiada, ale dane nie są jeszcze uzgodnione. Na PC w Ustawieniach pobierzesz osobne logi telefonu i Desktopu. Aktualizuj bez odinstalowywania EDHOME.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.134/edhome-beta.apk",
+  "sha256": "738555aaa371ee084feaae4305f9a86bf1428f70036c485b31d204a1507205f8"
 }
