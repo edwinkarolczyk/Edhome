@@ -466,6 +466,9 @@ final class DesktopHubSync {
             if(now-last<DIAG_INTERVAL_MS)return "Następna automatyczna próba za chwilę.";
             preferences.edit().putLong(PREF_DIAG_ATTEMPT_AT,now).apply();
         }
+        // Nie budź LAN tylko po to, żeby zgłosić brak logów.
+        if(DiagnosticLog.readFullText().isBlank())
+            return "Brak nowych logów do przeniesienia.";
         String host=resolveHost(context,preferences);
         if(host==null)throw new IllegalStateException(
             "Desktop nie odpowiada w sieci LAN (port 45823).");
@@ -496,8 +499,8 @@ final class DesktopHubSync {
             preferences.edit().putString(PREF_LAST_STATE,
                 "API POŁĄCZONE • oczekiwanie na pierwszą synchronizację").apply();
         }
-        DiagnosticLog.event("HUB_DIAGNOSTICS_ARCHIVED_ON_PC",
-            "cleared="+cleared);
+        // Nie dopisuj udanego transferu do właśnie wyczyszczonych logów.
+        // Desktop przechowuje jego potwierdzenie i zapisuje własny wpis.
         return cleared
             ? "Desktop zapisał logi w archiwum i potwierdził transfer SHA-256. "
                 +"Przeniesione wpisy usunięto z telefonu."
