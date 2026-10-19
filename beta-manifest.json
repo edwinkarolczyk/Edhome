@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 324,
-  "versionName": "0.8.0.132",
-  "changelog": "EDHOME Beta 0.8.0.132 / 324 — Czynności: przeplanowanie kilku zaległych terminów w jednym ciągu, bez powrotu do ekranu głównego po każdej zmianie. Lista odświeża się automatycznie i pokazuje liczbę pozostałych czynności. Przy propozycjach terminów i w szybkim dodawaniu wyświetlane są polskie nazwy dni tygodnia. Daty w bazie i synchronizacja bez zmian. Aktualizuj bez odinstalowywania EDHOME.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.132/edhome-beta.apk",
-  "sha256": "5adcf82026dca3e6fd8458d613bdd4f67ed9056822a0023a454e594a6e78aee7"
+  "versionCode": 325,
+  "versionName": "0.8.0.133",
+  "changelog": "EDHOME Beta 0.8.0.133 / 325 — Ustawienia: bezpośredni eksport pełnych logów Android do TXT i wysyłka przez aktualne API Desktopu. Logi docierają również przy konflikcie danych; synchronizacja pozostaje wstrzymana do porównania baz. Stan pokazuje, gdy API odpowiada, ale dane nie są jeszcze uzgodnione. Na PC w Ustawieniach pobierzesz osobne logi telefonu i Desktopu. Aktualizuj bez odinstalowywania EDHOME.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.133/edhome-beta.apk",
+  "sha256": "2e2d0be4122a3a6a0e923b3cc43cbf91b75919eb00bceae3f1d6bb94a0224819"
 }
