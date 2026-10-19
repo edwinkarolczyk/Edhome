@@ -1,5 +1,12 @@
 ## 2026-10-18 — Projekty: niebieskie miganie aktywnej czynności co sekundę (Android i Desktop Beta)
 
+## 2026-10-19 — Roadmapa EDHOME 1.0 Plus: pełny Budżet z arkusza
+
+- **Dokumentacja / bez zmian aplikacji:** do `docs/ROADMAP.md` dopisano sekcję **EDHOME 1.0 Plus / 1.0+** na podstawie przesłanego zrzutu arkusza budżetowego; commit `241ffdf8`.
+- **Zakres po 1.0:** jeden ekran Budżetu z rozwijanymi sekcjami (opłaty domowe, subskrypcje, kredyty/raty, pojazdy, cele oszczędnościowe, pożyczki/rozrachunki, wpływy), automatyczne podsumowania plan/fakt i według banku, cykle/terminy/przypomnienia, kolory statusów, zgodny Android/Desktop i LAN.
+- **Zasada bezpieczeństwa:** oszczędności to alokacje, a nie fikcyjne wydatki; długi nie stają się przelewami bez realnego potwierdzenia; saldo zmienia się wyłącznie na podstawie potwierdzeń PayCheck. Wykonanie w etapach Plus-A/B/C/D, z testami rozliczeń/ZIP/LAN.
+- **Status:** wpis do backlogu, **bez implementacji, nowego CI i nowej APK**. Oryginalny zakres i bramki P0 EDHOME 1.0.0 pozostają bez zmian; `main` Stable bez zmian.
+
 - **Android Beta 0.8.0.131 / 323:** w kartach Projektów aktywna sesja Start/Stop podświetla całe tło na niebiesko przez sekundę i przywraca zwykłe tło przez następną sekundę. Pętla współdzieli istniejące `bindProjectTimeStatus` (1000 ms), nie wymaga nowego timera ani przebudowy wszystkich kart co sekundę. Po Stop, automatycznej pauzie po 60 minutach lub zakończeniu sesji inną drogą karta wraca do zwykłego tła; render odświeża akcję Stop/Start. Kolory dopasowane do motywu jasnego i ciemnego.
 - **Desktop Beta 0.7.0.126:** odpowiednik w Swing `desktopProjectTaskCard`, wykorzystujący obecny `javax.swing.Timer(1000)` zegara czynności; `RoundedPanel.setFillColor` zmienia tło bez re-renderu panelu. Przycisk Stop przywraca tło i aktualizuje interfejs.
 - **Testy:** `tests/task_rules/ProjectTaskPulseSmoke.java` wykonuje regułę naprzemiennych faz 0/1/2 i kontrast dla dwóch motywów. `tests/check_project_task_pulse_contract.py` sprawdza integrację Android i Windows (bez drugiego timera). Kontrakty włączone do Android/Windows CI.
