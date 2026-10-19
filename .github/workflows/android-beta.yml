@@ -72,6 +72,11 @@ jobs:
           java -cp "$RUNNER_TEMP/smart-planner" \
             com.edwinkarolczyk.edhome.TimeSlotRulesSmoke
           python3 tests/check_smart_overdue_planner_contract.py
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/smart-planner" \
+            app/src/main/java/com/edwinkarolczyk/edhome/TaskDateLabels.java \
+            tests/task_rules/TaskDateLabelsSmoke.java
+          java -cp "$RUNNER_TEMP/smart-planner" \
+            com.edwinkarolczyk.edhome.TaskDateLabelsSmoke
       - name: Offline shopping rules regression
         run: |
           mkdir -p "$RUNNER_TEMP/shopping"
@@ -648,7 +653,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.131 / 323 — Projekty: czynność z uruchomionym licznikiem Start/Stop miga niebieskim tłem raz na sekundę. Kolor jest dopasowany do motywu jasnego i ciemnego; po zatrzymaniu lub automatycznej pauzie karta wraca do zwykłego wyglądu. Animacja korzysta z istniejącego odświeżania licznika, bez dodatkowego timera i przebudowy ekranu co sekundę. Inteligentne wyszukiwanie terminów z 0.8.0.130 zostaje zachowane. Aktualizuj bez odinstalowywania EDHOME."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.132 / 324 — Czynności: przeplanowanie kilku zaległych terminów w jednym ciągu, bez powrotu do ekranu głównego po każdej zmianie. Lista odświeża się automatycznie i pokazuje liczbę pozostałych czynności. Przy propozycjach terminów i w szybkim dodawaniu wyświetlane są polskie nazwy dni tygodnia. Daty w bazie i synchronizacja bez zmian. Aktualizuj bez odinstalowywania EDHOME."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
