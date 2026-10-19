@@ -1,6 +1,31 @@
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
 
+## EDHOME 1.0 Plus — Budżet miesiąca / PayCheck: pełne zastąpienie arkusza (19.10.2026)
+
+**Status: zatwierdzone do roadmapy; backlog po 1.0, NIE zaimplementowano w ramach tego wpisu.** Wzorzec wymagań: udostępniony zrzut miesięcznego budżetu w Google Sheets (wrzesień 2026). Nazwa robocza wydania: **1.0 Plus / 1.0+**; ostateczny numer semantyczny ustalić przy planowaniu wydania po stabilnym 1.0.0. Nie rozszerzać przez ten punkt zamrożonego zakresu 1.0 ani opóźniać poprawek P0 finansów. Zmiany docelowo na Android i Desktop równolegle, wspólna lokalna księga i LAN offline-first.
+
+### Zakres funkcjonalny i UX — P1 po 1.0
+
+1. **Jeden Budżet miesiąca jako centrum planowania:** poprzedni/następny miesiąc, zapamiętane historyczne miesiące, zwięzła lista pozycji z pojedynczym rozwinięciem na raz. Sekcje: opłaty domowe (gaz, prąd, woda/ścieki, śmieci, podatek, internet, telefon), subskrypcje, kredyty/raty, pojazdy, oszczędności, pożyczki/rozrachunki osobiste, wpływy i inne wydatki. Użytkownik może tworzyć/zmieniać nazwy własnych kategorii, przenosić pozycje między nimi i ukrywać puste sekcje. Nie odtwarzać siatki Excela 1:1.
+2. **Pełne harmonogramy pozycji:** jednorazowe, miesięczne, kwartalne, roczne oraz inne obsługiwane cykle; początek/koniec, termin, data faktycznej płatności, kwota stała lub zmienna, opcjonalność. Dla OC, przeglądu, podatku i subskrypcji przypomnienie przed terminem oraz po terminie, bez automatycznego uznawania ich za zapłacone. Pojazdy mogą dostarczać termin/koszt do Budżetu, ale bez podwójnej pozycji.
+3. **Kredyty, raty i zobowiązania:** nazwa, bank/odbiorca, miesięczna rata, liczba rat albo data końca, pozostałe raty/kwota, opcjonalny numer umowy; historia zmian. Zestawienia „suma rat”, „według banku” i „do końca spłaty”. Raty z różnymi terminami i kwotami nie mogą ginąć przy przechodzeniu na kolejny miesiąc.
+4. **Oszczędności i koperty:** wakacje, samochód, fundusz awaryjny, własny cel; kwota docelowa, planowane odkładanie, faktyczne wpłaty, pozostało do celu i historia. Planowane odkładanie jest **rezerwacją/alokacją**, nie automatycznym wydatkiem bankowym; przesunięcie między własnymi kontami lub kopertami nie zmienia łącznego salda majątku. Pokazać osobno środki dostępne i zarezerwowane.
+5. **Pożyczki/rozrachunki między osobami:** osobno „jestem winien” i „ktoś jest mi winien”; osoba, kwota początkowa, częściowe spłaty, saldo pozostałe, termin, notatka, historia. Spłata zmienia PayCheck tylko po rzeczywistym potwierdzeniu; samo utworzenie zobowiązania lub zmiana terminu nie tworzą sztucznej transakcji. Powiązane rozrachunki nie mogą być liczone podwójnie.
+6. **Podsumowanie jak w arkuszu, lecz automatyczne:** planowane wpływy, planowane wydatki, suma opłat stałych, suma rat, koszty pojazdów, odkładane środki, planowana reszta; osobno stan faktyczny: wpływy/wydatki potwierdzone w PayCheck, realne saldo, zaległości/niedopłaty, nadpłaty i dostępne środki po rezerwacjach. Sumy według kategorii, banku, miesiąca i roku; żadna kolumna podsumowania nie jest drugim źródłem księgowania. Czytelne rozróżnienie „prognoza” i „rzeczywiście zapłacono”.
+7. **Status i kolory:** zwarta linia na rachunek, rozwijane szczegóły po kliknięciu; zielony potwierdzone, czerwony nieopłacone/zaległe, żółty częściowe lub wymagające decyzji, niebieski przeniesione. Kolor nie może być jedynym nośnikiem informacji; etykieta i kwota pozostała również widoczne. Płatności za ten sam rachunek mogą być łączone 2→1 lub dzielone 1→2 zgodnie z zatwierdzonym mechanizmem finansów.
+8. **Jedna księga i zgodność z PayCheck:** definicje wpływów/wydatków dodaje się w Budżecie → PayCheck „Do potwierdzenia”; import CSV/PDF/XLSX służy do uzgodnień z bankiem. Faktyczna kwota z wyciągu i ręczne zatwierdzenie konfliktu mają pierwszeństwo przed planem. Zero podwójnego księgowania, powtórnego importu lub salda liczonego z niepotwierdzonych pozycji. Pozycje opcjonalne i rozrachunki muszą mieć jasną semantykę wpływu na saldo.
+9. **Wspólne Android/Desktop i przenoszenie danych:** identyczne sumy i reguły, zgodność przyrostowego LAN, selektywny oraz pełny ZIP/restore wraz z migracją i historią starych miesięcy. Nie tworzyć oddzielnej kopii budżetu na Desktopie. Ewentualny import starego arkusza dopiero po osobnym zatwierdzeniu mapowania kolumn i podglądu danych (bez automatycznego importu ze zdjęcia).
+
+### Kolejność wykonania 1.0 Plus (po zamknięciu P0 dla 1.0)
+
+- **Plus-A — UX i sumy:** jedna zwarta lista, sekcje/kategorie, miesięczne podsumowania plan/fakt i filtry banków/typów, zgodne Android/Desktop.
+- **Plus-B — harmonogramy i pojazdy:** pełne cykle, OC/przeglądy/subskrypcje, terminy i przypomnienia, raty oraz saldo pozostałe.
+- **Plus-C — oszczędności i rozrachunki:** koperty/cele i długi między osobami z kontrolą, by alokacje oraz wewnętrzne przesunięcia nie udawały wydatków.
+- **Plus-D — odbiór bezpieczeństwa:** testy wstecznych miesięcy, kwot plan/fakt, częściowych spłat, nadpłat/niedopłat, duplikatów, restartu, backup→restore i LAN w obie strony na Androidzie i Desktopie.
+
+**Warunek odbioru:** każdą klasę pozycji widoczną w przykładowym arkuszu można wprowadzić i rozliczać w EDHOME bez arkusza pomocniczego; podsumowania planowane i rzeczywiste są spójne co do grosza, a wszystkie przeniesienia/raty/cele zachowują historię. Brak deklaracji ukończenia bez testów funkcjonalnych i próby na urządzeniach.
+
 ## Desktop PayCheck/Budżet — równoległość Androida i Windows (13.10.2026)
 
 **Zasada:** jedna księga Budżetu dla Android ↔ Desktop, synchronizacja LAN per UUID, historia append-only, kontrola konfliktów, brak podwójnego salda i utraty starszych danych. Desktop ma umożliwiać pełną obsługę Budżetu bez telefonu przy każdej edycji, a później przesłać zmiany po połączeniu. Stable main bez zmian.
