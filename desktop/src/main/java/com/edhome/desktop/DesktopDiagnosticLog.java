@@ -16,6 +16,8 @@ final class DesktopDiagnosticLog {
     private static final Path DIR = Path.of(System.getProperty("user.home"), ".edhome", "logs");
     private static final Path CURRENT = DIR.resolve("edhome-desktop.log");
     private static final Path PREVIOUS = DIR.resolve("edhome-desktop.previous.log");
+    private static final Path PHONE = DIR.resolve("edhome-android-last.txt");
+    private static final int MAX_PHONE_BYTES = 3 * 1024 * 1024;
 
     private DesktopDiagnosticLog() { }
 
@@ -76,6 +78,49 @@ final class DesktopDiagnosticLog {
         if (text.length() <= MAX_COPY_CHARS) return text;
         return "[EDHOME Desktop: starsze wpisy pominięte; pełna historia w TXT]\n"
             + text.substring(text.length() - MAX_COPY_CHARS);
+    }
+
+    /** Ostatnie logi telefonu, przesłane tokenizowanym API Huba po LAN. */
+    static boolean hasPhoneDiagnostics() {
+        synchronized (LOCK) { return Files.isRegularFile(PHONE); }
+    }
+
+    static String readPhoneDiagnostics() throws IOException {
+        synchronized (LOCK) {
+            if (!Files.isRegularFile(PHONE))
+                throw new IOException("Telefon nie przekazał jeszcze logów do Desktopu.");
+            return Files.readString(PHONE, StandardCharsets.UTF_8);
+        }
+    }
+
+    static void receivePhoneDiagnostics(String deviceId,String androidVersion,
+            String text) throws IOException {
+        if (deviceId == null || !deviceId.matches("[A-Za-z0-9_-]{1,96}"))
+            throw new IOException("Nieprawidłowy identyfikator telefonu.");
+        if (text == null || text.isBlank()
+                || text.getBytes(StandardCharsets.UTF_8).length > MAX_PHONE_BYTES)
+            throw new IOException("Pusty lub zbyt duży raport telefonu.");
+        synchronized (LOCK) {
+            Files.createDirectories(DIR);
+            Path temp = Files.createTempFile(DIR,"edhome-phone-", ".tmp");
+            try {
+                String header = "EDHOME Android Beta "
+                    + safe(androidVersion) + " • odebrano "
+                    + Instant.now() + "\n"
+                    + "Urządzenie: " + safe(deviceId) + "\n\n";
+                Files.writeString(temp,header+text,StandardCharsets.UTF_8);
+                try {
+                    Files.move(temp,PHONE,java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+                } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                    Files.move(temp,PHONE,StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally {
+                Files.deleteIfExists(temp);
+            }
+        }
+        event("HUB_PHONE_DIAGNOSTICS_RECEIVED",
+            "chars="+text.length());
     }
 
     static Path logDirectory() { return DIR; }
