@@ -40,6 +40,14 @@ assert 'if(!prefs.getString(PREF_CONFLICT,"").isBlank())return;' in android
 assert 'private static String sendDiagnostics(Context context,boolean manual)' in android
 assert 'static void sendDiagnosticsNow(' in android
 assert 'PREF_LAST_SYNC' not in android.split('private static String sendDiagnostics(Context context,boolean manual)',1)[1].split('private static void syncOnce(Context context)',1)[0]
+assert '"Stan Hub Android: " + hubConnectionSummary()' in pc
+assert '"Ostatnia synchronizacja danych Hub (ta sesja): "' in pc
+assert '"Starszy protokół PC → telefon: "' in pc
+assert 'API połączone • synchronizacja danych niepotwierdzona' in pc
+assert 'API połączone • synchronizacja danych potwierdzona' in pc
+assert 'now-phone.seenAt<=180000L' in pc
+assert 'now-hubLastDataSyncAt<=180000L' in pc
+assert 'minCompatible=' in pc
 assert '"Pobierz logi Desktop i Android (TXT)"' in pc
 assert 'DesktopDiagnosticLog.readPhoneDiagnostics()' in pc
 assert '"Pobierz pełne logi Android (.txt)"' in main
