@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.128";
+    private static final String DESKTOP_VERSION = "0.7.0.129";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -394,7 +394,7 @@ public final class EdhomeDesktop extends JFrame {
                             }
                             DesktopDiagnosticLog.event("HUB_PHONE_REGISTERED",
                                 "android="+client.version
-                                    +" expected="+ANDROID_COMPAT_VERSION);
+                                    +" minCompatible="+ANDROID_COMPAT_VERSION);
                             updateTrayTooltip();
                         });
                     }
@@ -6167,6 +6167,10 @@ public final class EdhomeDesktop extends JFrame {
             statusCard.add(Box.createVerticalStrut(4));
             statusCard.add(phoneState);
         }
+        JLabel phoneConnectivity=new JLabel(hubConnectionSummary());
+        phoneConnectivity.setForeground(APP_MUTED);
+        statusCard.add(Box.createVerticalStrut(4));
+        statusCard.add(phoneConnectivity);
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
@@ -6284,6 +6288,25 @@ public final class EdhomeDesktop extends JFrame {
         }.execute();
     }
 
+    /** Hub reachability is not the same as successful data synchronization. */
+    private String hubConnectionSummary() {
+        DesktopHubServer.ClientInfo phone=hubServer==null
+            ?null:hubServer.newestClient();
+        long now=System.currentTimeMillis();
+        boolean recent=phone!=null && phone.seenAt<=now
+            && now-phone.seenAt<=180000L;
+        boolean dataRecent=hubLastDataSyncAt>0L
+            && hubLastDataSyncAt<=now
+            && now-hubLastDataSyncAt<=180000L;
+        if(hubServer==null || !hubServer.isRunning())
+            return "API Desktopu wyłączone • synchronizacja niedostępna";
+        if(!recent)
+            return "API działa • telefon nie zgłosił się w ostatnich 3 minutach";
+        if(!dataRecent)
+            return "API połączone • synchronizacja danych niepotwierdzona";
+        return "API połączone • synchronizacja danych potwierdzona";
+    }
+
     private String desktopDiagnosticsText() {
         String host = sanitizedPhoneHost();
         DesktopHubServer.ClientInfo hubPhone =
@@ -6300,8 +6323,16 @@ public final class EdhomeDesktop extends JFrame {
             + "System: " + System.getProperty("os.name") + " "
                 + System.getProperty("os.version") + "\n"
             + "Java: " + System.getProperty("java.version") + "\n"
-            + "Stan telefonu: " + (connected ? "ONLINE" : "OFFLINE") + "\n"
-            + "Adres telefonu: " + (host.isBlank() ? "brak" : host) + "\n"
+            + "Stan Hub Android: " + hubConnectionSummary() + "\n"
+            + "Ostatni klient Hub: " + (hubPhone==null
+                ?"brak"
+                : hubPhone.address+" • Android "+hubPhone.version
+                    +" • kontakt "+java.time.Instant.ofEpochMilli(hubPhone.seenAt)) + "\n"
+            + "Ostatnia synchronizacja danych Hub (ta sesja): "
+                + (hubLastDataSyncAt<=0L?"brak potwierdzenia"
+                    :java.time.Instant.ofEpochMilli(hubLastDataSyncAt)) + "\n"
+            + "Starszy protokół PC → telefon: " + (connected?"ONLINE":"OFFLINE")
+                +" • zapisany adres: "+(host.isBlank()?"brak":host)+"\n"
             + "Katalog logów: " + DesktopDiagnosticLog.logDirectory() + "\n"
             + "Archiwum logów telefonu: " + DesktopDiagnosticLog.phoneArchiveDirectory() + "\n\n"
             + "--- LOG EDHOME DESKTOP ---\n"
