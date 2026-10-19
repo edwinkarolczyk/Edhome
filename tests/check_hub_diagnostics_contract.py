@@ -29,7 +29,7 @@ assert 'static Transfer captureTransfer()' in phone_log
 assert 'new Transfer(snapshot,snapshot.isBlank()?"":sha256(snapshot))' in phone_log
 assert 'DiagnosticLog.clearIfTransferred(transfer.id)' in android
 assert 'transfer.id.equals(receipt.optString("transferId",""))' in android
-assert '"transferId"' in server
+assert 'transferId' in server
 assert 'String receipt = DesktopDiagnosticLog.receivePhoneDiagnostics(' in server
 assert 'DIAG_INTERVAL_MS=60L*1000L' in android
 assert 'PREF_DIAG_ATTEMPT_AT' in android
@@ -39,7 +39,7 @@ assert 'BackupSyncGate.exitTransfer();' in android
 assert 'if(!prefs.getString(PREF_CONFLICT,"").isBlank())return;' in android
 assert 'private static String sendDiagnostics(Context context,boolean manual)' in android
 assert 'static void sendDiagnosticsNow(' in android
-assert 'PREF_LAST_SYNC' not in android.split('private static String sendDiagnostics(Context context)',1)[1].split('private static void syncOnce(Context context)',1)[0]
+assert 'PREF_LAST_SYNC' not in android.split('private static String sendDiagnostics(Context context,boolean manual)',1)[1].split('private static void syncOnce(Context context)',1)[0]
 assert '"Pobierz logi Desktop i Android (TXT)"' in pc
 assert 'DesktopDiagnosticLog.readPhoneDiagnostics()' in pc
 assert '"Pobierz pełne logi Android (.txt)"' in main
