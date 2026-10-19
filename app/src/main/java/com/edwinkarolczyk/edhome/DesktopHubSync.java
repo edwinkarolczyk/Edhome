@@ -59,6 +59,8 @@ final class DesktopHubSync {
     private static final String PREF_DEVICE="desktop_hub_device_id";
     private static final String PREF_BASE_SHA="desktop_hub_baseline_sha";
     private static final String PREF_LAST_SYNC="desktop_hub_last_sync";
+    private static final String PREF_DIAG_SENT_AT="desktop_hub_diag_sent_at";
+    private static final long DIAG_INTERVAL_MS=5L*60L*1000L;
     private static final String PREF_LAST_STATE="desktop_hub_last_state";
     private static final String PREF_CONFLICT="desktop_hub_conflict";
     private static final String PREF_FIRST_BACKUP="desktop_hub_first_backup_done";
@@ -185,7 +187,8 @@ final class DesktopHubSync {
         SharedPreferences prefs=prefs(context);
         prefs.edit().remove(PREF_ID).remove(PREF_HOST).remove(PREF_HOSTS)
             .remove(PREF_TOKEN).remove(PREF_BASE_SHA).remove(PREF_LAST_SYNC)
-            .remove(PREF_LAST_STATE).remove(PREF_CONFLICT).apply();
+            .remove(PREF_LAST_STATE).remove(PREF_CONFLICT)
+            .remove(PREF_DIAG_SENT_AT).apply();
         baselineFile(context).delete();
         conflictFile(context).delete();
         DiagnosticLog.event("HUB_PAIRING_CLEARED");
@@ -218,7 +221,7 @@ final class DesktopHubSync {
             .putString(PREF_HOST,first)
             .putString(PREF_HOSTS,android.text.TextUtils.join(",",validHosts))
             .putString(PREF_LAST_STATE,"PAROWANIE • szukam API Desktopu");
-        if(!sameDesktop)editor.remove(PREF_CONFLICT);
+        if(!sameDesktop)editor.remove(PREF_CONFLICT).remove(PREF_DIAG_SENT_AT);
         editor.apply();
         if(!sameDesktop) {
             baselineFile(context).delete();
@@ -430,7 +433,63 @@ final class DesktopHubSync {
             }
         } finally {
             BackupSyncGate.exitTransfer();
+            // Telemetria lokalna: przy konflikcie synchronizacja danych jest
+            // wstrzymana, ale diagnostyka telefonu nadal może dotrzeć na PC.
+            if(System.currentTimeMillis()-prefs(context).getLong(PREF_DIAG_SENT_AT,0L)
+                    >=DIAG_INTERVAL_MS) {
+                try {
+                    sendDiagnostics(context);
+                } catch(Exception error) {
+                    DiagnosticLog.error("HUB_DIAGNOSTICS_BACKGROUND",error);
+                }
+            }
         }
+    }
+
+    /** Wysyła wyłącznie lokalne logi; nie zapisuje nic do baz ani baseline. */
+    private static String sendDiagnostics(Context context) throws Exception {
+        if(!paired(context))throw new IllegalStateException(
+            "Najpierw sparuj EDHOME z komputerem.");
+        SharedPreferences preferences=prefs(context);
+        String host=resolveHost(context,preferences);
+        if(host==null)throw new IllegalStateException(
+            "Desktop nie odpowiada w sieci LAN (port 45823).");
+        String log=DiagnosticLog.readFullText();
+        if(log.isBlank())throw new IllegalStateException(
+            "Nie ma jeszcze logów diagnostycznych.");
+        JSONObject payload=new JSONObject();
+        payload.put("log",log);
+        HttpResult result=request(context,preferences,host,"POST",
+            "/diagnostics-upload",payload.toString(),
+            "application/json; charset=utf-8");
+        if(result.code!=200)throw new IllegalStateException(
+            "Desktop odrzucił logi: HTTP "+result.code+". "
+                +"Zaktualizuj również EDHOME Desktop.");
+        preferences.edit().putLong(PREF_DIAG_SENT_AT,System.currentTimeMillis())
+            .apply();
+        if(BackupSyncGate.isHeld(context) || !conflict(context).isBlank()) {
+            preferences.edit().putString(PREF_LAST_STATE,
+                "API POŁĄCZONE • dane czekają na uzgodnienie").apply();
+        } else if(preferences.getString(PREF_LAST_STATE,"").startsWith("PAROWANIE")) {
+            preferences.edit().putString(PREF_LAST_STATE,
+                "API POŁĄCZONE • oczekiwanie na pierwszą synchronizację").apply();
+        }
+        DiagnosticLog.event("HUB_DIAGNOSTICS_UPLOADED","host="+host);
+        return "Logi Androida przesłano do EDHOME Desktop. "
+            +"Otwórz Ustawienia na PC i pobierz oba pliki TXT.";
+    }
+
+    static void sendDiagnosticsNow(Context context,
+            java.util.function.Consumer<String> ready,
+            java.util.function.Consumer<String> failed) {
+        Context app=context.getApplicationContext();
+        EXEC.execute(()->{
+            try { ready.accept(sendDiagnostics(app)); }
+            catch(Exception error) {
+                DiagnosticLog.error("HUB_DIAGNOSTICS_MANUAL",error);
+                failed.accept("Nie przesłano logów: "+shortMessage(error));
+            }
+        });
     }
 
     private static void syncOnce(Context context) throws Exception {
