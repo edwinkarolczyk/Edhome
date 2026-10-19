@@ -16,7 +16,7 @@ assert "boolean sameDesktop=desktopId.equalsIgnoreCase(" in pair
 assert "if(!sameDesktop) {" in pair
 assert "baselineFile(context).delete();" in pair
 assert "conflictFile(context).delete();" in pair
-assert "if(!sameDesktop)editor.remove(PREF_CONFLICT);" in pair
+assert "if(!sameDesktop)editor.remove(PREF_CONFLICT).remove(PREF_DIAG_SENT_AT);" in pair
 assert pair.index("if(!sameDesktop) {")<pair.index("baselineFile(context).delete();")
 
 sync=section(android,"private static void syncOnce(Context context)","private static void register(Context context")
