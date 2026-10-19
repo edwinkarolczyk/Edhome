@@ -60,7 +60,8 @@ final class DesktopHubSync {
     private static final String PREF_BASE_SHA="desktop_hub_baseline_sha";
     private static final String PREF_LAST_SYNC="desktop_hub_last_sync";
     private static final String PREF_DIAG_SENT_AT="desktop_hub_diag_sent_at";
-    private static final long DIAG_INTERVAL_MS=5L*60L*1000L;
+    private static final String PREF_DIAG_ATTEMPT_AT="desktop_hub_diag_attempt_at";
+    private static final long DIAG_INTERVAL_MS=60L*1000L;
     private static final String PREF_LAST_STATE="desktop_hub_last_state";
     private static final String PREF_CONFLICT="desktop_hub_conflict";
     private static final String PREF_FIRST_BACKUP="desktop_hub_first_backup_done";
@@ -188,7 +189,7 @@ final class DesktopHubSync {
         prefs.edit().remove(PREF_ID).remove(PREF_HOST).remove(PREF_HOSTS)
             .remove(PREF_TOKEN).remove(PREF_BASE_SHA).remove(PREF_LAST_SYNC)
             .remove(PREF_LAST_STATE).remove(PREF_CONFLICT)
-            .remove(PREF_DIAG_SENT_AT).apply();
+            .remove(PREF_DIAG_SENT_AT).remove(PREF_DIAG_ATTEMPT_AT).apply();
         baselineFile(context).delete();
         conflictFile(context).delete();
         DiagnosticLog.event("HUB_PAIRING_CLEARED");
@@ -221,7 +222,8 @@ final class DesktopHubSync {
             .putString(PREF_HOST,first)
             .putString(PREF_HOSTS,android.text.TextUtils.join(",",validHosts))
             .putString(PREF_LAST_STATE,"PAROWANIE • szukam API Desktopu");
-        if(!sameDesktop)editor.remove(PREF_CONFLICT).remove(PREF_DIAG_SENT_AT);
+        if(!sameDesktop)editor.remove(PREF_CONFLICT).remove(PREF_DIAG_SENT_AT)
+            .remove(PREF_DIAG_ATTEMPT_AT);
         editor.apply();
         if(!sameDesktop) {
             baselineFile(context).delete();
@@ -435,36 +437,56 @@ final class DesktopHubSync {
             BackupSyncGate.exitTransfer();
             // Telemetria lokalna: przy konflikcie synchronizacja danych jest
             // wstrzymana, ale diagnostyka telefonu nadal może dotrzeć na PC.
-            if(System.currentTimeMillis()-prefs(context).getLong(PREF_DIAG_SENT_AT,0L)
+            if(System.currentTimeMillis()-prefs(context).getLong(PREF_DIAG_ATTEMPT_AT,0L)
                     >=DIAG_INTERVAL_MS) {
                 try {
-                    sendDiagnostics(context);
+                    sendDiagnostics(context,false);
                 } catch(Exception error) {
+                    // Rate limited, including failures: no per-second log flood.
                     DiagnosticLog.error("HUB_DIAGNOSTICS_BACKGROUND",error);
                 }
             }
         }
     }
 
-    /** Wysyła wyłącznie lokalne logi; nie zapisuje nic do baz ani baseline. */
-    private static String sendDiagnostics(Context context) throws Exception {
+    /**
+     * Automatyczny transfer diagnostyki przez aktualny Hub (telefon → PC).
+     * Identyfikator SHA jest liczony z tej samej, niezmiennej migawki co body.
+     * Android kasuje zapisany fragment tylko po odpowiedzi Desktopu z tym SHA.
+     * Wszelkie nowe wpisy powstałe w międzyczasie zostają na telefonie.
+     */
+    private static String sendDiagnostics(Context context,boolean manual)
+            throws Exception {
         if(!paired(context))throw new IllegalStateException(
             "Najpierw sparuj EDHOME z komputerem.");
         SharedPreferences preferences=prefs(context);
+        if(!manual) {
+            long now=System.currentTimeMillis();
+            long last=preferences.getLong(PREF_DIAG_ATTEMPT_AT,0L);
+            if(now-last<DIAG_INTERVAL_MS)return "Następna automatyczna próba za chwilę.";
+            preferences.edit().putLong(PREF_DIAG_ATTEMPT_AT,now).apply();
+        }
         String host=resolveHost(context,preferences);
         if(host==null)throw new IllegalStateException(
             "Desktop nie odpowiada w sieci LAN (port 45823).");
-        String log=DiagnosticLog.readFullText();
-        if(log.isBlank())throw new IllegalStateException(
-            "Nie ma jeszcze logów diagnostycznych.");
+        DiagnosticLog.Transfer transfer=DiagnosticLog.captureTransfer();
+        if(transfer.id.isBlank())return "Brak nowych logów do przeniesienia.";
         JSONObject payload=new JSONObject();
-        payload.put("log",log);
-        HttpResult result=request(context,preferences,host,"POST",
+        payload.put("log",transfer.body);
+        HttpResult response=request(context,preferences,host,"POST",
             "/diagnostics-upload",payload.toString(),
             "application/json; charset=utf-8");
-        if(result.code!=200)throw new IllegalStateException(
-            "Desktop odrzucił logi: HTTP "+result.code+". "
+        if(response.code!=200)throw new IllegalStateException(
+            "Desktop odrzucił logi: HTTP "+response.code+". "
                 +"Zaktualizuj również EDHOME Desktop.");
+        JSONObject receipt=new JSONObject(response.body);
+        if(!receipt.optBoolean("ok",false)
+                ||!transfer.id.equals(receipt.optString("transferId",""))) {
+            throw new IllegalStateException(
+                "Desktop nie potwierdził identycznej zawartości logów. "
+                    +"Logi pozostały na Androidzie.");
+        }
+        boolean cleared=DiagnosticLog.clearIfTransferred(transfer.id);
         preferences.edit().putLong(PREF_DIAG_SENT_AT,System.currentTimeMillis())
             .apply();
         if(BackupSyncGate.isHeld(context) || !conflict(context).isBlank()) {
@@ -474,9 +496,13 @@ final class DesktopHubSync {
             preferences.edit().putString(PREF_LAST_STATE,
                 "API POŁĄCZONE • oczekiwanie na pierwszą synchronizację").apply();
         }
-        DiagnosticLog.event("HUB_DIAGNOSTICS_UPLOADED","host="+host);
-        return "Logi Androida przesłano do EDHOME Desktop. "
-            +"Otwórz Ustawienia na PC i pobierz oba pliki TXT.";
+        DiagnosticLog.event("HUB_DIAGNOSTICS_ARCHIVED_ON_PC",
+            "cleared="+cleared);
+        return cleared
+            ? "Desktop zapisał logi w archiwum i potwierdził transfer SHA-256. "
+                +"Przeniesione wpisy usunięto z telefonu."
+            : "Desktop zapisał logi, ale na telefonie pojawiły się nowe wpisy. "
+                +"Pozostały do następnego transferu — nic nie utracono.";
     }
 
     static void sendDiagnosticsNow(Context context,
@@ -484,7 +510,7 @@ final class DesktopHubSync {
             java.util.function.Consumer<String> failed) {
         Context app=context.getApplicationContext();
         EXEC.execute(()->{
-            try { ready.accept(sendDiagnostics(app)); }
+            try { ready.accept(sendDiagnostics(app,true)); }
             catch(Exception error) {
                 DiagnosticLog.error("HUB_DIAGNOSTICS_MANUAL",error);
                 failed.accept("Nie przesłano logów: "+shortMessage(error));
