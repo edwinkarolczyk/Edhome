@@ -1,6 +1,8 @@
 package com.edhome.desktop;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +19,7 @@ final class DesktopDiagnosticLog {
     private static final Path CURRENT = DIR.resolve("edhome-desktop.log");
     private static final Path PREVIOUS = DIR.resolve("edhome-desktop.previous.log");
     private static final Path PHONE = DIR.resolve("edhome-android-last.txt");
+    private static final Path PHONE_ARCHIVE = DIR.resolve("android-archive");
     private static final int MAX_PHONE_BYTES = 3 * 1024 * 1024;
 
     private DesktopDiagnosticLog() { }
@@ -93,34 +96,62 @@ final class DesktopDiagnosticLog {
         }
     }
 
-    static void receivePhoneDiagnostics(String deviceId,String androidVersion,
-            String text) throws IOException {
+    /** Archive on PC first; return a receipt only when both files are durable. */
+    static String receivePhoneDiagnostics(String deviceId,String androidVersion,
+            String body) throws IOException {
         if (deviceId == null || !deviceId.matches("[A-Za-z0-9_-]{1,96}"))
             throw new IOException("Nieprawidłowy identyfikator telefonu.");
-        if (text == null || text.isBlank()
-                || text.getBytes(StandardCharsets.UTF_8).length > MAX_PHONE_BYTES)
+        if (body == null || body.isBlank()
+                || body.getBytes(StandardCharsets.UTF_8).length > MAX_PHONE_BYTES)
             throw new IOException("Pusty lub zbyt duży raport telefonu.");
+        String receipt = sha256(body);
+        String header = "EDHOME Android Beta "
+            + safe(androidVersion) + " • odebrano "
+            + Instant.now() + "\n"
+            + "Urządzenie: " + safe(deviceId) + "\n"
+            + "Identyfikator transferu SHA-256: " + receipt + "\n\n";
         synchronized (LOCK) {
-            Files.createDirectories(DIR);
-            Path temp = Files.createTempFile(DIR,"edhome-phone-", ".tmp");
-            try {
-                String header = "EDHOME Android Beta "
-                    + safe(androidVersion) + " • odebrano "
-                    + Instant.now() + "\n"
-                    + "Urządzenie: " + safe(deviceId) + "\n\n";
-                Files.writeString(temp,header+text,StandardCharsets.UTF_8);
-                try {
-                    Files.move(temp,PHONE,java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
-                } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                    Files.move(temp,PHONE,StandardCopyOption.REPLACE_EXISTING);
-                }
-            } finally {
-                Files.deleteIfExists(temp);
+            Files.createDirectories(PHONE_ARCHIVE);
+            Path archived = PHONE_ARCHIVE.resolve(deviceId+"-"+receipt+".txt");
+            // Unique content hash makes retry after a lost response idempotent.
+            if (!Files.isRegularFile(archived)) {
+                writeAtomically(archived,header+body);
             }
+            // Exports from Settings always show the latest successful transfer.
+            writeAtomically(PHONE,header+body);
         }
-        event("HUB_PHONE_DIAGNOSTICS_RECEIVED",
-            "chars="+text.length());
+        event("HUB_PHONE_DIAGNOSTICS_ARCHIVED",
+            "bytes="+body.getBytes(StandardCharsets.UTF_8).length);
+        return receipt;
+    }
+
+    static Path phoneArchiveDirectory() { return PHONE_ARCHIVE; }
+
+    private static void writeAtomically(Path path,String text) throws IOException {
+        Path temp = Files.createTempFile(path.getParent(),"edhome-diag-", ".tmp");
+        try {
+            Files.writeString(temp,text,StandardCharsets.UTF_8);
+            try (FileChannel channel = FileChannel.open(temp,StandardOpenOption.WRITE)) {
+                channel.force(true);
+            }
+            try {
+                Files.move(temp,path,StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temp,path,StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    private static String sha256(String text) throws IOException {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(text.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException unavailable) {
+            throw new IOException("Brak SHA-256, nie potwierdzono transferu.",unavailable);
+        }
     }
 
     static Path logDirectory() { return DIR; }
