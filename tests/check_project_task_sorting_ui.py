@@ -34,7 +34,7 @@ for token in (
     'group==4', '"Sortowanie czynności"',
     'if(!hasFocusedTask)continue;',
     'if(item.group!=groupId)continue;',
-    'showProjectTaskPriorityPicker(project.id,taskId)',
+    'showProjectTaskPriorityPicker(',
     '⚑ ', '👤 Bez wykonawcy', 'item.assigneeName',
     'setOnDragListener(', 'startDragAndDrop(',
     '↑ Przesuń wyżej', '↓ Przesuń niżej',
