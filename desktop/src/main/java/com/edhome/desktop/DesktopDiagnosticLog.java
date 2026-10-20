@@ -125,6 +125,69 @@ final class DesktopDiagnosticLog {
         return receipt;
     }
 
+    /**
+     * Export all acknowledged phone log transfers, not only edhome-android-last.txt.
+     * The archive is append-only and each transfer is named by its SHA-256 receipt.
+     * This does not communicate with the phone and never deletes archived data.
+     * Streaming avoids loading potentially years of diagnostic history into memory.
+     */
+    static int exportPhoneHistory(Path destination) throws IOException {
+        java.util.ArrayList<Path> files=new java.util.ArrayList<>();
+        synchronized (LOCK) {
+            if (Files.isDirectory(PHONE_ARCHIVE)) {
+                try (java.util.stream.Stream<Path> stream=Files.list(PHONE_ARCHIVE)) {
+                    stream.filter(p->Files.isRegularFile(p,
+                            java.nio.file.LinkOption.NOFOLLOW_LINKS))
+                        .filter(p->p.getFileName().toString().matches(
+                            "[A-Za-z0-9_-]{1,96}-[a-f0-9]{64}\\.txt"))
+                        .forEach(files::add);
+                }
+            }
+            if (files.isEmpty() && Files.isRegularFile(PHONE))
+                files.add(PHONE); // Support old installations without an archive.
+            files.sort((a,b)->{
+                try {
+                    int byTime=Files.getLastModifiedTime(a)
+                        .compareTo(Files.getLastModifiedTime(b));
+                    return byTime!=0?byTime:a.getFileName().toString()
+                        .compareTo(b.getFileName().toString());
+                } catch(IOException error) {
+                    return a.getFileName().toString()
+                        .compareTo(b.getFileName().toString());
+                }
+            });
+        }
+        if(files.isEmpty())return 0;
+        Files.createDirectories(destination.toAbsolutePath().getParent());
+        Path temp=Files.createTempFile(destination.toAbsolutePath().getParent(),
+            "edhome-android-export-", ".tmp");
+        try {
+            try(java.io.BufferedWriter out=Files.newBufferedWriter(temp,
+                    StandardCharsets.UTF_8)) {
+                out.write("EDHOME • pełna historia logów Android z archiwum Desktop\n");
+                out.write("Liczba potwierdzonych transferów: "+files.size()+"\n");
+                for(int i=0;i<files.size();i++) {
+                    out.write("\n========== TRANSFER "+(i+1)+" / "+files.size()
+                        +" ==========\n");
+                    try(java.io.BufferedReader input=Files.newBufferedReader(
+                            files.get(i),StandardCharsets.UTF_8)) {
+                        input.transferTo(out);
+                    }
+                    out.write("\n");
+                }
+            }
+            try {
+                Files.move(temp,destination,StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+            } catch(java.nio.file.AtomicMoveNotSupportedException error) {
+                Files.move(temp,destination,StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+        return files.size();
+    }
+
     static Path phoneArchiveDirectory() { return PHONE_ARCHIVE; }
 
     private static void writeAtomically(Path path,String text) throws IOException {

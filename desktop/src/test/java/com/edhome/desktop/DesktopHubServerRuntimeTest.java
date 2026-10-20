@@ -196,6 +196,30 @@ final class DesktopHubServerRuntimeTest {
             assertTrue(DesktopDiagnosticLog.hasPhoneDiagnostics());
             assertTrue(DesktopDiagnosticLog.readPhoneDiagnostics()
                 .contains("EDHOME TEST LOG"));
+
+            // Historia eksportowana z Desktop zawiera WSZYSTKIE transfery,
+            // mimo że podgląd "ostatni Android" został już zastąpiony.
+            HttpURLConnection next=open("POST","/diagnostics-upload",
+                "{\"log\":\"EDHOME KOLEJNY LOG\"}");
+            assertEquals(200,next.getResponseCode());
+            next.disconnect();
+            java.nio.file.Path exported=java.nio.file.Files.createTempFile(
+                "edhome-android-history-", ".txt");
+            try {
+                int count=DesktopDiagnosticLog.exportPhoneHistory(exported);
+                String history=java.nio.file.Files.readString(exported);
+                assertTrue(count>=2,"Eksport musi zawierać starszą i nowszą paczkę.");
+                assertTrue(history.contains("EDHOME TEST LOG"));
+                assertTrue(history.contains("EDHOME KOLEJNY LOG"));
+                assertTrue(history.contains(
+                    "Liczba potwierdzonych transferów: "));
+                assertEquals(1,history.split("EDHOME TEST LOG",-1).length-1,
+                    "Ponowienie identycznego SHA nie może dublować wpisów.");
+                assertEquals(firstContents,java.nio.file.Files.readString(archive),
+                    "Eksport nie może usuwać ani modyfikować archiwum PC.");
+            } finally {
+                java.nio.file.Files.deleteIfExists(exported);
+            }
         }
     }
 

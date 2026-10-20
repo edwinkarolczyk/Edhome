@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.130";
+    private static final String DESKTOP_VERSION = "0.7.0.131";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -6211,7 +6211,7 @@ public final class EdhomeDesktop extends JFrame {
         JButton qrPair = actionButton("Połącz telefon przez QR");
         JButton repairHub = actionButton("Napraw połączenie telefonu / zaporę Windows");
         JButton updateDesktop = actionButton("Aktualizuj EDHOME Desktop — 1 klik");
-        JButton allLogs = actionButton("Pobierz logi Desktop i Android (TXT)");
+        JButton allLogs = actionButton("Pobierz pełne logi Desktop i Android (TXT)");
         JButton copyDesktopLogs = actionButton("Pobierz logi Desktop (TXT)");
         JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
         actions.add(qrPair);
@@ -6289,16 +6289,18 @@ public final class EdhomeDesktop extends JFrame {
                 Files.writeString(pc,desktopDiagnosticsText(),StandardCharsets.UTF_8);
                 StringBuilder result=new StringBuilder("Zapisano logi Desktop:\n")
                     .append(pc.toAbsolutePath());
-                if(DesktopDiagnosticLog.hasPhoneDiagnostics()) {
-                    Path phone=folder.resolve("EDHOME-Android-logi-"+stamp+".txt");
-                    Files.writeString(phone,DesktopDiagnosticLog.readPhoneDiagnostics(),
-                        StandardCharsets.UTF_8);
-                    result.append("\n\nZapisano ostatnie logi telefonu:\n")
-                        .append(phone.toAbsolutePath());
+                Path phone=folder.resolve("EDHOME-Android-logi-"+stamp+".txt");
+                int archivedTransfers=DesktopDiagnosticLog.exportPhoneHistory(phone);
+                if(archivedTransfers>0) {
+                    result.append("\n\nZapisano PEŁNE archiwum logów Android:\n")
+                        .append(phone.toAbsolutePath())
+                        .append("\nPotwierdzone transfery: ")
+                        .append(archivedTransfers)
+                        .append("\nStarsze wpisy nie są usuwane z archiwum PC.");
                 } else {
-                    result.append("\n\nBrak logów telefonu na PC. W EDHOME Android "
-                        +"otwórz Ustawienia → Dane i diagnostyka → "
-                        +"Prześlij logi Android do Desktopu. "
+                    result.append("\n\nBrak przesłanych logów telefonu na PC. "
+                        +"W EDHOME Android otwórz Ustawienia → Dane i diagnostyka "
+                        +"→ Prześlij logi Android do Desktopu. "
                         +"To działa również przy konflikcie baz.");
                 }
                 DesktopDiagnosticLog.event("HUB_DIAGNOSTICS_EXPORT_SAVED",

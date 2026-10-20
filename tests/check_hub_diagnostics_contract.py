@@ -15,6 +15,12 @@ assert '"X-EDHOME-TOKEN"' in android and 'constantTimeEquals(token,supplied)' in
 assert 'client.deviceId,client.version,log' in server
 assert 'receivePhoneDiagnostics(' in logs
 assert 'phoneArchiveDirectory()' in logs
+assert 'static int exportPhoneHistory(Path destination)' in logs
+assert 'Files.list(PHONE_ARCHIVE)' in logs
+assert 'input.transferTo(out)' in logs
+assert 'Files.getLastModifiedTime(a)' in logs
+assert 'Liczba potwierdzonych transferów:' in logs
+assert 'Zapisano PEŁNE archiwum logów Android:' in pc
 assert 'android-archive' in logs
 assert 'FileChannel.open(temp' in logs
 assert 'channel.force(true)' in logs
@@ -48,10 +54,13 @@ assert 'API połączone • synchronizacja danych potwierdzona' in pc
 assert 'now-phone.seenAt<=180000L' in pc
 assert 'now-hubLastDataSyncAt<=180000L' in pc
 assert 'minCompatible=' in pc
-assert '"Pobierz logi Desktop i Android (TXT)"' in pc
-assert 'DesktopDiagnosticLog.readPhoneDiagnostics()' in pc
+assert '"Pobierz pełne logi Desktop i Android (TXT)"' in pc
+assert 'DesktopDiagnosticLog.exportPhoneHistory(phone)' in pc
 assert '"Pobierz pełne logi Android (.txt)"' in main
 assert '"Prześlij logi Android do Desktopu (LAN)"' in main
 assert 'this::exportDiagnosticLogsToFile' in main
 assert 'void acceptsAndroidLogsWhileSynchronizationIsBlockedWithoutTouchingData()' in runtime
+assert 'DesktopDiagnosticLog.exportPhoneHistory(exported)' in runtime
+assert 'history.contains("EDHOME KOLEJNY LOG")' in runtime
+assert 'assertEquals(firstContents,java.nio.file.Files.readString(archive)' in runtime
 print("EDHOME Hub diagnostics: automatic SHA-confirmed archive and safe phone cleanup, conflicts untouched PASS")

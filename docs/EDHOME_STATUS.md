@@ -1,3 +1,12 @@
+## 2026-10-20 — Desktop Beta 0.7.0.131: pełny eksport logów Android z archiwum
+
+- Raport użytkownika: Android Beta 0.8.1.139 / Desktop 0.7.0.130; raport Android z 20:29 zawiera 4 nowe zdarzenia, ponieważ archiwizacja przez Hub działa w tle. Desktop potwierdza transfery 12 433 B, 909 B, 1478 B i 341 B między 20:25 a 20:28.
+- **Przyczyna:** „Pobierz logi Desktop i Android (TXT)” eksportował tylko nadpisywany plik `edhome-android-last.txt`, nie czytał przechowywanego archiwum `~/.edhome/logs/android-archive`.
+- **Naprawa:** Desktop zapisuje jeden raport `EDHOME-Android-logi-*.txt` z WSZYSTKICH unikalnych potwierdzonych segmentów z archiwum w kolejności odbioru. Eksport strumieniowy ogranicza zużycie RAM. Plik ostatniego transferu pozostaje jako fallback dla instalacji bez archiwum.
+- **Bez zmian w ACK / kasowaniu telefonu:** najpierw trwały zapis na PC, potwierdzenie SHA-256, dopiero potem Android usuwa dokładnie odebrane logi. Nie kasujemy archiwów Desktopu ani nie nadpisujemy danych synchronizacji.
+- Test kontraktowy i JUnit Hub uzupełnione o dwa osobne transfery, idempotencję SHA, eksport starszych i nowszych wpisów oraz brak usuwania archiwum.
+- Android 0.8.1.139 / 332 bez zmian. `main` Stable bez zmian. CI i publikację nowego Desktopu zweryfikować po commicie.
+
 ## 2026-10-20 — Projekty: ukrywanie czynności i priorytety przy planowaniu (Android Beta 0.8.1.139 / 332)
 
 - **Edytuj projekt:** „Pokazuj czynności projektu w głównej liście” (domyślnie TAK) zapisane w `projects.show_in_main_tasks`; działa także dla podprojektów poprzez dziedziczenie ukrywania. Zmiana nie usuwa żadnej czynności, historii czasu ani kosztów.

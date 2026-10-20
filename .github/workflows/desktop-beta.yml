@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.130"
+  DESKTOP_VERSION: "0.7.0.131"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
@@ -109,4 +109,4 @@ jobs:
             gh release create $tag --repo $repo --target "${{ github.sha }}" --prerelease --title "EDHOME Desktop Beta • latest" --notes "Publiczna paczka używana przez aktualizację jednym przyciskiem w EDHOME Desktop."
           }
           gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Setup.exe desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
-          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION. Projekty: opcja Pokazuj czynności w głównych listach 1/0 w edycji projektu; ukryte projekty i podprojekty nie pojawiają się w ogólnych listach Zadania i Czynności, ale pozostają w Projektach. Nowa kolumna show_in_main_tasks jest synchronizowana z Android Beta 0.8.1.139 i zapisuje się w ZIP. Dotychczasowe Start/Stop, naliczanie robocizny, podprojekty i LAN bez zmian. Zalecany instalator EDHOME-Desktop-Beta-Setup.exe; nie uruchamiaj samego EXE bez app/runtime."
+          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION. Diagnostyka: Pobierz pełne logi Desktop i Android (TXT) eksportuje teraz całą historię transferów z android-archive, a nie tylko ostatnią paczkę edhome-android-last.txt. Segmenty posortowane według daty odbioru, każdy zapisany tylko raz według identyfikatora SHA. Poprzednia zasada bez zmian: Android wysyła logi LAN, PC zapisuje trwale, potwierdza SHA i dopiero potem telefon usuwa odebraną paczkę. Archiwum PC nie jest kasowane przez eksport. Stabilność synchronizacji danych nie jest przedmiotem tej poprawki. Instaluj bez odinstalowywania, dane użytkownika zachowane."
