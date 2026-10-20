@@ -260,7 +260,99 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("Planowanie czynności • pozostało: "+items.size())
             .setItems(choices,(dialog,index)->showOverduePlanOptions(items.get(index)))
-            .setNegativeButton("Później",null).show();
+            .setNegativeButton("Później",null)
+            .setPositiveButton("Dopasuj terminy automatycznie",
+                (dialog,which)->showBatchPlanPreview())
+            .show();
+    }
+
+    /**
+     * Zbiorcze dopasowanie nie zapisuje dat bez zgody użytkownika.
+     * Każda pozycja pokazuje polski dzień tygodnia, datę i godziny.
+     */
+    private void showBatchPlanPreview() {
+        if(!unlocked)return;
+        java.util.List<SmartTaskPlanner.Task> tasks=pendingPlanningTasks();
+        if(tasks.isEmpty()) {
+            alert("Wszystkie czynności mają już terminy.");
+            return;
+        }
+        final BatchTaskPlanner.Draft draft=BatchTaskPlanner.create(
+            db.getReadableDatabase(),tasks,java.time.LocalDateTime.now());
+        String[] labels=new String[draft.rows.size()];
+        for(int i=0;i<draft.rows.size();i++)
+            labels[i]=draft.rows.get(i).label();
+        AlertDialog.Builder builder=new AlertDialog.Builder(this)
+            .setTitle("Dopasowane terminy • "+draft.count+"/"+draft.rows.size())
+            .setMessage("Sprawdź daty i godziny poniżej. "
+                +"Nic nie zostanie zapisane bez potwierdzenia. "
+                +"Czynności bez wykonawcy lub wolnego terminu pozostaną na liście.")
+            .setItems(labels,(dialog,index)->{
+                BatchTaskPlanner.Row selected=draft.rows.get(index);
+                if(selected.task.memberId<=0) {
+                    showTaskPlannerAssignee(selected.task,true);
+                } else if(selected.chosen==null) {
+                    new AlertDialog.Builder(this)
+                        .setTitle(selected.task.title)
+                        .setMessage(selected.unavailable)
+                        .setNegativeButton("Wróć do podglądu",
+                            (d,w)->showBatchPlanPreview())
+                        .setPositiveButton("Wybierz termin ręcznie",
+                            (d,w)->showOverduePlanOptions(selected.task))
+                        .show();
+                } else {
+                    new AlertDialog.Builder(this)
+                        .setTitle(selected.task.title)
+                        .setMessage(selected.label()
+                            +"\\n\\nTermin jest propozycją, jeszcze nie zapisano daty.")
+                        .setPositiveButton("Wróć do podglądu",
+                            (d,w)->showBatchPlanPreview())
+                        .show();
+                }
+            })
+            .setNegativeButton("Wróć do listy",
+                (dialog,which)->showOverduePlanList())
+            .setNeutralButton("Przelicz ponownie",
+                (dialog,which)->showBatchPlanPreview());
+        if(draft.count>0)builder.setPositiveButton(
+            "Zapisz dopasowane ("+draft.count+")",
+            (dialog,which)->new AlertDialog.Builder(this)
+                .setTitle("Zatwierdzić zbiorcze terminy?")
+                .setMessage("EDHOME zapisze "+draft.count+" "
+                    +"z "+draft.rows.size()+" terminów oraz zaplanuje przypomnienia. "
+                    +"Niedopasowane czynności pozostaną bez zmian. "
+                    +"Jeżeli jeden termin będzie zajęty, żaden nie zostanie zapisany.")
+                .setNegativeButton("Sprawdź listę",
+                    (confirm,w)->showBatchPlanPreview())
+                .setPositiveButton("Zatwierdź i zapisz",(confirm,w)->{
+                    try {
+                        int saved=BatchTaskPlanner.approve(
+                            db.getWritableDatabase(),draft);
+                        ReminderReceiver.schedule(this);
+                        DiagnosticLog.event("TASK_BATCH_PLAN_USER_APPROVED",
+                            "count="+saved);
+                        render();
+                        android.widget.Toast.makeText(this,
+                            "Zapisano terminy: "+saved,
+                            android.widget.Toast.LENGTH_LONG).show();
+                        if(pendingPlanningTasks().isEmpty()) {
+                            alert("Wszystkie czynności otrzymały terminy.");
+                        } else {
+                            showOverduePlanList();
+                        }
+                    } catch(Exception error) {
+                        DiagnosticLog.error("TASK_BATCH_PLAN_REJECTED",error);
+                        new AlertDialog.Builder(this)
+                            .setTitle("Nie zapisano zbiorczych terminów")
+                            .setMessage(error.getMessage()
+                                +"\\nNie wprowadzono częściowych zmian.")
+                            .setPositiveButton("Przelicz ponownie",
+                                (d,w)->showBatchPlanPreview())
+                            .setNegativeButton("Wróć",null)
+                            .show();
+                    }
+                }).show());
+        builder.show();
     }
 
     private void showOverduePlanOptions(SmartTaskPlanner.Task task) {
@@ -333,6 +425,11 @@ public final class MainActivity extends Activity {
 
     /** Nie zakładaj, że bieżący profil będzie wykonywać cudze zadanie. */
     private void showTaskPlannerAssignee(SmartTaskPlanner.Task task) {
+        showTaskPlannerAssignee(task,false);
+    }
+
+    private void showTaskPlannerAssignee(SmartTaskPlanner.Task task,
+            boolean returnToBatch) {
         java.util.List<Long> ids=new java.util.ArrayList<>();
         java.util.List<String> names=new java.util.ArrayList<>();
         try(Cursor cursor=db.getReadableDatabase().rawQuery(
@@ -355,12 +452,19 @@ public final class MainActivity extends Activity {
                         task.id,ids.get(index));
                     SmartTaskPlanner.Task updated=SmartTaskPlanner.readAny(
                         db.getReadableDatabase(),task.id);
-                    if(updated!=null)showOverduePlanOptions(updated);
+                    if(updated!=null) {
+                        if(returnToBatch)showBatchPlanPreview();
+                        else showOverduePlanOptions(updated);
+                    }
                 } catch(Exception error) {
                     alert("Nie przypisano czynności: "+error.getMessage());
                 }
             })
-            .setNegativeButton("Wróć do listy",(d,w)->showOverduePlanList())
+            .setNegativeButton("Wróć do listy",
+                (d,w)->{
+                    if(returnToBatch)showBatchPlanPreview();
+                    else showOverduePlanList();
+                })
             .show();
     }
 
