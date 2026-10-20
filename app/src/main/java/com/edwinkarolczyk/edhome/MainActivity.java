@@ -5960,12 +5960,119 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private static final String[] PROJECT_TASK_SORT_VALUES={
+        "intelligent","date","priority","alphabetical","manual"
+    };
+    private static final String[] PROJECT_TASK_SORT_LABELS={
+        "Inteligentnie","Termin","Priorytet","Alfabetycznie A–Z","Własna kolejność"
+    };
+    private static final String[] PROJECT_TASK_GROUP_LABELS={
+        "W trakcie","Gotowe • odblokowują inne","Gotowe do wykonania",
+        "Zablokowane","Zakończone"
+    };
+
+    private String projectTaskSortMode(long projectId) {
+        String selected=prefs.getString("project_task_sort_"+projectId,"intelligent");
+        for(String value:PROJECT_TASK_SORT_VALUES)if(value.equals(selected))return value;
+        return "intelligent";
+    }
+
+    private boolean projectTaskGroupCollapsed(long projectId,int group) {
+        return prefs.getBoolean("project_task_collapse_"+projectId+"_"+group,group==4);
+    }
+
+    private String projectTaskPriorityLabel(String priority) {
+        switch(priority==null?"":priority) {
+            case "urgent":return "Pilny";
+            case "high":return "Wysoki";
+            case "low":return "Niski";
+            default:return "Normalny";
+        }
+    }
+
+    private void showProjectTaskSortPicker(long projectId) {
+        String current=projectTaskSortMode(projectId);
+        int selected=java.util.Arrays.asList(PROJECT_TASK_SORT_VALUES).indexOf(current);
+        new AlertDialog.Builder(this)
+            .setTitle("Sortowanie czynności")
+            .setSingleChoiceItems(PROJECT_TASK_SORT_LABELS,selected,(dialog,which)->{
+                prefs.edit().putString("project_task_sort_"+projectId,
+                    PROJECT_TASK_SORT_VALUES[which]).apply();
+                dialog.dismiss();
+                render();
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void showProjectTaskPriorityPicker(long projectId,long taskId) {
+        new AlertDialog.Builder(this)
+            .setTitle("Priorytet czynności")
+            .setItems(TASK_PRIORITY_LABELS,(dialog,which)->{
+                try {
+                    ProjectStore.setTaskPriority(db.getWritableDatabase(),
+                        projectId,taskId,TASK_PRIORITIES[which]);
+                    render();
+                }catch(Exception error) {
+                    alert(error.getMessage()==null
+                        ?"Nie zapisano priorytetu.":error.getMessage());
+                }
+            }).setNegativeButton("Anuluj",null).show();
+    }
+
+    private void moveProjectTask(long projectId,long sourceId,long targetId) {
+        try {
+            if(!ProjectStore.reorderTask(
+                    db.getWritableDatabase(),projectId,sourceId,targetId)) {
+                alert("Kolejność można zmieniać tylko w tej samej grupie czynności.");
+                return;
+            }
+            render();
+        }catch(Exception error) {
+            alert(error.getMessage()==null
+                ?"Nie zapisano kolejności czynności.":error.getMessage());
+        }
+    }
+
     private void renderProjectTasks(ProjectStore.Project project) {
         title("Czynności");
-        int count=0;
-        for(ProjectStore.TaskItem item:ProjectStore.displayTasks(
-                db.getReadableDatabase(),project.id)) {
-            count++;
+        final String sortMode=projectTaskSortMode(project.id);
+        LinearLayout sortRow=compactActionRow();
+        int sortIndex=java.util.Arrays.asList(PROJECT_TASK_SORT_VALUES)
+            .indexOf(sortMode);
+        compactAction(sortRow,"Sortuj: "+PROJECT_TASK_SORT_LABELS[
+            Math.max(0,sortIndex)],()->showProjectTaskSortPicker(project.id));
+        if("manual".equals(sortMode))
+            note("Przytrzymaj i przeciągnij czynność w obrębie tej samej grupy.");
+        java.util.List<ProjectStore.TaskItem> items=ProjectStore.displayTasks(
+            db.getReadableDatabase(),project.id,sortMode);
+        if(items.isEmpty()) {
+            note("Brak czynności w tym projekcie.");
+            return;
+        }
+        for(int group=0;group<PROJECT_TASK_GROUP_LABELS.length;group++) {
+            final int groupId=group;
+            int groupCount=0;
+            for(ProjectStore.TaskItem row:items)
+                if(row.group==groupId)groupCount++;
+            if(groupCount==0)continue;
+            final boolean collapsed=projectTaskGroupCollapsed(project.id,groupId);
+            LinearLayout groupHeader=compactActionRow();
+            compactAction(groupHeader,(collapsed?"▸ ":"▾ ")
+                +PROJECT_TASK_GROUP_LABELS[groupId]+" ("+groupCount+")",()->{
+                prefs.edit().putBoolean(
+                    "project_task_collapse_"+project.id+"_"+groupId,!collapsed).apply();
+                render();
+            });
+            if(collapsed) {
+                // Powiadomienie otwierające konkretną czynność musi pokazać
+                // ją także wtedy, gdy ukończone czynności są zwinięte.
+                boolean hasFocusedTask=false;
+                for(ProjectStore.TaskItem row:items)
+                    if(row.group==groupId&&row.id==pendingProjectTaskFocusId)
+                        hasFocusedTask=true;
+                if(!hasFocusedTask)continue;
+            }
+            for(ProjectStore.TaskItem item:items) {
+                if(item.group!=groupId)continue;
             final long taskId=item.id;
             final String taskName=item.title;
             final boolean done=item.done;
@@ -6026,6 +6133,47 @@ public final class MainActivity extends Activity {
             taskTitle.setTextColor(done?subdued:ink);
             taskHeader.addView(taskTitle,new LinearLayout.LayoutParams(0,-2,1f));
             box.addView(taskHeader);
+            LinearLayout taskTags=new LinearLayout(this);
+            taskTags.setOrientation(LinearLayout.HORIZONTAL);
+            taskTags.setGravity(Gravity.CENTER_VERTICAL);
+            TextView priorityTag=text("⚑ "+projectTaskPriorityLabel(item.priority),
+                12,true);
+            priorityTag.setPadding(dp(8),dp(4),dp(8),dp(4));
+            priorityTag.setBackground(skin.panel(this,skin.tileTop,14));
+            priorityTag.setTextColor("urgent".equals(item.priority)
+                ||"high".equals(item.priority)?projectTimeRed():ink);
+            priorityTag.setOnClickListener(v->showProjectTaskPriorityPicker(
+                project.id,taskId));
+            priorityTag.setContentDescription("Zmień priorytet: "
+                +projectTaskPriorityLabel(item.priority));
+            taskTags.addView(priorityTag);
+            TextView assigneeTag=text(item.assigneeName.isEmpty()
+                ?"  👤 Bez wykonawcy":"  👤 "+item.assigneeName,12,false);
+            assigneeTag.setMaxLines(1);
+            assigneeTag.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            taskTags.addView(assigneeTag,new LinearLayout.LayoutParams(0,-2,1f));
+            box.addView(taskTags);
+
+            if("manual".equals(sortMode)) {
+                box.setOnLongClickListener(v->{
+                    android.view.View.DragShadowBuilder shadow=
+                        new android.view.View.DragShadowBuilder(v);
+                    if(android.os.Build.VERSION.SDK_INT>=24)
+                        return v.startDragAndDrop(null,shadow,Long.valueOf(taskId),0);
+                    return v.startDrag(null,shadow,Long.valueOf(taskId),0);
+                });
+                box.setOnDragListener((view,event)->{
+                    if(event.getAction()==android.view.DragEvent.ACTION_DRAG_STARTED)
+                        return event.getLocalState() instanceof Long;
+                    if(event.getAction()==android.view.DragEvent.ACTION_DROP) {
+                        if(event.getLocalState() instanceof Long)
+                            moveProjectTask(project.id,
+                                ((Long)event.getLocalState()).longValue(),taskId);
+                        return true;
+                    }
+                    return true;
+                });
+            }
 
             String timeLine="Plan: "+projectTimeText(minutes)
                 +" • wykonano: "+projectTimeText(worked)
@@ -6184,8 +6332,27 @@ public final class MainActivity extends Activity {
                 compactAction(editRow,"↶ Cofnij",()->requestReopenTask(taskId));
             compactAction(editRow,"Usuń",
                 ()->confirmDeleteProjectTask(taskId,taskName));
+            if("manual".equals(sortMode)) {
+                java.util.ArrayList<ProjectStore.TaskItem> siblings=
+                    new java.util.ArrayList<>();
+                for(ProjectStore.TaskItem sibling:items)
+                    if(sibling.group==item.group)siblings.add(sibling);
+                int position=-1;
+                for(int i=0;i<siblings.size();i++)
+                    if(siblings.get(i).id==taskId)position=i;
+                if(position>0) {
+                    final long previousId=siblings.get(position-1).id;
+                    smallButton(box,"↑ Przesuń wyżej",()->
+                        moveProjectTask(project.id,taskId,previousId));
+                }
+                if(position>=0&&position+1<siblings.size()) {
+                    final long nextId=siblings.get(position+1).id;
+                    smallButton(box,"↓ Przesuń niżej",()->
+                        moveProjectTask(project.id,taskId,nextId));
+                }
+            }
         }
-        if(count==0)note("Brak czynności w tym projekcie.");
+        }
     }
 
     private void showProjectDependentsDialog(long taskId,String taskName) {

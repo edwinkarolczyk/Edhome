@@ -38,9 +38,13 @@ final class ProjectStore {
         final boolean done;
         final String dueDate;
         final int durationMinutes;
-        TaskItem(long id,String title,boolean done,String dueDate,int durationMinutes) {
+        final String priority,assigneeName;
+        final int group;
+        TaskItem(long id,String title,boolean done,String dueDate,int durationMinutes,
+                String priority,String assigneeName,int group) {
             this.id=id;this.title=title;this.done=done;
             this.dueDate=dueDate;this.durationMinutes=durationMinutes;
+            this.priority=priority;this.assigneeName=assigneeName;this.group=group;
         }
     }
 
@@ -488,6 +492,11 @@ final class ProjectStore {
     }
 
     static List<TaskItem> displayTasks(SQLiteDatabase db,long projectId) {
+        return displayTasks(db,projectId,"intelligent");
+    }
+
+    /** W każdej opcji sortowania zachowujemy grupy zależności i pracę w toku. */
+    static List<TaskItem> displayTasks(SQLiteDatabase db,long projectId,String sortMode) {
         ArrayList<TaskItem> out=new ArrayList<>();
         String ready=
             "NOT EXISTS(SELECT 1 FROM project_task_dependencies d "
@@ -495,26 +504,90 @@ final class ProjectStore {
                 +"WHERE d.task_id=t.id AND req.done=0) "
             +"AND NOT EXISTS(SELECT 1 FROM project_task_blockers b "
                 +"WHERE b.task_id=t.id AND b.hard=1 AND b.resolved=0)";
-        String sql=
-            "SELECT t.id,t.title,t.done,t.due_date,t.duration_minutes FROM tasks t "
-                +"WHERE t.project_id=? ORDER BY CASE "
-                +"WHEN t.done!=0 THEN 4 "
-                +"WHEN EXISTS(SELECT 1 FROM project_task_work_sessions s "
-                    +"WHERE s.task_id=t.id AND s.ended_at IS NULL) THEN 0 "
-                +"WHEN "+ready+" AND EXISTS("
-                    +"SELECT 1 FROM project_task_dependencies next "
-                    +"JOIN tasks waiter ON waiter.id=next.task_id "
-                    +"WHERE next.depends_on_task_id=t.id AND waiter.done=0) THEN 1 "
-                +"WHEN "+ready+" THEN 2 ELSE 3 END,"
-                +"CASE WHEN t.due_date IS NULL OR TRIM(t.due_date)='' "
-                    +"THEN 1 ELSE 0 END,"
-                +"t.due_date,t.project_sort_order,t.id";
+        String groupSql="CASE WHEN t.done!=0 THEN 4 "
+            +"WHEN EXISTS(SELECT 1 FROM project_task_work_sessions s "
+                +"WHERE s.task_id=t.id AND s.ended_at IS NULL) THEN 0 "
+            +"WHEN "+ready+" AND EXISTS("
+                +"SELECT 1 FROM project_task_dependencies next "
+                +"JOIN tasks waiter ON waiter.id=next.task_id "
+                +"WHERE next.depends_on_task_id=t.id AND waiter.done=0) THEN 1 "
+            +"WHEN "+ready+" THEN 2 ELSE 3 END";
+        String due="CASE WHEN t.due_date IS NULL OR TRIM(t.due_date)='' "
+            +"THEN 1 ELSE 0 END,t.due_date";
+        String priority="CASE t.priority WHEN 'urgent' THEN 0 "
+            +"WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END";
+        String order;
+        switch(sortMode==null?"":sortMode) {
+            case "date": order=due+",t.project_sort_order,t.id";break;
+            case "priority":order=priority+","+due+",t.project_sort_order,t.id";break;
+            case "alphabetical":order="t.title COLLATE NOCASE,t.id";break;
+            case "manual":order="t.project_sort_order,t.id";break;
+            default:order=due+",t.project_sort_order,t.id";
+        }
+        String sql="SELECT t.id,t.title,t.done,t.due_date,t.duration_minutes,"
+            +"t.priority,COALESCE(m.name,''),"+groupSql+" AS group_rank "
+            +"FROM tasks t LEFT JOIN household_members m ON m.id=t.assignee_id "
+            +"WHERE t.project_id=? ORDER BY group_rank,"+order;
         try(Cursor c=db.rawQuery(sql,new String[]{Long.toString(projectId)})) {
             while(c.moveToNext())
                 out.add(new TaskItem(c.getLong(0),c.getString(1),
-                    c.getInt(2)!=0,c.isNull(3)?"":c.getString(3),c.getInt(4)));
+                    c.getInt(2)!=0,c.isNull(3)?"":c.getString(3),c.getInt(4),
+                    c.getString(5),c.getString(6),c.getInt(7)));
         }
         return Collections.unmodifiableList(out);
+    }
+
+    /** Zapis priorytetu do tej samej tabeli tasks co pozostałe dane czynności. */
+    static void setTaskPriority(SQLiteDatabase db,long projectId,long taskId,
+            String priority) {
+        if(!("low".equals(priority)||"normal".equals(priority)
+                ||"high".equals(priority)||"urgent".equals(priority)))
+            throw new IllegalArgumentException("Nieznany priorytet.");
+        ContentValues v=new ContentValues();
+        v.put("priority",priority);
+        if(db.update("tasks",v,"id=? AND project_id=?",
+                new String[]{Long.toString(taskId),Long.toString(projectId)})!=1)
+            throw new IllegalArgumentException("Czynność nie należy do tego projektu.");
+    }
+
+    /**
+     * Ręczne przesuwanie wyłącznie w obrębie tej samej grupy.
+     * Inaczej przeniesienie mogłoby ominąć twardą zależność.
+     * Równe/stare sort_order normalizujemy w pojedynczej transakcji.
+     */
+    static boolean reorderTask(SQLiteDatabase db,long projectId,long movingId,
+            long targetId) {
+        if(movingId==targetId)return false;
+        List<TaskItem> all=displayTasks(db,projectId,"manual");
+        TaskItem moving=null,target=null;
+        for(TaskItem item:all) {
+            if(item.id==movingId)moving=item;
+            if(item.id==targetId)target=item;
+        }
+        if(moving==null||target==null||moving.group!=target.group)return false;
+        ArrayList<TaskItem> group=new ArrayList<>();
+        for(TaskItem item:all)if(item.group==moving.group)group.add(item);
+        int from=-1,to=-1;
+        for(int i=0;i<group.size();i++) {
+            if(group.get(i).id==movingId)from=i;
+            if(group.get(i).id==targetId)to=i;
+        }
+        if(from<0||to<0||from==to)return false;
+        TaskItem item=group.remove(from);
+        group.add(to,item);
+        db.beginTransaction();
+        try {
+            for(int i=0;i<group.size();i++) {
+                ContentValues value=new ContentValues();
+                value.put("project_sort_order",(i+1)*10);
+                if(db.update("tasks",value,"id=? AND project_id=?",
+                        new String[]{Long.toString(group.get(i).id),
+                            Long.toString(projectId)})!=1)
+                    throw new IllegalStateException("Nie zapisano kolejności projektu.");
+            }
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+        return true;
     }
 
     static Long activeWorkStartedAt(SQLiteDatabase db,long taskId) {

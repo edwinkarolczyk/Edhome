@@ -1,3 +1,11 @@
+## 2026-10-20 — Projekty: sortowanie, grupy, priorytety, wykonawca (Android Beta 0.8.1.138 / 331)
+
+- **Lista czynności projektu:** opcje „Inteligentnie”, „Termin”, „Priorytet”, „Alfabetycznie A–Z” i „Własna kolejność”; preferencja zapamiętywana osobno dla projektu lokalnie. Wszystkie tryby zachowują kategorie pracy: trwa / gotowe odblokowujące / gotowe / zablokowane / zakończone. Inteligentne sortowanie zachowuje dotychczasowy porządek.
+- **Zwijanie:** klikalne nagłówki z licznikami; grupa „Zakończone” domyślnie zwinięta, pozostałe rozwinięte. Nawigacja z powiadomienia do konkretnej czynności otwiera ją nawet przy zwiniętej grupie.
+- **Priorytet i wykonawca:** na każdej karcie pokazano aktualny priorytet i imię przypisanego domownika lub „Bez wykonawcy”. Dotknięcie priorytetu wywołuje wybór z 4 wartości i zapisuje go do istniejącej kolumny `tasks.priority`; wykonawcę można edytować obecnym formularzem czynności.
+- **Ręczna kolejność:** przeciąganie po przytrzymaniu oraz przyciski „Przesuń wyżej/niżej” tylko w tej samej grupie. Przestawienie w SQLite następuje transakcyjnie, bez możliwości ręcznego przeskoczenia nierozwiązanych zależności lub zakończonych prac. `tasks.project_sort_order` już znajduje się w ZIP i rekordach LAN.
+- **Bez migracji:** wykorzystano istniejące pola `priority`, `assignee_id`, `project_sort_order`; nowe lokalne preferencje prezentacji nie zmieniają danych czynności. `tests/check_project_task_sorting_ui.py` dołączony do Android CI. **Weryfikacja CI, podpisana APK i test na urządzeniu do sprawdzenia.** Stable `main` bez zmian.
+
 ## 2026-10-20 — P0 Budżet/PayCheck: jawne rozliczanie po imporcie i ochrona snapshotu (beta)
 
 - **Decyzje 1–40:** specyfikacja zatwierdzona w `docs/EDHOME_BUDZET_PAYCHECK_40_DECYZJI_2026-10-20.md`. Wszystkie rozliczenia bankowe wymagają osobnej zgody, także przy jednoznacznym dopasowaniu.
