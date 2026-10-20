@@ -282,11 +282,11 @@ public final class MainActivity extends Activity {
         String[] labels=new String[draft.rows.size()];
         for(int i=0;i<draft.rows.size();i++)
             labels[i]=draft.rows.get(i).label();
+        // AlertDialog.setMessage() tłumi listę setItems() na Androidzie:
+        // instrukcja jest w tytule, a wszystkie pozycje pozostają widoczne.
         AlertDialog.Builder builder=new AlertDialog.Builder(this)
-            .setTitle("Dopasowane terminy • "+draft.count+"/"+draft.rows.size())
-            .setMessage("Sprawdź daty i godziny poniżej. "
-                +"Nic nie zostanie zapisane bez potwierdzenia. "
-                +"Czynności bez wykonawcy lub wolnego terminu pozostaną na liście.")
+            .setTitle("Propozycje (niezapisane) • "+draft.count
+                +"/"+draft.rows.size())
             .setItems(labels,(dialog,index)->{
                 BatchTaskPlanner.Row selected=draft.rows.get(index);
                 if(selected.task.memberId<=0) {
