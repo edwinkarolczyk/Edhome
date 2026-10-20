@@ -17,10 +17,17 @@ public final class EdhomeApplication extends Application {
             "edhome_beta_prefs",MODE_PRIVATE);
         // Baza może już istnieć mimo braku kluczy preferences (stara wersja).
         // Nigdy nie traktuj takiej aktualizacji jako świeżej instalacji.
-        if (!prefs.getAll().isEmpty()
-                || getDatabasePath("edhome-beta-preview.db").exists()) return;
+        if (prefs.getAll().isEmpty()
+                && !getDatabasePath("edhome-beta-preview.db").exists()) {
+            initializeFreshInstall(prefs);
+        }
+        FirstRunProfileSetup.register(this,prefs);
+    }
 
+    private void initializeFreshInstall(SharedPreferences prefs) {
         prefs.edit()
+            .putBoolean(FirstRunProfileSetup.PROFILE_PENDING,true)
+            .putBoolean(FirstRunProfileSetup.NOTIFICATION_PENDING,true)
             .putString("theme",UiSkin.PASTEL)
             .putString("home_interface_mode","current")
             .putInt(HomeTileLayout.PAGE_SLOTS_KEY,24)
