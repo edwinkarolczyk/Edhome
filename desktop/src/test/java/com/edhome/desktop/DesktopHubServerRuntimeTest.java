@@ -39,6 +39,21 @@ final class DesktopHubServerRuntimeTest {
     }
 
     @Test
+    void desktopNewProjectContainsEveryAndroidRequiredField() {
+        com.google.gson.JsonObject project=EdhomeDesktop.newDesktopProjectTemplate(77L,9000L);
+        for(String field:new String[]{
+            "id","name","parent_id","place_id","assignee_id","status","due_date",
+            "budget_grosz","thumbnail_base64","labor_rate_grosz",
+            "created_at","show_in_main_tasks"}) {
+            assertTrue(project.has(field),"Brak pola projektu: "+field);
+        }
+        assertTrue(project.get("thumbnail_base64").isJsonNull());
+        assertTrue(project.get("labor_rate_grosz").isJsonNull());
+        assertEquals(1,project.get("show_in_main_tasks").getAsInt());
+        assertEquals(77L,project.get("id").getAsLong());
+    }
+
+    @Test
     void servesAuthenticatedStatusRejectsBadTokenAndAnswersDiscovery() throws Exception {
         DesktopHubServer.Host host=new DesktopHubServer.Host() {
             @Override public String snapshot(){return "{\"schema\":1}";}
