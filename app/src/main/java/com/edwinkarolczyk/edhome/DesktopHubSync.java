@@ -853,10 +853,33 @@ final class DesktopHubSync {
                             +"nie nadpisano nowych zmian ("+section+").");
                 }
             }
-            if(!canonical(new JSONObject(current)).equals(canonical(parsed))) {
-                DataBackup.restoreJson(database,prefs,server);
+            // createdAt/sourceVersion są znacznikami eksportu, a nie zmianą
+            // rzeczywistych danych. Nie odtwarzaj całej bazy dla samego nagłówka.
+            // W szczególności nie uruchamiaj kosztownego restore po każdej
+            // odpowiedzi Huba na własny snapshot telefonu.
+            JSONObject localRoot=new JSONObject(current);
+            boolean dataChanged=false;
+            for(String section:new String[]{"settings","tables","syncRecords"}) {
+                if(!canonical(localRoot.opt(section)).equals(
+                        canonical(parsed.opt(section)))) {
+                    dataChanged=true;
+                    break;
+                }
+            }
+            if(dataChanged) {
+                try {
+                    DataBackup.restoreJson(database,prefs,server);
+                } catch(IllegalArgumentException invalid) {
+                    // Nazwy tabel i kolumn są definiowane w kodzie, nie są
+                    // danymi użytkownika: komunikat może trafić do diagnostyki.
+                    DiagnosticLog.event("HUB_SNAPSHOT_REJECTED",
+                        DataBackup.safeHubFailureCode(invalid));
+                    throw invalid;
+                }
                 ReminderReceiver.schedule(context);
                 DeviceTimerReceiver.scheduleAll(context);
+            } else {
+                DiagnosticLog.event("HUB_DATA_IDENTICAL_NO_RESTORE");
             }
         }
         String sha=suppliedSha==null||suppliedSha.isBlank()
