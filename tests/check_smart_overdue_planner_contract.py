@@ -48,7 +48,7 @@ for token in (
     "private void showOverduePlanOptions(",
     "SmartTaskPlanner.approve(",
     "ReminderReceiver.schedule(this);",
-    'button("↻ Znajdź nowe terminy zaległych"',
+    'button("↻ Zaplanuj bez terminu i zaległe"',
 ):
     assert token in main, "Brak interfejsu zatwierdzania: "+token
 for token in (
@@ -70,10 +70,13 @@ flow=main.split("private void showOverduePlanOptions(",1)[1].split(
     "private boolean backupLegacyExportNext;",1)[0]
 list_flow=main.split("private void showOverduePlanList()",1)[1].split(
     "private void showOverduePlanOptions(",1)[0]
-assert "pendingOverduePlanTasks()" in list_flow
+assert "pendingPlanningTasks()" in list_flow
 assert '"once".equals(task.repeatRule)' in main
+assert "SmartTaskPlanner.undated(" in main
+assert "SmartTaskPlanner.approveUndated(" in flow
+assert "showTaskPlannerAssignee(task);" in flow
 assert 'pozostało: "+items.size()' in list_flow
-assert "if(pendingOverduePlanTasks().isEmpty())" in flow
+assert "if(pendingPlanningTasks().isEmpty())" in flow
 assert "showOverduePlanList();" in flow
 assert "render();" in flow
 assert 'go("tasks");' not in flow
