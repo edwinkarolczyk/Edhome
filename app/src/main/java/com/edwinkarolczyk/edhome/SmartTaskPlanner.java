@@ -61,6 +61,54 @@ final class SmartTaskPlanner {
         return Collections.unmodifiableList(items);
     }
 
+    /** Czynności nieprzypisane do terminu, ale niezakończone. */
+    static List<Task> undated(SQLiteDatabase db,int limit) {
+        ArrayList<Task> items=new ArrayList<>();
+        try(Cursor c=db.rawQuery(
+                "SELECT t.id,t.title,t.due_date,t.repeat_rule,t.duration_minutes,"
+                    +"COALESCE(t.assignee_id,p.assignee_id,0),t.project_id "
+                    +"FROM tasks t LEFT JOIN projects p ON p.id=t.project_id "
+                    +"WHERE t.done=0 AND (t.due_date IS NULL OR t.due_date='') "
+                    +"AND t.repeat_rule='once' AND t.task_kind<>'waste' "
+                    +"ORDER BY t.id LIMIT ?",
+                new String[]{String.valueOf(limit)})) {
+            while(c.moveToNext())items.add(new Task(
+                c.getLong(0),c.getLong(5),c.getString(1),"",
+                c.getString(3),c.getInt(4),!c.isNull(6)));
+        }
+        return Collections.unmodifiableList(items);
+    }
+
+    static Task readAny(SQLiteDatabase db,long id) {
+        try(Cursor c=db.rawQuery(
+                "SELECT t.id,t.title,t.due_date,t.repeat_rule,t.duration_minutes,"
+                    +"COALESCE(t.assignee_id,p.assignee_id,0),t.project_id "
+                    +"FROM tasks t LEFT JOIN projects p ON p.id=t.project_id "
+                    +"WHERE t.id=? AND t.done=0",new String[]{String.valueOf(id)})) {
+            if(!c.moveToFirst())return null;
+            return new Task(c.getLong(0),c.getLong(5),c.getString(1),
+                c.isNull(2)?"":c.getString(2),c.getString(3),
+                c.getInt(4),!c.isNull(6));
+        }
+    }
+
+    /** Przy braku wykonawcy nie wolno używać grafiku aktywnego profilu. */
+    static void assignIfMissing(SQLiteDatabase db,long taskId,long memberId) {
+        if(memberId<=0)throw new IllegalArgumentException("Wybierz domownika.");
+        try(Cursor c=db.rawQuery("SELECT 1 FROM household_members WHERE id=?",
+                new String[]{String.valueOf(memberId)})) {
+            if(!c.moveToFirst())
+                throw new IllegalArgumentException("Nie znaleziono domownika.");
+        }
+        ContentValues values=new ContentValues();
+        values.put("assignee_id",memberId);
+        int changed=db.update("tasks",values,
+            "id=? AND done=0 AND assignee_id IS NULL",
+            new String[]{String.valueOf(taskId)});
+        if(changed!=1)
+            throw new IllegalStateException("Wykonawca został zmieniony; odśwież listę.");
+    }
+
     private static Task read(SQLiteDatabase db,long id) {
         try(Cursor c=db.rawQuery(
                 "SELECT t.id,t.title,t.due_date,t.repeat_rule,t.duration_minutes,"
@@ -116,6 +164,95 @@ final class SmartTaskPlanner {
             ?ProjectPlanningStore.planningNotBefore(db,task.id):null;
         return calculate(db,task.memberId>0?task.memberId:fallbackMember,
             taskId,duration,now,notBefore);
+    }
+
+    /** Pierwszy termin dla niezaplanowanej czynności: tylko po wyborze osoby. */
+    static List<TimeSuggestions.Option> proposeUndated(SQLiteDatabase db,
+            long taskId,LocalDateTime now) {
+        Task task=readAny(db,taskId);
+        if(task==null || !task.due.isEmpty() ||
+                !"once".equals(task.repeatRule) || task.memberId<=0 ||
+                !reason(db,task,0L).isEmpty())return Collections.emptyList();
+        int duration=task.project
+            ?ProjectStore.remainingMinutes(db,task.id,task.duration)
+            :task.duration;
+        LocalDate notBefore=task.project
+            ?ProjectPlanningStore.planningNotBefore(db,task.id):null;
+        return calculate(db,task.memberId,taskId,duration,now,notBefore);
+    }
+
+    /** Zapis daty tylko po potwierdzeniu i drugim sprawdzeniu kolizji. */
+    static void approveUndated(SQLiteDatabase db,long id,
+            TimeSuggestions.Option selected) {
+        db.beginTransaction();
+        try {
+            Task task=readAny(db,id);
+            if(task==null || !task.due.isEmpty() || task.memberId<=0)
+                throw new IllegalStateException("Czynność lub wykonawca już się zmienił.");
+            List<TimeSuggestions.Option> fresh=proposeUndated(db,id,
+                LocalDateTime.now());
+            boolean valid=false;
+            for(TimeSuggestions.Option option:fresh)
+                if(option.date.equals(selected.date)
+                        &&option.start.equals(selected.start)
+                        &&option.end.equals(selected.end))valid=true;
+            if(!valid)throw new IllegalStateException(
+                "Termin jest już zajęty. Wyszukaj propozycje ponownie.");
+            ContentValues value=new ContentValues();
+            value.put("due_date",selected.date.toString());
+            value.put("remind_time",selected.start.toString());
+            value.put("reminder_lead_days",0);
+            int count=db.update("tasks",value,
+                "id=? AND done=0 AND repeat_rule='once' "
+                    +"AND (due_date IS NULL OR due_date='')",
+                new String[]{String.valueOf(id)});
+            if(count!=1)
+                throw new IllegalStateException("Data zmieniła się na innym urządzeniu.");
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        DiagnosticLog.event("TASK_UNDATED_PLANNED","task="+id);
+    }
+
+    static final class PlanningOverview {
+        final int suggested;
+        final int needsAssignee;
+        final String digest;
+        PlanningOverview(int suggested,int needsAssignee,String digest) {
+            this.suggested=suggested;
+            this.needsAssignee=needsAssignee;
+            this.digest=digest;
+        }
+        boolean actionable(){return suggested>0||needsAssignee>0;}
+    }
+
+    /** Rano i wieczorem sprawdzamy kolejkę; bez zapisu do tabeli zadań. */
+    static PlanningOverview planningOverview(SQLiteDatabase db) {
+        int ready=0,missing=0;
+        StringBuilder digest=new StringBuilder();
+        List<Task> items=new ArrayList<>();
+        items.addAll(overdue(db,12));
+        items.addAll(undated(db,12));
+        LocalDateTime now=LocalDateTime.now();
+        for(Task task:items) {
+            if(!"once".equals(task.repeatRule))continue;
+            if(task.memberId<=0) {
+                missing++;
+                digest.append(task.id).append(":person;");
+                continue;
+            }
+            List<TimeSuggestions.Option> options=task.due==null||task.due.isEmpty()
+                ?proposeUndated(db,task.id,now)
+                :propose(db,task.id,0L,now);
+            if(!options.isEmpty()) {
+                ready++;
+                TimeSuggestions.Option first=options.get(0);
+                digest.append(task.id).append(":")
+                    .append(first.date).append(":").append(first.start).append(";");
+            }
+        }
+        return new PlanningOverview(ready,missing,digest.toString());
     }
 
     static List<TimeSuggestions.Option> proposeNew(SQLiteDatabase db,
