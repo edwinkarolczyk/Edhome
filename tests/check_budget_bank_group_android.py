@@ -10,9 +10,12 @@ bank=(src/"BankEvidenceStore.java").read_text(encoding="utf-8")
 settle=(src/"BankBudgetGroupSettlement.java").read_text(encoding="utf-8")
 rules=(src/"BankBudgetGroupRules.java").read_text(encoding="utf-8")
 
-assert "showBankBudgetProposals();" in main.split(
-    "private void importStatementFilesWorker(",1)[1].split(
-    "private static final class BankAutoCandidate",1)[0], "Wyświetl propozycje po imporcie"
+import_worker=main.split("private void importStatementFilesWorker(",1)[1].split(
+    "private static final class BankAutoCandidate",1)[0]
+assert '.setPositiveButton("Rozlicz teraz",' in import_worker
+assert '(dialog,which)->showBankBudgetProposals()' in import_worker
+assert '.setNegativeButton("Później",null)' in import_worker
+assert "autoSettleImportedBankEvidence(incoming)" not in import_worker
 
 grp=main.split("private int appendBankBudgetGroupProposals(",1)[1].split(
     "private void showBankBudgetProposals() {",1)[0]
