@@ -285,18 +285,23 @@ for marker in ('transferId()', 'clearIfTransferred(String expectedId)',
 # Current approved UX: one button saves Desktop diagnostics and only new
 # phone diagnostics to the Windows Desktop. The phone log is acknowledged
 # (and removed on Android) only after the PC file was written successfully.
-for marker in ('Pobierz logi Desktop i Android (TXT)',
+for marker in ('Pobierz pełne logi Desktop i Android (TXT)',
+               'saveHubDiagnosticsToDesktop(allLogs)',
+               'DesktopDiagnosticLog.exportPhoneHistory(phone)',
                'desktopDiagnosticsText()',
                'diagnosticsDesktopFolder()',
-               'EDHOME-Desktop-diagnostyka-',
-               'Hub API:',
+               'EDHOME-Desktop-logi-',
                'Telefon Hub:'):
     assert marker in desktop, "Missing Desktop Hub diagnostics UX: " + marker
 for marker in ('edhome-desktop.log', 'edhome-desktop.previous.log',
                'MAX_BYTES', 'readFullText()', 'readForClipboard()'):
     assert marker in desktop_log, "Missing Desktop rolling diagnostics log: " + marker
-assert 'Files.writeString(target, result.text, StandardCharsets.UTF_8)' in desktop
-assert '.ackDiagnostics(result.id)' in desktop
+assert 'Files.writeString(pc,desktopDiagnosticsText(),StandardCharsets.UTF_8)' in desktop
+assert 'DesktopDiagnosticLog.exportPhoneHistory(phone)' in desktop
+assert '"/diagnostics-upload"' in hub_server
+assert 'DesktopDiagnosticLog.receivePhoneDiagnostics(' in hub_server
+assert 'DiagnosticLog.clearIfTransferred(transfer.id)' in hub_client
+assert 'private static final Gson GSON = new GsonBuilder().serializeNulls()' in desktop
 print("desktop diagnostics transfer + local log contract OK")
 
 # Desktop diagnostics must preserve the real async failure behind SwingWorker/ExecutionException.
@@ -329,7 +334,7 @@ print("desktop new-record local persistence contract OK")
 # Desktop Hub settings: diagnostics are local to the Hub. Phone-side logs remain
 # available in Android diagnostics, while Desktop writes its own report to Windows Desktop.
 for marker in (
-    'Pobierz logi Desktop i Android (TXT)',
+    'Pobierz pełne logi Desktop i Android (TXT)',
     'diagnosticsDesktopFolder()',
     'desktopDiagnosticsText()',
     'HUB_API_STARTED',
