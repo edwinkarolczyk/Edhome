@@ -15,7 +15,7 @@ for marker in (
     'page("Ustawienia • telefon i diagnostyka")',
     'actionButton("Połącz telefon przez QR")',
     'actionButton("Aktualizuj EDHOME Desktop — 1 klik")',
-    'actionButton("Pobierz logi Desktop i Android (TXT)")',
+    'actionButton("Pobierz pełne logi Desktop i Android (TXT)")',
     'actionButton("Pobierz logi Desktop (TXT)")',
     'showQrPairing(pairState, qrPair)',
     'oneClickDesktopUpdate(updateDesktop)',
