@@ -5791,6 +5791,15 @@ public final class MainActivity extends Activity {
         if(existing!=null){
             form.addView(text("Status projektu",14,true));form.addView(status);
         }
+        android.widget.CheckBox showInMain=new android.widget.CheckBox(this);
+        showInMain.setText("Pokazuj czynności projektu w głównej liście");
+        showInMain.setChecked(existing==null
+            ||ProjectStore.showInMainTasks(db.getReadableDatabase(),existing.id));
+        form.addView(showInMain);
+        form.addView(text("Gdy wyłączone, czynności projektu i podprojektów "
+            +"znikają z głównej listy oraz globalnych automatycznych propozycji "
+            +"terminów. Nadal działają wewnątrz Projektów: Start/Stop, "
+            +"koszt robocizny, własny planer i zapisane przypomnienia.",12,false));
         lightDialogForm(form);
 
         AlertDialog dialog=new AlertDialog.Builder(this)
@@ -5838,6 +5847,8 @@ public final class MainActivity extends Activity {
                         selectedProjectId=id;
                     }
                     ProjectStore.setLaborRate(db.getWritableDatabase(),id,hourlyRate);
+                    ProjectStore.setShowInMainTasks(db.getWritableDatabase(),
+                        id,showInMain.isChecked());
                     dialog.dismiss();
                     render();
                 } catch(Exception error) {
@@ -7241,8 +7252,16 @@ public final class MainActivity extends Activity {
         if(!pendingPlanningTasks().isEmpty())
             button("↻ Zaplanuj bez terminu i zaległe",this::showOverduePlanList);
 
-        note("Zaległe: " + db.overdueTasks()
-            + " • wykonanie cyklicznej wyznacza kolejny termin.");
+        long visibleOverdue=0;
+        String taskVisibility=ProjectStore.mainTaskClause(
+            db.getReadableDatabase(),"tasks");
+        try(Cursor overdue=db.getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM tasks WHERE done=0 AND due_date<?"
+                +taskVisibility,new String[]{LocalDate.now().toString()})) {
+            if(overdue.moveToFirst())visibleOverdue=overdue.getLong(0);
+        }
+        note("Zaległe w głównej liście: "+visibleOverdue
+            +" • wykonanie cyklicznej wyznacza kolejny termin.");
 
         HorizontalScrollView filters = new HorizontalScrollView(this);
         filters.setHorizontalScrollBarEnabled(false);
@@ -7286,6 +7305,7 @@ public final class MainActivity extends Activity {
             case "done": condition = "done=1"; break;
             default: condition = "1=1";
         }
+        condition+=taskVisibility;
 
         int total = 0;
         try (Cursor count = db.getReadableDatabase().rawQuery(
@@ -25132,7 +25152,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 50);
+            super(context, "edhome-beta-preview.db", null, 51);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -25195,7 +25215,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 50) {
+            if (oldVersion < 1 || newVersion > 51) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -25462,6 +25482,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 50) {
                 StorageStore.upgrade50(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_49_TO_50_STORAGE_HOME");
+            }
+            if(oldVersion < 51) {
+                ProjectStore.upgrade51(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_50_TO_51_PROJECT_VISIBILITY");
             }
             if(newVersion >= 36) {
                 try {

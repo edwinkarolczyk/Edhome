@@ -1,3 +1,12 @@
+## 2026-10-20 — Projekty: ukrywanie czynności i priorytety przy planowaniu (Android Beta 0.8.1.139 / 332)
+
+- **Edytuj projekt:** „Pokazuj czynności projektu w głównej liście” (domyślnie TAK) zapisane w `projects.show_in_main_tasks`; działa także dla podprojektów poprzez dziedziczenie ukrywania. Zmiana nie usuwa żadnej czynności, historii czasu ani kosztów.
+- **Główna lista i globalny planer:** ukryte czynności nie są liczone do głównej listy ani do globalnych propozycji rano i wieczorem. Własny planer projektu działa; istniejące powiadomienia, Start/Stop, zależności i robocizna pozostają, bez wyzerowania czasu.
+- **Inteligentne terminy:** zaległe i należne dziś mają pierwszeństwo, potem priorytety Pilny/Wysoki/Normalny/Niski i wcześniejsze terminy; projektowa kolejka zachowuje porządek zależności. Praca nigdy nie jest planowana bez wolnego przedziału wykonawcy, a zatwierdzenie daty pozostaje ręczne.
+- **Baza i ZIP:** wersja schematu 51, stare bazy v50 migrują z widocznością TAK, stare ZIP v50 przywracają wartość TAK; nowa kolumna jest w `DataBackup.TABLES` i metadanych sync. Selektywne odzyskiwanie Projektów obsługuje stare kopie.
+- **Desktop:** główne listy Zadania/Czynności respektują widoczność i podprojekty; ustawienie edytowane także na Desktop jako 1=tak/0=nie. Rozszerzone UX Desktop checkbox i test fizyczny Android↔Desktop nadal do potwierdzenia.
+- **Test:** `tests/check_project_visibility_priority_51.py` w Android CI; Stable `main` bez zmian.
+
 ## 2026-10-20 — Projekty: sortowanie, grupy, priorytety, wykonawca (Android Beta 0.8.1.138 / 331)
 
 - **Lista czynności projektu:** opcje „Inteligentnie”, „Termin”, „Priorytet”, „Alfabetycznie A–Z” i „Własna kolejność”; preferencja zapamiętywana osobno dla projektu lokalnie. Wszystkie tryby zachowują kategorie pracy: trwa / gotowe odblokowujące / gotowe / zablokowane / zakończone. Inteligentne sortowanie zachowuje dotychczasowy porządek.

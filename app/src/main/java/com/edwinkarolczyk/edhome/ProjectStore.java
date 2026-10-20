@@ -103,6 +103,8 @@ final class ProjectStore {
             +"status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','paused','done')),"
             +"due_date TEXT,"
             +"budget_grosz INTEGER,"
+            +"show_in_main_tasks INTEGER NOT NULL DEFAULT 1 "
+            +"CHECK(show_in_main_tasks IN (0,1)),"
             +"thumbnail_base64 TEXT,"
             +"labor_rate_grosz INTEGER CHECK(labor_rate_grosz IS NULL OR labor_rate_grosz BETWEEN 0 AND 100000000),"
             +"created_at INTEGER NOT NULL,"
@@ -182,6 +184,53 @@ final class ProjectStore {
         ensureColumn(db,"project_task_work_sessions","hourly_rate_grosz",
             "INTEGER CHECK(hourly_rate_grosz IS NULL OR hourly_rate_grosz BETWEEN 0 AND 100000000)");
         ensureColumn(db,"project_task_work_sessions","worker_id","INTEGER");
+    }
+
+    /** W wersji 51 nowa preferencja projektu podróżuje wraz z bazą, ZIP i LAN. */
+    static void upgrade51(SQLiteDatabase db) {
+        ensureColumn(db,"projects","show_in_main_tasks",
+            "INTEGER NOT NULL DEFAULT 1 CHECK(show_in_main_tasks IN (0,1))");
+    }
+
+    static void setShowInMainTasks(SQLiteDatabase db,long projectId,boolean shown) {
+        ContentValues changes=new ContentValues();
+        changes.put("show_in_main_tasks",shown?1:0);
+        if(db.update("projects",changes,"id=?",
+                new String[]{Long.toString(projectId)})!=1)
+            throw new IllegalArgumentException("Projekt nie istnieje.");
+    }
+
+    static boolean showInMainTasks(SQLiteDatabase db,long projectId) {
+        try(Cursor c=db.rawQuery(
+                "SELECT show_in_main_tasks FROM projects WHERE id=?",
+                new String[]{Long.toString(projectId)})) {
+            return !c.moveToFirst() || c.getInt(0)!=0;
+        }
+    }
+
+    /**
+     * Ukrycie projektu działa też na wszystkie podprojekty.
+     * Klauzula filtruje tylko główną listę / globalny planer.
+     * Planowanie wewnątrz projektu, Start/Stop i księgowanie kosztów pozostają.
+     */
+    static String mainTaskClause(SQLiteDatabase db,String tasksAlias) {
+        if(!"t".equals(tasksAlias)&&!"tasks".equals(tasksAlias))
+            throw new IllegalArgumentException("Nieznany alias czynności.");
+        StringBuilder hidden=new StringBuilder();
+        try(Cursor c=db.rawQuery(
+                "WITH RECURSIVE hidden(id) AS ("
+                    +"SELECT id FROM projects WHERE show_in_main_tasks=0 "
+                    +"UNION SELECT child.id FROM projects child "
+                    +"JOIN hidden h ON child.parent_id=h.id) "
+                    +"SELECT id FROM hidden ORDER BY id",null)) {
+            while(c.moveToNext()) {
+                if(hidden.length()>0)hidden.append(',');
+                hidden.append(c.getLong(0));
+            }
+        }
+        if(hidden.length()==0)return "";
+        return " AND ("+tasksAlias+".project_id IS NULL OR "
+            +tasksAlias+".project_id NOT IN ("+hidden+"))";
     }
 
     private static void ensureColumn(SQLiteDatabase db,String table,String column,String definition) {
@@ -971,7 +1020,15 @@ final class ProjectStore {
         java.util.LinkedHashSet<Long> remaining=new java.util.LinkedHashSet<>();
         try(Cursor c=db.rawQuery(
                 "SELECT id FROM tasks WHERE done=0 AND project_id IN ("
-                    +inClause(projects)+") ORDER BY duration_minutes DESC,id",
+                    +inClause(projects)+") ORDER BY "
+                    +"CASE WHEN due_date IS NOT NULL "
+                    +"AND due_date<date('now') THEN 0 "
+                    +"WHEN due_date=date('now') THEN 1 "
+                    +"WHEN priority='urgent' THEN 2 "
+                    +"WHEN priority='high' THEN 3 "
+                    +"WHEN priority='normal' THEN 4 ELSE 5 END,"
+                    +"CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
+                    +"due_date,duration_minutes DESC,id",
                 args(projects))) {
             while(c.moveToNext()) {
                 long taskId=c.getLong(0);

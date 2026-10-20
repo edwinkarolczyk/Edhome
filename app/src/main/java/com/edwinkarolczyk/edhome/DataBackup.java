@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 50;
+    private static final int DB_VERSION = 51;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -35,7 +35,7 @@ final class DataBackup {
         {"household_members", "id", "name"},
         {"user_profiles", "id", "member_id", "role", "avatar", "color", "created_at"},
         {"projects", "id", "name", "parent_id", "place_id", "assignee_id",
-            "status", "due_date", "budget_grosz", "thumbnail_base64", "labor_rate_grosz", "created_at"},
+            "status", "due_date", "budget_grosz", "show_in_main_tasks", "thumbnail_base64", "labor_rate_grosz", "created_at"},
         {"member_weekly_shifts", "id", "member_id", "weekday", "shift"},
         {"member_shift_exceptions", "id", "member_id", "date", "shift"},
         {"member_shift_hours", "id", "member_id", "shift", "start_time", "end_time"},
@@ -339,7 +339,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != 50 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -600,6 +600,10 @@ final class DataBackup {
                             if("return_required".equals(key)){values.put(key,0);continue;}
                             if("return_after_days".equals(key)){values.put(key,1);continue;}
                             if("taken_at".equals(key)){values.putNull(key);continue;}
+                        }
+                        if(inputVersion < 51 && "projects".equals(definition[0])
+                                &&"show_in_main_tasks".equals(key)){
+                            values.put(key,1);continue;
                         }
                         if(inputVersion < 49 && "projects".equals(definition[0])
                                 &&"labor_rate_grosz".equals(key)){

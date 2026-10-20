@@ -1053,12 +1053,13 @@ public final class EdhomeDesktop extends JFrame {
         if ("Pulpit".equals(name)) return dashboard();
         if ("Dzisiaj".equals(name)) return today();
         if ("Kalendarz".equals(name)) return frostSection(calendar());
-        if ("Zadania".equals(name)) return tablePage("Zadania", "tasks",
+        if ("Zadania".equals(name)) return tablePage("Zadania",desktopMainVisibleTasks(),
             cols("Tytuł","title","Termin","due_date","Priorytet","priority",
-                 "Wykonane","done","Osoba","assignee_id"));
-        if ("Czynności".equals(name)) return frostSection(tablePage("Czynności", "tasks",
+                 "Wykonane","done","Osoba","assignee_id"),"tasks");
+        if ("Czynności".equals(name)) return frostSection(tablePage("Czynności",
+            desktopMainVisibleTasks(),
             cols("Nazwa","title","Typ","task_kind","Powtarzanie","repeat_rule",
-                 "Co ile","repeat_every","Miejsce","place_id")));
+                 "Co ile","repeat_every","Miejsce","place_id"),"tasks"));
         if ("Projekty".equals(name)) return desktopProjects();
         if ("Magazyn".equals(name)) {
             ensureDesktopStorageHomeFields();
@@ -2407,12 +2408,38 @@ public final class EdhomeDesktop extends JFrame {
         showSection("Projekty");
     }
 
+    /** Ukryte projekty nie znikają z Projektów, tylko z ogólnych Czynności. */
+    private JsonArray desktopMainVisibleTasks() {
+        java.util.HashSet<Long> hidden=new java.util.HashSet<>();
+        for(JsonElement element:table("projects")) {
+            if(!element.isJsonObject())continue;
+            JsonObject p=element.getAsJsonObject();
+            if(p.has("show_in_main_tasks")&&intValue(p,"show_in_main_tasks")==0)
+                hidden.add(longValue(p,"id"));
+        }
+        JsonArray visible=new JsonArray();
+        for(JsonElement element:table("tasks")) {
+            if(!element.isJsonObject())continue;
+            JsonObject task=element.getAsJsonObject();
+            long projectId=longValue(task,"project_id");
+            boolean suppressed=false;
+            if(projectId>0)for(Long rootId:hidden)
+                if(projectId==rootId||desktopProjectDescendsFrom(projectId,rootId)) {
+                    suppressed=true;break;
+                }
+            if(!suppressed)visible.add(element);
+        }
+        return visible;
+    }
+
     private void showDesktopProjectEditor(JsonObject existing,Long parentPreset) {
         boolean isNew = existing == null;
         JsonObject row = isNew ? newRowTemplate("projects") : existing;
         if (row == null) return;
         if (isNew && parentPreset != null)
             row.addProperty("parent_id",parentPreset);
+        if(!row.has("show_in_main_tasks"))
+            row.addProperty("show_in_main_tasks",1);
         long id = longValue(row,"id");
         if (!editRow(row,cols(
                 "Nazwa","name",
@@ -2421,7 +2448,8 @@ public final class EdhomeDesktop extends JFrame {
                 "Osoba","assignee_id",
                 "Status","status",
                 "Termin","due_date",
-                "Budżet [zł]","budget_grosz"))) return;
+                "Budżet [zł]","budget_grosz",
+                "Pokazuj czynności w głównych listach (1/0)","show_in_main_tasks"))) return;
         if (isNew) table("projects").add(row);
         markDirty();
         desktopProjectId = id;
@@ -2429,6 +2457,10 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private void validateDesktopProjectRow(JsonObject row) {
+        if(row.has("show_in_main_tasks")
+                &&intValue(row,"show_in_main_tasks")!=0
+                &&intValue(row,"show_in_main_tasks")!=1)
+            throw new IllegalArgumentException("Widoczność musi mieć wartość 1 lub 0.");
         String name = value(row,"name").trim();
         if (name.isBlank() || name.length() > 160)
             throw new IllegalArgumentException("Podaj nazwę projektu 1–160 znaków.");

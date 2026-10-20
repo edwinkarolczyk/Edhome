@@ -68,7 +68,12 @@ final class SmartTaskPlanner {
                     +"COALESCE(t.assignee_id,p.assignee_id,0),t.project_id "
                     +"FROM tasks t LEFT JOIN projects p ON p.id=t.project_id "
                     +"WHERE t.done=0 AND t.due_date IS NOT NULL AND t.due_date<? "
-                    +"AND t.task_kind<>'waste' ORDER BY t.due_date,t.id LIMIT ?",
+                    +"AND t.task_kind<>'waste' "
+                    +ProjectStore.mainTaskClause(db,"t")
+                    +" ORDER BY t.due_date,"
+                    +"CASE t.priority WHEN 'urgent' THEN 0 "
+                    +"WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,"
+                    +"t.id LIMIT ?",
                 new String[]{LocalDate.now().toString(),String.valueOf(limit)})) {
             while(c.moveToNext())items.add(new Task(
                 c.getLong(0),c.getLong(5),c.getString(1),c.getString(2),
@@ -86,7 +91,10 @@ final class SmartTaskPlanner {
                     +"FROM tasks t LEFT JOIN projects p ON p.id=t.project_id "
                     +"WHERE t.done=0 AND (t.due_date IS NULL OR t.due_date='') "
                     +"AND t.repeat_rule='once' AND t.task_kind<>'waste' "
-                    +"ORDER BY t.id LIMIT ?",
+                    +ProjectStore.mainTaskClause(db,"t")
+                    +" ORDER BY CASE t.priority WHEN 'urgent' THEN 0 "
+                    +"WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,"
+                    +"t.id LIMIT ?",
                 new String[]{String.valueOf(limit)})) {
             while(c.moveToNext())items.add(new Task(
                 c.getLong(0),c.getLong(5),c.getString(1),"",
