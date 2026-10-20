@@ -62,3 +62,18 @@ assert 'if(alreadyUpserted||alreadyDeleted)continue;' in desktop
 print("PASS: retry ten sam UUID/rewizja nie tworzy drugiego zdarzenia finansowego")
 
 print("PASS: QR zachowuje baseline, nowe PC wymaga decyzji, pełny CAS robi backup, historia porównywana semantycznie")
+
+# Przy powrocie do Huba nagłówki createdAt/sourceVersion nie są zmianą danych.
+# Kiedy zmieniły się wyłącznie sidecary, aplikacja nie może przywracać całej
+# SQLite (tym bardziej nie może kasować budżetu/historii).
+apply=section(android,"private static void applyServerSnapshot(Context context,SharedPreferences prefs,\n            String server,String suppliedSha,String expectedLocal)","private static void ensureFirstBackup(")
+assert 'new String[]{"settings","tables","syncRecords"}' in apply
+assert 'HUB_DATA_IDENTICAL_NO_RESTORE' in apply
+assert 'HUB_METADATA_ONLY_APPLIED' in apply
+assert 'SyncRecordStore.restoreMetadata(database,' in apply
+assert apply.index('if(sameSettings && sameTables') < apply.index('DataBackup.restoreJson(database,prefs,server);')
+assert 'DiagnosticLog.event("HUB_SNAPSHOT_REJECTED"' in apply
+backup=(root/"app/src/main/java/com/edwinkarolczyk/edhome/DataBackup.java").read_text(encoding="utf-8")
+assert 'safeHubFailureCode(IllegalArgumentException failure)' in backup
+assert '"Niekompletny rekord: " + definition[0] + "." + key' in backup
+print("PASS: nagłówek snapshotu bez restore, same metadane bez kasowania danych, szczegół bez danych użytkownika")
