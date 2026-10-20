@@ -660,7 +660,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.136 / 329 — Czynności: nowy przycisk Dopasuj terminy automatycznie na dole listy bezterminowych i zaległych. EDHOME proponuje niekolidujące przedziały w grafiku każdej osoby i pokazuje wszystkie czynności z pełnymi polskimi nazwami dni, datami i godzinami. Wybierz Zapisz dopasowane, aby zatwierdzić; zapis grupowy jest transakcyjny, a czynności bez wykonawcy lub dostępnego terminu pozostają bez zmian. Stable bez zmian. Aktualizuj bez odinstalowywania."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.137 / 330 — P0 PayCheck/Budżet: po imporcie bankowym EDHOME nie rozlicza przelewów automatycznie, lecz pyta Rozliczyć teraz? i pokazuje propozycje do świadomego zatwierdzenia. Eksport ZIP i przywracanie są blokowane przy niedokończonym rozliczeniu grupowym, aby nie utracić dziennika naprawy. Dopasowania 1:1 i 200+300=500 pozostają dostępne po ręcznej zgodzie. Stable bez zmian. Aktualizuj bez odinstalowywania."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
