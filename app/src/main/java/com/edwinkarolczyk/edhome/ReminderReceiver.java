@@ -30,8 +30,11 @@ public final class ReminderReceiver extends BroadcastReceiver {
         "com.edwinkarolczyk.edhome.REMIND_TASKS";
     private static final String ACTION_TASK =
         "com.edwinkarolczyk.edhome.REMIND_SINGLE_TASK";
+    private static final String ACTION_PLAN =
+        "com.edwinkarolczyk.edhome.CHECK_TASK_PLANNING";
     private static final String CHANNEL_ID = "edhome-task-due";
     private static final int ALARM_ID = 7125;
+    private static final int PLAN_ALARM_ID = 7126;
     private static final String DATABASE = "edhome-beta-preview.db";
 
     private static SharedPreferences prefs(Context context) {
@@ -123,6 +126,12 @@ public final class ReminderReceiver extends BroadcastReceiver {
             intent, PendingIntent.FLAG_UPDATE_CURRENT
                 | LegacyCompat.immutableFlag());
         manager.cancel(daily);
+        Intent planningIntent=new Intent(context,ReminderReceiver.class)
+            .setAction(ACTION_PLAN);
+        PendingIntent evening=PendingIntent.getBroadcast(context,PLAN_ALARM_ID,
+            planningIntent,PendingIntent.FLAG_UPDATE_CURRENT
+                |LegacyCompat.immutableFlag());
+        manager.cancel(evening);
         SharedPreferences pref = prefs(context);
         java.io.File file = context.getDatabasePath(DATABASE);
         if (file.isFile()) {
@@ -171,6 +180,22 @@ public final class ReminderReceiver extends BroadcastReceiver {
             planned, quietStart, quietEnd)));
         manager.setInexactRepeating(AlarmManager.RTC_WAKEUP,
             next.getTimeInMillis(), AlarmManager.INTERVAL_DAY, daily);
+        if(BetaUpdater.isBeta()) {
+            Calendar night=Calendar.getInstance();
+            night.set(Calendar.HOUR_OF_DAY,19);
+            night.set(Calendar.MINUTE,0);
+            night.set(Calendar.SECOND,0);
+            night.set(Calendar.MILLISECOND,0);
+            if(night.getTimeInMillis()<=System.currentTimeMillis())
+                night.add(Calendar.DAY_OF_MONTH,1);
+            LocalDateTime eveningTime=LocalDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(night.getTimeInMillis()),
+                ZoneId.systemDefault());
+            night.setTimeInMillis(epoch(ReminderRules.nextAllowed(
+                eveningTime,quietStart,quietEnd)));
+            manager.setInexactRepeating(AlarmManager.RTC_WAKEUP,
+                night.getTimeInMillis(),AlarmManager.INTERVAL_DAY,evening);
+        }
         DiagnosticLog.event("REMINDER_SCHEDULED");
     }
 
@@ -207,7 +232,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 context, intent.getLongExtra("task_id", -1L));
             return;
         }
-        if (!ACTION_REMIND.equals(action) && !ACTION_TASK.equals(action)) {
+        if (!ACTION_REMIND.equals(action)
+                && !ACTION_TASK.equals(action) && !ACTION_PLAN.equals(action)) {
             if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                     || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)
                     || Intent.ACTION_TIMEZONE_CHANGED.equals(action)
@@ -246,6 +272,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         String singleTaskTitle = "";
         boolean singleProjectTask = false;
         boolean legacy = ACTION_REMIND.equals(action);
+        boolean plannerOnly=ACTION_PLAN.equals(action);
         try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
                 file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY)) {
             if (legacy) {
@@ -272,7 +299,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
                         if ("waste".equals(tasks.getString(1))) waste++;
                     }
                 }
-            } else {
+            } else if(!plannerOnly) {
                 long id = intent.getLongExtra("task_id", -1L);
                 String expected = intent.getStringExtra("occurrence");
                 if (id < 0 || expected == null) return;
@@ -308,8 +335,27 @@ public final class ReminderReceiver extends BroadcastReceiver {
             DiagnosticLog.error("REMINDER_DATABASE", problem);
             return;
         }
-        if (due == 0) {
-            if (legacy) pref.edit().putString("reminder_legacy_day",
+        // Każdego ranka i wieczoru nowe terminy szukane są lokalnie.
+        // Nie zapisujemy dat bez wyboru przez domownika.
+        SmartTaskPlanner.PlanningOverview planning=null;
+        boolean planningTick=(legacy||plannerOnly)&&BetaUpdater.isBeta();
+        boolean planningFresh=false;
+        if(planningTick) {
+            try(SQLiteDatabase planner=SQLiteDatabase.openDatabase(
+                    file.getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY)) {
+                planning=SmartTaskPlanner.planningOverview(planner);
+                planningFresh=planning.actionable()
+                    &&!planning.digest.equals(pref.getString(
+                        "task_planner_last_notice",""));
+                DiagnosticLog.event("TASK_PLANNING_SCAN",
+                    "morning="+legacy+" suggested="+planning.suggested
+                        +" missing="+planning.needsAssignee);
+            } catch(Exception problem) {
+                DiagnosticLog.error("TASK_PLANNING_SCAN",problem);
+            }
+        }
+        if((plannerOnly&&!planningFresh)||(due==0&&!planningFresh)) {
+            if(legacy)pref.edit().putString("reminder_legacy_day",
                 today.toString()).apply();
             return;
         }
@@ -331,21 +377,11 @@ public final class ReminderReceiver extends BroadcastReceiver {
         LegacyCompat.ensureChannel(notifications, CHANNEL_ID,
             "Przypomnienia o czynnościach", NotificationManager.IMPORTANCE_DEFAULT,
             null, true, true, false);
-        // Rano same sprawdzamy, czy istnieje możliwe przeplanowanie.
-        // Wyświetlenie propozycji i zmiana daty nastąpią po akceptacji.
-        boolean proposalsReady = false;
-        boolean openOverdue = legacy && overdue > 0 && BetaUpdater.isBeta();
-        if (openOverdue) {
-            try (SQLiteDatabase planning = SQLiteDatabase.openDatabase(
-                    file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY)) {
-                proposalsReady = SmartTaskPlanner.hasProposals(planning,
-                    pref.getLong("active_member_id", 0L));
-                if (proposalsReady)
-                    DiagnosticLog.event("TASK_OVERDUE_SUGGESTIONS_READY");
-            } catch (Exception problem) {
-                DiagnosticLog.error("TASK_OVERDUE_SEARCH", problem);
-            }
-        }
+        boolean proposalsReady=planning!=null&&planning.suggested>0;
+        int missingAssignee=planning==null?0:planning.needsAssignee;
+        boolean openOverdue=planningTick&&(
+            planningFresh||(legacy&&overdue>0));
+        if(proposalsReady)DiagnosticLog.event("TASK_OVERDUE_SUGGESTIONS_READY");
         Intent destination=new Intent(context, MainActivity.class).setFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         if (openOverdue) destination.putExtra("open_overdue_plan",true);
@@ -360,7 +396,10 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     : "EDHOME • czynności")
             .setContentText(!legacy && singleProjectTask
                 ? "Czynność projektu • możesz uruchomić pomiar czasu"
-                : (overdue > 0
+                : plannerOnly
+                    ? "Nowe terminy: "+(planning==null?0:planning.suggested)
+                        +" • wskaż wykonawcę: "+missingAssignee
+                    : (overdue > 0
                     ? "Zaległe: " + overdue + " • na dziś: " + (due - overdue)
                         + (foundTerms ? " • znaleziono nowe terminy"
                             : " • sprawdź terminy")
@@ -368,7 +407,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     : (waste > 0
                         ? "Odpady do wystawienia: " + waste
                             + " • pozostałe czynności: " + (due - waste)
-                        : "Czynności do wykonania: " + due)))
+                        : "Czynności do wykonania: " + due
+                            +(planningFresh?" • sprawdź propozycje":""))))
             .setContentIntent(open)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true);
@@ -380,11 +420,14 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 "▶ Start", ProjectWorkNotification.startAction(
                     context, singleTaskId));
         Notification notification = builder.build();
-        int notificationId = legacy ? ALARM_ID
+        int notificationId = plannerOnly ? PLAN_ALARM_ID
+            : legacy ? ALARM_ID
             : requestCode(intent.getLongExtra("task_id", -1L));
         notifications.notify(notificationId, notification);
         SharedPreferences.Editor editor = pref.edit();
         if (legacy) editor.putString("reminder_legacy_day", today.toString());
+        if (planningFresh && planning!=null)
+            editor.putString("task_planner_last_notice",planning.digest);
         else editor.putString(firedKey, firedValue)
             .putString("reminder_custom_day_"
                 + intent.getLongExtra("task_id", -1L), today.toString());
