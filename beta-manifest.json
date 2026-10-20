@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 327,
   "versionName": "0.8.1.134",
-  "changelog": "EDHOME Beta 0.8.0.135 / 327 — Czynności: rano około 8:00 i wieczorem około 19:00 EDHOME szuka do trzech wolnych terminów dla zaległych i bez daty, na 28 dni naprzód. Powiadomienia nie powtarzają niezmienionych propozycji. Przed planowaniem bez wykonawcy aplikacja pyta, kto wykona czynność; szybki formularz wybiera domownika i domyślnie zapisuje bez daty, a gdy znajdzie termin pokazuje wybór od razu. W Szybkiej czynności jest mikrofon z polskim rozpoznawaniem mowy Android/Google; tekst można poprawić. Żadne terminy nie są zatwierdzane automatycznie. Aktualizuj bez odinstalowywania.",
+  "changelog": "EDHOME Beta 0.8.1.134 / 327 — Czynności: rano około 8:00 i wieczorem około 19:00 EDHOME szuka do trzech wolnych terminów dla zaległych i bez daty, na 28 dni naprzód. Powiadomienia nie powtarzają niezmienionych propozycji. Przed planowaniem bez wykonawcy aplikacja pyta, kto wykona czynność; szybki formularz wybiera domownika i domyślnie zapisuje bez daty, a gdy znajdzie termin pokazuje wybór od razu. W Szybkiej czynności jest mikrofon z polskim rozpoznawaniem mowy Android/Google; tekst można poprawić. Żadne terminy nie są zatwierdzane automatycznie. Aktualizuj bez odinstalowywania.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.134/edhome-beta.apk",
   "sha256": "07408330bab235e7669bb0f258cc7edc496d1ae19bf176e845c83e4229b2d67f"
 }
