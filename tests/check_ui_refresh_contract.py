@@ -87,8 +87,9 @@ manifest=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 assert 'android:name=".EdhomeApplication"' in manifest
 assert 'getSharedPreferences("edhome_beta_prefs"' in application or (
     'getSharedPreferences(' in application and '"edhome_beta_prefs"' in application)
-assert 'if (!prefs.getAll().isEmpty()' in application
-assert 'getDatabasePath("edhome-beta-preview.db").exists()' in application
+assert 'if (prefs.getAll().isEmpty()' in application
+assert '!getDatabasePath("edhome-beta-preview.db").exists()' in application
+assert 'FirstRunProfileSetup.register(this,prefs);' in application
 assert '.putString("theme",UiSkin.PASTEL)' in application
 assert 'if (!BuildConfig.DIAGNOSTICS_ENABLED) return;' in application
 assert 'prefs.getString("theme", UiSkin.NEON)' in main
