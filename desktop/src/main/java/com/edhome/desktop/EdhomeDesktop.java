@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.131";
+    private static final String DESKTOP_VERSION = "0.7.0.132";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -90,7 +90,8 @@ public final class EdhomeDesktop extends JFrame {
         System.getProperty("user.home"), ".edhome", "desktop-instance.lock");
     private static FileChannel instanceLockChannel;
     private static FileLock instanceLock;
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    // Hub musi przesyłać również jawne JSON null: Android wymaga każdego pola rekordu.
+    private static final Gson GSON = new GsonBuilder().serializeNulls().setPrettyPrinting().create();
     private static final Preferences PREFS =
         Preferences.userRoot().node("edhome/desktop-beta");
 
