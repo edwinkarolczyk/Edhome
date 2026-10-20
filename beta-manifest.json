@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 330,
-  "versionName": "0.8.1.137",
-  "changelog": "EDHOME Beta 0.8.1.137 / 330 — P0 PayCheck/Budżet: po imporcie bankowym EDHOME nie rozlicza przelewów automatycznie, lecz pyta Rozliczyć teraz? i pokazuje propozycje do świadomego zatwierdzenia. Eksport ZIP i przywracanie są blokowane przy niedokończonym rozliczeniu grupowym, aby nie utracić dziennika naprawy. Dopasowania 1:1 i 200+300=500 pozostają dostępne po ręcznej zgodzie. Stable bez zmian. Aktualizuj bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.137/edhome-beta.apk",
-  "sha256": "2da0609f14995f43b5d09ddb1313fd34a7f9dd716b427775199546863d4d6a56"
+  "versionCode": 331,
+  "versionName": "0.8.1.138",
+  "changelog": "EDHOME Beta 0.8.1.138 / 331 — Projekty: sortowanie czynności Inteligentnie/Termin/Priorytet/A–Z/Własna kolejność, zwijane grupy W trakcie/Gotowe/Zablokowane/Zakończone, zakończone domyślnie schowane, widoczne priorytety i wykonawcy. Kliknij priorytet, by go zmienić. W trybie Własna kolejność użyj przytrzymania i przeciągnięcia lub strzałek góra/dół; zależności zachowują pierwszeństwo. Bez migracji bazy; Stable bez zmian. Aktualizuj bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.138/edhome-beta.apk",
+  "sha256": "7d5d22f7bc53921ceeeb67fcccf8620a2c2eeb586217cfc13135461de2692dc3"
 }
