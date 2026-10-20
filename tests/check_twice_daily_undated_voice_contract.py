@@ -29,7 +29,7 @@ assert "(t.due_date IS NULL OR t.due_date='')" in planner
 assert 't.repeat_rule=\'once\'' in planner
 assert 'static List<TimeSuggestions.Option> proposeUndated(' in planner
 assert 'static void approveUndated(' in planner
-assert '"AND (due_date IS NULL OR due_date=\'\')" ' in planner
+assert "AND (due_date IS NULL OR due_date='')" in planner
 assert 'static void assignIfMissing(' in planner
 assert 'task.memberId<=0' in planner
 assert 'db.beginTransaction()' in planner
