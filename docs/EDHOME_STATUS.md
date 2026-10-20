@@ -1,3 +1,11 @@
+## 2026-10-20 — Ustawienia startowe tylko dla czystej instalacji (Android Beta 0.8.1.135 / 328)
+
+- **Użytkownik zatwierdził na podstawie czytelnych ekranów:** Pastelowy, obecny interfejs, 24 miejsca (3×8), AI 3D, pełne grafiki jako tło, gesty 450/1100 ms, przypomnienia Tak z ciszą 22:00–07:00, NFC bez stałego nasłuchu i działanie „Pokaż działania”, Magazyn (galeria i 3 typy widoczne), Spiżarnia 5 sekund.
+- **Bootstrap `EdhomeApplication`:** konfiguruje preferencje tylko przy pustym `SharedPreferences` i braku pliku bazy; zachowuje wszystkie wcześniejsze ustawienia użytkownika po aktualizacji. Działa wyłącznie w kanale Beta, `main` Stable bez zmian.
+- **Kreator pierwszego profilu:** `FirstRunProfileSetup` pyta o imię administratora, zapisuje przez `UserProfileStore.add` tylko w pustej bazie. Nie tworzy „Edwin” na sztywno. Przy systemie Android 13+ pyta o uprawnienie do powiadomień (ustawienie w aplikacji nie zastępuje zgody OS).
+- **ZIP:** `DataBackup` eksportuje dodatkowo ustawienia przypomnień, globalnego NFC i widoczności Magazynu, waliduje typy, przywraca je warunkowo dla zachowania zgodności ze starszymi kopiami. Nie usuwa PIN-u, tagów ani synchronizacji.
+- **Testy:** `check_fresh_install_defaults_contract.py` w Android CI; uaktualniono `check_ui_refresh_contract.py`. Wersja kodu `0.8.1.135/328`. **Status:** kod w gałęzi beta, CI/instalacja na telefonie i E2E ZIP czekają na potwierdzenie. [Issue #10](https://github.com/edwinkarolczyk/Edhome/issues/10). Nie odinstalowywać aktualnej aplikacji dla testu.
+
 ## 2026-10-20 — Szybkie czynności, automatyczny planer rano/wieczorem, dyktowanie (Android Beta 0.8.1.134 / 327)
 
 - **Nowe sprawdzenie o ~8:00 i ~19:00:** ten sam lokalny planer sprawdza zaległe jednorazowe czynności oraz niezakończone bez daty. Skanowanie wyłącznie przy włączonych przypomnieniach Beta; AlarmManager inexact (Android może opóźnić), cisza nocna zachowana. Brak ponawiania identycznych powiadomień przy braku nowych propozycji.
