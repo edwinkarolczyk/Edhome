@@ -46,6 +46,8 @@ jobs:
           gradle-version: "8.10.2"
       - name: Verify update-channel scripts
         run: python3 -m py_compile .github/scripts/publish_public_channel.py
+      - name: Fresh-install default settings and ZIP preservation contract
+        run: python3 tests/check_fresh_install_defaults_contract.py
       - name: Android launcher quick task shortcut regression
         run: python3 tests/check_launcher_quick_task_contract.py
       - name: Undated tasks twice daily and Polish speech shortcut regression
