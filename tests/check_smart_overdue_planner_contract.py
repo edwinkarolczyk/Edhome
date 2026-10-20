@@ -52,7 +52,7 @@ for token in (
 ):
     assert token in main, "Brak interfejsu zatwierdzania: "+token
 for token in (
-    "SmartTaskPlanner.hasProposals(planning,",
+    "SmartTaskPlanner.planningOverview(planner)",
     "TASK_OVERDUE_SUGGESTIONS_READY",
     "open_overdue_plan",
     "Znajdź nowe terminy",
