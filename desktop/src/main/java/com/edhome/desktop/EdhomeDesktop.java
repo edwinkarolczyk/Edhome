@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.132";
+    private static final String DESKTOP_VERSION = "0.7.0.133";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -429,9 +429,17 @@ public final class EdhomeDesktop extends JFrame {
 
     private String hubSnapshotJson() throws Exception {
         if(snapshot==null)throw new IOException("Desktop nie ma jeszcze lokalnej kopii danych.");
+        // Napraw także projekty utworzone przez poprzednie wydania Desktop:
+        // inaczej Android 139 odrzuca import przy pierwszej edycji na PC.
+        ensureDesktopLaborColumns();
         commitHubLocalMetadata();
-        markHubDataOnline(hubServer==null?null:hubServer.newestClient(),
-            "dane zsynchronizowane");
+        // Samo GET /snapshot nie jest potwierdzeniem poprawnego zastosowania
+        // danych na telefonie. Nie wolno na tej podstawie pokazywać zielonego
+        // statusu synchronizacji, zwłaszcza gdy Android zwraca błąd importu.
+        hubLastDataSyncAt=0L;
+        connected=false;
+        connection.setText("POŁĄCZONO • wysłano dane • czeka na potwierdzenie Androida");
+        connection.setForeground(new Color(230,175,95));
         return GSON.toJson(snapshot);
     }
 
@@ -1107,6 +1115,14 @@ public final class EdhomeDesktop extends JFrame {
             JsonObject row=element.getAsJsonObject();
             if(!row.has("labor_rate_grosz")) {
                 row.add("labor_rate_grosz",com.google.gson.JsonNull.INSTANCE);
+                touched=true;
+            }
+            if(!row.has("thumbnail_base64")) {
+                row.add("thumbnail_base64",com.google.gson.JsonNull.INSTANCE);
+                touched=true;
+            }
+            if(!row.has("show_in_main_tasks")) {
+                row.addProperty("show_in_main_tasks",1);
                 touched=true;
             }
         }
@@ -9035,7 +9051,13 @@ public final class EdhomeDesktop extends JFrame {
             row.addProperty("status", "active");
             row.add("due_date", com.google.gson.JsonNull.INSTANCE);
             row.add("budget_grosz", com.google.gson.JsonNull.INSTANCE);
+            // Dokładnie ten sam zestaw kolumn co DataBackup.TABLES["projects"]
+            // na Androidzie. Brak klucza (nawet dla pustego pola) odrzuca
+            // cały snapshot i zrywa automatyczną synchronizację.
+            row.add("thumbnail_base64", com.google.gson.JsonNull.INSTANCE);
+            row.add("labor_rate_grosz", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("created_at", now);
+            row.addProperty("show_in_main_tasks",1);
             return row;
         }
         if ("pantry".equals(tableName)) {
