@@ -212,6 +212,18 @@ final class DataBackup {
             HomeTileLayout.PAGE_SLOTS_KEY, HomeTileLayout.DEFAULT_PAGE_SLOTS)));
         settings.put("homeTileFullArt",
             prefs.getBoolean("home_tile_full_art", true));
+        settings.put("remindersEnabled",
+            prefs.getBoolean("reminders_enabled", false));
+        settings.put("nfcGlobalListen",
+            prefs.getBoolean("nfc_global_listen", false));
+        settings.put("storageGalleryEnabled",
+            prefs.getBoolean("storage_gallery_enabled", true));
+        settings.put("storageShowThings",
+            prefs.getBoolean("storage_show_things", true));
+        settings.put("storageShowBoxes",
+            prefs.getBoolean("storage_show_boxes", true));
+        settings.put("storageShowPlaces",
+            prefs.getBoolean("storage_show_places", true));
         settings.put("pantryTakeDelaySeconds", prefs.getInt(
             PantryTakeCountdown.DELAY_PREF, PantryTakeCountdown.DEFAULT_SECONDS));
         settings.put("paycheckMonthlyBudget",
@@ -419,6 +431,16 @@ final class DataBackup {
         if (settings.has("timerNotificationsEnabled")
                 && !(settings.get("timerNotificationsEnabled") instanceof Boolean))
             throw new IllegalArgumentException("Nieprawidłowe ustawienia minutników.");
+        // Stare kopie nie mają tych opcji: zachowaj ustawienia urządzenia.
+        String[] optionalBooleans = {
+            "remindersEnabled", "nfcGlobalListen", "storageGalleryEnabled",
+            "storageShowThings", "storageShowBoxes", "storageShowPlaces"
+        };
+        for (String key : optionalBooleans) {
+            if (settings.has(key) && !(settings.get(key) instanceof Boolean))
+                throw new IllegalArgumentException(
+                    "Nieprawidłowa wartość ustawienia: " + key);
+        }
         String quietStart = settings.optString("quietHoursStart",
             QuietHoursRules.DEFAULT_START);
         String quietEnd = settings.optString("quietHoursEnd",
@@ -1784,6 +1806,24 @@ final class DataBackup {
                 .putBoolean("timer_notifications_enabled", timerNotifications)
                 .putString("quiet_hours_start", quietStart)
                 .putString("quiet_hours_end", quietEnd);
+            if (settings.has("remindersEnabled"))
+                restored.putBoolean("reminders_enabled",
+                    settings.getBoolean("remindersEnabled"));
+            if (settings.has("nfcGlobalListen"))
+                restored.putBoolean("nfc_global_listen",
+                    settings.getBoolean("nfcGlobalListen"));
+            if (settings.has("storageGalleryEnabled"))
+                restored.putBoolean("storage_gallery_enabled",
+                    settings.getBoolean("storageGalleryEnabled"));
+            if (settings.has("storageShowThings"))
+                restored.putBoolean("storage_show_things",
+                    settings.getBoolean("storageShowThings"));
+            if (settings.has("storageShowBoxes"))
+                restored.putBoolean("storage_show_boxes",
+                    settings.getBoolean("storageShowBoxes"));
+            if (settings.has("storageShowPlaces"))
+                restored.putBoolean("storage_show_places",
+                    settings.getBoolean("storageShowPlaces"));
             for (String key : prefs.getAll().keySet()) {
                 if (key.startsWith("tile_label_") || key.startsWith("tile_tint_")
                         || key.startsWith("tile_icon_") || key.startsWith("tile_target_")
