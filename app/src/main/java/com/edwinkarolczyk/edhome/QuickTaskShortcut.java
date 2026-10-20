@@ -94,7 +94,7 @@ final class QuickTaskShortcut {
         durationAdapter.setDropDownViewResource(
             android.R.layout.simple_spinner_dropdown_item);
         duration.setAdapter(durationAdapter);
-        duration.setSelection(1);
+        duration.setSelection(0);
         form.addView(duration);
 
         Spinner date=new Spinner(activity);
