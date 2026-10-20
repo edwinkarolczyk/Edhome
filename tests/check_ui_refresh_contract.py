@@ -80,15 +80,17 @@ assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
 assert 'smallButton(appearance,"Zastosuj motyw"' in settings
 assert 'settingsAccordion("appearance","Wygląd i kafelki"' in settings
 assert 'for (int i = 0; i < UiSkin.THEMES.length; i++)' not in settings
-# Styl 1 tylko przy naprawdę nowej instalacji. Aktualizacja zachowuje
-# zarówno świadomie wybrany motyw, jak i dawny domyślny bez klucza theme.
+# Nowy preset tylko przy naprawdę czystej instalacji Beta.
+# Aktualizacja zachowuje wybrany motyw lub wcześniejszy domyślny bez klucza.
 application=Path("app/src/main/java/com/edwinkarolczyk/edhome/EdhomeApplication.java").read_text(encoding="utf-8")
 manifest=Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 assert 'android:name=".EdhomeApplication"' in manifest
 assert 'getSharedPreferences("edhome_beta_prefs"' in application or (
     'getSharedPreferences(' in application and '"edhome_beta_prefs"' in application)
-assert 'if(!prefs.contains("theme") && prefs.getAll().isEmpty())' in application
-assert 'prefs.edit().putString("theme",UiSkin.MODERN_LIGHT).commit();' in application
+assert 'if (!prefs.getAll().isEmpty()' in application
+assert 'getDatabasePath("edhome-beta-preview.db").exists()' in application
+assert '.putString("theme",UiSkin.PASTEL)' in application
+assert 'if (!BuildConfig.DIAGNOSTICS_ENABLED) return;' in application
 assert 'prefs.getString("theme", UiSkin.NEON)' in main
 assert 'static final String MODERN_LIGHT = "Nowoczesny jasny";' in skin
 print("6 themes via compact dropdown, unlimited configurable tiles, drag, backup and SQLite v41: PASS")
