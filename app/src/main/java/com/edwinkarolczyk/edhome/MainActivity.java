@@ -228,34 +228,49 @@ public final class MainActivity extends Activity {
         return pending;
     }
 
+    private java.util.List<SmartTaskPlanner.Task> pendingPlanningTasks() {
+        java.util.List<SmartTaskPlanner.Task> tasks=new java.util.ArrayList<>();
+        tasks.addAll(pendingOverduePlanTasks());
+        tasks.addAll(SmartTaskPlanner.undated(db.getReadableDatabase(),80));
+        return tasks;
+    }
+
     private void showOverduePlanList() {
         if(!unlocked)return;
-        java.util.List<SmartTaskPlanner.Task> items=pendingOverduePlanTasks();
+        java.util.List<SmartTaskPlanner.Task> items=pendingPlanningTasks();
         if(items.isEmpty()) {
-            alert("Nie ma zaległych jednorazowych czynności do przeplanowania.");
+            alert("Nie ma czynności bez terminu ani zaległych do przeplanowania.");
             return;
         }
         String[] choices=new String[items.size()];
         for(int i=0;i<items.size();i++) {
             SmartTaskPlanner.Task task=items.get(i);
-            choices[i]=task.title+" • termin "+TaskDateLabels.format(task.due);
+            choices[i]=task.title+(task.memberId<=0?" • wybierz wykonawcę":"")
+                +(task.due.isEmpty()?" • bez terminu"
+                    :" • termin "+TaskDateLabels.format(task.due));
         }
         new AlertDialog.Builder(this)
-            .setTitle("Zaległe czynności • pozostało: "+items.size())
+            .setTitle("Planowanie czynności • pozostało: "+items.size())
             .setItems(choices,(dialog,index)->showOverduePlanOptions(items.get(index)))
             .setNegativeButton("Później",null).show();
     }
 
     private void showOverduePlanOptions(SmartTaskPlanner.Task task) {
-        final long member=activeMemberId();
-        String blocker=SmartTaskPlanner.reason(db.getReadableDatabase(),task,member);
+        if(task.memberId<=0) {
+            showTaskPlannerAssignee(task);
+            return;
+        }
+        final long member=task.memberId;
+        String blocker=SmartTaskPlanner.reason(db.getReadableDatabase(),task,0L);
         if(!blocker.isEmpty()) {
             alert(task.title+" — "+blocker);
             return;
         }
-        java.util.List<TimeSuggestions.Option> options=
-            SmartTaskPlanner.propose(db.getReadableDatabase(),task.id,
-                member,java.time.LocalDateTime.now());
+        java.util.List<TimeSuggestions.Option> options=task.due.isEmpty()
+            ?SmartTaskPlanner.proposeUndated(db.getReadableDatabase(),task.id,
+                java.time.LocalDateTime.now())
+            :SmartTaskPlanner.propose(db.getReadableDatabase(),task.id,
+                0L,java.time.LocalDateTime.now());
         if(options.isEmpty()) {
             alert("Dla „"+task.title+"” nie znaleziono bezkolizyjnego "
                 +"przedziału na kolejne 28 dni. Uzupełnij grafik, "
@@ -268,20 +283,23 @@ public final class MainActivity extends Activity {
             labels[i]=TaskDateLabels.format(option.date)+" • "+option.start+"–"+option.end;
         }
         new AlertDialog.Builder(this)
-            .setTitle(task.title+" • wybierz nowy termin")
+            .setTitle(task.title+" • wybierz termin")
             .setItems(labels,(dialog,index)->{
                 final TimeSuggestions.Option chosen=options.get(index);
                 new AlertDialog.Builder(this)
                     .setTitle("Zatwierdzić nowy termin?")
-                    .setMessage(task.title+"\\nPoprzedni: "+TaskDateLabels.format(task.due)
+                    .setMessage(task.title+"\\nPoprzedni: "
+                        +(task.due.isEmpty()?"bez terminu":TaskDateLabels.format(task.due))
                         +"\\nNowy: "+labels[index]
                         +"\\nZostanie również ustawione przypomnienie.")
                     .setNegativeButton("Wróć do terminów",
                         (confirm,which)->showOverduePlanOptions(task))
                     .setPositiveButton("Zatwierdź",(confirm,which)->{
                         try {
-                            SmartTaskPlanner.approve(db.getWritableDatabase(),
-                                task.id,task.due,chosen,member);
+                            if(task.due.isEmpty())SmartTaskPlanner.approveUndated(
+                                db.getWritableDatabase(),task.id,chosen);
+                            else SmartTaskPlanner.approve(db.getWritableDatabase(),
+                                task.id,task.due,chosen,0L);
                             ReminderReceiver.schedule(this);
                             DiagnosticLog.event("TASK_PLAN_USER_APPROVED",
                                 "task="+task.id);
@@ -289,9 +307,9 @@ public final class MainActivity extends Activity {
                             android.widget.Toast.makeText(this,
                                 "Zapisano: "+labels[index],
                                 android.widget.Toast.LENGTH_SHORT).show();
-                            if(pendingOverduePlanTasks().isEmpty()) {
-                                alert("Wszystkie zaległe jednorazowe czynności "
-                                    +"mają już nowe terminy.");
+                            if(pendingPlanningTasks().isEmpty()) {
+                                alert("Wszystkie czynności do zaplanowania "
+                                    +"otrzymały nowe terminy.");
                             } else {
                                 // Zostań w przeplanowaniu: 3 → 2 → 1 bez szukania przycisku.
                                 showOverduePlanList();
@@ -303,6 +321,39 @@ public final class MainActivity extends Activity {
             })
             .setNegativeButton("Wróć do listy",
                 (dialog,which)->showOverduePlanList()).show();
+    }
+
+    /** Nie zakładaj, że bieżący profil będzie wykonywać cudze zadanie. */
+    private void showTaskPlannerAssignee(SmartTaskPlanner.Task task) {
+        java.util.List<Long> ids=new java.util.ArrayList<>();
+        java.util.List<String> names=new java.util.ArrayList<>();
+        try(Cursor cursor=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",null)) {
+            while(cursor.moveToNext()) {
+                ids.add(cursor.getLong(0));
+                names.add(cursor.getString(1));
+            }
+        }
+        if(ids.isEmpty()) {
+            alert("Dodaj domownika w Ustawieniach → Użytkownicy, "
+                +"aby wyszukiwać terminy według jego grafiku.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(task.title+" • kto ma wykonać?")
+            .setItems(names.toArray(new String[0]),(dialog,index)->{
+                try {
+                    SmartTaskPlanner.assignIfMissing(db.getWritableDatabase(),
+                        task.id,ids.get(index));
+                    SmartTaskPlanner.Task updated=SmartTaskPlanner.readAny(
+                        db.getReadableDatabase(),task.id);
+                    if(updated!=null)showOverduePlanOptions(updated);
+                } catch(Exception error) {
+                    alert("Nie przypisano czynności: "+error.getMessage());
+                }
+            })
+            .setNegativeButton("Wróć do listy",(d,w)->showOverduePlanList())
+            .show();
     }
 
     private boolean backupLegacyExportNext;
@@ -6908,8 +6959,8 @@ public final class MainActivity extends Activity {
             () -> editTask(null, "", "", "once", 1));
         compactAction(row3, "▦ Kalendarz", () -> go("calendar"));
         button("❄ Przygotowanie do zimy",this::showFrostPreparation);
-        if(db.overdueTasks()>0)
-            button("↻ Znajdź nowe terminy zaległych",this::showOverduePlanList);
+        if(!pendingPlanningTasks().isEmpty())
+            button("↻ Zaplanuj bez terminu i zaległe",this::showOverduePlanList);
 
         note("Zaległe: " + db.overdueTasks()
             + " • wykonanie cyklicznej wyznacza kolejny termin.");
