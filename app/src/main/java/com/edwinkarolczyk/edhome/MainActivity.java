@@ -187,7 +187,7 @@ public final class MainActivity extends Activity {
             (title,due,minutes,reminder,member) -> {
                 if(db.memberName(member).isEmpty())
                     throw new IllegalArgumentException("Najpierw wybierz domownika.");
-                db.saveTask(null,title,due,"once",1,
+                long savedId=db.saveTask(null,title,due,"once",1,
                     null,"normal",minutes,member,reminder,0,
                     new java.util.ArrayList<>(),null);
                 ReminderReceiver.schedule(this);
@@ -195,6 +195,14 @@ public final class MainActivity extends Activity {
                 tasksFilter = "all";
                 tasksPage = 0;
                 go("tasks");
+                if(due.isEmpty())root.post(()->{
+                    SmartTaskPlanner.Task pending=SmartTaskPlanner.readAny(
+                        db.getReadableDatabase(),savedId);
+                    if(pending!=null && !SmartTaskPlanner.proposeUndated(
+                            db.getReadableDatabase(),savedId,
+                            java.time.LocalDateTime.now()).isEmpty())
+                        showOverduePlanOptions(pending);
+                });
             },this::launchQuickTaskSpeech);
         launcherQuickTaskDialog.setOnDismissListener(ignored -> {
             launcherQuickTaskDialog = null;
@@ -210,7 +218,7 @@ public final class MainActivity extends Activity {
             return false;
         intent.removeExtra("open_overdue_plan");
         if(!BetaUpdater.isBeta() || !unlocked || root==null)return true;
-        tasksFilter="overdue";
+        tasksFilter="all";
         tasksPage=0;
         go("tasks");
         showOverduePlanList();
@@ -25421,7 +25429,7 @@ public final class MainActivity extends Activity {
             }
         }
 
-        void saveTask(Long id, String title, String dueDate, String rule, int every,
+        long saveTask(Long id, String title, String dueDate, String rule, int every,
                 Long placeId, String priority, int durationMinutes,
                 Long assigneeId, String customTime, int reminderLeadDays,
                 java.util.List<Long> rotationMembers, Long projectId) {
@@ -25500,6 +25508,7 @@ public final class MainActivity extends Activity {
                 values.put("place_id", placeId);
             }
             SQLiteDatabase database = getWritableDatabase();
+            long savedId=-1L;
             database.beginTransaction();
             try {
                 long taskId;
@@ -25531,10 +25540,12 @@ public final class MainActivity extends Activity {
                         database.insertOrThrow("task_rotation_members", null, rotation);
                     }
                 }
+                savedId=taskId;
                 database.setTransactionSuccessful();
             } finally {
                 database.endTransaction();
             }
+            return savedId;
         }
 
         Long taskProjectId(long taskId) {
