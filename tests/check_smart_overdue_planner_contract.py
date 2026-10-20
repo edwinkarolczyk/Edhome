@@ -36,7 +36,7 @@ for token in (
 
 assert 'remind_time TEXT' in main
 assert '"remind_time", "reminder_lead_days"' in backup
-assert 'super(context, "edhome-beta-preview.db", null, 50' in main
+assert 'super(context, "edhome-beta-preview.db", null, 51' in main
 for token in (
     "SmartTaskPlanner.proposeNew(",
     "SmartTaskPlanner.proposeForProject(",
@@ -91,4 +91,4 @@ assert 'DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy"' in labels
 assert "TaskDateLabels.format(task.due)" in main
 assert "TaskDateLabels.format(option.date)" in main
 assert "TaskDateLabels.format(o.date)" in shortcut
-print("Smart planner: wiele terminów w jednym przebiegu, polskie dni tygodnia i backup v50 PASS")
+print("Smart planner: wiele terminów w jednym przebiegu, polskie dni tygodnia i backup v51 PASS")
