@@ -9019,6 +9019,24 @@ public final class EdhomeDesktop extends JFrame {
         showSection(current);
     }
 
+    /** Pełny wiersz kompatybilny z DataBackup.TABLES["projects"] na Androidzie. */
+    static JsonObject newDesktopProjectTemplate(long id,long now) {
+        JsonObject row=new JsonObject();
+        row.addProperty("id",id);
+        row.addProperty("name","Nowy projekt");
+        row.add("parent_id",com.google.gson.JsonNull.INSTANCE);
+        row.add("place_id",com.google.gson.JsonNull.INSTANCE);
+        row.add("assignee_id",com.google.gson.JsonNull.INSTANCE);
+        row.addProperty("status","active");
+        row.add("due_date",com.google.gson.JsonNull.INSTANCE);
+        row.add("budget_grosz",com.google.gson.JsonNull.INSTANCE);
+        row.add("thumbnail_base64",com.google.gson.JsonNull.INSTANCE);
+        row.add("labor_rate_grosz",com.google.gson.JsonNull.INSTANCE);
+        row.addProperty("created_at",now);
+        row.addProperty("show_in_main_tasks",1);
+        return row;
+    }
+
     private JsonObject newRowTemplate(String tableName) {
         JsonObject row = new JsonObject();
         long id = nextId(tableName);
@@ -9042,24 +9060,8 @@ public final class EdhomeDesktop extends JFrame {
             row.addProperty("project_sort_order", 0L);
             return row;
         }
-        if ("projects".equals(tableName)) {
-            row.addProperty("id", id);
-            row.addProperty("name", "Nowy projekt");
-            row.add("parent_id", com.google.gson.JsonNull.INSTANCE);
-            row.add("place_id", com.google.gson.JsonNull.INSTANCE);
-            row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
-            row.addProperty("status", "active");
-            row.add("due_date", com.google.gson.JsonNull.INSTANCE);
-            row.add("budget_grosz", com.google.gson.JsonNull.INSTANCE);
-            // Dokładnie ten sam zestaw kolumn co DataBackup.TABLES["projects"]
-            // na Androidzie. Brak klucza (nawet dla pustego pola) odrzuca
-            // cały snapshot i zrywa automatyczną synchronizację.
-            row.add("thumbnail_base64", com.google.gson.JsonNull.INSTANCE);
-            row.add("labor_rate_grosz", com.google.gson.JsonNull.INSTANCE);
-            row.addProperty("created_at", now);
-            row.addProperty("show_in_main_tasks",1);
-            return row;
-        }
+        if ("projects".equals(tableName))
+            return newDesktopProjectTemplate(id,now);
         if ("pantry".equals(tableName)) {
             row.addProperty("id", id);
             row.addProperty("name", "Nowy produkt");
