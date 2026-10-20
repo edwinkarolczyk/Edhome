@@ -138,6 +138,28 @@ final class DataBackup {
 
     private DataBackup() { }
 
+    /**
+     * Diagnostyka LAN ujawnia tylko zdefiniowaną w kodzie tabelę i kolumnę.
+     * Nigdy nie zapisuj treści wyjątku zawierającego dane z kopii użytkownika.
+     */
+    static String safeHubFailureCode(IllegalArgumentException failure) {
+        if (failure == null) return "validation_failed";
+        String message=failure.getMessage();
+        final String prefix="Niekompletny rekord: ";
+        if (message!=null && message.startsWith(prefix)) {
+            String field=message.substring(prefix.length());
+            for(String[] definition:TABLES) {
+                for(int i=1;i<definition.length;i++) {
+                    if((definition[0]+"."+definition[i]).equals(field))
+                        return "missing_field="+field;
+                }
+            }
+        }
+        return "validation_failed";
+    }
+
+
+
     static String exportJson(SQLiteDatabase database, SharedPreferences prefs) throws Exception {
         return exportJson(database, prefs, java.util.Collections.emptySet());
     }
@@ -772,7 +794,7 @@ final class DataBackup {
                                 values.put(key, ""); continue;
                             }
                         }
-                        throw new IllegalArgumentException("Niekompletny rekord: " + definition[0]);
+                        throw new IllegalArgumentException("Niekompletny rekord: " + definition[0] + "." + key);
                     }
                     Object value = item.get(key);
                     if (value == JSONObject.NULL) {
