@@ -30,9 +30,15 @@ assert 'values.put("status","pending");' in store
 worker=main.split("private void importStatementFilesWorker(",1)[1].split(
     "private static final class BankAutoCandidate",1)[0]
 assert "BankEvidenceStore.ingest(" in worker
-assert "autoSettleImportedBankEvidence(incoming)" in worker
-assert worker.index("BankEvidenceStore.ingest(")<worker.index(
-    "autoSettleImportedBankEvidence(incoming)")
+# Od 40 zatwierdzonych decyzji: po imporcie nigdy nie księguj bez zgody.
+assert "autoSettleImportedBankEvidence(incoming)" not in worker
+assert "BankEvidenceStore.match(" not in worker
+assert "PaycheckStore.confirm(" not in worker
+assert "PaycheckMonthlyBudget.match(" not in worker
+assert 'setTitle("Rozliczyć teraz?")' in worker
+assert '.setPositiveButton("Rozlicz teraz"' in worker
+assert '.setNegativeButton("Później",null)' in worker
+assert worker.index("BankEvidenceStore.ingest(")<worker.index('setTitle("Rozliczyć teraz?")')
 matching=main.split("private BankAutoResult autoSettleImportedBankEvidence(",1)[1].split(
     "private void showBankEvidenceQueue(int filter)",1)[0]
 for required in (

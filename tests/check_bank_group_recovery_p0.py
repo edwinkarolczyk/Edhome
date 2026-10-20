@@ -45,6 +45,43 @@ for forbidden in ("PaycheckStore.add(", "PaycheckStore.confirm(", "matchBudgetAc
 assert 'editor.putString(PREF_KEY,serialize(items))' in budget
 assert 'PaycheckBudgetHistoryStore.stage(prefs,editor,events)' in budget
 
+# Bramka P0: snapshot i restore są blokowane przed utratą dziennika
+# przerwanego rozliczenia grupowego. Nie tworzymy fałszywego salda.
+backup=(src/"DataBackup.java").read_text(encoding="utf-8")
+assert "static void requireCompletedForSnapshot(SQLiteDatabase db)" in settle
+guard=settle.split("static void requireCompletedForSnapshot(",1)[1].split(
+    "private static void journal(",1)[0]
+assert "sqlite_master" in guard and 'SELECT 1 FROM "+JOURNAL+" LIMIT 1' in guard
+assert 'if(pending.moveToFirst())' in guard and "IllegalStateException" in guard
+export=backup.split("static String exportJson(SQLiteDatabase database, SharedPreferences prefs,",1)[1].split(
+    "JSONObject result = new JSONObject();",1)[0]
+assert "BankBudgetGroupSettlement.requireCompletedForSnapshot(database);" in export
+assert export.index("requireCompletedForSnapshot(database)")<export.index(
+    "PaycheckBudgetSqliteStore.reconcile(database,prefs)")
+restore=backup.split("static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,",1)[1].split(
+    "database.beginTransaction();",1)[0]
+assert "BankBudgetGroupSettlement.requireCompletedForSnapshot(database);" in restore
+assert restore.index("requireCompletedForSnapshot(database)")<restore.index(
+    "JSONObject root = new JSONObject(json)")
+
+def can_snapshot(con):
+    exists=con.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                       "AND name='bank_group_settlement_recovery'").fetchone()
+    if exists and con.execute(
+       "SELECT 1 FROM bank_group_settlement_recovery LIMIT 1").fetchone():
+        return False
+    return True
+
+c=sqlite3.connect(":memory:")
+assert can_snapshot(c)
+c.execute("CREATE TABLE bank_group_settlement_recovery(evidence_key TEXT PRIMARY KEY)")
+assert can_snapshot(c)
+c.execute("INSERT INTO bank_group_settlement_recovery VALUES ('unfinished')")
+assert not can_snapshot(c)
+c.execute("DELETE FROM bank_group_settlement_recovery")
+assert can_snapshot(c)
+c.close()
+
 # Symulacja księgi: 500 zł wydatku, jednego dowodu albo 200+300.
 def new_db():
     con = sqlite3.connect(":memory:")

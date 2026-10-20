@@ -79,6 +79,27 @@ final class BankBudgetGroupSettlement {
         }
     }
 
+    /**
+     * Snapshot/restore nie może zgubić dziennika częściowo rozliczonej grupy.
+     * Dziennik jest lokalny i celowo nie należy do publicznego snapshotu LAN/ZIP:
+     * dopóki istnieje niedokończony wpis, blokujemy oba kierunki transferu.
+     * Po otwarciu PayCheck repairInterrupted bezpiecznie kończy powiązania.
+     */
+    static void requireCompletedForSnapshot(SQLiteDatabase db) {
+        try(Cursor tables=db.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                new String[]{JOURNAL})) {
+            if(!tables.moveToFirst())return;
+        }
+        try(Cursor pending=db.rawQuery("SELECT 1 FROM "+JOURNAL+" LIMIT 1",null)) {
+            if(pending.moveToFirst())
+                throw new IllegalStateException(
+                    "Niedokończone rozliczenie bankowe. Otwórz PayCheck, "
+                    +"sprawdź wynik naprawy i ponów operację ZIP/LAN. "
+                    +"Nie nadpisuj danych przed zakończeniem rozliczenia.");
+        }
+    }
+
     private static void journal(SQLiteDatabase db,String evidenceKey,String mode,
             YearMonth month,String firstItem,String secondItem,
             String firstOperation,String secondOperation,String secondEvidence) {

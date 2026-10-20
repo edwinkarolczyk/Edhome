@@ -1,3 +1,11 @@
+## 2026-10-20 — P0 Budżet/PayCheck: jawne rozliczanie po imporcie i ochrona snapshotu (beta)
+
+- **Decyzje 1–40:** specyfikacja zatwierdzona w `docs/EDHOME_BUDZET_PAYCHECK_40_DECYZJI_2026-10-20.md`. Wszystkie rozliczenia bankowe wymagają osobnej zgody, także przy jednoznacznym dopasowaniu.
+- **Android:** `MainActivity.importStatementFilesWorker` importuje wyłącznie dowody `BankEvidenceStore.ingest`; nie wywołuje automatycznego księgowania `autoSettleImportedBankEvidence`. Po imporcie pokazuje „Rozliczyć teraz?” → „Rozlicz teraz”/„Później”, a istniejący ekran propozycji wymaga już osobnych potwierdzeń. Nie zmienia to salda podczas importu.
+- **ZIP/LAN:** `BankBudgetGroupSettlement.requireCompletedForSnapshot` blokuje snapshot oraz restore z lokalnym niedokończonym dziennikiem `bank_group_settlement_recovery`. Komunikat prowadzi do PayCheck, gdzie `repairInterrupted` ma odzyskać rozliczenie; brak cichej utraty dziennika.
+- **Testy:** aktualizacja kontraktu importu bez automatycznego księgowania i regresji blokady ZIP/recovery. **CI i fizyczny test telefonu do potwierdzenia; brak nowych migracji.**
+- **Otwarte:** pełny krokowy kreator, limit propozycji 300 / limit naprawy 500, test rzeczywistych wyciągów, nadpłat oraz ZIP/Android↔Desktop na urządzeniach. Stable `main` bez zmian.
+
 ## 2026-10-20 — Czynności: zbiorczy podgląd i automatyczne dopasowanie (Android Beta 0.8.1.136 / 329)
 
 - **Dialog na telefonie:** na dole listy „Planowanie czynności • pozostało N” nowy przycisk „Dopasuj terminy automatycznie”. Lista propozycji wyświetla każdą czynność, datę z pełną polską nazwą dnia i zakres godzin (`TaskDateLabels`). Bez wykonawcy lub bez wolnej godziny — informacja zamiast fikcyjnego terminu; można przypisać domownika i przeliczyć.

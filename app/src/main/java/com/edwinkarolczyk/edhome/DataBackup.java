@@ -150,6 +150,7 @@ final class DataBackup {
             Set<Long> omitStorageThumbnailIds) throws Exception {
         if (omitStorageThumbnailIds == null)
             omitStorageThumbnailIds = java.util.Collections.emptySet();
+        BankBudgetGroupSettlement.requireCompletedForSnapshot(database);
         // Migrate old preferences to SQLite before generating a snapshot.
         // Failed migration aborts export and never drops historical entries.
         PaycheckBudgetSqliteStore.reconcile(database,prefs);
@@ -329,6 +330,9 @@ final class DataBackup {
             throws Exception {
         if (archivedStorageThumbs == null)
             archivedStorageThumbs = java.util.Collections.emptyMap();
+        // Przywrócenie nie może zastąpić księgi, gdy trwa naprawa grupy.
+        // Bez tego utracilibyśmy lokalny dziennik SQL -> SharedPreferences.
+        BankBudgetGroupSettlement.requireCompletedForSnapshot(database);
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
             throw new IllegalArgumentException("Plik jest za duży (maks. 32 MB).");
         JSONObject root = new JSONObject(json);

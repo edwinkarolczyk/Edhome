@@ -15119,10 +15119,9 @@ public final class MainActivity extends Activity {
             diagStage="QUEUE_SAVE";
             BankEvidenceStore.IngestResult queue=BankEvidenceStore.ingest(
                 db.getWritableDatabase(),incoming);
-            // Jednoznaczne powiązania z pozycjami Budżetu: tylko kwota,
-            // kierunek, miesiąc, charakterystyczna nazwa odbiorcy i unikalność.
-            // Wątpliwe dopasowania pozostają w kolejce do ręcznej decyzji.
-            BankAutoResult reconciliation=autoSettleImportedBankEvidence(incoming);
+            // P0: import zapisuje wyłącznie dowody bankowe. Nawet pewne
+            // dopasowanie wymaga osobnej akceptacji użytkownika.
+            // Nie wywoływać tutaj autoSettleImportedBankEvidence: zmienia saldo.
             bankImportDiag("OK",files.size(),queue.inserted);
             DiagnosticLog.event("PAYCHECK_BANK_FILES_PREVIEW");
             java.util.List<String> detectedSources=new java.util.ArrayList<>();
@@ -15145,12 +15144,19 @@ public final class MainActivity extends Activity {
                     +" • Wydatki: "+importedExpenseCount
                     +"\nNowo zapisane: "+queue.inserted
                     +" • Duplikaty: "+duplicates
-                    +"\nAutomatycznie uzgodnione: "+reconciliation.matched
-                    +" • Do wyjaśnienia: "+reconciliation.review
+                    +"\nDo ręcznego rozliczenia z tej partii: "+queue.inserted
                     +"\nJeśli plik zawiera późniejsze daty niż rozpoznane, "
                     +"sprawdź dokument. Samo wyświetlenie propozycji "
                     +"nie zmienia salda.";
-                showBankBudgetProposals();
+                new AlertDialog.Builder(this)
+                    .setTitle("Rozliczyć teraz?")
+                    .setMessage(bankProposalLastImportSummary
+                        +"\n\nEDHOME tylko proponuje dopasowania. "
+                        +"Saldo zmienia się dopiero po Twoim zatwierdzeniu.")
+                    .setPositiveButton("Rozlicz teraz",
+                        (dialog,which)->showBankBudgetProposals())
+                    .setNegativeButton("Później",null)
+                    .show();
             });
         }catch(Exception error){
             bankImportDiag("BŁĄD • "+diagStage,files.size(),0);
