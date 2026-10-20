@@ -347,7 +347,7 @@ public final class MainActivity extends Activity {
                             .setMessage(error.getMessage()
                                 +"\\nNie wprowadzono częściowych zmian.")
                             .setPositiveButton("Przelicz ponownie",
-                                (d,w)->showBatchPlanPreview())
+                                (retryDialog,retryWhich)->showBatchPlanPreview())
                             .setNegativeButton("Wróć",null)
                             .show();
                     }
