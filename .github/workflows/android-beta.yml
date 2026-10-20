@@ -658,7 +658,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.0.135 / 327 — Czynności: rano około 8:00 i wieczorem około 19:00 EDHOME szuka do trzech wolnych terminów dla zaległych i bez daty, na 28 dni naprzód. Powiadomienia nie powtarzają niezmienionych propozycji. Przed planowaniem bez wykonawcy aplikacja pyta, kto wykona czynność; szybki formularz wybiera domownika i domyślnie zapisuje bez daty, a gdy znajdzie termin pokazuje wybór od razu. W Szybkiej czynności jest mikrofon z polskim rozpoznawaniem mowy Android/Google; tekst można poprawić. Żadne terminy nie są zatwierdzane automatycznie. Aktualizuj bez odinstalowywania."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.135 / 328 — Ustawienia po czystej instalacji: Pastelowy, 24 miejsca Start, AI 3D i pełne grafiki kafelków, przypomnienia włączone (Android wymaga zgody na powiadomienia), cisza nocna 22:00–07:00, NFC bez globalnego nasłuchu, widoczne typy magazynu i galeria, czas wyjmowania 5 sekund. Zapisane preferencje pozostają bez zmian przy aktualizacji, nowe pola są objęte ZIP. Ustawienie imienia pierwszego profilu wymaga jeszcze osobnego kreatora. Aktualizuj bez odinstalowywania."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
