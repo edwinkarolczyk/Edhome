@@ -18,6 +18,27 @@ final class DesktopHubServerRuntimeTest {
     private static final String TOKEN="test_token_12345678901234567890";
 
     @Test
+    void desktopHubDoesNotDropNullableAndroidRecordFields() throws Exception {
+        // Real production GSON instance, not an independent test configuration.
+        java.lang.reflect.Field serializer=EdhomeDesktop.class.getDeclaredField("GSON");
+        serializer.setAccessible(true);
+        com.google.gson.Gson gson=(com.google.gson.Gson)serializer.get(null);
+        com.google.gson.JsonObject project=new com.google.gson.JsonObject();
+        project.addProperty("id",5);
+        project.add("parent_id",com.google.gson.JsonNull.INSTANCE);
+        project.add("thumbnail_base64",com.google.gson.JsonNull.INSTANCE);
+        project.add("labor_rate_grosz",com.google.gson.JsonNull.INSTANCE);
+        com.google.gson.JsonObject output=com.google.gson.JsonParser.parseString(
+            gson.toJson(project)).getAsJsonObject();
+        assertTrue(output.has("parent_id"));
+        assertTrue(output.get("parent_id").isJsonNull());
+        assertTrue(output.has("thumbnail_base64"));
+        assertTrue(output.get("thumbnail_base64").isJsonNull());
+        assertTrue(output.has("labor_rate_grosz"));
+        assertTrue(output.get("labor_rate_grosz").isJsonNull());
+    }
+
+    @Test
     void servesAuthenticatedStatusRejectsBadTokenAndAnswersDiscovery() throws Exception {
         DesktopHubServer.Host host=new DesktopHubServer.Host() {
             @Override public String snapshot(){return "{\"schema\":1}";}
