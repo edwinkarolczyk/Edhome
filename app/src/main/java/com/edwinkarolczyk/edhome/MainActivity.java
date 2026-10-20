@@ -133,6 +133,33 @@ public final class MainActivity extends Activity {
     private AlertDialog quickStorageSetupDialog;
     private AlertDialog dataBackupBusyDialog;
     private AlertDialog launcherQuickTaskDialog;
+    private android.widget.EditText quickTaskSpeechTarget;
+    private static final int RECOGNIZE_QUICK_TASK_SPEECH = 1244;
+
+    private void launchQuickTaskSpeech(android.widget.EditText target) {
+        Intent recognizer=new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        recognizer.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        recognizer.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE,"pl-PL");
+        recognizer.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,
+            "Powiedz nazwę czynności");
+        recognizer.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS,1);
+        try {
+            quickTaskSpeechTarget=target;
+            startActivityForResult(recognizer,RECOGNIZE_QUICK_TASK_SPEECH);
+            DiagnosticLog.event("TASK_QUICK_SPEECH_STARTED");
+        } catch(android.content.ActivityNotFoundException unavailable) {
+            quickTaskSpeechTarget=null;
+            alert("Brak usługi rozpoznawania mowy. "
+                +"Możesz zainstalować lub włączyć rozpoznawanie Google "
+                +"albo wpisać czynność ręcznie.");
+        } catch(Exception error) {
+            quickTaskSpeechTarget=null;
+            DiagnosticLog.error("TASK_QUICK_SPEECH_LAUNCH",error);
+            alert("Nie można uruchomić dyktowania.");
+        }
+    }
+
     private static final String ACTION_QUICK_TASK =
         "com.edwinkarolczyk.edhome.action.QUICK_TASK";
 
@@ -145,24 +172,34 @@ public final class MainActivity extends Activity {
         if (!BetaUpdater.isBeta() || !unlocked || root == null) return true;
         if (launcherQuickTaskDialog != null && launcherQuickTaskDialog.isShowing())
             return true;
-        launcherQuickTaskDialog = QuickTaskShortcut.show(this, minutes -> {
-            final long member=activeMemberId();
-            if(member<=0)return java.util.Collections.emptyList();
-            return SmartTaskPlanner.proposeNew(db.getReadableDatabase(),
-                member,minutes,java.time.LocalDateTime.now());
-        }, (title,due,minutes,reminder) -> {
-            db.saveTask(null,title,due,"once",1,
-                null,"normal",minutes,
-                activeMemberId()>0?activeMemberId():null,reminder,0,
-                new java.util.ArrayList<>(),null);
-            ReminderReceiver.schedule(this);
-            DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");
-            tasksFilter = "all";
-            tasksPage = 0;
-            go("tasks");
+        java.util.List<QuickTaskShortcut.Member> members=
+            new java.util.ArrayList<>();
+        try(Cursor cursor=db.getReadableDatabase().rawQuery(
+                "SELECT id,name FROM household_members ORDER BY name COLLATE NOCASE",null)) {
+            while(cursor.moveToNext())
+                members.add(new QuickTaskShortcut.Member(cursor.getLong(0),
+                    cursor.getString(1)));
+        }
+        launcherQuickTaskDialog = QuickTaskShortcut.show(this,members,
+            (member,minutes) -> SmartTaskPlanner.proposeNew(
+                db.getReadableDatabase(),member,minutes,
+                java.time.LocalDateTime.now()),
+            (title,due,minutes,reminder,member) -> {
+                if(db.memberName(member).isEmpty())
+                    throw new IllegalArgumentException("Najpierw wybierz domownika.");
+                db.saveTask(null,title,due,"once",1,
+                    null,"normal",minutes,member,reminder,0,
+                    new java.util.ArrayList<>(),null);
+                ReminderReceiver.schedule(this);
+                DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");
+                tasksFilter = "all";
+                tasksPage = 0;
+                go("tasks");
+            },this::launchQuickTaskSpeech);
+        launcherQuickTaskDialog.setOnDismissListener(ignored -> {
+            launcherQuickTaskDialog = null;
+            quickTaskSpeechTarget = null;
         });
-        launcherQuickTaskDialog.setOnDismissListener(ignored ->
-            launcherQuickTaskDialog = null);
         return true;
     }
 
@@ -24298,6 +24335,24 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if(request==RECOGNIZE_QUICK_TASK_SPEECH) {
+            android.widget.EditText target=quickTaskSpeechTarget;
+            quickTaskSpeechTarget=null;
+            if(result==RESULT_OK && target!=null
+                    &&launcherQuickTaskDialog!=null
+                    &&launcherQuickTaskDialog.isShowing() && data!=null) {
+                java.util.ArrayList<String> candidates=data.getStringArrayListExtra(
+                    android.speech.RecognizerIntent.EXTRA_RESULTS);
+                if(candidates!=null&&!candidates.isEmpty()
+                        &&candidates.get(0)!=null) {
+                    String spoken=candidates.get(0).trim();
+                    target.setText(spoken.length()>160?spoken.substring(0,160):spoken);
+                    target.setSelection(target.length());
+                    DiagnosticLog.event("TASK_QUICK_SPEECH_TRANSCRIBED");
+                }
+            }
+            return;
+        }
         if(request==IMPORT_PROJECT_THUMBNAIL){
             long id=pendingProjectThumbnailId;
             pendingProjectThumbnailId=0;
