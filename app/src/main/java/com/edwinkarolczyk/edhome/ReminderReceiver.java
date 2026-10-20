@@ -428,9 +428,10 @@ public final class ReminderReceiver extends BroadcastReceiver {
         if (legacy) editor.putString("reminder_legacy_day", today.toString());
         if (planningFresh && planning!=null)
             editor.putString("task_planner_last_notice",planning.digest);
-        else editor.putString(firedKey, firedValue)
-            .putString("reminder_custom_day_"
-                + intent.getLongExtra("task_id", -1L), today.toString());
+        if (!legacy && !plannerOnly)
+            editor.putString(firedKey, firedValue)
+                .putString("reminder_custom_day_"
+                    + intent.getLongExtra("task_id", -1L), today.toString());
         editor.apply();
         DiagnosticLog.event("REMINDER_DELIVERED");
         if (!legacy) schedule(context);
