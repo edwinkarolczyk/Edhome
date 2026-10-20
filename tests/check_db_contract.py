@@ -136,6 +136,14 @@ step38 = garden38.copy()
 step39 = statements(section(upgrade, "if(oldVersion < 39)", "if(oldVersion < 40)"))
 project40 = statements(section(project_store, "static void create(SQLiteDatabase db)",
                                "static void upgrade41(").replace("db.execSQL(", "database.execSQL("))
+# Wersja 50 nie ma jeszcze przełącznika widoczności projektu.
+project40legacy = [sql.replace(
+    ",show_in_main_tasks INTEGER NOT NULL DEFAULT 1 CHECK(show_in_main_tasks IN (0,1))", "")
+    for sql in project40]
+step51 = [
+    "ALTER TABLE projects ADD COLUMN show_in_main_tasks INTEGER NOT NULL DEFAULT 1 "
+    "CHECK(show_in_main_tasks IN (0,1))"
+]
 project41 = statements(section(project_store, "static void upgrade41(SQLiteDatabase db)",
                                "static void upgrade43(").replace("db.execSQL(", "database.execSQL("))
 project43 = statements(section(project_store, "static void upgrade43(SQLiteDatabase db)",
@@ -155,7 +163,7 @@ budget46 = [
     for table in ("budget_items", "budget_occurrences", "budget_recipients",
                   "budget_credits", "budget_history")
 ]
-step40 = statements(section(upgrade, "if(oldVersion < 40)", "if(oldVersion < 41)")) + project40
+step40 = statements(section(upgrade, "if(oldVersion < 40)", "if(oldVersion < 41)")) + project40legacy
 step41 = statements(section(upgrade, "if(oldVersion < 41)", "if(oldVersion < 42)")) + project41
 step30 = statements(section(upgrade, "if (oldVersion >= 20 && oldVersion < 30)", "if (oldVersion < 31)"))
 step31 = statements(section(upgrade, "if (oldVersion < 31)", "if(oldVersion < 32)"))
@@ -205,7 +213,7 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 50, "Database version and backup format differ"
+assert version == backup_version == 51, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42 + project43 + planning44 + budget46 + frost47)
@@ -301,7 +309,10 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, budget46)  # v45 to v46, archiwum i tabele Budżetu
     execute(db, step47)  # v46 to v47, ochrony przed mrozem
     execute(db, storage_step50)  # v49 to v50, zwrot rzeczy na miejsce
+    execute(db, step51)  # v50 to v51, brak utraty widoczności projektów
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
+    assert "show_in_main_tasks" in [x[1] for x in db.execute("PRAGMA table_info(projects)").fetchall()]
+    assert db.execute("SELECT COUNT(*) FROM projects WHERE show_in_main_tasks!=1").fetchone()[0]==0
     assert db.execute("SELECT id,title,done FROM tasks").fetchone() == (7, "Test", 0)
     db.execute("INSERT INTO device_timers (id,device_type,title,start_at,"
                "end_at,status) VALUES (3,'washer','Bawełna',1789980000000,"
