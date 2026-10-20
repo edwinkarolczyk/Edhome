@@ -866,6 +866,27 @@ final class DesktopHubSync {
                     break;
                 }
             }
+            boolean sameSettings=canonical(localRoot.opt("settings")).equals(
+                canonical(parsed.opt("settings")));
+            boolean sameTables=canonical(localRoot.opt("tables")).equals(
+                canonical(parsed.opt("tables")));
+            if(sameSettings && sameTables
+                    &&!canonical(localRoot.opt("syncRecords")).equals(
+                        canonical(parsed.opt("syncRecords")))) {
+                // Wyrównaj jedynie metadane synchronizacji. W przeciwnym razie
+                // przyjęcie tego samego zestawu rekordów wymuszało cały restore,
+                // powodowało zbędną walidację i potrafiło zatrzymać Hub w konflikcie.
+                database.beginTransaction();
+                try {
+                    SyncRecordStore.restoreMetadata(database,
+                        parsed.getJSONArray("syncRecords"));
+                    database.setTransactionSuccessful();
+                } finally {
+                    database.endTransaction();
+                }
+                DiagnosticLog.event("HUB_METADATA_ONLY_APPLIED");
+                dataChanged=false;
+            }
             if(dataChanged) {
                 try {
                     DataBackup.restoreJson(database,prefs,server);
