@@ -1,3 +1,11 @@
+## 2026-10-20 — Czynności: zbiorczy podgląd i automatyczne dopasowanie (Android Beta 0.8.1.136 / 329)
+
+- **Dialog na telefonie:** na dole listy „Planowanie czynności • pozostało N” nowy przycisk „Dopasuj terminy automatycznie”. Lista propozycji wyświetla każdą czynność, datę z pełną polską nazwą dnia i zakres godzin (`TaskDateLabels`). Bez wykonawcy lub bez wolnej godziny — informacja zamiast fikcyjnego terminu; można przypisać domownika i przeliczyć.
+- **Plan:** `SmartTaskPlanner.proposeForBatch` liczy do 28 dni zgodnie z grafikiem, blokadami, zleceniami i minutnikami. Wirtualne rezerwacje wcześniejszych dopasowań zapobiegają przydzieleniu dwóch czynności tej samej osoby na tę samą godzinę.
+- **Zapis:** `BatchTaskPlanner` pokazuje podgląd bez mutowania SQLite; dopiero „Zapisz dopasowane (X)” i osobne „Zatwierdź i zapisz” uruchamiają **jedną transakcję**, ponownie walidując daty, członków, zależności i konflikty. Błąd wycofuje cały zapis, niedopasowane czynności zostają bez zmian.
+- **Zgodność:** dotychczasowe planowanie pojedynczej czynności, reguły cykliczne, backup i synchronizacja bez modyfikacji schematu; Stable `main` bez zmian.
+- **Test:** `tests/check_batch_task_planner_contract.py` dołączony do Android CI. **Stan:** kod w `beta`, build/podpisana APK i test fizyczny pozostają do potwierdzenia. [Issue #11](https://github.com/edwinkarolczyk/Edhome/issues/11).
+
 ## 2026-10-20 — Ustawienia startowe tylko dla czystej instalacji (Android Beta 0.8.1.135 / 328)
 
 - **Użytkownik zatwierdził na podstawie czytelnych ekranów:** Pastelowy, obecny interfejs, 24 miejsca (3×8), AI 3D, pełne grafiki jako tło, gesty 450/1100 ms, przypomnienia Tak z ciszą 22:00–07:00, NFC bez stałego nasłuchu i działanie „Pokaż działania”, Magazyn (galeria i 3 typy widoczne), Spiżarnia 5 sekund.
