@@ -20,7 +20,7 @@ for token in (
     'PAYCHECK_BUDGET_PENDING_AUTO_CREATED',
     "WHERE scope='shared'",
     'DATABASE_MIGRATED_19_TO_20_PAYCHECK_SHARED',
-    'super(context, "edhome-beta-preview.db", null, 50)',
+    'super(context, "edhome-beta-preview.db", null, 51)',
 ):
     assert token in main, token
 assert 'button("Dodaj transakcję do PayCheck"' not in main, "PayCheck nie moze tworzyc osobnych transakcji z formularza"
@@ -41,7 +41,7 @@ for token in (
 ):
     assert token in store,token
 for token in (
-    'DB_VERSION = 50;',
+    'DB_VERSION = 51;',
     '{"paycheck_transactions", "id", "operation_id", "scope", "kind",',
     'inputVersion < 20 && "paycheck_transactions".equals(definition[0])',
     '!"shared".equals(scope)',
