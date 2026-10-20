@@ -13,8 +13,11 @@ manifest=(root/"app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
 for token in (
     'if (!BuildConfig.DIAGNOSTICS_ENABLED) return;',
     '"edhome_beta_prefs"',
-    'if (!prefs.getAll().isEmpty()',
-    'getDatabasePath("edhome-beta-preview.db").exists()) return;',
+    'if (prefs.getAll().isEmpty()',
+    '!getDatabasePath("edhome-beta-preview.db").exists()',
+    'FirstRunProfileSetup.register(this,prefs);',
+    '.putBoolean(FirstRunProfileSetup.PROFILE_PENDING,true)',
+    '.putBoolean(FirstRunProfileSetup.NOTIFICATION_PENDING,true)',
     '.putString("theme",UiSkin.PASTEL)',
     '.putString("home_interface_mode","current")',
     '.putInt(HomeTileLayout.PAGE_SLOTS_KEY,24)',
@@ -39,6 +42,19 @@ assert 'android:name=".EdhomeApplication"' in manifest
 assert 'SCAN_DEFAULT_NFC = "scan_default_nfc_global"' in main
 assert 'SCAN_DEFAULT_GLOBAL' in main
 assert 'icon_style_explicit' not in app
+onboarding=(source/"FirstRunProfileSetup.java").read_text(encoding="utf-8")
+for token in (
+    'private static void show(Activity activity, SharedPreferences preferences)',
+    'if (UserProfileStore.count(db)>0)',
+    'UserProfileStore.add(db,value,',
+    'UserProfileStore.ROLE_ADMIN',
+    'FirstRunProfileSetup' if False else 'FIRST_RUN_PROFILE_SAVE_FAILED',
+    'preferences.edit().putBoolean(PROFILE_PENDING,false).commit();',
+    'requestPermissions(',
+    'Build.VERSION.SDK_INT>=33',
+    'Manifest.permission.POST_NOTIFICATIONS',
+):
+    assert token in onboarding, "Konfiguracja pierwszego uruchomienia: "+token
 
 # Preset nie może tworzyć użytkownika Edwin ani zapisywać PIN-u.
 for forbidden in ('"Edwin"', 'pin_hash', 'household_members', 'user_profiles'):
