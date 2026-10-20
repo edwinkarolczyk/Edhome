@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 326,
-  "versionName": "0.8.0.134",
-  "changelog": "EDHOME Beta 0.8.0.134 / 326 — Diagnostyka: automatyczny transfer logów do Desktopu co około minutę, potwierdzenie SHA-256 trwałego zapisu na PC przed skasowaniem dokładnie przekazanych wpisów z Androida. Gdy PC jest wyłączony lub logi zmieniły się w trakcie wysyłki, pozostają na telefonie. Ustawienia: bezpośredni eksport pełnych logów Android do TXT i wysyłka przez aktualne API Desktopu. Logi docierają również przy konflikcie danych; synchronizacja pozostaje wstrzymana do porównania baz. Stan pokazuje, gdy API odpowiada, ale dane nie są jeszcze uzgodnione. Na PC w Ustawieniach pobierzesz osobne logi telefonu i Desktopu. Aktualizuj bez odinstalowywania EDHOME.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.0.134/edhome-beta.apk",
-  "sha256": "738555aaa371ee084feaae4305f9a86bf1428f70036c485b31d204a1507205f8"
+  "versionCode": 327,
+  "versionName": "0.8.1.134",
+  "changelog": "EDHOME Beta 0.8.0.135 / 327 — Czynności: rano około 8:00 i wieczorem około 19:00 EDHOME szuka do trzech wolnych terminów dla zaległych i bez daty, na 28 dni naprzód. Powiadomienia nie powtarzają niezmienionych propozycji. Przed planowaniem bez wykonawcy aplikacja pyta, kto wykona czynność; szybki formularz wybiera domownika i domyślnie zapisuje bez daty, a gdy znajdzie termin pokazuje wybór od razu. W Szybkiej czynności jest mikrofon z polskim rozpoznawaniem mowy Android/Google; tekst można poprawić. Żadne terminy nie są zatwierdzane automatycznie. Aktualizuj bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.134/edhome-beta.apk",
+  "sha256": "07408330bab235e7669bb0f258cc7edc496d1ae19bf176e845c83e4229b2d67f"
 }
