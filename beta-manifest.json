@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 329,
-  "versionName": "0.8.1.136",
-  "changelog": "EDHOME Beta 0.8.1.136 / 329 — Czynności: nowy przycisk Dopasuj terminy automatycznie na dole listy bezterminowych i zaległych. EDHOME proponuje niekolidujące przedziały w grafiku każdej osoby i pokazuje wszystkie czynności z pełnymi polskimi nazwami dni, datami i godzinami. Wybierz Zapisz dopasowane, aby zatwierdzić; zapis grupowy jest transakcyjny, a czynności bez wykonawcy lub dostępnego terminu pozostają bez zmian. Stable bez zmian. Aktualizuj bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.136/edhome-beta.apk",
-  "sha256": "116d1baaa26f9bb2c8546a1747c9a429c271955f2ccdff6fc49f71d3293cda9c"
+  "versionCode": 330,
+  "versionName": "0.8.1.137",
+  "changelog": "EDHOME Beta 0.8.1.137 / 330 — P0 PayCheck/Budżet: po imporcie bankowym EDHOME nie rozlicza przelewów automatycznie, lecz pyta Rozliczyć teraz? i pokazuje propozycje do świadomego zatwierdzenia. Eksport ZIP i przywracanie są blokowane przy niedokończonym rozliczeniu grupowym, aby nie utracić dziennika naprawy. Dopasowania 1:1 i 200+300=500 pozostają dostępne po ręcznej zgodzie. Stable bez zmian. Aktualizuj bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.137/edhome-beta.apk",
+  "sha256": "2da0609f14995f43b5d09ddb1313fd34a7f9dd716b427775199546863d4d6a56"
 }
