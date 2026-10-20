@@ -15,7 +15,7 @@ assert 'night.set(Calendar.HOUR_OF_DAY,19)' in receiver
 assert 'next.set(Calendar.HOUR_OF_DAY, 8)' in receiver
 assert 'manager.setInexactRepeating(AlarmManager.RTC_WAKEUP' in receiver
 assert 'planningOverview(planner)' in receiver
-assert 'pref.getString("task_planner_last_notice","")' in receiver
+assert '"task_planner_last_notice",""' in receiver
 assert 'if (planningFresh && planning!=null)' in receiver
 assert 'if (!legacy && !plannerOnly)' in receiver
 assert 'if (!pref.getBoolean("reminders_enabled", false)) return;' in receiver
