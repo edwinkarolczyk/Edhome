@@ -12,6 +12,8 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Button;
+import java.util.ArrayList;
 import android.view.View;
 import java.time.LocalDate;
 import java.util.List;
@@ -20,14 +22,26 @@ import java.util.List;
 final class QuickTaskShortcut {
     private QuickTaskShortcut() { }
 
+    static final class Member {
+        final long id;
+        final String name;
+        Member(long id,String name) {
+            this.id=id;
+            this.name=name;
+        }
+    }
     interface Suggest {
-        List<TimeSuggestions.Option> find(int durationMinutes);
+        List<TimeSuggestions.Option> find(long memberId,int durationMinutes);
     }
     interface Save {
-        void save(String name,String due,int minutes,String reminder);
+        void save(String name,String due,int minutes,String reminder,long memberId);
+    }
+    interface Speech {
+        void start(EditText target);
     }
 
-    static AlertDialog show(Activity activity,Suggest suggest,Save onSave) {
+    static AlertDialog show(Activity activity,List<Member> members,
+            Suggest suggest,Save onSave,Speech speech) {
         LinearLayout form=new LinearLayout(activity);
         form.setOrientation(LinearLayout.VERTICAL);
         int pad=Math.round(18*activity.getResources().getDisplayMetrics().density);
@@ -38,7 +52,35 @@ final class QuickTaskShortcut {
         title.setHint("Co trzeba zrobić?");
         title.setInputType(InputType.TYPE_CLASS_TEXT
             |InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        form.addView(title);
+        LinearLayout nameRow=new LinearLayout(activity);
+        nameRow.setOrientation(LinearLayout.HORIZONTAL);
+        nameRow.addView(title,new LinearLayout.LayoutParams(
+            0,Math.round(54*activity.getResources().getDisplayMetrics().density),1));
+        Button microphone=new Button(activity);
+        microphone.setText("🎤");
+        microphone.setContentDescription("Dyktuj nazwę czynności po polsku");
+        nameRow.addView(microphone,new LinearLayout.LayoutParams(
+            Math.round(64*activity.getResources().getDisplayMetrics().density),-2));
+        microphone.setOnClickListener(v->speech.start(title));
+        form.addView(nameRow);
+
+        TextView personLabel=new TextView(activity);
+        personLabel.setText("Kto ma wykonać? (wymagane)");
+        form.addView(personLabel);
+        Spinner person=new Spinner(activity);
+        ArrayList<String> names=new ArrayList<>();
+        names.add("Wybierz domownika…");
+        for(Member member:members) names.add(member.name);
+        ArrayAdapter<String> personAdapter=new ArrayAdapter<>(activity,
+            android.R.layout.simple_spinner_item,names);
+        personAdapter.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item);
+        person.setAdapter(personAdapter);
+        form.addView(person);
+        TextView personError=new TextView(activity);
+        personError.setTextColor(0xffbb3030);
+        form.addView(personError);
+
 
         TextView durationLabel=new TextView(activity);
         durationLabel.setText("Czas wykonania");
@@ -63,10 +105,11 @@ final class QuickTaskShortcut {
         adapter.setDropDownViewResource(
             android.R.layout.simple_spinner_dropdown_item);
         date.setAdapter(adapter);
+        date.setSelection(2);
         form.addView(date);
 
         TextView selected=new TextView(activity);
-        selected.setText("Termin: dzisiaj");
+        selected.setText("Bez terminu — EDHOME poszuka rano i wieczorem");
         selected.setPadding(0,pad/2,0,0);
         form.addView(selected);
         TextView caveat=new TextView(activity);
@@ -95,15 +138,23 @@ final class QuickTaskShortcut {
                 if(position!=3)chosen[0]=null;
                 if(position==0)selected.setText("Termin: dzisiaj");
                 else if(position==1)selected.setText("Termin: jutro");
-                else if(position==2)selected.setText("Bez terminu");
+                else if(position==2)selected.setText("Bez terminu — szukanie o 8:00 i 19:00");
                 else if(position==3) {
+                    int memberIndex=person.getSelectedItemPosition();
+                    if(memberIndex<=0) {
+                        personError.setText("Najpierw wybierz wykonawcę czynności.");
+                        date.setSelection(2);
+                        return;
+                    }
+                    personError.setText("");
                     List<TimeSuggestions.Option> slots=suggest.find(
+                        members.get(memberIndex-1).id,
                         minutes[duration.getSelectedItemPosition()]);
                     if(slots==null||slots.isEmpty()) {
                         date.setSelection(0);
                         new AlertDialog.Builder(activity)
                             .setTitle("Nie znaleziono wolnego dnia")
-                            .setMessage("Ustaw grafik aktywnej osoby lub "
+                            .setMessage("Ustaw grafik wybranego domownika lub "
                                 +"wybierz datę ręcznie. Dni z innymi "
                                 +"czynnościami nie są proponowane.")
                             .setPositiveButton("Rozumiem",null).show();
@@ -146,10 +197,29 @@ final class QuickTaskShortcut {
             .setNegativeButton("Anuluj",null)
             .setPositiveButton("Dodaj",null)
             .create();
+        person.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+            @Override public void onItemSelected(AdapterView<?> parent,View view,
+                    int position,long id) {
+                if(position>0)personError.setText("");
+                if(chosen[0]!=null) {
+                    chosen[0]=null;
+                    date.setSelection(2);
+                    selected.setText("Zmieniono wykonawcę — wyszukaj ponownie.");
+                }
+            }
+        });
         dialog.setOnShowListener(ignored->{
             dialog.getButton(DialogInterface.BUTTON_POSITIVE)
                 .setOnClickListener(v->{
                     String name=title.getText().toString().trim();
+                    int memberIndex=person.getSelectedItemPosition();
+                    if(memberIndex<=0) {
+                        personError.setText("Wybierz, kto ma wykonać tę czynność.");
+                        person.requestFocus();
+                        return;
+                    }
+                    long memberId=members.get(memberIndex-1).id;
                     int choice=date.getSelectedItemPosition();
                     if(choice==3&&chosen[0]==null) {
                         selected.setError("Wybierz propozycję.");
@@ -172,7 +242,7 @@ final class QuickTaskShortcut {
                     try {
                         onSave.save(name,due,
                             minutes[duration.getSelectedItemPosition()],
-                            choice==3?chosen[0].start.toString():null);
+                            choice==3?chosen[0].start.toString():null,memberId);
                         dialog.dismiss();
                     } catch(Exception error) {
                         title.setError("Nie zapisano czynności: "
