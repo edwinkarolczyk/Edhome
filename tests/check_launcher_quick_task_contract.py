@@ -40,7 +40,7 @@ form=Path("app/src/main/java/com/edwinkarolczyk/edhome/QuickTaskShortcut.java").
 for token in ("root.post(() -> openLauncherQuickTask(getIntent()));",
               "if (openLauncherQuickTask(intent)) return;",
               "intent.setAction(Intent.ACTION_MAIN);",
-              'db.saveTask(null,title,due,"once",1,',
+              'long savedId=db.saveTask(null,title,due,"once",1,',
               "ReminderReceiver.schedule(this);",
               'DiagnosticLog.event("TASK_QUICK_SHORTCUT_ADDED");'):
     assert token in main, token
@@ -74,5 +74,13 @@ assert "SELECT start_at,end_at FROM device_timers" in planner
 assert "ProjectPlanningStore.windows(" in planner
 print("Szybka czynność: trzy propozycje wolnych dni, grafik i przypomnienie OK")
 
-assert "final long member=activeMemberId();" in main
+assert "members.add(new QuickTaskShortcut.Member(" in main
+assert "this::launchQuickTaskSpeech" in main
+assert "SmartTaskPlanner.proposeUndated(" in main
+assert "RECOGNIZE_QUICK_TASK_SPEECH" in main
+assert "RecognizerIntent.EXTRA_RESULTS" in main
+assert 'names.add("Wybierz domownika…")' in form
+assert "person.getSelectedItemPosition()" in form
+assert "speech.start(title)" in form
+assert 'date.setSelection(2);' in form
 assert "selectedMemberId>0?selectedMemberId:null,reminder,0" not in main
