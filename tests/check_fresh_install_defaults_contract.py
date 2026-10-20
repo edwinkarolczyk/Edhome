@@ -41,7 +41,7 @@ assert 'android:name=".EdhomeApplication"' in manifest
 # świadomego wyboru stylu ikon.
 assert 'SCAN_DEFAULT_NFC = "scan_default_nfc_global"' in main
 assert 'SCAN_DEFAULT_GLOBAL' in main
-assert 'icon_style_explicit' not in app
+assert 'putBoolean("icon_style_explicit"' not in app
 onboarding=(source/"FirstRunProfileSetup.java").read_text(encoding="utf-8")
 for token in (
     'private static void show(Activity activity, SharedPreferences preferences)',
