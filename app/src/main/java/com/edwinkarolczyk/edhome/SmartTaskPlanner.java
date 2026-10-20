@@ -33,6 +33,22 @@ final class SmartTaskPlanner {
             this.repeatRule=repeatRule;this.duration=duration;this.project=project;
         }
     }
+    static final class DraftReservation {
+        final long memberId;
+        final LocalDate date;
+        final LocalTime start, end;
+        DraftReservation(long memberId,TimeSuggestions.Option option) {
+            this.memberId=memberId;
+            this.date=option.date;
+            this.start=option.start;
+            this.end=option.end;
+        }
+        boolean overlaps(long member,LocalDate day,LocalDateTime a,LocalDateTime b) {
+            return memberId==member && date.equals(day)
+                && TimeSlotRules.overlaps(a,b,date.atTime(start),date.atTime(end));
+        }
+    }
+
     private static final class Busy {
         final LocalDateTime start, end;
         Busy(LocalDateTime start,LocalDateTime end) {
@@ -267,9 +283,32 @@ final class SmartTaskPlanner {
             earliest.minusSeconds(1),null);
     }
 
+    /**
+     * Lista propozycji dla wsadowego podglądu: uwzględnia także czynności
+     * już dopasowane w tej samej sesji, ale jeszcze niezapisane w bazie.
+     */
+    static List<TimeSuggestions.Option> proposeForBatch(SQLiteDatabase db,
+            Task task,LocalDateTime now,List<DraftReservation> held) {
+        if(task==null || task.memberId<=0 ||
+                !reason(db,task,0L).isEmpty())return Collections.emptyList();
+        int duration=task.project
+            ?ProjectStore.remainingMinutes(db,task.id,task.duration)
+            :task.duration;
+        LocalDate notBefore=task.project
+            ?ProjectPlanningStore.planningNotBefore(db,task.id):null;
+        return calculate(db,task.memberId,task.id,duration,now,notBefore,held);
+    }
+
     private static List<TimeSuggestions.Option> calculate(SQLiteDatabase db,
             long memberId,long excludedTask,int duration,LocalDateTime now,
             LocalDate notBefore) {
+        return calculate(db,memberId,excludedTask,duration,now,notBefore,
+            Collections.emptyList());
+    }
+
+    private static List<TimeSuggestions.Option> calculate(SQLiteDatabase db,
+            long memberId,long excludedTask,int duration,LocalDateTime now,
+            LocalDate notBefore,List<DraftReservation> held) {
         if(memberId<=0 || duration<1 || duration>MAX_DURATION)
             return Collections.emptyList();
         ArrayList<TimeSuggestions.Option> options=new ArrayList<>();
@@ -293,6 +332,11 @@ final class SmartTaskPlanner {
                     boolean blocked=false;
                     for(Busy item:busy)if(item.overlaps(candidate,end)) {
                         blocked=true;break;
+                    }
+                    if(!blocked)for(DraftReservation hold:held) {
+                        if(hold.overlaps(memberId,date,candidate,end)) {
+                            blocked=true;break;
+                        }
                     }
                     if(!blocked) {
                         options.add(new TimeSuggestions.Option(date,
