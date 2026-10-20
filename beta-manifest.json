@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 328,
-  "versionName": "0.8.1.135",
-  "changelog": "EDHOME Beta 0.8.1.135 / 328 — Ustawienia po czystej instalacji: Pastelowy, 24 miejsca Start, AI 3D i pełne grafiki kafelków, przypomnienia włączone (Android wymaga zgody na powiadomienia), cisza nocna 22:00–07:00, NFC bez globalnego nasłuchu, widoczne typy magazynu i galeria, czas wyjmowania 5 sekund. Zapisane preferencje pozostają bez zmian przy aktualizacji, nowe pola są objęte ZIP. Pierwsze uruchomienie: kreator imienia administratora i systemowe pytanie o zgodę na powiadomienia; istniejące profile pozostają bez zmian. Aktualizuj bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.135/edhome-beta.apk",
-  "sha256": "6e39eccafa1f2dd2c7cda482af10940e5ce7a05a648e0e506f189dd9da634f7d"
+  "versionCode": 329,
+  "versionName": "0.8.1.136",
+  "changelog": "EDHOME Beta 0.8.1.136 / 329 — Czynności: nowy przycisk Dopasuj terminy automatycznie na dole listy bezterminowych i zaległych. EDHOME proponuje niekolidujące przedziały w grafiku każdej osoby i pokazuje wszystkie czynności z pełnymi polskimi nazwami dni, datami i godzinami. Wybierz Zapisz dopasowane, aby zatwierdzić; zapis grupowy jest transakcyjny, a czynności bez wykonawcy lub dostępnego terminu pozostają bez zmian. Stable bez zmian. Aktualizuj bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.136/edhome-beta.apk",
+  "sha256": "116d1baaa26f9bb2c8546a1747c9a429c271955f2ccdff6fc49f71d3293cda9c"
 }
