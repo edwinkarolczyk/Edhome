@@ -194,7 +194,9 @@ assert "else if(which==1)showBankBudgetProposals();" in menu
 assert 'this::showBankBudgetProposals' in main.split(
     "private void paycheck() {",1)[1].split("private void ",1)[0]
 assert 'bankProposalLastImportSummary=' in worker
-assert 'showBankBudgetProposals();' in worker
+assert '.setPositiveButton("Rozlicz teraz",' in worker
+assert '(dialog,which)->showBankBudgetProposals()' in worker
+assert '.setNegativeButton("Później",null)' in worker
 assert '"Historia bankowa wczytana"' in worker
 assert 'bankProposalLastImportSummary+"\\n\\n"' in suggestions
 assert 'proposalScore(' in rules
