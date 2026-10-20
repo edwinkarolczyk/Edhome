@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 331,
-  "versionName": "0.8.1.138",
-  "changelog": "EDHOME Beta 0.8.1.138 / 331 — Projekty: sortowanie czynności Inteligentnie/Termin/Priorytet/A–Z/Własna kolejność, zwijane grupy W trakcie/Gotowe/Zablokowane/Zakończone, zakończone domyślnie schowane, widoczne priorytety i wykonawcy. Kliknij priorytet, by go zmienić. W trybie Własna kolejność użyj przytrzymania i przeciągnięcia lub strzałek góra/dół; zależności zachowują pierwszeństwo. Bez migracji bazy; Stable bez zmian. Aktualizuj bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.138/edhome-beta.apk",
-  "sha256": "7d5d22f7bc53921ceeeb67fcccf8620a2c2eeb586217cfc13135461de2692dc3"
+  "versionCode": 332,
+  "versionName": "0.8.1.139",
+  "changelog": "EDHOME Beta 0.8.1.139 / 332 — Projekty: w edycji projektu checkbox Pokazuj czynności projektu w głównej liście. Wyłączenie ukrywa także czynności podprojektów w głównej liście i globalnym planowaniu; własny planer projektu, Start/Stop, koszty i zapisane przypomnienia pozostają. Propozycje terminów projektu uwzględniają priorytety i terminy przy zachowaniu zależności. Schema v51, migracja i ZIP wstecznie zgodne. Desktop: filtrowanie głównych list. Stable bez zmian, aktualizuj bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.139/edhome-beta.apk",
+  "sha256": "bc31b59d4a604bb8760033f09ab059962bf68b7b4db08f9c8681e6411e9059df"
 }
