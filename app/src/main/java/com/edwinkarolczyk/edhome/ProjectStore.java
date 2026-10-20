@@ -103,11 +103,11 @@ final class ProjectStore {
             +"status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','paused','done')),"
             +"due_date TEXT,"
             +"budget_grosz INTEGER,"
-            +"show_in_main_tasks INTEGER NOT NULL DEFAULT 1 "
-            +"CHECK(show_in_main_tasks IN (0,1)),"
             +"thumbnail_base64 TEXT,"
             +"labor_rate_grosz INTEGER CHECK(labor_rate_grosz IS NULL OR labor_rate_grosz BETWEEN 0 AND 100000000),"
             +"created_at INTEGER NOT NULL,"
+            +"show_in_main_tasks INTEGER NOT NULL DEFAULT 1 "
+            +"CHECK(show_in_main_tasks IN (0,1)),"
             +"CHECK(parent_id IS NULL OR parent_id!=id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS projects_parent_idx "
             +"ON projects(parent_id,name COLLATE NOCASE)");
