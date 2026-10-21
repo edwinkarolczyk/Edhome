@@ -1,3 +1,13 @@
+## 2026-10-21 — P0 Projekty: rozdzielenie planu i czasu pracy (beta)
+
+- **Android Beta 0.8.1.143 / 336, Desktop Beta 0.7.0.136** — poprawiono statystyki czasu: po zaznaczeniu czynności jako wykonanej czas planowany nie jest sztucznie dopisywany do minut z sesji Start/Stop. Plan zaliczany jest wyłącznie do postępu projektu.
+- Android: ukończona czynność wyświetla do wykonania: 0 min, osobno plan, czas zarejestrowany, poniżej planu albo przekroczenie; ukończenie bez Start/Stop pokazuje brak pomiaru. Podsumowanie rozróżnia zaliczone minuty planu od czasu sesji.
+- Desktop: podsumowanie projektu wyświetla plan, zarejestrowany czas i pozostałą pracę, a karty ukończonych czynności nie sugerują nierozliczonego czasu. Zgodność numeru DESKTOP_VERSION w kodzie, Gradle i workflow poprawiona.
+- Historia sesji i stawki robocizny nie są przepisywane; koszt nadal wyliczany ze znaczników czasu Start/Stop, bez automatycznego księgowania PayCheck. Brak migracji bazy, zmian w backup ZIP i protokole LAN.
+- Regresja modułu Projekty rozszerzona w tests/check_projects_contract.py. **CI PASS Android:** [39597867545](https://github.com/edwinkarolczyk/Edhome/actions/runs/39597867545); **CI PASS Desktop:** [39597867635](https://github.com/edwinkarolczyk/Edhome/actions/runs/39597867635).
+- **Wydane:** [APK Beta 0.8.1.143](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.143) i [Windows Desktop Beta 0.7.0.136](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest). Manifest aktualizatora APK otrzymał poprawny opis zmian.
+- **Następny krok:** fizycznie sprawdzić na telefonie i Desktopie przypadki: plan 120 min / sesja 28 min / wykonane, plan 90 min / sesja 182 min, oznaczenie wykonania bez uruchamiania pomiaru, cofnięcie i ponowny START, synchronizacja czasu po LAN. **Stable main bez zmian.**
+
 ## 2026-10-21 — EDHOME 1.0: logowanie importu bankowego/ZIP i 20 min Desktop (beta)
 
 - **Android Beta 0.8.1.142 / 335:** `BankEvidenceStore.ingest` raportuje rozpoczęcie partii, zatwierdzone liczniki dodanych/duplikatów lub wyjątek z typem i stosem (bez kwot, nazw ani treści przelewów); pozostawia dotychczasową transakcję i rollback. Zdarzenia nie rozliczają automatycznie banku.
