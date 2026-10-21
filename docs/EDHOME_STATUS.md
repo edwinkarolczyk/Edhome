@@ -4,7 +4,8 @@
 - `DataBackup.exportJson` raportuje tylko błędy (bez zalewania logu sukcesami okresowego snapshotu). `DataBackup.restoreJson` raportuje rozpoczęcie, sukces po zakończeniu transakcji oraz błąd walidacji/SQL/odtwarzania. Bez zmian formatu ZIP, bazy i synchronizacji.
 - **Desktop Beta 0.7.0.135:** nowe czynności, także wklejane do projektu, domyślnie 20 minut jak na Androidzie, a nie 30. Dotychczasowe czasy istniejących czynności nietknięte.
 - Dodane kontrole statyczne do testów banku, kopii oraz synchronizacji Desktop; oba CI uruchamiane na `beta`.
-- **Otwarte:** testy po commicie oraz fizyczne potwierdzenie Android↔Desktop i ZIP. Pełny audyt cichych błędów trwa, issue #12. Stable `main` bez zmian.
+- **CI 21.10.2026 PASS:** Android [run #39559695856](https://github.com/edwinkarolczyk/Edhome/actions/runs/39559695856) i Desktop [run #39559695894](https://github.com/edwinkarolczyk/Edhome/actions/runs/39559695894). Opublikowano APK `beta-v0.8.1.142` oraz instalator Desktop `0.7.0.135` (`desktop-beta-latest`).
+- **Otwarte:** fizyczne potwierdzenie Android↔Desktop, importu bankowego i ZIP (w tym rollback/konflikt); pełny audyt cichych błędów trwa, issue #12. Stable `main` bez zmian.
 
 ## 2026-10-21 — EDHOME 1.0: fundament diagnostyki Android/Desktop (beta)
 
