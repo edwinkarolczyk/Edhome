@@ -271,6 +271,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
         long singleTaskId = -1L;
         String singleTaskTitle = "";
         boolean singleProjectTask = false;
+        StringBuilder dailyTaskNames = new StringBuilder();
+        String firstDailyTitle = "";
+        long firstDailyTaskId = -1L;
         boolean legacy = ACTION_REMIND.equals(action);
         boolean plannerOnly=ACTION_PLAN.equals(action);
         try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
@@ -283,8 +286,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 if (today.toString().equals(
                         pref.getString("reminder_legacy_day", ""))) return;
                 try (Cursor tasks = database.rawQuery(
-                        "SELECT id,task_kind,remind_time,due_date FROM tasks "
-                        + "WHERE done=0 AND due_date IS NOT NULL AND due_date<=?",
+                        "SELECT id,task_kind,remind_time,due_date,title FROM tasks "
+                        + "WHERE done=0 AND due_date IS NOT NULL AND due_date<=? "
+                        + "ORDER BY due_date ASC,id DESC",
                         new String[]{today.toString()})) {
                     while (tasks.moveToNext()) {
                         if (!tasks.isNull(2) && !tasks.getString(3).equals(
@@ -294,6 +298,14 @@ public final class ReminderReceiver extends BroadcastReceiver {
                                     ""))) continue;
                         } else if (!tasks.isNull(2)) continue;
                         due++;
+                        if(firstDailyTaskId<0L) {
+                            firstDailyTaskId=tasks.getLong(0);
+                            firstDailyTitle=tasks.getString(4);
+                        }
+                        if(due<=5) {
+                            if(dailyTaskNames.length()>0)dailyTaskNames.append("\n");
+                            dailyTaskNames.append("• ").append(tasks.getString(4));
+                        }
                         if (tasks.getString(3).compareTo(today.toString()) < 0)
                             overdue++;
                         if ("waste".equals(tasks.getString(1))) waste++;
@@ -383,19 +395,42 @@ public final class ReminderReceiver extends BroadcastReceiver {
             planningFresh||(legacy&&overdue>0));
         if(proposalsReady)DiagnosticLog.event("TASK_OVERDUE_SUGGESTIONS_READY");
         Intent destination=new Intent(context, MainActivity.class).setFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        if (openOverdue) destination.putExtra("open_overdue_plan",true);
-        PendingIntent open = PendingIntent.getActivity(context, 0,destination,
+                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        int openCode=plannerOnly ? PLAN_ALARM_ID
+            : legacy ? ALARM_ID : requestCode(singleTaskId);
+        destination.setAction("com.edwinkarolczyk.edhome.OPEN_REMINDER."+openCode);
+        if(plannerOnly || (legacy && due==0 && openOverdue))
+            destination.putExtra("open_overdue_plan",true);
+        else if(legacy && due==1 && !planningFresh)
+            destination.putExtra("open_task_id",firstDailyTaskId);
+        else if(legacy && due>0)
+            destination.putExtra("open_task_reminder_list",true);
+        else if(!legacy && singleTaskId>0)
+            destination.putExtra("open_task_id",singleTaskId);
+        PendingIntent open = PendingIntent.getActivity(context,openCode,destination,
             PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        Intent planningDestination=new Intent(context,MainActivity.class)
+            .setAction("com.edwinkarolczyk.edhome.OPEN_TASK_PLANNING")
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("open_overdue_plan",true);
+        PendingIntent openPlanning=PendingIntent.getActivity(context,PLAN_ALARM_ID+10,
+            planningDestination,PendingIntent.FLAG_UPDATE_CURRENT
+                | LegacyCompat.immutableFlag());
         final boolean foundTerms=proposalsReady;
         Notification.Builder builder = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle(!legacy && singleProjectTask
+            .setContentTitle(!legacy && singleTaskId>0
                 && !singleTaskTitle.isEmpty()
                     ? "EDHOME • " + singleTaskTitle
                     : "EDHOME • czynności")
-            .setContentText(!legacy && singleProjectTask
-                ? "Czynność projektu • możesz uruchomić pomiar czasu"
+            .setContentText(!legacy && singleTaskId>0
+                ? (singleProjectTask ? "Czynność projektu • otwórz lub uruchom pomiar"
+                    : "Dotknij, aby otworzyć tę czynność")
+                : legacy && due>0
+                    ? (due==1 ? firstDailyTitle
+                        : firstDailyTitle+" • i "+(due-1)+" pozostałych")
                 : plannerOnly
                     ? "Nowe terminy: "+(planning==null?0:planning.suggested)
                         +" • wskaż wykonawcę: "+missingAssignee
@@ -410,11 +445,17 @@ public final class ReminderReceiver extends BroadcastReceiver {
                         : "Czynności do wykonania: " + due
                             +(planningFresh?" • sprawdź propozycje":""))))
             .setContentIntent(open)
+            .setStyle(legacy && due>0
+                ? new Notification.BigTextStyle().bigText(dailyTaskNames.toString()
+                    +(due>5 ? "\n… i "+(due-5)+" kolejnych" : ""))
+                : new Notification.BigTextStyle().bigText(
+                    !legacy && !singleTaskTitle.isEmpty() ? singleTaskTitle
+                        : "Dotknij powiadomienia, aby zobaczyć szczegóły."))
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true);
         if (openOverdue)
             builder.addAction(android.R.drawable.ic_menu_today,
-                "Znajdź nowe terminy", open);
+                "Znajdź nowe terminy", openPlanning);
         if (!legacy && singleProjectTask)
             builder.addAction(android.R.drawable.ic_media_play,
                 "▶ Start", ProjectWorkNotification.startAction(
