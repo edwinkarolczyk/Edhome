@@ -304,10 +304,10 @@ assert 'DiagnosticLog.clearIfTransferred(transfer.id)' in hub_client
 assert 'private static final Gson GSON = new GsonBuilder().serializeNulls()' in desktop
 print("desktop diagnostics transfer + local log contract OK")
 
-# Desktop diagnostics must preserve the real async failure behind SwingWorker/ExecutionException.
+# Desktop zachowuje typ przyczyny błędu, lecz nie zapisuje prywatnych treści wyjątku.
 assert 'rootCause(problem)' in desktop_log
-assert 'root=' in desktop_log and 'message=' in desktop_log
-print("desktop diagnostics root-cause contract OK")
+assert 'root=' in desktop_log and 'root.getMessage()' not in desktop_log
+print("desktop diagnostics root-cause privacy contract OK")
 
 
 # Local Desktop cache must tolerate Windows file locks and concurrent cache writes.
