@@ -664,7 +664,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.140 / 333 — P0 synchronizacja: Android nie odtwarza całej bazy, jeśli różnią się wyłącznie nagłówki kopii lub metadane Hub. Diagnostyka wskazuje brakujące pole bez ujawniania danych użytkownika. Desktop 0.7.0.132 zachowuje wartości null w pełnych snapshotach. Logi Android automatycznie archiwizowane i usuwane z telefonu po potwierdzeniu SHA-256. Stable bez zmian, aktualizuj bez odinstalowywania."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.144 / 337 — przypomnienia pokazują nazwy czynności, po dotknięciu otwierają właściwą kartę także na dalszych stronach listy i w projektach. Zbiorcze przypomnienie pokazuje nazwy czynności i listę wyboru, a komunikat o wstrzymaniu minutnika po 60 minutach identyfikuje czynność i prowadzi do jej projektu. Stable bez zmian; instaluj przez aktualizator bez odinstalowywania."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
