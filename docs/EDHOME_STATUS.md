@@ -1,3 +1,12 @@
+## 2026-10-21 — P0: powiadomienia czynności wskazują właściwą pozycję (Beta 0.8.1.144 / 337)
+
+- **Problem:** zwykłe alarmy o czynnościach otwierały główny ekran bez identyfikatora; zbiorcze przypomnienie wyświetlało tylko liczniki; powiadomienia o automatycznym wstrzymaniu minutnika po 60 min nie podawały nazwy pracy.
+- **Android Beta:** `ReminderReceiver` wyświetla nazwy maksymalnie pięciu czynności w podglądzie dziennym, a dla alarmu pojedynczego pokazuje tytuł także poza Projektami. Każde powiadomienie posiada odrębny `PendingIntent` z identyfikatorem (bez nadpisywania przez inne alarmy); akcja szukania terminów nadal otwiera planer. Zbiorcze przypomnienie prowadzi do listy tytułów z wyborem konkretnej czynności.
+- **Nawigacja:** `MainActivity` otwiera konkretną kartę projektu/podprojektu albo właściwą stronę 3-elementowej listy Czynności, rozwija jej opcje, podświetla kartę i przewija ją do widoku. Obsługa powiadomień nie omija istniejącej blokady PIN.
+- **Projekt/minutnik:** `ProjectWorkNotification` podaje tytuł pracy przy automatycznej pauzie 60 min i zatrzymaniu, a dotknięcie otwiera odpowiedni projekt i czynność.
+- **Testy:** rozszerzono `tests/check_reminder_contract.py`; ręczna kontrola spójności odnośników PASS. Android CI **oczekuje na wynik** dla `beta`. Odbiór na fizycznym telefonie nadal wymagany (1 czynność, 3+ zaległe, czynność z dalszej strony, projekt/podprojekt, przypomnienie 60 min, po restarcie i przy zablokowanej aplikacji).
+- **Commity:** `0d72dcc` (nazwy i PendingIntent), `01f11df` (nawigacja), `d0e951e` (minutnik), `79fc611` (test), `b96e7dd` (wersja), `053cfb4` (opis aktualizacji). Nie zmieniano danych, bazy, ZIP ani protokołu LAN. **Desktop bez zmian; Stable main bez zmian.**
+
 ## 2026-10-21 — P0 Projekty: rozdzielenie planu i czasu pracy (beta)
 
 - **Android Beta 0.8.1.143 / 336, Desktop Beta 0.7.0.136** — poprawiono statystyki czasu: po zaznaczeniu czynności jako wykonanej czas planowany nie jest sztucznie dopisywany do minut z sesji Start/Stop. Plan zaliczany jest wyłącznie do postępu projektu.
