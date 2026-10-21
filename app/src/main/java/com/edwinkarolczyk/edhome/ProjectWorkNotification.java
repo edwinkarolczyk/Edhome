@@ -86,6 +86,31 @@ final class ProjectWorkNotification {
             PendingIntent.FLAG_UPDATE_CURRENT|LegacyCompat.immutableFlag());
     }
 
+    private static final class NotificationTask {
+        final String title;
+        final long projectId;
+        NotificationTask(String title,long projectId) {
+            this.title=title;
+            this.projectId=projectId;
+        }
+    }
+
+    private static NotificationTask reminderTask(Context context,long taskId) {
+        File file=context.getDatabasePath(DATABASE);
+        if(!file.isFile())return null;
+        try(SQLiteDatabase database=SQLiteDatabase.openDatabase(
+                file.getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY);
+            Cursor row=database.rawQuery(
+                "SELECT title,project_id FROM tasks WHERE id=? AND project_id IS NOT NULL",
+                new String[]{Long.toString(taskId)})) {
+            return row.moveToFirst()
+                ? new NotificationTask(row.getString(0),row.getLong(1)) : null;
+        }catch(Exception problem) {
+            DiagnosticLog.error("PROJECT_WORK_REMINDER_TARGET",problem);
+            return null;
+        }
+    }
+
     private static PendingIntent checkAction(Context context, long taskId) {
         Intent intent = new Intent(context, ReminderReceiver.class)
             .setAction(ACTION_CHECK).putExtra("task_id", taskId);
@@ -145,10 +170,17 @@ final class ProjectWorkNotification {
         LegacyCompat.ensureChannel(manager, CHANNEL_ID,
             "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_DEFAULT,
             null, true, true, false);
+        NotificationTask target=reminderTask(context,taskId);
         Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle("Czy nadal wykonujesz tę czynność?")
+            .setContentTitle(target==null ? "EDHOME • pomiar wstrzymany"
+                : "EDHOME • "+target.title)
             .setContentText("Po 60 minutach licznik wstrzymano. Wznów lub zakończ.")
+            .setStyle(new Notification.BigTextStyle().bigText(
+                (target==null ? "" : "Czynność: "+target.title+"\n")
+                +"Czy nadal pracujesz? Po 60 minutach wstrzymano pomiar."))
+            .setContentIntent(target==null?null
+                :openAction(context,target.projectId,taskId))
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_media_play, "Tak, pracuję",
                 startAction(context, taskId))
@@ -223,10 +255,17 @@ final class ProjectWorkNotification {
         LegacyCompat.ensureChannel(manager, CHANNEL_ID,
             "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
             null, true, true, false);
+        NotificationTask target=reminderTask(context,taskId);
         Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle("Czy nadal wykonujesz tę czynność?")
+            .setContentTitle(target==null ? "EDHOME • pomiar wstrzymany"
+                : "EDHOME • "+target.title)
             .setContentText("Po 60 minutach pomiar został wstrzymany. Wznów lub zakończ.")
+            .setStyle(new Notification.BigTextStyle().bigText(
+                (target==null ? "" : "Czynność: "+target.title+"\n")
+                +"Czy nadal pracujesz? Minutnik wstrzymano po 60 minutach."))
+            .setContentIntent(target==null?null
+                :openAction(context,target.projectId,taskId))
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_media_play, "Tak, pracuję",
                 startAction(context, taskId))
@@ -432,10 +471,14 @@ final class ProjectWorkNotification {
         LegacyCompat.ensureChannel(manager, CHANNEL_ID,
             "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
             null, true, true, false);
+        NotificationTask target=reminderTask(context,taskId);
         Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle("EDHOME • pomiar zatrzymany")
-            .setContentText("Ostatnia sesja: " + formatMinutes(minutes))
+            .setContentTitle(target==null?"EDHOME • pomiar zatrzymany"
+                :"EDHOME • "+target.title)
+            .setContentText("Pomiar zatrzymany • ostatnia sesja: " + formatMinutes(minutes))
+            .setContentIntent(target==null?null
+                :openAction(context,target.projectId,taskId))
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .build();
