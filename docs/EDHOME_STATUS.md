@@ -1,3 +1,13 @@
+## 2026-10-21 — EDHOME 1.0: fundament diagnostyki Android/Desktop (beta)
+
+- Cel: domknąć zatwierdzoną funkcjonalność 1.0 i dopiero potem zrobić pełny odbiór błędów, bez rozbudowy o nowe funkcje.
+- **Android Beta 0.8.1.141 / 334:** diagnostyka uruchamia się z `EdhomeApplication.onCreate`, przed usługą LAN i ekranami. `DiagnosticLog.init` jest jednokrotny na proces — nie instaluje wielokrotnie handlera.
+- **Desktop Beta 0.7.0.134:** globalny handler awarii wątków/EDT, idempotentna inicjalizacja; błędy nie zapisują treści `Throwable.getMessage()`, która mogła zawierać prywatne dane.
+- Zostawiono dotychczasowe rotacje, archiwum Huba i ACK SHA-256; nie zmieniono schematu bazy, synchronizacji, płatności ani zawartości ZIP.
+- **Ograniczenie:** rejestrujemy wyjątki krytyczne i istniejące zdarzenia, ale nie wszystkie obsłużone błędy każdego modułu. Kontrakt i warunki odbioru: `docs/EDHOME_DIAGNOSTYKA_1_0.md`.
+- Kontrole statyczne dopisane do `tests/check_hub_diagnostics_contract.py` uruchamianego przez oba CI. CI, buildy i test rzeczywistych urządzeń wymagają osobnej weryfikacji.
+- Stable `main` bez zmian.
+
 ## 2026-10-20 — Desktop Beta 0.7.0.131: pełny eksport logów Android z archiwum
 
 - Raport użytkownika: Android Beta 0.8.1.139 / Desktop 0.7.0.130; raport Android z 20:29 zawiera 4 nowe zdarzenia, ponieważ archiwizacja przez Hub działa w tle. Desktop potwierdza transfery 12 433 B, 909 B, 1478 B i 341 B między 20:25 a 20:28.

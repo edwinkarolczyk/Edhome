@@ -64,3 +64,15 @@ assert 'DesktopDiagnosticLog.exportPhoneHistory(exported)' in runtime
 assert 'history.contains("EDHOME KOLEJNY LOG")' in runtime
 assert 'assertEquals(firstContents,java.nio.file.Files.readString(archive)' in runtime
 print("EDHOME Hub diagnostics: automatic SHA-confirmed archive and safe phone cleanup, conflicts untouched PASS")
+
+# EDHOME 1.0: diagnostyka aktywna od startu procesu i bez prywatnych komunikatów.
+application=(root/"app/src/main/java/com/edwinkarolczyk/edhome/EdhomeApplication.java").read_text(encoding="utf-8")
+assert "DiagnosticLog.init(this);" in application.split("super.onCreate();",1)[1]
+assert "private static boolean initialized;" in phone_log
+assert "if (initialized) return;" in phone_log
+assert "Thread.setDefaultUncaughtExceptionHandler" in phone_log
+assert "Thread.setDefaultUncaughtExceptionHandler" in logs
+assert "if (initialized) return;" in logs
+assert "root.getMessage()" not in logs
+assert 'DesktopDiagnosticLog.error("APP_START", error)' in pc
+print("EDHOME 1.0: handlers Android/Desktop i prywatność wyjątków PASS")

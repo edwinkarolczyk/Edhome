@@ -11,6 +11,8 @@ import android.content.SharedPreferences;
 public final class EdhomeApplication extends Application {
     @Override public void onCreate() {
         super.onCreate();
+        // Diagnostyka działa przed ekranami, odbiornikami i usługą LAN.
+        DiagnosticLog.init(this);
         if (!BuildConfig.DIAGNOSTICS_ENABLED) return;
 
         SharedPreferences prefs=getSharedPreferences(

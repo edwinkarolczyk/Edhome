@@ -13,6 +13,7 @@ import java.time.Instant;
 /** Privacy-safe rolling log for EDHOME Desktop Beta. */
 final class DesktopDiagnosticLog {
     private static final Object LOCK = new Object();
+    private static boolean initialized;
     private static final long MAX_BYTES = 1024L * 1024L;
     private static final int MAX_COPY_CHARS = 20000;
     private static final Path DIR = Path.of(System.getProperty("user.home"), ".edhome", "logs");
@@ -25,10 +26,23 @@ final class DesktopDiagnosticLog {
     private DesktopDiagnosticLog() { }
 
     static void init(String version) {
-        try {
-            Files.createDirectories(DIR);
-            event("APP_START", "version=" + safe(version));
-        } catch (Exception ignored) { }
+        synchronized (LOCK) {
+            if (initialized) return;
+            try {
+                Files.createDirectories(DIR);
+                // Rejestruje również awarie w wątkach roboczych i EDT Swing.
+                Thread.UncaughtExceptionHandler previous =
+                    Thread.getDefaultUncaughtExceptionHandler();
+                Thread.setDefaultUncaughtExceptionHandler((thread, problem) -> {
+                    error("UNCAUGHT_" + safe(thread.getName()), problem);
+                    if (previous != null) previous.uncaughtException(thread, problem);
+                });
+                initialized = true;
+                event("APP_START", "version=" + safe(version));
+            } catch (Exception ignored) {
+                System.err.println("EDHOME_DIAGNOSTYKA_START_FAILED");
+            }
+        }
     }
 
     static void event(String event) { event(event, ""); }
@@ -44,9 +58,8 @@ final class DesktopDiagnosticLog {
         if (root != null && root != problem) {
             info.append(" root=").append(root.getClass().getSimpleName());
         }
-        if (root != null && root.getMessage() != null && !root.getMessage().isBlank()) {
-            info.append(" message=").append(safe(root.getMessage()));
-        }
+        // Komunikat wyjątku może zawierać nazwy, kwoty lub ścieżki użytkownika.
+        // Zostawiamy klasę błędu i ramki stosu, ale nie zapisujemy jego treści.
         if (root != null) {
             StackTraceElement[] frames = root.getStackTrace();
             for (int i = 0; i < Math.min(10, frames.length); i++) {

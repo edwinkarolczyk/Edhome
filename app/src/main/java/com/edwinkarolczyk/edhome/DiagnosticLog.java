@@ -26,6 +26,7 @@ public final class DiagnosticLog {
     private static final int MAX_CHAT_CHARS = 20000;
     private static File current;
     private static File previous;
+    private static boolean initialized;
 
     private DiagnosticLog() { }
 
@@ -36,6 +37,7 @@ public final class DiagnosticLog {
     public static void init(Context context) {
         if (!enabled()) return;
         synchronized (LOCK) {
+            if (initialized) return; // Jeden handler i jeden wpis startu na proces.
             File dir = new File(context.getApplicationContext().getFilesDir(), "diagnostics");
             if (!dir.exists() && !dir.mkdirs()) {
                 Log.e("EDHOME_DIAG", "Unable to create beta diagnostic folder");
@@ -43,14 +45,17 @@ public final class DiagnosticLog {
             }
             current = new File(dir, "edhome-beta.log");
             previous = new File(dir, "edhome-beta.previous.log");
+            Thread.UncaughtExceptionHandler previousHandler =
+                Thread.getDefaultUncaughtExceptionHandler();
+            Thread.setDefaultUncaughtExceptionHandler((thread, exception) -> {
+                error("UNCAUGHT_" + safe(thread.getName()), exception);
+                if (previousHandler != null)
+                    previousHandler.uncaughtException(thread, exception);
+            });
+            initialized = true;
             append("APP_START", "version=" + BuildConfig.VERSION_NAME
                 + " sdk=" + Build.VERSION.SDK_INT);
         }
-        Thread.UncaughtExceptionHandler previousHandler = Thread.getDefaultUncaughtExceptionHandler();
-        Thread.setDefaultUncaughtExceptionHandler((thread, exception) -> {
-            error("UNCAUGHT_" + safe(thread.getName()), exception);
-            if (previousHandler != null) previousHandler.uncaughtException(thread, exception);
-        });
     }
 
     private static String safe(String event) {
