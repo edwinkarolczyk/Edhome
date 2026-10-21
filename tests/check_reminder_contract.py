@@ -72,5 +72,43 @@ for expected in (
 
 assert 'ProjectWorkNotification.showActive(this,taskId);' in main
 assert 'ProjectWorkNotification.cancel(this,taskId);' in main
+# P0: kliknięcie w przypomnienie prowadzi do jednoznacznego zadania.
+# Każde przypomnienie ma własny PendingIntent (brak nadpisywania extras).
+for expected in (
+    '"open_task_id",singleTaskId',
+    '"open_task_id",firstDailyTaskId',
+    '"open_task_reminder_list",true',
+    'destination.setAction("com.edwinkarolczyk.edhome.OPEN_REMINDER."+openCode)',
+    'PendingIntent.getActivity(context,openCode,destination,',
+    'StringBuilder dailyTaskNames',
+    'dailyTaskNames.append("• ")',
+    '"Znajdź nowe terminy", openPlanning',
+):
+    assert expected in receiver, "Missing task reminder route/title: " + expected
+
+for expected in (
+    'private boolean openTaskReminderIntent(Intent intent,boolean renderNow)',
+    'if (openTaskReminderIntent(intent,true)) return;',
+    'root.post(() -> openTaskReminderIntent(getIntent(),true));',
+    'root.post(()->openTaskReminderIntent(getIntent(),true));',
+    'private void showRemindedTaskList()',
+    'private void openRemindedTask(long taskId,boolean renderNow)',
+    'if(renderNow)openProjectTask(taskId);',
+    'tasksPage=position/3;',
+    'pendingTaskFocusId=taskId;',
+    'pendingTaskFocusView=box;',
+    'actions.setVisibility(fromReminder?View.VISIBLE:View.GONE);',
+    'scroll.scrollTo(0,destination);',
+):
+    assert expected in main, "Missing in-app task deep link: " + expected
+
+for expected in (
+    'private static NotificationTask reminderTask(Context context,long taskId)',
+    'target==null ? "EDHOME • pomiar wstrzymany"',
+    'openAction(context,target.projectId,taskId)',
+    '"Czynność: "+target.title',
+):
+    assert expected in project_work, "Missing named 60-minute project notice: " + expected
+
 print("Project reminder Start + persistent chronometer + Stop contract: PASS")
 print("Reminder opt-in, dedup, re-arm, SQLite/backup and quiet-hours contracts: PASS")
