@@ -2,7 +2,7 @@
   "channel": "beta",
   "versionCode": 336,
   "versionName": "0.8.1.143",
-  "changelog": "EDHOME Beta 0.8.1.140 / 333 — P0 synchronizacja: Android nie odtwarza całej bazy, jeśli różnią się wyłącznie nagłówki kopii lub metadane Hub. Diagnostyka wskazuje brakujące pole bez ujawniania danych użytkownika. Desktop 0.7.0.132 zachowuje wartości null w pełnych snapshotach. Logi Android automatycznie archiwizowane i usuwane z telefonu po potwierdzeniu SHA-256. Stable bez zmian, aktualizuj bez odinstalowywania.",
+  "changelog": "EDHOME Beta 0.8.1.143 / 336 — P0 Projekty: po oznaczeniu czynności jako wykonanej planowany czas nie powiększa już rzeczywiście zarejestrowanego czasu Start/Stop. Postęp projektu nadal zalicza plan zadania. Karty pokazują oddzielnie plan, czas sesji i pozostałą pracę; wykonana czynność ma 0 min do wykonania, a brak pomiaru jest wyraźnie oznaczony. Zachowano historię sesji i naliczanie robocizny od rzeczywistych znaczników czasu. Desktop 0.7.0.136 otrzymał analogiczne opisy. Dane i baza bez migracji. Stable main bez zmian.",
   "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.143/edhome-beta.apk",
   "sha256": "512fe9b76d8826e8e8bb3d6b857861f2bd1348e70a08c11e26447c768377dd21"
 }
