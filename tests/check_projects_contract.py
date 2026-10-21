@@ -390,3 +390,29 @@ selective=(root / "app/src/main/java/com/edwinkarolczyk/edhome/BackupSelectiveMe
 assert 'sourceVersion < 51 && "projects".equals(table)' in selective
 assert 'project.put("thumbnail_base64",JSONObject.NULL)' in selective
 print("P0 Projekty: cascade, aktywne sesje, tombstones, ZIP v47-v48 — kontrakty PASS")
+
+
+# P0 — ukończona czynność zalicza plan do postępu, ale nie nalicza
+# nieprzepracowanych minut do czasu i kosztu rzeczywistych sesji.
+stats_method=project.split("static Stats stats(",1)[1].split(
+    "static List<TaskItem> displayTasks(",1)[0]
+assert "doneMinutes+=minutes;" in stats_method
+assert "workedMinutes+=Math.max(minutes,taskWorked)" not in stats_method
+assert stats_method.count("workedMinutes+=taskWorked;")==2
+assert 'if(c.getInt(0)!=0)' in project.split("static void startWork(",1)[1].split(
+    "static int stopWork(",1)[0]
+assert 'final int remaining=done?0:Math.max(0,minutes-worked);' in project_tasks
+assert ' • czas zarejestrowany: ' in project_tasks
+assert ' • zakończono • do wykonania: 0 min' in project_tasks
+assert ' • brak pomiaru Start/Stop' in project_tasks
+assert ' • poniżej planu: ' in project_tasks
+assert 'zaliczono z planu: ' in main
+assert 'Pozostało wg planu: ' in main
+assert ' • zarejestrowano ' in main
+assert 'int registered = 0;' in desktop
+assert 'registered += worked;' in desktop
+assert ' • Zarejestrowano: <b>' in desktop
+assert ' • Czas zarejestrowany: ' in desktop
+assert ' • Zakończono • Do wykonania: 0 min' in desktop
+assert ' • Brak pomiaru Start/Stop' in desktop
+print("P0: rozdzielenie planu, czasu Start/Stop i statusu wykonania Android/Desktop OK")
