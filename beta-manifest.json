@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 336,
-  "versionName": "0.8.1.143",
-  "changelog": "EDHOME Beta 0.8.1.143 / 336 — P0 Projekty: po oznaczeniu czynności jako wykonanej planowany czas nie powiększa już rzeczywiście zarejestrowanego czasu Start/Stop. Postęp projektu nadal zalicza plan zadania. Karty pokazują oddzielnie plan, czas sesji i pozostałą pracę; wykonana czynność ma 0 min do wykonania, a brak pomiaru jest wyraźnie oznaczony. Zachowano historię sesji i naliczanie robocizny od rzeczywistych znaczników czasu. Desktop 0.7.0.136 otrzymał analogiczne opisy. Dane i baza bez migracji. Stable main bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.143/edhome-beta.apk",
-  "sha256": "512fe9b76d8826e8e8bb3d6b857861f2bd1348e70a08c11e26447c768377dd21"
+  "versionCode": 337,
+  "versionName": "0.8.1.144",
+  "changelog": "EDHOME Beta 0.8.1.144 / 337 — przypomnienia pokazują nazwy czynności, po dotknięciu otwierają właściwą kartę także na dalszych stronach listy i w projektach. Zbiorcze przypomnienie pokazuje nazwy czynności i listę wyboru, a komunikat o wstrzymaniu minutnika po 60 minutach identyfikuje czynność i prowadzi do jej projektu. Stable bez zmian; instaluj przez aktualizator bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.144/edhome-beta.apk",
+  "sha256": "7cbcab86d8a9f8318081091e13738b9c9ff63066680a720bf692e7fb5731f345"
 }
