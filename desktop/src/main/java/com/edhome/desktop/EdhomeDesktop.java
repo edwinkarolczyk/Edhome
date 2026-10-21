@@ -1342,13 +1342,15 @@ public final class EdhomeDesktop extends JFrame {
         int done = 0;
         int planned = 0;
         int remaining = 0;
+        int registered = 0;
         for (JsonObject task : tasks) {
             int duration = Math.max(20,intValue(task,"duration_minutes"));
+            int worked = desktopTaskWorkedMinutes(longValue(task,"id"));
             planned += duration;
+            registered += worked;
             if (intValue(task,"done") != 0) {
                 done++;
             } else {
-                int worked = desktopTaskWorkedMinutes(longValue(task,"id"));
                 remaining += Math.max(0,duration-worked);
             }
         }
@@ -1374,7 +1376,9 @@ public final class EdhomeDesktop extends JFrame {
             + html(friendlyValue("status",project))
             + "</b> • Postęp: <b>" + progress + "%</b>"
             + " • Czynności: <b>" + done + "/" + tasks.size() + "</b>"
-            + " • Pozostało: <b>" + formatMinutes(remaining) + "</b>"
+            + " • Plan: <b>" + formatMinutes(planned) + "</b>"
+            + " • Zarejestrowano: <b>" + formatMinutes(registered) + "</b>"
+            + " • Pozostało wg planu: <b>" + formatMinutes(remaining) + "</b>"
             + (due.isBlank() ? "" : " • Termin: <b>" + html(due) + "</b>")
             + (budget.isBlank() ? "" : " • Budżet: <b>" + html(money(budget)) + "</b>")
             + "</html>");
@@ -1643,8 +1647,12 @@ public final class EdhomeDesktop extends JFrame {
         int remaining=done?0:Math.max(0,duration-worked);
         String due=value(task,"due_date");
         JLabel meta=new JLabel("Plan: "+formatMinutes(duration)
-            +" • Wykonano: "+formatMinutes(worked)
-            +" • Zostało: "+formatMinutes(remaining)
+            +" • Czas zarejestrowany: "+formatMinutes(worked)
+            +(done?" • Zakończono • Do wykonania: 0 min"
+                : " • Zostało wg planu: "+formatMinutes(remaining))
+            +(done&&worked==0?" • Brak pomiaru Start/Stop":"")
+            +(done&&worked>0&&worked<duration
+                ?" • Poniżej planu: "+formatMinutes(duration-worked):"")
             +(due.isBlank()?"":" • Termin: "+due));
         meta.setForeground(APP_MUTED);
         meta.setFont(meta.getFont().deriveFont(11f));
