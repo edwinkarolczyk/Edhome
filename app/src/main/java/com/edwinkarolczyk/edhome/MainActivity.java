@@ -213,6 +213,125 @@ public final class MainActivity extends Activity {
 
 
     /** Powiadomienie wraca do głównej aktywności, żeby nie omijać blokady PIN. */
+    /** Otwieranie pojedynczych czynności i listy przypomnień bez zgadywania strony. */
+    private boolean openTaskReminderIntent(Intent intent,boolean renderNow) {
+        if(intent==null)return false;
+        long taskId=intent.getLongExtra("open_task_id",0L);
+        boolean showList=intent.getBooleanExtra("open_task_reminder_list",false);
+        if(taskId<=0L&&!showList)return false;
+        // Zachowaj odnośnik do czasu odblokowania instalacji PIN.
+        if(!unlocked||db==null||root==null)return true;
+        intent.removeExtra("open_task_id");
+        intent.removeExtra("open_task_reminder_list");
+        if(showList) {
+            tasksFilter="all";
+            tasksPage=0;
+            screenScrollY.put("tasks",0);
+            screen="tasks";
+            if(renderNow)render();
+            root.post(this::showRemindedTaskList);
+            return true;
+        }
+        openRemindedTask(taskId,renderNow);
+        return true;
+    }
+
+    private void showRemindedTaskList() {
+        if(!unlocked||root==null)return;
+        java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        String today=LocalDate.now().toString();
+        try(Cursor rows=db.getReadableDatabase().rawQuery(
+                "SELECT id,title,due_date,remind_time,project_id FROM tasks "
+                +"WHERE done=0 AND due_date IS NOT NULL AND due_date<=? "
+                +"ORDER BY due_date ASC,id DESC LIMIT 150",new String[]{today})) {
+            while(rows.moveToNext()) {
+                long id=rows.getLong(0);
+                String due=rows.getString(2);
+                if(!rows.isNull(3)) {
+                    if(today.equals(due))continue;
+                    if(today.equals(prefs.getString("reminder_custom_day_"+id,"")))
+                        continue;
+                }
+                String label=rows.getString(1)+" • "+TaskDateLabels.format(due);
+                if(!rows.isNull(4))label+=" • "+projectPath(rows.getLong(4));
+                ids.add(id);
+                labels.add(label);
+            }
+        } catch(Exception problem) {
+            DiagnosticLog.error("TASK_REMINDER_LIST",problem);
+            alert("Nie udało się otworzyć listy przypomnień.");
+            return;
+        }
+        if(ids.isEmpty()) {
+            alert("Czynności z przypomnienia są już wykonane albo zmienione.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Czynności z przypomnienia ("+ids.size()+")")
+            .setItems(labels.toArray(new String[0]),
+                (dialog,index)->openRemindedTask(ids.get(index),true))
+            .setPositiveButton("Pokaż wszystkie",(dialog,which)->{
+                tasksFilter="all";
+                tasksPage=0;
+                go("tasks");
+            })
+            .setNegativeButton("Zamknij",null)
+            .show();
+    }
+
+    private void openRemindedTask(long taskId,boolean renderNow) {
+        Long projectId=null;
+        try(Cursor row=db.getReadableDatabase().rawQuery(
+                "SELECT project_id FROM tasks WHERE id=?",
+                new String[]{Long.toString(taskId)})) {
+            if(!row.moveToFirst()) {
+                alert("Ta czynność już nie istnieje.");
+                return;
+            }
+            if(!row.isNull(0))projectId=row.getLong(0);
+        }
+        if(projectId!=null&&projectId>0) {
+            if(renderNow)openProjectTask(taskId);
+            else {
+                selectedProjectId=projectId;
+                pendingProjectTaskFocusId=taskId;
+                screenScrollY.put("projects",0);
+                screen="projects";
+            }
+            DiagnosticLog.event("TASK_REMINDER_OPEN","task="+taskId);
+            return;
+        }
+        String visible=ProjectStore.mainTaskClause(
+            db.getReadableDatabase(),"tasks");
+        int position=0;
+        boolean found=false;
+        try(Cursor tasks=db.getReadableDatabase().rawQuery(
+                "SELECT id FROM tasks WHERE 1=1"+visible
+                    +" ORDER BY done ASC,"
+                    +"CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
+                    +"due_date ASC,id DESC",null)) {
+            while(tasks.moveToNext()) {
+                if(tasks.getLong(0)==taskId) {
+                    found=true;
+                    break;
+                }
+                position++;
+            }
+        }
+        if(!found) {
+            alert("Nie można odnaleźć tej czynności na głównej liście.");
+            return;
+        }
+        tasksFilter="all";
+        tasksPage=position/3;
+        pendingTaskFocusId=taskId;
+        screenScrollY.put("tasks",0);
+        screen="tasks";
+        DiagnosticLog.event("TASK_REMINDER_OPEN","task="+taskId);
+        if(renderNow)render();
+    }
+
     private boolean openOverduePlanIntent(Intent intent) {
         if(intent==null || !intent.getBooleanExtra("open_overdue_plan",false))
             return false;
@@ -563,6 +682,8 @@ public final class MainActivity extends Activity {
     private long selectedProjectId;
     private long pendingProjectTaskFocusId;
     private View pendingProjectTaskFocusView;
+    private long pendingTaskFocusId;
+    private View pendingTaskFocusView;
     private Long taskEditorProjectPreset;
     private long selectedMemberId;
     private String membersReturnScreen = "tasks";
@@ -726,6 +847,7 @@ public final class MainActivity extends Activity {
         render();
         root.post(() -> openLauncherQuickTask(getIntent()));
         root.post(() -> openOverduePlanIntent(getIntent()));
+        root.post(() -> openTaskReminderIntent(getIntent(),true));
         root.post(() -> handleNfcIntent(getIntent()));
         new Thread(() -> {
             int migrated=TileArtLibrary.migrateExistingCustomArt(this,prefs);
@@ -893,6 +1015,7 @@ public final class MainActivity extends Activity {
         setIntent(intent);
         if (openLauncherQuickTask(intent)) return;
         if (openOverduePlanIntent(intent)) return;
+        if (openTaskReminderIntent(intent,true)) return;
         if(applyProjectTaskIntent(intent,true)) {
             handleNfcIntent(intent);
             return;
@@ -1882,6 +2005,7 @@ public final class MainActivity extends Activity {
         else if (privateAuthDialog == null)
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         pendingProjectTaskFocusView=null;
+        pendingTaskFocusView=null;
         root.removeAllViews();
         if (structuredInterfaceShell()) root.setBackground(skin.page(this));
         else root.setBackgroundColor(bg);
@@ -1986,6 +2110,8 @@ public final class MainActivity extends Activity {
         // przewiń do wybranej czynności. Tylko jedno scrollTo po layout.
         final View focusedProjectTask=pendingProjectTaskFocusView;
         pendingProjectTaskFocusView=null;
+        final View focusedTask=pendingTaskFocusView;
+        pendingTaskFocusView=null;
         scroll.post(()->{
             if(pageScroll==scroll && restoreScreen.equals(screen)) {
                 int maxY=Math.max(0,body.getHeight()-scroll.getHeight());
@@ -1994,6 +2120,10 @@ public final class MainActivity extends Activity {
                         &&focusedProjectTask.getParent()==body)
                     destination=Math.max(0,Math.min(maxY,
                         focusedProjectTask.getTop()-dp(88)));
+                if("tasks".equals(screen)&&focusedTask!=null
+                        &&focusedTask.getParent()==body)
+                    destination=Math.max(0,Math.min(maxY,
+                        focusedTask.getTop()-dp(88)));
                 scroll.scrollTo(0,destination);
             }
         });
@@ -2161,6 +2291,7 @@ public final class MainActivity extends Activity {
                 unlocked = true;
                 DiagnosticLog.event("PIN_SETUP_OK");
                 goHome();
+                root.post(()->openTaskReminderIntent(getIntent(),true));
             } catch (Exception error) {
                 DiagnosticLog.error("PIN_SETUP", error);
                 alert("Błąd zabezpieczenia PIN. Spróbuj ponownie.");
@@ -2182,6 +2313,7 @@ public final class MainActivity extends Activity {
                     unlocked = true;
                     DiagnosticLog.event("PIN_UNLOCK_OK");
                     goHome();
+                    root.post(()->openTaskReminderIntent(getIntent(),true));
                 } else {
                     DiagnosticLog.event("PIN_UNLOCK_FAILED");
                     input.setText("");
@@ -7438,6 +7570,13 @@ public final class MainActivity extends Activity {
             String rule, int every) {
         LinearLayout box = card();
         if(done)box.setBackground(skin.panel(this,completedTaskSurface(),22));
+        final boolean fromReminder=id==pendingTaskFocusId;
+        if(fromReminder) {
+            box.setBackground(skin.panel(this,skin.tileTop,22));
+            box.setElevation(dp(6));
+            pendingTaskFocusView=box;
+            pendingTaskFocusId=0L;
+        }
         LinearLayout taskHeader=new LinearLayout(this);
         taskHeader.setOrientation(LinearLayout.HORIZONTAL);
         taskHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -7505,7 +7644,7 @@ public final class MainActivity extends Activity {
         });
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setVisibility(View.GONE);
+        actions.setVisibility(fromReminder?View.VISIBLE:View.GONE);
         box.addView(actions);
         taskAction(actions, "Edytuj", () -> editTask(id, name, due, rule, every));
         taskAction(actions, "Historia", () -> showTaskHistory(id, name));
