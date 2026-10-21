@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 334,
-  "versionName": "0.8.1.141",
+  "versionCode": 335,
+  "versionName": "0.8.1.142",
   "changelog": "EDHOME Beta 0.8.1.140 / 333 — P0 synchronizacja: Android nie odtwarza całej bazy, jeśli różnią się wyłącznie nagłówki kopii lub metadane Hub. Diagnostyka wskazuje brakujące pole bez ujawniania danych użytkownika. Desktop 0.7.0.132 zachowuje wartości null w pełnych snapshotach. Logi Android automatycznie archiwizowane i usuwane z telefonu po potwierdzeniu SHA-256. Stable bez zmian, aktualizuj bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.141/edhome-beta.apk",
-  "sha256": "140c299decf71dbca6dfb6267ed17f6cfbdd83cf1232c68fcabd92fa56891c84"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.142/edhome-beta.apk",
+  "sha256": "191295405eb0b06f15e8f28d51850266c3a039601e366acad264f33934a2d884"
 }
