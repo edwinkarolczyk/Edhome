@@ -516,8 +516,9 @@ final class ProjectStore {
                 totalMinutes+=minutes;
                 if(c.getInt(1)!=0) {
                     done++;
+                    // Ukończenie zalicza plan do postępu, nie dopisuje fikcyjnego czasu pracy.
                     doneMinutes+=minutes;
-                    workedMinutes+=Math.max(minutes,taskWorked);
+                    workedMinutes+=taskWorked;
                 } else {
                     doneMinutes+=Math.min(minutes,taskWorked);
                     workedMinutes+=taskWorked;
