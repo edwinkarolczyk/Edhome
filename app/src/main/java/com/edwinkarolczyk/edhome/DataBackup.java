@@ -170,6 +170,9 @@ final class DataBackup {
      */
     static String exportJson(SQLiteDatabase database, SharedPreferences prefs,
             Set<Long> omitStorageThumbnailIds) throws Exception {
+        // Snapshot jest wykonywany także okresowo przez LAN — logujemy awarie,
+        // a nie każdą prawidłową kontrolę, żeby nie wypierać ważnych błędów.
+        try {
         if (omitStorageThumbnailIds == null)
             omitStorageThumbnailIds = java.util.Collections.emptySet();
         BankBudgetGroupSettlement.requireCompletedForSnapshot(database);
@@ -334,6 +337,10 @@ final class DataBackup {
         if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BYTES)
             throw new IllegalStateException("Kopia przekracza limit 32 MB.");
         return json;
+        } catch(Exception error) {
+            DiagnosticLog.error("BACKUP_EXPORT_FAILED",error);
+            throw error;
+        }
     }
 
     static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json)
@@ -350,6 +357,8 @@ final class DataBackup {
     static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,
             Map<Long,String> archivedStorageThumbs, boolean preserveLocalBudgetHistory)
             throws Exception {
+        DiagnosticLog.event("BACKUP_RESTORE_STARTED");
+        try {
         if (archivedStorageThumbs == null)
             archivedStorageThumbs = java.util.Collections.emptyMap();
         // Przywrócenie nie może zastąpić księgi, gdy trwa naprawa grupy.
@@ -1885,6 +1894,12 @@ final class DataBackup {
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
+        }
+        DiagnosticLog.event("BACKUP_RESTORE_COMMITTED");
+        } catch(Exception error) {
+            // Obejmuje walidację przed transakcją oraz rollback podczas importu.
+            DiagnosticLog.error("BACKUP_RESTORE_FAILED",error);
+            throw error;
         }
     }
 

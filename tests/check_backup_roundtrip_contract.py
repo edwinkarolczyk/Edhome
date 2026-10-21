@@ -365,3 +365,14 @@ assert main.index('BackupRestoreDependencies.resolve(') < main.index(
     "Relacje należy obliczyć przed importem")
 
 print("Backup: 54 tables, ZIP v1/v2, selective restore + rescue checkpoint static contracts PASS")
+
+# 1.0: błędy pełnego snapshotu i restore są rejestrowane bez danych kopii.
+for token in ('DiagnosticLog.error("BACKUP_EXPORT_FAILED",error)',
+              'DiagnosticLog.event("BACKUP_RESTORE_STARTED")',
+              'DiagnosticLog.event("BACKUP_RESTORE_COMMITTED")',
+              'DiagnosticLog.error("BACKUP_RESTORE_FAILED",error)'):
+    assert token in source, "Brak diagnostyki snapshot/restore: " + token
+assert source.index('DiagnosticLog.event("BACKUP_RESTORE_COMMITTED")') > source.index(
+    'database.setTransactionSuccessful();', source.index(
+        'static void restoreJson(SQLiteDatabase database, SharedPreferences prefs, String json,'))
+print("Backup: logowanie błędów eksportu, walidacji i cofnięcia restore PASS")

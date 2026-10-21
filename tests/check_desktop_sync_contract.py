@@ -526,3 +526,11 @@ assert 'text.indexOf' in row_rules and 'maxChars' in row_rules
 assert '("projects".equals(table) ? 512 * 1024 : 256 * 1024)' in sync_store
 assert 'DataBackup.MAX_BYTES' in server
 print("P0: duże zdjęcie projektu Desktop → Android LAN, walidacja JPEG i limitów: PASS")
+
+# EDHOME 1.0: nowa zwykła czynność i wklejona czynność projektu = 20 minut.
+assert 'row.addProperty("duration_minutes", 20);' in desktop
+assert 'task.addProperty("duration_minutes",20);' in desktop
+assert '". Domyślny czas: 20 min."' in desktop
+assert 'row.addProperty("duration_minutes", 30);' not in desktop
+assert 'task.addProperty("duration_minutes",30);' not in desktop
+print("Desktop Android: nowe zadania/projekty mają wspólne 20 minut: PASS")

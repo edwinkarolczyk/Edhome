@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.134";
+    private static final String DESKTOP_VERSION = "0.7.0.135";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -2305,7 +2305,7 @@ public final class EdhomeDesktop extends JFrame {
             task.addProperty("title",name);
             task.addProperty("project_id",projectId);
             task.addProperty("project_sort_order",sortOrder);
-            task.addProperty("duration_minutes",30);
+            task.addProperty("duration_minutes",20);
             table("tasks").add(task);
             sortOrder+=10L;
             added++;
@@ -2314,7 +2314,7 @@ public final class EdhomeDesktop extends JFrame {
         desktopProjectId = projectId;
         showSection("Projekty");
         JOptionPane.showMessageDialog(this,
-            "Dodano czynności: " + added + ". Domyślny czas: 30 min.");
+            "Dodano czynności: " + added + ". Domyślny czas: 20 min.");
     }
 
 
@@ -9050,7 +9050,7 @@ public final class EdhomeDesktop extends JFrame {
             row.addProperty("repeat_every", 1);
             row.add("place_id", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("priority", "normal");
-            row.addProperty("duration_minutes", 30);
+            row.addProperty("duration_minutes", 20);
             row.add("assignee_id", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("task_kind", "general");
             row.add("waste_fraction", com.google.gson.JsonNull.INSTANCE);

@@ -1,3 +1,11 @@
+## 2026-10-21 — EDHOME 1.0: logowanie importu bankowego/ZIP i 20 min Desktop (beta)
+
+- **Android Beta 0.8.1.142 / 335:** `BankEvidenceStore.ingest` raportuje rozpoczęcie partii, zatwierdzone liczniki dodanych/duplikatów lub wyjątek z typem i stosem (bez kwot, nazw ani treści przelewów); pozostawia dotychczasową transakcję i rollback. Zdarzenia nie rozliczają automatycznie banku.
+- `DataBackup.exportJson` raportuje tylko błędy (bez zalewania logu sukcesami okresowego snapshotu). `DataBackup.restoreJson` raportuje rozpoczęcie, sukces po zakończeniu transakcji oraz błąd walidacji/SQL/odtwarzania. Bez zmian formatu ZIP, bazy i synchronizacji.
+- **Desktop Beta 0.7.0.135:** nowe czynności, także wklejane do projektu, domyślnie 20 minut jak na Androidzie, a nie 30. Dotychczasowe czasy istniejących czynności nietknięte.
+- Dodane kontrole statyczne do testów banku, kopii oraz synchronizacji Desktop; oba CI uruchamiane na `beta`.
+- **Otwarte:** testy po commicie oraz fizyczne potwierdzenie Android↔Desktop i ZIP. Pełny audyt cichych błędów trwa, issue #12. Stable `main` bez zmian.
+
 ## 2026-10-21 — EDHOME 1.0: fundament diagnostyki Android/Desktop (beta)
 
 - Cel: domknąć zatwierdzoną funkcjonalność 1.0 i dopiero potem zrobić pełny odbiór błędów, bez rozbudowy o nowe funkcje.

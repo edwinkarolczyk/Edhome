@@ -153,3 +153,12 @@ assert view.index('choose.setOnCheckedChangeListener(') < view.index(
     'header.setOnClickListener(v->')
 
 print("Bank evidence queue: persistent v35 schema, state constraints, dedup, UI and backup PASS")
+# 1.0: import bankowy ma wynik diagnostyczny także po odrzuceniu i rollbacku.
+for token in ('BANK_EVIDENCE_IMPORT_STARTED', 'BANK_EVIDENCE_IMPORT_COMMITTED',
+              'BANK_EVIDENCE_IMPORT_FAILED', 'ingestTransaction(db,incoming)',
+              'DiagnosticLog.error("BANK_EVIDENCE_IMPORT_FAILED",error)',
+              'throw error;', 'db.endTransaction()'):
+    assert token in store, "Brak diagnostyki importu: " + token
+assert 'candidate.entry.description' not in store.split(
+    'static IngestResult ingest(',1)[1].split('private static boolean existsEvidence(',1)[0].split('DiagnosticLog.',1)[0]
+print("Bank evidence: diagnostyka START/COMMIT/ROLLBACK bez danych finansowych PASS")

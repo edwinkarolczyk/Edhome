@@ -72,6 +72,22 @@ final class BankEvidenceStore {
 
     static IngestResult ingest(SQLiteDatabase db,List<Incoming> incoming) {
         if(incoming==null||incoming.isEmpty())return new IngestResult(0,0);
+        // Jedna partia = jeden wynik diagnostyczny, bez nazw i kwot przelewów.
+        DiagnosticLog.event("BANK_EVIDENCE_IMPORT_STARTED",
+            "entries="+incoming.size());
+        try {
+            IngestResult result=ingestTransaction(db,incoming);
+            DiagnosticLog.event("BANK_EVIDENCE_IMPORT_COMMITTED",
+                "inserted="+result.inserted+" duplicates="+result.duplicates);
+            return result;
+        } catch(RuntimeException error) {
+            // Transakcja została cofnięta przez ingestTransaction.
+            DiagnosticLog.error("BANK_EVIDENCE_IMPORT_FAILED",error);
+            throw error;
+        }
+    }
+
+    private static IngestResult ingestTransaction(SQLiteDatabase db,List<Incoming> incoming) {
         if(incoming.size()>MAX_IMPORT_BATCH)
             throw new IllegalArgumentException("Jedna partia może mieć maksymalnie 50 000 operacji bankowych. Podziel import na partie.");
         db.beginTransaction();
