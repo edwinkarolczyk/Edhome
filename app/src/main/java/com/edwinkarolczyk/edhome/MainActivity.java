@@ -5445,12 +5445,12 @@ public final class MainActivity extends Activity {
         progress.setMax(100);
         progress.setProgress(stats.progressPct());
         summary.addView(progress,new LinearLayout.LayoutParams(-1,dp(10)));
-        summary.addView(text(stats.doneTasks+" / "+stats.tasks+" czynności • "
-            +projectTimeText(stats.doneMinutes)+" / "
-            +projectTimeText(stats.totalMinutes),14,false));
+        summary.addView(text("Czynności: "+stats.doneTasks+" / "+stats.tasks
+            +" • zaliczono z planu: "+projectTimeText(stats.doneMinutes)
+            +" / "+projectTimeText(stats.totalMinutes),14,false));
         addProjectTimeProgress(summary,stats);
         bindProjectLaborSummary(summary,project.id);
-        summary.addView(text("Pozostało: "+projectTimeText(stats.remainingMinutes())
+        summary.addView(text("Pozostało wg planu: "+projectTimeText(stats.remainingMinutes())
             +(stats.overdueTasks>0?" • zaległe: "+stats.overdueTasks:""),14,false));
         summary.addView(text("Koszt planowany: "
             +MoneyRules.format(stats.plannedCostGrosz)
@@ -5554,7 +5554,7 @@ public final class MainActivity extends Activity {
             state="● Czas: OK • PRACA TRWA";
         }
         int pct=stats.timePct();
-        String label=state+" • "+pct+"% • "
+        String label=state+" • zarejestrowano "+pct+"% planu • "
             +projectTimeText(stats.workedMinutes)+" / "
             +projectTimeText(stats.totalMinutes);
         if(stats.timeOverrun())
@@ -5603,7 +5603,7 @@ public final class MainActivity extends Activity {
         info.setOrientation(LinearLayout.VERTICAL);
         info.addView(text(project.name,19,true));
         info.addView(text(stats.progressPct()+"% • "+stats.doneTasks+"/"+stats.tasks
-            +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało",13,false));
+            +" czynności • "+projectTimeText(stats.remainingMinutes())+" zostało wg planu",13,false));
         addProjectTimeProgress(info,stats);
         bindProjectLaborSummary(info,project.id);
         info.addView(text("Koszt: "+MoneyRules.format(stats.plannedCostGrosz)
@@ -6091,7 +6091,7 @@ public final class MainActivity extends Activity {
             final int minutes=item.durationMinutes;
             final int worked=ProjectStore.workedMinutes(
                 db.getReadableDatabase(),taskId,true);
-            final int remaining=Math.max(0,minutes-worked);
+            final int remaining=done?0:Math.max(0,minutes-worked);
             final int overrun=Math.max(0,worked-minutes);
             final Long activeStarted=ProjectStore.activeWorkStartedAt(
                 db.getReadableDatabase(),taskId);
@@ -6187,8 +6187,15 @@ public final class MainActivity extends Activity {
             }
 
             String timeLine="Plan: "+projectTimeText(minutes)
-                +" • wykonano: "+projectTimeText(worked)
-                +" • zostało: "+projectTimeText(remaining);
+                +" • czas zarejestrowany: "+projectTimeText(worked);
+            if(done) {
+                timeLine+=" • zakończono • do wykonania: 0 min";
+                if(worked==0)timeLine+=" • brak pomiaru Start/Stop";
+                else if(worked<minutes)
+                    timeLine+=" • poniżej planu: "+projectTimeText(minutes-worked);
+            } else {
+                timeLine+=" • zostało wg planu: "+projectTimeText(remaining);
+            }
             if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
             TextView projectTime=text(timeLine,12,false);
             bindProjectTimeStatus(projectTime,box,taskId,minutes,activeStarted);
@@ -6536,8 +6543,8 @@ public final class MainActivity extends Activity {
             long overrunSeconds=Math.max(0L,workedSeconds-plannedSeconds);
 
             String line="Plan: "+projectTimeText(plannedMinutes)
-                +" • wykonano: "+projectLiveTimeText(workedSeconds)
-                +" • zostało: "+projectLiveTimeText(remainingSeconds);
+                +" • czas zarejestrowany: "+projectLiveTimeText(workedSeconds)
+                +" • zostało wg planu: "+projectLiveTimeText(remainingSeconds);
             if(overrunSeconds>0)
                 line+=" • przekroczenie: "+projectLiveTimeText(overrunSeconds);
             view.setText(line);
