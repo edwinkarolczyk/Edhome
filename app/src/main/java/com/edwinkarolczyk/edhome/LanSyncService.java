@@ -112,6 +112,9 @@ public final class LanSyncService extends Service {
         ENDPOINT_RUNNING = server.isRunning();
         watchdogHandler = new Handler(Looper.getMainLooper());
         watchdogHandler.postDelayed(watchdog, 1200L);
+        // Po odtworzeniu procesu Android uruchamia usługę foreground bez
+        // MainActivity. Harmonogram klienta Huba musi wystartować również tutaj.
+        DesktopHubSync.ensureScheduled(this);
         DiagnosticLog.event("DESKTOP_SYNC_SERVICE_STARTED");
     }
 

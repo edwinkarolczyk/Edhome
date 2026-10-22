@@ -530,9 +530,13 @@ final class DesktopHubSync {
                     +"Zachowaj obie kopie i wybierz świadomie Telefon lub Desktop.",
                     null);
             DiagnosticLog.event("HUB_RESTORE_HOLD_NO_AUTO_PUSH_PULL");
+            heartbeatWithoutDataTransfer(context,prefs);
             return;
         }
-        if(!prefs.getString(PREF_CONFLICT,"").isBlank())return;
+        if(!prefs.getString(PREF_CONFLICT,"").isBlank()) {
+            heartbeatWithoutDataTransfer(context,prefs);
+            return;
+        }
         String host=resolveHost(context,prefs);
         if(host==null)throw new IllegalStateException("Nie znaleziono EDHOME Desktop w LAN.");
         register(context,prefs,host);
@@ -636,6 +640,24 @@ final class DesktopHubSync {
                 prefs.edit().putLong(PREF_LAST_SYNC,System.currentTimeMillis())
                     .putString(PREF_LAST_STATE,"ONLINE • dane aktualne").apply();
             }
+        }
+    }
+
+    /**
+     * Przy konflikcie lub po imporcie ZIP utrzymujemy tylko obecność w LAN.
+     * /status i /register nie przekazują ani nie nadpisują żadnych rekordów.
+     * Nie ustawiamy PREF_LAST_SYNC, żeby nie udawać synchronizacji danych.
+     */
+    private static void heartbeatWithoutDataTransfer(Context context,
+            SharedPreferences prefs) throws Exception {
+        String host=resolveHost(context,prefs);
+        if(host==null)
+            throw new IllegalStateException("Nie znaleziono API Desktopu w sieci LAN.");
+        register(context,prefs,host);
+        final String state="API POŁĄCZONE • dane czekają na uzgodnienie";
+        if(!state.equals(prefs.getString(PREF_LAST_STATE,""))) {
+            prefs.edit().putString(PREF_LAST_STATE,state).apply();
+            DiagnosticLog.event("HUB_CONFLICT_API_HEARTBEAT_OK");
         }
     }
 

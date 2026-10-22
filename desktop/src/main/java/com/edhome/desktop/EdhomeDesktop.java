@@ -126,6 +126,7 @@ public final class EdhomeDesktop extends JFrame {
     private QrPairingSession qrPairingSession;
     private TrayIcon trayIcon;
     private javax.swing.Timer reconnectTimer;
+    private long lastHubRestartAttemptAt;
     private javax.swing.Timer autoSaveTimer;
     private boolean autoSaving;
     private boolean editingDialog;
@@ -412,6 +413,7 @@ public final class EdhomeDesktop extends JFrame {
                 SwingUtilities.invokeLater(()->prepareWindowsPairingFirewall(false));
             }
         } catch(Exception error) {
+            if(hubServer!=null)hubServer.close();
             hubServer=null;
             apiStatus.setText("● API NIE DZIAŁA");
             apiStatus.setForeground(new Color(230,95,95));
@@ -7043,8 +7045,24 @@ public final class EdhomeDesktop extends JFrame {
         pullFromPhone(host, secret, null, silent);
     }
 
+    /** Naprawia wyłącznie nasłuch API, nigdy nie resetuje tokenu ani bazy. */
+    private void ensureHubApiRunning() {
+        if(hubServer!=null&&hubServer.isRunning())return;
+        long now=System.currentTimeMillis();
+        if(lastHubRestartAttemptAt>0L
+                &&now-lastHubRestartAttemptAt<30000L)return;
+        lastHubRestartAttemptAt=now;
+        DesktopDiagnosticLog.event("HUB_API_WATCHDOG_RESTART");
+        if(hubServer!=null) {
+            hubServer.close();
+            hubServer=null;
+        }
+        startHubApi();
+    }
+
     private void startReconnectLoop() {
         reconnectTimer = new javax.swing.Timer(10000, e -> {
+            ensureHubApiRunning();
             if(PREFS.getBoolean("hubMode",false)) {
                 if(hubServer!=null&&hubServer.isRunning()) {
                     DesktopHubServer.ClientInfo phone=hubServer.newestClient();
@@ -7069,6 +7087,13 @@ public final class EdhomeDesktop extends JFrame {
                         connection.setText("API GOTOWE • czekam na telefon");
                         connection.setForeground(APP_MUTED);
                     }
+                    updateTrayTooltip();
+                } else {
+                    connected=false;
+                    apiStatus.setText("● API NIE DZIAŁA • ponawiam uruchomienie");
+                    apiStatus.setForeground(new Color(230,95,95));
+                    connection.setText("OFFLINE • nie uruchomiono nasłuchu LAN");
+                    connection.setForeground(new Color(230,175,95));
                     updateTrayTooltip();
                 }
                 return;
