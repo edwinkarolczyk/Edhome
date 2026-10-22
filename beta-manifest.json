@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 339,
-  "versionName": "0.8.1.146",
+  "versionCode": 340,
+  "versionName": "0.8.1.147",
   "changelog": "EDHOME Beta 0.8.1.146 / 339 — Projekty > Koszty i zakupy: przy każdej istniejącej pozycji przyciski minus i plus zmieniają ilość o 1 szt./m/kg/l, a dotknięcie ilości pozwala podać wartości ułamkowe. Koszt przeliczany automatycznie; zero nie usuwa pozycji. Bez tworzenia duplikatów, bez zmiany statusu i bez księgowania PayCheck. Stable bez zmian; aktualizacja bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.146/edhome-beta.apk",
-  "sha256": "fc30d205eb6ccc4fd1036da0e91240ff1bdfbea26335c639c426834cad1afa39"
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.147/edhome-beta.apk",
+  "sha256": "c33e81debc987d8579f8522c30d37209d83d1d72186da9109845b499720050e8"
 }
