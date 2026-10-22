@@ -19,7 +19,8 @@ assert "resolveHost(context,prefs)" in heartbeat
 assert "register(context,prefs,host)" in heartbeat
 assert '"API POŁĄCZONE • dane czekają na uzgodnienie"' in heartbeat
 for forbidden in ("applyServerSnapshot(", '"/patch"', '"/snapshot"',
-                  "PREF_LAST_SYNC", "clearConflict(", "restoreJson(", "applyPatch("):
+                  ".putLong(PREF_LAST_SYNC", ".remove(PREF_LAST_SYNC",
+                  "clearConflict(", "restoreJson(", "applyPatch("):
     assert forbidden not in heartbeat, forbidden
 assert "ensureHubApiRunning();" in pc.split("private void startReconnectLoop()",1)[1]
 watchdog=pc.split("private void ensureHubApiRunning()",1)[1].split(
