@@ -45,6 +45,20 @@ class DesktopBudgetOutboundDeltaUuidTest {
         assertEquals(1, edited.getAsJsonObject("tables").getAsJsonArray("budget_entries").size());
     }
 
+    @Test void rejectsCaseVariantDuplicateUuid() throws Exception {
+        JsonObject before = snapshot(null);
+        JsonObject edited = snapshot("12345678-1234-1234-1234-abcdefabcdef");
+        JsonArray rows = new JsonArray();
+        JsonObject first = new JsonObject();
+        first.addProperty("id", "12345678-1234-1234-1234-abcdefabcdef");
+        JsonObject second = new JsonObject();
+        second.addProperty("id", "12345678-1234-1234-1234-ABCDEFABCDEF");
+        rows.add(first);
+        rows.add(second);
+        edited.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget", rows.toString());
+        assertNull(DesktopBudgetOutboundDelta.build(before, edited));
+    }
+
     @Test void acceptsCanonicalUuidAndCreatesOneOperation() throws Exception {
         JsonObject before = snapshot(null);
         JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
