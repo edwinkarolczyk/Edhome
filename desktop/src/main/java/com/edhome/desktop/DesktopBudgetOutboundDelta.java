@@ -26,6 +26,12 @@ final class DesktopBudgetOutboundDelta {
         if(base==null||edited==null
                 ||!base.has("settings")||!edited.has("settings")
                 ||!base.has("tables")||!edited.has("tables"))return null;
+        // Dane wejściowe z LAN mogą mieć poprawny JSON, lecz błędne typy.
+        // Nie dopuszczaj do wyjątku przed weryfikacją snapshotu.
+        if(!base.get("settings").isJsonObject()
+                ||!edited.get("settings").isJsonObject()
+                ||!base.get("tables").isJsonObject()
+                ||!edited.get("tables").isJsonObject())return null;
         JsonObject oldSettings=base.getAsJsonObject("settings");
         JsonObject newSettings=edited.getAsJsonObject("settings");
         final String[] fields={
