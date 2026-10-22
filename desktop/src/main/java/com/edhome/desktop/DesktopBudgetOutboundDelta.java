@@ -95,12 +95,14 @@ final class DesktopBudgetOutboundDelta {
 
     private static LinkedHashMap<String,JsonObject> rows(JsonArray data) {
         LinkedHashMap<String,JsonObject> result=new LinkedHashMap<>();
+        Set<String> canonicalIds=new java.util.HashSet<>();
         for(JsonElement element:data) {
             if(!element.isJsonObject())return null;
             JsonObject item=element.getAsJsonObject();
             if(!item.has("id")||!item.get("id").isJsonPrimitive())return null;
             String id=item.get("id").getAsString();
-            if(!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}") || result.containsKey(id))
+            if(!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                    || !canonicalIds.add(id.toLowerCase(java.util.Locale.ROOT)))
                 return null;
             result.put(id,item);
         }
