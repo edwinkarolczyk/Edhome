@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 338,
-  "versionName": "0.8.1.145",
-  "changelog": "EDHOME Beta 0.8.1.145 / 338 — Ustawienia mają 6 stale widocznych zakładek u góry ekranu, w dwóch rzędach po trzy przyciski: Ogólne, Wygląd, Magazyn, NFC i skan, Alarmy, Połączenia. Widoczna jest tylko wybrana grupa, bez przewijania całej listy. Wszystkie wcześniejsze opcje i ich wartości zachowane. Stable bez zmian; aktualizacja bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.145/edhome-beta.apk",
-  "sha256": "05c95a6ada58205ffb1b4137d37998092b6970013707358162382221353a5fda"
+  "versionCode": 339,
+  "versionName": "0.8.1.146",
+  "changelog": "EDHOME Beta 0.8.1.146 / 339 — Projekty > Koszty i zakupy: przy każdej istniejącej pozycji przyciski minus i plus zmieniają ilość o 1 szt./m/kg/l, a dotknięcie ilości pozwala podać wartości ułamkowe. Koszt przeliczany automatycznie; zero nie usuwa pozycji. Bez tworzenia duplikatów, bez zmiany statusu i bez księgowania PayCheck. Stable bez zmian; aktualizacja bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.146/edhome-beta.apk",
+  "sha256": "fc30d205eb6ccc4fd1036da0e91240ff1bdfbea26335c639c426834cad1afa39"
 }
