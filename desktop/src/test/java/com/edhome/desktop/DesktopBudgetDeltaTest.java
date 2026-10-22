@@ -150,6 +150,25 @@ final class DesktopBudgetDeltaTest {
             .get("paycheckRecipients").getAsString()).getAsJsonArray().size());
     }
 
+    @Test void conflictInSecondFieldRollsBackFirstField() throws Exception {
+        JsonObject server=snapshot();
+        String before=server.toString();
+        JsonObject changedRecipient=new JsonObject();
+        changedRecipient.addProperty("id",E);
+        changedRecipient.addProperty("name","Nowy odbiorca");
+        JsonObject packageDelta=new JsonObject();
+        JsonArray recipients=new JsonArray();
+        recipients.add(change(E,null,changedRecipient));
+        packageDelta.add("paycheckRecipients",recipients);
+        JsonArray items=new JsonArray();
+        items.add(change(A,item(A,9999),item(A,12000)));
+        packageDelta.add("paycheckMonthlyBudget",items);
+        assertThrows(DesktopHubServer.Conflict.class,
+            ()->DesktopBudgetDelta.apply(server,packageDelta));
+        assertEquals(before,server.toString(),
+            "Konflikt w drugim polu nie może zapisać pierwszego pola.");
+    }
+
     @Test void rejectingUnknownFieldsPreventsSettingsInjection() {
         JsonObject state=snapshot();
         JsonObject event=new JsonObject();
