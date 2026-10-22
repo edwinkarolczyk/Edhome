@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 340,
-  "versionName": "0.8.1.147",
-  "changelog": "EDHOME Beta 0.8.1.146 / 339 — Projekty > Koszty i zakupy: przy każdej istniejącej pozycji przyciski minus i plus zmieniają ilość o 1 szt./m/kg/l, a dotknięcie ilości pozwala podać wartości ułamkowe. Koszt przeliczany automatycznie; zero nie usuwa pozycji. Bez tworzenia duplikatów, bez zmiany statusu i bez księgowania PayCheck. Stable bez zmian; aktualizacja bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.147/edhome-beta.apk",
-  "sha256": "c33e81debc987d8579f8522c30d37209d83d1d72186da9109845b499720050e8"
+  "versionCode": 341,
+  "versionName": "0.8.1.148",
+  "changelog": "EDHOME Beta 0.8.1.148 / 341 — poprawka połączenia z PC: wznowienie klienta LAN po restarcie usługi Android, utrzymanie sygnału obecności w trakcie konfliktu danych bez nadpisywania telefonu ani Desktopu. Nie zmienia parowania, formatów ani danych. Zalecany EDHOME Desktop Beta 0.7.0.139.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.148/edhome-beta.apk",
+  "sha256": "535e1981f0fea2eedf16d86c388c1eb2ed22c1cdcee92f534c82e358b699c001"
 }
