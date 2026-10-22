@@ -73,6 +73,41 @@ class DesktopBudgetOutboundDeltaUuidTest {
         assertTrue(operation.get("after").isJsonObject());
     }
 
+    @Test void malformedBudgetJsonFailsClosedWithoutChangingData() throws Exception {
+        JsonObject before = snapshot(null);
+        JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
+        edited.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget", "{niepoprawny JSON");
+        String original = edited.toString();
+        assertNull(DesktopBudgetOutboundDelta.build(before, edited));
+        assertEquals(original, edited.toString());
+    }
+
+    @Test void budgetObjectInsteadOfArrayFailsClosed() throws Exception {
+        JsonObject before = snapshot(null);
+        JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
+        edited.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget", "{}");
+        assertNull(DesktopBudgetOutboundDelta.build(before, edited));
+    }
+
+    @Test void updateCarriesPreviousRecordForConflictDetection() throws Exception {
+        JsonObject before = snapshot("12345678-1234-1234-1234-1234567890ab");
+        JsonObject edited = before.deepCopy();
+        JsonArray rows = new JsonArray();
+        JsonObject row = new JsonObject();
+        row.addProperty("id", "12345678-1234-1234-1234-1234567890ab");
+        row.addProperty("amount", 300);
+        rows.add(row);
+        edited.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget", rows.toString());
+        DesktopBudgetOutboundDelta.Result delta = DesktopBudgetOutboundDelta.build(before, edited);
+        assertNotNull(delta);
+        JsonObject operation = delta.payload.getAsJsonObject("budgetDelta")
+                .getAsJsonArray("paycheckMonthlyBudget").get(0).getAsJsonObject();
+        assertTrue(operation.get("before").isJsonObject());
+        assertTrue(operation.get("after").isJsonObject());
+        assertFalse(operation.getAsJsonObject("before").has("amount"));
+        assertEquals(300, operation.getAsJsonObject("after").get("amount").getAsInt());
+    }
+
     @Test void acceptsCanonicalUuidAndCreatesOneOperation() throws Exception {
         JsonObject before = snapshot(null);
         JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
