@@ -80,6 +80,27 @@ assert 'themeChoice.setSelection(Math.max(0,currentTheme));' in settings
 assert 'smallButton(appearance,"Zastosuj motyw"' in settings
 assert 'settingsAccordion("appearance","Wygląd i kafelki"' in settings
 assert 'for (int i = 0; i < UiSkin.THEMES.length; i++)' not in settings
+# Ustawienia: zawsze widoczne 6 przełączników w dwóch rzędach;
+# widoczna jest tylko aktywna grupa, bez długiej listy dziesięciu sekcji.
+assert 'if (unlocked && "settings".equals(screen)) addSettingsTopNavigation();' in main
+assert 'private void addSettingsTopNavigation()' in main
+assert 'root.addView(bar,0,new LinearLayout.LayoutParams(-1,-2));' in main
+assert 'for(int rowIndex=0;rowIndex<2;rowIndex++)' in main
+assert 'for(int colIndex=0;colIndex<3;colIndex++)' in main
+assert '"Ogólne","Wygląd","Magazyn"' in main
+assert '"NFC i skan","Alarmy","Połączenia"' in main
+assert 'settings_selected_tab' in main
+assert 'screenScrollY.put("settings",0);' in main
+assert 'prefs.edit().putString("settings_selected_tab",tab).apply();' in main
+for group in ("general","appearance","storage","scan","notifications","connection"):
+    assert f'if("{group}".equals(selected))' in settings
+for category in ("general", "users", "appearance", "storage", "nfc", "scanner",
+                 "notifications", "desktop", "supla", "data"):
+    assert f'settingsAccordion("{category}"' in settings
+assert 'settingsYesNo(notifications,"Przypomnienia"' in settings
+assert 'settingsYesNo(nfc,"Nasłuch NFC poza aktywną operacją"' in settings
+assert 'smallButton(data,"Kopia danych / przenoszenie"' in settings
+
 # Nowy preset tylko przy naprawdę czystej instalacji Beta.
 # Aktualizacja zachowuje wybrany motyw lub wcześniejszy domyślny bez klucza.
 application=Path("app/src/main/java/com/edwinkarolczyk/edhome/EdhomeApplication.java").read_text(encoding="utf-8")
