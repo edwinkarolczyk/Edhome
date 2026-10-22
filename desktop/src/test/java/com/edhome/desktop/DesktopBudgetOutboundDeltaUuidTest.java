@@ -59,9 +59,25 @@ class DesktopBudgetOutboundDeltaUuidTest {
         assertNull(DesktopBudgetOutboundDelta.build(before, edited));
     }
 
-    @Test void caseChangeOfUuidDoesNotProduceDeleteAndInsert() throws Exception {
+    @Test void caseOnlyUuidChangeDoesNotProduceAnyDelta() throws Exception {
         JsonObject before = snapshot("12345678-1234-1234-1234-abcdefabcdef");
         JsonObject edited = snapshot("12345678-1234-1234-1234-ABCDEFABCDEF");
+        String beforeJson = before.toString();
+        String editedJson = edited.toString();
+        assertNull(DesktopBudgetOutboundDelta.build(before, edited));
+        assertEquals(beforeJson, before.toString());
+        assertEquals(editedJson, edited.toString());
+    }
+
+    @Test void actualEditWithCaseVariantUuidProducesSingleUpdate() throws Exception {
+        JsonObject before = snapshot("12345678-1234-1234-1234-abcdefabcdef");
+        JsonObject edited = snapshot("12345678-1234-1234-1234-ABCDEFABCDEF");
+        JsonArray rows = new JsonArray();
+        JsonObject changed = new JsonObject();
+        changed.addProperty("id", "12345678-1234-1234-1234-ABCDEFABCDEF");
+        changed.addProperty("amount", 300);
+        rows.add(changed);
+        edited.getAsJsonObject("settings").addProperty("paycheckMonthlyBudget", rows.toString());
         DesktopBudgetOutboundDelta.Result result = DesktopBudgetOutboundDelta.build(before, edited);
         assertNotNull(result);
         assertEquals(1, result.changes);
@@ -69,8 +85,10 @@ class DesktopBudgetOutboundDeltaUuidTest {
                 .getAsJsonArray("paycheckMonthlyBudget");
         assertEquals(1, changes.size());
         JsonObject operation = changes.get(0).getAsJsonObject();
+        assertEquals("12345678-1234-1234-1234-abcdefabcdef", operation.get("id").getAsString());
         assertTrue(operation.get("before").isJsonObject());
         assertTrue(operation.get("after").isJsonObject());
+        assertEquals(300, operation.getAsJsonObject("after").get("amount").getAsInt());
     }
 
     @Test void malformedBudgetJsonFailsClosedWithoutChangingData() throws Exception {
