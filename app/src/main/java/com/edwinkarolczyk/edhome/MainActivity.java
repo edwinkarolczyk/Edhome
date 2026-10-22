@@ -2047,6 +2047,7 @@ public final class MainActivity extends Activity {
             root.addView(scroll, scrollParams);
         }
 
+        if (unlocked && "settings".equals(screen)) addSettingsTopNavigation();
         if (!BetaUpdater.isBeta() && !prefs.contains("pin_hash")) setupPin();
         else if (!BetaUpdater.isBeta() && !unlocked) unlockPin();
         else {
@@ -22901,6 +22902,68 @@ public final class MainActivity extends Activity {
             + " znaków logów diagnostycznych. Wklej je do czatu.");
     }
 
+    /** Stały pasek zakładek Ustawień — pozostaje dostępny podczas przewijania formularza. */
+    private String settingsSelectedTab() {
+        String saved=prefs.getString("settings_selected_tab","general");
+        switch(saved) {
+            case "general": case "appearance": case "storage":
+            case "scan": case "notifications": case "connection":
+                return saved;
+            default: return "general";
+        }
+    }
+
+    private void addSettingsTopNavigation() {
+        final String selected=settingsSelectedTab();
+        final String[] keys={"general","appearance","storage",
+            "scan","notifications","connection"};
+        final String[] titles={"Ogólne","Wygląd","Magazyn",
+            "NFC i skan","Alarmy","Połączenia"};
+        final String[] icons={"⌂","◉","▣","◈","♧","↔"};
+        LinearLayout bar=new LinearLayout(this);
+        bar.setOrientation(LinearLayout.VERTICAL);
+        bar.setPadding(dp(9),dp(6),dp(9),dp(6));
+        bar.setBackgroundColor(bg);
+        bar.setElevation(dp(3));
+        for(int rowIndex=0;rowIndex<2;rowIndex++) {
+            LinearLayout row=new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for(int colIndex=0;colIndex<3;colIndex++) {
+                int index=rowIndex*3+colIndex;
+                final String tab=keys[index];
+                final boolean active=tab.equals(selected);
+                Button button=new Button(this);
+                button.setAllCaps(false);
+                button.setText(icons[index]+" "+titles[index]);
+                button.setTextSize(12);
+                button.setSingleLine(true);
+                button.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                button.setMinHeight(0);
+                button.setMinimumHeight(0);
+                button.setPadding(dp(3),0,dp(3),0);
+                button.setTextColor(active?skin.accentInk:ink);
+                button.setBackground(rounded(active?accent:surface));
+                button.setSelected(active);
+                button.setContentDescription("Ustawienia: "+titles[index]
+                    +(active?" • aktywna zakładka":" • otwórz zakładkę"));
+                LinearLayout.LayoutParams params=
+                    new LinearLayout.LayoutParams(0,dp(42),1f);
+                params.setMargins(dp(2),dp(2),dp(2),dp(2));
+                row.addView(button,params);
+                button.setOnClickListener(v->{
+                    if(tab.equals(settingsSelectedTab()))return;
+                    prefs.edit().putString("settings_selected_tab",tab).apply();
+                    if(pageScroll!=null)pageScroll.scrollTo(0,0);
+                    screenScrollY.put("settings",0);
+                    DiagnosticLog.event("SETTINGS_TAB_CHANGED","tab="+tab);
+                    render();
+                });
+            }
+            bar.addView(row,new LinearLayout.LayoutParams(-1,-2));
+        }
+        root.addView(bar,0,new LinearLayout.LayoutParams(-1,-2));
+    }
+
     private LinearLayout settingsAccordion(String key,String title,String summary,
             boolean openByDefault) {
         LinearLayout shell=card();
@@ -23235,12 +23298,13 @@ public final class MainActivity extends Activity {
     }
 
     private void settings() {
+        final String selected=settingsSelectedTab();
         header("Ustawienia");
-        note("Wybierz kategorię ustawień. Dotknij karty, aby ją rozwinąć; "
-            +"ustawienia i dane pozostają bez zmian.");
+        note("Wybierz zakładkę u góry. Wyświetlane są tylko jej ustawienia.");
 
+        if("general".equals(selected)) {
         LinearLayout general=settingsAccordion("general","Ogólne",
-            "Nazwa gospodarstwa i podstawowe ustawienia.",false);
+            "Nazwa gospodarstwa i podstawowe ustawienia.",true);
         EditText household=new EditText(this);
         household.setSingleLine(true);
         household.setHint("Nazwa gospodarstwa");
@@ -23267,7 +23331,9 @@ public final class MainActivity extends Activity {
         });
         users.addView(text("Dane profilu synchronizują się z Desktopem. "
             +"PIN profilu pozostaje lokalnie na tym urządzeniu.",12,false));
+        }
 
+        if("scan".equals(selected)) {
         LinearLayout nfc=settingsAccordion("nfc","NFC",
             "Cała obsługa NFC: nasłuch, zachowanie po skanie i reguły typów.",true);
         String hardware=nfcAdapter==null?"Brak modułu NFC"
@@ -23295,9 +23361,11 @@ public final class MainActivity extends Activity {
             +"Rzeczy, Pudełka, Miejsca, Produktu lub Pojazdu. EDHOME zapisuje UID "
             +"i nie nadpisuje pamięci taga. Operacje zmieniające dane nadal wymagają "
             +"potwierdzenia.",12,false));
+        }
 
+        if("storage".equals(selected)) {
         LinearLayout storageSettings=settingsAccordion("storage","Magazyn",
-            "Co widać w Magazynie i które przyciski mają być pokazywane.",false);
+            "Co widać w Magazynie i które przyciski mają być pokazywane.",true);
         settingsYesNo(storageSettings,"Galeria miniaturek rzeczy",
             STORAGE_GALLERY_PREF,true,null);
         LinearLayout types=settingsNestedAccordion(storageSettings,"storage_types",
@@ -23332,7 +23400,9 @@ public final class MainActivity extends Activity {
             "place_actions","Miejsca • widoczne akcje",false);
         settingsStorageAction(placeActions,"place","qr","QR / etykieta miejsca");
         settingsStorageAction(placeActions,"place","nfc","NFC");
+        }
 
+        if("scan".equals(selected)) {
         LinearLayout scannerSettings=settingsAccordion("scanner","Skaner QR / produkty",
             "Zachowanie wspólnego skanera i czas wyjmowania ze Spiżarni.",false);
         scannerSettings.addView(text("Po skanie QR/kodu bez osobnej reguły: "
@@ -23357,9 +23427,11 @@ public final class MainActivity extends Activity {
                 PantryTakeCountdown.DELAY_OPTIONS[choice]).apply();
             DiagnosticLog.event("PANTRY_TAKE_DELAY_SAVED");
         });
+        }
 
+        if("appearance".equals(selected)) {
         LinearLayout appearance=settingsAccordion("appearance","Wygląd i kafelki",
-            "Motyw, interfejs, ikony oraz gesty na panelu głównym.",false);
+            "Motyw, interfejs, ikony oraz gesty na panelu głównym.",true);
 
         appearance.addView(text("Interfejs EDHOME",14,true));
         Spinner interfaceChoice=new Spinner(this);
@@ -23507,9 +23579,11 @@ public final class MainActivity extends Activity {
                 .putInt(HomeTileLayout.DRAG_KEY,moveMs).apply();
             DiagnosticLog.event("HOME_TILE_GESTURE_TIMING_SAVED");
         });
+        }
 
+        if("notifications".equals(selected)) {
         LinearLayout notifications=settingsAccordion("notifications","Powiadomienia",
-            "Przypomnienia i cisza nocna.",false);
+            "Przypomnienia i cisza nocna.",true);
         settingsYesNo(notifications,"Przypomnienia", "reminders_enabled",false,()->{
             boolean enabled=prefs.getBoolean("reminders_enabled",false);
             if(enabled&&Build.VERSION.SDK_INT>=33
@@ -23530,7 +23604,9 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("QUIET_HOURS_RESET");
             render();
         });
+        }
 
+        if("connection".equals(selected)) {
         if(BetaUpdater.isBeta()){
             LinearLayout suplaSettings=settingsAccordion("supla","SUPLA Cloud",
                 "Połączenie z chmurą SUPLA i odczyt urządzeń/kanałów.",false);
@@ -23666,6 +23742,7 @@ public final class MainActivity extends Activity {
         }
         data.addView(text("Dane pozostają lokalne. Ustawienia widoczności "
             +"nie usuwają obiektów ani ich powiązań.",12,false));
+        }
     }
 
 
