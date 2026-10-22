@@ -1,3 +1,11 @@
+## 2026-10-22 — P0 LAN: ponawianie połączenia telefonu i Desktopu (Android Beta 0.8.1.148 / 341, Desktop Beta 0.7.0.139)
+
+- **Zgłoszenie użytkownika:** Android 147 i Desktop 138 połączyły się tylko raz; potem PC nie pokazuje telefonu.
+- **Znane luki w kodzie (bez logów z urządzeń niepotwierdzone jako jedyne źródło awarii):** Android po ponownym uruchomieniu procesu usługi foreground nie wznawiał klienta wychodzącego Huba bez otwartej MainActivity. Przy konflikcie danych lub blokadzie po ZIP telefon nie rejestrował swojej obecności, a PC po 3 minutach uznawał go za niedostępny. Desktop przy zatrzymaniu nasłuchu API nie miał mechanizmu samoczynnego odtworzenia serwera.
+- **Poprawiono:** `LanSyncService` uruchamia harmonogram `DesktopHubSync`; w konflikcie lub po ZIP działa tylko uwierzytelniony heartbeat `/status` + `/register`, bez /snapshot, /patch, zmiany baseline i znacznika ostatniej synchronizacji. Desktop przy awarii portu 45823 ponawia start Huba co najwyżej raz na 30 s, zachowuje token/ID, cache i dane.
+- **Bramka testowa:** `tests/check_lan_reconnect_contract.py` oraz JUnit ponownej rejestracji Huba bez zapisu do baz, a także dotychczasowe testy sync/ZIP. **CI nowych wersji i odbiór na fizycznym PC/Androidzie są do potwierdzenia.** Stan API połączonego nie oznacza jeszcze zgodności danych.
+- **Bez zmian:** Stable `main`, schemat SQLite, protokół, migracje, format ZIP, salda PayCheck i Budżetu. Nie usuwać ani danych aplikacji, ani cache Desktopu w celu samej naprawy połączenia.
+
 ## 2026-10-22 — Etap 1 przed RC1: aktualizacja statusu i bramek wydania (Android Beta 0.8.1.147 / 340, Desktop Beta 0.7.0.138)
 
 - **Wersje zweryfikowane w kodzie `beta`:** Android `app/build.gradle` = `0.8.1.147` / `340`; Desktop `desktop/build.gradle` = `0.7.0.138`. Numery wersji obu platform są niezależne.
