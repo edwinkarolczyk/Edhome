@@ -11,6 +11,7 @@ on:
       - "gradle/**"
       - "settings.gradle"
       - ".github/workflows/android-beta.yml"
+      - ".github/workflows/desktop-beta.yml"
       - ".github/scripts/**"
       - "tests/**"
   workflow_dispatch:
