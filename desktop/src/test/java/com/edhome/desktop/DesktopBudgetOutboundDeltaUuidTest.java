@@ -31,6 +31,20 @@ class DesktopBudgetOutboundDeltaUuidTest {
         assertEquals(original, edited.toString());
     }
 
+    @Test void rejectsChangedBudgetTableInsteadOfSilentlyDroppingRows() throws Exception {
+        JsonObject before = snapshot(null);
+        JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
+        JsonArray oldRows = new JsonArray();
+        JsonArray newRows = new JsonArray();
+        JsonObject row = new JsonObject();
+        row.addProperty("id", 1);
+        newRows.add(row);
+        before.getAsJsonObject("tables").add("budget_entries", oldRows);
+        edited.getAsJsonObject("tables").add("budget_entries", newRows);
+        assertNull(DesktopBudgetOutboundDelta.build(before, edited));
+        assertEquals(1, edited.getAsJsonObject("tables").getAsJsonArray("budget_entries").size());
+    }
+
     @Test void acceptsCanonicalUuidAndCreatesOneOperation() throws Exception {
         JsonObject before = snapshot(null);
         JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
