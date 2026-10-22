@@ -1089,6 +1089,36 @@ final class ProjectStore {
         return db.insertOrThrow("project_costs",null,v);
     }
 
+    /** Zmienia ilość istniejącej pozycji, nie dopisuje nowego zakupu ani płatności. */
+    static long changeCostQty(SQLiteDatabase db,long id,long desiredMilli) {
+        if(desiredMilli<0||desiredMilli>1000000000L)
+            throw new IllegalArgumentException("Ilość musi być od 0 do 1 000 000.");
+        ContentValues values=new ContentValues();
+        values.put("qty_milli",desiredMilli);
+        if(db.update("project_costs",values,"id=?",
+                new String[]{Long.toString(id)})!=1)
+            throw new IllegalArgumentException("Pozycja kosztu już nie istnieje.");
+        return desiredMilli;
+    }
+
+    static long adjustCostQty(SQLiteDatabase db,long id,long deltaMilli) {
+        long previous;
+        try(Cursor cursor=db.rawQuery(
+                "SELECT qty_milli FROM project_costs WHERE id=?",
+                new String[]{Long.toString(id)})) {
+            if(!cursor.moveToFirst())
+                throw new IllegalArgumentException("Pozycja kosztu już nie istnieje.");
+            previous=cursor.getLong(0);
+        }
+        long next;
+        try {
+            next=Math.addExact(previous,deltaMilli);
+        } catch(ArithmeticException overflow) {
+            throw new IllegalArgumentException("Ilość jest zbyt duża.");
+        }
+        return changeCostQty(db,id,Math.max(0,next));
+    }
+
     static void setCostStatus(SQLiteDatabase db,long id,String status) {
         if(!"planned".equals(status)&&!"bought".equals(status)&&!"paid".equals(status))
             throw new IllegalArgumentException("Nieprawidłowy status kosztu.");

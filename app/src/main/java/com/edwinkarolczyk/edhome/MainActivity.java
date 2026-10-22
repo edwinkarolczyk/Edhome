@@ -7061,6 +7061,61 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Ręczny wpis dopuszcza 0 oraz maksymalnie trzy miejsca po przecinku. */
+    private long parseProjectQtyMilliForEdit(String value) {
+        try {
+            long milli=new java.math.BigDecimal(value.trim().replace(',','.'))
+                .movePointRight(3).longValueExact();
+            if(milli<0||milli>1000000000L)throw new IllegalArgumentException();
+            return milli;
+        } catch(Exception invalid) {
+            throw new IllegalArgumentException(
+                "Podaj ilość od 0 do 1 000 000, maksymalnie 3 miejsca po przecinku.");
+        }
+    }
+
+    private void changeProjectCostQuantity(long costId,long deltaMilli) {
+        try {
+            ProjectStore.adjustCostQty(db.getWritableDatabase(),costId,deltaMilli);
+            DiagnosticLog.event("PROJECT_COST_QTY_CHANGED","id="+costId);
+            render();
+        } catch(Exception error) {
+            DiagnosticLog.error("PROJECT_COST_QTY_CHANGE",error);
+            alert(error.getMessage()==null?"Nie zmieniono ilości.":error.getMessage());
+        }
+    }
+
+    private void editProjectCostQuantity(long costId,long currentMilli,String unit) {
+        EditText field=new EditText(this);
+        field.setSingleLine(true);
+        field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+            |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            |android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+        field.setText(java.math.BigDecimal.valueOf(currentMilli,3)
+            .stripTrailingZeros().toPlainString().replace('.',','));
+        field.setSelectAllOnFocus(true);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Ilość • "+unit)
+            .setMessage("Możesz wpisać np. 1,25. Zero pozostawia pozycję na liście.")
+            .setView(field)
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Zapisz",null).create();
+        dialog.setOnShowListener(x->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    ProjectStore.changeCostQty(db.getWritableDatabase(),costId,
+                        parseProjectQtyMilliForEdit(field.getText().toString()));
+                    DiagnosticLog.event("PROJECT_COST_QTY_CHANGED","id="+costId);
+                    dialog.dismiss();
+                    render();
+                } catch(Exception error) {
+                    field.setError(error.getMessage()==null
+                        ?"Nie zmieniono ilości.":error.getMessage());
+                }
+            }));
+        dialog.show();
+    }
+
     private void showProjectCostDialog(long projectId) {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -7135,6 +7190,17 @@ public final class MainActivity extends Activity {
                 box.addView(text(("planned".equals(status)?"Planowane":
                     "bought".equals(status)?"Kupione":"Zapłacone")
                     +(noteValue.isEmpty()?"":" • "+noteValue),12,false));
+                // Skróty modyfikują ten sam wiersz, bez duplikowania zakupu.
+                LinearLayout quickQty=new LinearLayout(this);
+                quickQty.setOrientation(LinearLayout.HORIZONTAL);
+                quickQty.setGravity(Gravity.CENTER_VERTICAL);
+                box.addView(quickQty,new LinearLayout.LayoutParams(-1,dp(42)));
+                compactAction(quickQty,"−",()->changeProjectCostQuantity(costId,-1000L));
+                String qtyLabel=java.math.BigDecimal.valueOf(qty,3)
+                    .stripTrailingZeros().toPlainString()+" "+unit;
+                compactAction(quickQty,qtyLabel,
+                    ()->editProjectCostQuantity(costId,qty,unit));
+                compactAction(quickQty,"+",()->changeProjectCostQuantity(costId,1000L));
                 smallButton(box,"Następny status",()->{
                     String next="planned".equals(status)?"bought":
                         "bought".equals(status)?"paid":"planned";
