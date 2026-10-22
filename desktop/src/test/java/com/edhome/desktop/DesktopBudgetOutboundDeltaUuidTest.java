@@ -59,6 +59,20 @@ class DesktopBudgetOutboundDeltaUuidTest {
         assertNull(DesktopBudgetOutboundDelta.build(before, edited));
     }
 
+    @Test void caseChangeOfUuidDoesNotProduceDeleteAndInsert() throws Exception {
+        JsonObject before = snapshot("12345678-1234-1234-1234-abcdefabcdef");
+        JsonObject edited = snapshot("12345678-1234-1234-1234-ABCDEFABCDEF");
+        DesktopBudgetOutboundDelta.Result result = DesktopBudgetOutboundDelta.build(before, edited);
+        assertNotNull(result);
+        assertEquals(1, result.changes);
+        JsonArray changes = result.payload.getAsJsonObject("budgetDelta")
+                .getAsJsonArray("paycheckMonthlyBudget");
+        assertEquals(1, changes.size());
+        JsonObject operation = changes.get(0).getAsJsonObject();
+        assertTrue(operation.get("before").isJsonObject());
+        assertTrue(operation.get("after").isJsonObject());
+    }
+
     @Test void acceptsCanonicalUuidAndCreatesOneOperation() throws Exception {
         JsonObject before = snapshot(null);
         JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
