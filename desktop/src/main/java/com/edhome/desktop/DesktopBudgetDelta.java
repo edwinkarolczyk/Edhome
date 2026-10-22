@@ -21,6 +21,17 @@ final class DesktopBudgetDelta {
 
     static int apply(JsonObject snapshot,JsonObject delta)
             throws DesktopHubServer.Conflict {
+        // Sprawdź cały pakiet na kopii: konflikt w drugim polu
+        // nie może pozostawić zmian z pierwszego pola.
+        if(snapshot==null)throw conflict("budget","","Brak snapshotu.");
+        JsonObject working=snapshot.deepCopy();
+        int count=applyValidated(working,delta);
+        snapshot.add("settings",working.get("settings"));
+        return count;
+    }
+
+    private static int applyValidated(JsonObject snapshot,JsonObject delta)
+            throws DesktopHubServer.Conflict {
         if(delta==null||delta.size()==0)
             throw conflict("budget","", "Pusty pakiet zmian budżetu.");
         if(snapshot==null||!snapshot.has("settings")
