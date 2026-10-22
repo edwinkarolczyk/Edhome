@@ -58,10 +58,18 @@ final class DesktopBudgetOutboundDelta {
             if(!oldSettings.has(field)||!newSettings.has(field)
                     ||!oldSettings.get(field).isJsonPrimitive()
                     ||!newSettings.get(field).isJsonPrimitive())return null;
-            LinkedHashMap<String,JsonObject> before=rows(
-                JsonParser.parseString(oldSettings.get(field).getAsString()).getAsJsonArray());
-            LinkedHashMap<String,JsonObject> after=rows(
-                JsonParser.parseString(newSettings.get(field).getAsString()).getAsJsonArray());
+            // Nieprawidłowy lub niepełny snapshot nie może być podstawą delty.
+            // Zatrzymaj wysyłkę zamiast tworzyć operacje z niepewnych danych.
+            JsonElement oldData, newData;
+            try {
+                oldData=JsonParser.parseString(oldSettings.get(field).getAsString());
+                newData=JsonParser.parseString(newSettings.get(field).getAsString());
+            } catch (com.google.gson.JsonParseException error) {
+                return null;
+            }
+            if(!oldData.isJsonArray()||!newData.isJsonArray())return null;
+            LinkedHashMap<String,JsonObject> before=rows(oldData.getAsJsonArray());
+            LinkedHashMap<String,JsonObject> after=rows(newData.getAsJsonArray());
             if(before==null||after==null)return null;
             Set<String> ids=new TreeSet<>();
             ids.addAll(before.keySet());
