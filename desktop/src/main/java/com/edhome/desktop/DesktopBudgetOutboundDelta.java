@@ -98,8 +98,9 @@ final class DesktopBudgetOutboundDelta {
             JsonObject item=element.getAsJsonObject();
             if(!item.has("id")||!item.get("id").isJsonPrimitive())return null;
             String id=item.get("id").getAsString();
-            if(!id.matches("[0-9a-fA-F-]{36}")||result.put(id,item)!=null)
+            if(!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}") || result.containsKey(id))
                 return null;
+            result.put(id,item);
         }
         return result;
     }
