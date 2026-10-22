@@ -1,3 +1,11 @@
+## 2026-10-22 — Ustawienia w sześciu przypiętych zakładkach (Android Beta 0.8.1.145 / 338)
+
+- **Zmiana wyglądu:** zamiast przewijać dziesięć grup w jednej kolumnie, na górze ekranu Ustawień są stale widoczne dwa rzędy po trzy przyciski: **Ogólne**, **Wygląd**, **Magazyn**, **NFC i skan**, **Alarmy**, **Połączenia**. Aktywna zakładka jest wyróżniona motywem, a dotknięcie natychmiast przełącza widoczną treść i wraca na początek.
+- **Podział starych kategorii:** Ogólne = gospodarstwo/użytkownicy; Wygląd = motywy, ikony, kafelki i gesty; Magazyn = widoczność i akcje rzeczy/pudełek/miejsc; NFC i skan = reguły NFC, skaner QR i Spiżarnia; Alarmy = przypomnienia/cisza nocna; Połączenia = SUPLA, Desktop/Wi-Fi, backup i diagnostyka.
+- **Zachowanie danych i ustawień:** wszystkie istniejące przyciski/akcje oraz ich wartości zachowane, bez migracji SQLite i zmian w synchronizacji/ZIP. Wybór aktywnej zakładki zapamiętywany tylko lokalnie. Dawne zwijanie kart nadal działa. Pasek nie przewija się wraz z formularzem; karty wyświetlają się tylko w wybranej zakładce.
+- **Kod:** `MainActivity.java` commit `b1be92b`; regresja `tests/check_ui_refresh_contract.py` commit `821d65a`; wersja `01e8200`; opis aktualizacji `7eef754`. Test kompilacji i podpisanej APK oczekuje na wynik CI dla `beta`. Wymagany odbiór na telefonie (wąski ekran, dotyk i przewijanie, zachowanie wyboru po powrocie, motywy jasny/ciemny).
+- **Stable `main` bez zmian. Desktop bez zmian** — ta zmiana dotyczy wyłącznie nawigacji po Ustawieniach Android.
+
 ## 2026-10-21 — P0: powiadomienia czynności wskazują właściwą pozycję (Beta 0.8.1.144 / 337)
 
 - **Problem:** zwykłe alarmy o czynnościach otwierały główny ekran bez identyfikatora; zbiorcze przypomnienie wyświetlało tylko liczniki; powiadomienia o automatycznym wstrzymaniu minutnika po 60 min nie podawały nazwy pracy.
