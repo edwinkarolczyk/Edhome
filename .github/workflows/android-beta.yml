@@ -80,6 +80,7 @@ jobs:
             com.edwinkarolczyk.edhome.TimeSlotRulesSmoke
           python3 tests/check_smart_overdue_planner_contract.py
           python3 tests/check_hub_diagnostics_contract.py
+          python3 tests/check_lan_reconnect_contract.py
           javac -encoding UTF-8 -d "$RUNNER_TEMP/smart-planner" \
             app/src/main/java/com/edwinkarolczyk/edhome/TaskDateLabels.java \
             tests/task_rules/TaskDateLabelsSmoke.java
@@ -665,7 +666,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.146 / 339 — Projekty > Koszty i zakupy: przy każdej istniejącej pozycji przyciski minus i plus zmieniają ilość o 1 szt./m/kg/l, a dotknięcie ilości pozwala podać wartości ułamkowe. Koszt przeliczany automatycznie; zero nie usuwa pozycji. Bez tworzenia duplikatów, bez zmiany statusu i bez księgowania PayCheck. Stable bez zmian; aktualizacja bez odinstalowywania."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.148 / 341 — poprawka połączenia z PC: wznowienie klienta LAN po restarcie usługi Android, utrzymanie sygnału obecności w trakcie konfliktu danych bez nadpisywania telefonu ani Desktopu. Nie zmienia parowania, formatów ani danych. Zalecany EDHOME Desktop Beta 0.7.0.139."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
