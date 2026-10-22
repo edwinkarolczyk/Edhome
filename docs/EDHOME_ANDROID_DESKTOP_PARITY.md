@@ -63,3 +63,11 @@
 - Android 0.8.1.142 / 335: przy imporcie bankowym jednoznaczny ślad START / COMMITTED / FAILED, przy eksporcie ZIP awarie, a przy restore START / COMMITTED / FAILED. Bez danych prywatnych w metadanych.
 - Desktop 0.7.0.135: naprawione domyślne 20 minut nowej czynności i wklejanej czynności projektu.
 - Testy/realne urządzenia wymagają odbioru; nie deklarować pełnej zgodności 1.0. Stable `main` bez zmian.
+
+## Kontrola 22.10.2026 — Android 0.8.1.146 / 339 ↔ Desktop 0.7.0.137
+
+- Wersje potwierdzone bezpośrednio w `app/build.gradle` i `desktop/build.gradle` gałęzi `beta`; numeracja niezależna.
+- **Projekty → Koszty i zakupy (P1):** zgodnie z `docs/EDHOME_STATUS.md` Android 146 i Desktop 137 obsługują korektę ilości `−/+` istniejącej pozycji `project_costs`; Desktop ma też edycję ilości, dodawanie i status. Android commit `ca1fb6f`, Desktop commit `59b735c`. Zapis Desktop korzysta z istniejącej tabeli snapshot i `markDirty()`. **Zgodność kodu zadeklarowana, E2E niepotwierdzone**; sprawdzić ułamkowe jednostki, zero, koszt, synchronizację w obie strony i brak duplikatów.
+- **P0 nadal otwarte:** Hub JSON, konflikty, saldo PayCheck/Budżet, ZIP/restore i stare dane. Brak podstaw do automatycznego modyfikowania kontraktu lub migracji bez testów.
+- **CI dla 146/137:** status w aktualnym wpisie `EDHOME_STATUS.md` oznaczony jako oczekujący; nie potwierdzono PASS ani realnej publikacji tych konkretnych wersji. **Test fizyczny Android/PC:** niepotwierdzony.
+- **Ten przebieg:** aktualizacja macierzy; bez nowej zmiany kodu, bazy, `EDHOME_STATUS.md` lub `main`.
