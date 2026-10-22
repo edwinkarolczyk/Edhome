@@ -104,7 +104,9 @@ final class DesktopBudgetOutboundDelta {
             if(!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
                     || !canonicalIds.add(id.toLowerCase(java.util.Locale.ROOT)))
                 return null;
-            result.put(id,item);
+            // Ten sam rekord musi mieć ten sam klucz także pomiędzy snapshotami,
+            // niezależnie od zapisu liter UUID. Nie generuj usunięcia i dodania.
+            result.put(id.toLowerCase(java.util.Locale.ROOT),item);
         }
         return result;
     }
