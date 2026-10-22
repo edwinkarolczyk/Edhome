@@ -44,7 +44,9 @@ final class DesktopBudgetOutboundDelta {
         JsonObject newTables=edited.getAsJsonObject("tables");
         for(Map.Entry<String,JsonElement> e:oldTables.entrySet()) {
             String table=e.getKey();
-            if(table.startsWith("budget_"))continue;
+            // Nie wolno pomijać zmian tabel budget_: payload budgetDelta
+            // zawiera wyłącznie ustawienia, więc pominięte wiersze zginęłyby.
+            // Wymagaj osobnego patcha rekordów zamiast cichej utraty zmian.
             if(!e.getValue().equals(newTables.get(table)))return null;
         }
         for(String table:newTables.keySet())
