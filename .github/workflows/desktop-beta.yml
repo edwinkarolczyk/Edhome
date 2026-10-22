@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.138"
+  DESKTOP_VERSION: "0.7.0.139"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
@@ -21,6 +21,7 @@ on:
       - "tests/check_storage_stabilization_gate.py"
       - "tests/check_desktop_settings_contract.py"
       - "tests/check_hub_diagnostics_contract.py"
+      - "tests/check_lan_reconnect_contract.py"
   workflow_dispatch:
 
 jobs:
@@ -49,6 +50,7 @@ jobs:
           python tests/check_paycheck_budget_stage5c_reverse_patch.py
           python tests/check_hub_repair_history_safety.py
           python tests/check_hub_diagnostics_contract.py
+          python tests/check_lan_reconnect_contract.py
           python tests/check_paycheck_budget_stage6_desktop.py
           python tests/check_storage_stabilization_gate.py
           python tests/check_desktop_settings_contract.py
@@ -109,4 +111,4 @@ jobs:
             gh release create $tag --repo $repo --target "${{ github.sha }}" --prerelease --title "EDHOME Desktop Beta • latest" --notes "Publiczna paczka używana przez aktualizację jednym przyciskiem w EDHOME Desktop."
           }
           gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Setup.exe desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
-          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION. Projekty: sekcja Koszty i zakupy, przyciski plus/minus dla istniejących pozycji oraz ręczna edycja ilości i przeliczenie sum. Zmiany zapisują się lokalnie, a PayCheck pozostaje niezależny. Instalacja bez odinstalowywania i bez utraty danych."
+          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION — P0 LAN: Desktop automatycznie odtwarza nasłuch API TCP 45823, gdy ten zakończy się awarią, bez resetu tokenu parowania i bez kasowania danych. Android Beta 0.8.1.148 utrzymuje obecność także podczas konfliktu; nie wykonuje wtedy synchronizacji. Bez odinstalowywania."
