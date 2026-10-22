@@ -169,6 +169,39 @@ final class DesktopBudgetDeltaTest {
             "Konflikt w drugim polu nie może zapisać pierwszego pola.");
     }
 
+    @Test void malformedUuidAndDuplicateChangesAreRejectedAtomically()
+            throws Exception {
+        JsonObject server=snapshot();
+        String before=server.toString();
+        JsonObject invalid=delta("paycheckMonthlyBudget",
+            change("not-a-valid-uuid",null,item(E,100)));
+        assertThrows(DesktopHubServer.Conflict.class,
+            ()->DesktopBudgetDelta.apply(server,invalid));
+        JsonObject repeated=delta("paycheckMonthlyBudget",
+            change(A,item(A,10000),item(A,12000)),
+            change(A,item(A,12000),item(A,13000)));
+        assertThrows(DesktopHubServer.Conflict.class,
+            ()->DesktopBudgetDelta.apply(server,repeated));
+        assertEquals(before,server.toString());
+    }
+
+    @Test void uuidCaseVariantsCannotCreateSecondRecipient() throws Exception {
+        JsonObject server=snapshot();
+        JsonObject recipient=new JsonObject();
+        recipient.addProperty("id",E);
+        recipient.addProperty("name","Odbiorca");
+        DesktopBudgetDelta.apply(server,delta("paycheckRecipients",
+            change(E,null,recipient)));
+        String before=server.toString();
+        JsonObject altered=recipient.deepCopy();
+        altered.addProperty("id",E.toUpperCase(java.util.Locale.ROOT));
+        altered.addProperty("name","Inny odbiorca");
+        assertThrows(DesktopHubServer.Conflict.class,
+            ()->DesktopBudgetDelta.apply(server,delta("paycheckRecipients",
+                change(E.toUpperCase(java.util.Locale.ROOT),null,altered))));
+        assertEquals(before,server.toString());
+    }
+
     @Test void rejectingUnknownFieldsPreventsSettingsInjection() {
         JsonObject state=snapshot();
         JsonObject event=new JsonObject();
