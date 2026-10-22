@@ -7,6 +7,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Etap 5C: scalenie wyłącznie zmienionych pozycji wspólnego Budżetu.
@@ -56,6 +59,7 @@ final class DesktopBudgetDelta {
                 throw conflict(name,"", "Nieprawidłowy format Budżetu na PC.");
             }
             LinkedHashMap<String,JsonObject> rows=rows(current,name);
+            Set<String> packageIds=new HashSet<>();
             for(JsonElement element:field.getValue().getAsJsonArray()) {
                 if(!element.isJsonObject())
                     throw conflict(name,"", "Nieprawidłowa zmiana pozycji.");
@@ -64,15 +68,16 @@ final class DesktopBudgetDelta {
                         ||!change.has("before")||!change.has("after"))
                     throw conflict(name,"", "Niekompletna zmiana budżetu.");
                 String id=change.get("id").getAsString();
-                if(!id.matches("[0-9a-fA-F-]{36}"))
-                    throw conflict(name,id,"Błędny identyfikator budżetu.");
+                if(!validId(id)||!packageIds.add(id.toLowerCase(Locale.ROOT)))
+                    throw conflict(name,id,"Błędny lub powtórzony identyfikator budżetu.");
                 JsonObject expected=objectOrNull(change.get("before"),name,id);
                 JsonObject incoming=objectOrNull(change.get("after"),name,id);
-                if(expected!=null&&!id.equals(identity(expected))
-                        ||incoming!=null&&!id.equals(identity(incoming)))
+                if(expected!=null&&!id.equalsIgnoreCase(identity(expected))
+                        ||incoming!=null&&!id.equalsIgnoreCase(identity(incoming)))
                     throw conflict(name,id,"Niespójny identyfikator pozycji.");
 
-                JsonObject actual=rows.get(id);
+                String key=id.toLowerCase(Locale.ROOT);
+                JsonObject actual=rows.get(key);
                 if(HISTORY.equals(name)) {
                     if(expected!=null||incoming==null)
                         throw conflict(name,id,
@@ -82,7 +87,7 @@ final class DesktopBudgetDelta {
                             throw conflict(name,id,
                                 "Zdarzenie historii ma dwie różne treści.");
                         // Powtórne otrzymanie identycznego zdarzenia nie księguje go drugi raz.
-                    } else rows.put(id,incoming.deepCopy());
+                    } else rows.put(key,normalized(incoming));
                 } else {
                     // Powtórzenie po utracie odpowiedzi HTTP nie może
                     // ponownie księgować ani fałszywie zgłosić konfliktu.
@@ -90,8 +95,8 @@ final class DesktopBudgetDelta {
                         if(!same(actual,expected))
                             throw conflict(name,id,
                                 "Ta pozycja została zmieniona na innym urządzeniu.");
-                        if(incoming==null)rows.remove(id);
-                        else rows.put(id,incoming.deepCopy());
+                        if(incoming==null)rows.remove(key);
+                        else rows.put(key,normalized(incoming));
                     }
                 }
                 if(++total>500)
@@ -115,10 +120,21 @@ final class DesktopBudgetDelta {
         for(JsonElement entry:source) {
             JsonObject item=objectOrNull(entry,name,"");
             String id=identity(item);
-            if(!id.matches("[0-9a-fA-F-]{36}")||out.put(id,item)!=null)
+            if(!validId(id)||out.put(id.toLowerCase(Locale.ROOT),normalized(item))!=null)
                 throw conflict(name,id,"Powtórzony albo nieprawidłowy identyfikator.");
         }
         return out;
+    }
+
+    private static boolean validId(String id) {
+        return id!=null&&id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    }
+
+    private static JsonObject normalized(JsonObject item) {
+        if(item==null)return null;
+        JsonObject copy=item.deepCopy();
+        copy.addProperty("id",identity(item).toLowerCase(Locale.ROOT));
+        return copy;
     }
 
     private static JsonObject objectOrNull(JsonElement element,
@@ -136,7 +152,7 @@ final class DesktopBudgetDelta {
     }
 
     private static boolean same(JsonObject a,JsonObject b) {
-        return a==b || a!=null&&b!=null&&a.equals(b);
+        return a==b || a!=null&&b!=null&&normalized(a).equals(normalized(b));
     }
 
     private static DesktopHubServer.Conflict conflict(
