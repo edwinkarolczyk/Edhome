@@ -126,6 +126,17 @@ class DesktopBudgetOutboundDeltaUuidTest {
         assertEquals(300, operation.getAsJsonObject("after").get("amount").getAsInt());
     }
 
+    @Test void rejectsIncorrectSnapshotRootTypes() throws Exception {
+        for (String field : new String[]{"settings", "tables"}) {
+            JsonObject before = snapshot(null);
+            JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
+            edited.addProperty(field, "uszkodzone");
+            String original = edited.toString();
+            assertNull(DesktopBudgetOutboundDelta.build(before, edited));
+            assertEquals(original, edited.toString());
+        }
+    }
+
     @Test void acceptsCanonicalUuidAndCreatesOneOperation() throws Exception {
         JsonObject before = snapshot(null);
         JsonObject edited = snapshot("12345678-1234-1234-1234-1234567890ab");
