@@ -42,7 +42,8 @@ assert 'PREF_DIAG_ATTEMPT_AT' in android
 assert 'preferences.edit().putLong(PREF_DIAG_ATTEMPT_AT,now).apply()' in android
 assert 'sendDiagnostics(context,false);' in android
 assert 'BackupSyncGate.exitTransfer();' in android
-assert 'if(!prefs.getString(PREF_CONFLICT,"").isBlank())return;' in android
+assert 'if(!prefs.getString(PREF_CONFLICT,"").isBlank()) {' in android
+assert 'heartbeatWithoutDataTransfer(context,prefs);' in android
 assert 'private static String sendDiagnostics(Context context,boolean manual)' in android
 assert 'static void sendDiagnosticsNow(' in android
 assert 'PREF_LAST_SYNC' not in android.split('private static String sendDiagnostics(Context context,boolean manual)',1)[1].split('private static void syncOnce(Context context)',1)[0]
