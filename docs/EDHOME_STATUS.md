@@ -1,4 +1,4 @@
-## 2026-10-22 — Projekty: szybka korekta ilości kosztów i zakupów (beta, odbiór w toku)
+## 2026-10-22 — Projekty: szybka korekta ilości kosztów i zakupów (Android Beta 0.8.1.146 / 339, Desktop Beta 0.7.0.137, odbiór CI w toku)
 
 - Android: obok istniejącej pozycji `project_costs` są `−`, ilość i `+`. Jedno dotknięcie to 1 jednostka (szt./m/kg/l); dotknięcie ilości otwiera ręczną korektę z dokładnością 0,001, także do zera. Nie powstaje drugi zakup; cena jednostkowa i status zostają niezmienione, suma oraz statystyki przeliczają się ponownie.
 - Desktop: dodano widoczną sekcję `Koszty i zakupy` w szczegółach projektu, przyciski `−/+`, bezpośrednią edycję ilości, dodawanie pozycji i zmianę statusu. Dane zapisywane do istniejącej tablicy `project_costs` w snapshot, z `markDirty()`.

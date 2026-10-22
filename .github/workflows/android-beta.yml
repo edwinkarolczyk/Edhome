@@ -664,7 +664,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.145 / 338 — Ustawienia mają 6 stale widocznych zakładek u góry ekranu, w dwóch rzędach po trzy przyciski: Ogólne, Wygląd, Magazyn, NFC i skan, Alarmy, Połączenia. Widoczna jest tylko wybrana grupa, bez przewijania całej listy. Wszystkie wcześniejsze opcje i ich wartości zachowane. Stable bez zmian; aktualizacja bez odinstalowywania."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.146 / 339 — Projekty > Koszty i zakupy: przy każdej istniejącej pozycji przyciski minus i plus zmieniają ilość o 1 szt./m/kg/l, a dotknięcie ilości pozwala podać wartości ułamkowe. Koszt przeliczany automatycznie; zero nie usuwa pozycji. Bez tworzenia duplikatów, bez zmiany statusu i bez księgowania PayCheck. Stable bez zmian; aktualizacja bez odinstalowywania."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
