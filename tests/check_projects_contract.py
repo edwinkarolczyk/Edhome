@@ -416,3 +416,32 @@ assert ' • Czas zarejestrowany: ' in desktop
 assert ' • Zakończono • Do wykonania: 0 min' in desktop
 assert ' • Brak pomiaru Start/Stop' in desktop
 print("P0: rozdzielenie planu, czasu Start/Stop i statusu wykonania Android/Desktop OK")
+
+
+# Regresja ilości kosztów Projektów: szybkie +/− na istniejącym wierszu.
+assert "static long changeCostQty(" in project
+assert "static long adjustCostQty(" in project
+assert 'values.put("qty_milli",desiredMilli);' in project
+assert '"SELECT qty_milli FROM project_costs WHERE id=?"' in project
+assert "return changeCostQty(db,id,Math.max(0,next));" in project
+assert "private void editProjectCostQuantity(" in main
+assert "private void changeProjectCostQuantity(" in main
+assert 'compactAction(quickQty,"−",()->changeProjectCostQuantity(costId,-1000L));' in main
+assert 'compactAction(quickQty,"+",()->changeProjectCostQuantity(costId,1000L));' in main
+assert "parseProjectQtyMilliForEdit(field.getText().toString())" in main
+assert 'new LinearLayout.LayoutParams(-1,dp(42))' in main
+assert "private JPanel desktopProjectCostPanel(" in desktop
+assert "private void setDesktopProjectCostQty(" in desktop
+assert "private void addDesktopProjectCost(" in desktop
+assert "list.add(desktopProjectCostPanel(projectId));" in desktop
+assert "mutableTable(\"project_costs\").add(row);" in desktop
+assert 'cost.addProperty("qty_milli",desired);' in desktop
+assert "markDirty();" in desktop
+assert 'status.addActionListener(e->{' in desktop
+assert "PROJECT_COST_QTY_CHANGED_DESKTOP" in desktop
+# Operacje ilości nie są przelewem ani księgowaniem PayCheck.
+quantity_update=main.split("private void changeProjectCostQuantity(",1)[1].split(
+    "private void editProjectCostQuantity(",1)[0]
+assert "ProjectStore.adjustCostQty" in quantity_update
+assert "paycheck" not in quantity_update.lower()
+

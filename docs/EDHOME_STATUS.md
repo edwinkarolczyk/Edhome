@@ -1,3 +1,10 @@
+## 2026-10-22 — Projekty: szybka korekta ilości kosztów i zakupów (beta, odbiór w toku)
+
+- Android: obok istniejącej pozycji `project_costs` są `−`, ilość i `+`. Jedno dotknięcie to 1 jednostka (szt./m/kg/l); dotknięcie ilości otwiera ręczną korektę z dokładnością 0,001, także do zera. Nie powstaje drugi zakup; cena jednostkowa i status zostają niezmienione, suma oraz statystyki przeliczają się ponownie.
+- Desktop: dodano widoczną sekcję `Koszty i zakupy` w szczegółach projektu, przyciski `−/+`, bezpośrednią edycję ilości, dodawanie pozycji i zmianę statusu. Dane zapisywane do istniejącej tablicy `project_costs` w snapshot, z `markDirty()`.
+- Bez migracji SQLite i zmian formatu kopii ZIP lub protokołu LAN. Projektowe zakupy nie tworzą wpisów w PayCheck, nie zmieniają salda i nie aktualizują statusu płatności przy zmianie ilości.
+- Zakres gałęzi `beta`: Android commmit `ca1fb6f`, Desktop commit `59b735c`; test regresyjny kontraktu i JUnit dodane w kolejnym commicie. **CI i test na realnym telefonie/PC pozostają do odbioru; Stable `main` bez zmian.**
+
 ## 2026-10-22 — Ustawienia w sześciu przypiętych zakładkach (Android Beta 0.8.1.145 / 338)
 
 - **Zmiana wyglądu:** zamiast przewijać dziesięć grup w jednej kolumnie, na górze ekranu Ustawień są stale widoczne dwa rzędy po trzy przyciski: **Ogólne**, **Wygląd**, **Magazyn**, **NFC i skan**, **Alarmy**, **Połączenia**. Aktywna zakładka jest wyróżniona motywem, a dotknięcie natychmiast przełącza widoczną treść i wraca na początek.
