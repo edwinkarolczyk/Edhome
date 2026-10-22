@@ -259,6 +259,55 @@ final class DesktopHubServerRuntimeTest {
         }
     }
 
+
+    @Test
+    void repeatedApiHeartbeatDoesNotWriteDataAndHubCanRestart() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger writes=
+            new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger registrations=
+            new java.util.concurrent.atomic.AtomicInteger();
+        DesktopHubServer.Host host=new DesktopHubServer.Host() {
+            @Override public String snapshot() {
+                throw new AssertionError("Heartbeat nie może czytać snapshotu.");
+            }
+            @Override public String bootstrap(String incoming,
+                    DesktopHubServer.ClientInfo client) {
+                writes.incrementAndGet();return incoming;
+            }
+            @Override public String patch(String incoming,
+                    DesktopHubServer.ClientInfo client,boolean phoneWins) {
+                writes.incrementAndGet();return incoming;
+            }
+            @Override public String replace(String incoming,String baseSha,
+                    DesktopHubServer.ClientInfo client) {
+                writes.incrementAndGet();return incoming;
+            }
+            @Override public long revision(){return 0L;}
+            @Override public boolean initialized(){return false;}
+            @Override public void registered(DesktopHubServer.ClientInfo client) {
+                registrations.incrementAndGet();
+            }
+        };
+        for(int attempt=0;attempt<2;attempt++) {
+            try(DesktopHubServer server=new DesktopHubServer(
+                    DESKTOP_ID,"0.7.0.139",TOKEN,host)) {
+                server.start();
+                for(int i=0;i<2;i++) {
+                    HttpURLConnection heartbeat=open("POST","/register",
+                        "{\"deviceId\":\"runtime-smoke\",\"version\":\"0.8.1.148\"}");
+                    assertEquals(200,heartbeat.getResponseCode());
+                    assertTrue(read(heartbeat).contains("\"ok\":true"));
+                    heartbeat.disconnect();
+                }
+                assertEquals(1,server.recentClientCount(180000L));
+                assertTrue(server.isRunning());
+            }
+        }
+        assertTrue(registrations.get()>=4);
+        assertEquals(0,writes.get(),
+            "Rejestracja obecności nie może modyfikować Projektów, PayCheck ani budżetu.");
+    }
+
     private static HttpURLConnection open(String method,String path,String body)
             throws Exception {
         HttpURLConnection connection=(HttpURLConnection)new URL(
