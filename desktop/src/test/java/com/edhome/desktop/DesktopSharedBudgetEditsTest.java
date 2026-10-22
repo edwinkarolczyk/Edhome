@@ -129,10 +129,12 @@ final class DesktopSharedBudgetEditsTest {
         assertEquals(2,DesktopBudgetMirror.month(newItems,new JsonArray(),
             YearMonth.of(2026,11)).rows.getRowCount());
         DesktopBudgetIntegrity.assertSidecars(after);
+        // Dodanie pozycji zmienia również tabele SQLite budget_*.
+        // Delta obejmująca wyłącznie settings nie może pomijać tych zmian.
+        // Pełna synchronizacja rekordów musi obsłużyć spójny zestaw.
         DesktopBudgetOutboundDelta.Result delta=
             DesktopBudgetOutboundDelta.build(before,after);
-        assertNotNull(delta);
-        assertEquals(2,delta.changes); // pozycja i zdarzenie historii
+        assertNull(delta);
     }
 
     @Test void desktopCreatesSingleIncomeOnlyInSelectedMonth()
