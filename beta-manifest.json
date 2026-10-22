@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 337,
-  "versionName": "0.8.1.144",
-  "changelog": "EDHOME Beta 0.8.1.144 / 337 — przypomnienia pokazują nazwy czynności, po dotknięciu otwierają właściwą kartę także na dalszych stronach listy i w projektach. Zbiorcze przypomnienie pokazuje nazwy czynności i listę wyboru, a komunikat o wstrzymaniu minutnika po 60 minutach identyfikuje czynność i prowadzi do jej projektu. Stable bez zmian; instaluj przez aktualizator bez odinstalowywania.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.144/edhome-beta.apk",
-  "sha256": "7cbcab86d8a9f8318081091e13738b9c9ff63066680a720bf692e7fb5731f345"
+  "versionCode": 338,
+  "versionName": "0.8.1.145",
+  "changelog": "EDHOME Beta 0.8.1.145 / 338 — Ustawienia mają 6 stale widocznych zakładek u góry ekranu, w dwóch rzędach po trzy przyciski: Ogólne, Wygląd, Magazyn, NFC i skan, Alarmy, Połączenia. Widoczna jest tylko wybrana grupa, bez przewijania całej listy. Wszystkie wcześniejsze opcje i ich wartości zachowane. Stable bez zmian; aktualizacja bez odinstalowywania.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.145/edhome-beta.apk",
+  "sha256": "05c95a6ada58205ffb1b4137d37998092b6970013707358162382221353a5fda"
 }
