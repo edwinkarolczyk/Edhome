@@ -114,7 +114,9 @@ final class DesktopBudgetOutboundDelta {
                 return null;
             // Ten sam rekord musi mieć ten sam klucz także pomiędzy snapshotami,
             // niezależnie od zapisu liter UUID. Nie generuj usunięcia i dodania.
-            result.put(id.toLowerCase(java.util.Locale.ROOT),item);
+            JsonObject normalized=item.deepCopy();
+            normalized.addProperty("id",id.toLowerCase(java.util.Locale.ROOT));
+            result.put(id.toLowerCase(java.util.Locale.ROOT),normalized);
         }
         return result;
     }
