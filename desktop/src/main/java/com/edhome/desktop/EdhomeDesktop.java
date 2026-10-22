@@ -1454,6 +1454,10 @@ public final class EdhomeDesktop extends JFrame {
         batchEdit.addActionListener(e ->
             showDesktopProjectBatchEdit(projectId,new ArrayList<>(selectedTasks)));
 
+        // Koszty i zakupy pozostają częścią tego samego projektu i przewijanej listy.
+        list.add(Box.createVerticalStrut(12));
+        list.add(desktopProjectCostPanel(projectId));
+
         JScrollPane scroll = new JScrollPane(list);
         scroll.setName("edhome-project-tasks");
         scroll.putClientProperty("edhome.projectId",Long.valueOf(projectId));
@@ -1467,6 +1471,246 @@ public final class EdhomeDesktop extends JFrame {
         hint.setForeground(APP_MUTED);
         wrapper.add(hint,BorderLayout.SOUTH);
         return wrapper;
+    }
+
+
+    private static String desktopProjectCostStatus(String status) {
+        if ("bought".equals(status)) return "Kupione";
+        if ("paid".equals(status)) return "Zapłacone";
+        return "Planowane";
+    }
+
+    private static long desktopProjectCostQtyMilli(String raw,boolean allowZero) {
+        try {
+            long result=new java.math.BigDecimal(raw.trim().replace(',','.'))
+                .movePointRight(3).longValueExact();
+            if(result < (allowZero?0:1)||result>1000000000L)
+                throw new IllegalArgumentException();
+            return result;
+        } catch(Exception invalid) {
+            throw new IllegalArgumentException(
+                "Ilość musi być od "+(allowZero?"0":"0,001")
+                +" do 1 000 000, maksymalnie 3 miejsca po przecinku.");
+        }
+    }
+
+    private static long desktopProjectCostPriceGrosz(String raw) {
+        try {
+            long value=new java.math.BigDecimal(raw.trim().replace(',','.'))
+                .movePointRight(2).longValueExact();
+            if(value<0||value>100000000000L)throw new IllegalArgumentException();
+            return value;
+        } catch(Exception invalid) {
+            throw new IllegalArgumentException(
+                "Podaj poprawną cenę w złotych (np. 4 lub 4,50).");
+        }
+    }
+
+    private static long desktopProjectCostValue(JsonObject row) {
+        return java.math.BigDecimal.valueOf(longValue(row,"qty_milli"))
+            .multiply(java.math.BigDecimal.valueOf(longValue(row,"unit_price_grosz")))
+            .movePointLeft(3).setScale(0,java.math.RoundingMode.HALF_UP)
+            .longValueExact();
+    }
+
+    private void refreshDesktopProjectCosts(JLabel summary,long projectId) {
+        long planned=0,spent=0;
+        for(JsonElement element:table("project_costs")) {
+            if(!element.isJsonObject())continue;
+            JsonObject cost=element.getAsJsonObject();
+            if(longValue(cost,"project_id")!=projectId)continue;
+            long value=desktopProjectCostValue(cost);
+            planned=Math.addExact(planned,value);
+            if(!"planned".equals(value(cost,"status")))
+                spent=Math.addExact(spent,value);
+        }
+        summary.setText("Plan: "+money(Long.toString(planned))
+            +" • Kupiono/zapłacono: "+money(Long.toString(spent)));
+    }
+
+    private void setDesktopProjectCostQty(JsonObject cost,long desired,
+            JButton quantity,JLabel amount,JButton minus,JLabel summary,
+            long projectId) {
+        if(desired<0||desired>1000000000L) {
+            JOptionPane.showMessageDialog(this,"Ilość musi być od 0 do 1 000 000.");
+            return;
+        }
+        if(desired==longValue(cost,"qty_milli"))return;
+        cost.addProperty("qty_milli",desired);
+        markDirty();
+        quantity.setText(milli(Long.toString(desired))
+            +" "+value(cost,"unit"));
+        amount.setText(money(Long.toString(desktopProjectCostValue(cost))));
+        minus.setEnabled(desired>0);
+        refreshDesktopProjectCosts(summary,projectId);
+        DesktopDiagnosticLog.event("PROJECT_COST_QTY_CHANGED_DESKTOP",
+            "id="+longValue(cost,"id"));
+    }
+
+    private JPanel desktopProjectCostPanel(long projectId) {
+        JPanel section=new JPanel();
+        section.setOpaque(false);
+        section.setLayout(new BoxLayout(section,BoxLayout.Y_AXIS));
+        section.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel header=new JPanel(new FlowLayout(FlowLayout.LEFT,8,5));
+        header.setOpaque(false);
+        JLabel title=new JLabel("Koszty i zakupy");
+        title.setForeground(APP_TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD,16f));
+        header.add(title);
+        JButton add=compactActionButton("+ Koszt / zakup");
+        add.addActionListener(e->addDesktopProjectCost(projectId));
+        header.add(add);
+        section.add(header);
+
+        JLabel summary=new JLabel();
+        summary.setForeground(APP_ACCENT);
+        refreshDesktopProjectCosts(summary,projectId);
+        section.add(summary);
+
+        int count=0;
+        for(JsonElement element:table("project_costs")) {
+            if(!element.isJsonObject())continue;
+            JsonObject cost=element.getAsJsonObject();
+            if(longValue(cost,"project_id")!=projectId)continue;
+            count++;
+            JPanel row=new RoundedPanel(APP_SURFACE,14);
+            row.setLayout(new BorderLayout(8,2));
+            row.setBorder(new EmptyBorder(8,12,8,12));
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+            JLabel description=new JLabel("<html><b>"+html(value(cost,"name"))
+                +"</b> • "+html(money(value(cost,"unit_price_grosz")))
+                +" / "+html(value(cost,"unit"))
+                +(value(cost,"note").isBlank()?""
+                    :" • "+html(value(cost,"note")))+"</html>");
+            description.setForeground(APP_TEXT);
+            row.add(description,BorderLayout.NORTH);
+            JPanel controls=new JPanel(new FlowLayout(FlowLayout.LEFT,6,1));
+            controls.setOpaque(false);
+            JButton minus=compactActionButton("−");
+            minus.setToolTipText("Odejmij 1 "+value(cost,"unit"));
+            minus.setEnabled(longValue(cost,"qty_milli")>0);
+            JButton quantity=compactActionButton(milli(value(cost,"qty_milli"))
+                +" "+value(cost,"unit"));
+            quantity.setToolTipText("Kliknij, aby wpisać ilość ręcznie");
+            JButton plus=compactActionButton("+");
+            plus.setToolTipText("Dodaj 1 "+value(cost,"unit"));
+            JLabel amount=new JLabel(money(Long.toString(desktopProjectCostValue(cost))));
+            amount.setForeground(APP_TEXT);
+            JButton status=compactActionButton(desktopProjectCostStatus(value(cost,"status")));
+            status.setToolTipText("Zmień status bez księgowania w PayCheck");
+            JButton remove=compactActionButton("Usuń");
+
+            minus.addActionListener(e->setDesktopProjectCostQty(cost,
+                Math.max(0,longValue(cost,"qty_milli")-1000L),
+                quantity,amount,minus,summary,projectId));
+            plus.addActionListener(e->setDesktopProjectCostQty(cost,
+                longValue(cost,"qty_milli")+1000L,
+                quantity,amount,minus,summary,projectId));
+            quantity.addActionListener(e->{
+                String raw=JOptionPane.showInputDialog(this,
+                    "Podaj nową ilość w "+value(cost,"unit")+" (może być 0):",
+                    milli(value(cost,"qty_milli")));
+                if(raw==null)return;
+                try {
+                    setDesktopProjectCostQty(cost,
+                        desktopProjectCostQtyMilli(raw,true),
+                        quantity,amount,minus,summary,projectId);
+                } catch(IllegalArgumentException invalid) {
+                    JOptionPane.showMessageDialog(this,invalid.getMessage());
+                }
+            });
+            status.addActionListener(e->{
+                String old=value(cost,"status");
+                String next="planned".equals(old)?"bought":
+                    "bought".equals(old)?"paid":"planned";
+                cost.addProperty("status",next);
+                markDirty();
+                status.setText(desktopProjectCostStatus(next));
+                refreshDesktopProjectCosts(summary,projectId);
+            });
+            remove.addActionListener(e->{
+                if(JOptionPane.showConfirmDialog(this,
+                        "Usunąć zakup „"+value(cost,"name")+"”?",
+                        "EDHOME • Projekty",JOptionPane.YES_NO_OPTION)
+                        !=JOptionPane.YES_OPTION)return;
+                mutableTable("project_costs").remove(cost);
+                markDirty();
+                showSection("Projekty");
+            });
+
+            controls.add(minus);
+            controls.add(quantity);
+            controls.add(plus);
+            controls.add(amount);
+            controls.add(status);
+            controls.add(remove);
+            row.add(controls,BorderLayout.CENTER);
+            section.add(row);
+            section.add(Box.createVerticalStrut(6));
+        }
+        if(count==0) {
+            JLabel empty=new JLabel("Brak kosztów i zakupów w projekcie.");
+            empty.setForeground(APP_MUTED);
+            section.add(empty);
+        }
+        return section;
+    }
+
+    private void addDesktopProjectCost(long projectId) {
+        JTextField name=new JTextField(22);
+        JTextField quantity=new JTextField("1",10);
+        JTextField unit=new JTextField("szt.",10);
+        JTextField price=new JTextField("0",10);
+        JTextField note=new JTextField(22);
+        JComboBox<Choice> status=new JComboBox<>(new Choice[]{
+            new Choice("planned","Planowane"),
+            new Choice("bought","Kupione"),
+            new Choice("paid","Zapłacone")
+        });
+        JPanel form=new JPanel(new GridLayout(6,2,8,8));
+        form.add(new JLabel("Nazwa"));form.add(name);
+        form.add(new JLabel("Ilość"));form.add(quantity);
+        form.add(new JLabel("Jednostka (szt., m, kg, l)"));form.add(unit);
+        form.add(new JLabel("Cena jednostkowa (zł)"));form.add(price);
+        form.add(new JLabel("Status"));form.add(status);
+        form.add(new JLabel("Notatka"));form.add(note);
+        for(;;) {
+            int answer=JOptionPane.showConfirmDialog(this,form,
+                "Koszt / zakup projektu",JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+            if(answer!=JOptionPane.OK_OPTION)return;
+            try {
+                String label=name.getText().trim();
+                String unitName=unit.getText().trim();
+                if(label.isEmpty()||label.length()>160)
+                    throw new IllegalArgumentException("Podaj nazwę (maksymalnie 160 znaków).");
+                if(unitName.isEmpty()||unitName.length()>24)
+                    throw new IllegalArgumentException("Podaj jednostkę (np. szt. lub m).");
+                long qty=desktopProjectCostQtyMilli(quantity.getText(),false);
+                long priceGrosz=desktopProjectCostPriceGrosz(price.getText());
+                JsonObject row=new JsonObject();
+                row.addProperty("id",nextId("project_costs"));
+                row.addProperty("project_id",projectId);
+                row.addProperty("name",label);
+                row.addProperty("qty_milli",qty);
+                row.addProperty("unit",unitName);
+                row.addProperty("unit_price_grosz",priceGrosz);
+                row.addProperty("status",((Choice)status.getSelectedItem()).value);
+                row.addProperty("note",note.getText().trim());
+                row.addProperty("created_at",System.currentTimeMillis());
+                mutableTable("project_costs").add(row);
+                markDirty();
+                DesktopDiagnosticLog.event("PROJECT_COST_ADDED_DESKTOP",
+                    "project="+projectId);
+                showSection("Projekty");
+                return;
+            } catch(Exception invalid) {
+                JOptionPane.showMessageDialog(this,
+                    invalid.getMessage()==null?"Nie zapisano kosztu.":invalid.getMessage());
+            }
+        }
     }
 
     private void showDesktopProjectBatchEdit(long currentProjectId,
