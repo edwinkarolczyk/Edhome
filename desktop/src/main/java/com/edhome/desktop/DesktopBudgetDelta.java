@@ -83,7 +83,7 @@ final class DesktopBudgetDelta {
                         throw conflict(name,id,
                             "Historia jest tylko do dopisywania.");
                     if(actual!=null) {
-                        if(!actual.equals(incoming))
+                        if(!same(actual,incoming))
                             throw conflict(name,id,
                                 "Zdarzenie historii ma dwie różne treści.");
                         // Powtórne otrzymanie identycznego zdarzenia nie księguje go drugi raz.
