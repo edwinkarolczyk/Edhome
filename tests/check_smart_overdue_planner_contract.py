@@ -36,7 +36,7 @@ for token in (
 
 assert 'remind_time TEXT' in main
 assert '"remind_time", "reminder_lead_days"' in backup
-assert 'super(context, "edhome-beta-preview.db", null, 51' in main
+assert 'super(context, "edhome-beta-preview.db", null, 52' in main
 for token in (
     "SmartTaskPlanner.proposeNew(",
     "SmartTaskPlanner.proposeForProject(",

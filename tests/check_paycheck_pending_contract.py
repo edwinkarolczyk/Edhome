@@ -40,7 +40,7 @@ for token in ('Do potwierdzenia z Budżetu',
               'Saldo potwierdzone:',
               'DATABASE_MIGRATED_29_TO_30_PAYCHECK_PENDING'):
     assert token in main,token
-for token in ('DB_VERSION = 51;','"created_at", "status"',
+for token in ('DB_VERSION = 52;','"created_at", "status"',
               'inputVersion < 30','values.put(key, "confirmed");',
               '|| !("pending".equals(status) || "confirmed".equals(status))'):
     assert token in backup,token

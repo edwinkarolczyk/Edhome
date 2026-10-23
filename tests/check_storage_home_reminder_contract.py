@@ -32,7 +32,7 @@ for token in (
     '✓ Odłożone na swoje miejsce',
     'case "storage"',
     'DATABASE_MIGRATED_49_TO_50_STORAGE_HOME',
-    'super(context, "edhome-beta-preview.db", null, 51)',
+    'super(context, "edhome-beta-preview.db", null, 52)',
 ):
     assert token in main, token
 assert 'java.time.LocalDateTime' in alerts
@@ -46,7 +46,7 @@ assert 'StorageHomeReminderReceiver.schedule(context);' in reminder
 assert 'android:name=".StorageHomeReminderReceiver"' in manifest
 assert 'return_required","return_after_days","taken_at"' in backup
 assert 'inputVersion < 50 && "storage_items".equals(definition[0])' in backup
-assert 'CURRENT_SCHEMA = 51;' in selective
+assert 'CURRENT_SCHEMA = 52;' in selective
 assert 'if(!project.has("return_after_days"))' in selective
 assert '"Powinna wracać na swoje miejsce","return_required"' in desktop
 assert 'appendDesktopStorageHomeEvent' in desktop
