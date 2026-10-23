@@ -30,6 +30,12 @@ final class LegacyCompat {
             privateVisibility, showBadge, silent);
     }
 
+    static void ensureAudibleChannel(NotificationManager manager,String id,
+            String name) {
+        if(manager!=null&&Build.VERSION.SDK_INT>=26)
+            Api26.ensureAudibleChannel(manager,id,name);
+    }
+
     static boolean channelEnabled(NotificationManager manager, String id) {
         return manager != null
             && (Build.VERSION.SDK_INT < 26 || Api26.channelEnabled(manager, id));
@@ -84,6 +90,21 @@ final class LegacyCompat {
                 channel.setSound(null, null);
                 channel.enableVibration(false);
             }
+            manager.createNotificationChannel(channel);
+        }
+
+        static void ensureAudibleChannel(NotificationManager manager,String id,
+                String name) {
+            NotificationChannel channel=new NotificationChannel(id,name,
+                NotificationManager.IMPORTANCE_DEFAULT);
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0,180,120,180});
+            channel.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
+                new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
             manager.createNotificationChannel(channel);
         }
 

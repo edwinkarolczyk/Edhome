@@ -23964,6 +23964,18 @@ public final class MainActivity extends Activity {
         if("notifications".equals(selected)) {
         LinearLayout notifications=settingsAccordion("notifications","Powiadomienia",
             "Przypomnienia i cisza nocna.",true);
+        settingsYesNo(notifications,"Dźwięki aplikacji",
+            FeedbackSignals.SOUNDS_ENABLED,true,null);
+        settingsYesNo(notifications,"Wibracje aplikacji",
+            FeedbackSignals.VIBRATIONS_ENABLED,true,null);
+        smallButton(notifications,"Przetestuj dźwięk i wibrację",()->{
+            FeedbackSignals.warning(this);
+            alert("Wysłano próbę sygnału. Sprawdź głośność powiadomień, "
+                +"tryb cichy i kanał EDHOME w ustawieniach telefonu.");
+        });
+        notifications.addView(text("Alarmy Androida używają osobnego kanału "
+            +"powiadomień z dźwiękiem i wibracją. Tryb Nie przeszkadzać "
+            +"i ustawienia systemowe mogą wyciszyć sygnał.",12,false));
         settingsYesNo(notifications,"Przypomnienia", "reminders_enabled",false,()->{
             boolean enabled=prefs.getBoolean("reminders_enabled",false);
             if(enabled&&Build.VERSION.SDK_INT>=33

@@ -32,7 +32,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         "com.edwinkarolczyk.edhome.REMIND_SINGLE_TASK";
     private static final String ACTION_PLAN =
         "com.edwinkarolczyk.edhome.CHECK_TASK_PLANNING";
-    private static final String CHANNEL_ID = "edhome-task-due";
+    private static final String CHANNEL_ID = "edhome-task-due-alert-v2";
     private static final int ALARM_ID = 7125;
     private static final int PLAN_ALARM_ID = 7126;
     private static final String DATABASE = "edhome-beta-preview.db";
@@ -455,9 +455,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (notifications == null || !LegacyCompat.notificationsEnabled(notifications))
             return;
-        LegacyCompat.ensureChannel(notifications, CHANNEL_ID,
-            "Przypomnienia o czynnościach", NotificationManager.IMPORTANCE_DEFAULT,
-            null, true, true, false);
+        LegacyCompat.ensureAudibleChannel(notifications, CHANNEL_ID,
+            "Przypomnienia czynności • dźwięk i wibracje");
         if(legacy) {
             // Bez podsumowania zastępującego czynności: każda ma własny tag,
             // tytuł, ekran docelowy i możliwość niezależnego usunięcia.
@@ -545,6 +544,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
             builder.addAction(android.R.drawable.ic_media_play,
                 "▶ Start", ProjectWorkNotification.startAction(
                     context, singleTaskId));
+        if(Build.VERSION.SDK_INT<26)
+            builder.setDefaults(Notification.DEFAULT_SOUND|Notification.DEFAULT_VIBRATE);
         Notification notification = builder.build();
         int notificationId = plannerOnly ? PLAN_ALARM_ID
             : legacy ? ALARM_ID
