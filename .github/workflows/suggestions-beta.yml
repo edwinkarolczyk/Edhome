@@ -1,0 +1,48 @@
+name: EDHOME Sugestie — plik na beta
+
+on:
+  # Plik aktualizuje się przy kolejnym wdrożeniu beta.
+  # Issues nie mogą uruchomić tego workflow bez pliku na domyślnej
+  # gałęzi main, której nie modyfikujemy bez zgody.
+  push:
+    branches: [beta]
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "docs/EDHOME_STATUS.md"
+      - ".github/workflows/suggestions-beta.yml"
+      - ".github/scripts/sync_edhome_suggestions.py"
+  workflow_dispatch:
+
+concurrency:
+  group: edhome-suggestions-beta
+  cancel-in-progress: false
+
+jobs:
+  archive-suggestions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: read
+    steps:
+      - name: Checkout beta
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          persist-credentials: true
+      - name: Zbierz sugestie właściciela do pliku Markdown
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 .github/scripts/sync_edhome_suggestions.py
+      - name: Zapisz zmiany w gałęzi beta
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/EDHOME_SUGESTIE.md
+          if git diff --cached --quiet; then
+            echo "Brak nowych zmian w sugestiach."
+          else
+            git commit -m "docs: zaktualizuj zgłoszenia EDHOME z GitHub Issues"
+            git push origin HEAD:beta
+          fi
