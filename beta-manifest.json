@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 341,
-  "versionName": "0.8.1.148",
-  "changelog": "EDHOME Beta 0.8.1.148 / 341 — poprawka połączenia z PC: wznowienie klienta LAN po restarcie usługi Android, utrzymanie sygnału obecności w trakcie konfliktu danych bez nadpisywania telefonu ani Desktopu. Nie zmienia parowania, formatów ani danych. Zalecany EDHOME Desktop Beta 0.7.0.139.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.148/edhome-beta.apk",
-  "sha256": "535e1981f0fea2eedf16d86c388c1eb2ed22c1cdcee92f534c82e358b699c001"
+  "versionCode": 343,
+  "versionName": "0.8.1.150",
+  "changelog": "EDHOME Beta 0.8.1.150 / 343 — Projekty: pełnoekranowy podgląd dwóch zdjęć czynności z powiększaniem i przesuwaniem, wyborem aparat/galeria, osobną zmianą i usunięciem. Czas Start/Stop bez zmian. Desktop Beta 0.7.0.141.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.150/edhome-beta.apk",
+  "sha256": "45680275174747e06565755462a615797975fd16aa33552f71ccdd3a799d38e2"
 }
