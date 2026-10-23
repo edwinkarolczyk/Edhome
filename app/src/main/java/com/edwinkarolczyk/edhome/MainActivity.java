@@ -23652,9 +23652,9 @@ public final class MainActivity extends Activity {
                 save.run();
                 String prefix=category.getSelectedItemPosition()==1
                     ?"[EDHOME Błąd] ":"[EDHOME Sugestia] ";
-                String bodyText="### Opis\\n"
-                    +description+"\\n\\nPlatforma: Android\\nWersja: "
-                    +BuildConfig.VERSION_NAME+"\\n\\n"
+                String bodyText="### Opis\n"
+                    +description+"\n\nPlatforma: Android\nWersja: "
+                    +BuildConfig.VERSION_NAME+"\n\n"
                     +"Zgłoszenie przesłane z formularza EDHOME.";
                 String url="https://github.com/edwinkarolczyk/Edhome/issues/new"
                     +"?title="+Uri.encode(prefix+titleText)
