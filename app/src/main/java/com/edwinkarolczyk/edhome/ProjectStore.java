@@ -186,6 +186,34 @@ final class ProjectStore {
         ensureColumn(db,"project_task_work_sessions","worker_id","INTEGER");
     }
 
+    /** Dwie miniatury czynności projektu przechowywane w tasks i synchronizowane z ZIP/LAN. */
+    static void upgrade52(SQLiteDatabase db) {
+        ensureColumn(db,"tasks","task_thumbnail_1_base64","TEXT");
+        ensureColumn(db,"tasks","task_thumbnail_2_base64","TEXT");
+    }
+
+    static String taskThumbnail(SQLiteDatabase db,long taskId,int slot) {
+        if(slot<1||slot>2)throw new IllegalArgumentException("Nieprawidłowy numer zdjęcia.");
+        try(Cursor c=db.rawQuery(
+                "SELECT task_thumbnail_"+slot+"_base64 FROM tasks WHERE id=? AND project_id IS NOT NULL",
+                new String[]{Long.toString(taskId)})) {
+            return c.moveToFirst()&&!c.isNull(0)?c.getString(0):"";
+        }
+    }
+
+    static void setTaskThumbnail(SQLiteDatabase db,long taskId,int slot,String encoded) {
+        if(slot<1||slot>2)throw new IllegalArgumentException("Nieprawidłowy numer zdjęcia.");
+        if(encoded!=null&&encoded.length()>StorageThumbs.MAX_BASE64_CHARS)
+            throw new IllegalArgumentException("Zdjęcie czynności jest za duże.");
+        ContentValues values=new ContentValues();
+        String column="task_thumbnail_"+slot+"_base64";
+        if(encoded==null||encoded.isEmpty())values.putNull(column);
+        else values.put(column,encoded);
+        if(db.update("tasks",values,"id=? AND project_id IS NOT NULL",
+                new String[]{Long.toString(taskId)})!=1)
+            throw new IllegalArgumentException("Czynność projektu nie istnieje.");
+    }
+
     /** W wersji 51 nowa preferencja projektu podróżuje wraz z bazą, ZIP i LAN. */
     static void upgrade51(SQLiteDatabase db) {
         ensureColumn(db,"projects","show_in_main_tasks",

@@ -427,7 +427,8 @@ final class SyncRecordStore {
         if (row == null || !rowKey.equals(rowKey(table, row)))
             throw new IllegalArgumentException("Klucz rekordu nie zgadza się z operacją.");
         if (row.toString().getBytes(StandardCharsets.UTF_8).length >
-                ("projects".equals(table) ? 512 * 1024 : 256 * 1024))
+                ("projects".equals(table)||"tasks".equals(table)
+                    ? 1024 * 1024 : 256 * 1024))
             throw new IllegalArgumentException("Rekord synchronizacji jest za duży.");
         return row;
     }
@@ -459,12 +460,15 @@ final class SyncRecordStore {
                 String text = (String) value;
                 boolean projectThumbnail="projects".equals(table)
                     && "thumbnail_base64".equals(column);
-                int maxChars=projectThumbnail
+                boolean taskThumbnail="tasks".equals(table)
+                    && ("task_thumbnail_1_base64".equals(column)
+                        || "task_thumbnail_2_base64".equals(column));
+                int maxChars=projectThumbnail||taskThumbnail
                     ? StorageThumbs.MAX_BASE64_CHARS : 20000;
                 if (text.indexOf('\0') >= 0 || text.length() > maxChars)
                     throw new IllegalArgumentException(
                         "Nieprawidłowy tekst w polu " + column + ".");
-                if(projectThumbnail&&!text.isEmpty()){
+                if((projectThumbnail||taskThumbnail)&&!text.isEmpty()){
                     byte[] jpeg;
                     try {
                         jpeg=android.util.Base64.decode(text,android.util.Base64.NO_WRAP);

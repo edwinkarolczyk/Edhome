@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.139";
+    private static final String DESKTOP_VERSION = "0.7.0.140";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -123,6 +123,7 @@ public final class EdhomeDesktop extends JFrame {
     private String hubLastAndroidVersion = "";
     private String current = "Pulpit";
     private long desktopProjectId;
+    private long expandedDesktopProjectTaskId;
     private QrPairingSession qrPairingSession;
     private TrayIcon trayIcon;
     private javax.swing.Timer reconnectTimer;
@@ -1112,6 +1113,17 @@ public final class EdhomeDesktop extends JFrame {
     /** Stare snapshoty Desktop sprzed v49 nie mają kolumn kosztu godzinowego. */
     private void ensureDesktopLaborColumns() {
         boolean touched=false;
+        for(JsonElement element:table("tasks")) {
+            if(!element.isJsonObject())continue;
+            JsonObject task=element.getAsJsonObject();
+            for(int slot=1;slot<=2;slot++){
+                String key="task_thumbnail_"+slot+"_base64";
+                if(!task.has(key)){
+                    task.add(key,com.google.gson.JsonNull.INSTANCE);
+                    touched=true;
+                }
+            }
+        }
         for(JsonElement element:table("projects")) {
             if(!element.isJsonObject())continue;
             JsonObject row=element.getAsJsonObject();
@@ -1878,8 +1890,9 @@ public final class EdhomeDesktop extends JFrame {
 
         RoundedPanel card=new RoundedPanel(APP_SURFACE,16);
         card.setLayout(new BorderLayout(8,5));
-        card.setBorder(new EmptyBorder(9,11,9,11));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE,210));
+        card.setBorder(new EmptyBorder(5,10,5,10));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE,320));
+        boolean expanded=expandedDesktopProjectTaskId==taskId;
 
         JPanel detail=new JPanel();
         detail.setOpaque(false);
@@ -1887,7 +1900,22 @@ public final class EdhomeDesktop extends JFrame {
         JLabel title=new JLabel((done?"✓ ":"• ")+value(task,"title"));
         title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD,14f));
-        detail.add(title);
+        JPanel compactHeader=new JPanel(new BorderLayout(6,2));
+        compactHeader.setOpaque(false);
+        JPanel headLine=new JPanel(new FlowLayout(FlowLayout.LEFT,5,0));
+        headLine.setOpaque(false);
+        headLine.add(title);
+        headLine.add(desktopProjectTaskThumbnailButton(task,1));
+        headLine.add(desktopProjectTaskThumbnailButton(task,2));
+        JButton expand=compactActionButton(expanded?"▾ Ukryj":"▸ Więcej");
+        expand.setToolTipText("Rozwiń lub zwiń czynność");
+        expand.addActionListener(e->{
+            expandedDesktopProjectTaskId=expanded?0L:taskId;
+            showSection("Projekty");
+        });
+        headLine.add(expand);
+        compactHeader.add(headLine,BorderLayout.NORTH);
+        card.add(compactHeader,BorderLayout.NORTH);
 
         int worked=desktopTaskWorkedMinutes(taskId);
         int remaining=done?0:Math.max(0,duration-worked);
@@ -1903,6 +1931,12 @@ public final class EdhomeDesktop extends JFrame {
         meta.setForeground(APP_MUTED);
         meta.setFont(meta.getFont().deriveFont(11f));
         detail.add(meta);
+        JLabel quickTime=new JLabel((activeSession!=null?"● PRACA TRWA • ":done?"✓ GOTOWE • ":"")
+            +"Plan "+formatMinutes(duration)+" • Wykonano "+formatMinutes(worked)
+            +" • Pozostało "+formatMinutes(remaining));
+        quickTime.setForeground(APP_MUTED);
+        quickTime.setFont(quickTime.getFont().deriveFont(11f));
+        compactHeader.add(quickTime,BorderLayout.SOUTH);
         JLabel laborTask=new JLabel();
         laborTask.setForeground(APP_ACCENT);
         detail.add(laborTask);
@@ -1943,10 +1977,14 @@ public final class EdhomeDesktop extends JFrame {
             JLabel clock=new JLabel();
             clock.setForeground(APP_ACCENT);
             clock.setFont(clock.getFont().deriveFont(Font.BOLD,13f));
-            detail.add(clock);
+            compactHeader.add(clock,BorderLayout.CENTER);
             bindDesktopProjectClock(clock,card,taskId,duration);
         }
-        card.add(detail,BorderLayout.CENTER);
+        JPanel unfolded=new JPanel(new BorderLayout(0,4));
+        unfolded.setOpaque(false);
+        unfolded.add(detail,BorderLayout.CENTER);
+        unfolded.setVisible(expanded);
+        card.add(unfolded,BorderLayout.CENTER);
 
         // Dwa rzędy działań mieszczą się w panelu również przy wąskim oknie.
         JPanel actions=new JPanel();
@@ -1982,6 +2020,10 @@ public final class EdhomeDesktop extends JFrame {
         JButton deps=compactActionButton("Zależności");
         deps.addActionListener(e->showDesktopTaskDependencies(task));
         secondary.add(deps);
+        JButton timeHistory=compactActionButton("Czas");
+        timeHistory.setToolTipText("Historia sesji Start/Stop");
+        timeHistory.addActionListener(e->showDesktopProjectWorkHistory(taskId,value(task,"title")));
+        secondary.add(timeHistory);
         JButton up=compactActionButton("↑");
         up.setToolTipText("Przesuń czynność wyżej");
         up.addActionListener(e->moveDesktopProjectTask(task,-1));
@@ -1996,7 +2038,7 @@ public final class EdhomeDesktop extends JFrame {
 
         actions.add(primary);
         actions.add(secondary);
-        card.add(actions,BorderLayout.SOUTH);
+        unfolded.add(actions,BorderLayout.SOUTH);
         return card;
     }
 
@@ -2587,6 +2629,103 @@ public final class EdhomeDesktop extends JFrame {
             int h=Math.max(1,(int)Math.round(source.getHeight()*scale));
             return new ImageIcon(source.getScaledInstance(w,h,Image.SCALE_SMOOTH));
         }catch(Exception invalid){return null;}
+    }
+
+    private ImageIcon desktopProjectTaskThumbnailIcon(JsonObject task,int slot,int edge) {
+        JsonObject photo=new JsonObject();
+        photo.addProperty("thumbnail_base64",value(task,"task_thumbnail_"+slot+"_base64"));
+        return desktopProjectThumbnailIcon(photo,edge);
+    }
+
+    private JButton desktopProjectTaskThumbnailButton(JsonObject task,int slot) {
+        ImageIcon photo=desktopProjectTaskThumbnailIcon(task,slot,36);
+        JButton button=compactActionButton(photo==null?"+":"");
+        if(photo!=null)button.setIcon(photo);
+        button.setPreferredSize(new Dimension(40,38));
+        button.setToolTipText("Zdjęcie "+slot+": kliknij, aby dodać lub zmienić"
+            +(photo==null?"":"; prawy przycisk myszy, aby usunąć"));
+        button.addActionListener(e->chooseDesktopProjectTaskThumbnail(task,slot));
+        if(photo!=null){
+            JPopupMenu menu=new JPopupMenu();
+            JMenuItem remove=new JMenuItem("Usuń zdjęcie "+slot);
+            remove.addActionListener(e->{
+                task.add("task_thumbnail_"+slot+"_base64",
+                    com.google.gson.JsonNull.INSTANCE);
+                markDirty();
+                showSection("Projekty");
+            });
+            menu.add(remove);
+            button.setComponentPopupMenu(menu);
+        }
+        return button;
+    }
+
+    private void chooseDesktopProjectTaskThumbnail(JsonObject task,int slot) {
+        JFileChooser picker=new JFileChooser();
+        picker.setDialogTitle("Wybierz zdjęcie "+slot+" czynności");
+        if(picker.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        try {
+            Path path=picker.getSelectedFile().toPath();
+            if(Files.size(path)>12*1024*1024)
+                throw new IllegalArgumentException("Wybierz zdjęcie mniejsze niż 12 MB.");
+            BufferedImage image=ImageIO.read(path.toFile());
+            if(image==null)throw new IllegalArgumentException("To nie jest obsługiwane zdjęcie.");
+            double scale=Math.min(1.0,256.0/Math.max(image.getWidth(),image.getHeight()));
+            int w=Math.max(1,(int)Math.round(image.getWidth()*scale));
+            int h=Math.max(1,(int)Math.round(image.getHeight()*scale));
+            BufferedImage small=new BufferedImage(w,h,BufferedImage.TYPE_INT_RGB);
+            Graphics2D graphics=small.createGraphics();
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.drawImage(image,0,0,w,h,null);
+            graphics.dispose();
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            ImageIO.write(small,"jpg",bytes);
+            if(bytes.size()>256*1024)
+                throw new IllegalArgumentException("Nie udało się zmniejszyć zdjęcia.");
+            task.addProperty("task_thumbnail_"+slot+"_base64",
+                Base64.getEncoder().encodeToString(bytes.toByteArray()));
+            markDirty();
+            showSection("Projekty");
+        }catch(Exception error){
+            JOptionPane.showMessageDialog(this,rootMessage(error),
+                "EDHOME • zdjęcie czynności",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void showDesktopProjectWorkHistory(long taskId,String title) {
+        java.util.List<JsonObject> sessions=new ArrayList<>();
+        for(JsonElement element:table("project_task_work_sessions")){
+            if(!element.isJsonObject())continue;
+            JsonObject row=element.getAsJsonObject();
+            if(longValue(row,"task_id")==taskId)sessions.add(row);
+        }
+        sessions.sort((a,b)->Long.compare(
+            longValue(b,"started_at"),longValue(a,"started_at")));
+        StringBuilder history=new StringBuilder();
+        java.time.format.DateTimeFormatter format=
+            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        for(int i=0;i<Math.min(100,sessions.size());i++){
+            JsonObject row=sessions.get(i);
+            long started=longValue(row,"started_at");
+            history.append(java.time.Instant.ofEpochMilli(started)
+                .atZone(java.time.ZoneId.systemDefault()).format(format));
+            if(!row.has("ended_at")||row.get("ended_at").isJsonNull())
+                history.append(" → trwa");
+            else {
+                long ended=longValue(row,"ended_at");
+                history.append(" → ").append(java.time.Instant.ofEpochMilli(ended)
+                    .atZone(java.time.ZoneId.systemDefault()).format(format))
+                    .append(" • ").append(formatMinutes(intValue(row,"worked_minutes")));
+            }
+            history.append("\n");
+        }
+        javax.swing.JTextArea area=new javax.swing.JTextArea(
+            sessions.isEmpty()?"Brak zapisanych sesji Start/Stop.":history.toString());
+        area.setEditable(false);
+        area.setRows(Math.min(14,Math.max(3,sessions.size())));
+        JOptionPane.showMessageDialog(this,new JScrollPane(area),
+            "Czas pracy • "+title,JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void chooseDesktopProjectThumbnail(JsonObject project){
@@ -9335,6 +9474,8 @@ public final class EdhomeDesktop extends JFrame {
             row.addProperty("reminder_lead_days", 0);
             row.add("project_id", com.google.gson.JsonNull.INSTANCE);
             row.addProperty("project_sort_order", 0L);
+            row.add("task_thumbnail_1_base64",com.google.gson.JsonNull.INSTANCE);
+            row.add("task_thumbnail_2_base64",com.google.gson.JsonNull.INSTANCE);
             return row;
         }
         if ("projects".equals(tableName))

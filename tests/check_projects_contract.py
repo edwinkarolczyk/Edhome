@@ -40,7 +40,7 @@ for marker in (
 
 assert "MAX_TASK_MINUTES = 600" in main
 assert "durationMinutes > 600" in time
-assert 'private static final int DB_VERSION = 51;' in backup
+assert 'private static final int DB_VERSION = 52;' in backup
 assert '{"project_task_dependencies", "task_id", "depends_on_task_id", "created_at"}' in backup
 assert '"project_task_dependencies".equals(table)' in sync
 assert 'return new String[]{"task_id","depends_on_task_id"};' in sync
@@ -294,7 +294,7 @@ project_checks=main.split("private void renderProjectTasks(",1)[1].split(
     "private void showProjectDependentsDialog(",1)[0]
 regular_checks=main.split("private void drawTask(",1)[1].split(
     "private void taskAction(",1)[0]
-assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)))' in project_checks
+assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(36),dp(38)))' in project_checks
 assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)))' in regular_checks
 assert 'check.setText(taskName)' not in project_checks
 assert 'check.setText(name)' not in regular_checks

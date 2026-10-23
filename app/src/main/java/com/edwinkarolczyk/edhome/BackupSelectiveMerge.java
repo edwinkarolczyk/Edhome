@@ -15,7 +15,7 @@ import java.util.Set;
  * Nie zapisuje niczego do bazy. Całą migawkę waliduje DataBackup.restoreJson.
  */
 final class BackupSelectiveMerge {
-    private static final int CURRENT_SCHEMA = 51;
+    private static final int CURRENT_SCHEMA = 52;
     private static final int OLDEST_SELECTIVE_SCHEMA = 45;
 
     private BackupSelectiveMerge() { }
@@ -78,6 +78,7 @@ final class BackupSelectiveMerge {
                     "Kopia nie zawiera wymaganej tabeli: " + table);
             }
             if ((sourceVersion < 51 && "projects".equals(table))
+                    || (sourceVersion < 52 && "tasks".equals(table))
                     || (sourceVersion < 50 && ("project_task_work_sessions".equals(table)
                     || "storage_items".equals(table)))) {
                 // Starszy eksport projektów nie posiada miniaturek.
@@ -85,6 +86,12 @@ final class BackupSelectiveMerge {
                 JSONArray legacy=archivedTables.getJSONArray(table);
                 for(int i=0;i<legacy.length();i++){
                     JSONObject project=new JSONObject(legacy.getJSONObject(i).toString());
+                    if("tasks".equals(table)&&sourceVersion<52){
+                        if(!project.has("task_thumbnail_1_base64"))
+                            project.put("task_thumbnail_1_base64",JSONObject.NULL);
+                        if(!project.has("task_thumbnail_2_base64"))
+                            project.put("task_thumbnail_2_base64",JSONObject.NULL);
+                    }
                     if("projects".equals(table)&&sourceVersion<48
                             &&!project.has("thumbnail_base64"))
                         project.put("thumbnail_base64",JSONObject.NULL);

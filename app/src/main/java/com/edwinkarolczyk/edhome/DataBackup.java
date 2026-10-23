@@ -24,7 +24,7 @@ final class DataBackup {
     static final int MAX_BYTES = 32 * 1024 * 1024;
     private static final String FORMAT = "edhome-data-backup";
     private static final int FORMAT_VERSION = 1;
-    private static final int DB_VERSION = 51;
+    private static final int DB_VERSION = 52;
     private static final String[] HOME_TILE_IDS = {
         "tasks", "projects", "calendar", "places", "pantry", "audit",
         "updates", "backup", "settings", "today", "garden"
@@ -44,7 +44,8 @@ final class DataBackup {
         {"tasks", "id", "title", "done", "due_date", "repeat_rule", "repeat_every",
             "place_id", "priority", "duration_minutes", "assignee_id",
             "task_kind", "waste_fraction", "remind_time", "reminder_lead_days",
-            "project_id", "project_sort_order"},
+            "project_id", "project_sort_order",
+            "task_thumbnail_1_base64", "task_thumbnail_2_base64"},
         {"project_resources", "id", "project_id", "target_kind", "target_id", "created_at"},
         {"project_costs", "id", "project_id", "name", "qty_milli", "unit",
             "unit_price_grosz", "status", "note", "created_at"},
@@ -370,7 +371,7 @@ final class DataBackup {
         int inputVersion = root.optInt("databaseVersion", -1);
         if (!FORMAT.equals(root.optString("format"))
                 || root.optInt("formatVersion", -1) != FORMAT_VERSION
-                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != 50 && inputVersion != DB_VERSION))
+                || (inputVersion != 2 && inputVersion != 3 && inputVersion != 4 && inputVersion != 5 && inputVersion != 6 && inputVersion != 7 && inputVersion != 8 && inputVersion != 9 && inputVersion != 10 && inputVersion != 11 && inputVersion != 12 && inputVersion != 13 && inputVersion != 14 && inputVersion != 15 && inputVersion != 16 && inputVersion != 17 && inputVersion != 18 && inputVersion != 19 && inputVersion != 20 && inputVersion != 21 && inputVersion != 22 && inputVersion != 23 && inputVersion != 24 && inputVersion != 25 && inputVersion != 26 && inputVersion != 27 && inputVersion != 28 && inputVersion != 29 && inputVersion != 30 && inputVersion != 31 && inputVersion != 32 && inputVersion != 33 && inputVersion != 34 && inputVersion != 35 && inputVersion != 36 && inputVersion != 37 && inputVersion != 38 && inputVersion != 39 && inputVersion != 40 && inputVersion != 41 && inputVersion != 42 && inputVersion != 43 && inputVersion != 44 && inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != 50 && inputVersion != 51 && inputVersion != DB_VERSION))
             throw new IllegalArgumentException("Nieobsługiwany format lub wersja kopii.");
 
         JSONArray syncRecords = root.optJSONArray("syncRecords");
@@ -627,6 +628,11 @@ final class DataBackup {
                 for (int j = 1; j < definition.length; j++) {
                     String key = definition[j];
                     if (!item.has(key)) {
+                        if(inputVersion < 52 && "tasks".equals(definition[0])
+                                && ("task_thumbnail_1_base64".equals(key)
+                                    || "task_thumbnail_2_base64".equals(key))) {
+                            values.putNull(key);continue;
+                        }
                         if(inputVersion < 50 && "storage_items".equals(definition[0])) {
                             if("return_required".equals(key)){values.put(key,0);continue;}
                             if("return_after_days".equals(key)){values.put(key,1);continue;}
@@ -812,6 +818,8 @@ final class DataBackup {
                             || "place_id".equals(key) || "parent_id".equals(key) || "assignee_id".equals(key)
                             || "project_id".equals(key) || "budget_grosz".equals(key)
                             || "thumbnail_base64".equals(key)
+                            || "task_thumbnail_1_base64".equals(key)
+                            || "task_thumbnail_2_base64".equals(key)
                             || "taken_at".equals(key)
                             || "labor_rate_grosz".equals(key)
                             || "hourly_rate_grosz".equals(key)
@@ -1301,6 +1309,27 @@ final class DataBackup {
                     Long done = values.getAsLong("done");
                     if (done == null || done > 1)
                         throw new IllegalArgumentException("Nieprawidłowy status czynności.");
+                    for(int slot=1;slot<=2;slot++){
+                        String encoded=values.getAsString(
+                            "task_thumbnail_"+slot+"_base64");
+                        if(encoded==null)continue;
+                        if(encoded.length()>StorageThumbs.MAX_BASE64_CHARS)
+                            throw new IllegalArgumentException(
+                                "Zdjęcie czynności w kopii jest za duże.");
+                        byte[] jpeg;
+                        try{
+                            jpeg=android.util.Base64.decode(
+                                encoded,android.util.Base64.NO_WRAP);
+                        }catch(Exception invalid){
+                            throw new IllegalArgumentException(
+                                "Nieprawidłowe zdjęcie czynności w kopii.",invalid);
+                        }
+                        if(jpeg.length<4||jpeg.length>StorageThumbs.MAX_JPEG_BYTES
+                                ||(jpeg[0]&255)!=255||(jpeg[1]&255)!=216
+                                ||(jpeg[2]&255)!=255)
+                            throw new IllegalArgumentException(
+                                "Zdjęcie czynności w kopii musi być plikiem JPEG.");
+                    }
                     String due = values.getAsString("due_date");
                     String rule = values.getAsString("repeat_rule");
                     Integer every = values.getAsInteger("repeat_every");

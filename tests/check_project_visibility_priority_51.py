@@ -27,7 +27,7 @@ required={
     'for(Long dependency:dependencyIds(db,task))'
 ],
 "android": [
-    'super(context, "edhome-beta-preview.db", null, 51);',
+    'super(context, "edhome-beta-preview.db", null, 52);',
     'ProjectStore.upgrade51(database);',
     'DATABASE_MIGRATED_50_TO_51_PROJECT_VISIBILITY',
     'Pokazuj czynności projektu w głównej liście',
@@ -47,14 +47,14 @@ required={
     'static void approveUndated('
 ],
 "backup": [
-    'private static final int DB_VERSION = 51;',
+    'private static final int DB_VERSION = 52;',
     '"show_in_main_tasks"',
     'inputVersion != 50 && inputVersion != DB_VERSION',
     'if(inputVersion < 51 && "projects".equals(definition[0])',
     'values.put(key,1);continue;'
 ],
 "selective": [
-    'CURRENT_SCHEMA = 51;',
+    'CURRENT_SCHEMA = 52;',
     'sourceVersion < 51 && "projects".equals(table)',
     'project.put("show_in_main_tasks",1);'
 ],

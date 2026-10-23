@@ -89,7 +89,10 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_STATEMENT_CSV = 1217;
     private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
     private static final int IMPORT_PROJECT_THUMBNAIL = 1234;
+    private static final int IMPORT_PROJECT_TASK_THUMBNAIL = 1235;
     private long pendingProjectThumbnailId;
+    private long pendingProjectTaskThumbnailId;
+    private int pendingProjectTaskThumbnailSlot;
     private static final int PICK_BANK_APP_SYSTEM = 1219;
     private static final int IMPORT_AI_3D_PACK = 1220;
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
@@ -2953,6 +2956,14 @@ public final class MainActivity extends Activity {
         body.addView(bar, new LinearLayout.LayoutParams(-1, dp(38)));
     }
 
+    private LinearLayout compactActionRow(LinearLayout parent) {
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        parent.addView(row,new LinearLayout.LayoutParams(-1,dp(39)));
+        return row;
+    }
+
     private LinearLayout compactActionRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -5789,6 +5800,54 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void selectProjectTaskThumbnail(long taskId,int slot) {
+        if(slot<1||slot>2)return;
+        pendingProjectTaskThumbnailId=taskId;
+        pendingProjectTaskThumbnailSlot=slot;
+        Intent picker=new Intent(Intent.ACTION_GET_CONTENT);
+        picker.setType("image/*");
+        try{startActivityForResult(picker,IMPORT_PROJECT_TASK_THUMBNAIL);}
+        catch(Exception error){
+            pendingProjectTaskThumbnailId=0;
+            alert("Nie można otworzyć wyboru zdjęcia czynności.");
+        }
+    }
+
+    private View projectTaskThumbnailView(long taskId,int slot) {
+        String encoded=ProjectStore.taskThumbnail(db.getReadableDatabase(),taskId,slot);
+        android.graphics.Bitmap bitmap=projectThumbnailBitmap(encoded);
+        View thumbnail;
+        if(bitmap!=null){
+            ImageView image=new ImageView(this);
+            image.setImageBitmap(bitmap);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            image.setBackground(rounded(surface));
+            image.setClipToOutline(true);
+            thumbnail=image;
+        }else{
+            TextView placeholder=text("+",19,true);
+            placeholder.setGravity(Gravity.CENTER);
+            placeholder.setTextColor(subdued);
+            placeholder.setBackground(rounded(surface));
+            thumbnail=placeholder;
+        }
+        thumbnail.setContentDescription("Zdjęcie "+slot+" czynności. "
+            +(bitmap==null?"Dodaj zdjęcie.":"Zmień zdjęcie. Przytrzymaj, aby usunąć."));
+        thumbnail.setOnClickListener(v->selectProjectTaskThumbnail(taskId,slot));
+        thumbnail.setOnLongClickListener(v->{
+            if(encoded.isEmpty())return false;
+            new AlertDialog.Builder(this).setTitle("Usuń zdjęcie "+slot+" czynności?")
+                .setNegativeButton("Anuluj",null)
+                .setPositiveButton("Usuń",(dialog,which)->{
+                    ProjectStore.setTaskThumbnail(
+                        db.getWritableDatabase(),taskId,slot,null);
+                    render();
+                }).show();
+            return true;
+        });
+        return thumbnail;
+    }
+
     private void editProject(long id) {
         ProjectStore.Project existing=ProjectStore.find(db.getReadableDatabase(),id);
         if(existing!=null)showProjectEditor(existing.parentId,id);
@@ -6247,7 +6306,13 @@ public final class MainActivity extends Activity {
                 db.getReadableDatabase(),taskId).size();
             final boolean completionBlocked=blockers>0||hardRequirements>0;
 
+            final boolean focused=taskId==pendingProjectTaskFocusId;
+            final String expandedKey="project_expanded_task_"+project.id;
+            final boolean expanded=focused
+                ||prefs.getLong(expandedKey,0L)==taskId;
+            if(focused)prefs.edit().putLong(expandedKey,taskId).apply();
             LinearLayout box=card();
+            box.setPadding(dp(8),dp(5),dp(8),dp(5));
             if(done)box.setBackground(skin.panel(this,completedTaskSurface(),22));
             if(taskId==pendingProjectTaskFocusId) {
                 box.setBackground(skin.panel(this,skin.tileTop,22));
@@ -6272,10 +6337,31 @@ public final class MainActivity extends Activity {
             if(completionBlocked&&!done)
                 check.setContentDescription(taskName
                     +". Zablokowane. Najpierw zakończ zależności i spełnij wymagania.");
-            taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)));
-            TextView taskTitle=text(taskName,17,true);
+            taskHeader.addView(check,new LinearLayout.LayoutParams(dp(36),dp(38)));
+            TextView taskTitle=text(taskName,15,true);
             taskTitle.setTextColor(done?subdued:ink);
+            taskTitle.setMaxLines(2);
+            taskTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
             taskHeader.addView(taskTitle,new LinearLayout.LayoutParams(0,-2,1f));
+            for(int slot=1;slot<=2;slot++){
+                LinearLayout.LayoutParams miniParams=
+                    new LinearLayout.LayoutParams(dp(36),dp(38));
+                miniParams.setMargins(dp(3),0,0,0);
+                taskHeader.addView(projectTaskThumbnailView(taskId,slot),miniParams);
+            }
+            TextView expandIcon=text(expanded?"▾":"▸",20,true);
+            expandIcon.setGravity(Gravity.CENTER);
+            expandIcon.setContentDescription(
+                expanded?"Zwiń szczegóły czynności":"Rozwiń szczegóły czynności");
+            taskHeader.addView(expandIcon,new LinearLayout.LayoutParams(dp(30),dp(38)));
+            Runnable toggle=()->{
+                prefs.edit().putLong(expandedKey,expanded?0L:taskId).apply();
+                render();
+            };
+            taskHeader.setOnClickListener(v->toggle.run());
+            box.setOnClickListener(v->toggle.run());
+            box.setClickable(true);
+            touchFeedback(box);
             box.addView(taskHeader);
             LinearLayout taskTags=new LinearLayout(this);
             taskTags.setOrientation(LinearLayout.HORIZONTAL);
@@ -6330,13 +6416,19 @@ public final class MainActivity extends Activity {
                 timeLine+=" • zostało wg planu: "+projectTimeText(remaining);
             }
             if(overrun>0)timeLine+=" • przekroczenie: "+projectTimeText(overrun);
-            TextView projectTime=text(timeLine,12,false);
+            TextView projectTime=text(timeLine,11,false);
+            projectTime.setMaxLines(1);
+            projectTime.setEllipsize(android.text.TextUtils.TruncateAt.END);
             bindProjectTimeStatus(projectTime,box,taskId,minutes,activeStarted);
             box.addView(projectTime);
+            LinearLayout details=new LinearLayout(this);
+            details.setOrientation(LinearLayout.VERTICAL);
+            details.setVisibility(expanded?View.VISIBLE:View.GONE);
+            box.addView(details);
             TextView taskLabor=text("",12,false);
-            box.addView(taskLabor);
+            details.addView(taskLabor);
             bindProjectTaskLabor(taskLabor,project.id,taskId,activeStarted!=null);
-            box.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
+            details.addView(text(ProjectStore.timeClass(db.getReadableDatabase(),
                     project.id,taskId)
                 +(due.isEmpty()?"":" • termin "+due),12,false));
 
@@ -6344,7 +6436,7 @@ public final class MainActivity extends Activity {
                 String started=Instant.ofEpochMilli(activeStarted)
                     .atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofPattern("HH:mm"));
-                box.addView(text("● Praca trwa od "+started,12,true));
+                details.addView(text("● Praca trwa od "+started,12,true));
             }
 
             if(completionBlocked) {
@@ -6354,43 +6446,43 @@ public final class MainActivity extends Activity {
                     blockedText+=" • wymagania: "+hardRequirements;
                 TextView blocked=text(blockedText,12,true);
                 blocked.setTextColor(projectTimeRed());
-                box.addView(blocked);
+                details.addView(blocked);
                 for(ProjectStore.TaskRef dependency:openDependencies)
-                    smallButton(box,"🔗 Czeka na: "+dependency.title,
+                    smallButton(details,"🔗 Czeka na: "+dependency.title,
                         ()->openProjectTask(dependency.id));
                 for(ProjectPlanningStore.Blocker requirement:openHardBlockers)
-                    smallButton(box,"▣ Brakuje: "+requirement.label,
+                    smallButton(details,"▣ Brakuje: "+requirement.label,
                         ()->showProjectBlockerActions(requirement,taskName));
             } else if(dependencies>0) {
-                box.addView(text("✓ Zależności zakończone • można rozpocząć",12,false));
+                details.addView(text("✓ Zależności zakończone • można rozpocząć",12,false));
             }
 
             if(unlocks>0&&!done) {
                 TextView unlock=text("↳ Od tej czynności zależą "
                     +unlocks+(unlocks==1?" następna praca:":" następne prace:"),12,true);
                 unlock.setTextColor(accent);
-                box.addView(unlock);
+                details.addView(unlock);
                 for(int i=0;i<Math.min(3,openDependents.size());i++) {
                     ProjectStore.TaskRef dependent=openDependents.get(i);
-                    smallButton(box,"↳ "+dependent.title+" • "
+                    smallButton(details,"↳ "+dependent.title+" • "
                         +projectPath(dependent.projectId),
                         ()->openProjectTask(dependent.id));
                 }
                 if(openDependents.size()>3)
-                    smallButton(box,"Pokaż pozostałe: "+(openDependents.size()-3),
+                    smallButton(details,"Pokaż pozostałe: "+(openDependents.size()-3),
                         ()->showProjectDependentsDialog(taskId,taskName));
             }
             if(softRequirements>0)
-                box.addView(text("⚠ Niespełnione zalecenia: "
+                details.addView(text("⚠ Niespełnione zalecenia: "
                     +softRequirements,12,false));
             if(!done&&remaining>0&&!due.isEmpty()
                     &&due.compareTo(LocalDate.now().toString())<0)
-                box.addView(text("Termin minął • zostało "
+                details.addView(text("Termin minął • zostało "
                     +projectTimeText(remaining)
                     +" • planer może wyznaczyć nowy termin tylko dla reszty pracy.",
                     12,true));
             if(!done&&remaining==0)
-                box.addView(text("Planowany czas wykorzystany. "
+                details.addView(text("Planowany czas wykorzystany. "
                     +"Możesz oznaczyć czynność jako wykonaną albo dalej mierzyć "
                     +"pracę jako przekroczenie.",12,false));
 
@@ -6418,7 +6510,7 @@ public final class MainActivity extends Activity {
                 }
             });
 
-            LinearLayout work=compactActionRow();
+            LinearLayout work=compactActionRow(details);
             if(!done) {
                 if(activeStarted==null) {
                     compactAction(work,"▶ Start",()->{
@@ -6461,14 +6553,14 @@ public final class MainActivity extends Activity {
                 compactAction(work,"↻ Termin",
                     ()->showProjectPlanSuggestions(project.id));
 
-            LinearLayout actions=compactActionRow();
+            LinearLayout actions=compactActionRow(details);
             compactAction(actions,"Zależności"
                     +(blockers>0?" ("+blockers+")":""),
                 ()->showProjectDependencyDialog(taskId,project.id));
             compactAction(actions,"Wymagania ("+requirementsTotal
                     +(openRequirements>0?" • oczekuje "+openRequirements:"")
                     +")",()->showProjectBlockers(taskId,taskName));
-            LinearLayout editRow=compactActionRow();
+            LinearLayout editRow=compactActionRow(details);
             compactAction(editRow,"Edytuj",()->{
                 try(Cursor row=db.getReadableDatabase().rawQuery(
                         "SELECT repeat_rule,repeat_every FROM tasks WHERE id=?",
@@ -6493,12 +6585,12 @@ public final class MainActivity extends Activity {
                     if(siblings.get(i).id==taskId)position=i;
                 if(position>0) {
                     final long previousId=siblings.get(position-1).id;
-                    smallButton(box,"↑ Przesuń wyżej",()->
+                    smallButton(details,"↑ Przesuń wyżej",()->
                         moveProjectTask(project.id,taskId,previousId));
                 }
                 if(position>=0&&position+1<siblings.size()) {
                     final long nextId=siblings.get(position+1).id;
-                    smallButton(box,"↓ Przesuń niżej",()->
+                    smallButton(details,"↓ Przesuń niżej",()->
                         moveProjectTask(project.id,taskId,nextId));
                 }
             }
@@ -6704,8 +6796,14 @@ public final class MainActivity extends Activity {
                     .atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
                 history.append(started);
-                if(c.isNull(1))history.append(" • trwa");
-                else history.append(" • ").append(projectTimeText(c.getInt(2)));
+                if(c.isNull(1))history.append(" → trwa");
+                else{
+                    String ended=Instant.ofEpochMilli(c.getLong(1))
+                        .atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                    history.append(" → ").append(ended)
+                        .append(" • ").append(projectTimeText(c.getInt(2)));
+                }
                 history.append("\n");
             }
         }
@@ -24998,6 +25096,26 @@ public final class MainActivity extends Activity {
             }
             return;
         }
+        if(request==IMPORT_PROJECT_TASK_THUMBNAIL){
+            long taskId=pendingProjectTaskThumbnailId;
+            int slot=pendingProjectTaskThumbnailSlot;
+            pendingProjectTaskThumbnailId=0;
+            pendingProjectTaskThumbnailSlot=0;
+            if(result==RESULT_OK&&taskId>0&&data!=null&&data.getData()!=null){
+                try{
+                    String jpeg=StorageThumbs.compress(getContentResolver(),data.getData());
+                    ProjectStore.setTaskThumbnail(
+                        db.getWritableDatabase(),taskId,slot,jpeg);
+                    DiagnosticLog.event("PROJECT_TASK_THUMBNAIL_SAVED",
+                        "task="+taskId+" slot="+slot);
+                    render();
+                }catch(Exception error){
+                    alert(error.getMessage()==null
+                        ?"Nie udało się zapisać zdjęcia czynności.":error.getMessage());
+                }
+            }
+            return;
+        }
         if(request==IMPORT_PROJECT_THUMBNAIL){
             long id=pendingProjectThumbnailId;
             pendingProjectThumbnailId=0;
@@ -25441,7 +25559,7 @@ public final class MainActivity extends Activity {
 
     static final class LocalDb extends SQLiteOpenHelper {
         LocalDb(Context context) {
-            super(context, "edhome-beta-preview.db", null, 51);
+            super(context, "edhome-beta-preview.db", null, 52);
         }
 
         @Override public void onCreate(SQLiteDatabase database) {
@@ -25455,7 +25573,8 @@ public final class MainActivity extends Activity {
                 + "task_kind TEXT NOT NULL DEFAULT 'general', waste_fraction TEXT, "
                 + "remind_time TEXT, reminder_lead_days INTEGER NOT NULL DEFAULT 0, "
                 + "project_id INTEGER, "
-                + "project_sort_order INTEGER NOT NULL DEFAULT 0)");
+                + "project_sort_order INTEGER NOT NULL DEFAULT 0, "
+                + "task_thumbnail_1_base64 TEXT, task_thumbnail_2_base64 TEXT)");
             database.execSQL("CREATE TABLE pantry (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "name TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 0, "
                 + "category TEXT NOT NULL DEFAULT 'other' CHECK(category IN "
@@ -25504,7 +25623,7 @@ public final class MainActivity extends Activity {
         }
 
         @Override public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-            if (oldVersion < 1 || newVersion > 51) {
+            if (oldVersion < 1 || newVersion > 52) {
                 DiagnosticLog.event("DATABASE_MIGRATION_REQUIRED");
                 throw new IllegalStateException("Unsupported EDHOME database migration");
             }
@@ -25775,6 +25894,10 @@ public final class MainActivity extends Activity {
             if(oldVersion < 51) {
                 ProjectStore.upgrade51(database);
                 DiagnosticLog.event("DATABASE_MIGRATED_50_TO_51_PROJECT_VISIBILITY");
+            }
+            if(oldVersion < 52) {
+                ProjectStore.upgrade52(database);
+                DiagnosticLog.event("DATABASE_MIGRATED_51_TO_52_PROJECT_TASK_THUMBNAILS");
             }
             if(newVersion >= 36) {
                 try {

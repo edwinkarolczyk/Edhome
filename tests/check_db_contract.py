@@ -140,6 +140,10 @@ project40 = statements(section(project_store, "static void create(SQLiteDatabase
 project40legacy = [sql.replace(
     ",show_in_main_tasks INTEGER NOT NULL DEFAULT 1 CHECK(show_in_main_tasks IN (0,1))", "")
     for sql in project40]
+step52 = [
+    "ALTER TABLE tasks ADD COLUMN task_thumbnail_1_base64 TEXT",
+    "ALTER TABLE tasks ADD COLUMN task_thumbnail_2_base64 TEXT"
+]
 step51 = [
     "ALTER TABLE projects ADD COLUMN show_in_main_tasks INTEGER NOT NULL DEFAULT 1 "
     "CHECK(show_in_main_tasks IN (0,1))"
@@ -213,7 +217,7 @@ def schema(database):
 assert len(create) == 2 and len(audit) == 3 and len(history) == 2 and len(rotations) == 2 and len(places) == 1 and len(sibling_index) == 1 and len(step11) == 4 and len(timers) == 2 and len(members) == 1 and len(shifts) == 2 and len(shopping) == 1
 version = int(re.search(r'super\(context, "edhome-beta-preview.db", null, (\d+)\)', main).group(1))
 backup_version = int(re.search(r'private static final int DB_VERSION = (\d+);', backup).group(1))
-assert version == backup_version == 51, "Database version and backup format differ"
+assert version == backup_version == 52, "Database version and backup format differ"
 
 fresh = sqlite3.connect(":memory:")
 execute(fresh, create + audit + history + rotations + places + sibling_index + members + shifts + shopping + timers + pantry14 + pantry15 + pantry17 + receipts18 + storage19 + paycheck32 + bank34 + nfc35 + garden37 + garden38 + sync36 + goals21 + prices22 + vehicles28 + tyres25 + policies27 + costs29 + documents33 + project40 + project41 + user42 + project43 + planning44 + budget46 + frost47)
@@ -310,6 +314,7 @@ for old in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
     execute(db, step47)  # v46 to v47, ochrony przed mrozem
     execute(db, storage_step50)  # v49 to v50, zwrot rzeczy na miejsce
     execute(db, step51)  # v50 to v51, brak utraty widoczności projektów
+    execute(db, step52)  # v51 to v52, dwie miniatury czynności
     assert schema(db) == expected, f"Upgrade from SQLite v{old} differs from fresh schema"
     assert "show_in_main_tasks" in [x[1] for x in db.execute("PRAGMA table_info(projects)").fetchall()]
     assert db.execute("SELECT COUNT(*) FROM projects WHERE show_in_main_tasks!=1").fetchone()[0]==0
