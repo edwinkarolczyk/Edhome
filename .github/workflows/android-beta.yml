@@ -353,7 +353,9 @@ jobs:
             com.edwinkarolczyk.edhome.ProjectTaskPulseSmoke
           python3 tests/check_project_task_pulse_contract.py
       - name: Projekty — regresja
-        run: python3 tests/check_projects_contract.py
+        run: |
+          python3 tests/check_projects_contract.py
+          python3 tests/check_project_task_photos_contract.py
       - name: Capitalized names and titles contract
         run: python3 tests/check_text_entry_capitalization_contract.py
       - name: Project availability, blockers and user-role contract
@@ -666,7 +668,7 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.148 / 341 — poprawka połączenia z PC: wznowienie klienta LAN po restarcie usługi Android, utrzymanie sygnału obecności w trakcie konfliktu danych bez nadpisywania telefonu ani Desktopu. Nie zmienia parowania, formatów ani danych. Zalecany EDHOME Desktop Beta 0.7.0.139."
+          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.150 / 343 — Projekty: pełnoekranowy podgląd dwóch zdjęć czynności z powiększaniem i przesuwaniem, wyborem aparat/galeria, osobną zmianą i usunięciem. Czas Start/Stop bez zmian. Desktop Beta 0.7.0.141."
         run: python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()

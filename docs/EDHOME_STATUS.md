@@ -1,3 +1,11 @@
+## 2026-10-23 — Projekty: podgląd dwóch zdjęć czynności po kliknięciu (Android Beta 0.8.1.150 / 343, Desktop Beta 0.7.0.141)
+
+- **Doprecyzowanie UX:** przy dwóch miniaturach na kompaktowym kafelku czynności dotknięcie istniejącego zdjęcia otwiera pełnoekranowy podgląd, zamiast od razu uruchamiać zamianę. Zmiana/Usunięcie są osobnymi akcjami. Puste miejsce otwiera wybór Aparat/Galeria. Zoom gestem dwóch palców, przesuwanie powiększonego zdjęcia i przesunięcie poziome do drugiego zdjęcia (jeżeli istnieje).
+- **Android:** nowy `ProjectTaskPhotoDialog.java`, integracja z `MainActivity` i aparatem przez dotychczasowy `FileProvider` i skompresowany JPEG; po zrobieniu zdjęcia plik tymczasowy jest kasowany. Brak zmian w tabelach lub historii Start/Stop. Przed usunięciem zdjęcia wymagane potwierdzenie.
+- **Desktop:** kliknięcie zdjęcia otwiera okno podglądu, przyciski poprzednie/następne oraz powiększanie (+/−, Ctrl+rolka), osobne akcje Zmień/Usuń, potwierdzenie usuwania. Numer Desktop w kodzie/Gradle/workflow ujednolicony do 0.7.0.141 (wcześniej był niespójny 0.7.0.140 / 0.7.0.139).
+- **Zachowana istniejąca implementacja:** 2 zdjęcia przy nazwie, zwijane akcje, status pracy i historia sesji; zdjęcia w polach `tasks.task_thumbnail_1_base64` / `tasks.task_thumbnail_2_base64` w dotychczasowych ZIP i synchronizacji. Obraz w podglądzie jest zapisanym skompresowanym JPEG o rozdzielczości do 256 px, nie oryginałem pełnej jakości.
+- **Bramka:** `tests/check_project_task_photos_contract.py` w CI Android/Desktop; kompilacja, publikacja i fizyczna próba gestów, aparatu, Zoom Desktop, ZIP/LAN wymagają odbioru. Stable `main` bez zmian. Issue #13.
+
 ## 2026-10-22 — P0 LAN: ponawianie połączenia telefonu i Desktopu (Android Beta 0.8.1.148 / 341, Desktop Beta 0.7.0.139)
 
 - **Zgłoszenie użytkownika:** Android 147 i Desktop 138 połączyły się tylko raz; potem PC nie pokazuje telefonu.

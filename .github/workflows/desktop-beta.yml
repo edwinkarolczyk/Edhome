@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.139"
+  DESKTOP_VERSION: "0.7.0.141"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
@@ -45,6 +45,7 @@ jobs:
         run: |
           python tests/check_desktop_approved_scope.py
           python tests/check_project_task_pulse_contract.py
+          python tests/check_project_task_photos_contract.py
           python tests/check_desktop_sync_contract.py
           python tests/check_paycheck_budget_stage5c_sync_contract.py
           python tests/check_paycheck_budget_stage5c_reverse_patch.py
@@ -111,4 +112,4 @@ jobs:
             gh release create $tag --repo $repo --target "${{ github.sha }}" --prerelease --title "EDHOME Desktop Beta • latest" --notes "Publiczna paczka używana przez aktualizację jednym przyciskiem w EDHOME Desktop."
           }
           gh release upload $tag desktop/build/EDHOME-Desktop-Beta-Setup.exe desktop/build/EDHOME-Desktop-Beta-Windows.zip --repo $repo --clobber
-          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION — P0 LAN: Desktop automatycznie odtwarza nasłuch API TCP 45823, gdy ten zakończy się awarią, bez resetu tokenu parowania i bez kasowania danych. Android Beta 0.8.1.148 utrzymuje obecność także podczas konfliktu; nie wykonuje wtedy synchronizacji. Bez odinstalowywania."
+          gh release edit $tag --repo $repo --title "EDHOME Desktop Beta $env:DESKTOP_VERSION" --notes "Windows $env:DESKTOP_VERSION — Projekty: miniaturki czynności otwierają podgląd zdjęć, przyciski zmiany i usunięcia są oddzielne. Zachowano dotychczasowe czasy Start/Stop i lokalną synchronizację. Bez odinstalowywania."
