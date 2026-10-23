@@ -49,7 +49,7 @@ required={
 "backup": [
     'private static final int DB_VERSION = 52;',
     '"show_in_main_tasks"',
-    'inputVersion != 50 && inputVersion != DB_VERSION',
+    'inputVersion != 50 && inputVersion != 51 && inputVersion != DB_VERSION',
     'if(inputVersion < 51 && "projects".equals(definition[0])',
     'values.put(key,1);continue;'
 ],
