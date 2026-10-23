@@ -5819,7 +5819,7 @@ public final class MainActivity extends Activity {
 
     private void chooseProjectTaskPhotoSource(long taskId,int slot) {
         if(slot<1||slot>2)return;
-        if(ProjectStore.taskProjectId(db.getReadableDatabase(),taskId)==null){
+        if(ProjectStore.taskRef(db.getReadableDatabase(),taskId)==null){
             alert("Czynność już nie istnieje.");
             return;
         }
@@ -5848,7 +5848,7 @@ public final class MainActivity extends Activity {
 
     private void launchProjectTaskThumbnailCamera() {
         long taskId=pendingProjectTaskThumbnailId;
-        if(taskId<=0||ProjectStore.taskProjectId(
+        if(taskId<=0||ProjectStore.taskRef(
                 db.getReadableDatabase(),taskId)==null){
             pendingProjectTaskThumbnailId=0;
             pendingProjectTaskThumbnailSlot=0;
