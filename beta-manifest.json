@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 344,
-  "versionName": "0.8.1.151",
-  "changelog": "EDHOME Beta 0.8.1.151 / 344 — każde standardowe przypomnienie czynności osobno (bez zbiorczego powiadomienia), bezpośrednie otwieranie zadania; Ustawienia Ogólne: formularz sugestii/błędów z lokalnym szkicem i GitHub Issues. Desktop Beta 0.7.0.142. Nie zmienia tabel danych ani czasu pracy.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.151/edhome-beta.apk",
-  "sha256": "27665c3678c9150ecbde6f79906961e35e8e4f20ba50e1402a5e584f5b822acb"
+  "versionCode": 345,
+  "versionName": "0.8.1.152",
+  "changelog": "EDHOME Beta 0.8.1.152 / 345 — przypomnienia pojedynczych czynności: nowy kanał z dźwiękiem i wibracją, kontrola próbnego sygnału w Ustawienia → Alarmy. Wcześniej dodano osobne przypomnienia i sugestie GitHub Issues. Desktop 0.7.0.142.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.152/edhome-beta.apk",
+  "sha256": "21c4588ad85288c65c85be1497ddc2f47176f30b3a6bd90c161f03b9a39a951d"
 }
