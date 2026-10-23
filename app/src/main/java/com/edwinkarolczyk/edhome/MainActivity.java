@@ -90,9 +90,13 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_STORAGE_THUMBNAIL = 1218;
     private static final int IMPORT_PROJECT_THUMBNAIL = 1234;
     private static final int IMPORT_PROJECT_TASK_THUMBNAIL = 1235;
+    private static final int TAKE_PROJECT_TASK_THUMBNAIL = 1236;
+    private static final int PROJECT_TASK_CAMERA_PERMISSION = 7135;
     private long pendingProjectThumbnailId;
     private long pendingProjectTaskThumbnailId;
     private int pendingProjectTaskThumbnailSlot;
+    private Uri pendingProjectTaskCameraUri;
+    private java.io.File pendingProjectTaskCameraFile;
     private static final int PICK_BANK_APP_SYSTEM = 1219;
     private static final int IMPORT_AI_3D_PACK = 1220;
     private static final int IMPORT_CUSTOM_TILE_ICON = 1221;
@@ -5813,6 +5817,116 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void chooseProjectTaskPhotoSource(long taskId,int slot) {
+        if(slot<1||slot>2)return;
+        if(ProjectStore.taskProjectId(db.getReadableDatabase(),taskId)==null){
+            alert("Czynność już nie istnieje.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Zdjęcie "+slot+" czynności")
+            .setItems(new String[]{"Zrób zdjęcie aparatem","Wybierz z galerii"},
+                (dialog,which)->{
+                    if(which==0)takeProjectTaskThumbnail(taskId,slot);
+                    else selectProjectTaskThumbnail(taskId,slot);
+                })
+            .setNegativeButton("Anuluj",null).show();
+    }
+
+    private void takeProjectTaskThumbnail(long taskId,int slot) {
+        pendingProjectTaskThumbnailId=taskId;
+        pendingProjectTaskThumbnailSlot=slot;
+        if(Build.VERSION.SDK_INT>=23
+                &&checkSelfPermission(android.Manifest.permission.CAMERA)
+                    !=android.content.pm.PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA},
+                PROJECT_TASK_CAMERA_PERMISSION);
+            return;
+        }
+        launchProjectTaskThumbnailCamera();
+    }
+
+    private void launchProjectTaskThumbnailCamera() {
+        long taskId=pendingProjectTaskThumbnailId;
+        if(taskId<=0||ProjectStore.taskProjectId(
+                db.getReadableDatabase(),taskId)==null){
+            pendingProjectTaskThumbnailId=0;
+            pendingProjectTaskThumbnailSlot=0;
+            alert("Czynność już nie istnieje.");
+            return;
+        }
+        Intent camera=new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        if(camera.resolveActivity(getPackageManager())==null){
+            pendingProjectTaskThumbnailId=0;
+            pendingProjectTaskThumbnailSlot=0;
+            alert("Nie znaleziono aplikacji aparatu.");
+            return;
+        }
+        try{
+            java.io.File dir=new java.io.File(getCacheDir(),"storage_camera");
+            if(!dir.exists()&&!dir.mkdirs())
+                throw new IllegalStateException("Nie utworzono katalogu aparatu.");
+            java.io.File file=java.io.File.createTempFile(
+                "edhome_task_"+taskId+"_","_photo.jpg",dir);
+            Uri uri=FileProvider.getUriForFile(this,
+                getPackageName()+".storage.files",file);
+            pendingProjectTaskCameraFile=file;
+            pendingProjectTaskCameraUri=uri;
+            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT,uri);
+            camera.setClipData(ClipData.newRawUri("EDHOME zdjęcie czynności",uri));
+            camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                |Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivityForResult(camera,TAKE_PROJECT_TASK_THUMBNAIL);
+        }catch(Exception error){
+            cleanupProjectTaskCameraTemp();
+            pendingProjectTaskThumbnailId=0;
+            pendingProjectTaskThumbnailSlot=0;
+            DiagnosticLog.error("PROJECT_TASK_PHOTO_CAMERA",error);
+            alert("Nie można uruchomić aparatu. Wybierz zdjęcie z galerii.");
+        }
+    }
+
+    private void cleanupProjectTaskCameraTemp() {
+        pendingProjectTaskCameraUri=null;
+        java.io.File file=pendingProjectTaskCameraFile;
+        pendingProjectTaskCameraFile=null;
+        if(file!=null&&file.exists())file.delete();
+    }
+
+    private void confirmDeleteProjectTaskPhoto(long taskId,int slot) {
+        new AlertDialog.Builder(this)
+            .setTitle("Usuń zdjęcie "+slot+" czynności?")
+            .setMessage("Usuniesz tylko to zdjęcie, nie samą czynność.")
+            .setNegativeButton("Anuluj",null)
+            .setPositiveButton("Usuń",(dialog,which)->{
+                try {
+                    ProjectStore.setTaskThumbnail(db.getWritableDatabase(),taskId,
+                        slot,null);
+                    DiagnosticLog.event("PROJECT_TASK_THUMBNAIL_REMOVED",
+                        "task="+taskId+" slot="+slot);
+                    render();
+                }catch(Exception error){
+                    alert("Nie udało się usunąć zdjęcia.");
+                }
+            }).show();
+    }
+
+    private void showProjectTaskPhoto(long taskId,int selectedSlot) {
+        android.graphics.Bitmap first=projectThumbnailBitmap(
+            ProjectStore.taskThumbnail(db.getReadableDatabase(),taskId,1));
+        android.graphics.Bitmap second=projectThumbnailBitmap(
+            ProjectStore.taskThumbnail(db.getReadableDatabase(),taskId,2));
+        ProjectTaskPhotoDialog.show(this,first,second,selectedSlot,
+            new ProjectTaskPhotoDialog.Actions(){
+                @Override public void replace(int slot) {
+                    chooseProjectTaskPhotoSource(taskId,slot);
+                }
+                @Override public void remove(int slot) {
+                    confirmDeleteProjectTaskPhoto(taskId,slot);
+                }
+            });
+    }
+
     private View projectTaskThumbnailView(long taskId,int slot) {
         String encoded=ProjectStore.taskThumbnail(db.getReadableDatabase(),taskId,slot);
         android.graphics.Bitmap bitmap=projectThumbnailBitmap(encoded);
@@ -5832,17 +5946,14 @@ public final class MainActivity extends Activity {
             thumbnail=placeholder;
         }
         thumbnail.setContentDescription("Zdjęcie "+slot+" czynności. "
-            +(bitmap==null?"Dodaj zdjęcie.":"Zmień zdjęcie. Przytrzymaj, aby usunąć."));
-        thumbnail.setOnClickListener(v->selectProjectTaskThumbnail(taskId,slot));
+            +(bitmap==null?"Dodaj zdjęcie.":"Otwórz zdjęcie. Przytrzymaj, aby usunąć."));
+        thumbnail.setOnClickListener(v->{
+            if(bitmap==null)chooseProjectTaskPhotoSource(taskId,slot);
+            else showProjectTaskPhoto(taskId,slot);
+        });
         thumbnail.setOnLongClickListener(v->{
-            if(encoded.isEmpty())return false;
-            new AlertDialog.Builder(this).setTitle("Usuń zdjęcie "+slot+" czynności?")
-                .setNegativeButton("Anuluj",null)
-                .setPositiveButton("Usuń",(dialog,which)->{
-                    ProjectStore.setTaskThumbnail(
-                        db.getWritableDatabase(),taskId,slot,null);
-                    render();
-                }).show();
+            if(bitmap==null)return false;
+            confirmDeleteProjectTaskPhoto(taskId,slot);
             return true;
         });
         return thumbnail;
@@ -25054,6 +25165,17 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode,
             String[] permissions,int[] grantResults) {
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode==PROJECT_TASK_CAMERA_PERMISSION){
+            boolean allowed=grantResults.length>0
+                &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if(allowed)launchProjectTaskThumbnailCamera();
+            else {
+                pendingProjectTaskThumbnailId=0;
+                pendingProjectTaskThumbnailSlot=0;
+                alert("Aby zrobić zdjęcie, zezwól EDHOME na aparat.");
+            }
+            return;
+        }
         if(requestCode!=STORAGE_CAMERA_PERMISSION)return;
         boolean granted=grantResults.length>0
             &&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED;
@@ -25093,6 +25215,34 @@ public final class MainActivity extends Activity {
                     target.setSelection(target.length());
                     DiagnosticLog.event("TASK_QUICK_SPEECH_TRANSCRIBED");
                 }
+            }
+            return;
+        }
+        if(request==TAKE_PROJECT_TASK_THUMBNAIL){
+            long taskId=pendingProjectTaskThumbnailId;
+            int slot=pendingProjectTaskThumbnailSlot;
+            Uri photo=pendingProjectTaskCameraUri;
+            java.io.File file=pendingProjectTaskCameraFile;
+            pendingProjectTaskThumbnailId=0;
+            pendingProjectTaskThumbnailSlot=0;
+            try {
+                if(result==RESULT_OK&&taskId>0&&slot>=1&&slot<=2){
+                    if(photo==null||file==null||!file.exists()||file.length()<4)
+                        throw new IllegalArgumentException(
+                            "Aparat nie zapisał zdjęcia. Spróbuj ponownie.");
+                    String jpeg=StorageThumbs.compress(getContentResolver(),photo);
+                    ProjectStore.setTaskThumbnail(
+                        db.getWritableDatabase(),taskId,slot,jpeg);
+                    DiagnosticLog.event("PROJECT_TASK_THUMBNAIL_SAVED",
+                        "task="+taskId+" slot="+slot+" source=camera");
+                    render();
+                }
+            }catch(Exception error){
+                DiagnosticLog.error("PROJECT_TASK_PHOTO_CAMERA_RESULT",error);
+                alert(error.getMessage()==null
+                    ?"Nie udało się zapisać zdjęcia czynności.":error.getMessage());
+            }finally{
+                cleanupProjectTaskCameraTemp();
             }
             return;
         }
