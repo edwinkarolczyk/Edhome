@@ -35,7 +35,7 @@ assert 'OLDEST_SELECTIVE_SCHEMA = 45;' in selective
 assert 'sourceVersion < 47 && table.startsWith("frost_")' in selective
 assert 'if (!row.has(flag)) row.put(flag, 0);' in selective
 assert 'sourceVersion < 47 && table.startsWith("frost_")' in selective.split('boolean selected = ',1)[1]
-assert 'inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != 50 && inputVersion != DB_VERSION' in backup
+assert 'inputVersion != 45 && inputVersion != 46 && inputVersion != 47 && inputVersion != 48 && inputVersion != 49 && inputVersion != 50 && inputVersion != 51 && inputVersion != DB_VERSION' in backup
 assert 'INSERT OR IGNORE INTO frost_settings(id) VALUES(1)' in backup
 for token in ('private static final int DB_VERSION = 52',
               '"frost_risk"', '"protect_frost"', '"frost_settings"',
