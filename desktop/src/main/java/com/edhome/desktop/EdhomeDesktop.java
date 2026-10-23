@@ -6727,7 +6727,7 @@ public final class EdhomeDesktop extends JFrame {
         content.add(statusCard);
         content.add(Box.createVerticalStrut(12));
 
-        JPanel actions = new JPanel(new GridLayout(6, 1, 0, 8));
+        JPanel actions = new JPanel(new GridLayout(7, 1, 0, 8));
         actions.setBackground(APP_BG);
         JButton qrPair = actionButton("Połącz telefon przez QR");
         JButton repairHub = actionButton("Napraw połączenie telefonu / zaporę Windows");
@@ -6735,12 +6735,14 @@ public final class EdhomeDesktop extends JFrame {
         JButton allLogs = actionButton("Pobierz pełne logi Desktop i Android (TXT)");
         JButton copyDesktopLogs = actionButton("Pobierz logi Desktop (TXT)");
         JButton openBackups = actionButton("Otwórz backup EDHOME na PC");
+        JButton sendSuggestion = actionButton("💡 Wyślij sugestię / zgłoś błąd");
         actions.add(qrPair);
         actions.add(repairHub);
         actions.add(updateDesktop);
         actions.add(allLogs);
         actions.add(copyDesktopLogs);
         actions.add(openBackups);
+        actions.add(sendSuggestion);
         content.add(actions);
         content.add(Box.createVerticalStrut(12));
 
@@ -6791,9 +6793,86 @@ public final class EdhomeDesktop extends JFrame {
             }
         });
         openBackups.addActionListener(e -> openPcBackupFolder());
+        sendSuggestion.addActionListener(e -> showDesktopSuggestionDialog());
 
         page.add(content, BorderLayout.NORTH);
         return page;
+    }
+
+    /** GitHub przyjmuje zgłoszenie po zatwierdzeniu w przeglądarce.
+     * Token repozytorium nigdy nie jest zapisywany w EDHOME.
+     */
+    private void showDesktopSuggestionDialog() {
+        JComboBox<String> category=new JComboBox<>(new String[]{"Sugestia","Błąd"});
+        category.setSelectedIndex(Math.min(1,Math.max(0,
+            PREFS.getInt("github_suggestion_draft_type",0))));
+        JTextField title=new JTextField(
+            PREFS.get("github_suggestion_draft_title",""),34);
+        JTextArea details=new JTextArea(
+            PREFS.get("github_suggestion_draft_body",""),7,34);
+        details.setLineWrap(true);
+        details.setWrapStyleWord(true);
+
+        JPanel form=new JPanel();
+        form.setLayout(new BoxLayout(form,BoxLayout.Y_AXIS));
+        form.add(new JLabel("Sugestie i zgłoszenia błędów EDHOME"));
+        form.add(new JLabel("Nie podawaj PIN-u, haseł ani danych bankowych."));
+        form.add(Box.createVerticalStrut(8));
+        form.add(new JLabel("Rodzaj zgłoszenia"));
+        form.add(category);
+        form.add(new JLabel("Tytuł"));
+        form.add(title);
+        form.add(new JLabel("Opis"));
+        form.add(new JScrollPane(details));
+        form.add(new JLabel("GitHub wymaga zalogowania i zatwierdzenia zgłoszenia."));
+        final Runnable save=()->{
+            PREFS.putInt("github_suggestion_draft_type",category.getSelectedIndex());
+            PREFS.put("github_suggestion_draft_title",title.getText());
+            PREFS.put("github_suggestion_draft_body",details.getText());
+        };
+        while(true){
+            Object[] options={"Otwórz GitHub","Zapisz szkic","Anuluj"};
+            int choice=JOptionPane.showOptionDialog(this,form,
+                "EDHOME • wyślij sugestię",JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE,null,options,options[0]);
+            if(choice==2||choice==JOptionPane.CLOSED_OPTION)return;
+            save.run();
+            if(choice==1){
+                JOptionPane.showMessageDialog(this,
+                    "Szkic zapisany lokalnie na tym komputerze.");
+                return;
+            }
+            String subject=title.getText().trim();
+            String description=details.getText().trim();
+            if(subject.length()<5||subject.length()>120
+                    ||description.length()<10||description.length()>2000){
+                JOptionPane.showMessageDialog(this,
+                    "Tytuł: 5–120 znaków, opis: 10–2000 znaków.",
+                    "EDHOME",JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+            String prefix=category.getSelectedIndex()==1
+                ?"[EDHOME Błąd] ":"[EDHOME Sugestia] ";
+            String issueText="### Opis\\n"+description
+                +"\\n\\nPlatforma: Windows Desktop\\nWersja: "
+                +DESKTOP_VERSION+"\\n\\nZgłoszenie przesłane z EDHOME.";
+            try{
+                String url="https://github.com/edwinkarolczyk/Edhome/issues/new"
+                    +"?title="+java.net.URLEncoder.encode(prefix+subject,
+                        java.nio.charset.StandardCharsets.UTF_8)
+                    +"&body="+java.net.URLEncoder.encode(issueText,
+                        java.nio.charset.StandardCharsets.UTF_8);
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+                DesktopDiagnosticLog.event("EDHOME_SUGGESTION_GITHUB_OPENED");
+                return;
+            }catch(Exception error){
+                DesktopDiagnosticLog.error("EDHOME_SUGGESTION_BROWSER",error);
+                JOptionPane.showMessageDialog(this,
+                    "Nie można otworzyć GitHub; szkic został zapisany.",
+                    "EDHOME",JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
     }
 
     /** Jeden przycisk do dwóch osobnych plików, także przy konflikcie danych. */
