@@ -37,6 +37,71 @@ public final class ReminderReceiver extends BroadcastReceiver {
     private static final int PLAN_ALARM_ID = 7126;
     private static final String DATABASE = "edhome-beta-preview.db";
 
+    /** Osobna pozycja powiadomienia dla każdej czynności standardowej. */
+    private static final class DailyTask {
+        final long id;
+        final String title;
+        final boolean project;
+        final boolean overdue;
+        DailyTask(long id,String title,boolean project,boolean overdue) {
+            this.id=id;
+            this.title=title==null?"Czynność":title;
+            this.project=project;
+            this.overdue=overdue;
+        }
+    }
+
+    private static void notifyDailyTask(Context context,
+            NotificationManager notifications,DailyTask task) {
+        // String tag utrzymuje unikalność także dla dużych SQLite id.
+        Intent destination=new Intent(context,MainActivity.class)
+            .setAction("com.edwinkarolczyk.edhome.OPEN_REMINDER_TASK")
+            .setData(android.net.Uri.parse("edhome://reminder/task/"+task.id))
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                |Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("open_task_id",task.id);
+        PendingIntent open=PendingIntent.getActivity(context,requestCode(task.id),
+            destination,PendingIntent.FLAG_UPDATE_CURRENT
+                |LegacyCompat.immutableFlag());
+        Notification.Builder builder=LegacyCompat.notificationBuilder(context,CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_edhome)
+            .setContentTitle("EDHOME • "+task.title)
+            .setContentText(task.overdue
+                ?"Zaległa czynność • dotknij, aby otworzyć"
+                :task.project?"Czynność projektu • dotknij, aby otworzyć"
+                    :"Czynność na dziś • dotknij, aby otworzyć")
+            .setStyle(new Notification.BigTextStyle().bigText(task.title))
+            .setContentIntent(open)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setAutoCancel(true);
+        if(task.project && !ProjectWorkNotification.isActive(context,task.id))
+            builder.addAction(android.R.drawable.ic_media_play,"▶ Start",
+                ProjectWorkNotification.startAction(context,task.id));
+        notifications.notify("edhome-task-"+task.id,ALARM_ID,builder.build());
+    }
+
+    private static void notifyPlanning(Context context,
+            NotificationManager notifications,int proposed,int missing) {
+        Intent destination=new Intent(context,MainActivity.class)
+            .setAction("com.edwinkarolczyk.edhome.OPEN_TASK_PLANNING")
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                |Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("open_overdue_plan",true);
+        PendingIntent open=PendingIntent.getActivity(context,PLAN_ALARM_ID+10,
+            destination,PendingIntent.FLAG_UPDATE_CURRENT
+                |LegacyCompat.immutableFlag());
+        Notification notification=LegacyCompat.notificationBuilder(context,CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_edhome)
+            .setContentTitle("EDHOME • propozycje terminów")
+            .setContentText("Nowe terminy: "+proposed
+                +" • wskaż wykonawcę: "+missing)
+            .setContentIntent(open)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .build();
+        notifications.notify(PLAN_ALARM_ID,notification);
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(
             "edhome_beta_prefs", Context.MODE_PRIVATE);
@@ -271,6 +336,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         long singleTaskId = -1L;
         String singleTaskTitle = "";
         boolean singleProjectTask = false;
+        java.util.ArrayList<DailyTask> dailyTasks=new java.util.ArrayList<>();
         StringBuilder dailyTaskNames = new StringBuilder();
         String firstDailyTitle = "";
         long firstDailyTaskId = -1L;
@@ -286,7 +352,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 if (today.toString().equals(
                         pref.getString("reminder_legacy_day", ""))) return;
                 try (Cursor tasks = database.rawQuery(
-                        "SELECT id,task_kind,remind_time,due_date,title FROM tasks "
+                        "SELECT id,task_kind,remind_time,due_date,title,project_id FROM tasks "
                         + "WHERE done=0 AND due_date IS NOT NULL AND due_date<=? "
                         + "ORDER BY due_date ASC,id DESC",
                         new String[]{today.toString()})) {
@@ -298,6 +364,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
                                     ""))) continue;
                         } else if (!tasks.isNull(2)) continue;
                         due++;
+                        dailyTasks.add(new DailyTask(tasks.getLong(0),
+                            tasks.getString(4),!tasks.isNull(5),
+                            tasks.getString(3).compareTo(today.toString())<0));
                         if(firstDailyTaskId<0L) {
                             firstDailyTaskId=tasks.getLong(0);
                             firstDailyTitle=tasks.getString(4);
@@ -389,6 +458,22 @@ public final class ReminderReceiver extends BroadcastReceiver {
         LegacyCompat.ensureChannel(notifications, CHANNEL_ID,
             "Przypomnienia o czynnościach", NotificationManager.IMPORTANCE_DEFAULT,
             null, true, true, false);
+        if(legacy) {
+            // Bez podsumowania zastępującego czynności: każda ma własny tag,
+            // tytuł, ekran docelowy i możliwość niezależnego usunięcia.
+            for(DailyTask task:dailyTasks)notifyDailyTask(context,notifications,task);
+            SharedPreferences.Editor saved=pref.edit()
+                .putString("reminder_legacy_day",today.toString());
+            if(planningFresh&&planning!=null) {
+                notifyPlanning(context,notifications,planning.suggested,
+                    planning.needsAssignee);
+                saved.putString("task_planner_last_notice",planning.digest);
+            }
+            saved.apply();
+            DiagnosticLog.event("REMINDER_DAILY_PER_TASK",
+                "count="+dailyTasks.size());
+            return;
+        }
         boolean proposalsReady=planning!=null&&planning.suggested>0;
         int missingAssignee=planning==null?0:planning.needsAssignee;
         boolean openOverdue=planningTick&&(
@@ -464,7 +549,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
         int notificationId = plannerOnly ? PLAN_ALARM_ID
             : legacy ? ALARM_ID
             : requestCode(intent.getLongExtra("task_id", -1L));
-        notifications.notify(notificationId, notification);
+        if(!legacy&&!plannerOnly&&singleTaskId>0)
+            notifications.notify("edhome-task-"+singleTaskId,ALARM_ID,notification);
+        else notifications.notify(notificationId, notification);
         SharedPreferences.Editor editor = pref.edit();
         if (legacy) editor.putString("reminder_legacy_day", today.toString());
         if (planningFresh && planning!=null)
