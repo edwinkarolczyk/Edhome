@@ -111,6 +111,8 @@ final class DesktopBudgetDelta {
             }
             settings.addProperty(name,merged.toString());
         }
+        if(total==0)
+            throw conflict("budget","","Pusty pakiet zmian Budżetu.");
         return total;
     }
 
