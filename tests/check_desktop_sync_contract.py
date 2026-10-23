@@ -523,7 +523,12 @@ assert 'StorageThumbs.MAX_JPEG_BYTES' in row_rules
 assert 'android.util.Base64.decode(text,android.util.Base64.NO_WRAP)' in row_rules
 assert '(jpeg[0]&0xff)!=0xff' in row_rules
 assert 'text.indexOf' in row_rules and 'maxChars' in row_rules
-assert '("projects".equals(table) ? 512 * 1024 : 256 * 1024)' in sync_store
+assert '("projects".equals(table)||"tasks".equals(table)' in sync_store
+assert '? 1024 * 1024 : 256 * 1024' in sync_store
+# Dwie miniatury czynności i zdjęcie projektu korzystają z osobnego limitu.
+assert '"task_thumbnail_1_base64".equals(column)' in row_rules
+assert '"task_thumbnail_2_base64".equals(column)' in row_rules
+assert 'projectThumbnail||taskThumbnail' in row_rules
 assert 'DataBackup.MAX_BYTES' in server
 print("P0: duże zdjęcie projektu Desktop → Android LAN, walidacja JPEG i limitów: PASS")
 
