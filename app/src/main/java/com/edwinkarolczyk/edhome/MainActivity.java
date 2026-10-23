@@ -23572,6 +23572,106 @@ public final class MainActivity extends Activity {
         return "Stan: " + String.join(" • ", values);
     }
 
+    /**
+     * Zgłoszenia są wysyłane świadomie przez GitHub Issues w przeglądarce.
+     * Nie przechowujemy tokenów GitHub w APK. Szkic zostaje lokalnie,
+     * również gdy użytkownik zamknie stronę bez zatwierdzenia.
+     */
+    private void showSuggestionDialog() {
+        LinearLayout form=new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18),dp(10),dp(18),dp(10));
+        form.addView(text("Wyślij pomysł lub zgłoś błąd EDHOME. "
+            +"Szkic zostanie na telefonie. Po zatwierdzeniu formularza w GitHub "
+            +"zgłoszenie pojawi się w repozytorium. "
+            +"Nie podawaj PIN-u, haseł, tokenów ani prywatnych danych bankowych.",
+            13,false));
+        Spinner category=new Spinner(this);
+        category.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(
+            "Sugestia","Błąd")));
+        category.setSelection(Math.min(1,Math.max(0,
+            prefs.getInt("github_suggestion_draft_type",0))));
+        form.addView(text("Rodzaj zgłoszenia",14,true));
+        form.addView(category);
+        EditText subject=new EditText(this);
+        subject.setSingleLine(true);
+        subject.setHint("Krótki tytuł");
+        subject.setText(prefs.getString("github_suggestion_draft_title",""));
+        subject.setTextColor(ink);
+        subject.setHintTextColor(subdued);
+        subject.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(120)});
+        form.addView(text("Tytuł",14,true));
+        form.addView(subject);
+        EditText details=new EditText(this);
+        details.setSingleLine(false);
+        details.setMinLines(4);
+        details.setMaxLines(8);
+        details.setGravity(Gravity.TOP);
+        details.setHint("Opisz, co zmienić lub jak odtworzyć problem.");
+        details.setText(prefs.getString("github_suggestion_draft_body",""));
+        details.setTextColor(ink);
+        details.setHintTextColor(subdued);
+        details.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(2000)});
+        form.addView(text("Treść",14,true));
+        form.addView(details);
+        form.addView(text("Do publikacji potrzebne jest zalogowanie do GitHub "
+            +"i kliknięcie „Submit new issue”. EDHOME nie wysyła zgłoszeń "
+            +"w tle i nie umieszcza haseł do GitHub w aplikacji.",12,false));
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Sugestie i błędy EDHOME")
+            .setView(scroll)
+            .setNegativeButton("Zamknij",null)
+            .setNeutralButton("Zapisz szkic",null)
+            .setPositiveButton("Otwórz GitHub",null).create();
+        Runnable save=()->prefs.edit()
+            .putInt("github_suggestion_draft_type",category.getSelectedItemPosition())
+            .putString("github_suggestion_draft_title",subject.getText().toString())
+            .putString("github_suggestion_draft_body",details.getText().toString())
+            .apply();
+        dialog.setOnShowListener(unused->{
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                save.run();
+                dialog.dismiss();
+                alert("Szkic sugestii zapisano na tym telefonie.");
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                String titleText=subject.getText().toString().trim();
+                String description=details.getText().toString().trim();
+                if(titleText.length()<5){
+                    subject.setError("Podaj tytuł (minimum 5 znaków).");
+                    return;
+                }
+                if(description.length()<10){
+                    details.setError("Opisz zgłoszenie (minimum 10 znaków).");
+                    return;
+                }
+                save.run();
+                String prefix=category.getSelectedItemPosition()==1
+                    ?"[EDHOME Błąd] ":"[EDHOME Sugestia] ";
+                String bodyText="### Opis\\n"
+                    +description+"\\n\\nPlatforma: Android\\nWersja: "
+                    +BuildConfig.VERSION_NAME+"\\n\\n"
+                    +"Zgłoszenie przesłane z formularza EDHOME.";
+                String url="https://github.com/edwinkarolczyk/Edhome/issues/new"
+                    +"?title="+Uri.encode(prefix+titleText)
+                    +"&body="+Uri.encode(bodyText);
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));
+                    dialog.dismiss();
+                    DiagnosticLog.event("EDHOME_SUGGESTION_GITHUB_OPENED");
+                }catch(Exception unavailable){
+                    DiagnosticLog.error("EDHOME_SUGGESTION_BROWSER",unavailable);
+                    alert("Nie można otworzyć GitHub. Szkic został zapisany.");
+                }
+            });
+        });
+        dialog.show();
+    }
+
     private void settings() {
         final String selected=settingsSelectedTab();
         header("Ustawienia");
@@ -23594,6 +23694,11 @@ public final class MainActivity extends Activity {
             DiagnosticLog.event("HOUSEHOLD_RENAMED");
             alert("Zapisano nazwę gospodarstwa.");
         });
+
+        smallButton(general,"💡 Wyślij sugestię / zgłoś błąd",
+            this::showSuggestionDialog);
+        general.addView(text("Po kliknięciu otworzysz formularz GitHub; zgłoszenie "
+            +"zostanie opublikowane dopiero po Twoim potwierdzeniu.",12,false));
 
         LinearLayout users=settingsAccordion("users","Użytkownicy",
             "Profile, role, lokalny PIN i grafiki domowników.",false);
