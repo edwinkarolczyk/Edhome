@@ -2642,13 +2642,21 @@ public final class EdhomeDesktop extends JFrame {
         JButton button=compactActionButton(photo==null?"+":"");
         if(photo!=null)button.setIcon(photo);
         button.setPreferredSize(new Dimension(40,38));
-        button.setToolTipText("Zdjęcie "+slot+": kliknij, aby dodać lub zmienić"
+        button.setToolTipText("Zdjęcie "+slot+": "
+            +(photo==null?"dodaj zdjęcie":"otwórz podgląd")
             +(photo==null?"":"; prawy przycisk myszy, aby usunąć"));
-        button.addActionListener(e->chooseDesktopProjectTaskThumbnail(task,slot));
+        button.addActionListener(e->{
+            if(photo==null)chooseDesktopProjectTaskThumbnail(task,slot);
+            else showDesktopProjectTaskPhoto(task,slot);
+        });
         if(photo!=null){
             JPopupMenu menu=new JPopupMenu();
             JMenuItem remove=new JMenuItem("Usuń zdjęcie "+slot);
             remove.addActionListener(e->{
+                int answer=JOptionPane.showConfirmDialog(this,
+                    "Usunąć zdjęcie "+slot+"? Czynność zostanie zachowana.",
+                    "EDHOME • zdjęcia czynności",JOptionPane.YES_NO_OPTION);
+                if(answer!=JOptionPane.YES_OPTION)return;
                 task.add("task_thumbnail_"+slot+"_base64",
                     com.google.gson.JsonNull.INSTANCE);
                 markDirty();
@@ -2658,6 +2666,109 @@ public final class EdhomeDesktop extends JFrame {
             button.setComponentPopupMenu(menu);
         }
         return button;
+    }
+
+    /**
+     * Podgląd zdjęcia po kliknięciu miniaturki. Zmiana i usunięcie danych
+     * wymagają osobnej, jawnej akcji; sesje czasu pozostają nietknięte.
+     */
+    private BufferedImage desktopProjectTaskPhoto(JsonObject task,int slot) {
+        String encoded=value(task,"task_thumbnail_"+slot+"_base64");
+        if(encoded.isBlank()||encoded.length()>360000)return null;
+        try {
+            byte[] bytes=Base64.getDecoder().decode(encoded);
+            if(bytes.length>256*1024)return null;
+            return ImageIO.read(new ByteArrayInputStream(bytes));
+        }catch(Exception invalid){return null;}
+    }
+
+    private void showDesktopProjectTaskPhoto(JsonObject task,int selectedSlot) {
+        BufferedImage[] photos={
+            desktopProjectTaskPhoto(task,1),desktopProjectTaskPhoto(task,2)
+        };
+        if(photos[0]==null&&photos[1]==null){
+            chooseDesktopProjectTaskThumbnail(task,selectedSlot);
+            return;
+        }
+        int[] index={selectedSlot==2?1:0};
+        if(photos[index[0]]==null)index[0]=photos[0]!=null?0:1;
+        double[] zoom={2.0};
+        JDialog dialog=new JDialog(this,"Zdjęcia czynności",false);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setLayout(new BorderLayout(8,8));
+
+        JLabel image=new JLabel("",SwingConstants.CENTER);
+        image.setOpaque(true);
+        image.setBackground(Color.BLACK);
+        JScrollPane viewport=new JScrollPane(image);
+        viewport.getViewport().setBackground(Color.BLACK);
+        dialog.add(viewport,BorderLayout.CENTER);
+
+        JLabel counter=new JLabel();
+        JButton previous=new JButton("‹");
+        JButton next=new JButton("›");
+        JButton zoomIn=new JButton("+");
+        JButton zoomOut=new JButton("−");
+        JButton replace=new JButton("Zmień zdjęcie");
+        JButton remove=new JButton("Usuń zdjęcie");
+        JButton close=new JButton("Zamknij");
+        JPanel bar=new JPanel(new FlowLayout(FlowLayout.CENTER,7,4));
+        for(JComponent control:new JComponent[]{
+                previous,next,counter,zoomOut,zoomIn,replace,remove,close})
+            bar.add(control);
+        dialog.add(bar,BorderLayout.SOUTH);
+
+        final Runnable refresh=()->{
+            BufferedImage source=photos[index[0]];
+            if(source==null)return;
+            int w=Math.max(1,(int)Math.round(source.getWidth()*zoom[0]));
+            int h=Math.max(1,(int)Math.round(source.getHeight()*zoom[0]));
+            image.setIcon(new ImageIcon(source.getScaledInstance(w,h,Image.SCALE_SMOOTH)));
+            image.revalidate();
+            counter.setText("Zdjęcie "+(index[0]+1)+" z 2 • "
+                +Math.round(zoom[0]*100)+"%");
+            previous.setEnabled(index[0]>0&&photos[0]!=null);
+            next.setEnabled(index[0]<1&&photos[1]!=null);
+        };
+        previous.addActionListener(e->{index[0]=0;zoom[0]=2;refresh.run();});
+        next.addActionListener(e->{index[0]=1;zoom[0]=2;refresh.run();});
+        zoomIn.addActionListener(e->{
+            zoom[0]=Math.min(6.0,zoom[0]*1.25);
+            refresh.run();
+        });
+        zoomOut.addActionListener(e->{
+            zoom[0]=Math.max(0.5,zoom[0]/1.25);
+            refresh.run();
+        });
+        viewport.addMouseWheelListener(e->{
+            if(!e.isControlDown())return;
+            zoom[0]=Math.max(0.5,Math.min(6.0,
+                zoom[0]*(e.getWheelRotation()<0?1.25:0.8)));
+            refresh.run();
+            e.consume();
+        });
+        replace.addActionListener(e->{
+            int slot=index[0]+1;
+            dialog.dispose();
+            chooseDesktopProjectTaskThumbnail(task,slot);
+        });
+        remove.addActionListener(e->{
+            int slot=index[0]+1;
+            int answer=JOptionPane.showConfirmDialog(dialog,
+                "Usunąć zdjęcie "+slot+"? Czynność zostanie zachowana.",
+                "EDHOME • zdjęcia czynności",JOptionPane.YES_NO_OPTION);
+            if(answer!=JOptionPane.YES_OPTION)return;
+            task.add("task_thumbnail_"+slot+"_base64",
+                com.google.gson.JsonNull.INSTANCE);
+            markDirty();
+            dialog.dispose();
+            showSection("Projekty");
+        });
+        close.addActionListener(e->dialog.dispose());
+        refresh.run();
+        dialog.setSize(850,650);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 
     private void chooseDesktopProjectTaskThumbnail(JsonObject task,int slot) {
