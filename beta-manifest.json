@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 343,
-  "versionName": "0.8.1.150",
-  "changelog": "EDHOME Beta 0.8.1.150 / 343 — Projekty: pełnoekranowy podgląd dwóch zdjęć czynności z powiększaniem i przesuwaniem, wyborem aparat/galeria, osobną zmianą i usunięciem. Czas Start/Stop bez zmian. Desktop Beta 0.7.0.141.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.150/edhome-beta.apk",
-  "sha256": "45680275174747e06565755462a615797975fd16aa33552f71ccdd3a799d38e2"
+  "versionCode": 344,
+  "versionName": "0.8.1.151",
+  "changelog": "EDHOME Beta 0.8.1.151 / 344 — każde standardowe przypomnienie czynności osobno (bez zbiorczego powiadomienia), bezpośrednie otwieranie zadania; Ustawienia Ogólne: formularz sugestii/błędów z lokalnym szkicem i GitHub Issues. Desktop Beta 0.7.0.142. Nie zmienia tabel danych ani czasu pracy.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.151/edhome-beta.apk",
+  "sha256": "27665c3678c9150ecbde6f79906961e35e8e4f20ba50e1402a5e584f5b822acb"
 }
