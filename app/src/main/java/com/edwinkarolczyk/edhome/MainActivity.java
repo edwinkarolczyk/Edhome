@@ -6635,6 +6635,7 @@ public final class MainActivity extends Activity {
                         try {
                             ProjectStore.startWork(db.getWritableDatabase(),taskId);
                             ProjectWorkNotification.showActive(this,taskId);
+                            FeedbackSignals.success(this);
                             DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
                             render();
                         } catch(Exception error) {
@@ -6648,6 +6649,7 @@ public final class MainActivity extends Activity {
                             int session=ProjectStore.stopWork(
                                 db.getWritableDatabase(),taskId);
                             ProjectWorkNotification.cancel(this,taskId);
+                            FeedbackSignals.stopped(this);
                             DiagnosticLog.event("PROJECT_WORK_STOPPED",
                                 "task="+taskId+" minutes="+session);
                             render();
@@ -23968,6 +23970,7 @@ public final class MainActivity extends Activity {
             String state="Zgoda na powiadomienia: "+(allowed?"TAK":"BRAK")
                 +"\nPowiadomienia systemowe: "
                 +(LegacyCompat.notificationsEnabled(nm)?"WŁ.":"WYŁ.")
+                +"\n"+FeedbackSignals.diagnostics(this)
                 +"\nTryb głośności i ciszy może wyciszyć sygnał.";
             new AlertDialog.Builder(this).setTitle("Test dźwięku i wibracji")
                 .setMessage(state)
@@ -23984,6 +23987,19 @@ public final class MainActivity extends Activity {
                             android.Manifest.permission.POST_NOTIFICATIONS},7130);
                     else alert("Zgoda jest już przyznana albo system nie wymaga jej osobno.");
                 }).show();
+        });
+        smallButton(notifications,"Ustawienia kanału przypomnień Android",()->{
+            Intent settingsIntent;
+            if(Build.VERSION.SDK_INT>=26) {
+                settingsIntent=new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName())
+                    .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,"edhome-task-due-alert-v2");
+            } else {
+                settingsIntent=new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:"+getPackageName()));
+            }
+            try { startActivity(settingsIntent); }
+            catch(Exception error) { alert("Nie można otworzyć ustawień kanału: "+error.getMessage()); }
         });
         notifications.addView(text("Alarmy Androida używają osobnego kanału "
             +"powiadomień z dźwiękiem i wibracją. Tryb Nie przeszkadzać "
