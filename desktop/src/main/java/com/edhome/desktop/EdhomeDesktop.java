@@ -684,7 +684,7 @@ public final class EdhomeDesktop extends JFrame {
                 throw new IllegalArgumentException(
                     "Błędny lub powtórzony syncUuid w paczce LAN.");
             if(table.isBlank()||rowKey.isBlank()
-                    ||!rowKeys.add(table+"\\u0000"+rowKey))
+                    ||!rowKeys.add(table+"#"+rowKey))
                 throw new IllegalArgumentException(
                     "Powtórzony lub nieprawidłowy klucz rekordu w paczce LAN.");
         }
