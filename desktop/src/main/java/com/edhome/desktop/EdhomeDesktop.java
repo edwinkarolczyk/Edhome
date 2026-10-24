@@ -666,6 +666,30 @@ public final class EdhomeDesktop extends JFrame {
         return out.toString();
     }
 
+    // P0: Android SyncRecordStore.applyV2 odrzuca powtórzony syncUuid.
+    // Desktop musi stosować ten sam kontrakt zanim zmieni roboczy snapshot.
+    static void validateHubPatchOperationIdentities(JsonArray operations) {
+        if(operations==null)
+            throw new IllegalArgumentException("Brak operacji synchronizacji.");
+        java.util.Set<String> uuids=new java.util.HashSet<>();
+        java.util.Set<String> rowKeys=new java.util.HashSet<>();
+        for(JsonElement element:operations) {
+            if(!element.isJsonObject())
+                throw new IllegalArgumentException("Nieprawidłowa operacja patcha.");
+            JsonObject op=element.getAsJsonObject();
+            String uuid=value(op,"syncUuid").toLowerCase(Locale.ROOT);
+            String table=value(op,"table");
+            String rowKey=value(op,"rowKey");
+            if(!uuid.matches("[0-9a-f-]{36}")||!uuids.add(uuid))
+                throw new IllegalArgumentException(
+                    "Błędny lub powtórzony syncUuid w paczce LAN.");
+            if(table.isBlank()||rowKey.isBlank()
+                    ||!rowKeys.add(table+"\\u0000"+rowKey))
+                throw new IllegalArgumentException(
+                    "Powtórzony lub nieprawidłowy klucz rekordu w paczce LAN.");
+        }
+    }
+
     private String hubApplyPatch(String incoming,DesktopHubServer.ClientInfo client,
             boolean phoneWins) throws Exception {
         if(snapshot==null)throw new IOException("Brak danych Desktopu.");
@@ -676,6 +700,7 @@ public final class EdhomeDesktop extends JFrame {
                 ||!patch.has("operations")||!patch.get("operations").isJsonArray())
             throw new IllegalArgumentException("Nieobsługiwany patch synchronizacji.");
         JsonArray operations=patch.getAsJsonArray("operations");
+        validateHubPatchOperationIdentities(operations);
         JsonObject budgetDelta=patch.has("budgetDelta")
             &&patch.get("budgetDelta").isJsonObject()
             ?patch.getAsJsonObject("budgetDelta"):null;
