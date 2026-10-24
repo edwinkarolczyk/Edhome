@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 346,
-  "versionName": "0.8.1.153",
-  "changelog": "EDHOME Beta 0.8.1.153 / 346 — Czynności: jedna przewijana lista sortowana od najwcześniejszego terminu, bez limitu 3. Diagnostyka dźwięku i wibracji, sprawdzenie uprawnień Androida i szybkie przejście do ustawień; krótki sygnał Stop.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.153/edhome-beta.apk",
-  "sha256": "fdb1c349d75aef218fc0131143082bd3bc1e8d8884b2cd683c2ec424a54de1ca"
+  "versionCode": 347,
+  "versionName": "0.8.1.154",
+  "changelog": "EDHOME Beta 0.8.1.154 / 347 — Naprawiono brak dźwięku i wibracji po kliknięciu Start/Stop w Projektach. Test w Ustawienia → Powiadomienia pokazuje tryb telefonu, poziom głośności i dostępność wibracji; dodano otwarcie kanału przypomnień Androida. Dźwięki respektują tryb cichy. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.154/edhome-beta.apk",
+  "sha256": "c354b398a6cd73ab7939c87388b23b47e2c6f0f34bf106316b40f9bc5a14bc22"
 }
