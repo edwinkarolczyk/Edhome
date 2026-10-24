@@ -18,6 +18,46 @@ final class DesktopHubServerRuntimeTest {
     private static final String TOKEN="test_token_12345678901234567890";
 
     @Test
+    void desktopHubRejectsRepeatedSyncUuidAndRowKeysBeforePatch() {
+        String a="11111111-1111-4111-8111-111111111111";
+        String b="22222222-2222-4222-8222-222222222222";
+        com.google.gson.JsonArray valid=new com.google.gson.JsonArray();
+        valid.add(patchIdentity("tasks","1",a));
+        valid.add(patchIdentity("tasks","2",b));
+        assertDoesNotThrow(()->
+            EdhomeDesktop.validateHubPatchOperationIdentities(valid));
+
+        com.google.gson.JsonArray duplicateUuid=new com.google.gson.JsonArray();
+        duplicateUuid.add(patchIdentity("tasks","1",a));
+        duplicateUuid.add(patchIdentity("places","2",a.toUpperCase(java.util.Locale.ROOT)));
+        assertThrows(IllegalArgumentException.class,()->
+            EdhomeDesktop.validateHubPatchOperationIdentities(duplicateUuid));
+
+        com.google.gson.JsonArray duplicateRow=new com.google.gson.JsonArray();
+        duplicateRow.add(patchIdentity("tasks","1",a));
+        duplicateRow.add(patchIdentity("tasks","1",b));
+        assertThrows(IllegalArgumentException.class,()->
+            EdhomeDesktop.validateHubPatchOperationIdentities(duplicateRow));
+
+        com.google.gson.JsonArray missingUuid=new com.google.gson.JsonArray();
+        missingUuid.add(patchIdentity("tasks","3",""));
+        assertThrows(IllegalArgumentException.class,()->
+            EdhomeDesktop.validateHubPatchOperationIdentities(missingUuid));
+        // Paczka zawierająca wyłącznie budgetDelta nadal ma pustą listę operations.
+        assertDoesNotThrow(()->EdhomeDesktop.validateHubPatchOperationIdentities(
+            new com.google.gson.JsonArray()));
+    }
+
+    private static com.google.gson.JsonObject patchIdentity(
+            String table,String rowKey,String syncUuid) {
+        com.google.gson.JsonObject op=new com.google.gson.JsonObject();
+        op.addProperty("table",table);
+        op.addProperty("rowKey",rowKey);
+        op.addProperty("syncUuid",syncUuid);
+        return op;
+    }
+
+    @Test
     void desktopHubDoesNotDropNullableAndroidRecordFields() throws Exception {
         // Real production GSON instance, not an independent test configuration.
         java.lang.reflect.Field serializer=EdhomeDesktop.class.getDeclaredField("GSON");
