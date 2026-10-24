@@ -94,7 +94,7 @@ for expected in (
     'private void showRemindedTaskList()',
     'private void openRemindedTask(long taskId,boolean renderNow)',
     'if(renderNow)openProjectTask(taskId);',
-    'tasksPage=position/3;',
+    'tasksPage=0;',
     'pendingTaskFocusId=taskId;',
     'pendingTaskFocusView=box;',
     'actions.setVisibility(fromReminder?View.VISIBLE:View.GONE);',
@@ -109,6 +109,22 @@ for expected in (
     '"Czynność: "+target.title',
 ):
     assert expected in project_work, "Missing named 60-minute project notice: " + expected
+
+# Regresja Android 0.8.1.153: ekran Czynności nie może wrócić do trzech kart.
+# Kliknięcie w przypomnienie nadal przewija do właściwej karty bez stronicowania.
+tasks_screen = main.split("    private void tasks() {", 1)[1].split(
+    "    private void smallButton(", 1
+)[0]
+assert 'tasksPage = 0; // Lista przewijana zamiast stron po trzy pozycje.' in tasks_screen
+assert 'ORDER BY done ASC,' in tasks_screen
+assert 'CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,' in tasks_screen
+assert 'due_date ASC,id DESC' in tasks_screen
+assert 'while (cursor.moveToNext())' in tasks_screen
+assert 'LIMIT 3' not in tasks_screen
+assert 'OFFSET' not in tasks_screen
+assert 'position/3' not in main
+assert 'private String tasksFilter = "all";' in main
+print("Czynności: pełna lista bez limitu 3 i od najwcześniejszego terminu: PASS")
 
 print("Project reminder Start + persistent chronometer + Stop contract: PASS")
 print("Reminder opt-in, dedup, re-arm, SQLite/backup and quiet-hours contracts: PASS")
