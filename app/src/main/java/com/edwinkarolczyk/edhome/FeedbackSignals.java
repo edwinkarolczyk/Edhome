@@ -20,9 +20,9 @@ final class FeedbackSignals {
         signal(context, ToneGenerator.TONE_PROP_ACK, 65, 35);
     }
 
-    /** Ciągły, trzysekundowy sygnał zakończenia pomiaru. */
+    /** Krótki sygnał zakończenia pomiaru, bez ciągłego pisku. */
     static void stopped(Context context) {
-        signal(context, ToneGenerator.TONE_PROP_BEEP, 3000, 450);
+        signal(context, ToneGenerator.TONE_PROP_ACK, 170, 130);
     }
 
     static void warning(Context context) {
@@ -35,13 +35,12 @@ final class FeedbackSignals {
             PREFS, Context.MODE_PRIVATE);
         AudioManager audio = (AudioManager) context.getSystemService(
             Context.AUDIO_SERVICE);
-        if (audio == null || audio.getRingerMode()
-                == AudioManager.RINGER_MODE_SILENT) return;
+        if (audio == null) return;
         if (prefs.getBoolean(SOUNDS_ENABLED, true)
                 && audio.getRingerMode() == AudioManager.RINGER_MODE_NORMAL) {
             ToneGenerator generator = null;
             try {
-                generator = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35);
+                generator = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90);
                 generator.startTone(tone, durationMs);
                 // ToneGenerator.stopTone() and release() are intentionally
                 // deferred to avoid cutting off the tone immediately.
@@ -56,7 +55,8 @@ final class FeedbackSignals {
                 if (generator != null) generator.release();
             }
         }
-        if (prefs.getBoolean(VIBRATIONS_ENABLED, true)) {
+        if (prefs.getBoolean(VIBRATIONS_ENABLED, true)
+                && audio.getRingerMode()!=AudioManager.RINGER_MODE_SILENT) {
             Vibrator vibrator = (Vibrator) context.getSystemService(
                 Context.VIBRATOR_SERVICE);
             if (vibrator != null && vibrator.hasVibrator()) {

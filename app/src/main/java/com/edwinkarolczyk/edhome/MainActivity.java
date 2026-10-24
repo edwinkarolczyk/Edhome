@@ -331,7 +331,7 @@ public final class MainActivity extends Activity {
             return;
         }
         tasksFilter="all";
-        tasksPage=position/3;
+        tasksPage=0;
         pendingTaskFocusId=taskId;
         screenScrollY.put("tasks",0);
         screen="tasks";
@@ -7727,15 +7727,14 @@ public final class MainActivity extends Activity {
                 "SELECT COUNT(*) FROM tasks WHERE " + condition, args)) {
             if (count.moveToFirst()) total = count.getInt(0);
         }
-        int pages = Math.max(1, (total + 2) / 3);
-        tasksPage = Math.max(0, Math.min(tasksPage, pages - 1));
+        tasksPage = 0; // Lista przewijana zamiast stron po trzy pozycje.
 
         int shown = 0;
         try (Cursor cursor = db.getReadableDatabase().rawQuery(
                 "SELECT id,title,done,due_date,repeat_rule,repeat_every FROM tasks "
                 + "WHERE " + condition + " ORDER BY done ASC,"
                 + "CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,"
-                + "due_date ASC,id DESC LIMIT 3 OFFSET " + (tasksPage * 3), args)) {
+                + "due_date ASC,id DESC", args)) {
             while (cursor.moveToNext()) {
                 shown++;
                 drawTask(cursor.getLong(0), cursor.getString(1), cursor.getInt(2) == 1,
@@ -7746,16 +7745,7 @@ public final class MainActivity extends Activity {
         if (shown == 0)
             note("Brak czynności w tym widoku. Wybierz filtr lub dodaj nową.");
 
-        if (pages > 1) {
-            LinearLayout pager = compactActionRow();
-            compactAction(pager, "‹", () -> {
-                if (tasksPage > 0) { tasksPage--; render(); }
-            });
-            compactAction(pager, (tasksPage + 1) + " / " + pages, () -> { });
-            compactAction(pager, "›", () -> {
-                if (tasksPage + 1 < pages) { tasksPage++; render(); }
-            });
-        }
+
     }
 
     private void smallButton(LinearLayout container, String label, Runnable action) {
@@ -23970,8 +23960,30 @@ public final class MainActivity extends Activity {
             FeedbackSignals.VIBRATIONS_ENABLED,true,null);
         smallButton(notifications,"Przetestuj dźwięk i wibrację",()->{
             FeedbackSignals.warning(this);
-            alert("Wysłano próbę sygnału. Sprawdź głośność powiadomień, "
-                +"tryb cichy i kanał EDHOME w ustawieniach telefonu.");
+            android.app.NotificationManager nm=(android.app.NotificationManager)
+                getSystemService(Context.NOTIFICATION_SERVICE);
+            boolean allowed=Build.VERSION.SDK_INT<33
+                ||checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    ==android.content.pm.PackageManager.PERMISSION_GRANTED;
+            String state="Zgoda na powiadomienia: "+(allowed?"TAK":"BRAK")
+                +"\nPowiadomienia systemowe: "
+                +(LegacyCompat.notificationsEnabled(nm)?"WŁ.":"WYŁ.")
+                +"\nTryb głośności i ciszy może wyciszyć sygnał.";
+            new AlertDialog.Builder(this).setTitle("Test dźwięku i wibracji")
+                .setMessage(state)
+                .setNegativeButton("Zamknij",null)
+                .setNeutralButton("Ustawienia Androida",(dialog,which)->{
+                    Intent details=new Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:"+getPackageName()));
+                    startActivity(details);
+                })
+                .setPositiveButton("Poproś o zgodę",(dialog,which)->{
+                    if(Build.VERSION.SDK_INT>=33&&!allowed)
+                        requestPermissions(new String[]{
+                            android.Manifest.permission.POST_NOTIFICATIONS},7130);
+                    else alert("Zgoda jest już przyznana albo system nie wymaga jej osobno.");
+                }).show();
         });
         notifications.addView(text("Alarmy Androida używają osobnego kanału "
             +"powiadomień z dźwiękiem i wibracją. Tryb Nie przeszkadzać "
