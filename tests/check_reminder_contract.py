@@ -126,5 +126,30 @@ assert 'position/3' not in main
 assert 'private String tasksFilter = "all";' in main
 print("Czynności: pełna lista bez limitu 3 i od najwcześniejszego terminu: PASS")
 
+# Regresja Start/Stop: przyciski aplikacji muszą uruchamiać te same
+# sygnały co działania z powiadomienia (Android 5.1+).
+feedback = Path("app/src/main/java/com/edwinkarolczyk/edhome/FeedbackSignals.java").read_text(
+    encoding="utf-8")
+manifest = Path("app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+start_card = main.split("ProjectStore.startWork(db.getWritableDatabase(),taskId);", 1)[1].split(
+    'DiagnosticLog.event("PROJECT_WORK_STARTED"', 1)[0]
+stop_card = main.split("ProjectStore.stopWork(\n", 1)[1].split(
+    'DiagnosticLog.event("PROJECT_WORK_STOPPED"', 1)[0]
+assert "FeedbackSignals.success(this);" in start_card
+assert "FeedbackSignals.stopped(this);" in stop_card
+assert "FeedbackSignals.success(context);" in project_work
+assert "FeedbackSignals.stopped(context);" in project_work
+assert 'android.permission.VIBRATE' in manifest
+assert 'android.permission.POST_NOTIFICATIONS' in manifest
+assert "Vibrator vibrator" in feedback and "vibrator.vibrate(" in feedback
+assert "ToneGenerator generator" in feedback and "startTone(tone, durationMs)" in feedback
+assert 'DiagnosticLog.error("FEEDBACK_AUDIO", problem)' in feedback
+assert 'DiagnosticLog.error("FEEDBACK_VIBRATION", problem)' in feedback
+assert "static String diagnostics(Context context)" in feedback
+assert 'FeedbackSignals.diagnostics(this)' in main
+assert "Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS" in main
+assert '"edhome-task-due-alert-v2"' in main
+print("PASS: dźwięk i wibracje Start/Stop, diagnostyka i ustawienia kanału")
+
 print("Project reminder Start + persistent chronometer + Stop contract: PASS")
 print("Reminder opt-in, dedup, re-arm, SQLite/backup and quiet-hours contracts: PASS")
