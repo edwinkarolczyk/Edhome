@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 345,
-  "versionName": "0.8.1.152",
-  "changelog": "EDHOME Beta 0.8.1.152 / 345 — przypomnienia pojedynczych czynności: nowy kanał z dźwiękiem i wibracją, kontrola próbnego sygnału w Ustawienia → Alarmy. Wcześniej dodano osobne przypomnienia i sugestie GitHub Issues. Desktop 0.7.0.142.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.152/edhome-beta.apk",
-  "sha256": "21c4588ad85288c65c85be1497ddc2f47176f30b3a6bd90c161f03b9a39a951d"
+  "versionCode": 346,
+  "versionName": "0.8.1.153",
+  "changelog": "EDHOME Beta 0.8.1.153 / 346 — Czynności: jedna przewijana lista sortowana od najwcześniejszego terminu, bez limitu 3. Diagnostyka dźwięku i wibracji, sprawdzenie uprawnień Androida i szybkie przejście do ustawień; krótki sygnał Stop.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.153/edhome-beta.apk",
+  "sha256": "fdb1c349d75aef218fc0131143082bd3bc1e8d8884b2cd683c2ec424a54de1ca"
 }
