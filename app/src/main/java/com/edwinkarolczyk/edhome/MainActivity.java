@@ -1799,8 +1799,16 @@ public final class MainActivity extends Activity {
         return b;
     }
 
-    private EditText field(String hint, boolean number) {
+    /** Domyślne zachowanie tekstowych pól formularzy; typy liczbowe/datowe mogą je nadpisać. */
+    private EditText newTextInput() {
         EditText input = new EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        return input;
+    }
+
+    private EditText field(String hint, boolean number) {
+        EditText input = newTextInput();
         input.setHint(hint);
         input.setTextColor(ink);
         input.setHintTextColor(subdued);
@@ -2240,7 +2248,7 @@ public final class MainActivity extends Activity {
             render();
             return;
         }
-        EditText pin=new EditText(this);
+        EditText pin=newTextInput();
         pin.setHint("PIN 5–8 cyfr");
         pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             |android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
@@ -4318,7 +4326,7 @@ public final class MainActivity extends Activity {
         destination.setSelection(Math.max(0, targets.indexOf(homeTileTarget(id))));
         form.addView(destination);
         form.addView(text("Podpis (maks. 24 znaki)", 15, true));
-        EditText label = new EditText(this);
+        EditText label = newTextInput();
         label.setSingleLine(true);
         label.setText(homeTileLabel(id));
         label.setTextColor(ink);
@@ -4355,7 +4363,7 @@ public final class MainActivity extends Activity {
             new java.util.ArrayList<>(iconIds);
         final java.util.List<String> filteredIconNames =
             new java.util.ArrayList<>(iconNames);
-        EditText iconSearch = new EditText(this);
+        EditText iconSearch = newTextInput();
         iconSearch.setSingleLine(true);
         iconSearch.setHint("Szukaj ikony, np. garaż, auto, pralka, finanse");
         iconSearch.setTextColor(ink);
@@ -4765,7 +4773,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(22),dp(8),dp(22),0);
 
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
@@ -4800,7 +4808,7 @@ public final class MainActivity extends Activity {
         role.setSelection(first?0:1);
         form.addView(role,new LinearLayout.LayoutParams(-1,dp(52)));
 
-        EditText pin=new EditText(this);
+        EditText pin=newTextInput();
         pin.setSingleLine(true);
         pin.setHint("PIN opcjonalny • 5–8 cyfr");
         pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -4809,7 +4817,7 @@ public final class MainActivity extends Activity {
         pin.setHintTextColor(subdued);
         form.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
 
-        EditText repeat=new EditText(this);
+        EditText repeat=newTextInput();
         repeat.setSingleLine(true);
         repeat.setHint("Powtórz PIN");
         repeat.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -4902,7 +4910,7 @@ public final class MainActivity extends Activity {
 
             LinearLayout data=card();
             data.addView(text("Dane profilu",18,true));
-            EditText name=new EditText(this);
+            EditText name=newTextInput();
             name.setSingleLine(true);
             name.setText(currentName);
             name.setTextColor(ink);
@@ -5008,7 +5016,7 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(22),dp(8),dp(22),0);
-        EditText pin=new EditText(this);
+        EditText pin=newTextInput();
         pin.setSingleLine(true);
         pin.setHint("Nowy PIN • 5–8 cyfr");
         pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -5016,7 +5024,7 @@ public final class MainActivity extends Activity {
         pin.setTextColor(ink);
         pin.setHintTextColor(subdued);
         form.addView(pin,new LinearLayout.LayoutParams(-1,dp(54)));
-        EditText repeat=new EditText(this);
+        EditText repeat=newTextInput();
         repeat.setSingleLine(true);
         repeat.setHint("Powtórz PIN");
         repeat.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -5082,9 +5090,9 @@ public final class MainActivity extends Activity {
         form.setPadding(dp(20),dp(8),dp(20),0);
         form.addView(text("Godziny pracy tej zmiany. Dla zmiany nocnej koniec "
             +"może być wcześniejszy od początku, np. 22:00–06:00.",13,false));
-        EditText start=new EditText(this);
+        EditText start=newTextInput();
         start.setSingleLine(true);start.setHint("Od HH:mm");start.setText(current.start);
-        EditText end=new EditText(this);
+        EditText end=newTextInput();
         end.setSingleLine(true);end.setHint("Do HH:mm");end.setText(current.end);
         form.addView(start);form.addView(end);
         lightDialogForm(form);
@@ -5117,10 +5125,10 @@ public final class MainActivity extends Activity {
             +"w których EDHOME może proponować projekty. Możesz ustawić dwa okna. "
             +"Zostaw oba puste, aby dla tego rodzaju dnia niczego nie planować.",
             13,false));
-        EditText start1=new EditText(this);start1.setSingleLine(true);start1.setHint("Okno 1 • od HH:mm");
-        EditText end1=new EditText(this);end1.setSingleLine(true);end1.setHint("Okno 1 • do HH:mm");
-        EditText start2=new EditText(this);start2.setSingleLine(true);start2.setHint("Okno 2 • od HH:mm");
-        EditText end2=new EditText(this);end2.setSingleLine(true);end2.setHint("Okno 2 • do HH:mm");
+        EditText start1=newTextInput();start1.setSingleLine(true);start1.setHint("Okno 1 • od HH:mm");
+        EditText end1=newTextInput();end1.setSingleLine(true);end1.setHint("Okno 1 • do HH:mm");
+        EditText start2=newTextInput();start2.setSingleLine(true);start2.setHint("Okno 2 • od HH:mm");
+        EditText end2=newTextInput();end2.setSingleLine(true);end2.setHint("Okno 2 • do HH:mm");
         if(current.size()>0){start1.setText(current.get(0).start.toString());end1.setText(current.get(0).end.toString());}
         if(current.size()>1){start2.setText(current.get(1).start.toString());end2.setText(current.get(1).end.toString());}
         form.addView(start1);form.addView(end1);form.addView(start2);form.addView(end2);
@@ -5212,7 +5220,7 @@ public final class MainActivity extends Activity {
         exception.addView(text("Nadpisuje tygodniowy grafik tylko dla tej daty. "
             +"Możesz np. oznaczyć urlop/dzień wolny bez zmiany całego tygodnia.",
             13,false));
-        EditText selectedDate=new EditText(this);
+        EditText selectedDate=newTextInput();
         selectedDate.setSingleLine(true);selectedDate.setFocusable(false);
         selectedDate.setText(LocalDate.now().toString());selectedDate.setTextColor(ink);
         selectedDate.setOnClickListener(v->{
@@ -5276,7 +5284,7 @@ public final class MainActivity extends Activity {
             java.util.Arrays.asList(WasteRules.LABELS)));
         form.addView(fraction);
         form.addView(text("Pierwszy dzień wystawienia", 15, true));
-        EditText date = new EditText(this);
+        EditText date = newTextInput();
         date.setSingleLine(true);
         date.setFocusable(false);
         date.setText(LocalDate.now().toString());
@@ -5379,14 +5387,14 @@ public final class MainActivity extends Activity {
             DeviceTimerRules.LABELS)));
         editor.addView(device);
         editor.addView(text("Nazwa / program (opcjonalnie)", 15, true));
-        EditText titleInput = new EditText(this);
+        EditText titleInput = newTextInput();
         titleInput.setSingleLine(true);
         titleInput.setTextColor(ink);
         titleInput.setHintTextColor(subdued);
         titleInput.setHint("np. Pralka Bosch • Bawełna");
         editor.addView(titleInput);
         editor.addView(text("Czas w minutach (1–1440)", 15, true));
-        EditText minutes = new EditText(this);
+        EditText minutes = newTextInput();
         minutes.setSingleLine(true);
         minutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         minutes.setText("60");
@@ -6008,7 +6016,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
 
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
@@ -6017,7 +6025,7 @@ public final class MainActivity extends Activity {
         form.addView(name);
         if(existing!=null)name.setText(existing.name);
 
-        EditText due=new EditText(this);
+        EditText due=newTextInput();
         due.setSingleLine(true);
         due.setHint("RRRR-MM-DD • opcjonalnie");
         due.setFocusable(false);
@@ -6033,7 +6041,7 @@ public final class MainActivity extends Activity {
         if(existing!=null)due.setText(existing.dueDate);
         smallButton(form,"Wybierz termin",()->due.performClick());
 
-        EditText budget=new EditText(this);
+        EditText budget=newTextInput();
         budget.setSingleLine(true);
         budget.setHint("Budżet PLN • opcjonalnie");
         budget.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -6042,7 +6050,7 @@ public final class MainActivity extends Activity {
         form.addView(budget);
         if(existing!=null&&existing.budgetGrosz!=null)
             budget.setText(MoneyRules.format(existing.budgetGrosz).replace(" zł","").replace(" ",""));
-        EditText laborRate=new EditText(this);
+        EditText laborRate=newTextInput();
         laborRate.setSingleLine(true);
         laborRate.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -6188,7 +6196,7 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
@@ -6199,7 +6207,7 @@ public final class MainActivity extends Activity {
             "20 min","30 min","45 min","1 h","1 h 30 min","2 h",
             "3 h","4 h","6 h","8 h","10 h")));
         quickDuration.setSelection(0);
-        EditText due=new EditText(this);
+        EditText due=newTextInput();
         due.setSingleLine(true);
         due.setHint("Termin • dotknij, aby wybrać datę");
         due.setFocusable(false);
@@ -6215,7 +6223,7 @@ public final class MainActivity extends Activity {
                 initial.getYear(),initial.getMonthValue()-1,
                 initial.getDayOfMonth()).show();
         });
-        EditText reminder=new EditText(this);
+        EditText reminder=newTextInput();
         reminder.setSingleLine(true);
         reminder.setText("08:00");
         reminder.setHint("Przypomnienie HH:mm • opcjonalnie");
@@ -7130,13 +7138,13 @@ public final class MainActivity extends Activity {
         Spinner kind=new Spinner(this);
         kind.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(ProjectPlanningStore.BLOCKER_LABELS)));
-        EditText label=new EditText(this);
+        EditText label=newTextInput();
         label.setSingleLine(true);label.setHint("Co musi być gotowe?");
         Spinner strength=new Spinner(this);
         strength.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(
                 "Twarde • blokuje Start","Miękkie • tylko ostrzega")));
-        EditText available=new EditText(this);
+        EditText available=newTextInput();
         available.setSingleLine(true);
         available.setHint("Najwcześniej od RRRR-MM-DD • opcjonalnie");
         available.setFocusable(false);
@@ -7297,7 +7305,7 @@ public final class MainActivity extends Activity {
     }
 
     private void editProjectCostQuantity(long costId,long currentMilli,String unit) {
-        EditText field=new EditText(this);
+        EditText field=newTextInput();
         field.setSingleLine(true);
         field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -7331,10 +7339,10 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
-        EditText name=new EditText(this);name.setHint("Np. Płytki");
-        EditText qty=new EditText(this);qty.setHint("Ilość");qty.setText("1");
-        EditText unit=new EditText(this);unit.setHint("Jednostka");unit.setText("szt.");
-        EditText price=new EditText(this);price.setHint("Cena za 1 w PLN");
+        EditText name=newTextInput();name.setHint("Np. Płytki");
+        EditText qty=newTextInput();qty.setHint("Ilość");qty.setText("1");
+        EditText unit=newTextInput();unit.setHint("Jednostka");unit.setText("szt.");
+        EditText price=newTextInput();price.setHint("Cena za 1 w PLN");
         qty.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -7342,7 +7350,7 @@ public final class MainActivity extends Activity {
         Spinner status=new Spinner(this);
         status.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList("Planowane","Kupione","Zapłacone")));
-        EditText note=new EditText(this);note.setHint("Notatka • opcjonalnie");
+        EditText note=newTextInput();note.setHint("Notatka • opcjonalnie");
         form.addView(text("Nazwa",13,true));form.addView(name);
         form.addView(text("Ilość",13,true));form.addView(qty);
         form.addView(text("Jednostka",13,true));form.addView(unit);
@@ -7612,7 +7620,7 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(14),dp(10),dp(14),dp(10));
-        EditText start=new EditText(this);
+        EditText start=newTextInput();
         start.setText(String.format(Locale.ROOT,"%02d-%02d",cfg.month,cfg.day));
         start.setFocusable(false);
         form.addView(text("Początek zimy • miesiąc i dzień",14,true));
@@ -7620,7 +7628,7 @@ public final class MainActivity extends Activity {
         start.setOnClickListener(v->new DatePickerDialog(this,(picker,y,m,day)->
             start.setText(String.format(Locale.ROOT,"%02d-%02d",m+1,day)),
             LocalDate.now().getYear(),cfg.month-1,cfg.day).show());
-        EditText lead=new EditText(this);
+        EditText lead=newTextInput();
         lead.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         lead.setText(Integer.toString(cfg.lead));
         form.addView(text("Przygotowanie przed zimą • ile dni? (1–90)",14,true));
@@ -8117,7 +8125,7 @@ public final class MainActivity extends Activity {
         form.addView(text(id == null ? "Nowa czynność" : "Edytuj czynność",
             21, true));
 
-        EditText name = new EditText(this);
+        EditText name = newTextInput();
         name.setSingleLine(true);
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
@@ -8146,7 +8154,7 @@ public final class MainActivity extends Activity {
         LinearLayout hoursBox=new LinearLayout(this);
         hoursBox.setOrientation(LinearLayout.VERTICAL);
         hoursBox.addView(text("Godziny",12,false));
-        EditText durationHours=new EditText(this);
+        EditText durationHours=newTextInput();
         durationHours.setSingleLine(true);
         durationHours.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         durationHours.setHint("0");
@@ -8162,7 +8170,7 @@ public final class MainActivity extends Activity {
         LinearLayout minutesBox=new LinearLayout(this);
         minutesBox.setOrientation(LinearLayout.VERTICAL);
         minutesBox.addView(text("Minuty",12,false));
-        EditText durationMinutes=new EditText(this);
+        EditText durationMinutes=newTextInput();
         durationMinutes.setSingleLine(true);
         durationMinutes.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         durationMinutes.setHint("30");
@@ -8177,7 +8185,7 @@ public final class MainActivity extends Activity {
             +"minimum 20 min; krótszy czas EDHOME automatycznie ustawi na 20 min. "
             +"Maksimum: 10 h.",12,false));
 
-        EditText date = new EditText(this);
+        EditText date = newTextInput();
         date.setSingleLine(true);
         date.setHint("Termin: RRRR-MM-DD (opcjonalnie)");
         date.setText(existingDate);
@@ -8206,7 +8214,7 @@ public final class MainActivity extends Activity {
         repeat.setAdapter(themeSpinnerAdapter(java.util.Arrays.asList(TaskRules.LABELS)));
         repeat.setSelection(TaskRules.index(existingRule));
         form.addView(repeat);
-        EditText interval = new EditText(this);
+        EditText interval = newTextInput();
         interval.setSingleLine(true);
         interval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         interval.setHint("N: co ile dni / tygodni / miesięcy / lat");
@@ -8343,7 +8351,7 @@ public final class MainActivity extends Activity {
             "Standardowo ok. 08:00", "Moja godzina i wyprzedzenie")));
         reminderMode.setSelection(savedReminder[0].isEmpty() ? 0 : 1);
         form.addView(reminderMode);
-        EditText reminderHour = new EditText(this);
+        EditText reminderHour = newTextInput();
         reminderHour.setSingleLine(true);
         reminderHour.setFocusable(false);
         reminderHour.setText(savedReminder[0].isEmpty()
@@ -9300,9 +9308,9 @@ public final class MainActivity extends Activity {
     private void gardenAreaDialog() {
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(16),dp(8),dp(16),dp(8));
-        EditText name=new EditText(this); name.setHint("Nazwa, np. Grządka 1"); name.setSingleLine(true);
-        EditText kind=new EditText(this); kind.setHint("Typ: grządka / tunel / donica / sad"); kind.setSingleLine(true);
-        EditText notes=new EditText(this); notes.setHint("Notatka (opcjonalnie)");
+        EditText name=newTextInput(); name.setHint("Nazwa, np. Grządka 1"); name.setSingleLine(true);
+        EditText kind=newTextInput(); kind.setHint("Typ: grządka / tunel / donica / sad"); kind.setSingleLine(true);
+        EditText notes=newTextInput(); notes.setHint("Notatka (opcjonalnie)");
         form.addView(name); form.addView(kind); form.addView(notes); lightDialogForm(form);
         new AlertDialog.Builder(this).setTitle("Nowy obszar ogrodu").setView(form)
             .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
@@ -9316,10 +9324,10 @@ public final class MainActivity extends Activity {
     private void gardenPlantDialog() {
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(16),dp(8),dp(16),dp(8));
-        EditText name=new EditText(this); name.setHint("Nazwa, np. Pomidor"); name.setSingleLine(true);
-        EditText variety=new EditText(this); variety.setHint("Odmiana, np. Malinowy"); variety.setSingleLine(true);
-        EditText latin=new EditText(this); latin.setHint("Nazwa łacińska (opcjonalnie)"); latin.setSingleLine(true);
-        EditText notes=new EditText(this); notes.setHint("Moje uwagi");
+        EditText name=newTextInput(); name.setHint("Nazwa, np. Pomidor"); name.setSingleLine(true);
+        EditText variety=newTextInput(); variety.setHint("Odmiana, np. Malinowy"); variety.setSingleLine(true);
+        EditText latin=newTextInput(); latin.setHint("Nazwa łacińska (opcjonalnie)"); latin.setSingleLine(true);
+        EditText notes=newTextInput(); notes.setHint("Moje uwagi");
         form.addView(name); form.addView(variety); form.addView(latin); form.addView(notes); lightDialogForm(form);
         new AlertDialog.Builder(this).setTitle("Moja roślina / odmiana").setView(form)
             .setNegativeButton("Anuluj",null).setPositiveButton("Dodaj",(d,w)->{
@@ -9359,11 +9367,11 @@ public final class MainActivity extends Activity {
         area.setAdapter(lightDialogSpinnerAdapter(areaNames)); form.addView(area);
         form.addView(text("Roślina",13,true)); Spinner plant=new Spinner(this);
         plant.setAdapter(lightDialogSpinnerAdapter(plantNames)); form.addView(plant);
-        EditText label=new EditText(this); label.setHint("Nazwa nasadzenia (opcjonalnie)");
-        EditText sow=new EditText(this); sow.setHint("Planowany siew RRRR-MM-DD");
-        EditText plantDate=new EditText(this); plantDate.setHint("Planowane sadzenie RRRR-MM-DD");
-        EditText harvest=new EditText(this); harvest.setHint("Planowany zbiór RRRR-MM-DD");
-        EditText notes=new EditText(this); notes.setHint("Notatka");
+        EditText label=newTextInput(); label.setHint("Nazwa nasadzenia (opcjonalnie)");
+        EditText sow=newTextInput(); sow.setHint("Planowany siew RRRR-MM-DD");
+        EditText plantDate=newTextInput(); plantDate.setHint("Planowane sadzenie RRRR-MM-DD");
+        EditText harvest=newTextInput(); harvest.setHint("Planowany zbiór RRRR-MM-DD");
+        EditText notes=newTextInput(); notes.setHint("Notatka");
         form.addView(label);form.addView(sow);form.addView(plantDate);form.addView(harvest);form.addView(notes);
         lightDialogForm(form); ScrollView scroll=new ScrollView(this); scroll.addView(form);
         new AlertDialog.Builder(this).setTitle("Nowe nasadzenie").setView(scroll)
@@ -9413,7 +9421,7 @@ public final class MainActivity extends Activity {
     }
 
     private EditText gardenDateInput(LinearLayout form,String label,String initial) {
-        EditText date=new EditText(this);
+        EditText date=newTextInput();
         date.setSingleLine(true);
         date.setFocusable(false);
         date.setClickable(true);
@@ -9441,7 +9449,7 @@ public final class MainActivity extends Activity {
         EditText date=gardenDateInput(form,
             "sow".equals(stage)?"Faktyczny siew":"Faktyczne sadzenie",
             LocalDate.now().toString());
-        EditText note=new EditText(this);
+        EditText note=newTextInput();
         note.setHint("Notatka (opcjonalnie)");
         form.addView(note);
         lightDialogForm(form);
@@ -9469,7 +9477,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
         EditText date=gardenDateInput(form,"Data zbioru",LocalDate.now().toString());
-        EditText quantity=new EditText(this);
+        EditText quantity=newTextInput();
         quantity.setSingleLine(true);
         quantity.setHint("Ilość, np. 2,5");
         quantity.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -9481,7 +9489,7 @@ public final class MainActivity extends Activity {
             java.util.Arrays.asList("kg","g","szt.","l","ml")));
         form.addView(text("Jednostka",13,true));
         form.addView(unit);
-        EditText note=new EditText(this);
+        EditText note=newTextInput();
         note.setHint("Notatka (opcjonalnie)");
         form.addView(note);
         lightDialogForm(form);
@@ -9510,7 +9518,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
         EditText date=gardenDateInput(form,"Data zakończenia",LocalDate.now().toString());
-        EditText note=new EditText(this);
+        EditText note=newTextInput();
         note.setHint("Podsumowanie sezonu (opcjonalnie)");
         form.addView(note);
         lightDialogForm(form);
@@ -9535,7 +9543,7 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(10),dp(18),dp(10));
-        EditText year=new EditText(this);
+        EditText year=newTextInput();
         year.setSingleLine(true);
         year.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         year.setText(Integer.toString(suggested));
@@ -9616,7 +9624,7 @@ public final class MainActivity extends Activity {
         kind.setAdapter(lightDialogSpinnerAdapter(kindLabels));
         form.addView(kind);
 
-        EditText custom=new EditText(this);
+        EditText custom=newTextInput();
         custom.setHint("Nazwa własnej czynności");
         custom.setSingleLine(true);
         custom.setVisibility(View.GONE);
@@ -9630,7 +9638,7 @@ public final class MainActivity extends Activity {
         });
 
         form.addView(text("Pierwszy termin",14,true));
-        EditText due=new EditText(this);
+        EditText due=newTextInput();
         due.setHint("RRRR-MM-DD");
         due.setSingleLine(true);
         due.setFocusable(false);
@@ -9651,7 +9659,7 @@ public final class MainActivity extends Activity {
         repeat.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(TaskRules.LABELS)));
         form.addView(repeat);
-        EditText every=new EditText(this);
+        EditText every=newTextInput();
         every.setSingleLine(true);
         every.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         every.setText("1");
@@ -10489,7 +10497,7 @@ public final class MainActivity extends Activity {
     }
 
     private EditText vehicleInput(LinearLayout form, String hint, String value) {
-        EditText input = new EditText(this);
+        EditText input = newTextInput();
         input.setSingleLine(true);
         input.setTextColor(ink);
         input.setHintTextColor(subdued);
@@ -10795,7 +10803,7 @@ public final class MainActivity extends Activity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(20), dp(12), dp(20), dp(12));
         layout.addView(text("Nazwa miejsca • dowolna, Twoja", 16, true));
-        EditText input = new EditText(this);
+        EditText input = newTextInput();
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
@@ -10825,7 +10833,7 @@ public final class MainActivity extends Activity {
         }
         layout.addView(parent);
         layout.addView(text("Rodzaj (opcjonalnie, własny opis)", 16, true));
-        EditText type = new EditText(this);
+        EditText type = newTextInput();
         type.setSingleLine(true);
         type.setText(kind);
         type.setTextColor(ink);
@@ -11355,7 +11363,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showScannerCreateNfcTarget(String uid,String kind) {
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint("thing".equals(kind)?"Nazwa rzeczy":
             "box".equals(kind)?"Nazwa pudełka":"Nazwa miejsca");
@@ -12059,7 +12067,7 @@ public final class MainActivity extends Activity {
         title("Rzeczy");
         note("Tylko miniatury. Dotknij, aby otworzyć rzecz. Przytrzymaj "
             +"miniaturę około 0,4 s, aby powiększyć ją tylko na czas trzymania.");
-        EditText search=new EditText(this);
+        EditText search=newTextInput();
         search.setSingleLine(true);
         search.setHint("Szukaj rzeczy lub miejsca…");
         search.setText(storageGallerySearch);
@@ -13028,7 +13036,7 @@ public final class MainActivity extends Activity {
     private void showQuickThingBatchUnknownTargetName(String uid,String kind) {
         if(!quickThingBatchActive)return;
         boolean box="box".equals(kind);
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint(box?"Nazwa nowego pudełka":"Nazwa nowego miejsca");
         LinearLayout layout=new LinearLayout(this);
@@ -13282,7 +13290,7 @@ public final class MainActivity extends Activity {
         LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18),dp(12),dp(18),dp(12));
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint(box?"Nazwa pudełka":"Co to jest?");
         layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
@@ -13323,7 +13331,7 @@ public final class MainActivity extends Activity {
         LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18),dp(12),dp(18),dp(12));
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint("Nazwa miejsca");
         layout.addView(name,new LinearLayout.LayoutParams(-1,-2));
@@ -14048,7 +14056,7 @@ public final class MainActivity extends Activity {
             return;
         }
         boolean box="box".equals(kind);
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint(box?"Nazwa nowego pudełka":"Nazwa nowego miejsca");
         LinearLayout layout=new LinearLayout(this);
@@ -14252,7 +14260,7 @@ public final class MainActivity extends Activity {
         LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18),dp(12),dp(18),dp(12));
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint("Nazwa rzeczy albo pudełka");
         name.setText(existing==null?"":existing.name);
@@ -14377,7 +14385,7 @@ public final class MainActivity extends Activity {
     }
 
     private void askStorageLend(StorageStore.Item item){
-        EditText recipient=new EditText(this);
+        EditText recipient=newTextInput();
         recipient.setSingleLine(true);recipient.setHint("Komu wypożyczono?");
         lightDialogForm(recipient);
         new AlertDialog.Builder(this).setTitle("Wypożycz: "+item.name)
@@ -15061,7 +15069,7 @@ public final class MainActivity extends Activity {
             });
             choices.addView(choice);
         }
-        EditText searchBank=new EditText(this);
+        EditText searchBank=newTextInput();
         searchBank.setSingleLine(true);
         searchBank.setHint("Szukaj banku lub aplikacji na liście");
         searchBank.addTextChangedListener(new android.text.TextWatcher() {
@@ -15106,7 +15114,7 @@ public final class MainActivity extends Activity {
         listScroll.addView(choices);
         form.addView(listScroll,new LinearLayout.LayoutParams(
             -1,dp(260)));
-        EditText manual=new EditText(this);
+        EditText manual=newTextInput();
         manual.setSingleLine(true);
         manual.setTextColor(DialogContrast.TEXT);
         manual.setHintTextColor(DialogContrast.HINT);
@@ -15512,7 +15520,7 @@ public final class MainActivity extends Activity {
                     } else if(choice==1) {
                         openStatementFilePicker("VeloBank");
                     } else {
-                        EditText bank=new EditText(this);
+                        EditText bank=newTextInput();
                         bank.setSingleLine(true);
                         bank.setHint("Nazwa banku");
                         String previous=prefs.getString("paycheck_csv_bank_name","");
@@ -16655,21 +16663,21 @@ public final class MainActivity extends Activity {
             +"\n"+row.description
             +"\n\nKwota i nazwa to podpowiedzi. Sprawdź je przed zapisem.",13,false);
         form.addView(proof);
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint("Nazwa pozycji w Budżecie");
         name.setText(suggested);
         name.setFilters(new android.text.InputFilter[]{
             new android.text.InputFilter.LengthFilter(80)});
         form.addView(name);
-        EditText recipient=new EditText(this);
+        EditText recipient=newTextInput();
         recipient.setSingleLine(true);
         recipient.setHint("Odbiorca / źródło (opcjonalnie)");
         recipient.setFilters(new android.text.InputFilter[]{
             new android.text.InputFilter.LengthFilter(80)});
         recipient.setText(suggested);
         form.addView(recipient);
-        EditText amount=new EditText(this);
+        EditText amount=newTextInput();
         amount.setSingleLine(true);
         amount.setHint("Kwota planowana");
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -17791,7 +17799,7 @@ public final class MainActivity extends Activity {
                 + "zalecane jest dłuższe hasło."
             : "Wpisz hasło prywatnego sejfu. "
                 + "Wspólny PayCheck pozostaje bez zmian.", 14, false));
-        EditText password = new EditText(this);
+        EditText password = newTextInput();
         password.setSingleLine(true);
         password.setHint("Hasło prywatnego sejfu");
         password.setInputType(android.text.InputType.TYPE_CLASS_TEXT
@@ -17804,7 +17812,7 @@ public final class MainActivity extends Activity {
         form.addView(password);
         EditText confirmation = null;
         if (first) {
-            confirmation = new EditText(this);
+            confirmation = newTextInput();
             confirmation.setSingleLine(true);
             confirmation.setHint("Powtórz hasło");
             confirmation.setInputType(android.text.InputType.TYPE_CLASS_TEXT
@@ -18784,7 +18792,7 @@ public final class MainActivity extends Activity {
             + " • " + budgetMonthLabel(month)
             + "\nZmiany dotyczą tylko wybranego miesiąca.",13,false));
 
-        EditText amount = new EditText(this);
+        EditText amount = newTextInput();
         amount.setSingleLine(true);
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -18793,7 +18801,7 @@ public final class MainActivity extends Activity {
         amount.setText(String.format(java.util.Locale.ROOT,"%.2f",previous/100.0));
         form.addView(amount);
 
-        EditText due = new EditText(this);
+        EditText due = newTextInput();
         due.setSingleLine(true);
         due.setHint("Termin faktury YYYY-MM-DD");
         java.time.LocalDate oldDue=PaycheckMonthlyBudget.invoiceDueDate(item,month);
@@ -18802,7 +18810,7 @@ public final class MainActivity extends Activity {
             oldDue==null?month.atDay(1):oldDue,false);
         form.addView(due);
 
-        EditText plan = new EditText(this);
+        EditText plan = newTextInput();
         plan.setSingleLine(true);
         plan.setHint("Zapłać dnia YYYY-MM-DD (opcjonalnie)");
         String savedPlan=item.plannedPaymentDates.get(month.toString());
@@ -19312,7 +19320,7 @@ public final class MainActivity extends Activity {
         reasonType.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(reasons)));
         form.addView(reasonType);
-        EditText detail = new EditText(this);
+        EditText detail = newTextInput();
         detail.setSingleLine(false);
         detail.setHint("Dodatkowy opis (wymagany dla „Inne”)");
         detail.setFilters(new android.text.InputFilter[]{
@@ -19379,7 +19387,7 @@ public final class MainActivity extends Activity {
         reasonType.setAdapter(lightDialogSpinnerAdapter(
             java.util.Arrays.asList(reasons)));
         form.addView(reasonType);
-        EditText detail = new EditText(this);
+        EditText detail = newTextInput();
         detail.setSingleLine(false);
         detail.setHint("Dodatkowy opis (wymagany dla „Inne”)");
         detail.setFilters(new android.text.InputFilter[]{
@@ -19481,7 +19489,7 @@ public final class MainActivity extends Activity {
 
     private void showBudgetAmountChangeDialog(
             PaycheckMonthlyBudget.Item item, YearMonth month) {
-        EditText input = new EditText(this);
+        EditText input = newTextInput();
         input.setSingleLine(true);
         input.setHint("Nowa kwota w PLN");
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -19643,7 +19651,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18),dp(12),dp(18),dp(12));
 
-        EditText name=new EditText(this);
+        EditText name=newTextInput();
         name.setSingleLine(true);
         name.setHint("Nazwa odbiorcy");
         name.setText(existing==null?"":existing.name);
@@ -19665,7 +19673,7 @@ public final class MainActivity extends Activity {
         }
         form.addView(category);
 
-        EditText amount=new EditText(this);
+        EditText amount=newTextInput();
         amount.setSingleLine(true);
         amount.setHint("Domyślna kwota PLN • opcjonalnie");
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -19675,7 +19683,7 @@ public final class MainActivity extends Activity {
                 existing.defaultAmountGrosz/100.0));
         form.addView(amount);
 
-        EditText dueDay=new EditText(this);
+        EditText dueDay=newTextInput();
         dueDay.setSingleLine(true);
         dueDay.setHint("Domyślny dzień zapłaty 1–31 • opcjonalnie");
         dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
@@ -19744,7 +19752,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(12), dp(18), dp(12));
 
-        EditText name = new EditText(this);
+        EditText name = newTextInput();
         name.setSingleLine(true);
         name.setHint("Zobowiązanie, np. rachunek bieżący / rata");
         form.addView(name);
@@ -19776,7 +19784,7 @@ public final class MainActivity extends Activity {
             java.util.Arrays.asList(MoneyRules.CATEGORY_LABELS)));
         form.addView(category);
 
-        EditText creditAgreementNumber = new EditText(this);
+        EditText creditAgreementNumber = newTextInput();
         creditAgreementNumber.setSingleLine(true);
         creditAgreementNumber.setHint("Nr umowy kredytowej (opcjonalnie)");
         creditAgreementNumber.setFilters(new android.text.InputFilter[]{
@@ -19784,14 +19792,14 @@ public final class MainActivity extends Activity {
         creditAgreementNumber.setVisibility(View.GONE);
         form.addView(creditAgreementNumber);
 
-        EditText amount = new EditText(this);
+        EditText amount = newTextInput();
         amount.setSingleLine(true);
         amount.setHint("Kwota planowana w PLN");
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(amount);
 
-        EditText dueDay = new EditText(this);
+        EditText dueDay = newTextInput();
         dueDay.setSingleLine(true);
         dueDay.setHint("Dzień zapłaty 1–31 • domyślnie 10");
         dueDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
@@ -19825,7 +19833,7 @@ public final class MainActivity extends Activity {
             });
         }
 
-        EditText invoiceDueDate = new EditText(this);
+        EditText invoiceDueDate = newTextInput();
         invoiceDueDate.setSingleLine(true);
         invoiceDueDate.setHint("Termin faktury YYYY-MM-DD (opcjonalnie)");
         YearMonth defaultInvoiceMonth=paycheckBudgetMonth==null
@@ -19889,7 +19897,7 @@ public final class MainActivity extends Activity {
             "Co kwartał", "Co 6 miesięcy", "Co rok")));
         form.addView(cycle);
 
-        EditText startMonth = new EditText(this);
+        EditText startMonth = newTextInput();
         startMonth.setSingleLine(true);
         startMonth.setHint("Start YYYY-MM");
         startMonth.setText((paycheckBudgetMonth == null
@@ -19898,14 +19906,14 @@ public final class MainActivity extends Activity {
             paycheckBudgetMonth==null?YearMonth.now():paycheckBudgetMonth,false);
         form.addView(startMonth);
 
-        EditText endMonth = new EditText(this);
+        EditText endMonth = newTextInput();
         endMonth.setSingleLine(true);
         endMonth.setHint("Koniec YYYY-MM • dla rat zamiast liczby rat");
         attachPaycheckBudgetMonthCalendar(endMonth,startMonth,
             paycheckBudgetMonth==null?YearMonth.now():paycheckBudgetMonth,true);
         form.addView(endMonth);
 
-        EditText installmentCount = new EditText(this);
+        EditText installmentCount = newTextInput();
         installmentCount.setSingleLine(true);
         installmentCount.setHint("Liczba rat, np. 12");
         installmentCount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
@@ -20642,7 +20650,7 @@ public final class MainActivity extends Activity {
     }
 
     private EditText securePrivatePassword(String hint) {
-        EditText input = new EditText(this);
+        EditText input = newTextInput();
         input.setSingleLine(true);
         input.setHint(hint);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
@@ -20856,11 +20864,11 @@ public final class MainActivity extends Activity {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(12), dp(18), dp(12));
-        EditText name = new EditText(this);
+        EditText name = newTextInput();
         name.setSingleLine(true);
         name.setHint("Cel, np. OC samochodu");
         form.addView(name);
-        EditText amount = new EditText(this);
+        EditText amount = newTextInput();
         amount.setSingleLine(true);
         amount.setHint("Kwota celu w PLN, np. 700,00");
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -20892,7 +20900,7 @@ public final class MainActivity extends Activity {
 
     private void allocateSharedPaycheckGoal(long id, String name,
             long target, long previous) {
-        EditText amount = new EditText(this);
+        EditText amount = newTextInput();
         amount.setSingleLine(true);
         amount.setHint("Kwota w PLN");
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -21094,7 +21102,7 @@ public final class MainActivity extends Activity {
                 : ShoppingRules.formatQuantity(boughtQuantity))
             + " " + purchaseUnit + ". Cena jest DOBROWOLNA. "
             + "Nie dodajemy tu zapasu ani wydatku PayCheck.", 14, false));
-        EditText price = new EditText(this);
+        EditText price = newTextInput();
         price.setSingleLine(true);
         price.setHint("Cena za 1 " + purchaseUnit + ", np. 6,49");
         price.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
@@ -21121,7 +21129,7 @@ public final class MainActivity extends Activity {
             }
             @Override public void afterTextChanged(android.text.Editable s) { }
         });
-        EditText shop = new EditText(this);
+        EditText shop = newTextInput();
         shop.setSingleLine(true);
         shop.setHint("Sklep (opcjonalnie)");
         form.addView(shop);
@@ -21207,7 +21215,7 @@ public final class MainActivity extends Activity {
 
     private void confirmShoppingReceipt(long shoppingId, String shoppingName,
             long pantryId, String productLabel) {
-        EditText count = new EditText(this);
+        EditText count = newTextInput();
         count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         count.setText("1");
         count.setSelectAllOnFocus(true);
@@ -21452,7 +21460,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showPantrySearchDialog() {
-        EditText search = new EditText(this);
+        EditText search = newTextInput();
         search.setSingleLine(true);
         search.setText(pantrySearch);
         search.setHint("Nazwa produktu");
@@ -21540,7 +21548,7 @@ public final class MainActivity extends Activity {
             .setItems(actions.toArray(new String[0]), (dialog, which) -> {
                 String action = actions.get(which);
                 if ("Ustaw ilość".equals(action)) {
-                    EditText count = new EditText(this);
+                    EditText count = newTextInput();
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setSingleLine(true);
                     count.setText(String.valueOf(qty));
@@ -21697,7 +21705,7 @@ public final class MainActivity extends Activity {
 
     private void manualPantryBarcode() {
         finishPantryBatch();
-        EditText input = new EditText(this);
+        EditText input = newTextInput();
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         input.setHint("EAN-8 / UPC-A / EAN-13 / GTIN-14");
@@ -21788,7 +21796,7 @@ public final class MainActivity extends Activity {
         form.addView(text("Obecny stan: "
             +PantryPackageRules.summary(item.qty,pack.unit,pack.sizeMilli),14,false));
         int suggested=Math.max(1,Math.min(10000,defaultUnits));
-        EditText amount=new EditText(this);
+        EditText amount=newTextInput();
         amount.setSingleLine(true);
         amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         amount.setText(Integer.toString(suggested));
@@ -21916,7 +21924,7 @@ public final class MainActivity extends Activity {
             .setItems(actions.toArray(new String[0]),(dialog,which)->{
                 String action=actions.get(which);
                 if("Ustaw stawkę kaucji".equals(action)) {
-                    EditText money=new EditText(this);
+                    EditText money=newTextInput();
                     money.setSingleLine(true);
                     money.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
                         |android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -21944,7 +21952,7 @@ public final class MainActivity extends Activity {
                             }
                         }).show();
                 } else if("Oddaj opakowania".equals(action)) {
-                    EditText count=new EditText(this);
+                    EditText count=newTextInput();
                     count.setSingleLine(true);
                     count.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                     count.setText(Integer.toString(pack.depositPending));
@@ -22034,7 +22042,7 @@ public final class MainActivity extends Activity {
             form.setPadding(dp(18),dp(10),dp(18),dp(8));
             form.addView(text(name+"\n"+PantryPackageRules.summary(
                 qty,pack.unit,pack.sizeMilli)+"\nNowy kod: "+barcode,14,false));
-            EditText units=new EditText(this);
+            EditText units=newTextInput();
             units.setSingleLine(true);
             units.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
             units.setText("1");
@@ -22150,7 +22158,7 @@ public final class MainActivity extends Activity {
 
     /** Search after GTIN lookup fails. Query is never treated as a confirmed name. */
     private void promptPantryNameSearch(String scannedBarcode, String operationId) {
-        EditText query = new EditText(this);
+        EditText query = newTextInput();
         query.setSingleLine(true);
         query.setHint("np. proszek do prania, marka");
         lightDialogForm(query);
@@ -22304,7 +22312,7 @@ public final class MainActivity extends Activity {
         }
         EditText name = null;
         if (found == null) {
-            name = new EditText(this);
+            name = newTextInput();
             name.setSingleLine(true);
             name.setHint("Nazwa produktu / opakowania");
             form.addView(name);
@@ -22328,7 +22336,7 @@ public final class MainActivity extends Activity {
             14, false));
         String suggestedUnit = found == null ? "szt." : found.baseUnit;
         final Spinner packUnit = pantryPackageUnitSpinner(suggestedUnit);
-        final EditText packSize = new EditText(this);
+        final EditText packSize = newTextInput();
         packSize.setSingleLine(true);
         packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -22337,7 +22345,7 @@ public final class MainActivity extends Activity {
         packSize.setHint("np. 1,5 l albo 0,085 kg");
         form.addView(packUnit);
         form.addView(packSize);
-        final EditText scanUnits = new EditText(this);
+        final EditText scanUnits = newTextInput();
         scanUnits.setSingleLine(true);
         scanUnits.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         scanUnits.setText(Integer.toString(found == null ? 1 : found.unitsPerScan));
@@ -22568,7 +22576,7 @@ public final class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         int padding = (int)(16 * getResources().getDisplayMetrics().density);
         form.setPadding(padding, padding, padding, padding);
-        EditText input = new EditText(this);
+        EditText input = newTextInput();
         input.setSingleLine(true);
         input.setText(existingName);
         input.setHint("Nazwa produktu");
@@ -22583,7 +22591,7 @@ public final class MainActivity extends Activity {
             : PantryPackageStore.find(db.getReadableDatabase(), id);
         form.addView(text("Zawartość jednego opakowania", 14, false));
         Spinner packUnit = pantryPackageUnitSpinner(current.unit);
-        EditText packSize = new EditText(this);
+        EditText packSize = newTextInput();
         packSize.setSingleLine(true);
         packSize.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
             | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -22662,7 +22670,7 @@ public final class MainActivity extends Activity {
                     render();
                 });
                 button("Podaj faktyczną liczbę", () -> {
-                    EditText amount = new EditText(this);
+                    EditText amount = newTextInput();
                     amount.setInputType(2);
                     amount.setText(Integer.toString(expected));
                     amount.setSelectAllOnFocus(true);
@@ -23394,7 +23402,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout form = card();
         form.addView(text("Dane połączenia", 17, true));
-        EditText server = new EditText(this);
+        EditText server = newTextInput();
         server.setSingleLine(true);
         server.setHint("https://svrXX.supla.org");
         server.setInputType(android.text.InputType.TYPE_CLASS_TEXT
@@ -23404,7 +23412,7 @@ public final class MainActivity extends Activity {
         server.setHintTextColor(subdued);
         form.addView(server, new LinearLayout.LayoutParams(-1, dp(54)));
 
-        EditText token = new EditText(this);
+        EditText token = newTextInput();
         token.setSingleLine(true);
         token.setHint(hasToken
             ? "Token zapisany — pozostaw puste, aby go zachować"
@@ -23589,7 +23597,7 @@ public final class MainActivity extends Activity {
             prefs.getInt("github_suggestion_draft_type",0))));
         form.addView(text("Rodzaj zgłoszenia",14,true));
         form.addView(category);
-        EditText subject=new EditText(this);
+        EditText subject=newTextInput();
         subject.setSingleLine(true);
         subject.setHint("Krótki tytuł");
         subject.setText(prefs.getString("github_suggestion_draft_title",""));
@@ -23599,7 +23607,7 @@ public final class MainActivity extends Activity {
             new android.text.InputFilter.LengthFilter(120)});
         form.addView(text("Tytuł",14,true));
         form.addView(subject);
-        EditText details=new EditText(this);
+        EditText details=newTextInput();
         details.setSingleLine(false);
         details.setMinLines(4);
         details.setMaxLines(8);
@@ -23676,7 +23684,7 @@ public final class MainActivity extends Activity {
         if("general".equals(selected)) {
         LinearLayout general=settingsAccordion("general","Ogólne",
             "Nazwa gospodarstwa i podstawowe ustawienia.",true);
-        EditText household=new EditText(this);
+        EditText household=newTextInput();
         household.setSingleLine(true);
         household.setHint("Nazwa gospodarstwa");
         household.setTextColor(ink);

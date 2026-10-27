@@ -11,6 +11,8 @@ shopping=(root/"app/src/main/java/com/edwinkarolczyk/edhome/ShoppingRules.java")
 assert "capitalizeLabel(String raw)" in rules
 assert "Character.toUpperCase(ch)" in rules
 assert "TYPE_TEXT_FLAG_CAP_SENTENCES" in main
+assert "private EditText newTextInput()" in main, "formularze muszą korzystać ze wspólnego domyślnego pola tekstowego"
+assert main.count("new EditText(this)") == 1, "bezpośrednie tworzenie pól omija domyślną kapitalizację"
 task_form=main.split("private void editTask(",1)[1].split("private void showTaskHistory(",1)[0]
 assert "TYPE_TEXT_FLAG_CAP_SENTENCES" in task_form, "pełny formularz Czynności musi włączać wielką literę na początku zdania"
 assert "title = TextEntryRules.capitalizeLabel(title);" in task_form, "nazwa Czynności musi być normalizowana także przy zapisie"

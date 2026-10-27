@@ -1,3 +1,10 @@
+## 2026-10-27 — P0: domyślna wielka litera we wszystkich polach tekstowych Androida (Beta 0.8.1.156 / 349 — CI do potwierdzenia)
+
+- **Rozszerzenie zakresu po kontroli:** pojedyncza poprawka formularza Czynności nie gwarantowała zachowania we wszystkich pozostałych formularzach. Wprowadzono wspólną fabrykę `newTextInput()`, która domyślnie ustawia `TYPE_TEXT_FLAG_CAP_SENTENCES`; wszystkie programowo tworzone `EditText` w `MainActivity` korzystają teraz z tej fabryki. Jawnie ustawione typy liczbowe, daty i inne specjalne typy wejścia mogą nadal nadpisywać ustawienie.
+- Zachowano dodatkową normalizację nazw przy zapisie i kontrolę konkretnego formularza Czynności. Test kontraktowy wymaga teraz wspólnej fabryki i blokuje ponowne wprowadzenie bezpośrednich konstruktorów omijających domyślne ustawienie.
+- **Wersja Android Beta:** `0.8.1.156 / 349`. Desktop bez zmian; Stable `main` bez zmian. Brak zmian w bazie, ZIP i synchronizacji.
+- **Odbiór:** CI/build APK i test na fizycznym telefonie do potwierdzenia.
+
 ## 2026-10-27 — P0: wielka litera w pełnym formularzu Czynności (Android Beta 0.8.1.155 / 348 — kod przygotowany, CI do potwierdzenia)
 
 - **Przyczyna:** pełny formularz zwykłych Czynności w `MainActivity.editTask()` tworzył pole nazwy bez `TYPE_TEXT_FLAG_CAP_SENTENCES`, mimo że szybkie dodawanie czynności projektowych miało tę flagę. Dotychczasowy kontrakt testowy sprawdzał flagę gdziekolwiek w pliku, więc nie wykrywał braku w konkretnym formularzu.
