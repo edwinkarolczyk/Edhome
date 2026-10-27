@@ -32,7 +32,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         "com.edwinkarolczyk.edhome.REMIND_SINGLE_TASK";
     private static final String ACTION_PLAN =
         "com.edwinkarolczyk.edhome.CHECK_TASK_PLANNING";
-    private static final String CHANNEL_ID = "edhome-task-due-alert-v2";
+    private static final String CHANNEL_ID = "edhome-task-due-alert-v3";
     private static final int ALARM_ID = 7125;
     private static final int PLAN_ALARM_ID = 7126;
     private static final String DATABASE = "edhome-beta-preview.db";
@@ -73,7 +73,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
             .setStyle(new Notification.BigTextStyle().bigText(task.title))
             .setContentIntent(open)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .setAutoCancel(true);
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setPriority(Notification.PRIORITY_MAX);
         if(task.project && !ProjectWorkNotification.isActive(context,task.id))
             builder.addAction(android.R.drawable.ic_media_play,"▶ Start",
                 ProjectWorkNotification.startAction(context,task.id));
@@ -170,8 +172,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
         PendingIntent pending = taskIntent(context, id,
             PendingIntent.FLAG_UPDATE_CURRENT, occurrence);
         // Inexact delivery: Android may delay it, e.g. Doze or battery saving.
-        LegacyCompat.setAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP,
-            epoch(when), pending);
+        LegacyCompat.setExactOrInexactWhileIdle(context, manager,
+            AlarmManager.RTC_WAKEUP, epoch(when), pending);
     }
 
     static void schedule(Context context) {
@@ -536,7 +538,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
                     !legacy && !singleTaskTitle.isEmpty() ? singleTaskTitle
                         : "Dotknij powiadomienia, aby zobaczyć szczegóły."))
             .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .setAutoCancel(true);
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setPriority(Notification.PRIORITY_MAX);
         if (openOverdue)
             builder.addAction(android.R.drawable.ic_menu_today,
                 "Znajdź nowe terminy", openPlanning);

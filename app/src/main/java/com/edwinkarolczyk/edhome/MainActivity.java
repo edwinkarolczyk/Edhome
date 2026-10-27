@@ -992,6 +992,13 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (BetaUpdater.isBeta()) unlocked = true;
         refreshNfcReaderMode();
+        android.content.SharedPreferences reminderPrefs=getSharedPreferences(
+            "edhome_beta_prefs",MODE_PRIVATE);
+        if(reminderPrefs.getBoolean("exact_alarm_settings_pending",false)) {
+            reminderPrefs.edit().putBoolean("exact_alarm_settings_pending",false).apply();
+            ReminderReceiver.schedule(this);
+        }
+
         if (BetaUpdater.isBeta()) {
             try { stopService(new Intent(this,LanSyncService.class)); }
             catch(Exception ignored) { }
@@ -24000,12 +24007,38 @@ public final class MainActivity extends Activity {
                     else alert("Zgoda jest już przyznana albo system nie wymaga jej osobno.");
                 }).show();
         });
+        smallButton(notifications,"Włącz dokładne alarmy o godzinie",()->{
+            if(Build.VERSION.SDK_INT>=31) {
+                android.app.AlarmManager alarms=(android.app.AlarmManager)
+                    getSystemService(Context.ALARM_SERVICE);
+                if(alarms!=null && !alarms.canScheduleExactAlarms()) {
+                    getSharedPreferences("edhome_beta_prefs",MODE_PRIVATE).edit()
+                        .putBoolean("exact_alarm_settings_pending",true).apply();
+                    try {
+                        startActivity(new Intent(
+                            android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            Uri.parse("package:"+getPackageName())));
+                    } catch(Exception error) {
+                        getSharedPreferences("edhome_beta_prefs",MODE_PRIVATE).edit()
+                            .putBoolean("exact_alarm_settings_pending",false).apply();
+                        alert("Nie można otworzyć ustawień dokładnych alarmów: "
+                            +error.getMessage());
+                    }
+                } else {
+                    ReminderReceiver.schedule(this);
+                    alert("Dokładne alarmy są dostępne. Zaplanowano ponownie przypomnienia.");
+                }
+            } else {
+                ReminderReceiver.schedule(this);
+                alert("Ten Android nie wymaga osobnego dostępu do dokładnych alarmów.");
+            }
+        });
         smallButton(notifications,"Ustawienia kanału przypomnień Android",()->{
             Intent settingsIntent;
             if(Build.VERSION.SDK_INT>=26) {
                 settingsIntent=new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                     .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName())
-                    .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,"edhome-task-due-alert-v2");
+                    .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,"edhome-task-due-alert-v3");
             } else {
                 settingsIntent=new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:"+getPackageName()));

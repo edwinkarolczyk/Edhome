@@ -1,3 +1,10 @@
+## 2026-10-27 — P0: dokładne alarmy czynności i kanał alarmowy (Beta 0.8.1.157 / 350 — CI do potwierdzenia)
+
+- Zmieniono planowanie przypomnień indywidualnych: Android 12+ używa `setExactAndAllowWhileIdle`, gdy system udostępnił dostęp do dokładnych alarmów; bez niego zachowany jest jawny fallback niedokładny.
+- Dodano uprawnienie `SCHEDULE_EXACT_ALARM` oraz przycisk w Ustawienia → Powiadomienia otwierający systemowe ustawienie dostępu. Po powrocie EDHOME ponownie planuje alarmy.
+- Kanał powiadomień czynności zmieniono na nowy `edhome-task-due-alert-v3` o wysokim priorytecie; powiadomienia oznaczane są jako alarmy, z dźwiękiem i wibracją. Ustawienia kanału są osobne od poprzedniego kanału v2.
+- Zmiana dotyczy Androida; Desktop bez zmian. Gałąź `main` pozostaje nietknięta. CI, APK i rzeczywiste wybudzenie/dźwięk na telefonie wymagają potwierdzenia.
+
 ## 2026-10-27 — P0: domyślna wielka litera we wszystkich polach tekstowych Androida (Beta 0.8.1.156 / 349 — CI do potwierdzenia)
 
 - **Rozszerzenie zakresu po kontroli:** pojedyncza poprawka formularza Czynności nie gwarantowała zachowania we wszystkich pozostałych formularzach. Wprowadzono wspólną fabrykę `newTextInput()`, która domyślnie ustawia `TYPE_TEXT_FLAG_CAP_SENTENCES`; wszystkie programowo tworzone `EditText` w `MainActivity` korzystają teraz z tej fabryki. Jawnie ustawione typy liczbowe, daty i inne specjalne typy wejścia mogą nadal nadpisywać ustawienie.

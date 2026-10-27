@@ -47,6 +47,20 @@ final class LegacyCompat {
             : new Notification.Builder(context);
     }
 
+    static boolean canScheduleExactAlarms(Context context) {
+        if (Build.VERSION.SDK_INT < 31) return true;
+        return Api31.canScheduleExactAlarms(context);
+    }
+
+    static void setExactOrInexactWhileIdle(Context context, AlarmManager manager,
+            int type, long triggerAtMillis, PendingIntent operation) {
+        if (Build.VERSION.SDK_INT >= 31 && canScheduleExactAlarms(context)) {
+            Api31.setExactAndAllowWhileIdle(manager, type, triggerAtMillis, operation);
+        } else {
+            setAndAllowWhileIdle(manager, type, triggerAtMillis, operation);
+        }
+    }
+
     static void setAndAllowWhileIdle(AlarmManager manager, int type,
             long triggerAtMillis, PendingIntent operation) {
         if (Build.VERSION.SDK_INT >= 23)
@@ -65,6 +79,20 @@ final class LegacyCompat {
         static void setAndAllowWhileIdle(AlarmManager manager, int type,
                 long triggerAtMillis, PendingIntent operation) {
             manager.setAndAllowWhileIdle(type, triggerAtMillis, operation);
+        }
+    }
+
+    @android.annotation.TargetApi(31)
+    private static final class Api31 {
+        static boolean canScheduleExactAlarms(Context context) {
+            AlarmManager manager=(AlarmManager) context.getSystemService(
+                Context.ALARM_SERVICE);
+            return manager!=null && manager.canScheduleExactAlarms();
+        }
+
+        static void setExactAndAllowWhileIdle(AlarmManager manager, int type,
+                long triggerAtMillis, PendingIntent operation) {
+            manager.setExactAndAllowWhileIdle(type, triggerAtMillis, operation);
         }
     }
 
@@ -96,7 +124,7 @@ final class LegacyCompat {
         static void ensureAudibleChannel(NotificationManager manager,String id,
                 String name) {
             NotificationChannel channel=new NotificationChannel(id,name,
-                NotificationManager.IMPORTANCE_DEFAULT);
+                NotificationManager.IMPORTANCE_HIGH);
             channel.enableVibration(true);
             channel.setVibrationPattern(new long[]{0,180,120,180});
             channel.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
