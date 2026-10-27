@@ -1,3 +1,9 @@
+## 2026-10-27 — P0: widoczna edycja godziny przypomnienia czynności (Android Beta 0.8.1.158 / 351 — CI do potwierdzenia)
+
+- W pełnym formularzu dodawania/edycji czynności dodano jednoznaczny nagłówek **„Godzina przypomnienia”** bezpośrednio nad polem czasu i przyciskiem „Wybierz godzinę”, aby ustawienie nie wyglądało jak nieopisane pole.
+- Pole korzysta z istniejącego selektora Androida 24-godzinnego i istniejącego zapisu `tasks.remind_time`; tryb „Moja godzina i wyprzedzenie” zapisuje godzinę oraz wyprzedzenie, a po zapisie przypomnienia są ponownie planowane. Nie dodawano nowej kolumny ani nie zmieniano formatu ZIP/synchronizacji.
+- Dodano asercje kontraktowe dla widocznej etykiety i selektora. Wersja podniesiona do `0.8.1.158 / 351`; publikacja APK i CI wymagają potwierdzenia. Test na fizycznym telefonie nadal otwarty. Desktop bez zmian, `main`/Stable nietknięte.
+
 ## 2026-10-27 — P0: dokładne alarmy czynności i kanał alarmowy (Beta 0.8.1.157 / 350 — CI do potwierdzenia)
 
 - Zmieniono planowanie przypomnień indywidualnych: Android 12+ używa `setExactAndAllowWhileIdle`, gdy system udostępnił dostęp do dokładnych alarmów; bez niego zachowany jest jawny fallback niedokładny.

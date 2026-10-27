@@ -8373,6 +8373,7 @@ public final class MainActivity extends Activity {
                         hour, minute)),
                 initial.getHour(), initial.getMinute(), true).show();
         });
+        form.addView(text("Godzina przypomnienia", 15, true));
         form.addView(reminderHour);
         smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick());
         Spinner lead = new Spinner(this);

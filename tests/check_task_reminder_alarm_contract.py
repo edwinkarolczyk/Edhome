@@ -14,7 +14,9 @@ assert 'LegacyCompat.setExactOrInexactWhileIdle(context, manager' in receiver
 assert 'edhome-task-due-alert-v3' in receiver
 assert 'Notification.CATEGORY_ALARM' in receiver
 assert 'Włącz dokładne alarmy o godzinie' in main
+assert 'Godzina przypomnienia' in main
+assert 'smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick())' in main
 assert 'ACTION_REQUEST_SCHEDULE_EXACT_ALARM' in main
-assert 'versionCode 350' in gradle and "versionName '0.8.1.157'" in gradle
+assert 'versionCode 351' in gradle and "versionName '0.8.1.158'" in gradle
 
 print("task reminder exact-alarm contract OK")
