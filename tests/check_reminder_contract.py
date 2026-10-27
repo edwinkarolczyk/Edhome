@@ -13,7 +13,7 @@ for expected in (
     'if (!expected.equals(actual)',
     'ReminderRules.target(taskDue, time, lead,',
     'quietStart, quietEnd).isAfter(now)',
-    'LegacyCompat.setAndAllowWhileIdle(manager,',
+    'LegacyCompat.setExactOrInexactWhileIdle(context, manager,',
     'ReminderRules.nextAllowed(when,',
     'Intent.ACTION_BOOT_COMPLETED',
     'Intent.ACTION_MY_PACKAGE_REPLACED',
@@ -148,7 +148,7 @@ assert 'DiagnosticLog.error("FEEDBACK_VIBRATION", problem)' in feedback
 assert "static String diagnostics(Context context)" in feedback
 assert 'FeedbackSignals.diagnostics(this)' in main
 assert "Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS" in main
-assert '"edhome-task-due-alert-v2"' in main
+assert '"edhome-task-due-alert-v3"' in main
 print("PASS: dźwięk i wibracje Start/Stop, diagnostyka i ustawienia kanału")
 
 print("Project reminder Start + persistent chronometer + Stop contract: PASS")
