@@ -41,7 +41,7 @@ for token in (
     "MAX_JSON_BYTES = 96 * 1024",
     "MAX_IMAGE_BYTES = 640 * 1024",
     "getFilesDir()",
-    "MessageDigest.getInstance(\"SHA-256\")",
+    'MessageDigest.getInstance("SHA-256")',
 ):
     assert token in api, "Unsafe or missing network/cache condition: " + token
 for token in ("CREATE TABLE pantry_product_details", "pantry_id INTEGER NOT NULL UNIQUE",
@@ -54,7 +54,9 @@ for token in ('{"pantry_product_details", "id", "pantry_id", "brand", "image_url
               "DB_VERSION = 52;"):
     assert token in backup, "Missing backup contract: " + token
 assert int(__import__("re").search(r"\bversionCode\s+(\d+)", gradle).group(1)) >= 84 and "versionNameSuffix ''" in gradle
-assert "if (found == null) {\n            name = new EditText(this);" in main
+# MainActivity now uses the shared text-input factory so sentence capitalization
+# stays enabled across forms; this lookup fallback must use that factory too.
+assert "if (found == null) {\n            name = newTextInput();" in main
 assert "String entered = found != null ? found.name" in main
 assert "Źródło: \" + found.source" in main
 assert "lookupOne(candidate, catalogue[0], label)" in api
