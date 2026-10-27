@@ -8119,6 +8119,8 @@ public final class MainActivity extends Activity {
 
         EditText name = new EditText(this);
         name.setSingleLine(true);
+        name.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         name.setHint("Nazwa czynności");
         name.setText(existingName);
         name.setTextColor(ink);
@@ -8509,6 +8511,7 @@ public final class MainActivity extends Activity {
                 String selectedPriority = TASK_PRIORITIES[
                     priority.getSelectedItemPosition()];
                 String title = name.getText().toString().trim();
+                title = TextEntryRules.capitalizeLabel(title);
                 String due = date.getText().toString().trim();
                 String error = TaskRules.validate(title, due, rule, every);
                 if (error != null) { alert(error); return; }
@@ -22596,6 +22599,7 @@ public final class MainActivity extends Activity {
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             .setOnClickListener(v -> {
                 String name = input.getText().toString().trim();
+                name = TextEntryRules.capitalizeLabel(name);
                 String categoryId = PantryCategories.IDS[category.getSelectedItemPosition()];
                 if (name.isEmpty() || name.length() > 160) {
                     input.setError("Podaj nazwę (maks. 160 znaków).");

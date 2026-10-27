@@ -11,6 +11,9 @@ shopping=(root/"app/src/main/java/com/edwinkarolczyk/edhome/ShoppingRules.java")
 assert "capitalizeLabel(String raw)" in rules
 assert "Character.toUpperCase(ch)" in rules
 assert "TYPE_TEXT_FLAG_CAP_SENTENCES" in main
+task_form=main.split("private void editTask(",1)[1].split("private void showTaskHistory(",1)[0]
+assert "TYPE_TEXT_FLAG_CAP_SENTENCES" in task_form, "pełny formularz Czynności musi włączać wielką literę na początku zdania"
+assert "title = TextEntryRules.capitalizeLabel(title);" in task_form, "nazwa Czynności musi być normalizowana także przy zapisie"
 for marker in (
     "title = TextEntryRules.capitalizeLabel(title);",
     "name = TextEntryRules.capitalizeLabel(name);",

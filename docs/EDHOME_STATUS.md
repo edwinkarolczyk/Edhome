@@ -1,3 +1,10 @@
+## 2026-10-27 — P0: wielka litera w pełnym formularzu Czynności (Android Beta 0.8.1.155 / 348 — kod przygotowany, CI do potwierdzenia)
+
+- **Przyczyna:** pełny formularz zwykłych Czynności w `MainActivity.editTask()` tworzył pole nazwy bez `TYPE_TEXT_FLAG_CAP_SENTENCES`, mimo że szybkie dodawanie czynności projektowych miało tę flagę. Dotychczasowy kontrakt testowy sprawdzał flagę gdziekolwiek w pliku, więc nie wykrywał braku w konkretnym formularzu.
+- **Poprawka na `beta`:** pełny formularz Czynności włącza automatyczną wielką literę klawiatury na początku zdania; przy zapisie nazwa jest dodatkowo normalizowana przez `TextEntryRules.capitalizeLabel`, również dla tekstu wklejonego. Ten sam mechanizm zastosowano przy zapisie nazwy produktu Spiżarni. Rozszerzono `tests/check_text_entry_capitalization_contract.py`, aby sprawdzał bezpośrednio `editTask()`.
+- **Wersja Android Beta w kodzie:** `0.8.1.155 / 348`. Desktop bez zmian (`0.7.0.142`); nie dotykano `main`/Stable, bazy, migracji, ZIP ani synchronizacji.
+- **Status odbioru:** CI/build APK i test na fizycznym telefonie pozostają do potwierdzenia. Nie oznaczać jako odebrane przed sprawdzeniem nowej APK.
+
 ## 2026-10-24 — P0 Hub LAN: walidacja tożsamości patcha Desktop (Android Beta 0.8.1.152 / 345, Desktop Beta 0.7.0.142)
 
 - **Faktyczne wdrożenie kodu wyłącznie na `beta`:** [`9250852`](https://github.com/edwinkarolczyk/Edhome/commit/925085262161bc0149819786046687f519f419c8), [`711e369`](https://github.com/edwinkarolczyk/Edhome/commit/711e369762f5db7e2fef2fbd51833d6046fa302e) — Desktop Hub odrzuca powtórzony `syncUuid`, powtórzony `table/rowKey` i brak poprawnej tożsamości w jednej paczce v2, analogicznie do blokady UUID Android `SyncRecordStore.applyV2`; [`bf7a612`](https://github.com/edwinkarolczyk/Edhome/commit/bf7a6123b06386deaa021117b97730e3bb000a09) — JUnit dla poprawnej paczki, duplikatów, braku UUID i pustych operacji przy `budgetDelta`. Nie zmieniono schematu, migracji, bazy, ZIP, Androida ani numerów wersji.
