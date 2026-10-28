@@ -1,3 +1,10 @@
+## 2026-10-28 — P0: alarm czynności z akcjami Wykonane / Wyłącz / Drzemka (Android Beta 0.8.1.159 / 352 — CI do potwierdzenia)
+
+- Indywidualne powiadomienie czynności pozostaje widoczne jako trwające, z akcjami **„✓ Wykonane”**, **„Wyłącz alarm”** oraz — dla alarmu z wybraną godziną — **„Drzemka 5 min”**.
+- „Wykonane” uruchamia normalną ścieżkę `db.completeTask()`, zachowując historię, zależności i reguły czynności cyklicznych; po powodzeniu alarm zostaje zamknięty i harmonogram przypomnień przeliczony. Błąd blokady/zależności pokazuje komunikat zamiast fałszywie oznaczać ukończenie.
+- „Wyłącz alarm” usuwa bieżące powiadomienie bez zmiany statusu czynności. „Drzemka 5 min” planuje ponowne przypomnienie za 5 minut i nie oznacza zadania jako wykonanego.
+- Dodano test kontraktowy dla trzech akcji i obsługi ukończenia; Android Beta podniesiony do `0.8.1.159 / 352`. Dźwięk kanału Android jest powiadomieniem alarmowym, ale ciągłe zapętlenie dźwięku wymaga osobnego testu/ewentualnego serwisu alarmowego; nie oznaczono tego jako potwierdzone na telefonie. Desktop bez zmian; `main`/Stable nietknięte.
+
 ## 2026-10-27 — P0: widoczna edycja godziny przypomnienia czynności (Android Beta 0.8.1.158 / 351 — CI do potwierdzenia)
 
 - W pełnym formularzu dodawania/edycji czynności dodano jednoznaczny nagłówek **„Godzina przypomnienia”** bezpośrednio nad polem czasu i przyciskiem „Wybierz godzinę”, aby ustawienie nie wyglądało jak nieopisane pole.

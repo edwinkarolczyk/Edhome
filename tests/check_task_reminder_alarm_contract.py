@@ -15,8 +15,14 @@ assert 'edhome-task-due-alert-v3' in receiver
 assert 'Notification.CATEGORY_ALARM' in receiver
 assert 'Włącz dokładne alarmy o godzinie' in main
 assert 'Godzina przypomnienia' in main
+assert 'COMPLETE_TASK_FROM_REMINDER' in main
+assert 'completeTaskFromReminderIntent(getIntent())' in main
+assert '✓ Wykonane' in receiver
+assert 'Wyłącz alarm' in receiver
+assert 'Drzemka 5 min' in receiver
+assert 'ACTION_SNOOZE_ALERT' in receiver
 assert 'smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick())' in main
 assert 'ACTION_REQUEST_SCHEDULE_EXACT_ALARM' in main
-assert 'versionCode 351' in gradle and "versionName '0.8.1.158'" in gradle
+assert 'versionCode 352' in gradle and "versionName '0.8.1.159'" in gradle
 
 print("task reminder exact-alarm contract OK")

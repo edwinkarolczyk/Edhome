@@ -243,6 +243,35 @@ public final class MainActivity extends Activity {
         return true;
     }
 
+    private boolean completeTaskFromReminderIntent(Intent intent) {
+        if (intent == null || !"com.edwinkarolczyk.edhome.COMPLETE_TASK_FROM_REMINDER"
+                .equals(intent.getAction())) return false;
+        long taskId = intent.getLongExtra("task_id", -1L);
+        intent.setAction(Intent.ACTION_MAIN);
+        intent.removeExtra("task_id");
+        if (taskId <= 0L || !unlocked || db == null || root == null) return true;
+        try {
+            db.completeTask(taskId);
+            android.app.NotificationManager notifications =
+                (android.app.NotificationManager)getSystemService(
+                    Context.NOTIFICATION_SERVICE);
+            if (notifications != null)
+                notifications.cancel("edhome-task-" + taskId, 7125);
+            ReminderReceiver.schedule(this);
+            DiagnosticLog.event("TASK_COMPLETED_FROM_REMINDER");
+            android.widget.Toast.makeText(this, "Czynność oznaczona jako wykonana",
+                android.widget.Toast.LENGTH_SHORT).show();
+            tasksFilter = "all";
+            tasksPage = 0;
+            render();
+        } catch (Exception error) {
+            DiagnosticLog.error("TASK_COMPLETE_FROM_REMINDER", error);
+            alert(error.getMessage() == null
+                ? "Nie można oznaczyć czynności jako wykonanej." : error.getMessage());
+        }
+        return true;
+    }
+
     private void showRemindedTaskList() {
         if(!unlocked||root==null)return;
         java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
@@ -852,6 +881,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         DiagnosticLog.event("ACTIVITY_CREATED");
         render();
+        root.post(() -> completeTaskFromReminderIntent(getIntent()));
         root.post(() -> openLauncherQuickTask(getIntent()));
         root.post(() -> openOverduePlanIntent(getIntent()));
         root.post(() -> openTaskReminderIntent(getIntent(),true));
@@ -1027,6 +1057,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (completeTaskFromReminderIntent(intent)) return;
         if (openLauncherQuickTask(intent)) return;
         if (openOverduePlanIntent(intent)) return;
         if (openTaskReminderIntent(intent,true)) return;

@@ -32,6 +32,10 @@ public final class ReminderReceiver extends BroadcastReceiver {
         "com.edwinkarolczyk.edhome.REMIND_SINGLE_TASK";
     private static final String ACTION_PLAN =
         "com.edwinkarolczyk.edhome.CHECK_TASK_PLANNING";
+    private static final String ACTION_DISMISS_ALERT =
+        "com.edwinkarolczyk.edhome.DISMISS_TASK_ALERT";
+    private static final String ACTION_SNOOZE_ALERT =
+        "com.edwinkarolczyk.edhome.SNOOZE_TASK_ALERT";
     private static final String CHANNEL_ID = "edhome-task-due-alert-v3";
     private static final int ALARM_ID = 7125;
     private static final int PLAN_ALARM_ID = 7126;
@@ -49,6 +53,38 @@ public final class ReminderReceiver extends BroadcastReceiver {
             this.project=project;
             this.overdue=overdue;
         }
+    }
+
+    private static PendingIntent alertAction(Context context, String action,
+            long taskId, String occurrence, int offset) {
+        Intent intent = new Intent(context, ReminderReceiver.class)
+            .setAction(action).putExtra("task_id", taskId);
+        if (occurrence != null) intent.putExtra("occurrence", occurrence);
+        return PendingIntent.getBroadcast(context, requestCode(taskId) + offset,
+            intent, PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+    }
+
+    private static PendingIntent completeAction(Context context, long taskId) {
+        Intent intent = new Intent(context, MainActivity.class)
+            .setAction("com.edwinkarolczyk.edhome.COMPLETE_TASK_FROM_REMINDER")
+            .setData(android.net.Uri.parse("edhome://reminder/complete/" + taskId))
+            .putExtra("task_id", taskId)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        return PendingIntent.getActivity(context, requestCode(taskId) + 1,
+            intent, PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+    }
+
+    private static void addTaskActions(Context context, Notification.Builder builder,
+            long taskId, String occurrence) {
+        builder.setOngoing(true).setAutoCancel(false)
+            .addAction(android.R.drawable.checkbox_on_background, "✓ Wykonane",
+                completeAction(context, taskId))
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Wyłącz alarm",
+                alertAction(context, ACTION_DISMISS_ALERT, taskId, occurrence, 2));
+        if (occurrence != null)
+            builder.addAction(android.R.drawable.ic_lock_idle_alarm, "Drzemka 5 min",
+                alertAction(context, ACTION_SNOOZE_ALERT, taskId, occurrence, 3));
     }
 
     private static void notifyDailyTask(Context context,
@@ -76,6 +112,9 @@ public final class ReminderReceiver extends BroadcastReceiver {
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_ALARM)
             .setPriority(Notification.PRIORITY_MAX);
+        if (!legacy && !plannerOnly && singleTaskId > 0L)
+            addTaskActions(context, builder, singleTaskId, firedValue);
+        addTaskActions(context, builder, task.id, null);
         if(task.project && !ProjectWorkNotification.isActive(context,task.id))
             builder.addAction(android.R.drawable.ic_media_play,"▶ Start",
                 ProjectWorkNotification.startAction(context,task.id));
@@ -269,6 +308,35 @@ public final class ReminderReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         String action = intent.getAction();
+        if (ACTION_DISMISS_ALERT.equals(action)) {
+            long id = intent.getLongExtra("task_id", -1L);
+            NotificationManager manager = (NotificationManager)context.getSystemService(
+                Context.NOTIFICATION_SERVICE);
+            if (manager != null && id > 0L) manager.cancel("edhome-task-" + id, ALARM_ID);
+            DiagnosticLog.event("REMINDER_ALERT_DISMISSED");
+            return;
+        }
+        if (ACTION_SNOOZE_ALERT.equals(action)) {
+            long id = intent.getLongExtra("task_id", -1L);
+            String occurrence = intent.getStringExtra("occurrence");
+            if (id <= 0L || occurrence == null) return;
+            SharedPreferences saved = prefs(context);
+            saved.edit().remove("reminder_fired_" + id)
+                .remove("reminder_custom_day_" + id).apply();
+            AlarmManager manager = (AlarmManager)context.getSystemService(
+                Context.ALARM_SERVICE);
+            if (manager == null) return;
+            PendingIntent pending = taskIntent(context, id,
+                PendingIntent.FLAG_UPDATE_CURRENT, occurrence);
+            LegacyCompat.setExactOrInexactWhileIdle(context, manager,
+                AlarmManager.RTC_WAKEUP,
+                System.currentTimeMillis() + 5L * 60L * 1000L, pending);
+            NotificationManager notifications = (NotificationManager)
+                context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notifications != null) notifications.cancel("edhome-task-" + id, ALARM_ID);
+            DiagnosticLog.event("REMINDER_ALERT_SNOOZED");
+            return;
+        }
         if (ProjectWorkNotification.ACTION_DISMISS.equals(action)) {
             ProjectWorkNotification.cancel(context, intent.getLongExtra("task_id", -1L));
             return;
