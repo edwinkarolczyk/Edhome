@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.widget.RemoteViews;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -54,25 +55,37 @@ public final class TaskAlarmService extends Service {
     }
 
     private Notification buildNotification(String title, long id, String occurrence) {
+        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+            ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
+        RemoteViews expanded = new RemoteViews(getPackageName(),
+            R.layout.notification_task_alarm_snooze);
+        expanded.setTextViewText(R.id.task_alarm_title,
+            title + " — alarm dzwoni");
+        int[] minutes = new int[]{5, 10, 15, 30, 60};
+        int[] buttonIds = new int[]{R.id.task_snooze_5, R.id.task_snooze_10,
+            R.id.task_snooze_15, R.id.task_snooze_30, R.id.task_snooze_60};
+        for (int i = 0; i < minutes.length; i++) {
+            Intent snooze = new Intent(this, ReminderReceiver.class)
+                .setAction("com.edwinkarolczyk.edhome.SNOOZE_TASK_ALERT")
+                .putExtra("task_id", id).putExtra("occurrence", occurrence)
+                .putExtra("snooze_minutes", minutes[i]);
+            PendingIntent pending = PendingIntent.getBroadcast(this,
+                7141 + minutes[i], snooze,
+                PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+            expanded.setOnClickPendingIntent(buttonIds[i], pending);
+        }
         Intent stop = new Intent(this, ReminderReceiver.class)
             .setAction("com.edwinkarolczyk.edhome.DISMISS_TASK_ALERT")
             .putExtra("task_id", id);
         PendingIntent stopPending = PendingIntent.getBroadcast(this, 7139,
             stop, PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
-        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
-            ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
-        Intent snooze = new Intent(this, SnoozePickerActivity.class)
-            .putExtra("task_id", id).putExtra("occurrence", occurrence)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent snoozePending = PendingIntent.getActivity(this, 7140,
-            snooze, PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
+        expanded.setOnClickPendingIntent(R.id.task_alarm_mute, stopPending);
         return builder.setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • ALARM")
-            .setContentText(title + " — alarm dzwoni")
+            .setContentText(title + " — rozwiń, aby wybrać drzemkę")
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true).setAutoCancel(false)
-            .addAction(android.R.drawable.ic_lock_idle_alarm, "Odłóż…", snoozePending)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Wycisz", stopPending)
+            .setCustomBigContentView(expanded)
             .build();
     }
 
