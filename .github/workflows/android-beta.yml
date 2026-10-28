@@ -670,8 +670,28 @@ jobs:
         if: steps.beta_publish.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EDHOME_BETA_NOTES: "EDHOME Beta 0.8.1.154 / 347 — Naprawiono brak dźwięku i wibracji po kliknięciu Start/Stop w Projektach. Test w Ustawienia → Powiadomienia pokazuje tryb telefonu, poziom głośności i dostępność wibracji; dodano otwarcie kanału przypomnień Androida. Dźwięki respektują tryb cichy. Stable bez zmian."
-        run: python3 .github/scripts/publish_public_channel.py
+        run: |
+          # Build release notes from the current version's entry in EDHOME_STATUS.md.
+          EDHOME_BETA_NOTES="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          gradle = Path("app/build.gradle").read_text(encoding="utf-8")
+          version = re.search(r"\\bversionName\\s+'([^']+)'", gradle).group(1)
+          status = Path("docs/EDHOME_STATUS.md").read_text(encoding="utf-8")
+          sections = re.split(r"(?m)(?=^## )", status)
+          for section in sections:
+              if version in section.splitlines()[0] if section.splitlines() else False:
+                  lines = section.splitlines()
+                  details = [line.lstrip("- ").strip() for line in lines[1:] if line.startswith("- ")]
+                  summary = " ".join(details[:4])
+                  print(f"EDHOME Beta {version} — {summary or 'Poprawki i usprawnienia opisane w statusie beta.'} Stable bez zmian.")
+                  break
+          else:
+              print(f"EDHOME Beta {version} — Poprawki i usprawnienia beta. Stable bez zmian.")
+          PY
+          )"
+          export EDHOME_BETA_NOTES
+          python3 .github/scripts/publish_public_channel.py
       - name: Remove temporary signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/edhome-beta.p12"
