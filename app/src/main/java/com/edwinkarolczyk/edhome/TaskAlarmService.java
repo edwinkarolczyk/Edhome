@@ -70,7 +70,7 @@ public final class TaskAlarmService extends Service {
     }
 
     private void startRinging() {
-        stopRinging();
+        stopPlayback();
         try {
             Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
             if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
@@ -104,7 +104,7 @@ public final class TaskAlarmService extends Service {
         }
     }
 
-    private void stopRinging() {
+    private void stopPlayback() {
         if (player != null) {
             try { if (player.isPlaying()) player.stop(); } catch (Exception ignored) {}
             try { player.release(); } catch (Exception ignored) {}
@@ -114,6 +114,10 @@ public final class TaskAlarmService extends Service {
             try { vibrator.cancel(); } catch (Exception ignored) {}
             vibrator = null;
         }
+    }
+
+    private void stopRinging() {
+        stopPlayback();
         NotificationManager manager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.cancel(NOTIFICATION_ID);
     }
