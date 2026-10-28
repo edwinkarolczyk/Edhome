@@ -1,6 +1,19 @@
 name: EDHOME Beta APK
 
 on:
+  pull_request:
+    branches: [beta]
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "*.gradle"
+      - "gradle.properties"
+      - "gradle/**"
+      - "settings.gradle"
+      - ".github/workflows/android-beta.yml"
+      - ".github/workflows/desktop-beta.yml"
+      - ".github/scripts/**"
+      - "tests/**"
   push:
     branches: [beta]
     paths:
