@@ -7904,7 +7904,7 @@ public final class MainActivity extends Activity {
         }
         final boolean fromReminder=id==pendingTaskFocusId;
         if(fromReminder) {
-            box.setBackground(skin.panel(this,skin.tileTop,22));
+            // Fokus z przypomnienia podnosi kartę, ale nie nadpisuje koloru statusu.
             box.setElevation(dp(6));
             pendingTaskFocusView=box;
             pendingTaskFocusId=0L;

@@ -3,7 +3,7 @@
 - Karty wykonanych czynności pozostają zielone.
 - Czynności niewykonane po terminie mają delikatne czerwone tło.
 - Czynności niewykonane bez przekroczonego terminu mają delikatne niebieskie tło.
-- Kolory są mieszane z tłem aktywnego motywu dla czytelności; karta otwarta bezpośrednio z przypomnienia nadal ma wyróżnienie fokusu.
+- Kolory są mieszane z tłem aktywnego motywu dla czytelności; karta otwarta bezpośrednio z przypomnienia zachowuje swój kolor statusu i dostaje tylko wyróżnienie wysokością.
 - Zmiana dotyczy głównej listy Czynności; widoki wewnątrz Projektów pozostają bez zmian. CI/APK wymagają potwierdzenia; main/Stable bez zmian.
 
 ## 2026-10-28 — P0: poprawka kompilacji akcji alarmu (Android Beta 0.8.1.159 / 352; pełny CI i publikacja oczekujące)
