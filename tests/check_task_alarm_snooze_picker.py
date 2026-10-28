@@ -8,4 +8,6 @@ assert 'Math.max(1, Math.min(120,' in receiver
 assert 'snooze_minutes' in receiver and 'SnoozePickerActivity' in manifest
 assert 'slider.setMax(119)' in picker and 'setPositiveButton("Odłóż alarm"' in picker
 assert '.putExtra("occurrence", firedValue)' in receiver
-print("PASS: snooze picker, bounded minutes, occurrence binding, and manifest registration")
+assert 'REMINDER_ALERT_DISMISSED' in receiver
+assert 'manager.cancel("edhome-task-" + id, ALARM_ID)' not in receiver
+print("PASS: snooze picker, bounded minutes, occurrence binding, manifest registration, and mute without task notification loss")
