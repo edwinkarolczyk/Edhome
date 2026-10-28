@@ -1,3 +1,12 @@
+## 2026-10-28 — Drzemka wybierana bezpośrednio w rozwiniętym powiadomieniu (Android Beta 0.8.1.163 / 356; CI do potwierdzenia)
+
+- Zmieniono wymaganie UX: nie otwierać osobnej aktywności, by ustawić drzemkę. Rozwinięte powiadomienie alarmu zawiera bezpośrednie przyciski **5, 10, 15, 30 i 60 min** oraz **Wycisz alarm**.
+- Przyciski przekazują wybrany czas bezpośrednio do `ReminderReceiver`; nie uruchamiają `SnoozePickerActivity`. Po wybraniu czasu alarm ma się zatrzymać i wrócić po wskazanym interwale.
+- Zastosowano przyciski, a nie suwak przeciągany palcem: standardowe powiadomienia Androida nie zapewniają wiarygodnej obsługi interaktywnego SeekBar przez `RemoteViews`. Wybór czasu jest jednak dostępny bezpośrednio w rozwiniętym powiadomieniu, bez wchodzenia do aplikacji.
+- Dodano niestandardowy widok rozwiniętego powiadomienia oraz zaktualizowano test kontraktowy. Android Beta podniesiony do `0.8.1.163 / 356`; Desktop bez zmian. `main`/Stable bez zmian.
+- **Status w chwili zapisu:** zmiany przygotowywane na gałęzi naprawczej; CI, podpisany APK i działanie na fizycznym telefonie wymagają potwierdzenia. Nie traktować wersji 163 jako opublikowanej przed zielonym CI i sprawdzeniem manifestu.
+- Następny krok: uruchomić PR CI, poprawić ewentualne błędy kompilacji/testów, a po scaleniu do `beta` potwierdzić publikację APK i manifestu. Test urządzeniowy obejmuje rozwinąć alarm, kliknąć każdą wartość drzemki i potwierdzić ponowne zadzwonienie oraz działanie „Wycisz”.
+
 ## 2026-10-28 — Wybór czasu drzemki alarmu z powiadomienia (Android Beta 0.8.1.162 / 355; CI uruchamiane ponownie)
 
 - Dodano akcję **„Odłóż…”** do trwałego powiadomienia dzwoniącego alarmu. Otwiera małe okno EDHOME z suwakiem 1–120 minut i widoczną wartością; domyślnie 15 minut.
