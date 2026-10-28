@@ -1,6 +1,7 @@
 package com.edwinkarolczyk.edhome;
 
 import android.app.Notification;
+import androidx.core.app.NotificationCompat;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -55,8 +56,7 @@ public final class TaskAlarmService extends Service {
     }
 
     private Notification buildNotification(String title, long id, String occurrence) {
-        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
-            ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL);
         RemoteViews expanded = new RemoteViews(getPackageName(),
             R.layout.notification_task_alarm_snooze);
         expanded.setTextViewText(R.id.task_alarm_title,
