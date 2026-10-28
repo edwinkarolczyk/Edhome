@@ -552,9 +552,9 @@ jobs:
           java -cp "$RUNNER_TEMP/private-paycheck" com.edwinkarolczyk.edhome.PrivatePaycheckCryptoSmoke
           python3 tests/check_private_paycheck_contract.py
           python3 tests/check_private_backup_contract.py
-      - name: Android version displayed in EDHOME Beta and Stable headers
+      - name: Task alarm snooze picker regression
         run: python3 tests/check_task_alarm_snooze_picker.py
-
+      - name: Android version displayed in EDHOME Beta and Stable headers
         run: python3 tests/check_version_header_android.py
       - name: Update installer single-flight and polling regression
         run: python3 tests/check_updater_contract.py
