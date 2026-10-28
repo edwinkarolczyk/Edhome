@@ -112,8 +112,6 @@ public final class ReminderReceiver extends BroadcastReceiver {
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_ALARM)
             .setPriority(Notification.PRIORITY_MAX);
-        if (!legacy && !plannerOnly && singleTaskId > 0L)
-            addTaskActions(context, builder, singleTaskId, firedValue);
         addTaskActions(context, builder, task.id, null);
         if(task.project && !ProjectWorkNotification.isActive(context,task.id))
             builder.addAction(android.R.drawable.ic_media_play,"▶ Start",
@@ -609,6 +607,10 @@ public final class ReminderReceiver extends BroadcastReceiver {
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_ALARM)
             .setPriority(Notification.PRIORITY_MAX);
+        // Akcje z fingerprintem dotyczą wyłącznie pojedynczego alarmu zadania.
+        // Digest poranny i komunikat planera nie mają jednego occurrence.
+        if (!legacy && !plannerOnly && singleTaskId > 0L)
+            addTaskActions(context, builder, singleTaskId, firedValue);
         if (openOverdue)
             builder.addAction(android.R.drawable.ic_menu_today,
                 "Znajdź nowe terminy", openPlanning);
