@@ -29,6 +29,11 @@ assert ("if (!legacy && !plannerOnly && singleTaskId > 0L)\n"
         "            addTaskActions(context, builder, singleTaskId, firedValue);") in receive_method
 assert 'smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick())' in main
 assert 'ACTION_REQUEST_SCHEDULE_EXACT_ALARM' in main
-assert 'versionCode 352' in gradle and "versionName '0.8.1.159'" in gradle
+assert 'versionCode 353' in gradle and "versionName '0.8.1.160'" in gradle
 
 print("task reminder exact-alarm contract OK")
+
+# Główna lista Czynności: zielone wykonane, czerwone zaległe, niebieskie pozostałe.
+assert 'taskStatusSurface(Color.rgb(220, 55, 55))' in main
+assert 'taskStatusSurface(Color.rgb(45, 130, 230))' in main
+assert 'final boolean overdue = !done && !due.isEmpty()' in main

@@ -1764,6 +1764,16 @@ public final class MainActivity extends Activity {
         return box;
     }
 
+    // Tło statusu miesza kolor semantyczny z powierzchnią motywu,
+    // zachowując czytelność tekstu w jasnym i ciemnym wyglądzie.
+    private int taskStatusSurface(int statusColor) {
+        float tint = skin.light ? 0.17f : 0.25f;
+        return Color.rgb(
+            Math.round(Color.red(surface) * (1f - tint) + Color.red(statusColor) * tint),
+            Math.round(Color.green(surface) * (1f - tint) + Color.green(statusColor) * tint),
+            Math.round(Color.blue(surface) * (1f - tint) + Color.blue(statusColor) * tint));
+    }
+
     // Ukończona czynność ma subtelne zielone tło dopasowane do motywu.
     private int completedTaskSurface() {
         int green = Color.rgb(57, 167, 96);
@@ -7883,7 +7893,15 @@ public final class MainActivity extends Activity {
     private void drawTask(long id, String name, boolean done, String due,
             String rule, int every) {
         LinearLayout box = card();
-        if(done)box.setBackground(skin.panel(this,completedTaskSurface(),22));
+        final boolean overdue = !done && !due.isEmpty()
+            && due.compareTo(LocalDate.now().toString()) < 0;
+        if (done) {
+            box.setBackground(skin.panel(this, completedTaskSurface(), 22));
+        } else if (overdue) {
+            box.setBackground(skin.panel(this, taskStatusSurface(Color.rgb(220, 55, 55)), 22));
+        } else {
+            box.setBackground(skin.panel(this, taskStatusSurface(Color.rgb(45, 130, 230)), 22));
+        }
         final boolean fromReminder=id==pendingTaskFocusId;
         if(fromReminder) {
             box.setBackground(skin.panel(this,skin.tileTop,22));
@@ -7913,7 +7931,7 @@ public final class MainActivity extends Activity {
             + " • Priorytet: " + TASK_PRIORITY_LABELS[
                 Math.max(0, java.util.Arrays.asList(TASK_PRIORITIES)
                     .indexOf(planning[0]))];
-        if (!done && !due.isEmpty() && due.compareTo(LocalDate.now().toString()) < 0)
+        if (overdue)
             description += " • ZALEGŁE";
         if (done) description += " • Wykonane";
         String place = db.placeLabel(id);

@@ -1,3 +1,11 @@
+## 2026-10-28 — Kolory statusów w głównej liście Czynności (Android Beta 0.8.1.160 / 353; CI do potwierdzenia)
+
+- Karty wykonanych czynności pozostają zielone.
+- Czynności niewykonane po terminie mają delikatne czerwone tło.
+- Czynności niewykonane bez przekroczonego terminu mają delikatne niebieskie tło.
+- Kolory są mieszane z tłem aktywnego motywu dla czytelności; karta otwarta bezpośrednio z przypomnienia nadal ma wyróżnienie fokusu.
+- Zmiana dotyczy głównej listy Czynności; widoki wewnątrz Projektów pozostają bez zmian. CI/APK wymagają potwierdzenia; main/Stable bez zmian.
+
 ## 2026-10-28 — P0: poprawka kompilacji akcji alarmu (Android Beta 0.8.1.159 / 352; pełny CI i publikacja oczekujące)
 
 - CI wykrył błąd kompilacji w ReminderReceiver: warunek pojedynczego alarmu odwoływał się do zmiennych poza ich zakresem. Poprawka przenosi akcje Wykonane/Wyłącz alarm/Drzemka do ścieżki pojedynczego alarmu; poranne powiadomienia i planer pozostają osobnymi ścieżkami.
