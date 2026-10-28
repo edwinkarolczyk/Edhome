@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 353,
-  "versionName": "0.8.1.160",
-  "changelog": "EDHOME Beta 0.8.1.160 / 353 — Czynności: wykonane zielone, zaległe czerwone, niewykonane w terminie niebieskie; kolor statusu pozostaje czytelny po otwarciu z przypomnienia. Przypomnienia czynności mają akcje „Wykonane”, „Wyłącz alarm” i „Drzemka 5 min”, a formularz pokazuje pole „Godzina przypomnienia”. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.160/edhome-beta.apk",
-  "sha256": "c4d1b90cf51013e815615c322573b6d4eb7b4b1af588a5aef8187e0c2fae3679"
+  "versionCode": 354,
+  "versionName": "0.8.1.161",
+  "changelog": "EDHOME Beta 0.8.1.161 — Przyczyna: alarm o indywidualnej godzinie tworzył powiadomienie z jednorazowym dźwiękiem kanału, bez zapętlonego dźwięku i powtarzanej wibracji. Dodano `TaskAlarmService` na Beta: odtwarza domyślny dźwięk alarmu w pętli i cykliczną wibrację; osobne trwałe powiadomienie ma akcję „Wyłącz alarm”. „Wyłącz alarm” oraz „Drzemka 5 min” zatrzymują aktywne dzwonienie; drzemka nadal planuje ponowne przypomnienie po 5 minutach. Zachowano akcję „✓ Wykonane”. Dodano test kontraktowy i podniesiono Android Beta do `0.8.1.161 / 354`. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.161/edhome-beta.apk",
+  "sha256": "4fb3e753c4e450c3b87de3bbac18515112d75c5ff14bbbfb7582829be9fe985d"
 }
