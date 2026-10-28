@@ -308,6 +308,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
         String action = intent.getAction();
         if (ACTION_DISMISS_ALERT.equals(action)) {
             long id = intent.getLongExtra("task_id", -1L);
+            context.stopService(new Intent(context, TaskAlarmService.class));
             NotificationManager manager = (NotificationManager)context.getSystemService(
                 Context.NOTIFICATION_SERVICE);
             if (manager != null && id > 0L) manager.cancel("edhome-task-" + id, ALARM_ID);
@@ -318,6 +319,7 @@ public final class ReminderReceiver extends BroadcastReceiver {
             long id = intent.getLongExtra("task_id", -1L);
             String occurrence = intent.getStringExtra("occurrence");
             if (id <= 0L || occurrence == null) return;
+            context.stopService(new Intent(context, TaskAlarmService.class));
             SharedPreferences saved = prefs(context);
             saved.edit().remove("reminder_fired_" + id)
                 .remove("reminder_custom_day_" + id).apply();
@@ -624,9 +626,20 @@ public final class ReminderReceiver extends BroadcastReceiver {
         int notificationId = plannerOnly ? PLAN_ALARM_ID
             : legacy ? ALARM_ID
             : requestCode(intent.getLongExtra("task_id", -1L));
-        if(!legacy&&!plannerOnly&&singleTaskId>0)
+        if(!legacy&&!plannerOnly&&singleTaskId>0) {
             notifications.notify("edhome-task-"+singleTaskId,ALARM_ID,notification);
-        else notifications.notify(notificationId, notification);
+            // Kanał Androida odtwarza dźwięk tylko raz; usługa utrzymuje alarm.
+            try {
+                Intent ringing = new Intent(context, TaskAlarmService.class)
+                    .setAction(TaskAlarmService.ACTION_START)
+                    .putExtra("task_id", singleTaskId)
+                    .putExtra("task_title", singleTaskTitle);
+                if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(ringing);
+                else context.startService(ringing);
+            } catch (Exception problem) {
+                DiagnosticLog.error("TASK_ALARM_SERVICE_START", problem);
+            }
+        } else notifications.notify(notificationId, notification);
         SharedPreferences.Editor editor = pref.edit();
         if (legacy) editor.putString("reminder_legacy_day", today.toString());
         if (planningFresh && planning!=null)
