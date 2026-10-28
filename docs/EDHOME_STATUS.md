@@ -1,3 +1,11 @@
+## 2026-10-28 — Alarm czynności dzwoniący do wyłączenia (Android Beta 0.8.1.161 / 354; CI oczekujące)
+
+- Przyczyna: alarm o indywidualnej godzinie tworzył powiadomienie z jednorazowym dźwiękiem kanału, bez zapętlonego dźwięku i powtarzanej wibracji.
+- Dodano `TaskAlarmService` na Beta: odtwarza domyślny dźwięk alarmu w pętli i cykliczną wibrację; osobne trwałe powiadomienie ma akcję „Wyłącz alarm”.
+- „Wyłącz alarm” oraz „Drzemka 5 min” zatrzymują aktywne dzwonienie; drzemka nadal planuje ponowne przypomnienie po 5 minutach. Zachowano akcję „✓ Wykonane”.
+- Dodano test kontraktowy i podniesiono Android Beta do `0.8.1.161 / 354`.
+- **Status:** kod zapisany na `beta`; CI, podpisany APK i test na fizycznym telefonie do potwierdzenia. Głośność zależy od systemowego poziomu alarmu. `main`/Stable bez zmian.
+
 ## 2026-10-28 — Kolory statusów w głównej liście Czynności (Android Beta 0.8.1.160 / 353; CI do potwierdzenia)
 
 - Karty wykonanych czynności pozostają zielone.
