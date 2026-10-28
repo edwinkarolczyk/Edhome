@@ -21,6 +21,16 @@ assert '✓ Wykonane' in receiver
 assert 'Wyłącz alarm' in receiver
 assert 'Drzemka 5 min' in receiver
 assert 'ACTION_SNOOZE_ALERT' in receiver
+alarm_service=(root/"app/src/main/java/com/edwinkarolczyk/edhome/TaskAlarmService.java").read_text(encoding="utf-8")
+beta_manifest=(root/"app/src/beta/AndroidManifest.xml").read_text(encoding="utf-8")
+assert 'TaskAlarmService.ACTION_START' in receiver
+assert 'startForegroundService(ringing)' in receiver
+assert 'context.stopService(new Intent(context, TaskAlarmService.class))' in receiver
+assert 'player.setLooping(true)' in alarm_service
+assert 'vibrator.vibrate(pattern, 0)' in alarm_service
+assert 'Wyłącz alarm' in alarm_service
+assert 'android:foregroundServiceType="mediaPlayback"' in beta_manifest
+assert 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' in beta_manifest
 daily_method=receiver.split("private static void notifyDailyTask",1)[1].split(
     "private static void notifyPlanning",1)[0]
 assert "singleTaskId" not in daily_method and "plannerOnly" not in daily_method
@@ -29,7 +39,7 @@ assert ("if (!legacy && !plannerOnly && singleTaskId > 0L)\n"
         "            addTaskActions(context, builder, singleTaskId, firedValue);") in receive_method
 assert 'smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick())' in main
 assert 'ACTION_REQUEST_SCHEDULE_EXACT_ALARM' in main
-assert 'versionCode 353' in gradle and "versionName '0.8.1.160'" in gradle
+assert 'versionCode 354' in gradle and "versionName '0.8.1.161'" in gradle
 
 print("task reminder exact-alarm contract OK")
 
