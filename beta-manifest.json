@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 355,
-  "versionName": "0.8.1.162",
-  "changelog": "EDHOME Beta 0.8.1.162 — Dodano akcję **„Odłóż…”** do trwałego powiadomienia dzwoniącego alarmu. Otwiera małe okno EDHOME z suwakiem 1–120 minut i widoczną wartością; domyślnie 15 minut. Po zatwierdzeniu usługa alarmowa zostaje zatrzymana, a to samo przypomnienie jest ponownie planowane po wybranym czasie. Czas jest ograniczony do 1–120 minut; zachowano odrębną akcję **„Wycisz”** i zwykłą ścieżkę **„✓ Wykonane”** w powiadomieniu czynności. Poprawiono workflow: test drzemki i kontrola wersji Androida są osobnymi krokami. Commit `ae08674b928bb06f32dc1fddb0b128f4e355e8d9`. Dodatkowo naprawiono zachowanie **„Wycisz”**: zatrzymuje dzwonienie, ale nie usuwa powiadomienia czynności, więc użytkownik nadal może wybrać „Wykonane”. Test kontraktowy sprawdza, że powiadomienie nie jest kasowane. Commity: `0e65b730f00c4c58ca47601971a973796ce7730a`, `f859e8010c6c751232224161c71d79a25cec9e37`. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.162/edhome-beta.apk",
-  "sha256": "1d6359769c428b534775e1b0d5aeb2bfc6f4bcac912f57005f4450a54d7cddd2"
+  "versionCode": 356,
+  "versionName": "0.8.1.163",
+  "changelog": "EDHOME Beta 0.8.1.163 — Zmieniono wymaganie UX: nie otwierać osobnej aktywności, by ustawić drzemkę. Rozwinięte powiadomienie alarmu zawiera bezpośrednie przyciski **5, 10, 15, 30 i 60 min** oraz **Wycisz alarm**. Przyciski przekazują wybrany czas bezpośrednio do `ReminderReceiver`; nie uruchamiają `SnoozePickerActivity`. Po wybraniu czasu alarm ma się zatrzymać i wrócić po wskazanym interwale. Zastosowano przyciski, a nie suwak przeciągany palcem: standardowe powiadomienia Androida nie zapewniają wiarygodnej obsługi interaktywnego SeekBar przez `RemoteViews`. Wybór czasu jest jednak dostępny bezpośrednio w rozwiniętym powiadomieniu, bez wchodzenia do aplikacji. Dodano niestandardowy widok rozwiniętego powiadomienia oraz zaktualizowano test kontraktowy. Android Beta podniesiony do `0.8.1.163 / 356`; Desktop bez zmian. `main`/Stable bez zmian. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.163/edhome-beta.apk",
+  "sha256": "f5c88e9d57f765955c57a59d8508981ff45626f182c2cb8227c00ad6546af629"
 }
