@@ -676,7 +676,7 @@ jobs:
           import re
           from pathlib import Path
           gradle = Path("app/build.gradle").read_text(encoding="utf-8")
-          version = re.search(r"\\bversionName\\s+'([^']+)'", gradle).group(1)
+          version = re.search(r"\bversionName\s+'([^']+)'", gradle).group(1)
           status = Path("docs/EDHOME_STATUS.md").read_text(encoding="utf-8")
           sections = re.split(r"(?m)(?=^## )", status)
           for section in sections:
