@@ -1,3 +1,10 @@
+## 2026-10-28 — P0: poprawka kompilacji akcji alarmu (Android Beta 0.8.1.159 / 352; pełny CI i publikacja oczekujące)
+
+- CI wykrył błąd kompilacji w ReminderReceiver: warunek pojedynczego alarmu odwoływał się do zmiennych poza ich zakresem. Poprawka przenosi akcje Wykonane/Wyłącz alarm/Drzemka do ścieżki pojedynczego alarmu; poranne powiadomienia i planer pozostają osobnymi ścieżkami.
+- Kod: [2d514612](https://github.com/edwinkarolczyk/Edhome/commit/2d5146126cc4ef6cde181aa3f0d13864d20c1fe7). Test kontraktowy: [bdca24ec](https://github.com/edwinkarolczyk/Edhome/commit/bdca24ecbcba4b6001cbc5697075b6e05fc4da8d), poprawiony wzorzec testu: [35e2e288](https://github.com/edwinkarolczyk/Edhome/commit/35e2e28835667c072659c23eb13d5062096e935e).
+- [CI run 40649661376](https://github.com/edwinkarolczyk/Edhome/actions/runs/40649661376): krok kompilacji PASS, pełny workflow nadal w toku przy ostatnim odczycie. [Run 40649706389](https://github.com/edwinkarolczyk/Edhome/actions/runs/40649706389) dla bieżącego HEAD oczekuje. Źródło ma 0.8.1.159/352, ale manifest i opublikowany APK nadal wskazują 0.8.1.158/351; **nie oznaczać 159 jako wydanego** przed potwierdzeniem pełnego CI i assetu.
+- Bez zmian schematu SQLite, migracji, JSON Hub, ZIP, Desktop i main/Stable. Test akcji na fizycznym telefonie niepotwierdzony.
+
 ## 2026-10-28 — P0: alarm czynności z akcjami Wykonane / Wyłącz / Drzemka (Android Beta 0.8.1.159 / 352 — CI do potwierdzenia)
 
 - Indywidualne powiadomienie czynności pozostaje widoczne jako trwające, z akcjami **„✓ Wykonane”**, **„Wyłącz alarm”** oraz — dla alarmu z wybraną godziną — **„Drzemka 5 min”**.
