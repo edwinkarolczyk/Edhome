@@ -1,6 +1,19 @@
 name: EDHOME Beta APK
 
 on:
+  pull_request:
+    branches: [beta]
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "*.gradle"
+      - "gradle.properties"
+      - "gradle/**"
+      - "settings.gradle"
+      - ".github/workflows/android-beta.yml"
+      - ".github/workflows/desktop-beta.yml"
+      - ".github/scripts/**"
+      - "tests/**"
   push:
     branches: [beta]
     paths:
@@ -539,6 +552,8 @@ jobs:
           java -cp "$RUNNER_TEMP/private-paycheck" com.edwinkarolczyk.edhome.PrivatePaycheckCryptoSmoke
           python3 tests/check_private_paycheck_contract.py
           python3 tests/check_private_backup_contract.py
+      - name: Task alarm snooze picker regression
+        run: python3 tests/check_task_alarm_snooze_picker.py
       - name: Android version displayed in EDHOME Beta and Stable headers
         run: python3 tests/check_version_header_android.py
       - name: Update installer single-flight and polling regression
@@ -646,6 +661,11 @@ jobs:
           )
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           TAG="beta-v$VERSION"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "PR build only: publikacja jest zarezerwowana dla gałęzi beta."
+            exit 0
+          fi
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             if git rev-parse HEAD^ >/dev/null 2>&1 \
                 && git diff --quiet HEAD^ HEAD -- app build.gradle settings.gradle gradle.properties gradle; then

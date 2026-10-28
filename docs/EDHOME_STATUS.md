@@ -1,3 +1,13 @@
+## 2026-10-28 — Wybór czasu drzemki alarmu z powiadomienia (Android Beta 0.8.1.162 / 355; CI uruchamiane ponownie)
+
+- Dodano akcję **„Odłóż…”** do trwałego powiadomienia dzwoniącego alarmu. Otwiera małe okno EDHOME z suwakiem 1–120 minut i widoczną wartością; domyślnie 15 minut.
+- Po zatwierdzeniu usługa alarmowa zostaje zatrzymana, a to samo przypomnienie jest ponownie planowane po wybranym czasie. Czas jest ograniczony do 1–120 minut; zachowano odrębną akcję **„Wycisz”** i zwykłą ścieżkę **„✓ Wykonane”** w powiadomieniu czynności.
+- Poprawiono workflow: test drzemki i kontrola wersji Androida są osobnymi krokami. Commit `ae08674b928bb06f32dc1fddb0b128f4e355e8d9`.
+- Dodatkowo naprawiono zachowanie **„Wycisz”**: zatrzymuje dzwonienie, ale nie usuwa powiadomienia czynności, więc użytkownik nadal może wybrać „Wykonane”. Test kontraktowy sprawdza, że powiadomienie nie jest kasowane. Commity: `0e65b730f00c4c58ca47601971a973796ce7730a`, `f859e8010c6c751232224161c71d79a25cec9e37`.
+- Zachowano fingerprint wystąpienia czynności przy przekazaniu z usługi do selektora, aby drzemka dotyczyła właściwego alarmu. Zarejestrowano aktywność w manifeście wyłącznie Beta.
+- Dodano test kontraktowy `tests/check_task_alarm_snooze_picker.py`; zwiększono wersję Android Beta do `0.8.1.162 / 355`. Desktop bez zmian. `main`/Stable bez zmian.
+- **CI:** run [40750969011](https://github.com/edwinkarolczyk/Edhome/actions/runs/40750969011) potwierdził kompilację APK, podpis, wszystkie testy kontraktowe oraz upload artefaktu; workflow zakończył się błędem wyłącznie dlatego, że krok publikacji próbował działać w zdarzeniu `pull_request`, a skrypt bezpiecznie odmawia publikacji spoza `beta`. Poprawiono `.github/workflows/android-beta.yml` w commicie `7325dd76b096a8a747a467502a0fa02378eca45d`, aby PR budował i udostępniał artefakt bez publikowania wydania. Nowy CI po tej poprawce wymaga potwierdzenia. APK z runu 40750969011: [artefakt podpisanego APK](https://github.com/edwinkarolczyk/Edhome/actions/runs/40750969011/artifacts/12844126665). APK i test na fizycznym telefonie nadal niepotwierdzone. Suwak jest w małym oknie otwieranym przyciskiem powiadomienia, ponieważ standardowe powiadomienia Androida nie obsługują uniwersalnie interaktywnego suwaka.
+
 ## 2026-10-28 — Alarm czynności dzwoniący do wyłączenia (Android Beta 0.8.1.161 / 354; CI oczekujące)
 
 - Przyczyna: alarm o indywidualnej godzinie tworzył powiadomienie z jednorazowym dźwiękiem kanału, bez zapętlonego dźwięku i powtarzanej wibracji.
