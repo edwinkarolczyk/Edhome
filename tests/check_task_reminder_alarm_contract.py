@@ -25,7 +25,7 @@ daily_method=receiver.split("private static void notifyDailyTask",1)[1].split(
     "private static void notifyPlanning",1)[0]
 assert "singleTaskId" not in daily_method and "plannerOnly" not in daily_method
 receive_method=receiver.split("@Override public void onReceive",1)[1]
-assert ("if (!legacy && !plannerOnly && singleTaskId > 0L)\\n"
+assert ("if (!legacy && !plannerOnly && singleTaskId > 0L)\n"
         "            addTaskActions(context, builder, singleTaskId, firedValue);") in receive_method
 assert 'smallButton(form, "Wybierz godzinę", () -> reminderHour.performClick())' in main
 assert 'ACTION_REQUEST_SCHEDULE_EXACT_ALARM' in main
