@@ -661,6 +661,11 @@ jobs:
           )
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           TAG="beta-v$VERSION"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "PR build only: publikacja jest zarezerwowana dla gałęzi beta."
+            exit 0
+          fi
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             if git rev-parse HEAD^ >/dev/null 2>&1 \
                 && git diff --quiet HEAD^ HEAD -- app build.gradle settings.gradle gradle.properties gradle; then
