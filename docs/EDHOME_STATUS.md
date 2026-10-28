@@ -4,6 +4,7 @@
 - Czynności niewykonane po terminie mają delikatne czerwone tło.
 - Czynności niewykonane bez przekroczonego terminu mają delikatne niebieskie tło.
 - Kolory są mieszane z tłem aktywnego motywu dla czytelności; karta otwarta bezpośrednio z przypomnienia zachowuje swój kolor statusu i dostaje tylko wyróżnienie wysokością.
+- Naprawiono źródło sekcji „Co nowego”: opis wydania jest generowany z wpisu odpowiadającego bieżącej wersji w tym pliku, zamiast pozostawać na sztywno przy wersji 0.8.1.154. Wymaga potwierdzenia publikacji manifestu dla 0.8.1.160.
 - Zmiana dotyczy głównej listy Czynności; widoki wewnątrz Projektów pozostają bez zmian. CI/APK wymagają potwierdzenia; main/Stable bez zmian.
 
 ## 2026-10-28 — P0: poprawka kompilacji akcji alarmu (Android Beta 0.8.1.159 / 352; pełny CI i publikacja oczekujące)
