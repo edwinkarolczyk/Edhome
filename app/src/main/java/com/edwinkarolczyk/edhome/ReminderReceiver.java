@@ -330,7 +330,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 PendingIntent.FLAG_UPDATE_CURRENT, occurrence);
             LegacyCompat.setExactOrInexactWhileIdle(context, manager,
                 AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() + 5L * 60L * 1000L, pending);
+                System.currentTimeMillis() + Math.max(1, Math.min(120,
+                    intent.getIntExtra("snooze_minutes", 5))) * 60L * 1000L, pending);
             NotificationManager notifications = (NotificationManager)
                 context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (notifications != null) notifications.cancel("edhome-task-" + id, ALARM_ID);
@@ -633,7 +634,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
                 Intent ringing = new Intent(context, TaskAlarmService.class)
                     .setAction(TaskAlarmService.ACTION_START)
                     .putExtra("task_id", singleTaskId)
-                    .putExtra("task_title", singleTaskTitle);
+                    .putExtra("task_title", singleTaskTitle)
+                    .putExtra("occurrence", firedValue);
                 if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(ringing);
                 else context.startService(ringing);
             } catch (Exception problem) {

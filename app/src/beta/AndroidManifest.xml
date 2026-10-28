@@ -20,6 +20,11 @@
     <application
         android:usesCleartextTraffic="true"
         tools:replace="android:usesCleartextTraffic">
+        <activity
+            android:name=".SnoozePickerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.Light.Dialog.Alert" />
         <service
             android:name=".TaskAlarmService"
             android:exported="false"

@@ -1,3 +1,11 @@
+## 2026-10-28 — Wybór czasu drzemki alarmu z powiadomienia (Android Beta 0.8.1.162 / 355; CI do potwierdzenia)
+
+- Dodano akcję **„Odłóż…”** do trwałego powiadomienia dzwoniącego alarmu. Otwiera małe okno EDHOME z suwakiem 1–120 minut i widoczną wartością; domyślnie 15 minut.
+- Po zatwierdzeniu usługa alarmowa zostaje zatrzymana, a to samo przypomnienie jest ponownie planowane po wybranym czasie. Czas jest ograniczony do 1–120 minut; zachowano odrębną akcję **„Wycisz”** i zwykłą ścieżkę **„✓ Wykonane”** w powiadomieniu czynności.
+- Zachowano fingerprint wystąpienia czynności przy przekazaniu z usługi do selektora, aby drzemka dotyczyła właściwego alarmu. Zarejestrowano aktywność w manifeście wyłącznie Beta.
+- Dodano test kontraktowy `tests/check_task_alarm_snooze_picker.py`; zwiększono wersję Android Beta do `0.8.1.162 / 355`. Desktop bez zmian. `main`/Stable bez zmian.
+- **Status:** kod na `beta`; CI/APK oraz test na fizycznym telefonie wymagają potwierdzenia. Suwak jest w małym oknie otwieranym przyciskiem powiadomienia, ponieważ standardowe powiadomienia Androida nie obsługują uniwersalnie interaktywnego suwaka.
+
 ## 2026-10-28 — Alarm czynności dzwoniący do wyłączenia (Android Beta 0.8.1.161 / 354; CI oczekujące)
 
 - Przyczyna: alarm o indywidualnej godzinie tworzył powiadomienie z jednorazowym dźwiękiem kanału, bez zapętlonego dźwięku i powtarzanej wibracji.

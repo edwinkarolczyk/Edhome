@@ -32,10 +32,11 @@ public final class TaskAlarmService extends Service {
             return START_NOT_STICKY;
         }
         long taskId = intent.getLongExtra("task_id", -1L);
+        String occurrence = intent.getStringExtra("occurrence");
         String title = intent.getStringExtra("task_title");
         if (title == null || title.trim().isEmpty()) title = "Czynność";
         createSilentChannel();
-        startForeground(NOTIFICATION_ID, buildNotification(title, taskId));
+        startForeground(NOTIFICATION_ID, buildNotification(title, taskId, occurrence));
         startRinging();
         DiagnosticLog.event("TASK_ALARM_RINGING_STARTED", "task=" + taskId);
         return START_NOT_STICKY;
@@ -52,7 +53,7 @@ public final class TaskAlarmService extends Service {
         manager.createNotificationChannel(channel);
     }
 
-    private Notification buildNotification(String title, long id) {
+    private Notification buildNotification(String title, long id, String occurrence) {
         Intent stop = new Intent(this, ReminderReceiver.class)
             .setAction("com.edwinkarolczyk.edhome.DISMISS_TASK_ALERT")
             .putExtra("task_id", id);
@@ -60,12 +61,18 @@ public final class TaskAlarmService extends Service {
             stop, PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
+        Intent snooze = new Intent(this, SnoozePickerActivity.class)
+            .putExtra("task_id", id).putExtra("occurrence", occurrence)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        PendingIntent snoozePending = PendingIntent.getActivity(this, 7140,
+            snooze, PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag());
         return builder.setSmallIcon(R.drawable.ic_edhome)
             .setContentTitle("EDHOME • ALARM")
             .setContentText(title + " — alarm dzwoni")
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true).setAutoCancel(false)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Wyłącz alarm", stopPending)
+            .addAction(android.R.drawable.ic_lock_idle_alarm, "Odłóż…", snoozePending)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Wycisz", stopPending)
             .build();
     }
 
