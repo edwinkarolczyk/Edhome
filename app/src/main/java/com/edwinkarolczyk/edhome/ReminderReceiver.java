@@ -309,9 +309,8 @@ public final class ReminderReceiver extends BroadcastReceiver {
         if (ACTION_DISMISS_ALERT.equals(action)) {
             long id = intent.getLongExtra("task_id", -1L);
             context.stopService(new Intent(context, TaskAlarmService.class));
-            NotificationManager manager = (NotificationManager)context.getSystemService(
-                Context.NOTIFICATION_SERVICE);
-            if (manager != null && id > 0L) manager.cancel("edhome-task-" + id, ALARM_ID);
+            // Wyciszenie kończy dźwięk i wibracje usługi, ale zostawia
+            // powiadomienie czynności z akcją „Wykonane” i możliwością powrotu.
             DiagnosticLog.event("REMINDER_ALERT_DISMISSED");
             return;
         }
