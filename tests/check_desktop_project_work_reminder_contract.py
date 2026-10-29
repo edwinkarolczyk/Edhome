@@ -6,13 +6,17 @@ source = Path("desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java").rea
 build = Path("desktop/build.gradle").read_text(encoding="utf-8")
 workflow = Path(".github/workflows/desktop-beta.yml").read_text(encoding="utf-8")
 
-assert 'DESKTOP_VERSION = "0.7.0.143"' in source
+assert 'DESKTOP_VERSION = "0.7.0.144"' in source
 assert "version = '0.7.0.143'" in build
 assert 'DESKTOP_VERSION: "0.7.0.143"' in workflow
 assert "startProjectWorkReminderLoop();" in source
 assert "new javax.swing.Timer(30_000, e -> checkProjectWorkReminders())" in source
-assert 'PREFS.getLong(key, startedAt + TimeUnit.MINUTES.toMillis(60))' in source
-assert 'PREFS.putLong(key, now + TimeUnit.MINUTES.toMillis(60))' in source
+assert 'projectWorkReminderIntervalMinutes()' in source
+assert 'PREFS.getLong(key, startedAt + projectWorkReminderIntervalMs())' in source
+assert 'PREFS.putLong(key, now + projectWorkReminderIntervalMs())' in source
+assert 'projectWorkReminderIntervalMinutes", 60' in source
+assert 'PROJECT_WORK_REMINDER_INTERVAL_SAVED' in source
+assert 'new Integer[] {15, 30, 45, 60, 90, 120}' in source or 'Integer[] reminderIntervals = {15, 30, 45, 60, 90, 120}' in source
 
 block = source.split('private void checkProjectWorkReminders()', 1)[1].split('private void startDesktopProjectWork', 1)[0]
 assert 'if (!value(session, "ended_at").isBlank()) continue;' in block
