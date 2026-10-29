@@ -8417,9 +8417,12 @@ public final class MainActivity extends Activity {
             java.time.LocalTime initial = java.time.LocalTime.parse(
                 reminderHour.getText().toString());
             new android.app.TimePickerDialog(this,
-                (picker, hour, minute) -> reminderHour.setText(
-                    String.format(java.util.Locale.ROOT, "%02d:%02d",
-                        hour, minute)),
+                (picker, hour, minute) -> {
+                    reminderHour.setText(String.format(java.util.Locale.ROOT,
+                        "%02d:%02d", hour, minute));
+                    // Choosing any explicit time switches this task to custom reminder mode immediately.
+                    reminderMode.setSelection(1);
+                },
                 initial.getHour(), initial.getMinute(), true).show();
         });
         form.addView(text("Godzina przypomnienia", 15, true));
