@@ -27,6 +27,14 @@ final class ProjectWorkNotification {
     static final String ACTION_TIMEOUT =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_TIMEOUT";
     private static final long CHECK_MS = 60L * 60L * 1000L;
+
+    private static long reminderIntervalMs(Context context) {
+        int minutes = context.getSharedPreferences("edhome_beta_prefs", Context.MODE_PRIVATE)
+            .getInt("project_work_reminder_interval_minutes", 60);
+        if (minutes != 15 && minutes != 30 && minutes != 45
+                && minutes != 60 && minutes != 90 && minutes != 120) minutes = 60;
+        return minutes * 60L * 1000L;
+    }
     private static int reminderNotificationId(long taskId) {
         return 1000000 + (int) (taskId % 800000);
     }
@@ -153,7 +161,7 @@ final class ProjectWorkNotification {
             return;
         }
         long now = System.currentTimeMillis();
-        if (now < started + CHECK_MS) { scheduleCheck(context, taskId, started); return; }
+        if (now < started + reminderIntervalMs(context)) { scheduleCheck(context, taskId, started); return; }
         // Keep the persistent chronometer; show this reminder under a separate ID.
         scheduleNextCheck(context, taskId);
         if (!canNotify(context)) {
@@ -181,11 +189,32 @@ final class ProjectWorkNotification {
         DiagnosticLog.event("PROJECT_WORK_REMINDER_SHOWN", "task=" + taskId);
     }
 
+    static void rescheduleActiveSessions(Context context) {
+        File file = context.getDatabasePath(DATABASE);
+        if (!file.isFile()) return;
+        List<long[]> active = new ArrayList<>();
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
+                file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+             Cursor cursor = db.rawQuery(
+                "SELECT task_id, started_at FROM project_task_work_sessions WHERE ended_at IS NULL",
+                null)) {
+            while (cursor.moveToNext()) active.add(new long[]{cursor.getLong(0), cursor.getLong(1)});
+        } catch (Exception problem) {
+            DiagnosticLog.error("PROJECT_WORK_REMINDER_RESCHEDULE", problem);
+            return;
+        }
+        for (long[] session : active) {
+            if (session[0] > 0L && session[1] > 0L)
+                scheduleCheck(context, session[0], session[1]);
+        }
+        DiagnosticLog.event("PROJECT_WORK_REMINDER_INTERVAL_APPLIED", "active=" + active.size());
+    }
+
     private static void scheduleNextCheck(Context context, long taskId) {
         AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarm == null) return;
         LegacyCompat.setAndAllowWhileIdle(alarm, AlarmManager.RTC_WAKEUP,
-            System.currentTimeMillis() + CHECK_MS, checkAction(context, taskId));
+            System.currentTimeMillis() + reminderIntervalMs(context), checkAction(context, taskId));
     }
 
     private static PendingIntent stopNoticeAction(Context context, long taskId) {
@@ -211,7 +240,7 @@ final class ProjectWorkNotification {
         AlarmManager alarm = (AlarmManager) context.getSystemService(
             Context.ALARM_SERVICE);
         if (alarm != null) LegacyCompat.setAndAllowWhileIdle(alarm,
-            AlarmManager.RTC_WAKEUP, started + CHECK_MS,
+            AlarmManager.RTC_WAKEUP, started + reminderIntervalMs(context),
             timeoutIntent(context, taskId, started));
     }
 
