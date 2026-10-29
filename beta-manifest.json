@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 356,
-  "versionName": "0.8.1.163",
-  "changelog": "EDHOME Beta 0.8.1.163 — Zmieniono wymaganie UX: nie otwierać osobnej aktywności, by ustawić drzemkę. Rozwinięte powiadomienie alarmu zawiera bezpośrednie przyciski **5, 10, 15, 30 i 60 min** oraz **Wycisz alarm**. Przyciski przekazują wybrany czas bezpośrednio do `ReminderReceiver`; nie uruchamiają `SnoozePickerActivity`. Po wybraniu czasu alarm ma się zatrzymać i wrócić po wskazanym interwale. Zastosowano przyciski, a nie suwak przeciągany palcem: standardowe powiadomienia Androida nie zapewniają wiarygodnej obsługi interaktywnego SeekBar przez `RemoteViews`. Wybór czasu jest jednak dostępny bezpośrednio w rozwiniętym powiadomieniu, bez wchodzenia do aplikacji. Dodano niestandardowy widok rozwiniętego powiadomienia oraz zaktualizowano test kontraktowy. Android Beta podniesiony do `0.8.1.163 / 356`; Desktop bez zmian. `main`/Stable bez zmian. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.163/edhome-beta.apk",
-  "sha256": "f5c88e9d57f765955c57a59d8508981ff45626f182c2cb8227c00ad6546af629"
+  "versionCode": 357,
+  "versionName": "0.8.1.164",
+  "changelog": "EDHOME Beta 0.8.1.164 — Poprawki i usprawnienia beta. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.164/edhome-beta.apk",
+  "sha256": "9e6453fc3f7ae3b441f8e8defd7474a74caf0afa912dbe9068a04b3a2f6f3efd"
 }
