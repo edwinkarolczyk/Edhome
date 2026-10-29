@@ -104,9 +104,11 @@ for expected in (
 
 for expected in (
     'private static NotificationTask reminderTask(Context context,long taskId)',
-    'target==null ? "EDHOME • pomiar wstrzymany"',
-    'openAction(context,target.projectId,taskId)',
-    '"Czynność: "+target.title',
+    'target == null ? "EDHOME • licznik nadal działa"',
+    'openAction(context, target.projectId, taskId)',
+    '"Czynność: " + target.title',
+    'manager.notify(reminderNotificationId(taskId), notification)',
+    'Minęła godzina, ale pomiar nie został zatrzymany. Czas nadal się nalicza.',
 ):
     assert expected in project_work, "Missing named 60-minute project notice: " + expected
 
