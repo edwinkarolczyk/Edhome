@@ -134,7 +134,7 @@ final class ProjectWorkNotification {
         AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarm == null) return;
         LegacyCompat.setAndAllowWhileIdle(alarm, AlarmManager.RTC_WAKEUP,
-            Math.max(System.currentTimeMillis() + 1000L, started + CHECK_MS),
+            Math.max(System.currentTimeMillis() + 1000L, started + reminderIntervalMs(context)),
             checkAction(context, taskId));
     }
 
