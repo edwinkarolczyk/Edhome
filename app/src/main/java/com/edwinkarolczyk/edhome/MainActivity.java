@@ -7893,6 +7893,8 @@ public final class MainActivity extends Activity {
     private void drawTask(long id, String name, boolean done, String due,
             String rule, int every) {
         LinearLayout box = card();
+        // Compact list density: fit more activities on screen without removing actions.
+        box.setPadding(dp(9), dp(5), dp(9), dp(6));
         final boolean overdue = !done && !due.isEmpty()
             && due.compareTo(LocalDate.now().toString()) < 0;
         if (done) {
@@ -7918,8 +7920,9 @@ public final class MainActivity extends Activity {
         check.setContentDescription((done?"Cofnij wykonanie: ":"Wykonaj: ")+name);
         check.setButtonTintList(ColorStateList.valueOf(
             done?Color.rgb(69,165,95):accent));
-        taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        TextView taskTitle=text(name,17,true);
+        taskHeader.addView(check,new LinearLayout.LayoutParams(dp(38),dp(38)));
+        TextView taskTitle=text(name,15,true);
+        taskTitle.setIncludeFontPadding(false);
         taskTitle.setTextColor(done?subdued:ink);
         taskHeader.addView(taskTitle,new LinearLayout.LayoutParams(0,-2,1f));
         box.addView(taskHeader);
@@ -7948,9 +7951,15 @@ public final class MainActivity extends Activity {
             description += " • Przypomnienie: " + when.toLocalDate()
                 + " " + when.toLocalTime() + " (orientacyjnie)";
         }
-        TextView meta = text(description, 13, false);
+        TextView meta = text(description, 11, false);
+        meta.setIncludeFontPadding(false);
+        meta.setMaxLines(2);
+        meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        meta.setContentDescription(description);
         meta.setTextColor(subdued);
-        box.addView(meta);
+        LinearLayout.LayoutParams metaParams = new LinearLayout.LayoutParams(-1, -2);
+        metaParams.setMargins(0, dp(1), 0, 0);
+        box.addView(meta, metaParams);
         check.setOnCheckedChangeListener((v, value) -> {
             if(!value) {
                 check.setOnCheckedChangeListener(null);
