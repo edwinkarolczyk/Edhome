@@ -1,3 +1,10 @@
+## 2026-10-29 — Automatyczne przełączenie trybu przypomnienia po zmianie godziny (Android Beta 0.8.1.164 / 357; CI do potwierdzenia)
+
+- **Poprawka na `beta`:** commit [33033ea](https://github.com/edwinkarolczyk/Edhome/commit/33033eacf031b500d9ac3f86f66945ac06645e28). Po wybraniu godziny w selektorze `TimePickerDialog` formularz natychmiast ustawia tryb **„Moja godzina i wyprzedzenie”**. Nie trzeba ręcznie zmieniać listy trybów; zapis korzysta z już wybranego trybu i istniejącej ścieżki planowania przypomnień.
+- **Wersja Android Beta:** `0.8.1.164 / 357`, podniesiona w commicie [3f78ba8](https://github.com/edwinkarolczyk/Edhome/commit/3f78ba81d5fd58befae888763289118b2a6c5527). Test kontraktowy dodany w [5d454eb](https://github.com/edwinkarolczyk/Edhome/commit/5d454ebdba904afce0bc5acab08b1f62102dd558): `tests/check_custom_reminder_mode_on_time_change.py`.
+- **Odbiór:** CI, publikacja podpisanego APK/manifestu i test na fizycznym telefonie jeszcze niepotwierdzone. Nie traktować 0.8.1.164 jako wydanej, dopóki workflow nie przejdzie i release nie będzie widoczny.
+- **Zakres bezpieczeństwa:** zmiana wyłącznie Android Beta. Desktop bez zmian; `main`/Stable, SQLite, migracje, format ZIP i synchronizacja bez zmian.
+
 ## 2026-10-29 — Potwierdzona publikacja drzemki alarmu bezpośrednio w powiadomieniu (Android Beta 0.8.1.163 / 356)
 
 - Implementacja: [`829e32e`](https://github.com/edwinkarolczyk/Edhome/commit/829e32e18611d98d6698ffdaa93b5763e7d6c9b4); wydanie/manifest: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572).
