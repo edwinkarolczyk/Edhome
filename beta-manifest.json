@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 357,
-  "versionName": "0.8.1.164",
-  "changelog": "EDHOME Beta 0.8.1.164 — Poprawki i usprawnienia beta. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.164/edhome-beta.apk",
-  "sha256": "9e6453fc3f7ae3b441f8e8defd7474a74caf0afa912dbe9068a04b3a2f6f3efd"
+  "versionCode": 358,
+  "versionName": "0.8.1.165",
+  "changelog": "EDHOME Beta 0.8.1.165 — **Zakres:** wyłącznie Android Beta, gałąź `beta`; `main`/Stable nietknięte. **Zmiana UI:** `drawTask()` ma mniejsze odstępy karty, checkbox 38×38 dp zamiast 48×48 dp, tytuł 15 sp zamiast 17 sp oraz metadane 11 sp ograniczone do dwóch wierszy. Pełny opis pozostaje w `contentDescription` dla dostępności; status, termin, wykonanie i rozwijane akcje pozostają. **Wersja:** `app/build.gradle` podniesiony do `0.8.1.165 / 358`. **Regresja CI:** dodano `tests/check_compact_activity_cards_contract.py` oraz krok w `.github/workflows/android-beta.yml`. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.165/edhome-beta.apk",
+  "sha256": "2e479786180c23cdd6e9a8f161e81d02d566eede071767ecf905511bd19b270f"
 }
