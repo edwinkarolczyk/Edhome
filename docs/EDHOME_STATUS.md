@@ -1,3 +1,13 @@
+## 2026-10-29 — P0-B audyt Desktop licznika czynności (audyt zakończony; kod Desktop bez zmian)
+
+- Sprawdzono `desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java`: START tworzy sesję z `ended_at = null`, STOP zamyka ją ręcznie i zapisuje `worked_minutes`. W przejrzanej ścieżce nie ma automatycznego zatrzymania po godzinie, ale nie znaleziono też przypomnienia o długiej sesji.
+- Desktop ma ikonę zasobnika systemowego i obsługę komunikatów, więc można dodać przypomnienie bez zamykania sesji; trzeba zapamiętywać termin następnego przypomnienia per aktywna sesja i ponawiać je dopiero po interwale. Nie wolno zapisywać `ended_at` ani `worked_minutes` przez przypomnienie.
+- **Nie zmieniono kodu Desktop, numeru wersji ani builda** w tym kroku. Nie deklarować P0-B jako wdrożonego. Wersja odczytana z kodu: Desktop `0.7.0.142`; Android Beta timer fix: `0.8.1.166 / 359` (wydanie Android opisane niżej w historii statusu).
+- Następny krok implementacyjny: wpiąć przypomnienie w cykl życia Desktop, dodać test kontraktowy sesji nadal aktywnej po przypomnieniu, potem dopiero regulowany interwał wspólny dla Android/Desktop. Test fizyczny Desktop i telefonu pozostaje wymagany.
+- Zakres: wyłącznie `beta`; `main`/Stable bez zmian.
+
+---
+
 ## 2026-10-29 — Audyt Czynności: plan naprawy licznika czasu (P0; zapisano, bez zmian w kodzie)
 
 - **Gałąź:** `beta`. `main`/Stable nietknięte.
