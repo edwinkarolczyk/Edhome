@@ -2384,7 +2384,7 @@ public final class EdhomeDesktop extends JFrame {
             long startedAt = longValue(session, "started_at");
             if (sessionId <= 0L || startedAt <= 0L) continue;
             String key = projectWorkReminderKey(sessionId);
-            long nextAt = PREFS.getLong(key, startedAt + TimeUnit.MINUTES.toMillis(60));
+            long nextAt = PREFS.getLong(key, startedAt + projectWorkReminderIntervalMs());
             if (now < nextAt) continue;
             long taskId = longValue(session, "task_id");
             JsonObject task = desktopTaskById(taskId);
@@ -2403,7 +2403,7 @@ public final class EdhomeDesktop extends JFrame {
                     "EDHOME • Przypomnienie o pomiarze", JOptionPane.INFORMATION_MESSAGE);
             }
             // Keep the chosen interval for future reminders; the setting survives restart.
-            PREFS.putLong(key, now + TimeUnit.MINUTES.toMillis(60));
+            PREFS.putLong(key, now + projectWorkReminderIntervalMs());
         }
     }
 
