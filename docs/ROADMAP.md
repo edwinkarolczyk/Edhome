@@ -1,6 +1,14 @@
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
-## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika (29.10.2026)
+## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika
+
+### P0-B — audyt Desktop (29.10.2026)
+
+- Audyt `EdhomeDesktop.java`: START tworzy otwartą sesję, STOP ją ręcznie zamyka. W sprawdzonej ścieżce nie ma auto-stopu po 60 minutach, ale nie znaleziono również przypomnienia. To nie jest jeszcze zgodność funkcjonalna z Androidem.
+- Kryterium implementacji: powiadomienie systemowe po domyślnych 60 minutach, bez modyfikacji `ended_at`/`worked_minutes`; kolejne przypomnienie po interwale, dopóki użytkownik ręcznie nie zatrzyma sesji. Sesja zamknięta lub anulowana nie może generować przypomnień.
+- **Stan: audyt wykonany, kod Desktop jeszcze niezmieniony.** Następne: implementacja + test kontraktowy, następnie interwał konfigurowany na obu platformach, CI oraz testy fizyczne.
+
+ (29.10.2026)
 
 **Status 29.10.2026: P0-A wdrożone na `beta`; CI zakończone sukcesem, Android Beta `0.8.1.166/359` opublikowana. Test fizyczny na telefonie jeszcze niepotwierdzony.**
 
