@@ -1,3 +1,11 @@
+## 2026-10-29 — P0-C: regulowany odstęp przypomnienia licznika (CI w toku)
+
+- Android: docelowa Beta `0.8.1.167` / versionCode `360`; ustawienie w Ustawienia → Alarmy, dostępne wartości 15, 30, 45, 60, 90 i 120 minut; domyślnie 60 minut.
+- Desktop: docelowa Beta `0.7.0.144`; ustawienie odstępu w Ustawieniach Desktopu z tymi samymi wartościami.
+- Po zapisaniu odstępu aktywne sesje otrzymują zaktualizowane alarmy. Przypomnienie nie ustawia `ended_at` ani `worked_minutes`; sesja dalej trwa.
+- Dodano testy kontraktowe dla obu platform; workflow Android i Desktop powinny je uruchomić. Kompilacja i publikacja nowych wersji są jeszcze niepotwierdzone.
+- Test urządzeniowy nadal wymagany: sprawdzić krótki odstęp w praktyce, ponawianie przypomnień, ręczny STOP oraz zachowanie po restarcie.
+- Gałąź: `beta`; `main` / Stable bez zmian.
 ## 2026-10-29 — P0-B Desktop: przypomnienie bez zatrzymania licznika (0.7.0.143; CI do potwierdzenia)
 
 - Zmieniono `desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java`: Desktop sprawdza aktywne sesje co 30 s, przypomina po 60 minutach i ponawia przypomnienie co 60 minut. Komunikat podaje czynność i czas trwania.
