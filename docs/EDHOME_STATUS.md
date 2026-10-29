@@ -1,11 +1,11 @@
-## 2026-10-28 — Drzemka wybierana bezpośrednio w rozwiniętym powiadomieniu (Android Beta 0.8.1.163 / 356; CI do potwierdzenia)
+## 2026-10-29 — Potwierdzona publikacja drzemki alarmu bezpośrednio w powiadomieniu (Android Beta 0.8.1.163 / 356)
 
-- Zmieniono wymaganie UX: nie otwierać osobnej aktywności, by ustawić drzemkę. Rozwinięte powiadomienie alarmu zawiera bezpośrednie przyciski **5, 10, 15, 30 i 60 min** oraz **Wycisz alarm**.
-- Przyciski przekazują wybrany czas bezpośrednio do `ReminderReceiver`; nie uruchamiają `SnoozePickerActivity`. Po wybraniu czasu alarm ma się zatrzymać i wrócić po wskazanym interwale.
-- Zastosowano przyciski, a nie suwak przeciągany palcem: standardowe powiadomienia Androida nie zapewniają wiarygodnej obsługi interaktywnego SeekBar przez `RemoteViews`. Wybór czasu jest jednak dostępny bezpośrednio w rozwiniętym powiadomieniu, bez wchodzenia do aplikacji.
-- Dodano niestandardowy widok rozwiniętego powiadomienia oraz zaktualizowano test kontraktowy. Android Beta podniesiony do `0.8.1.163 / 356`; Desktop bez zmian. `main`/Stable bez zmian.
-- **Status w chwili zapisu:** zmiany przygotowywane na gałęzi naprawczej; CI, podpisany APK i działanie na fizycznym telefonie wymagają potwierdzenia. Nie traktować wersji 163 jako opublikowanej przed zielonym CI i sprawdzeniem manifestu.
-- Następny krok: uruchomić PR CI, poprawić ewentualne błędy kompilacji/testów, a po scaleniu do `beta` potwierdzić publikację APK i manifestu. Test urządzeniowy obejmuje rozwinąć alarm, kliknąć każdą wartość drzemki i potwierdzić ponowne zadzwonienie oraz działanie „Wycisz”.
+- Implementacja: [`829e32e`](https://github.com/edwinkarolczyk/Edhome/commit/829e32e18611d98d6698ffdaa93b5763e7d6c9b4); wydanie/manifest: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572).
+- **CI PASS:** [run 40760078491](https://github.com/edwinkarolczyk/Edhome/actions/runs/40760078491), w tym weryfikacja podpisu, upload artefaktu i publikacja release oraz live manifestu.
+- **Publikacja potwierdzona:** [`beta-v0.8.1.163`](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.163), APK 13 485 956 B; artefakt CI `EDHOME-0.8.1.163-signed-apk` 13 347 804 B.
+- Rozwinięte powiadomienie alarmu oferuje bezpośrednio **5, 10, 15, 30 i 60 min** oraz **Wycisz alarm**. Nie wymaga otwierania osobnej aktywności; „Wycisz” zatrzymuje alarm, a powiadomienie czynności pozostaje dostępne.
+- Desktop bez zmian: **0.7.0.142**. Test dźwięku, wibracji, drzemki i wyciszenia na fizycznym telefonie nadal niepotwierdzony. Nie zmieniano SQLite, migracji, ZIP ani Hub. `main`/Stable bez zmian.
+
 
 ## 2026-10-28 — Wybór czasu drzemki alarmu z powiadomienia (Android Beta 0.8.1.162 / 355; CI uruchamiane ponownie)
 
