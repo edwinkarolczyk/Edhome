@@ -27,6 +27,9 @@ final class ProjectWorkNotification {
     static final String ACTION_TIMEOUT =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_TIMEOUT";
     private static final long CHECK_MS = 60L * 60L * 1000L;
+    private static int reminderNotificationId(long taskId) {
+        return 1000000 + (int) (taskId % 800000);
+    }
     static final String ACTION_STOP =
         "com.edwinkarolczyk.edhome.PROJECT_WORK_STOP";
     private static final String CHANNEL_ID = "edhome-project-work";
@@ -134,61 +137,55 @@ final class ProjectWorkNotification {
         pending.cancel();
     }
 
-    /** Po godzinie bez potwierdzenia kończy sesję na granicy 60 minut. */
+    /** Po godzinie przypomina, ale nigdy nie zamyka ani nie pauzuje sesji. */
     static void handleCheckAction(Context context, long taskId) {
         File file = context.getDatabasePath(DATABASE);
         if (!file.isFile()) return;
-        boolean paused = false;
-        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
-                file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
-             Cursor cursor = db.rawQuery(
-                "SELECT id,started_at FROM project_task_work_sessions "
-                    + "WHERE task_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1",
+        long started;
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+             Cursor cursor = db.rawQuery("SELECT started_at FROM project_task_work_sessions "
+                + "WHERE task_id=? AND ended_at IS NULL ORDER BY id DESC LIMIT 1",
                 new String[]{Long.toString(taskId)})) {
-            if (!cursor.moveToFirst()) return;
-            long id = cursor.getLong(0);
-            long started = cursor.getLong(1);
-            if (System.currentTimeMillis() < started + CHECK_MS) {
-                scheduleCheck(context, taskId, started);
-                return;
-            }
-            android.content.ContentValues values = new android.content.ContentValues();
-            values.put("ended_at", started + CHECK_MS);
-            values.put("worked_minutes", 60);
-            paused = db.update("project_task_work_sessions", values,
-                "id=? AND ended_at IS NULL", new String[]{Long.toString(id)}) == 1;
+            if (!cursor.moveToFirst()) { cancelReminder(context, taskId); return; }
+            started = cursor.getLong(0);
         } catch (Exception problem) {
-            DiagnosticLog.error("PROJECT_WORK_AUTO_PAUSE", problem);
+            DiagnosticLog.error("PROJECT_WORK_REMINDER_CHECK", problem);
+            return;
         }
-        if (!paused) return;
-        cancel(context, taskId);
-        FeedbackSignals.warning(context);
-        if (!canNotify(context)) return;
-        NotificationManager manager = (NotificationManager)
-            context.getSystemService(Context.NOTIFICATION_SERVICE);
+        long now = System.currentTimeMillis();
+        if (now < started + CHECK_MS) { scheduleCheck(context, taskId, started); return; }
+        // Keep the persistent chronometer; show this reminder under a separate ID.
+        scheduleNextCheck(context, taskId);
+        if (!canNotify(context)) {
+            DiagnosticLog.event("PROJECT_WORK_REMINDER_SKIPPED", "task=" + taskId + " reason=notifications_disabled");
+            return;
+        }
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
-        LegacyCompat.ensureChannel(manager, CHANNEL_ID,
-            "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_DEFAULT,
-            null, true, true, false);
-        NotificationTask target=reminderTask(context,taskId);
+        LegacyCompat.ensureChannel(manager, CHANNEL_ID, "Aktywna praca nad projektem",
+            NotificationManager.IMPORTANCE_DEFAULT, null, true, true, false);
+        NotificationTask target = reminderTask(context, taskId);
         Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle(target==null ? "EDHOME • pomiar wstrzymany"
-                : "EDHOME • "+target.title)
-            .setContentText("Po 60 minutach licznik wstrzymano. Wznów lub zakończ.")
+            .setContentTitle(target == null ? "EDHOME • licznik nadal działa" : "EDHOME • " + target.title)
+            .setContentText("Minęła godzina. Licznik nadal działa — wybierz, kiedy zakończyć.")
             .setStyle(new Notification.BigTextStyle().bigText(
-                (target==null ? "" : "Czynność: "+target.title+"\n")
-                +"Czy nadal pracujesz? Po 60 minutach wstrzymano pomiar."))
-            .setContentIntent(target==null?null
-                :openAction(context,target.projectId,taskId))
+                (target == null ? "" : "Czynność: " + target.title + "\\n")
+                + "Minęła godzina, ale pomiar nie został zatrzymany. Czas nadal się nalicza."))
+            .setContentIntent(target == null ? null : openAction(context, target.projectId, taskId))
             .setAutoCancel(true)
-            .addAction(android.R.drawable.ic_media_play, "Tak, pracuję",
-                startAction(context, taskId))
-            .addAction(android.R.drawable.ic_media_pause, "Nie, zakończ",
-                stopNoticeAction(context, taskId))
+            .addAction(android.R.drawable.ic_media_pause, "Stop", stopAction(context, taskId))
             .build();
-        manager.notify(notificationId(taskId), notification);
-        DiagnosticLog.event("PROJECT_WORK_AUTO_PAUSED", "task=" + taskId);
+        manager.notify(reminderNotificationId(taskId), notification);
+        FeedbackSignals.warning(context);
+        DiagnosticLog.event("PROJECT_WORK_REMINDER_SHOWN", "task=" + taskId);
+    }
+
+    private static void scheduleNextCheck(Context context, long taskId) {
+        AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarm == null) return;
+        LegacyCompat.setAndAllowWhileIdle(alarm, AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + CHECK_MS, checkAction(context, taskId));
     }
 
     private static PendingIntent stopNoticeAction(Context context, long taskId) {
@@ -235,49 +232,11 @@ final class ProjectWorkNotification {
         cancel(context, taskId);
     }
 
+    /** Legacy alarm from older builds: turn it into a reminder, never a pause. */
     static void handleTimeout(Context context, long taskId, long started) {
         if (taskId < 0 || started <= 0) return;
-        File file = context.getDatabasePath(DATABASE);
-        if (!file.isFile()) return;
-        int minutes;
-        try (SQLiteDatabase database = SQLiteDatabase.openDatabase(
-                file.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE)) {
-            minutes = ProjectStore.pauseWorkAt(database, taskId, started, CHECK_MS);
-        } catch (Exception problem) {
-            DiagnosticLog.error("PROJECT_WORK_TIMEOUT", problem);
-            return;
-        }
-        if (minutes == 0) return;
-        cancel(context, taskId);
-        if (!canNotify(context)) return;
-        NotificationManager manager = (NotificationManager)
-            context.getSystemService(Context.NOTIFICATION_SERVICE);
-        LegacyCompat.ensureChannel(manager, CHANNEL_ID,
-            "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
-            null, true, true, false);
-        NotificationTask target=reminderTask(context,taskId);
-        Notification notification = LegacyCompat.notificationBuilder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_edhome)
-            .setContentTitle(target==null ? "EDHOME • pomiar wstrzymany"
-                : "EDHOME • "+target.title)
-            .setContentText("Po 60 minutach pomiar został wstrzymany. Wznów lub zakończ.")
-            .setStyle(new Notification.BigTextStyle().bigText(
-                (target==null ? "" : "Czynność: "+target.title+"\n")
-                +"Czy nadal pracujesz? Minutnik wstrzymano po 60 minutach."))
-            .setContentIntent(target==null?null
-                :openAction(context,target.projectId,taskId))
-            .setAutoCancel(true)
-            .addAction(android.R.drawable.ic_media_play, "Tak, pracuję",
-                startAction(context, taskId))
-            .addAction(android.R.drawable.ic_media_pause, "Nie, zakończ",
-                PendingIntent.getBroadcast(context,
-                    5100000 + (int) (taskId % 800000),
-                    new Intent(context, ReminderReceiver.class)
-                        .setAction(ACTION_DISMISS).putExtra("task_id", taskId),
-                    PendingIntent.FLAG_UPDATE_CURRENT | LegacyCompat.immutableFlag()))
-            .build();
-        manager.notify(notificationId(taskId), notification);
-        FeedbackSignals.warning(context);
+        DiagnosticLog.event("PROJECT_WORK_LEGACY_TIMEOUT_REMAPPED", "task=" + taskId);
+        handleCheckAction(context, taskId);
     }
 
     static boolean isActive(Context context, long taskId) {
@@ -401,7 +360,7 @@ final class ProjectWorkNotification {
             "Aktywna praca nad projektem", NotificationManager.IMPORTANCE_LOW,
             null, true, true, false);
 
-        scheduleTimeout(context, taskId, activeStarted);
+        cancelReminder(context, taskId);
         PendingIntent open=openAction(context,projectId,taskId);
 
         // Backdate the chronometer by already closed sessions so the system
@@ -436,8 +395,15 @@ final class ProjectWorkNotification {
         manager.notify(notificationId(taskId), notification);
     }
 
+    private static void cancelReminder(Context context, long taskId) {
+        NotificationManager manager = (NotificationManager)
+            context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.cancel(reminderNotificationId(taskId));
+    }
+
     static void cancel(Context context, long taskId) {
         cancelTimeout(context, taskId);
+        cancelReminder(context, taskId);
         NotificationManager manager = (NotificationManager)
             context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.cancel(notificationId(taskId));
