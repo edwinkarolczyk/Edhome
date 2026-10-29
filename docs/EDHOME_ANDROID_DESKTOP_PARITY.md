@@ -1,6 +1,6 @@
 ## Kontrola 29.10.2026 — Android 0.8.1.163 opublikowany; nowa luka P1: alarmy Windows
 
-**Zakres:** wyłącznie gałąź `beta`. Bieżący HEAD: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572). Wpis zastępuje nieaktualny status z 28.10, który opisywał wersję 0.8.1.159 jako oczekującą.
+**Zakres:** wyłącznie gałąź `beta`. Punkt bazowy audytu kodu/wydania przed zmianami dokumentacji: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572). Wpis zastępuje nieaktualny status z 28.10, który opisywał wersję 0.8.1.159 jako oczekującą.
 
 ### Wersje, commity, CI i publikacja
 
