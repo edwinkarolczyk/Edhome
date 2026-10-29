@@ -1,3 +1,17 @@
+## 2026-10-29 — Audyt Czynności: plan naprawy licznika czasu (P0; zapisano, bez zmian w kodzie)
+
+- **Gałąź:** `beta`. `main`/Stable nietknięte.
+- **Ustalenie z przeglądu kodu:** Android `ProjectWorkNotification.handleCheckAction()` zamyka aktywną sesję po 60 minutach (`ended_at = started_at + 60 min`, `worked_minutes = 60`), a ścieżka timeout również wstrzymuje pomiar. To nie spełnia wymagania: po godzinie ma być przypomnienie, a licznik ma czekać na decyzję użytkownika.
+- **Docelowa poprawka:** przypomnienie po konfigurowalnym interwale (domyślnie 60 min), bez automatycznego zamykania/wstrzymywania sesji; brak reakcji nie zatrzymuje licznika. Ręczne Stop/Wstrzymaj/Wznów ma zachować prawdziwy czas i historię.
+- **Zakres zgodności:** sprawdzić i ujednolicić semantykę Android/Desktop; ustawienie interwału musi przetrwać aktualizację i restart.
+- **Kolejność:** P0-A poprawa ścieżek Androida; P0-B kontrola Desktop; P0-C testy regresji; P0-D regulowany interwał; P0-E CI + test fizyczny i dopiero potem Beta release.
+- **Testy wymagane:** sesja nadal aktywna po przypomnieniu; brak reakcji nie zamyka sesji; ręczne akcje zapisują prawidłowy czas; brak duplikatów; test restartu i uprawnień powiadomień.
+- **Dalsze punkty audytu:** P1 rozdzielenie planowanego początku i `remind_time`; P1 stabilne sortowanie pełnej listy; P1 ponowna walidacja terminu przed zapisem; P2 zgodność Android/Desktop; P3 diagnostyka błędów tylko w potrzebnych miejscach.
+- **Status prac:** zapisano do roadmapy i statusu; **nie zmieniono kodu, wersji ani builda**. Audyt był statyczny; testy na fizycznym telefonie/komputerze pozostają do wykonania.
+- **Źródło szczegółów i kryteriów:** `docs/ROADMAP.md`, sekcja „Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika”.
+
+---
+
 ## 2026-10-29 — Kompaktowe karty Czynności (Android Beta 0.8.1.165 / 358; CI w toku)
 
 - **Zakres:** wyłącznie Android Beta, gałąź `beta`; `main`/Stable nietknięte.
