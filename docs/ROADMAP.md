@@ -1,5 +1,13 @@
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
+## Czynności — P0-C: regulowany odstęp przypomnienia (29.10.2026)
+
+- Android docelowo `0.8.1.167/360`, Desktop `0.7.0.144`; ustawienie 15/30/45/60/90/120 minut, domyślnie 60.
+- Ustawienie jest zapisywane lokalnie na każdej platformie; po zmianie przeliczane są aktywne alarmy. Licznik nie zatrzymuje się automatycznie.
+- Dodano testy kontraktowe. CI, publikacja i test fizyczny wymagają potwierdzenia.
+- Następny krok po zielonym CI: pobrać artefakty, przetestować aktywny pomiar i restart, następnie audyt sortowania zadań i niezależnych terminów przypomnień.
+
+
 ## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika
 
 ### P0-B — przypomnienie Desktop bez auto-stopu (29.10.2026)
