@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.143";
+    private static final String DESKTOP_VERSION = "0.7.0.144";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -2352,7 +2352,17 @@ public final class EdhomeDesktop extends JFrame {
         timer.start();
     }
 
-        private static String projectWorkReminderKey(long sessionId) {
+        private static int projectWorkReminderIntervalMinutes() {
+        int minutes = PREFS.getInt("projectWorkReminderIntervalMinutes", 60);
+        return minutes == 15 || minutes == 30 || minutes == 45
+            || minutes == 60 || minutes == 90 || minutes == 120 ? minutes : 60;
+    }
+
+    private static long projectWorkReminderIntervalMs() {
+        return TimeUnit.MINUTES.toMillis(projectWorkReminderIntervalMinutes());
+    }
+
+    private static String projectWorkReminderKey(long sessionId) {
         return "projectWorkReminderNext." + sessionId;
     }
 
@@ -2392,7 +2402,7 @@ public final class EdhomeDesktop extends JFrame {
                 JOptionPane.showMessageDialog(this, message,
                     "EDHOME • Przypomnienie o pomiarze", JOptionPane.INFORMATION_MESSAGE);
             }
-            // Default interval: 60 minutes. The next stage will make this configurable.
+            // Keep the chosen interval for future reminders; the setting survives restart.
             PREFS.putLong(key, now + TimeUnit.MINUTES.toMillis(60));
         }
     }
@@ -2457,7 +2467,7 @@ public final class EdhomeDesktop extends JFrame {
         session.add("worked_minutes",com.google.gson.JsonNull.INSTANCE);
         table("project_task_work_sessions").add(session);
         PREFS.putLong(projectWorkReminderKey(longValue(session, "id")),
-            longValue(session, "started_at") + TimeUnit.MINUTES.toMillis(60));
+            longValue(session, "started_at") + projectWorkReminderIntervalMs());
         markDirty();
         DesktopDiagnosticLog.event("PROJECT_WORK_STARTED_DESKTOP",
             "task="+taskId);
@@ -6800,6 +6810,49 @@ public final class EdhomeDesktop extends JFrame {
         statusCard.add(Box.createVerticalStrut(4));
         statusCard.add(phoneConnectivity);
         content.add(statusCard);
+        content.add(Box.createVerticalStrut(12));
+
+        JPanel timerCard = new RoundedPanel(APP_SURFACE, 20);
+        timerCard.setLayout(new BoxLayout(timerCard, BoxLayout.Y_AXIS));
+        timerCard.setBorder(new EmptyBorder(14, 18, 14, 18));
+        JLabel timerTitle = new JLabel("Przypomnienie o czasie czynności");
+        timerTitle.setForeground(APP_TEXT);
+        timerTitle.setFont(timerTitle.getFont().deriveFont(Font.BOLD, 16f));
+        timerCard.add(timerTitle);
+        timerCard.add(Box.createVerticalStrut(5));
+        JLabel timerDescription = new JLabel("Licznik nie zatrzymuje się sam. Ustaw odstęp przypomnień.");
+        timerDescription.setForeground(APP_MUTED);
+        timerCard.add(timerDescription);
+        timerCard.add(Box.createVerticalStrut(8));
+        Integer[] reminderIntervals = {15, 30, 45, 60, 90, 120};
+        JComboBox<Integer> reminderInterval = new JComboBox<>(reminderIntervals);
+        reminderInterval.setSelectedItem(projectWorkReminderIntervalMinutes());
+        timerCard.add(reminderInterval);
+        timerCard.add(Box.createVerticalStrut(8));
+        JButton saveReminderInterval = actionButton("Zapisz odstęp przypomnień");
+        saveReminderInterval.addActionListener(event -> {
+            Object selectedInterval = reminderInterval.getSelectedItem();
+            if (!(selectedInterval instanceof Integer)) return;
+            int minutes = (Integer) selectedInterval;
+            if (minutes != 15 && minutes != 30 && minutes != 45
+                    && minutes != 60 && minutes != 90 && minutes != 120) return;
+            PREFS.putInt("projectWorkReminderIntervalMinutes", minutes);
+            long now = System.currentTimeMillis();
+            for (JsonElement element : table("project_task_work_sessions")) {
+                if (!element.isJsonObject()) continue;
+                JsonObject session = element.getAsJsonObject();
+                if (!value(session, "ended_at").isBlank()) continue;
+                long sessionId = longValue(session, "id");
+                long startedAt = longValue(session, "started_at");
+                if (sessionId > 0L && startedAt > 0L)
+                    PREFS.putLong(projectWorkReminderKey(sessionId),
+                        Math.max(now + 1_000L, startedAt + TimeUnit.MINUTES.toMillis(minutes)));
+            }
+            DesktopDiagnosticLog.event("PROJECT_WORK_REMINDER_INTERVAL_SAVED", "minutes=" + minutes);
+            JOptionPane.showMessageDialog(this, "Zapisano przypomnienie co " + minutes + " min.");
+        });
+        timerCard.add(saveReminderInterval);
+        content.add(timerCard);
         content.add(Box.createVerticalStrut(12));
 
         JPanel actions = new JPanel(new GridLayout(7, 1, 0, 8));
