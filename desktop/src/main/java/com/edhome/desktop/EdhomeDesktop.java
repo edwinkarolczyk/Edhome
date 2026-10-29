@@ -69,7 +69,7 @@ import java.util.zip.ZipInputStream;
 public final class EdhomeDesktop extends JFrame {
     private static final int PORT = 45823;
     private static final int PAIR_PORT = 45824;
-    private static final String DESKTOP_VERSION = "0.7.0.142";
+    private static final String DESKTOP_VERSION = "0.7.0.143";
     private static final String ANDROID_COMPAT_VERSION = "0.8.0.44";
     private static final int HUB_FIREWALL_RULE_VERSION = 2;
     private static final Color APP_BG = new Color(16, 20, 27);
@@ -129,6 +129,7 @@ public final class EdhomeDesktop extends JFrame {
     private javax.swing.Timer reconnectTimer;
     private long lastHubRestartAttemptAt;
     private javax.swing.Timer autoSaveTimer;
+    private javax.swing.Timer projectWorkReminderTimer;
     private boolean autoSaving;
     private boolean editingDialog;
     private final Map<String,Integer> sectionScrollY = new java.util.HashMap<>();
@@ -286,6 +287,7 @@ public final class EdhomeDesktop extends JFrame {
         initTray();
         startReconnectLoop();
         startAutoSaveLoop();
+        startProjectWorkReminderLoop();
 
         boolean startMinimized = PREFS.getBoolean("startMinimized", false);
         setVisible(!(startMinimized && trayIcon != null));
@@ -2350,6 +2352,51 @@ public final class EdhomeDesktop extends JFrame {
         timer.start();
     }
 
+        private static String projectWorkReminderKey(long sessionId) {
+        return "projectWorkReminderNext." + sessionId;
+    }
+
+    private void startProjectWorkReminderLoop() {
+        if (projectWorkReminderTimer != null) projectWorkReminderTimer.stop();
+        projectWorkReminderTimer = new javax.swing.Timer(30_000, e -> checkProjectWorkReminders());
+        projectWorkReminderTimer.setInitialDelay(5_000);
+        projectWorkReminderTimer.start();
+    }
+
+    /** Reminds about long-running sessions without mutating or closing them. */
+    private void checkProjectWorkReminders() {
+        long now = System.currentTimeMillis();
+        for (JsonElement element : table("project_task_work_sessions")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject session = element.getAsJsonObject();
+            if (!value(session, "ended_at").isBlank()) continue;
+            long sessionId = longValue(session, "id");
+            long startedAt = longValue(session, "started_at");
+            if (sessionId <= 0L || startedAt <= 0L) continue;
+            String key = projectWorkReminderKey(sessionId);
+            long nextAt = PREFS.getLong(key, startedAt + TimeUnit.MINUTES.toMillis(60));
+            if (now < nextAt) continue;
+            long taskId = longValue(session, "task_id");
+            JsonObject task = desktopTaskById(taskId);
+            String taskName = task == null ? "czynność" : value(task, "title");
+            if (taskName.isBlank()) taskName = "czynność";
+            long elapsedMinutes = Math.max(1L, (now - startedAt) / 60_000L);
+            String message = "Pomiar nadal trwa: " + taskName + ". Minęło "
+                + elapsedMinutes + " min. Licznik nie został zatrzymany — wybierz STOP, gdy skończysz.";
+            DesktopDiagnosticLog.event("PROJECT_WORK_REMINDER_DESKTOP",
+                "session=" + sessionId + " task=" + taskId + " elapsedMinutes=" + elapsedMinutes);
+            if (trayIcon != null) {
+                trayIcon.displayMessage("EDHOME • Czynność", message, TrayIcon.MessageType.INFO);
+            } else {
+                Toolkit.getDefaultToolkit().beep();
+                JOptionPane.showMessageDialog(this, message,
+                    "EDHOME • Przypomnienie o pomiarze", JOptionPane.INFORMATION_MESSAGE);
+            }
+            // Default interval: 60 minutes. The next stage will make this configurable.
+            PREFS.putLong(key, now + TimeUnit.MINUTES.toMillis(60));
+        }
+    }
+
     private void startDesktopProjectWork(JsonObject task) {
         long taskId = longValue(task,"id");
         if (taskId <= 0 || desktopTaskById(taskId) == null) {
@@ -2409,6 +2456,8 @@ public final class EdhomeDesktop extends JFrame {
         session.add("ended_at",com.google.gson.JsonNull.INSTANCE);
         session.add("worked_minutes",com.google.gson.JsonNull.INSTANCE);
         table("project_task_work_sessions").add(session);
+        PREFS.putLong(projectWorkReminderKey(longValue(session, "id")),
+            longValue(session, "started_at") + TimeUnit.MINUTES.toMillis(60));
         markDirty();
         DesktopDiagnosticLog.event("PROJECT_WORK_STARTED_DESKTOP",
             "task="+taskId);
@@ -2430,6 +2479,7 @@ public final class EdhomeDesktop extends JFrame {
             Math.round(Math.max(0L,ended-started)/60000.0));
         session.addProperty("ended_at",ended);
         session.addProperty("worked_minutes",minutes);
+        PREFS.remove(projectWorkReminderKey(longValue(session, "id")));
         markDirty();
         DesktopDiagnosticLog.event("PROJECT_WORK_STOPPED_DESKTOP",
             "task="+taskId+" minutes="+minutes);
