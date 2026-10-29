@@ -2,11 +2,12 @@
 
 ## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika
 
-### P0-B — audyt Desktop (29.10.2026)
+### P0-B — przypomnienie Desktop bez auto-stopu (29.10.2026)
 
-- Audyt `EdhomeDesktop.java`: START tworzy otwartą sesję, STOP ją ręcznie zamyka. W sprawdzonej ścieżce nie ma auto-stopu po 60 minutach, ale nie znaleziono również przypomnienia. To nie jest jeszcze zgodność funkcjonalna z Androidem.
-- Kryterium implementacji: powiadomienie systemowe po domyślnych 60 minutach, bez modyfikacji `ended_at`/`worked_minutes`; kolejne przypomnienie po interwale, dopóki użytkownik ręcznie nie zatrzyma sesji. Sesja zamknięta lub anulowana nie może generować przypomnień.
-- **Stan: audyt wykonany, kod Desktop jeszcze niezmieniony.** Następne: implementacja + test kontraktowy, następnie interwał konfigurowany na obu platformach, CI oraz testy fizyczne.
+- Wersja robocza: Desktop `0.7.0.143`, zmiana na `beta` w commitach implementacji `f4cf290`, testu `4729654`, wersji `49395c1` i workflow `1d88ad8`.
+- Timer kontrolny sprawdza aktywne sesje co 30 sekund; pierwsze przypomnienie po 60 minutach, następne co 60 minut. Termin kolejnego przypomnienia jest przechowywany w preferencjach użytkownika.
+- Powiadomienie nie zmienia `ended_at` ani `worked_minutes`; sesja zamyka się wyłącznie po ręcznym STOP. Test kontraktowy jest dodany do CI.
+- **CI i publikacja instalatora nie zostały jeszcze potwierdzone.** Test na fizycznym Desktop nadal wymagany. Interwał jest na razie stały (60 min); konfiguracja na Androidzie i Desktop to następny etap.
 
  (29.10.2026)
 
