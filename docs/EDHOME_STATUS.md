@@ -1,10 +1,11 @@
-## 2026-10-29 — P0-B audyt Desktop licznika czynności (audyt zakończony; kod Desktop bez zmian)
+## 2026-10-29 — P0-B Desktop: przypomnienie bez zatrzymania licznika (0.7.0.143; CI do potwierdzenia)
 
-- Sprawdzono `desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java`: START tworzy sesję z `ended_at = null`, STOP zamyka ją ręcznie i zapisuje `worked_minutes`. W przejrzanej ścieżce nie ma automatycznego zatrzymania po godzinie, ale nie znaleziono też przypomnienia o długiej sesji.
-- Desktop ma ikonę zasobnika systemowego i obsługę komunikatów, więc można dodać przypomnienie bez zamykania sesji; trzeba zapamiętywać termin następnego przypomnienia per aktywna sesja i ponawiać je dopiero po interwale. Nie wolno zapisywać `ended_at` ani `worked_minutes` przez przypomnienie.
-- **Nie zmieniono kodu Desktop, numeru wersji ani builda** w tym kroku. Nie deklarować P0-B jako wdrożonego. Wersja odczytana z kodu: Desktop `0.7.0.142`; Android Beta timer fix: `0.8.1.166 / 359` (wydanie Android opisane niżej w historii statusu).
-- Następny krok implementacyjny: wpiąć przypomnienie w cykl życia Desktop, dodać test kontraktowy sesji nadal aktywnej po przypomnieniu, potem dopiero regulowany interwał wspólny dla Android/Desktop. Test fizyczny Desktop i telefonu pozostaje wymagany.
-- Zakres: wyłącznie `beta`; `main`/Stable bez zmian.
+- Zmieniono `desktop/src/main/java/com/edhome/desktop/EdhomeDesktop.java`: Desktop sprawdza aktywne sesje co 30 s, przypomina po 60 minutach i ponawia przypomnienie co 60 minut. Komunikat podaje czynność i czas trwania.
+- Przypomnienie **nie zapisuje** `ended_at` ani `worked_minutes`. Sesja pozostaje aktywna; ręczny STOP zamyka sesję i usuwa zapisany termin następnego przypomnienia. Termin przypomnienia jest przechowywany w preferencjach użytkownika, więc nie resetuje się po restarcie aplikacji.
+- Wersja Desktop podniesiona do `0.7.0.143` w kodzie i `desktop/build.gradle`; workflow publikuje wersję `0.7.0.143`. Dodano `tests/check_desktop_project_work_reminder_contract.py` i uruchamianie go w `.github/workflows/desktop-beta.yml`.
+- Commity: implementacja `f4cf290`; test `4729654`; wersja `49395c1`; workflow/test CI `1d88ad8`.
+- **Weryfikacja:** po zapisaniu zmian nie odczytano jeszcze wyniku nowego CI ani opublikowanego instalatora. Nie deklarować wydania gotowego do instalacji, dopóki CI i publikacja Beta nie przejdą. Test na fizycznym komputerze nadal wymagany.
+- **Następny krok:** sprawdzić CI i instalator `0.7.0.143`; potem zrobić konfigurowalny interwał przypomnienia na Androidzie i Desktop. Zakres wyłącznie `beta`; `main`/Stable nietknięte.
 
 ---
 
