@@ -1,14 +1,48 @@
-## Kontrola 28.10.2026 — poprawka P0 przypomnień Android; odbiór CI/publikacji otwarty
+## Kontrola 29.10.2026 — Android 0.8.1.163 opublikowany; nowa luka P1: alarmy Windows
 
-- **HEAD beta przed aktualizacją:** [35e2e288](https://github.com/edwinkarolczyk/Edhome/commit/35e2e28835667c072659c23eb13d5062096e935e). Zmiany kodu w tym etapie: [2d514612](https://github.com/edwinkarolczyk/Edhome/commit/2d5146126cc4ef6cde181aa3f0d13864d20c1fe7) przenosi akcje alarmu do ścieżki pojedynczego przypomnienia; [bdca24ec](https://github.com/edwinkarolczyk/Edhome/commit/bdca24ecbcba4b6001cbc5697075b6e05fc4da8d) dodaje test umiejscowienia akcji; [35e2e288](https://github.com/edwinkarolczyk/Edhome/commit/35e2e28835667c072659c23eb13d5062096e935e) poprawia wzorzec testu. Wyłącznie beta.
-- **Nowa rozbieżność P0 znaleziona w CI:** commit [84b805a1](https://github.com/edwinkarolczyk/Edhome/commit/84b805a1d2841eb46e941d477977f32c775f87e5) nie kompilował się: warunek z legacy, plannerOnly, singleTaskId i firedValue trafił do notifyDailyTask(), gdzie te zmienne nie istnieją. [Run 40645697954 — FAILURE](https://github.com/edwinkarolczyk/Edhome/actions/runs/40645697954).
-- **Naprawa w kodzie:** warunek przeniesiono do onReceive(), gdzie pojedynczy alarm ma poprawny identyfikator i fingerprint wystąpienia. Poranne przypomnienie nadal dodaje akcje bez drzemki; planer nie otrzymuje akcji pojedynczej czynności. Test kontraktowy sprawdza rozdział tych ścieżek. Nie zmieniono SQLite, migracji, JSON Hub, ZIP, sald ani danych.
-- **Android Beta:** źródło app/build.gradle = **0.8.1.159 / versionCode 352**. [Run 40649661376](https://github.com/edwinkarolczyk/Edhome/actions/runs/40649661376) dla poprawki kodu: krok Compile-check Beta and Stable **PASS**, pełny workflow nadal **in progress** w ostatnim odczycie. [Run 40649706389](https://github.com/edwinkarolczyk/Edhome/actions/runs/40649706389) dla testu i bieżącego HEAD: **pending**. Wydanie i manifest nadal wskazują **0.8.1.158 / versionCode 351** ([APK opublikowany 27.10](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.158)); **0.8.1.159 nie jest jeszcze potwierdzone jako opublikowane**.
-- **Desktop Beta:** **0.7.0.142**, desktop/build.gradle i EdhomeDesktop.DESKTOP_VERSION zgodne. Ostatni potwierdzony [CI PASS 40070265459](https://github.com/edwinkarolczyk/Edhome/actions/runs/40070265459) dla testów/patcha Hub; [release desktop-beta-latest](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest) ma EXE i ZIP, assety ostatnio zaktualizowane **24.10.2026 06:31 UTC**. Brak nowszego potwierdzonego wydania Desktop.
-- **Macierz modułów:** Projekty/Czynności — częściowo, **P1** (nowe akcje przypomnienia są Androidowym UX; nie są kontraktem danych Desktop); PayCheck/Budżet i Hub — częściowo, **P0**; Kalendarz/planer — brak pełnego odpowiednika SmartTaskPlanner na Desktop, **P1**; Magazyn QR/NFC, Miejsca i diagnostyka — częściowo, **P1**; Pojazdy, Odpady i Ogród — częściowo, **P2**; backup ZIP/restore — częściowo, **P0**. Szczegółowa macierz poniżej pozostaje aktualna.
-- **Warunki dwukierunkowej synchronizacji:** Android DataBackup.DB_VERSION=52; SyncRecordStore przechowuje sync_uuid/table_name/row_key/revision/updated_at/deleted_at/row_hash. Desktop Hub v2 używa operations[] z table/rowKey/syncUuid/baseRevision/action/row i 409 przy konflikcie. Nie zmieniano tych kontraktów. Ryzyko P0 nadal otwarte: PayCheck/Budżet 2→1 i 1→2, saldo/nadpłaty, utrata ACK/retry, stare i selektywne ZIP/restore.
-- **Testy fizyczne:** Android ↔ Windows E2E, dźwięk/wibracje i akcje alarmu, konflikty 409, finanse oraz ZIP **niepotwierdzone na prawdziwych urządzeniach**. CI nie zastępuje tego odbioru.
-- **Decyzja:** jedna mała poprawka Android została wdrożona na beta; brak podstaw do deklaracji publikacji 0.8.1.159 lub GO dla Stable, dopóki pełny CI nie zakończy się PASS i nie potwierdzimy assetu. main/Stable bez zmian.
+**Zakres:** wyłącznie gałąź `beta`. Bieżący HEAD: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572). Wpis zastępuje nieaktualny status z 28.10, który opisywał wersję 0.8.1.159 jako oczekującą.
+
+### Wersje, commity, CI i publikacja
+
+- **Android Beta 0.8.1.163 / versionCode 356.** Kod funkcji: [`829e32e`](https://github.com/edwinkarolczyk/Edhome/commit/829e32e18611d98d6698ffdaa93b5763e7d6c9b4); wydanie/manifest: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572). [GitHub Actions 40760078491 — PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/40760078491): kompilacja, certyfikat podpisu, artefakt podpisanego APK i publikacja release/manifestu zakończone powodzeniem. Artefakt `EDHOME-0.8.1.163-signed-apk` (13 347 804 B); [opublikowany APK](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.163) (13 485 956 B), 28.10.2026 20:09 UTC.
+- **Desktop Beta 0.7.0.142.** `desktop/build.gradle`, `EdhomeDesktop.DESKTOP_VERSION` i workflow nadal zgodne. Ostatni kod/test Hub: [`bf7a612`](https://github.com/edwinkarolczyk/Edhome/commit/bf7a6123b06386deaa021117b97730e3bb000a09). [GitHub Actions 40070265459 — PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/40070265459): JUnit, smoke JVM/EXE, paczkowanie i publikacja one-click. [Release Desktop](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest) ma EXE (57 338 368 B) i ZIP (56 505 937 B), assety ostatnio zaktualizowane 24.10.2026 06:31 UTC. Nie ma nowszego przebiegu Desktop Beta ani nowszej publikacji Desktop.
+- **Test na rzeczywistych urządzeniach:** niepotwierdzony. Nie ma dowodu E2E Android↔Windows ani fizycznego testu dźwięku/wibracji, wyciszenia i ponownego alarmu po drzemce. CI i assety nie zastępują odbioru na telefonie i PC.
+
+### Nowa rozbieżność funkcjonalna
+
+Android w [`d65c081`](https://github.com/edwinkarolczyk/Edhome/commit/d65c08140fb2af77207503d79c97c93432df6b18) oraz [`829e32e`](https://github.com/edwinkarolczyk/Edhome/commit/829e32e18611d98d6698ffdaa93b5763e7d6c9b4) ma trwały alarm czynności: usługa pierwszoplanowa dzwoni i wibruje, a rozwinięte powiadomienie udostępnia bezpośrednie drzemki **5/10/15/30/60 min** oraz **Wycisz**. W Desktop istnieje pole `tasks.remind_time` i formularz przypomnienia, ale w aktualnym `EdhomeDesktop.java` nie znaleziono równoważnego harmonogramu, zapętlonego alarmu Windows ani akcji drzemki/wyciszenia. To **brak funkcji Desktop P1**, nie rozbieżność schematu. Nie wdrażam jej automatycznie: wymaga zaplanowania powiadomień Windows, obsługi uśpienia/restartu, snooze/dismiss i testów systemowych; sama zmiana formularza mogłaby dać fałszywe poczucie, że alarm działa.
+
+### Aktualna macierz funkcji
+
+| Obszar | Fakty w kodzie na `beta` | Ocena | Priorytet |
+|---|---|---|---|
+| Projekty / podprojekty / Czynności | Wspólne rekordy, zależności, sesje pracy, koszty i dwie miniatury; Android 163 ma trwały alarm i drzemki w powiadomieniu, Desktop ma pole czasu, ale brak potwierdzonego odpowiednika alarmu Windows. | **Częściowo; brak alarmu Windows** | **P1** |
+| PayCheck / Budżet | Android `PaycheckBudgetSyncPatch`; Desktop `DesktopBudgetDelta`, `DesktopBudgetIntegrity`, historia append-only i obsługa retry; `budgetDelta` obejmuje `paycheckMonthlyBudget`, `paycheckRecipients`, `paycheckBudgetHistory`. | **Częściowo; E2E rozliczeń otwarte** | **P0** |
+| Kalendarz / planer | Kalendarz i terminy są obecne; Android `SmartTaskPlanner` ma propozycje i sprawdzanie kolizji, bez potwierdzonego odpowiednika pełnego planowania na Desktop. | **Brak pełnego parytetu planera** | **P1** |
+| Magazyn QR/NFC | Wspólne `storage_items`, `nfc_links`, miejsca, QR i operacje wzięcia/odłożenia; Desktop ma skaner. Brak testu fizycznych tagów, konfliktów lokalizacji i zwrotów. | **Częściowo** | **P1** |
+| Miejsca | `places`, hierarchia, przypisania i `frost_risk`; integracja z Magazynem jest walidowana w kodzie. Brak E2E przenoszenia/usuwania z zależnościami. | **Częściowo** | **P1** |
+| Pojazdy | `vehicles`, opony, polisy, koszty, dokumenty; wspólny model istnieje, lecz terminy, przypomnienia i rozliczenia nieodebrane na urządzeniach. | **Częściowo** | **P2** |
+| Odpady | Reguły Androida i widoki Desktop; brak porównania pełnego cyklu harmonogramu, powiadomień i retry. | **Częściowo** | **P2** |
+| Ogród | `garden_areas`, `garden_catalog`, `garden_plantings`, `garden_harvests` są obsługiwane przez obie aplikacje; synchronizacja cykli i zbiorów niepotwierdzona fizycznie. | **Częściowo** | **P2** |
+| Backup ZIP / restore | Android `DataBackupArchive`, `BackupSelectiveMerge`, checkpoint/cofnięcie i obsługa snapshotów DB v2–v52; Desktop robi kopię przed zastąpieniem snapshotu. Brak E2E starych/selektywnych ZIP, zdjęć i powrotu Android→PC→Android. | **Częściowo** | **P0** |
+| Diagnostyka | Android `DiagnosticLog`, Desktop `DesktopDiagnosticLog`, `/diagnostics-upload`, potwierdzenie transferu powiązane z zapisanymi bajtami. Brak fizycznego testu ACK, zerwania LAN i kasowania wyłącznie potwierdzonego fragmentu logu. | **Kontrakt w kodzie; odbiór otwarty** | **P1** |
+
+### Schemat, migracje i kontrakt synchronizacji
+
+- Android `DataBackup.DB_VERSION=52`; migracja 51→52 dodaje pola miniatur czynności `task_thumbnail_1_base64` i `task_thumbnail_2_base64`. Ostatnie zmiany alarmu w 161–163 nie modyfikują SQLite, migracji, formatu ZIP ani Hub.
+- Tabela metadanych synchronizacji Android przechowuje `sync_uuid`, `table_name`, `row_key`, `revision`, `updated_at`, `deleted_at`, `row_hash`. W JSON są to m.in. `syncUuid`, `table`, `rowKey`, `revision`, `updatedAt`, `deletedAt`, `rowHash`.
+- Hub v2: `format=edhome-record-patch`, `version=2`, `operations[]` z `table`, `rowKey`, `syncUuid`, `baseRevision`, `action`, `row`; finansowy delta-patch ma osobne `budgetDelta`. SHA-256 snapshotu i compare-and-set chronią zapis; konflikt zwraca HTTP **409**.
+- Android `SyncRecordStore.applyV2` waliduje tabelę, klucz, UUID, akcję i rewizję, odrzuca powtórzony UUID oraz wykonuje operacje w transakcji. Desktop `validateHubPatchOperationIdentities` odrzuca powtórzone UUID i pary `table#rowKey` przed zastosowaniem zmian; patch jest scalany na kopii snapshotu.
+- Kontraktowe testy w repo obejmują schemat/backup, Desktop sync, odwrotny patch budżetu i drzemkę alarmu. To testy automatyczne/statyczne; **nie dowodzą** fizycznego round-trip danych ani prawidłowego działania alarmu na urządzeniu.
+
+### Priorytet dalszych prac
+
+1. **P0:** fizyczny test Android↔Windows w obu kierunkach, HTTP 409, restart/zmiana IP, retry po utracie ACK, PayCheck/Budżet 2→1 i 1→2, saldo/nadpłaty oraz restore starych i selektywnych ZIP.
+2. **P1:** zaprojektować Windows task alarm (harmonogram, dzwonienie/powiadomienie, snooze, mute, restart/uśpienie) oraz uzupełnić pełny planer Desktop; dopiero potem implementacja z testami.
+3. **P1/P2:** odbiór Magazynu QR/NFC, Miejsc, diagnostyki, Pojazdów, Odpadów i Ogrodu.
+
+**Decyzja:** brak bezpiecznej, małej poprawki Desktop do wdrożenia bez ryzyka fałszywych alarmów lub utraty danych. W tym przebiegu zmieniana jest tylko macierz dokumentacyjna; brak zmian kodu i migracji. `docs/EDHOME_STATUS.md` aktualizuje się osobno wyłącznie dla faktycznie opublikowanej funkcji Android 0.8.1.163. **Stable `main` bez zmian.**
+
 
 ---
 
