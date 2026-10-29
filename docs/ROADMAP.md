@@ -2,7 +2,7 @@
 
 ## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika (29.10.2026)
 
-**Status: potwierdzony problem w audycie statycznym; poprawka zapisana do realizacji na gałęzi `beta`, jeszcze NIE zaimplementowana.** Nie podbijać wersji i nie ogłaszać wydania, dopóki zmiana, testy CI i weryfikacja na urządzeniach nie zostaną wykonane.
+**Status 29.10.2026: P0-A wdrożone w kodzie na `beta`; test kontraktowy dodany do Android CI. CI i test na fizycznym telefonie jeszcze niepotwierdzone.** Nie podbijać wersji ani nie ogłaszać wydania, dopóki CI i testy na urządzeniach nie zostaną wykonane.
 
 ### Wymagane zachowanie
 
@@ -24,7 +24,7 @@
 
 ### Kolejność realizacji
 
-- **P0-A:** usunąć automatyczne zamykanie sesji w Androidzie w `ProjectWorkNotification` / ścieżkach `ACTION_CHECK` i timeout; po interwale tylko przypominać.
+- **P0-A — kod wdrożony, weryfikacja oczekuje:** `ProjectWorkNotification` nie zamyka sesji po godzinie; przypomnienie ma osobny identyfikator, więc stałe powiadomienie z chronometrem pozostaje widoczne; ignorowanie przypomnienia nie zatrzymuje licznika; kolejne przypomnienie planowane jest za godzinę. Stary alarm `ACTION_TIMEOUT` jest przekierowany do przypomnienia, nie do pauzy. Test kontraktowy `tests/check_project_timer_reminder_contract.py` podpięty do Android CI. **Nie obejmuje jeszcze regulowanego interwału**.
 - **P0-B:** sprawdzić i ujednolicić Start/Stop oraz obsługę powiadomień w Desktopie.
 - **P0-C:** dodać testy regresji czasu sesji, braku reakcji i ręcznych akcji.
 - **P0-D:** dodać ustawienie interwału z bezpieczną wartością domyślną.
