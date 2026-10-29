@@ -2,7 +2,7 @@
 
 ## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika (29.10.2026)
 
-**Status 29.10.2026: P0-A wdrożone w kodzie na `beta`; test kontraktowy dodany do Android CI. CI i test na fizycznym telefonie jeszcze niepotwierdzone.** Nie podbijać wersji ani nie ogłaszać wydania, dopóki CI i testy na urządzeniach nie zostaną wykonane.
+**Status 29.10.2026: P0-A wdrożone w kodzie na `beta`; testy kontraktowe w Android CI, wydanie Beta `0.8.1.166/359` w przygotowaniu. Pełny CI i test na fizycznym telefonie jeszcze niepotwierdzone.**
 
 ### Wymagane zachowanie
 
