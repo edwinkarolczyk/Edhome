@@ -7,8 +7,8 @@ build = Path("desktop/build.gradle").read_text(encoding="utf-8")
 workflow = Path(".github/workflows/desktop-beta.yml").read_text(encoding="utf-8")
 
 assert 'DESKTOP_VERSION = "0.7.0.144"' in source
-assert "version = '0.7.0.143'" in build
-assert 'DESKTOP_VERSION: "0.7.0.143"' in workflow
+assert "version = '0.7.0.144'" in build
+assert 'DESKTOP_VERSION: "0.7.0.144"' in workflow
 assert "startProjectWorkReminderLoop();" in source
 assert "new javax.swing.Timer(30_000, e -> checkProjectWorkReminders())" in source
 assert 'projectWorkReminderIntervalMinutes()' in source
