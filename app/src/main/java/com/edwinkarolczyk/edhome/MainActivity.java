@@ -24037,6 +24037,31 @@ public final class MainActivity extends Activity {
         if("notifications".equals(selected)) {
         LinearLayout notifications=settingsAccordion("notifications","Powiadomienia",
             "Przypomnienia i cisza nocna.",true);
+        notifications.addView(text("Przypomnienie o czasie czynności w Projektach",14,true));
+        Spinner projectWorkInterval = new Spinner(this);
+        java.util.List<String> projectWorkIntervalLabels = java.util.Arrays.asList(
+            "15 minut", "30 minut", "45 minut", "60 minut", "90 minut", "120 minut");
+        projectWorkInterval.setAdapter(themeSpinnerAdapter(projectWorkIntervalLabels));
+        int savedProjectWorkInterval = prefs.getInt("project_work_reminder_interval_minutes", 60);
+        int[] projectWorkIntervalValues = {15, 30, 45, 60, 90, 120};
+        int projectWorkIntervalChoice = 3;
+        for (int i = 0; i < projectWorkIntervalValues.length; i++)
+            if (projectWorkIntervalValues[i] == savedProjectWorkInterval)
+                projectWorkIntervalChoice = i;
+        projectWorkInterval.setSelection(projectWorkIntervalChoice);
+        notifications.addView(projectWorkInterval,
+            new LinearLayout.LayoutParams(-1, dp(52)));
+        notifications.addView(text("Domyślnie 60 minut. Przypomnienie nie zatrzymuje licznika; "
+            + "po zapisaniu ustawienie zostanie zastosowane również do aktywnych pomiarów.",12,false));
+        smallButton(notifications,"Zapisz odstęp przypomnienia czynności",()->{
+            int choice = projectWorkInterval.getSelectedItemPosition();
+            if (choice < 0 || choice >= projectWorkIntervalValues.length) return;
+            int minutes = projectWorkIntervalValues[choice];
+            prefs.edit().putInt("project_work_reminder_interval_minutes", minutes).apply();
+            ProjectWorkNotification.rescheduleActiveSessions(this);
+            DiagnosticLog.event("PROJECT_WORK_REMINDER_INTERVAL_SAVED","minutes="+minutes);
+            alert("Zapisano przypomnienie co " + minutes + " minut.");
+        });
         settingsYesNo(notifications,"Dźwięki aplikacji",
             FeedbackSignals.SOUNDS_ENABLED,true,null);
         settingsYesNo(notifications,"Wibracje aplikacji",
