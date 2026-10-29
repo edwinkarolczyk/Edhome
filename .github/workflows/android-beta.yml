@@ -369,6 +369,7 @@ jobs:
           java -cp "$RUNNER_TEMP/project-task-pulse" \
             com.edwinkarolczyk.edhome.ProjectTaskPulseSmoke
           python3 tests/check_project_task_pulse_contract.py
+          python3 tests/check_project_timer_reminder_contract.py
       - name: Projekty — regresja
         run: |
           python3 tests/check_projects_contract.py
