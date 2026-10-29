@@ -295,7 +295,7 @@ project_checks=main.split("private void renderProjectTasks(",1)[1].split(
 regular_checks=main.split("private void drawTask(",1)[1].split(
     "private void taskAction(",1)[0]
 assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(36),dp(38)))' in project_checks
-assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(48),dp(48)))' in regular_checks
+assert 'taskHeader.addView(check,new LinearLayout.LayoutParams(dp(38),dp(38)))' in regular_checks
 assert 'check.setText(taskName)' not in project_checks
 assert 'check.setText(name)' not in regular_checks
 assert 'check.setText("");' in project_checks and 'check.setText("");' in regular_checks
