@@ -1,3 +1,16 @@
+## 2026-10-29 — Kompaktowe karty Czynności (Android Beta 0.8.1.165 / 358; CI w toku)
+
+- **Zakres:** wyłącznie Android Beta, gałąź `beta`; `main`/Stable nietknięte.
+- **Zmiana UI:** `drawTask()` ma mniejsze odstępy karty, checkbox 38×38 dp zamiast 48×48 dp, tytuł 15 sp zamiast 17 sp oraz metadane 11 sp ograniczone do dwóch wierszy. Pełny opis pozostaje w `contentDescription` dla dostępności; status, termin, wykonanie i rozwijane akcje pozostają.
+- **Wersja:** `app/build.gradle` podniesiony do `0.8.1.165 / 358`.
+- **Regresja CI:** dodano `tests/check_compact_activity_cards_contract.py` oraz krok w `.github/workflows/android-beta.yml`.
+- **Commity:** implementacja `55d650a`; wersja `8da6aa9`; test `0ade9d2`; integracja testu z CI `f0a0de4`.
+- **Weryfikacja:** workflow Android Beta został uruchomiony po zmianie wersji; kolejne commity testu/CI uruchamiają aktualny build. Oczekuje na wynik CI i publikację podpisanego APK/release. Nie zgłaszać jako gotowej aktualizacji do telefonu, dopóki build i release nie przejdą.
+- **Desktop:** bez zmian w tym etapie; zmiana dotyczy mobilnej listy-kafelków. Wersja Desktop nie została podbita.
+- **Następny krok:** sprawdzić CI, podpisany APK i release `beta-v0.8.1.165`; jeśli build przejdzie, przekazać link do instalacji. Fizyczny test gęstości listy na telefonie nadal wymaga potwierdzenia.
+
+---
+
 ## 2026-10-29 — Automatyczne przełączenie trybu przypomnienia po zmianie godziny (Android Beta 0.8.1.164 / 357; CI do potwierdzenia)
 
 - **Poprawka na `beta`:** commit [33033ea](https://github.com/edwinkarolczyk/Edhome/commit/33033eacf031b500d9ac3f86f66945ac06645e28). Po wybraniu godziny w selektorze `TimePickerDialog` formularz natychmiast ustawia tryb **„Moja godzina i wyprzedzenie”**. Nie trzeba ręcznie zmieniać listy trybów; zapis korzysta z już wybranego trybu i istniejącej ścieżki planowania przypomnień.
