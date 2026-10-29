@@ -16,6 +16,12 @@ timeout = source.split(
 assert "SELECT started_at FROM project_task_work_sessions" in check
 assert "ended_at IS NULL" in check
 assert "scheduleNextCheck(context, taskId)" in check
+assert "reminderIntervalMs(context)" in check
+assert "static void rescheduleActiveSessions(Context context)" in source
+settings = Path("app/src/main/java/com/edwinkarolczyk/edhome/MainActivity.java").read_text(encoding="utf-8")
+assert "project_work_reminder_interval_minutes" in settings
+assert "ProjectWorkNotification.rescheduleActiveSessions(this)" in settings
+assert "Zapisz odstęp przypomnienia czynności" in settings
 assert "manager.notify(reminderNotificationId(taskId), notification)" in check
 assert "ended_at" not in check.replace("ended_at IS NULL", "")
 assert "worked_minutes" not in check
