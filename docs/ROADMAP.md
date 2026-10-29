@@ -1,5 +1,47 @@
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
+## Czynności — P0: przypomnienie zamiast automatycznego zatrzymania licznika (29.10.2026)
+
+**Status: potwierdzony problem w audycie statycznym; poprawka zapisana do realizacji na gałęzi `beta`, jeszcze NIE zaimplementowana.** Nie podbijać wersji i nie ogłaszać wydania, dopóki zmiana, testy CI i weryfikacja na urządzeniach nie zostaną wykonane.
+
+### Wymagane zachowanie
+
+1. Po upływie skonfigurowanego interwału aktywnej pracy wyświetlić przypomnienie „Czy nadal pracujesz?”.
+2. **Nie kończyć ani nie wstrzymywać sesji automatycznie.** Licznik nadal nalicza rzeczywisty czas aż do decyzji użytkownika; nie dopisywać fikcyjnej godziny ani nie ucinać sesji na granicy 60 minut.
+3. Z powiadomienia umożliwić świadome działanie: kontynuuj/odłóż przypomnienie, wstrzymaj lub zakończ pomiar — zależnie od dostępnych i jasno opisanych akcji. Samo zignorowanie powiadomienia nie może zatrzymać licznika.
+4. Udostępnić regulowany interwał przypomnienia (domyślnie 60 minut), z walidacją wartości i zachowaniem ustawień po aktualizacji/odtworzeniu kopii.
+5. Ujednolicić semantykę Android/Desktop: te same zasady startu, przypomnienia, ręcznego wstrzymania/zakończenia i zapisu historii sesji.
+6. Nie zmieniać bez potrzeby formatu danych ani historii zamkniętych sesji; jeśli potrzebna będzie migracja ustawień, musi być wstecznie kompatybilna.
+
+### Testy akceptacyjne
+
+- Po upływie interwału pojawia się przypomnienie, a aktywna sesja nadal ma `ended_at IS NULL`.
+- Brak reakcji na powiadomienie nie zamyka sesji i czas dalej jest liczony.
+- Ręczne Stop/Wstrzymaj zapisuje prawidłowy faktyczny czas; Wznów rozpoczyna nową sesję bez nadpisania historii.
+- Zmiana interwału wpływa na kolejne przypomnienie i przetrwa restart aplikacji.
+- Powtórne alarmy nie tworzą duplikatów powiadomień ani sesji; obsłużone są restart urządzenia i brak uprawnień do powiadomień.
+- Testy kontraktowe i CI przechodzą dla Androida i Desktopu; sprawdzić również rzeczywiste działanie na telefonie i komputerze.
+
+### Kolejność realizacji
+
+- **P0-A:** usunąć automatyczne zamykanie sesji w Androidzie w `ProjectWorkNotification` / ścieżkach `ACTION_CHECK` i timeout; po interwale tylko przypominać.
+- **P0-B:** sprawdzić i ujednolicić Start/Stop oraz obsługę powiadomień w Desktopie.
+- **P0-C:** dodać testy regresji czasu sesji, braku reakcji i ręcznych akcji.
+- **P0-D:** dodać ustawienie interwału z bezpieczną wartością domyślną.
+- **P0-E:** uruchomić CI, opublikować wyłącznie Beta po sukcesie i odnotować wynik; test fizyczny oznaczyć osobno.
+
+### Powiązane dalsze punkty audytu Czynności
+
+- **P1 — oddzielić planowany początek od godziny przypomnienia.** Obecny planer wykorzystuje `remind_time` również jako początek zaakceptowanego terminu; rozdzielić znaczenia bez utraty dotychczasowych danych.
+- **P1 — zachować pełną listę i stabilne sortowanie.** Sprawdzić terminy zaległe/dzisiejsze/przyszłe/bez terminu oraz filtry i grupowanie; nie przywracać limitu trzech zadań.
+- **P1 — ponownie walidować propozycje planera przed zapisem.** Po zmianie zadania, osoby lub zależności nie zapisywać nieaktualnego terminu; zachować istniejące zabezpieczenia blokad i cykliczności.
+- **P2 — zgodność Android/Desktop.** Wspólne reguły przypomnień, statusów, zależności, osób przypisanych i historii synchronizowanych sesji.
+- **P3 — diagnostyka tylko tam, gdzie pomaga.** Czytelny zapis błędów planowania, powiadomień i synchronizacji bez zbędnego rozbudowywania interfejsu.
+
+**Granica audytu:** powyższe ustalenia pochodzą z przeglądu kodu/testów, nie z testu fizycznego telefonu i komputera. Nie oznaczaj ich jako naprawionych bez potwierdzenia.
+
+---
+
 
 ## EDHOME 1.0 Plus — Budżet miesiąca / PayCheck: pełne zastąpienie arkusza (19.10.2026)
 
