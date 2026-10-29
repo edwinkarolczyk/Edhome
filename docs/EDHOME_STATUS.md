@@ -1429,3 +1429,13 @@ Test użytkownika: **5 potencjalnych operacji nierozpoznanych**, pierwsza data 0
 - **Pozostałe wymagania przed promocją:** zdjęcia czynności, przełączniki dźwięku/wibracji, ustawienia PIN. Wdrożenie i testy niepotwierdzone.
 - **Scalenie:** PR #6 `beta` → `main` nadal `mergeable=false`. Nie scalać na siłę; zachować commity specyficzne dla `main`, najpierw rozwiązać konflikty i przejść testy.
 - **Następny krok:** poprawki kodu P0 Budżet/PayCheck wraz z testami; kolejne APK wydać pod nowym numerem dopiero po zebraniu poprawek.
+
+
+## 2026-10-29 — Czynności P0-A: przypomnienie licznika zamiast automatycznej pauzy
+
+- **Kod Android Beta na gałęzi `beta`:** commit `e3c797fd9fce36fbf3418cc44c5d39c879d7fab1` w `ProjectWorkNotification.java`. Po godzinie sesja nie jest zamykana ani przycinana do 60 minut; powiadomienie przypominające ma osobny identyfikator, więc stały licznik/chronometr pozostaje widoczny. Brak reakcji nie zatrzymuje czasu; następne przypomnienie planowane jest po kolejnej godzinie.
+- **Zgodność ze starymi alarmami:** `ACTION_TIMEOUT` ze starszego stanu aplikacji jest przekierowany do ścieżki przypomnienia zamiast automatycznej pauzy.
+- **Test regresyjny:** `tests/check_project_timer_reminder_contract.py`, commit `7e3f2e9617a724a3630042416e9a9551c83a223f`; podpięty do Android workflow w commicie `fc9522700db256afdcdd32663088aa9f27c61280`.
+- **Stan testów:** test został dodany do CI, ale wynik workflow dla nowego HEAD i test fizyczny na telefonie **jeszcze niepotwierdzone**. Nie utworzono nowego APK/release ani nie podbito wersji.
+- **Pozostało w P0:** zweryfikować CI, przetestować Start → ponad 60 min → brak reakcji → Stop oraz poprawny zapis pełnego czasu; następnie regulowany interwał przypomnienia i Desktop parity. `main`/Stable bez zmian.
+- **Roadmapa:** [P0 licznika](ROADMAP.md#czynności--p0-przypomnienie-zamiast-automatycznego-zatrzymania-licznika-29102026).
