@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 362,
-  "versionName": "0.8.1.169",
-  "changelog": "EDHOME Beta 0.8.1.169 — Poprawki i usprawnienia beta. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.169/edhome-beta.apk",
-  "sha256": "9cc40b32d8d0dfce222e400a2f24fa90fc6dd7138c923546abb9ab5c4501159f"
+  "versionCode": 363,
+  "versionName": "0.8.1.170",
+  "changelog": "EDHOME Beta 0.8.1.170 — Poprawki i usprawnienia beta. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.170/edhome-beta.apk",
+  "sha256": "47d75ca7090cc6f04d8828bc9f819c5c1654c903e7614a6505ce56014a0e3558"
 }
