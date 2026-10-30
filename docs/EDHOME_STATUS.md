@@ -1,3 +1,11 @@
+## 2026-10-30 — wynik CI P0-C
+
+- Potwierdzono sukces CI Android Beta dla `0.8.1.167/360` (run `40947540806`); APK opublikowany: https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.167
+- Potwierdzono sukces CI Desktop Beta dla `0.7.0.144` (run `40947540827`); artefakt Windows Portable: https://github.com/edwinkarolczyk/Edhome/actions/runs/40947540827 — artefakt wygasa 12.11.2026.
+- Testy kontraktowe i kompilacje w tych przebiegach zakończyły się powodzeniem. Brakuje jeszcze testu na fizycznym telefonie i komputerze.
+- W obu wersjach można wybrać 15/30/45/60/90/120 minut; wartość domyślna 60 minut. Zmiana jest zapisywana, a aktywne sesje mają przeliczone przypomnienie.
+- Gałąź beta; main / Stable nie były zmieniane.
+
 ## 2026-10-29 — P0-C: regulowany odstęp przypomnienia licznika (CI w toku)
 
 - Android: docelowa Beta `0.8.1.167` / versionCode `360`; ustawienie w Ustawienia → Alarmy, dostępne wartości 15, 30, 45, 60, 90 i 120 minut; domyślnie 60 minut.
