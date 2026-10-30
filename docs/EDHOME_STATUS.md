@@ -1,3 +1,12 @@
+## 2026-10-30 — poprawka numeru wydania Android Beta
+
+- Poprzedni artefakt z poprawkami Miejsc miał błędnie tę samą nazwę `0.8.1.167` i `versionCode 360` co wcześniejsze wydanie bez tych zmian.
+- Podniesiono Android Beta do `0.8.1.168` / `versionCode 361` na gałęzi `beta` (commit `0361482`).
+- To jest przygotowanie nowego wydania, nie potwierdzenie gotowego APK. Wymagane: zielony CI, kontrola artefaktu i publikacji. Test na fizycznym telefonie nadal nie został wykonany.
+- `main` / Stable bez zmian.
+
+---
+
 ## 2026-10-30 — Magazyn/Miejsca: wcięcia drzewa i globalna numeracja rzeczy
 
 - Android Beta, wyłącznie gałąź `beta`; `main` / Stable bez zmian.
