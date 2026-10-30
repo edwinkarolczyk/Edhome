@@ -1,3 +1,14 @@
+## 2026-10-30 — P0 Android: naprawa crasha szczegółów projektu (Beta 0.8.1.170)
+
+- Diagnoza z logu urządzenia: `renderProjectCosts()` tworzyło kartę przez `card()`, a `card()` już automatycznie dodaje widok do `body`. Następne `root.addView(expenseSummary)` próbowało dodać ten sam widok drugi raz i powodowało `IllegalStateException: ViewGroup.addViewInner`.
+- Usunięto drugie dodawanie widoku. Karta „Podsumowanie wydatków” pozostaje na końcu sekcji kosztów, bez zmiany jej zawartości i pozostałego układu.
+- Rozszerzono `check_project_expense_summary.py`: test wymaga utworzenia karty przez `card()`, potwierdza automatyczne dodanie do `body` i zabrania ponownego `root.addView(expenseSummary)`.
+- Android Beta podniesiony do 0.8.1.170 / versionCode 363. CI i publikacja APK oczekują na wynik.
+- Naprawa wyłącznie na `beta`; `main` / Stable nietknięte.
+- Hub nadal wymaga osobnej diagnostyki: log wskazuje timeout do 192.168.100.22:45823; nie zmieniano konfiguracji sieci ani synchronizacji bez potwierdzenia stanu komputera.
+
+---
+
 ## 2026-10-30 — Projekty: podsumowanie wydatków Android/Desktop (Beta)
 
 - Zakres: wyłącznie rozliczenie kosztów i podsumowanie wydatków na dole szczegółów projektu. Postęp, Czynności, czas, robocizna i pozostały układ ekranu bez przebudowy.
