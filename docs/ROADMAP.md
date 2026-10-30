@@ -1,3 +1,11 @@
+## Magazyn / Miejsca — drzewo i numeracja seryjna (30.10.2026)
+
+- Wdrożono na `beta`: karty miejsc potomnych otrzymują wcięcie 20 dp na każdy poziom drzewa; kolejność renderowania pozostaje rekurencyjna.
+- Wdrożono na `beta`: automatyczne nazwy rzeczy z seryjnego dodawania korzystają ze wspólnej numeracji `Rzecz 1, Rzecz 2, ...` liczonej względem wszystkich istniejących rzeczy, niezależnie od pudełka/miejsca. Numer sprawdzany jest ponownie tuż przed utworzeniem obiektu.
+- Dodano test kontraktowy i uruchamianie go w Android Beta CI.
+- Do potwierdzenia: zielone CI oraz test na fizycznym telefonie dla kilku pudełek i zagnieżdżonych miejsc.
+- Nie zmieniano `main` / Stable.
+
 # EDHOME — roadmapa obowiązująca od 30.09.2026
 
 ## Czynności — P0-C: regulowany odstęp przypomnienia (29.10.2026)
