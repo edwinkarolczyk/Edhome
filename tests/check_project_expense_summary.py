@@ -32,7 +32,9 @@ android_detail = main.split("private void projects()", 1)[1].split("private void
 assert "Koszt planowany:" not in android_detail
 assert android_detail.index("renderProjectTasks(project);") < android_detail.index("renderProjectResources(project.id);") < android_detail.index("renderProjectCosts(project.id);")
 android_costs = main.split("private void renderProjectCosts", 1)[1].split("private void showProjectPlanSuggestions", 1)[0]
-assert android_costs.rfind('root.addView(expenseSummary);') > android_costs.rfind('for(Long id:projectIds)')
+assert "LinearLayout expenseSummary=card();" in android_costs
+assert "root.addView(expenseSummary);" not in android_costs
+assert "body.addView(box, params);" in main.split("private LinearLayout card()", 1)[1].split("private int taskStatusSurface", 1)[0]
 assert 'Podsumowanie wydatków' in android_costs
 desktop_detail = desktop.split("private JComponent desktopProjectDetail", 1)[1].split("private static String desktopProjectCostStatus", 1)[0]
 assert "list.add(desktopProjectCostPanel(projectId));" in desktop_detail
