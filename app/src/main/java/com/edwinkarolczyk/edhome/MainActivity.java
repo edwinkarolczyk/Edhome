@@ -5656,10 +5656,6 @@ public final class MainActivity extends Activity {
         bindProjectLaborSummary(summary,project.id);
         summary.addView(text("Pozostało wg planu: "+projectTimeText(stats.remainingMinutes())
             +(stats.overdueTasks>0?" • zaległe: "+stats.overdueTasks:""),14,false));
-        summary.addView(text("Koszt planowany: "
-            +MoneyRules.format(stats.plannedCostGrosz)
-            +" • kupiono/zapłacono: "+MoneyRules.format(stats.spentCostGrosz),
-            14,false));
         if(project.budgetGrosz!=null)
             summary.addView(text("Budżet projektu: "
                 +MoneyRules.format(project.budgetGrosz),14,false));
@@ -7446,7 +7442,10 @@ public final class MainActivity extends Activity {
                 long price=c.getLong(4);
                 String status=c.getString(5);
                 String noteValue=c.getString(6);
-                long total=Math.round(qty*price/1000.0);
+                long total=java.math.BigDecimal.valueOf(qty)
+                    .multiply(java.math.BigDecimal.valueOf(price))
+                    .divide(java.math.BigDecimal.valueOf(1000),0,
+                        java.math.RoundingMode.HALF_UP).longValueExact();
                 LinearLayout box=card();
                 box.addView(text(name,16,true));
                 box.addView(text(java.math.BigDecimal.valueOf(qty)
@@ -7482,6 +7481,45 @@ public final class MainActivity extends Activity {
             }
         }
         if(count==0)note("Brak kosztów. Koszty projektu nie są księgowane w PayCheck.");
+
+        java.util.Set<Long> projectIds=ProjectStore.descendantIds(
+            db.getReadableDatabase(),projectId);
+        StringBuilder placeholders=new StringBuilder();
+        String[] args=new String[projectIds.size()];
+        int argIndex=0;
+        for(Long id:projectIds) {
+            if(placeholders.length()>0)placeholders.append(',');
+            placeholders.append('?');
+            args[argIndex++]=Long.toString(id);
+        }
+        long allCosts=0L,incurred=0L,plannedOnly=0L;
+        if(!projectIds.isEmpty())try(Cursor c=db.getReadableDatabase().rawQuery(
+                "SELECT qty_milli,unit_price_grosz,status FROM project_costs "
+                    +"WHERE project_id IN ("+placeholders+")",args)) {
+            while(c.moveToNext()) {
+                long value=java.math.BigDecimal.valueOf(c.getLong(0))
+                    .multiply(java.math.BigDecimal.valueOf(c.getLong(1)))
+                    .divide(java.math.BigDecimal.valueOf(1000),0,
+                        java.math.RoundingMode.HALF_UP).longValueExact();
+                allCosts=Math.addExact(allCosts,value);
+                String status=c.getString(2);
+                if("bought".equals(status)||"paid".equals(status))
+                    incurred=Math.addExact(incurred,value);
+                else if("planned".equals(status))
+                    plannedOnly=Math.addExact(plannedOnly,value);
+            }
+        }
+        LinearLayout expenseSummary=card();
+        expenseSummary.addView(text("Podsumowanie wydatków",18,true));
+        expenseSummary.addView(text("Wartość wszystkich kosztów: "
+            +MoneyRules.format(allCosts),15,true));
+        expenseSummary.addView(text("Poniesione (kupione / zapłacone): "
+            +MoneyRules.format(incurred),14,false));
+        expenseSummary.addView(text("Planowane: "
+            +MoneyRules.format(plannedOnly),14,false));
+        expenseSummary.addView(text("Koszty projektu nie są księgowane w PayCheck.",12,false));
+        expenseSummary.setContentDescription("Podsumowanie wydatków projektu");
+        root.addView(expenseSummary);
     }
 
     private void showProjectPlanSuggestions(long projectId) {
