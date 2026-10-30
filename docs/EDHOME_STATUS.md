@@ -1,3 +1,18 @@
+## 2026-10-30 — Projekty: podsumowanie wydatków Android/Desktop (Beta)
+
+- Zakres: wyłącznie rozliczenie kosztów i podsumowanie wydatków na dole szczegółów projektu. Postęp, Czynności, czas, robocizna i pozostały układ ekranu bez przebudowy.
+- Android: przeniesiono podsumowanie kosztów z górnego bloku na sam dół, pod koszty i zakupy. Pokazuje wartość wszystkich kosztów, wydatki poniesione oraz planowane. Uwzględnia projekt i wszystkie poziomy podprojektów.
+- Desktop: analogiczne podsumowanie pod listą kosztów i zakupów; uwzględnia podprojekty. Zmiana ilości lub statusu odświeża sumy.
+- Obie platformy liczą ilość razy cenę w groszach z dokładnym zaokrągleniem HALF_UP. Poniesione obejmują tylko statusy Kupione i Zapłacone; Planowane są osobno. Koszty nie są księgowane w PayCheck.
+- Android ProjectStore używa dokładnego sumowania z kontrolą przepełnienia. Poprawiono również wyliczanie wartości pojedynczego wiersza.
+- Dodano test check_project_expense_summary.py i podpięto go do Android Beta CI oraz Desktop Beta CI.
+- Docelowe wersje: Android 0.8.1.169 / versionCode 362; Desktop 0.7.0.145.
+- Commity: Android ProjectStore 8840cd4; Android UI 8f208a8; Desktop 3c947ad; test e596df3; workflow Android a0282ee; workflow Desktop 0918be8 i 6b32feed; wersje Gradle Android 3a478f8 i Desktop ec8f6bd.
+- Weryfikacja CI i nowe artefakty APK/instalatora: oczekujące. Test fizyczny na telefonie i komputerze pozostaje wymagany.
+- Wyłącznie beta; main / Stable bez zmian.
+
+---
+
 ## 2026-10-30 — potwierdzona publikacja Android 0.8.1.168 i Desktop 0.7.0.144
 
 - **Android Beta 0.8.1.168 / versionCode 361** opublikowany w [beta-v0.8.1.168](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.168). CI [41013018758 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41013018758), build commit `0361482`, release commit `eea1b04`. APK SHA-256: `b13ce1362919106ac67f18ea65e51b7a69d8632d79e13daa308a1fd655d0e003`.
