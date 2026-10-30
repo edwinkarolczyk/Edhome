@@ -1548,25 +1548,37 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private static long desktopProjectCostValue(JsonObject row) {
-        return java.math.BigDecimal.valueOf(longValue(row,"qty_milli"))
-            .multiply(java.math.BigDecimal.valueOf(longValue(row,"unit_price_grosz")))
-            .movePointLeft(3).setScale(0,java.math.RoundingMode.HALF_UP)
-            .longValueExact();
+        long quantity=longValue(row,"qty_milli");
+        long unitPrice=longValue(row,"unit_price_grosz");
+        if(quantity<0L||unitPrice<0L)
+            throw new IllegalArgumentException("Ujemna ilość lub cena kosztu projektu.");
+        return java.math.BigDecimal.valueOf(quantity)
+            .multiply(java.math.BigDecimal.valueOf(unitPrice))
+            .divide(java.math.BigDecimal.valueOf(1000),0,
+                java.math.RoundingMode.HALF_UP).longValueExact();
     }
 
     private void refreshDesktopProjectCosts(JLabel summary,long projectId) {
-        long planned=0,spent=0;
+        long allCosts=0L,spent=0L,plannedOnly=0L;
         for(JsonElement element:table("project_costs")) {
             if(!element.isJsonObject())continue;
             JsonObject cost=element.getAsJsonObject();
-            if(longValue(cost,"project_id")!=projectId)continue;
-            long value=desktopProjectCostValue(cost);
-            planned=Math.addExact(planned,value);
-            if(!"planned".equals(value(cost,"status")))
-                spent=Math.addExact(spent,value);
+            long owner=longValue(cost,"project_id");
+            if(owner!=projectId&&!desktopProjectDescendsFrom(owner,projectId))continue;
+            long amount=desktopProjectCostValue(cost);
+            allCosts=Math.addExact(allCosts,amount);
+            String status=value(cost,"status");
+            if("bought".equals(status)||"paid".equals(status))
+                spent=Math.addExact(spent,amount);
+            else if("planned".equals(status))
+                plannedOnly=Math.addExact(plannedOnly,amount);
         }
-        summary.setText("Plan: "+money(Long.toString(planned))
-            +" • Kupiono/zapłacono: "+money(Long.toString(spent)));
+        summary.setText("<html><b>Wartość wszystkich kosztów:</b> "
+            +html(money(Long.toString(allCosts)))
+            +"<br>Poniesione (kupione / zapłacone): "
+            +html(money(Long.toString(spent)))
+            +"<br>Planowane: "+html(money(Long.toString(plannedOnly)))
+            +"</html>");
     }
 
     private void setDesktopProjectCostQty(JsonObject cost,long desired,
@@ -1608,7 +1620,6 @@ public final class EdhomeDesktop extends JFrame {
         JLabel summary=new JLabel();
         summary.setForeground(APP_ACCENT);
         refreshDesktopProjectCosts(summary,projectId);
-        section.add(summary);
 
         int count=0;
         for(JsonElement element:table("project_costs")) {
@@ -1696,6 +1707,16 @@ public final class EdhomeDesktop extends JFrame {
             empty.setForeground(APP_MUTED);
             section.add(empty);
         }
+        JPanel expenseSummary=new RoundedPanel(APP_SURFACE,16);
+        expenseSummary.setLayout(new BorderLayout(8,4));
+        expenseSummary.setBorder(new EmptyBorder(12,14,12,14));
+        JLabel expenseTitle=new JLabel("Podsumowanie wydatków");
+        expenseTitle.setForeground(APP_TEXT);
+        expenseTitle.setFont(expenseTitle.getFont().deriveFont(Font.BOLD,15f));
+        expenseSummary.add(expenseTitle,BorderLayout.NORTH);
+        expenseSummary.add(summary,BorderLayout.CENTER);
+        section.add(Box.createVerticalStrut(10));
+        section.add(expenseSummary);
         return section;
     }
 
