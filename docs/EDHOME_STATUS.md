@@ -1,3 +1,16 @@
+## 2026-10-30 — Magazyn/Miejsca: wcięcia drzewa i globalna numeracja rzeczy
+
+- Android Beta, wyłącznie gałąź `beta`; `main` / Stable bez zmian.
+- `places()` renderuje gałęzie rekurencyjnie, a każda karta miejsca podrzędnego jest przesunięta w prawo o 20 dp na poziom. Etykieta poziomu pozostaje widoczna.
+- Seryjne dodawanie rzeczy pobiera następny numer z istniejących obiektów `storage_items` typu `thing` o nazwie `Rzecz N`. Numeracja jest wspólna dla wszystkich pudełek i miejsc, a nie resetowana do 1 przy nowej serii lub zmianie celu. Numer jest ponownie sprawdzany przed zapisem.
+- Dodano `tests/check_storage_place_tree_numbering_contract.py` i podpięto test do Android Beta CI.
+- Commity: implementacja `4fd57eb`; test `b64e384`; workflow `58c6142`.
+- **Weryfikacja:** oczekuje na CI Android Beta i test na fizycznym telefonie. Nie deklarować APK jako gotowego przed zielonym CI.
+- **Uwaga zakresu:** numer jest wyliczany jako maksimum istniejącego sufiksu + 1. Usunięte najwyższe numery mogą zostać ponownie wykorzystane, jeśli nie istnieje już rzecz o takim numerze.
+- Następny krok: sprawdzić CI, potem na telefonie dodać serię w pudełku A, zmienić na pudełko B i rozpocząć nową serię; potwierdzić ciągłość numeracji i czytelne wcięcia poziomów 1–4.
+
+---
+
 ## 2026-10-30 — wynik CI P0-C
 
 - Potwierdzono sukces CI Android Beta dla `0.8.1.167/360` (run `40947540806`); APK opublikowany: https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.167
