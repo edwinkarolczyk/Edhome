@@ -1,3 +1,54 @@
+## Kontrola 30.10.2026 — Android 0.8.1.168 i Desktop 0.7.0.144; nowa luka P0 w rozliczeniach grupowych
+
+**Zakres:** wyłącznie `beta`. Punkt bazowy kodu: Android build commit [`0361482`](https://github.com/edwinkarolczyk/Edhome/commit/0361482b2a7a0bb69441b7da94fdb89d7b81fc73), Desktop release-code commit [`e82ae96`](https://github.com/edwinkarolczyk/Edhome/commit/e82ae964be0c57e30c0ede4c4ed99ee59601fb1b), bieżący HEAD przed tym wpisem [`eea1b04`](https://github.com/edwinkarolczyk/Edhome/commit/eea1b04a91744f64fd8e4e00fc9374e528846c1b).
+
+### Wersje, testy, CI i publikacja
+
+- **Android Beta 0.8.1.168 / versionCode 361.** `app/build.gradle` i `beta-manifest.json` są zgodne; SHA-256 APK: `b13ce1362919106ac67f18ea65e51b7a69d8632d79e13daa308a1fd655d0e003`. [CI PASS 41013018758](https://github.com/edwinkarolczyk/Edhome/actions/runs/41013018758) dla [`0361482`](https://github.com/edwinkarolczyk/Edhome/commit/0361482b2a7a0bb69441b7da94fdb89d7b81fc73): kompilacja, kontrakty, testy regresyjne, podpis i publikacja zakończone powodzeniem. Artefakt `EDHOME-0.8.1.168-signed-apk` (12957584385). [Release APK](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.168), opublikowany 30.10.2026 06:20 UTC, 13 487 082 B.
+- **Desktop Beta 0.7.0.144.** `desktop/build.gradle`, `EdhomeDesktop.DESKTOP_VERSION` i workflow wskazują 0.7.0.144. [CI PASS 40947540827](https://github.com/edwinkarolczyk/Edhome/actions/runs/40947540827) dla [`e82ae96`](https://github.com/edwinkarolczyk/Edhome/commit/e82ae964be0c57e30c0ede4c4ed99ee59601fb1b): kontrakty, Hub runtime smoke, kompilacja, JVM/EXE smoke, instalator i publikacja one-click PASS. Artefakt CI `EDHOME-Desktop-Beta-Windows` (12929438279). [Release Desktop](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest), zaktualizowany 29.10.2026 20:20 UTC, zawiera Setup EXE 57 342 464 B (SHA-256 `ac82ada97289dda600337248715ac24bf8a37d49c94fc2d613b1aa20f062263f`) i ZIP 56 508 166 B (SHA-256 `3856020401775a9721d9e49d2fa5cfa20a83720be8bf695c337170fd2cd6b3e5`).
+- Numery wersji są niezależne. Ostatni udany workflow Desktop to 0.7.0.144; po nim nie ma nowszego przebiegu Desktop Beta. Android 0.8.1.168 jest rzeczywiście opublikowany — poprzedni wpis `EDHOME_STATUS.md` o oczekiwaniu na APK był nieaktualny.
+- **Testy na fizycznych urządzeniach:** brak potwierdzonego testu E2E Android↔Windows. Nie potwierdzono na telefonie wcięć Miejsc, globalnej numeracji rzeczy, alarmów ani grupowych rozliczeń; nie potwierdzono na PC pełnego round-trip Hub/ZIP.
+
+### Nowa rozbieżność P0 — grupowe rozliczenia bankowe na Desktop
+
+- Android ma `BankBudgetGroupSettlement.twoBankToOneBudget(...)` i `oneBankToTwoBudgets(...)`, reguły sumowania oraz dziennik odzyskiwania `bank_group_settlement_recovery`. Snapshot/backup jest blokowany przez `requireCompletedForSnapshot`, jeśli rozliczenie grupowe nie zostało zakończone. Workflow Android 41013018758 uruchomił test „Bank group matches 200 + 300 = 500 in both directions” — PASS dla reguł/kontraktu.
+- Desktop obsługuje ręczne dopasowanie pojedynczego dowodu do pojedynczej oczekującej transakcji (`matchBankEvidence` w `EdhomeDesktop.java`), import dowodów oraz sugestie `DesktopBankBudgetSuggestions`. Ta klasa jawnie deklaruje tryb **WYŁĄCZNIE ODCZYT**. Nie znaleziono desktopowego odpowiednika `BankBudgetGroupSettlement`, atomowego dziennika naprawy ani ścieżek 2→1 / 1→2. Test Desktop `check_paycheck_budget_stage6_desktop.py` nie zastępuje takiej funkcji.
+- **Ocena:** PayCheck/Budżet jest częściowy; **brak grupowego rozliczenia bankowego na Desktop — P0**. To luka logiki księgowej, nie brak pola w Hub. Nie wdrażam automatycznie: potrzebne są atomowe aktualizacje dowodów i transakcji, idempotencja po utracie ACK, odzyskiwanie po przerwaniu i zgodność salda. Nie wolno zastąpić tego samym sumowaniem kwot w UI.
+
+### Aktualna macierz funkcji
+
+| Obszar | Fakty na `beta` | Ocena | Priorytet |
+|---|---|---|---|
+| Projekty / podprojekty / Czynności | Wspólne rekordy, zależności, sesje, koszty i miniatury. Android ma alarm czynności z drzemką/wyciszeniem; Desktop 0.7.0.144 ma regulowany interwał przypomnienia aktywnego licznika robocizny 15/30/45/60/90/120 min, bez kończenia sesji. To inna funkcja niż alarm konkretnej czynności — brak równoważnego dzwoniącego alarmu zadania Windows. | **Częściowo** | **P1** |
+| PayCheck / Budżet | Desktop: import dowodów, ręczne 1:1, sugestie read-only, integralność i delta Budżetu. Android: grupowe 2→1 i 1→2 z dziennikiem odzyskiwania; brak odpowiednika Desktop. | **Częściowo; konkretna luka grupowego rozliczenia Desktop** | **P0** |
+| Kalendarz / planer | Desktop `DesktopCalendarPanel` ma siatkę miesiąca, agendę i dodanie zadania na dzień. Android `SmartTaskPlanner` ma propozycje terminów, kolizje i zatwierdzanie; pełnego odpowiednika planera Desktop nie potwierdzono. | **Brak pełnego parytetu planera** | **P1** |
+| Magazyn QR/NFC | Wspólne `storage_items`, `nfc_links`, QR i cykl Wzięte/Odłożone; Desktop ma drzewo pomieszczeń i skaner. Odczyt fizycznych tagów i konfliktów lokalizacji nieodebrany. | **Częściowo** | **P1** |
+| Miejsca | Android: rekurencyjne gałęzie, wcięcie 20 dp na poziom i globalna numeracja seryjnie dodawanych `Rzecz N`; test kontraktowy PASS w CI 41013018758. Desktop `DesktopRoomsPanel` pokazuje hierarchię przez `JTree`; odpowiednika globalnego numerowania szybkiej serii nie potwierdzono. | **Częściowo; struktura drzewa jest, nowy UX numeracji niepotwierdzony na Desktop** | **P1** |
+| Pojazdy | Wspólne pojazdy, opony, polisy, koszty i dokumenty; pełny odbiór terminów, powiadomień i rozliczeń na urządzeniach otwarty. | **Częściowo** | **P2** |
+| Odpady | Reguły cykli i widoki obu platform; pełny odbiór harmonogramów, przypomnień i retry otwarty. | **Częściowo** | **P2** |
+| Ogród | `garden_areas/catalog/plantings/harvests` i widoki obu platform; cykle, zbiory i powiązane zadania bez E2E. | **Częściowo** | **P2** |
+| Backup ZIP / restore | Android `DataBackup.DB_VERSION=52`, obsługa snapshotów 2–52, merge selektywny i recovery; Desktop zachowuje kopię przed zastąpieniem snapshotu. Stare ZIP, zdjęcia i pełny round-trip po restore nieodebrane na urządzeniach. | **Częściowo** | **P0** |
+| Diagnostyka | Android `DiagnosticLog`, Desktop `DesktopDiagnosticLog`, Hub `/diagnostics-upload`, SHA-256/ACK. Fizyczne zerwanie LAN, ACK i usuwanie wyłącznie potwierdzonego fragmentu logu nieodebrane. | **Kontrakt w kodzie; E2E otwarte** | **P1** |
+
+### Schemat, migracje i warunki synchronizacji
+
+- Android `DataBackup.DB_VERSION=52`; migracja 51→52 dodaje `task_thumbnail_1_base64` i `task_thumbnail_2_base64`. Zmiany Miejsc z 30.10 są UI/logiką numerowania — bez nowej migracji i bez zmiany formatu rekordu.
+- Android `sync_records`: `sync_uuid` (PK), `table_name`, `row_key`, `revision`, `updated_at`, `deleted_at`, `row_hash`; unikalny indeks żywego `table_name,row_key`. `SyncRecordStore` limituje patch do 500 operacji i delta do 4 MiB, waliduje UUID/tabelę/klucz i używa tombstone dla usunięć.
+- Hub v2 `edhome-record-patch`: `format`, `version=2`, `operations[]` z `table`, `rowKey`, `syncUuid`, `baseRevision`, `action`, `row`; snapshot SHA-256 i compare-and-set; konflikt HTTP 409. `budgetDelta` jest osobną ścieżką dla `paycheckMonthlyBudget`, `paycheckRecipients`, `paycheckBudgetHistory`.
+- Desktop waliduje tożsamości operacji przed mutacją i scala patch na kopii snapshotu. `DesktopBudgetDelta` waliduje i scala budżet; `DesktopBudgetOutboundDelta` emituje dozwolone pola finansowe. Sama zgodność transportu nie implementuje logiki grupowego księgowania.
+- Warunek odbioru dwukierunkowego: utworzenie Android→Desktop, edycja Desktop→Android, ten sam `syncUuid/table/rowKey`, poprawna `baseRevision`, 409 bez nadpisania, retry po utracie ACK bez drugiego księgowania, tombstone, restart/zmiana IP, saldo i restore ZIP na obu platformach.
+
+### Decyzja dla tego przebiegu
+
+1. **P0:** udokumentowano brak Desktop 2→1 / 1→2; nie wdrażano logiki księgowej ze względu na ryzyko podwójnego potwierdzenia lub rozjazdu salda.
+2. **P0:** nadal wymagany fizyczny round-trip Hub, 409/retry, bank 2→1 i 1→2, saldo/nadpłaty oraz stare/selektywne ZIP.
+3. **P1:** osobno zaplanować alarm konkretnej czynności Windows i pełny planer Desktop.
+4. **P1/P2:** odbiór QR/NFC, Miejsc, diagnostyki, Pojazdów, Odpadów i Ogrodu.
+
+**W tym przebiegu nie zmieniono kodu, migracji, numerów wersji ani `main`. Zmieniono tylko macierz. Test na prawdziwych urządzeniach: niepotwierdzony.**
+
+---
+
 ## Kontrola 29.10.2026 — Android 0.8.1.163 opublikowany; nowa luka P1: alarmy Windows
 
 **Zakres:** wyłącznie gałąź `beta`. Punkt bazowy audytu kodu/wydania przed zmianami dokumentacji: [`b1ff7f3`](https://github.com/edwinkarolczyk/Edhome/commit/b1ff7f30e8e036814423a13f8d06da3747d77572). Wpis zastępuje nieaktualny status z 28.10, który opisywał wersję 0.8.1.159 jako oczekującą.
