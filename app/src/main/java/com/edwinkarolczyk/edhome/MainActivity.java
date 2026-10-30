@@ -7519,7 +7519,9 @@ public final class MainActivity extends Activity {
             +MoneyRules.format(plannedOnly),14,false));
         expenseSummary.addView(text("Koszty projektu nie są księgowane w PayCheck.",12,false));
         expenseSummary.setContentDescription("Podsumowanie wydatków projektu");
-        root.addView(expenseSummary);
+        // card() attaches the card to the current screen body immediately.
+        // Adding it to root again throws IllegalStateException (already has a parent).
+
     }
 
     private void showProjectPlanSuggestions(long projectId) {
