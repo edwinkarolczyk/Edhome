@@ -362,6 +362,8 @@ jobs:
         run: python3 tests/check_project_task_sorting_ui.py
       - name: Projects hierarchy, dependencies and planning contract
         run: python3 tests/check_project_labor_cost.py
+      - name: Project expenses summary and cross-platform accounting regression
+        run: python3 tests/check_project_expense_summary.py
       - name: Aktywna czynność projektu — niebieskie pulsowanie 1 s
         run: |
           mkdir -p "$RUNNER_TEMP/project-task-pulse"
