@@ -144,6 +144,8 @@ jobs:
             com.edwinkarolczyk.edhome.PlaceRulesSmoke
       - name: Place hierarchy / task / backup contract
         run: python3 tests/check_place_contract.py
+      - name: Storage place indentation and global thing numbering regression
+        run: python3 tests/check_storage_place_tree_numbering_contract.py
       - name: Appliance timer validation regression
         run: |
           mkdir -p "$RUNNER_TEMP/appliance-timers"
