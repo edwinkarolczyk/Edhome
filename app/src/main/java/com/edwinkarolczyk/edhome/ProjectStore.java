@@ -559,10 +559,13 @@ final class ProjectStore {
                 "SELECT qty_milli,unit_price_grosz,status FROM project_costs "
                     +"WHERE project_id IN ("+in+")",a)) {
             while(c.moveToNext()) {
-                long value=Math.max(0,Math.round(c.getLong(0)*c.getLong(1)/1000.0));
-                planned+=value;
+                long value=java.math.BigDecimal.valueOf(c.getLong(0))
+                    .multiply(java.math.BigDecimal.valueOf(c.getLong(1)))
+                    .divide(java.math.BigDecimal.valueOf(1000),0,
+                        java.math.RoundingMode.HALF_UP).longValueExact();
+                planned=Math.addExact(planned,value);
                 if("bought".equals(c.getString(2))||"paid".equals(c.getString(2)))
-                    spent+=value;
+                    spent=Math.addExact(spent,value);
             }
         }
         return new Stats(tasks,done,overdue,totalMinutes,doneMinutes,planned,spent,
