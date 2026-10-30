@@ -10755,6 +10755,11 @@ public final class MainActivity extends Activity {
         if (!drawn.add(entry.id)) return;
         LinearLayout box = card();
         if (depth > 0) {
+            // Wcięcie całej karty pokazuje rzeczywistą głębokość drzewa miejsc.
+            LinearLayout.LayoutParams branchParams =
+                (LinearLayout.LayoutParams) box.getLayoutParams();
+            branchParams.setMargins(dp(depth * 20), dp(3), 0, dp(3));
+            box.setLayoutParams(branchParams);
             TextView indent = text("↳  Poziom " + (depth + 1), 12, false);
             indent.setTextColor(subdued);
             box.addView(indent);
@@ -12864,6 +12869,27 @@ public final class MainActivity extends Activity {
         return quickThingBatchActive && quickThingBatchCurrentId==id && id>0;
     }
 
+    /**
+     * Numeracja automatycznych rzeczy jest wspólna dla wszystkich pudełek i miejsc.
+     * Nie resetuje się po zmianie celu ani po rozpoczęciu kolejnej serii.
+     */
+    private int nextQuickThingBatchNumber() {
+        int maximum = 0;
+        try (Cursor rows = db.getReadableDatabase().rawQuery(
+                "SELECT name FROM storage_items WHERE kind='thing' "
+                    + "AND name GLOB 'Rzecz [0-9]*'", null)) {
+            while (rows.moveToNext()) {
+                String value = rows.getString(0);
+                if (value == null || !value.matches("Rzecz [0-9]+")) continue;
+                try {
+                    maximum = Math.max(maximum,
+                        Integer.parseInt(value.substring("Rzecz ".length())));
+                } catch (NumberFormatException ignored) { }
+            }
+        }
+        return maximum + 1;
+    }
+
     private void startQuickThingBatch() {
         if(quickThingBatchActive) {
             if(quickThingBatchTargetKind==null || quickThingBatchTargetId==null)
@@ -12874,7 +12900,7 @@ public final class MainActivity extends Activity {
         }
         quickThingBatchActive=true;
         quickThingBatchCurrentId=0L;
-        quickThingBatchCounter=1;
+        quickThingBatchCounter=nextQuickThingBatchNumber();
         quickThingBatchAdded=0;
         quickThingBatchPendingThumbnail=null;
         quickThingBatchTargetKind=null;
@@ -13222,6 +13248,10 @@ public final class MainActivity extends Activity {
             showQuickThingBatchTargetChooser();
             return;
         }
+        // Odśwież numer tuż przed zapisem, aby uwzględnić rzeczy dodane
+        // poza bieżącą serią lub na innym urządzeniu po synchronizacji.
+        quickThingBatchCounter=Math.max(
+            quickThingBatchCounter,nextQuickThingBatchNumber());
         String name="Rzecz "+quickThingBatchCounter;
         Long box="box".equals(quickThingBatchTargetKind)
             ?quickThingBatchTargetId:null;
