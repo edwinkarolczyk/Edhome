@@ -29,7 +29,8 @@ assert 'else if("planned".equals(status))' in desktop
 
 # Podsumowanie ma być ostatnim blokiem szczegółów, nie zmianą sekcji postępu/czynności.
 android_detail = main.split("private void projects()", 1)[1].split("private void bindProjectLaborSummary", 1)[0]
-assert android_detail.index("renderProjectCosts(project.id);") < android_detail.index("renderProjectCosts(project.id);") + 1
+assert "Koszt planowany:" not in android_detail
+assert android_detail.index("renderProjectTasks(project);") < android_detail.index("renderProjectResources(project.id);") < android_detail.index("renderProjectCosts(project.id);")
 android_costs = main.split("private void renderProjectCosts", 1)[1].split("private void showProjectPlanSuggestions", 1)[0]
 assert android_costs.rfind('root.addView(expenseSummary);') > android_costs.rfind('for(Long id:projectIds)')
 assert 'Podsumowanie wydatków' in android_costs
