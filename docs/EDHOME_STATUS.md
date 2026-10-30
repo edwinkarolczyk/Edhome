@@ -1,3 +1,13 @@
+## 2026-10-30 — potwierdzona publikacja Android 0.8.1.168 i Desktop 0.7.0.144
+
+- **Android Beta 0.8.1.168 / versionCode 361** opublikowany w [beta-v0.8.1.168](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.168). CI [41013018758 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41013018758), build commit `0361482`, release commit `eea1b04`. APK SHA-256: `b13ce1362919106ac67f18ea65e51b7a69d8632d79e13daa308a1fd655d0e003`.
+- Wydanie zawiera Androidową poprawkę drzewa Miejsc (rekurencyjne wcięcia 20 dp/poziom) i globalnej numeracji seryjnie dodawanych rzeczy `Rzecz N`; test regresyjny `check_storage_place_tree_numbering_contract.py` przeszedł w CI. Poprzednie wpisy mówiące, że CI/APK oczekują, są nieaktualne.
+- **Desktop Beta 0.7.0.144** opublikowany w [desktop-beta-latest](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest). CI [40947540827 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/40947540827), commit `e82ae96`; Setup EXE i Windows ZIP opublikowane. Regulowany interwał przypomnienia aktywnego licznika robocizny: 15/30/45/60/90/120 min, domyślnie 60; przypomnienie nie zamyka sesji.
+- Numery wersji Android/Desktop są niezależne. Test E2E na fizycznym telefonie i komputerze nadal nie został potwierdzony.
+- Zakres wyłącznie `beta`; bez zmian `main`/Stable.
+
+---
+
 ## 2026-10-30 — poprawka numeru wydania Android Beta
 
 - Poprzedni artefakt z poprawkami Miejsc miał błędnie tę samą nazwę `0.8.1.167` i `versionCode 360` co wcześniejsze wydanie bez tych zmian.
