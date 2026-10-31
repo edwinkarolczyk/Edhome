@@ -16,6 +16,9 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.util.Base64;
+import javax.imageio.ImageIO;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,7 +45,8 @@ final class DesktopReportPdf {
         try {
             for (JsonObject row : data) {
                 List<String> lines = rowLines(row, columns);
-                int needed = Math.max(58, 32 + lines.size() * 26);
+                BufferedImage photo = photo(row);
+                int needed = Math.max(58, 32 + lines.size() * 26 + (photo == null ? 0 : 250));
                 if (y + needed > pageH - margin) {
                     drawFooter(g, pageNo++, pageW, pageH, margin);
                     g.dispose();
@@ -67,6 +71,14 @@ final class DesktopReportPdf {
                     g.drawString(shorten(lines.get(i), g.getFontMetrics(),
                         pageW - 2*margin - 32), margin + 16, lineY);
                     lineY += 24;
+                }
+                if (photo != null) {
+                    double scale = Math.min((double)(pageW-2*margin-32)/photo.getWidth(),
+                        230.0/photo.getHeight());
+                    int photoW = Math.max(1,(int)(photo.getWidth()*scale));
+                    int photoH = Math.max(1,(int)(photo.getHeight()*scale));
+                    g.drawImage(photo,margin+16,lineY+4,photoW,photoH,null);
+                    photo.flush();
                 }
                 y += needed + rowGap;
             }
@@ -125,6 +137,15 @@ final class DesktopReportPdf {
         g.setColor(java.awt.Color.GRAY);
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         g.drawString("EDHOME • strona " + page, margin, h - 28);
+    }
+
+    private static BufferedImage photo(JsonObject row) {
+        try {
+            if (!row.has("jpegBase64") || row.get("jpegBase64").isJsonNull()) return null;
+            String encoded=row.get("jpegBase64").getAsString();
+            if(encoded.isBlank()||encoded.length()>12000000)return null;
+            return ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(encoded)));
+        } catch(Exception invalid) { return null; }
     }
 
     private static List<String> rowLines(JsonObject row, String[][] columns) {
