@@ -1,3 +1,13 @@
+## 2026-10-31 — Projekty: czytelne rozliczenie na pierwszej stronie PDF (Android Beta 0.8.1.172 / versionCode 365; CI w toku)
+
+- Przebudowano górne podsumowanie finansowe PDF: większy nagłówek i kwota łączna, wyraźnie pokazane godziny pracy, koszt robocizny, materiały/elementy oraz zakupy planowane poza sumą poniesioną.
+- Kwota łączna to robocizna + poniesione materiały/elementy. Zakupy planowane są pokazane osobno i nie zawyżają kosztu poniesionego.
+- W dalszej części raportu pozostają rozpisane sesje pracy, koszt robocizny według czynności oraz pozycje materiałów/elementów z ilością, ceną i statusem.
+- Android Beta podniesiony do `0.8.1.172 / versionCode 365`; CI uruchomione po zmianie. APK do pobrania dopiero po pomyślnym zakończeniu pipeline.
+- `main` / Stable bez zmian.
+
+---
+
 ## 2026-10-31 — Projekty: raport PDF Desktop Beta 0.7.0.146 (CI PASS)
 
 - Desktop: dodano przycisk `▣ PDF` przy nazwie projektu. Raport obejmuje status i termin, czynności projektu i podprojektów, planowany i zarejestrowany czas, sesje pracy, koszty, historię wykonań dostępną w kopii Desktop oraz dostępne miniatury projektu i czynności.
