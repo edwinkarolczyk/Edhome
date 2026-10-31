@@ -5712,7 +5712,7 @@ public final class MainActivity extends Activity {
                     stream.write(pdf);
                 }
                 Uri uri=FileProvider.getUriForFile(this,getPackageName()+".storage.files",out);
-                runOnUiThread(()->{
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
                     try {
                         Intent share=new Intent(Intent.ACTION_SEND);
                         share.setType("application/pdf");
@@ -5728,7 +5728,7 @@ public final class MainActivity extends Activity {
                 });
             } catch(Exception error) {
                 DiagnosticLog.error("PROJECT_REPORT_PDF",error);
-                runOnUiThread(()->alert(error.getMessage()==null
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(()->alert(error.getMessage()==null
                     ?"Nie udało się wygenerować raportu PDF.":error.getMessage()));
             }
         },"edhome-project-pdf").start();
