@@ -1,3 +1,14 @@
+## 2026-10-31 — Projekty: raport PDF (Android Beta 0.8.1.171 / versionCode 364; CI do potwierdzenia)
+
+- Dodano lokalny generator PDF `ProjectReportPdf` i małą akcję `▣ PDF` nad statusem projektu. Raport obejmuje projekt i podprojekty, postęp, czynności, sesje czasu pracy, koszty, zapisane wykonania oraz dostępne miniatury zdjęć.
+- Generowanie działa w tle, bez blokowania ekranu; plik jest udostępniany przez ograniczony `FileProvider`. Eksport nie zapisuje zmian do projektu i nie wymaga internetu.
+- Dane, których EDHOME nie przechowuje, są jawnie oznaczone: brak pełnego dziennika edycji projektu, brak oryginalnych plików zdjęć (moduł przechowuje wersje skompresowane) oraz brak osobnego pola opisu projektu. Raport nie rekonstruuje fikcyjnej historii.
+- Dodano test kontraktowy `tests/check_project_pdf_report_contract.py`; jego uruchomienie w CI pozostaje do podpięcia.
+- Wersja Android podniesiona do `0.8.1.171 / versionCode 364` ze względu na opublikowane już wydanie 0.8.1.170.
+- **Status odbioru:** kod zapisany na `beta`; CI, kompilacja, podpisany APK i publikacja są jeszcze do potwierdzenia. Desktop PDF pozostaje do wdrożenia. `main` / Stable bez zmian.
+
+---
+
 ## 2026-10-31 — potwierdzone wdrożenie podsumowania wydatków i naprawa crasha szczegółów projektu
 
 - Android Beta **0.8.1.170 / versionCode 363**: usunięto ponowne dołączanie karty podsumowania kosztów, które powodowało `IllegalStateException`. Implementacja `15b5bd3`, test regresyjny `e996d11`, bump `2039107`, release `62a948f`. [CI 41067880346 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067880346); [APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.170).
