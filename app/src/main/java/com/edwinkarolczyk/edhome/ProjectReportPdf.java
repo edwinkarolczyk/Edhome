@@ -54,6 +54,23 @@ final class ProjectReportPdf {
         heading("RAPORT PROJEKTU");
         line("EDHOME • Idea by Edwin",true);
         line("Data raportu: "+date(System.currentTimeMillis()),false);
+
+        // Pierwsza strona zaczyna się od rozliczenia finansowego i czasu pracy.
+        ProjectLaborCalculator.Summary labor=ProjectStore.laborPreview(
+            db,projectId,System.currentTimeMillis());
+        long materialSpent=0L,materialPlanned=0L;
+        try(Cursor c=db.rawQuery("SELECT qty_milli,unit_price_grosz,status FROM project_costs WHERE project_id IN ("+marks+")",args)){
+            while(c.moveToNext()){
+                long value=java.math.BigDecimal.valueOf(c.getLong(0))
+                    .multiply(java.math.BigDecimal.valueOf(c.getLong(1)))
+                    .divide(java.math.BigDecimal.valueOf(1000),0,java.math.RoundingMode.HALF_UP).longValueExact();
+                if("planned".equals(c.getString(2)))materialPlanned=Math.addExact(materialPlanned,value);
+                else materialSpent=Math.addExact(materialSpent,value);
+            }
+        }
+        long incurredTotal=Math.addExact(labor.costGrosz,materialSpent);
+        drawFinancialSummary(incurredTotal,labor.elapsedMillis,labor.costGrosz,
+            materialSpent,materialPlanned,labor.activeSessions);
         gap(12);
         heading("1. Informacje o projekcie");
         line("Nazwa: "+project.name,false);
@@ -94,15 +111,27 @@ final class ProjectReportPdf {
         if(taskCount==0)line("Brak czynności.",false);
 
         gap(10);heading("4. Czas pracy");
-        try(Cursor c=db.rawQuery("SELECT t.title,s.started_at,s.ended_at,s.worked_minutes FROM project_task_work_sessions s JOIN tasks t ON t.id=s.task_id WHERE t.project_id IN ("+marks+") ORDER BY s.started_at",args)){
+        try(Cursor c=db.rawQuery("SELECT t.id,t.title,s.started_at,s.ended_at,s.worked_minutes,s.hourly_rate_grosz,s.worker_id FROM project_task_work_sessions s JOIN tasks t ON t.id=s.task_id WHERE t.project_id IN ("+marks+") ORDER BY s.started_at",args)){
             int count=0;
             while(c.moveToNext()){
                 count++;
-                String duration=c.isNull(2)?"sesja aktywna":minutes(c.isNull(3)?0:c.getInt(3));
-                line(c.getString(0)+" • "+date(c.getLong(1))+" • "+duration,false);
+                String duration=c.isNull(2)?"—":(c.isNull(3)?"sesja aktywna":minutes(c.isNull(4)?0:c.getInt(4)));
+                line(c.getString(1)+" • "+date(c.getLong(2))+" • "+duration,false);
+                line("Stawka: "+(c.isNull(5)?"brak danych":MoneyRules.format(c.getLong(5))+"/h")
+                    +" • osoba ID: "+(c.isNull(6)?"nieprzypisana":Long.toString(c.getLong(6))),false);
             }
             if(count==0)line("Brak zapisanych sesji czasu pracy.",false);
         }
+        for(java.util.Map.Entry<Long,Long> entry:labor.taskCostsGrosz.entrySet()){
+            String taskName="Czynność #"+entry.getKey();
+            try(Cursor c=db.rawQuery("SELECT title FROM tasks WHERE id=?",new String[]{Long.toString(entry.getKey())})){
+                if(c.moveToFirst())taskName=c.getString(0);
+            }
+            line("Koszt robocizny • "+taskName+": "+MoneyRules.format(entry.getValue()),true);
+        }
+        line("Łączny koszt robocizny: "+MoneyRules.format(labor.costGrosz),true);
+        line("Łączny czas pracy: "+hours(labor.elapsedMillis)
+            +(labor.activeSessions>0?" • uwzględniono aktywne liczniki":"") ,true);
 
         gap(10);heading("5. Wydatki i zakupy");
         long total=0,spent=0,planned=0;int costCount=0;
@@ -154,6 +183,48 @@ final class ProjectReportPdf {
         line("Wydatki planowane: "+MoneyRules.format(planned),false);
         line("Raport wygenerowano lokalnie na urządzeniu. Dane projektu nie zostały zmienione.",false);
         finishPage();
+    }
+
+    private void drawFinancialSummary(long total,long elapsedMillis,long labor,
+            long materials,long planned,int activeSessions){
+        ensure(156,"Raport projektu");
+        int top=y;
+        paint.setColor(0xFF26364A);
+        canvas.drawRoundRect(LEFT,top,RIGHT,top+148,12,12,paint);
+        paint.setColor(0xFFFFFFFF);
+        paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+        paint.setTextSize(10);
+        canvas.drawText("ŁĄCZNY KOSZT PONIESIONY",LEFT+14,top+20,paint);
+        paint.setTextSize(27);
+        canvas.drawText(MoneyRules.format(total),LEFT+14,top+51,paint);
+        paint.setTextSize(9);
+        canvas.drawText("CZAS PRACY",LEFT+14,top+75,paint);
+        paint.setTextSize(16);
+        canvas.drawText(hours(elapsedMillis),LEFT+14,top+96,paint);
+        paint.setTextSize(9);
+        canvas.drawText("ROBOCIZNA",LEFT+14,top+119,paint);
+        paint.setTextSize(14);
+        canvas.drawText(MoneyRules.format(labor),LEFT+14,top+138,paint);
+        paint.setTextSize(9);
+        canvas.drawText("MATERIAŁY / ELEMENTY",LEFT+275,top+75,paint);
+        paint.setTextSize(16);
+        canvas.drawText(MoneyRules.format(materials),LEFT+275,top+96,paint);
+        paint.setTextSize(9);
+        canvas.drawText("ZAKUPY PLANOWANE (NIEPONIESIONE)",LEFT+275,top+119,paint);
+        paint.setTextSize(14);
+        canvas.drawText(MoneyRules.format(planned),LEFT+275,top+138,paint);
+        if(activeSessions>0){
+            y=top+164;
+            line("Uwaga: w sumie czasu i robocizny uwzględniono "+activeSessions
+                +" aktywne liczniki pracy (stan na moment generowania raportu).",false);
+        }else y=top+160;
+    }
+
+    private static String hours(long millis){
+        long safe=Math.max(0L,millis);
+        long wholeMinutes=safe/60000L;
+        long h=wholeMinutes/60L,m=wholeMinutes%60L;
+        return h+" h "+m+" min";
     }
 
     private void appendTaskTime(SQLiteDatabase db,long taskId){
