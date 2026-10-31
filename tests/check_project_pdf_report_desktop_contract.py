@@ -22,7 +22,7 @@ for marker in (
     'task_thumbnail_1_base64',
     'task_thumbnail_2_base64',
     'thumbnail_base64',
-    'printTableReport("Raport projektu',
+    "printTableReport(reportTitle,rows,columns)",
 ):
     assert marker in desktop, marker
 for marker in ("jpegBase64", "ImageIO.read", "LosslessFactory.createFromImage"):
