@@ -1404,7 +1404,13 @@ public final class EdhomeDesktop extends JFrame {
         JLabel title = new JLabel(value(project,"name"));
         title.setForeground(APP_TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD,20f));
-        head.add(title,BorderLayout.NORTH);
+        JPanel titleRow=new JPanel(new BorderLayout(8,0));
+        titleRow.setOpaque(false);
+        titleRow.add(title,BorderLayout.CENTER);
+        JButton reportButton=actionButton("▣ PDF");
+        reportButton.addActionListener(e->printTableReport("Raport projektu • "+value(project,"name"),new JsonArray(),new String[][]{{"Pozycja","name"}}));
+        titleRow.add(reportButton,BorderLayout.EAST);
+        head.add(titleRow,BorderLayout.NORTH);
         ImageIcon projectIcon=desktopProjectThumbnailIcon(project,76);
         if(projectIcon!=null){
             JLabel preview=new JLabel(projectIcon);
