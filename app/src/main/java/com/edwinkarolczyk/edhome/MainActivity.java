@@ -5702,7 +5702,7 @@ public final class MainActivity extends Activity {
         new Thread(()->{
             try {
                 byte[] pdf=ProjectReportPdf.create(db.getReadableDatabase(),projectId);
-                java.io.File folder=new java.io.File(getCacheDir(),"qr-labels");
+                java.io.File folder=new java.io.File(getCacheDir(),"project-reports");
                 if(!folder.isDirectory()&&!folder.mkdirs())
                     throw new java.io.IOException("Nie utworzono katalogu raportów.");
                 String file="edhome-project-"+projectId+"-"
@@ -5711,7 +5711,7 @@ public final class MainActivity extends Activity {
                 try(java.io.FileOutputStream stream=new java.io.FileOutputStream(out)){
                     stream.write(pdf);
                 }
-                Uri uri=Uri.parse("content://"+getPackageName()+".qrpdf/labels/"+file);
+                Uri uri=FileProvider.getUriForFile(this,getPackageName()+".storage.files",out);
                 runOnUiThread(()->{
                     try {
                         Intent share=new Intent(Intent.ACTION_SEND);
