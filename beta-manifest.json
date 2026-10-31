@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 363,
-  "versionName": "0.8.1.170",
-  "changelog": "EDHOME Beta 0.8.1.170 — Poprawki i usprawnienia beta. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.170/edhome-beta.apk",
-  "sha256": "47d75ca7090cc6f04d8828bc9f819c5c1654c903e7614a6505ce56014a0e3558"
+  "versionCode": 364,
+  "versionName": "0.8.1.171",
+  "changelog": "EDHOME Beta 0.8.1.171 — Dodano lokalny generator PDF `ProjectReportPdf` i małą akcję `▣ PDF` nad statusem projektu. Raport obejmuje projekt i podprojekty, postęp, czynności, sesje czasu pracy, koszty, zapisane wykonania oraz dostępne miniatury zdjęć. Generowanie działa w tle, bez blokowania ekranu; plik jest udostępniany przez ograniczony `FileProvider`. Eksport nie zapisuje zmian do projektu i nie wymaga internetu. Dane, których EDHOME nie przechowuje, są jawnie oznaczone: brak pełnego dziennika edycji projektu, brak oryginalnych plików zdjęć (moduł przechowuje wersje skompresowane) oraz brak osobnego pola opisu projektu. Raport nie rekonstruuje fikcyjnej historii. Dodano test kontraktowy `tests/check_project_pdf_report_contract.py`; jego uruchomienie w CI pozostaje do podpięcia. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.171/edhome-beta.apk",
+  "sha256": "0a53fb9bf52f1b92f00a41d622b57c66de6550c134d1fd95826395e7db9eaae6"
 }
