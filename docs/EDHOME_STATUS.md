@@ -1,4 +1,4 @@
-## 2026-10-31 — Projekty: raport PDF Desktop Beta 0.7.0.146 (CI do potwierdzenia)
+## 2026-10-31 — Projekty: raport PDF Desktop Beta 0.7.0.146 (CI PASS)
 
 - Desktop: dodano przycisk `▣ PDF` przy nazwie projektu. Raport obejmuje status i termin, czynności projektu i podprojektów, planowany i zarejestrowany czas, sesje pracy, koszty, historię wykonań dostępną w kopii Desktop oraz dostępne miniatury projektu i czynności.
 - Generator PDF Desktop wykorzystuje istniejący podgląd i drukowanie; obrazy są osadzane w raporcie. Zapisane obrazy są wersjami skompresowanymi.
@@ -9,14 +9,14 @@
 
 ---
 
-## 2026-10-31 — Projekty: raport PDF (Android Beta 0.8.1.171 / versionCode 364; CI do potwierdzenia)
+## 2026-10-31 — Projekty: raport PDF Android Beta 0.8.1.171 / versionCode 364 (CI PASS)
 
 - Dodano lokalny generator PDF `ProjectReportPdf` i małą akcję `▣ PDF` nad statusem projektu. Raport obejmuje projekt i podprojekty, postęp, czynności, sesje czasu pracy, koszty, zapisane wykonania oraz dostępne miniatury zdjęć.
 - Generowanie działa w tle, bez blokowania ekranu; plik jest udostępniany przez ograniczony `FileProvider`. Eksport nie zapisuje zmian do projektu i nie wymaga internetu.
 - Dane, których EDHOME nie przechowuje, są jawnie oznaczone: brak pełnego dziennika edycji projektu, brak oryginalnych plików zdjęć (moduł przechowuje wersje skompresowane) oraz brak osobnego pola opisu projektu. Raport nie rekonstruuje fikcyjnej historii.
-- Dodano test kontraktowy `tests/check_project_pdf_report_contract.py`; jego uruchomienie w CI pozostaje do podpięcia.
+- Dodano test kontraktowy `tests/check_project_pdf_report_contract.py`; uruchomiony w Android Beta CI; testy, kompilacja i lint zakończone powodzeniem.
 - Wersja Android podniesiona do `0.8.1.171 / versionCode 364` ze względu na opublikowane już wydanie 0.8.1.170.
-- **Status odbioru:** kod zapisany na `beta`; CI, kompilacja, podpisany APK i publikacja są jeszcze do potwierdzenia. Desktop PDF pozostaje do wdrożenia. `main` / Stable bez zmian.
+- **Status odbioru:** kod zapisany na `beta`; CI, kompilacja, podpisany APK i publikacja zakończone powodzeniem. Desktop PDF wdrożony. `main` / Stable bez zmian.
 
 ---
 
