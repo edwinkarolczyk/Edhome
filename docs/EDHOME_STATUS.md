@@ -1,9 +1,9 @@
 ## 2026-10-31 — Projekty: raport PDF Desktop Beta 0.7.0.146 (CI PASS)
 
 - Desktop: dodano przycisk `▣ PDF` przy nazwie projektu. Raport obejmuje status i termin, czynności projektu i podprojektów, planowany i zarejestrowany czas, sesje pracy, koszty, historię wykonań dostępną w kopii Desktop oraz dostępne miniatury projektu i czynności.
-- Generator PDF Desktop wykorzystuje istniejący podgląd i drukowanie; obrazy są osadzane w raporcie. Zapisane obrazy są wersjami skompresowanymi.
+- Generator PDF Desktop zapisuje raport w wybranej lokalizacji, oferuje podgląd i drukowanie; obrazy są osadzane w raporcie. Zapisane obrazy są wersjami skompresowanymi.
 - Wersja Desktop podniesiona z `0.7.0.145` do `0.7.0.146`. Android Beta pozostaje `0.8.1.171 / versionCode 364`.
-- Dodano test kontraktowy Desktop PDF i podpięto do Desktop Beta CI. Kompilacja, testy, instalator i ZIP oczekują na wynik CI.
+- Dodano test kontraktowy Desktop PDF i podpięto do Desktop Beta CI. Testy kontraktowe, runtime smoke, kompilacja, instalator i ZIP zakończyły się powodzeniem; wydanie Desktop 0.7.0.146 opublikowane.
 - Historia obejmuje tylko dostępne zapisane wykonania; pełny dziennik wszystkich edycji projektu nie jest generowany wstecz.
 - Wyłącznie `beta`; `main` / Stable bez zmian.
 
