@@ -1,3 +1,57 @@
+## Kontrola 31.10.2026 — Android 0.8.1.170 / Desktop 0.7.0.145; parytet podsumowania wydatków i naprawa crasha projektu
+
+**Zakres:** wyłącznie `beta`. HEAD odczytany przed aktualizacją dokumentacji: [`62a948f`](https://github.com/edwinkarolczyk/Edhome/commit/62a948f8fd9ae86dd7142786f5c94e37cc3c9b2c). Ten wpis jest aktualniejszy od historycznych wpisów 30.10 opisujących Android 0.8.1.168 / Desktop 0.7.0.144.
+
+### Wersje, commity, CI i publikacja
+
+- **Android Beta 0.8.1.170 / versionCode 363.** Potwierdzone zgodnie w `app/build.gradle` i `beta-manifest.json`. Implementacja naprawy crasha: [`15b5bd3`](https://github.com/edwinkarolczyk/Edhome/commit/15b5bd30b3fa790ba06e705b99410da36a303e1c); test regresyjny: [`e996d11`](https://github.com/edwinkarolczyk/Edhome/commit/e996d118e8b55d1004f5e343d5afc53481600f4e); bump wersji: [`2039107`](https://github.com/edwinkarolczyk/Edhome/commit/20391076f158c6aace9f531747c04f2da98d47a3); release commit: [`62a948f`](https://github.com/edwinkarolczyk/Edhome/commit/62a948f8fd9ae86dd7142786f5c94e37cc3c9b2c). [CI PASS 41067880346](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067880346), build commit `2039107`: kontrakt podsumowania wydatków Android/Desktop, projekty, Kalendarz, PayCheck, migracje/backup, QR/NFC i pozostałe testy workflow zakończone powodzeniem; podpis APK, weryfikacja certyfikatu, upload artefaktu i publikacja manifestu również PASS. [Release APK](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.170), opublikowany 30.10.2026 14:02:59 UTC; 13 487 511 B; SHA-256 `47d75ca7090cc6f04d8828bc9f819c5c1654c903e7614a6505ce56014a0e3558`.
+- **Desktop Beta 0.7.0.145.** Potwierdzone w `desktop/build.gradle` i `EdhomeDesktop.DESKTOP_VERSION`. Implementacja podsumowania: [`3c947ad`](https://github.com/edwinkarolczyk/Edhome/commit/3c947adba190cfd76588cb5b4e9941b612431bc3); test wspólny: [`e596df3`](https://github.com/edwinkarolczyk/Edhome/commit/e596df358ab0121c83f520ef9f4bebd93ac90654); bump Gradle: [`ec8f6bd`](https://github.com/edwinkarolczyk/Edhome/commit/ec8f6bdc445fac8489adfb5ffd64f5fbdb58d0ba); poprawka stałej wersji: [`0e38276`](https://github.com/edwinkarolczyk/Edhome/commit/0e38276a90e09d0f54121cd640dd11e17c76b595); workflow publikacji: [`6b32fee`](https://github.com/edwinkarolczyk/Edhome/commit/6b32feed5066d5fcc17d06e664a0dcb23bdc5f29). [CI PASS 41067805983](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067805983), commit testowy `e996d11`: podsumowanie wydatków, Desktop approved-scope, Hub runtime smoke, kompilacja, JVM/EXE smoke, instalator Windows, upload paczek i one-click update — PASS. [Release Desktop](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest) zaktualizowany 30.10.2026 14:02 UTC; Setup EXE 57 342 464 B (SHA-256 `13cd5e710571362900867033ec976e9aba3ab272b3b870be37446ac15adecd1b`), ZIP 56 508 477 B (SHA-256 `a8c18d1a3d01bcb9b106058b8a71beeb5885565a886da89294f4965d8369baf9`).
+- Wcześniejszy Android run [41067743561](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067743561) zakończył się FAIL na kroku regresji podsumowania. Test zaktualizowano tak, aby wymagał braku drugiego `root.addView(expenseSummary)`; późniejszy run 41067880346 przeszedł. Nie traktować anulowanych/nieudanych wcześniejszych przebiegów jako wyniku aktualnego wydania.
+- Numery wersji Android i Desktop są niezależne. Obie aktualne paczki są rzeczywiście opublikowane. **Test fizyczny/E2E na telefonie i Windows nadal niepotwierdzony.**
+
+### Potwierdzona zgodność funkcji: podsumowanie wydatków projektu
+
+- Obie platformy pokazują na dole szczegółów projektu podsumowanie: **wartość wszystkich kosztów**, **poniesione (Kupione/Zapłacone)** i **Planowane**. Koszty projektu pozostają poza księgowaniem PayCheck.
+- Suma obejmuje projekt nadrzędny i wszystkie poziomy podprojektów. Android używa `ProjectStore.descendantIds`; Desktop `desktopProjectDescendsFrom`.
+- Obie platformy liczą ilość w tysięcznych jednostki i cenę w groszach, z dokładnym zaokrągleniem `HALF_UP`; nie używają obliczeń `double` do sumy. Test sprawdza m.in. 10 zł planowane + 20 zł kupione + 30 zł zapłacone = 60 zł łącznie, z wykluczeniem obcego projektu.
+- Na Desktop zmiana ilości lub statusu odświeża sumy. Android zachowuje podsumowanie jako ostatni blok sekcji kosztów.
+- **Naprawiony crash Android:** `card()` automatycznie dołącza kartę do `body`; ponowne `root.addView(expenseSummary)` powodowało `IllegalStateException: ViewGroup.addViewInner`. Usunięto drugie dołączenie, bez zmiany danych i układu pozostałych sekcji. Test regresyjny wymaga teraz utworzenia karty przez `card()` i zabrania ponownego dodania jej do `root`.
+- To zmiana istniejących pól `project_costs`, bez nowej tabeli/kolumny i bez migracji. **Parytet statycznego kodu i CI: PASS; odbiór UI na rzeczywistym telefonie i PC: niepotwierdzony.**
+
+### Aktualna macierz funkcji na `beta`
+
+| Obszar | Fakty i aktualna ocena | Priorytet |
+|---|---|---|
+| Projekty / podprojekty / Czynności | **Częściowo.** Podsumowanie kosztów jest zgodne Android/Desktop i ma test wspólny. Wspólne są rekordy projektów, zależności, sesje, koszty i miniatury. Android ma trwały alarm konkretnej czynności z drzemką/wyciszeniem; Desktop ma regulowany interwał przypomnienia aktywnego licznika robocizny, ale nie potwierdzono odpowiednika dzwoniącego alarmu zadania Windows. | **P1** |
+| PayCheck / Budżet | **Częściowo; luka P0 nadal otwarta.** Android ma `BankBudgetGroupSettlement` dla 2→1 i 1→2 oraz dziennik `bank_group_settlement_recovery`. Desktop ma ręczne dopasowanie pojedynczego dowodu (`matchBankEvidence`), import i sugestie; nie znaleziono desktopowego odpowiednika grupowego rozliczenia ani dziennika naprawy. | **P0** |
+| Kalendarz / planer | **Częściowo.** Desktop ma kalendarz miesiąca/agendę; Android `SmartTaskPlanner` proponuje terminy, sprawdza kolizje i wymaga zatwierdzenia. Pełnego odpowiednika planera na Desktop nie potwierdzono. | **P1** |
+| Magazyn QR/NFC | **Częściowo.** Wspólne `storage_items`, `nfc_links`, QR i cykl Wzięte/Odłożone; Desktop ma drzewo pomieszczeń i skaner. Fizyczny odczyt tagów, konflikty lokalizacji i pełny cykl zwrotu nieodebrane. | **P1** |
+| Miejsca | **Częściowo.** Android renderuje rekurencyjne wcięcia 20 dp/poziom i globalną numerację seryjnie dodawanych `Rzecz N`; Desktop pokazuje hierarchię przez `JTree`, ale odpowiednika globalnej numeracji szybkiej serii nie potwierdzono. | **P1** |
+| Pojazdy | **Częściowo.** Wspólne pojazdy, opony, polisy, koszty i dokumenty; pełny odbiór terminów, powiadomień i rozliczeń na urządzeniach otwarty. | **P2** |
+| Odpady | **Częściowo.** Reguły cykli i widoki obu platform; pełny odbiór harmonogramów, przypomnień i retry otwarty. | **P2** |
+| Ogród | **Częściowo.** `garden_areas/catalog/plantings/harvests` i widoki obu platform; cykle, zbiory i zadania bez fizycznego E2E. | **P2** |
+| Backup ZIP / restore | **Częściowo.** Android obsługuje snapshoty DB v2–v52, merge selektywny i recovery; Desktop zachowuje kopię przed zastąpieniem snapshotu. Stare ZIP, media i pełny round-trip po restore nieodebrane na urządzeniach. | **P0** |
+| Diagnostyka | **Kontrakt w kodzie; E2E otwarte.** Android `DiagnosticLog`, Desktop `DesktopDiagnosticLog`, Hub `/diagnostics-upload`, SHA-256/ACK. Brak fizycznego testu zerwania LAN, retry i usuwania wyłącznie potwierdzonego fragmentu logu. | **P1** |
+
+### Schemat, migracje i kontrakt JSON Hub
+
+- Android nadal ma `DataBackup.DB_VERSION=52`; migracja 51→52 dodaje `task_thumbnail_1_base64` i `task_thumbnail_2_base64`. Wdrożenie podsumowania wydatków i naprawa podwójnego dołączenia widoku nie zmieniają SQLite, migracji, ZIP ani kontraktu Hub.
+- Android `sync_records`: `sync_uuid` (PK), `table_name`, `row_key`, `revision`, `updated_at`, `deleted_at`, `row_hash`; żywy rekord ma unikalną parę `table_name,row_key`. `SyncRecordStore` ogranicza patch do 500 operacji i delta do 4 MiB, waliduje UUID/tabelę/klucz, używa tombstone dla usunięć i stosuje operacje w transakcji.
+- Hub v2 `edhome-record-patch`: `format`, `version=2`, `operations[]` z `table`, `rowKey`, `syncUuid`, `baseRevision`, `action`, `row`; snapshot SHA-256/compare-and-set, konflikt HTTP 409. Finansowy `budgetDelta` pozostaje osobną ścieżką dla `paycheckMonthlyBudget`, `paycheckRecipients`, `paycheckBudgetHistory`.
+- Desktop `DesktopBudgetDelta` waliduje pełny UUID, duplikaty i wielkość liter; scala na kopii snapshotu, historia jest append-only, a retry identycznego zdarzenia jest idempotentne. Testy JUnit obejmują konflikt, rollback całej paczki, ponowienie po utracie ACK i niezmienność historii. To zabezpieczenia transportu/delta, **nie** implementacja rozliczeń grupowych.
+- Warunek dwukierunkowego odbioru pozostaje: Android→Desktop i Desktop→Android, ten sam `syncUuid/table/rowKey`, poprawna `baseRevision`, HTTP 409 bez nadpisania, retry po utracie ACK bez podwójnego księgowania, tombstone, restart/zmiana IP, saldo i ZIP restore na obu platformach.
+
+### Decyzja i następne priorytety
+
+1. **P0:** nie wdrażać automatycznie grupowego rozliczenia Desktop bez transakcyjnego dziennika, idempotencji, odzyskiwania po przerwaniu i testów salda; obecna luka pozostaje udokumentowana.
+2. **P0:** fizyczny round-trip Hub, konflikt 409, utrata ACK/retry, bank 2→1 i 1→2, saldo/nadpłaty oraz stare/selektywne ZIP.
+3. **P1:** alarm konkretnej czynności Windows i pełny planer Desktop.
+4. **P1/P2:** odbiór QR/NFC, Miejsc, diagnostyki, Pojazdów, Odpadów i Ogrodu.
+
+**Fizyczne testy:** niepotwierdzone dla Android↔Windows, alarmów, NFC i ZIP/restore. CI PASS nie zastępuje testu na rzeczywistych urządzeniach. Stable `main` bez zmian.
+
+---
+
 ## Kontrola 30.10.2026 — Android 0.8.1.168 i Desktop 0.7.0.144; nowa luka P0 w rozliczeniach grupowych
 
 **Zakres:** wyłącznie `beta`. Punkt bazowy kodu: Android build commit [`0361482`](https://github.com/edwinkarolczyk/Edhome/commit/0361482b2a7a0bb69441b7da94fdb89d7b81fc73), Desktop release-code commit [`e82ae96`](https://github.com/edwinkarolczyk/Edhome/commit/e82ae964be0c57e30c0ede4c4ed99ee59601fb1b), bieżący HEAD przed tym wpisem [`eea1b04`](https://github.com/edwinkarolczyk/Edhome/commit/eea1b04a91744f64fd8e4e00fc9374e528846c1b).
