@@ -1528,7 +1528,8 @@ public final class EdhomeDesktop extends JFrame {
             "EDHOME • "+value(project,"name")+" • "+java.time.LocalDate.now());
         addProjectReportRow(rows,"INFORMACJE",
             "Status: "+friendlyValue("status",project)
-                +" • Termin: "+(value(project,"due_date").isBlank()?"—":value(project,"due_date")));
+                +" • Termin: "+(value(project,"due_date").isBlank()?"—":value(project,"due_date")),
+            value(project,"thumbnail_base64"));
         java.util.Set<Long> ids=new java.util.HashSet<>();
         ids.add(projectId);
         for(JsonElement element:table("projects")) {
@@ -1552,7 +1553,11 @@ public final class EdhomeDesktop extends JFrame {
             addProjectReportRow(rows,(completed?"WYKONANA • ":"OTWARTA • ")+name,
                 "Termin: "+value(task,"due_date")+" • Plan: "
                     +formatMinutes(intValue(task,"duration_minutes"))
-                    +" • Praca: "+formatMinutes(minutes));
+                    +" • Praca: "+formatMinutes(minutes),
+                value(task,"task_thumbnail_1_base64"));
+            String secondPhoto=value(task,"task_thumbnail_2_base64");
+            if(!secondPhoto.isBlank())addProjectReportRow(rows,"ZDJĘCIE • "+name,
+                "Dodatkowe zdjęcie czynności",secondPhoto);
         }
         addProjectReportRow(rows,"POSTĘP",
             "Wykonane: "+done+"/"+total+" • "+(total==0?0:Math.round(done*100f/total))
@@ -1593,9 +1598,15 @@ public final class EdhomeDesktop extends JFrame {
     }
 
     private static void addProjectReportRow(JsonArray rows,String name,String details) {
+        addProjectReportRow(rows,name,details,"");
+    }
+
+    private static void addProjectReportRow(JsonArray rows,String name,
+            String details,String jpegBase64) {
         JsonObject row=new JsonObject();
         row.addProperty("name",name==null?"":name);
         row.addProperty("details",details==null?"":details);
+        row.addProperty("jpegBase64",jpegBase64==null?"":jpegBase64);
         rows.add(row);
     }
 
