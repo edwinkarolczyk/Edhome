@@ -187,37 +187,42 @@ final class ProjectReportPdf {
 
     private void drawFinancialSummary(long total,long elapsedMillis,long labor,
             long materials,long planned,int activeSessions){
-        ensure(156,"Raport projektu");
+        ensure(222,"Raport projektu");
         int top=y;
         paint.setColor(0xFF26364A);
-        canvas.drawRoundRect(LEFT,top,RIGHT,top+148,12,12,paint);
+        canvas.drawRoundRect(LEFT,top,RIGHT,top+210,12,12,paint);
         paint.setColor(0xFFFFFFFF);
         paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+
+        paint.setTextSize(11);
+        canvas.drawText("ŁĄCZNY KOSZT PONIESIONY",LEFT+16,top+24,paint);
+        paint.setTextSize(34);
+        canvas.drawText(MoneyRules.format(total),LEFT+16,top+64,paint);
+        paint.setTextSize(9);
+        canvas.drawText("ROBOCIZNA + MATERIAŁY / ELEMENTY",LEFT+16,top+84,paint);
+
         paint.setTextSize(10);
-        canvas.drawText("ŁĄCZNY KOSZT PONIESIONY",LEFT+14,top+20,paint);
-        paint.setTextSize(27);
-        canvas.drawText(MoneyRules.format(total),LEFT+14,top+51,paint);
-        paint.setTextSize(9);
-        canvas.drawText("CZAS PRACY",LEFT+14,top+75,paint);
-        paint.setTextSize(16);
-        canvas.drawText(hours(elapsedMillis),LEFT+14,top+96,paint);
-        paint.setTextSize(9);
-        canvas.drawText("ROBOCIZNA",LEFT+14,top+119,paint);
-        paint.setTextSize(14);
-        canvas.drawText(MoneyRules.format(labor),LEFT+14,top+138,paint);
-        paint.setTextSize(9);
-        canvas.drawText("MATERIAŁY / ELEMENTY",LEFT+275,top+75,paint);
-        paint.setTextSize(16);
-        canvas.drawText(MoneyRules.format(materials),LEFT+275,top+96,paint);
-        paint.setTextSize(9);
-        canvas.drawText("ZAKUPY PLANOWANE (NIEPONIESIONE)",LEFT+275,top+119,paint);
-        paint.setTextSize(14);
-        canvas.drawText(MoneyRules.format(planned),LEFT+275,top+138,paint);
+        canvas.drawText("CZAS PRACY",LEFT+16,top+113,paint);
+        paint.setTextSize(20);
+        canvas.drawText(hours(elapsedMillis),LEFT+16,top+139,paint);
+        paint.setTextSize(10);
+        canvas.drawText("KOSZT ROBOCIZNY",LEFT+16,top+164,paint);
+        paint.setTextSize(18);
+        canvas.drawText(MoneyRules.format(labor),LEFT+16,top+190,paint);
+
+        paint.setTextSize(10);
+        canvas.drawText("MATERIAŁY / ELEMENTY",LEFT+275,top+113,paint);
+        paint.setTextSize(20);
+        canvas.drawText(MoneyRules.format(materials),LEFT+275,top+139,paint);
+        paint.setTextSize(10);
+        canvas.drawText("ZAKUPY PLANOWANE • POZA SUMĄ",LEFT+275,top+164,paint);
+        paint.setTextSize(18);
+        canvas.drawText(MoneyRules.format(planned),LEFT+275,top+190,paint);
         if(activeSessions>0){
-            y=top+164;
+            y=top+226;
             line("Uwaga: w sumie czasu i robocizny uwzględniono "+activeSessions
                 +" aktywne liczniki pracy (stan na moment generowania raportu).",false);
-        }else y=top+160;
+        }else y=top+222;
     }
 
     private static String hours(long millis){
