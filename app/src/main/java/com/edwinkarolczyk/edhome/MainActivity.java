@@ -5659,6 +5659,7 @@ public final class MainActivity extends Activity {
         if(project.budgetGrosz!=null)
             summary.addView(text("Budżet projektu: "
                 +MoneyRules.format(project.budgetGrosz),14,false));
+        smallButton(summary,"▣ PDF",()->shareProjectReport(project.id));
         summary.addView(text("Status: "
             +("done".equals(project.status)?"Zakończony":
                 "paused".equals(project.status)?"Wstrzymany":"W trakcie"),
@@ -5691,6 +5692,46 @@ public final class MainActivity extends Activity {
         renderProjectTasks(project);
         renderProjectResources(project.id);
         renderProjectCosts(project.id);
+    }
+
+    /** Raport jest generowany poza wątkiem UI; eksport nie modyfikuje projektu. */
+    private void shareProjectReport(long projectId) {
+        ProjectStore.Project project=ProjectStore.find(db.getReadableDatabase(),projectId);
+        if(project==null){alert("Projekt już nie istnieje.");return;}
+        final String reportName=project.name;
+        new Thread(()->{
+            try {
+                byte[] pdf=ProjectReportPdf.create(db.getReadableDatabase(),projectId);
+                java.io.File folder=new java.io.File(getCacheDir(),"qr-labels");
+                if(!folder.isDirectory()&&!folder.mkdirs())
+                    throw new java.io.IOException("Nie utworzono katalogu raportów.");
+                String file="edhome-project-"+projectId+"-"
+                    +java.util.UUID.randomUUID().toString().replace("-","")+".pdf";
+                java.io.File out=new java.io.File(folder,file);
+                try(java.io.FileOutputStream stream=new java.io.FileOutputStream(out)){
+                    stream.write(pdf);
+                }
+                Uri uri=Uri.parse("content://"+getPackageName()+".qrpdf/labels/"+file);
+                runOnUiThread(()->{
+                    try {
+                        Intent share=new Intent(Intent.ACTION_SEND);
+                        share.setType("application/pdf");
+                        share.putExtra(Intent.EXTRA_STREAM,uri);
+                        share.putExtra(Intent.EXTRA_SUBJECT,"Raport projektu: "+reportName);
+                        share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        share.setClipData(ClipData.newUri(getContentResolver(),"Raport projektu EDHOME",uri));
+                        startActivity(Intent.createChooser(share,"Raport PDF • "+reportName));
+                    } catch(Exception error) {
+                        DiagnosticLog.error("PROJECT_REPORT_SHARE",error);
+                        alert("PDF utworzono, ale nie udało się otworzyć udostępniania.");
+                    }
+                });
+            } catch(Exception error) {
+                DiagnosticLog.error("PROJECT_REPORT_PDF",error);
+                runOnUiThread(()->alert(error.getMessage()==null
+                    ?"Nie udało się wygenerować raportu PDF.":error.getMessage()));
+            }
+        },"edhome-project-pdf").start();
     }
 
     /** Wycena na żywo, bez zapisywania groszy do bazy co klatkę. */
