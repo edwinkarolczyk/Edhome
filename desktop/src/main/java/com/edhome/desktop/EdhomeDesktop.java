@@ -1607,8 +1607,19 @@ public final class EdhomeDesktop extends JFrame {
         addProjectReportRow(rows,"UWAGA",
             "Raport przedstawia zapisane dane dostępne w EDHOME Desktop. "
                 +"Nie odtwarza zmian, których aplikacja nie zapisała.");
-        printTableReport("Raport projektu • "+value(project,"name"),rows,
-            new String[][]{{"Pozycja","name"},{"Szczegóły","details"}});
+        String reportTitle="Raport projektu • "+value(project,"name");
+        String[][] columns={{"Pozycja","name"},{"Szczegóły","details"}};
+        try {
+            byte[] pdf=DesktopReportPdf.table(reportTitle,rows,columns);
+            java.nio.file.Path saved=DesktopQrLabels.savePdf(this,pdf);
+            if(saved==null)return;
+            int preview=JOptionPane.showConfirmDialog(this,
+                "Raport zapisano:\\n"+saved+"\\n\\nCzy otworzyć podgląd i drukowanie?",
+                "EDHOME • Raport projektu",JOptionPane.YES_NO_OPTION);
+            if(preview==JOptionPane.YES_OPTION)printTableReport(reportTitle,rows,columns);
+        } catch(Exception error) {
+            JOptionPane.showMessageDialog(this,"Nie udało się zapisać raportu PDF:\\n"+rootMessage(error));
+        }
     }
 
     private static void addProjectReportRow(JsonArray rows,String name,String details) {
