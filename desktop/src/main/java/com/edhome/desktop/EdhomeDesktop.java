@@ -1590,6 +1590,20 @@ public final class EdhomeDesktop extends JFrame {
         addProjectReportRow(rows,"PODSUMOWANIE WYDATKÓW",
             "Wszystkie: "+money(Long.toString(all))+" • Poniesione: "
                 +money(Long.toString(spent))+" • Planowane: "+money(Long.toString(planned)));
+        int historyCount=0;
+        for(JsonElement element:table("task_history")) {
+            if(!element.isJsonObject())continue;
+            JsonObject history=element.getAsJsonObject();
+            String taskName=names.get(longValue(history,"task_id"));
+            if(taskName==null)continue;
+            historyCount++;
+            addProjectReportRow(rows,"HISTORIA • "+value(history,"title_snapshot"),
+                "Wykonano: "+value(history,"completed_at")
+                    +(value(history,"assignee_name_snapshot").isBlank()?""
+                        :" • Wykonał/a: "+value(history,"assignee_name_snapshot")));
+        }
+        if(historyCount==0)addProjectReportRow(rows,"HISTORIA",
+            "Brak dostępnych wpisów historii wykonań w lokalnej kopii Desktop.");
         addProjectReportRow(rows,"UWAGA",
             "Raport przedstawia zapisane dane dostępne w EDHOME Desktop. "
                 +"Nie odtwarza zmian, których aplikacja nie zapisała.");
