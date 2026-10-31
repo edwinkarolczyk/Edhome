@@ -1408,7 +1408,7 @@ public final class EdhomeDesktop extends JFrame {
         titleRow.setOpaque(false);
         titleRow.add(title,BorderLayout.CENTER);
         JButton reportButton=actionButton("▣ PDF");
-        reportButton.addActionListener(e->printTableReport("Raport projektu • "+value(project,"name"),new JsonArray(),new String[][]{{"Pozycja","name"}}));
+        reportButton.addActionListener(e->showDesktopProjectPdfReport(project));
         titleRow.add(reportButton,BorderLayout.EAST);
         head.add(titleRow,BorderLayout.NORTH);
         ImageIcon projectIcon=desktopProjectThumbnailIcon(project,76);
@@ -1520,6 +1520,84 @@ public final class EdhomeDesktop extends JFrame {
         return wrapper;
     }
 
+
+    private void showDesktopProjectPdfReport(JsonObject project) {
+        long projectId=longValue(project,"id");
+        JsonArray rows=new JsonArray();
+        addProjectReportRow(rows,"RAPORT PROJEKTU",
+            "EDHOME • "+value(project,"name")+" • "+java.time.LocalDate.now());
+        addProjectReportRow(rows,"INFORMACJE",
+            "Status: "+friendlyValue("status",project)
+                +" • Termin: "+(value(project,"due_date").isBlank()?"—":value(project,"due_date")));
+        java.util.Set<Long> ids=new java.util.HashSet<>();
+        ids.add(projectId);
+        for(JsonElement element:table("projects")) {
+            if(!element.isJsonObject())continue;
+            long id=longValue(element.getAsJsonObject(),"id");
+            if(id!=projectId&&desktopProjectDescendsFrom(id,projectId))ids.add(id);
+        }
+        java.util.Map<Long,String> names=new java.util.HashMap<>();
+        int done=0,total=0,worked=0,plannedTime=0;
+        for(JsonElement element:table("tasks")) {
+            if(!element.isJsonObject())continue;
+            JsonObject task=element.getAsJsonObject();
+            if(!ids.contains(longValue(task,"project_id")))continue;
+            long id=longValue(task,"id");
+            String name=value(task,"title");
+            names.put(id,name);
+            int minutes=desktopTaskWorkedMinutes(id);
+            total++;worked+=minutes;plannedTime+=intValue(task,"duration_minutes");
+            boolean completed=intValue(task,"done")!=0;
+            if(completed)done++;
+            addProjectReportRow(rows,(completed?"WYKONANA • ":"OTWARTA • ")+name,
+                "Termin: "+value(task,"due_date")+" • Plan: "
+                    +formatMinutes(intValue(task,"duration_minutes"))
+                    +" • Praca: "+formatMinutes(minutes));
+        }
+        addProjectReportRow(rows,"POSTĘP",
+            "Wykonane: "+done+"/"+total+" • "+(total==0?0:Math.round(done*100f/total))
+                +"% • Plan: "+formatMinutes(plannedTime)
+                +" • Zarejestrowano: "+formatMinutes(worked));
+        for(JsonElement element:table("project_task_work_sessions")) {
+            if(!element.isJsonObject())continue;
+            JsonObject session=element.getAsJsonObject();
+            String taskName=names.get(longValue(session,"task_id"));
+            if(taskName==null)continue;
+            addProjectReportRow(rows,"CZAS • "+taskName,
+                "Start: "+value(session,"started_at")+" • "
+                    +(value(session,"worked_minutes").isBlank()?"Sesja aktywna":
+                        formatMinutes(intValue(session,"worked_minutes"))));
+        }
+        long all=0L,spent=0L,planned=0L;
+        for(JsonElement element:table("project_costs")) {
+            if(!element.isJsonObject())continue;
+            JsonObject cost=element.getAsJsonObject();
+            if(!ids.contains(longValue(cost,"project_id")))continue;
+            long amount=desktopProjectCostValue(cost);
+            all=Math.addExact(all,amount);
+            String status=value(cost,"status");
+            if("planned".equals(status))planned=Math.addExact(planned,amount);
+            else spent=Math.addExact(spent,amount);
+            addProjectReportRow(rows,"WYDATEK • "+value(cost,"name"),
+                money(Long.toString(amount))+" • "+desktopProjectCostStatus(status)
+                    +(value(cost,"note").isBlank()?"":" • "+value(cost,"note")));
+        }
+        addProjectReportRow(rows,"PODSUMOWANIE WYDATKÓW",
+            "Wszystkie: "+money(Long.toString(all))+" • Poniesione: "
+                +money(Long.toString(spent))+" • Planowane: "+money(Long.toString(planned)));
+        addProjectReportRow(rows,"UWAGA",
+            "Raport przedstawia zapisane dane dostępne w EDHOME Desktop. "
+                +"Nie odtwarza zmian, których aplikacja nie zapisała.");
+        printTableReport("Raport projektu • "+value(project,"name"),rows,
+            new String[][]{{"Pozycja","name"},{"Szczegóły","details"}});
+    }
+
+    private static void addProjectReportRow(JsonArray rows,String name,String details) {
+        JsonObject row=new JsonObject();
+        row.addProperty("name",name==null?"":name);
+        row.addProperty("details",details==null?"":details);
+        rows.add(row);
+    }
 
     private static String desktopProjectCostStatus(String status) {
         if ("bought".equals(status)) return "Kupione";
