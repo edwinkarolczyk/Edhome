@@ -27,5 +27,6 @@ for marker in (
     assert marker in desktop, marker
 for marker in ("jpegBase64", "ImageIO.read", "LosslessFactory.createFromImage"):
     assert marker in pdf, marker
+assert "DesktopQrLabels.savePdf(this,pdf)" in desktop
 assert "Desktop project PDF report contract" in workflow
 print("PASS: Desktop project PDF report, saved photos, history and version gate")
