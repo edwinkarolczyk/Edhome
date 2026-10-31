@@ -1,9 +1,19 @@
+## 2026-10-31 — potwierdzone wdrożenie podsumowania wydatków i naprawa crasha szczegółów projektu
+
+- Android Beta **0.8.1.170 / versionCode 363**: usunięto ponowne dołączanie karty podsumowania kosztów, które powodowało `IllegalStateException`. Implementacja `15b5bd3`, test regresyjny `e996d11`, bump `2039107`, release `62a948f`. [CI 41067880346 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067880346); [APK opublikowany](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.170).
+- Desktop Beta **0.7.0.145**: podsumowanie kosztów projektu na dole szczegółów, z uwzględnieniem podprojektów i odświeżaniem po zmianie ilości/statusu. Implementacja `3c947ad`, test `e596df3`; [CI 41067805983 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067805983); [EXE i ZIP opublikowane](https://github.com/edwinkarolczyk/Edhome/releases/tag/desktop-beta-latest).
+- Wspólne wyliczenia używają ilości w tysiącznych jednostki i ceny w groszach, zaokrąglenia `HALF_UP`; koszty kupione/zapłacone są oddzielone od planowanych. Nie księgują się w PayCheck. Test regresyjny Android/Desktop PASS.
+- Bez zmian SQLite: Android nadal `DataBackup.DB_VERSION=52`; nie dodano migracji ani kolumn. Stable `main` bez zmian.
+- **Test E2E na fizycznym telefonie i Windows: niepotwierdzony.** CI nie zastępuje odbioru na urządzeniach.
+
+---
+
 ## 2026-10-30 — P0 Android: naprawa crasha szczegółów projektu (Beta 0.8.1.170)
 
 - Diagnoza z logu urządzenia: `renderProjectCosts()` tworzyło kartę przez `card()`, a `card()` już automatycznie dodaje widok do `body`. Następne `root.addView(expenseSummary)` próbowało dodać ten sam widok drugi raz i powodowało `IllegalStateException: ViewGroup.addViewInner`.
 - Usunięto drugie dodawanie widoku. Karta „Podsumowanie wydatków” pozostaje na końcu sekcji kosztów, bez zmiany jej zawartości i pozostałego układu.
 - Rozszerzono `check_project_expense_summary.py`: test wymaga utworzenia karty przez `card()`, potwierdza automatyczne dodanie do `body` i zabrania ponownego `root.addView(expenseSummary)`.
-- Android Beta podniesiony do 0.8.1.170 / versionCode 363. CI i publikacja APK oczekują na wynik.
+- Android Beta 0.8.1.170 / versionCode 363: [CI 41067880346 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067880346); podpisany APK opublikowany w [beta-v0.8.1.170](https://github.com/edwinkarolczyk/Edhome/releases/tag/beta-v0.8.1.170), release commit `62a948f`.
 - Naprawa wyłącznie na `beta`; `main` / Stable nietknięte.
 - Hub nadal wymaga osobnej diagnostyki: log wskazuje timeout do 192.168.100.22:45823; nie zmieniano konfiguracji sieci ani synchronizacji bez potwierdzenia stanu komputera.
 
@@ -17,9 +27,9 @@
 - Obie platformy liczą ilość razy cenę w groszach z dokładnym zaokrągleniem HALF_UP. Poniesione obejmują tylko statusy Kupione i Zapłacone; Planowane są osobno. Koszty nie są księgowane w PayCheck.
 - Android ProjectStore używa dokładnego sumowania z kontrolą przepełnienia. Poprawiono również wyliczanie wartości pojedynczego wiersza.
 - Dodano test check_project_expense_summary.py i podpięto go do Android Beta CI oraz Desktop Beta CI.
-- Docelowe wersje: Android 0.8.1.169 / versionCode 362; Desktop 0.7.0.145.
+- Wersje faktycznie opublikowane: Android 0.8.1.170 / versionCode 363; Desktop 0.7.0.145.
 - Commity: Android ProjectStore 8840cd4; Android UI 8f208a8; Desktop 3c947ad; test e596df3; workflow Android a0282ee; workflow Desktop 0918be8 i 6b32feed; wersje Gradle Android 3a478f8 i Desktop ec8f6bd.
-- Weryfikacja CI i nowe artefakty APK/instalatora: oczekujące. Test fizyczny na telefonie i komputerze pozostaje wymagany.
+- Android [CI 41067880346 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067880346); Desktop [CI 41067805983 PASS](https://github.com/edwinkarolczyk/Edhome/actions/runs/41067805983). APK, Setup EXE i ZIP są opublikowane. Test fizyczny na telefonie i komputerze pozostaje wymagany.
 - Wyłącznie beta; main / Stable bez zmian.
 
 ---
