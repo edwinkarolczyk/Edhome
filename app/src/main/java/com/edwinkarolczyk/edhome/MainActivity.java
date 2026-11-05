@@ -6839,8 +6839,18 @@ public final class MainActivity extends Activity {
                         }
                         try {
                             ProjectStore.startWork(db.getWritableDatabase(),taskId);
-                            prefs.edit().putLong("project_last_active_task_"+project.id,taskId)
-                                .putLong("project_last_active_at_"+project.id,System.currentTimeMillis()).apply();
+                            long activeProjectId=project.id;
+                            java.util.HashSet<Long> activeAncestors=new java.util.HashSet<>();
+                            for(int depth=0;activeProjectId>0&&depth<128
+                                    &&activeAncestors.add(activeProjectId);depth++) {
+                                prefs.edit().putLong("project_last_active_task_"+activeProjectId,taskId)
+                                    .putLong("project_last_active_at_"+activeProjectId,
+                                        System.currentTimeMillis()).apply();
+                                ProjectStore.Project activeProject=ProjectStore.find(
+                                    db.getReadableDatabase(),activeProjectId);
+                                activeProjectId=activeProject==null||activeProject.parentId==null
+                                    ?0L:activeProject.parentId;
+                            }
                             ProjectWorkNotification.showActive(this,taskId);
                             FeedbackSignals.success(this);
                             DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
