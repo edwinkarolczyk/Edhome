@@ -1,3 +1,13 @@
+## 2026-11-05 — poprawka blokady CI przed publikacją Android Beta 173
+
+- Run [42000375241](https://github.com/edwinkarolczyk/Edhome/actions/runs/42000375241) zatrzymał się na teście `check_desktop_sync_contract.py`: niespójna wersja Desktopu w kodzie/Gradle/workflow (`0.7.0.146` vs `0.7.0.147`). Testy Android projektu, w tym wyszukiwarka na żywo i ostatnia czynność, przeszły.
+- Poprawiono stałą `DESKTOP_VERSION` w `EdhomeDesktop.java` na `0.7.0.147`, zgodnie z Gradle i workflow. Commit: `ece0bc4270982217f8fac3d62e5c0809ef6c3446`.
+- Wcześniejsza poprawka testu Androida: commit `e320e2c971f4a98e3c5877a593523a78c54f94fe`.
+- **Status wydania Android 173:** nadal nieopublikowane; manifest i release pozostają na 172. Nowy CI ma przejść pełne testy, kompilację, podpis certyfikatem produkcyjnym i publikację. `main` / Stable bez zmian.
+- Następny krok: sprawdzić najnowszy Android Beta workflow po poprawce wersji Desktopu; dopiero po PASS potwierdzić release `beta-v0.8.1.173` i manifest.
+
+---
+
 ## 2026-11-05 — Projekty: wyszukiwarka na żywo i ostatnio aktywna czynność (Beta; CI do weryfikacji)
 
 - Android: w szczegółach projektu dodano pole wyszukiwania na górze, bez przycisku Szukaj. Wpisywanie na bieżąco pokazuje wyniki i chowa pozostałe sekcje do czasu wyczyszczenia pola.
