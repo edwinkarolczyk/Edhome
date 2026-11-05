@@ -2688,8 +2688,15 @@ public final class EdhomeDesktop extends JFrame {
             return;
         }
 
-        PREFS.putLong("project_last_active_task_"+longValue(task,"project_id"),taskId);
-        PREFS.putLong("project_last_active_at_"+longValue(task,"project_id"),System.currentTimeMillis());
+        long activeProjectId=longValue(task,"project_id");
+        java.util.HashSet<Long> activeAncestors=new java.util.HashSet<>();
+        for(int depth=0;activeProjectId>0&&depth<128
+                &&activeAncestors.add(activeProjectId);depth++) {
+            PREFS.putLong("project_last_active_task_"+activeProjectId,taskId);
+            PREFS.putLong("project_last_active_at_"+activeProjectId,System.currentTimeMillis());
+            JsonObject activeProject=desktopProjectById(activeProjectId);
+            activeProjectId=activeProject==null?0L:longValue(activeProject,"parent_id");
+        }
         JsonObject session = new JsonObject();
         session.addProperty("id",nextId("project_task_work_sessions"));
         session.addProperty("task_id",taskId);
