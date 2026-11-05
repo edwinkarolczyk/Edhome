@@ -9,7 +9,7 @@ results = main.split("private void renderProjectSearchResults", 1)[1].split("/**
 
 assert "addProjectSearch(project.id);" in detail
 assert 'setHint("Szukaj w projekcie:' in search
-assert "TextWatcher" in search and "renderProjectSearchResults(projectId,value.toString(),results)" in search
+assert "TextWatcher" in search and "renderProjectSearchResults(projectId,searchValue,results)" in search
 assert "project_last_active_task_" in search
 assert "openProjectTask(lastTask)" in search
 assert "collectProjectTreeIds" in search
@@ -20,6 +20,6 @@ assert "openProjectTask(task.id)" in results
 assert "PROJECT_WORK_STARTED" in main
 start = main.split("ProjectStore.startWork(db.getWritableDatabase(),taskId);", 1)[1][:450]
 assert 'putLong("project_last_active_task_"+activeProjectId,taskId)' in start
-assert "putLong(\"project_last_active_at_\"+project.id,System.currentTimeMillis())" in start
+assert "putLong(\"project_last_active_at_\"+activeProjectId,System.currentTimeMillis())" in start
 assert "body.addView(searchCard)" not in search  # card() attaches itself
 print("Project live search and last active task shortcut: PASS")
