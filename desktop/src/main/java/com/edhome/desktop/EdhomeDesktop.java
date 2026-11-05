@@ -1455,6 +1455,35 @@ public final class EdhomeDesktop extends JFrame {
         JPanel north = new JPanel(new BorderLayout(0,8));
         north.setBackground(APP_BG);
         north.add(head,BorderLayout.NORTH);
+        JPanel searchPanel=new JPanel();
+        searchPanel.setOpaque(false);
+        searchPanel.setLayout(new BoxLayout(searchPanel,BoxLayout.Y_AXIS));
+        JTextField projectSearch=new JTextField();
+        projectSearch.setToolTipText("Szukaj w projekcie: czynności, zakupy, materiały…");
+        projectSearch.setMaximumSize(new Dimension(Integer.MAX_VALUE,34));
+        JPanel searchResults=new JPanel();
+        searchResults.setOpaque(false);
+        searchResults.setLayout(new BoxLayout(searchResults,BoxLayout.Y_AXIS));
+        long lastActiveId=PREFS.getLong("project_last_active_task_"+projectId,0L);
+        JsonObject lastActiveTask=desktopTaskById(lastActiveId);
+        if(lastActiveTask!=null&&longValue(lastActiveTask,"project_id")>0
+                &&(longValue(lastActiveTask,"project_id")==projectId
+                    ||desktopProjectDescendsFrom(longValue(lastActiveTask,"project_id"),projectId))) {
+            JLabel recent=new JLabel("<html><b>Ostatnio aktywna czynność:</b> "
+                +html(value(lastActiveTask,"title"))+"  →</html>");
+            recent.setForeground(APP_ACCENT);
+            recent.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            recent.setBorder(new EmptyBorder(6,4,6,4));
+            recent.addMouseListener(new java.awt.event.MouseAdapter(){
+                @Override public void mouseClicked(java.awt.event.MouseEvent e){
+                    expandedDesktopProjectTaskId=lastActiveId;showSection("Projekty");
+                }
+            });
+            searchResults.add(recent);
+        }
+        searchPanel.add(projectSearch);
+        searchPanel.add(searchResults);
+        north.add(searchPanel,BorderLayout.CENTER);
         north.add(batchBar,BorderLayout.SOUTH);
         wrapper.add(north,BorderLayout.NORTH);
 
@@ -1505,6 +1534,83 @@ public final class EdhomeDesktop extends JFrame {
         list.add(Box.createVerticalStrut(12));
         list.add(desktopProjectCostPanel(projectId));
 
+        projectSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener(){
+            private void update(){
+                String q=projectSearch.getText().trim().toLowerCase(java.util.Locale.ROOT);
+                searchResults.removeAll();
+                if(q.isBlank()) {
+                    list.setVisible(true);
+                    searchResults.setVisible(lastActiveTask!=null);
+                    if(lastActiveTask!=null) {
+                        JLabel recent=new JLabel("<html><b>Ostatnio aktywna czynność:</b> "
+                            +html(value(lastActiveTask,"title"))+"  →</html>");
+                        recent.setForeground(APP_ACCENT);
+                        recent.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+                        recent.addMouseListener(new java.awt.event.MouseAdapter(){
+                            @Override public void mouseClicked(java.awt.event.MouseEvent e){
+                                expandedDesktopProjectTaskId=lastActiveId;showSection("Projekty");
+                            }
+                        });
+                        searchResults.add(recent);
+                    }
+                } else {
+                    list.setVisible(false);
+                    searchResults.setVisible(true);
+                    int matches=0;
+                    for(JsonElement element:table("tasks")) {
+                        if(!element.isJsonObject())continue;
+                        JsonObject task=element.getAsJsonObject();
+                        long owner=longValue(task,"project_id");
+                        if(owner!=projectId&&!desktopProjectDescendsFrom(owner,projectId))continue;
+                        String hay=(value(task,"title")+" "+value(task,"due_date")+" "
+                            +value(task,"description")).toLowerCase(java.util.Locale.ROOT);
+                        if(hay.contains(q)){searchResults.add(desktopProjectTaskCard(task));matches++;}
+                    }
+                    for(JsonElement element:table("project_costs")) {
+                        if(!element.isJsonObject())continue;
+                        JsonObject cost=element.getAsJsonObject();
+                        long owner=longValue(cost,"project_id");
+                        if(owner!=projectId&&!desktopProjectDescendsFrom(owner,projectId))continue;
+                        String hay=(value(cost,"name")+" "+value(cost,"note")+" "
+                            +value(cost,"status")).toLowerCase(java.util.Locale.ROOT);
+                        if(hay.contains(q)){
+                            JLabel hit=new JLabel("<html><b>Zakup / koszt:</b> "
+                                +html(value(cost,"name"))+" • "+html(desktopProjectCostStatus(value(cost,"status")))
+                                +" • "+html(value(cost,"note"))+"</html>");
+                            hit.setForeground(APP_TEXT);hit.setBorder(new EmptyBorder(5,6,5,6));
+                            searchResults.add(hit);matches++;
+                        }
+                    }
+                    for(JsonElement element:table("project_resources")) {
+                        if(!element.isJsonObject())continue;
+                        JsonObject resource=element.getAsJsonObject();
+                        long owner=longValue(resource,"project_id");
+                        if(owner!=projectId&&!desktopProjectDescendsFrom(owner,projectId))continue;
+                        long targetId=longValue(resource,"target_id");
+                        for(JsonElement stored:table("storage_items")) {
+                            if(!stored.isJsonObject())continue;
+                            JsonObject item=stored.getAsJsonObject();
+                            if(longValue(item,"id")!=targetId)continue;
+                            String hay=(value(item,"name")+" "+value(item,"note"))
+                                .toLowerCase(java.util.Locale.ROOT);
+                            if(hay.contains(q)){
+                                JLabel hit=new JLabel("<html><b>Rzecz / Pudełko:</b> "
+                                    +html(value(item,"name"))+"</html>");
+                                hit.setForeground(APP_TEXT);hit.setBorder(new EmptyBorder(5,6,5,6));
+                                searchResults.add(hit);matches++;
+                            }
+                        }
+                    }
+                    if(matches==0)searchResults.add(new JLabel("Brak wyników w tym projekcie."));
+                    else searchResults.add(new JLabel("Wyniki: "+matches));
+                }
+                searchResults.revalidate();searchResults.repaint();
+                list.revalidate();list.repaint();
+            }
+            public void insertUpdate(javax.swing.event.DocumentEvent e){update();}
+            public void removeUpdate(javax.swing.event.DocumentEvent e){update();}
+            public void changedUpdate(javax.swing.event.DocumentEvent e){update();}
+        });
         JScrollPane scroll = new JScrollPane(list);
         scroll.setName("edhome-project-tasks");
         scroll.putClientProperty("edhome.projectId",Long.valueOf(projectId));
@@ -2582,6 +2688,8 @@ public final class EdhomeDesktop extends JFrame {
             return;
         }
 
+        PREFS.putLong("project_last_active_task_"+longValue(task,"project_id"),taskId);
+        PREFS.putLong("project_last_active_at_"+longValue(task,"project_id"),System.currentTimeMillis());
         JsonObject session = new JsonObject();
         session.addProperty("id",nextId("project_task_work_sessions"));
         session.addProperty("task_id",taskId);
