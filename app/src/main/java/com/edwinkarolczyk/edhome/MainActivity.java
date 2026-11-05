@@ -5725,7 +5725,6 @@ public final class MainActivity extends Activity {
             }
             public void afterTextChanged(android.text.Editable value) {}
         });
-        body.addView(searchCard);
     }
 
     private ProjectStore.TaskItem findProjectTask(long rootId,long taskId) {
