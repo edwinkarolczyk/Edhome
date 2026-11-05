@@ -14,7 +14,8 @@ assert "child.setVisibility" in search
 assert "TextWatcher" in search and "renderProjectSearchResults(projectId,searchValue,results)" in search
 assert "project_last_active_task_" in search
 assert "openProjectTask(lastTask)" in search
-assert "collectProjectTreeIds" in search
+assert "collectProjectTreeIds" in main
+assert "ProjectStore.children" in main.split("private void collectProjectTreeIds", 1)[1].split("private void renderProjectSearchResults", 1)[0]
 assert "ProjectStore.displayTasks" in results
 assert "FROM project_costs WHERE project_id=?" in results
 assert "FROM project_resources WHERE project_id=?" in results
