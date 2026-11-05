@@ -1,7 +1,7 @@
 name: EDHOME Desktop Beta
 
 env:
-  DESKTOP_VERSION: "0.7.0.146"
+  DESKTOP_VERSION: "0.7.0.147"
 
 # Nie publikuj starszego instalatora po nowszym buildzie beta.
 concurrency:
@@ -46,6 +46,8 @@ jobs:
           gradle-version: "8.10.2"
       - name: Project expense summary and cross-platform accounting regression
         run: python tests/check_project_expense_summary.py
+      - name: Desktop project live search regression
+        run: python tests/check_project_live_search_desktop_contract.py
       - name: Desktop project PDF report contract
         run: python tests/check_project_pdf_report_desktop_contract.py
       - name: Desktop approved-scope contract
