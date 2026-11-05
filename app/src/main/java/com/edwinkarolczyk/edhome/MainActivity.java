@@ -5639,6 +5639,7 @@ public final class MainActivity extends Activity {
         button(project.parentId==null?"← Wszystkie projekty":"← Projekt nadrzędny",
             ()->projectBack(project));
         note(projectPath(project.id));
+        addProjectSearch(project.id);
 
         ProjectStore.Stats stats=ProjectStore.stats(
             db.getReadableDatabase(),project.id);
@@ -5692,6 +5693,118 @@ public final class MainActivity extends Activity {
         renderProjectTasks(project);
         renderProjectResources(project.id);
         renderProjectCosts(project.id);
+    }
+
+    /** Wyszukiwanie na żywo ograniczone do projektu i jego podprojektów. */
+    private void addProjectSearch(long projectId) {
+        EditText query=newTextInput();
+        query.setSingleLine(true);
+        query.setHint("Szukaj w projekcie: czynności, zakupy, materiały…");
+        query.setCompoundDrawablePadding(dp(8));
+        LinearLayout searchCard=card();
+        searchCard.addView(query);
+        LinearLayout results=new LinearLayout(this);
+        results.setOrientation(LinearLayout.VERTICAL);
+        searchCard.addView(results);
+        String lastKey="project_last_active_task_"+projectId;
+        long lastTask=prefs.getLong(lastKey,0L);
+        if(lastTask>0) {
+            ProjectStore.TaskItem active=findProjectTask(projectId,lastTask);
+            if(active!=null) {
+                TextView recent=text("Ostatnio aktywna czynność: "+active.title+"  →",14,true);
+                recent.setTextColor(accent);
+                recent.setPadding(dp(4),dp(10),dp(4),dp(10));
+                recent.setOnClickListener(v->openProjectTask(lastTask));
+                searchCard.addView(recent,0);
+            }
+        }
+        query.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence value,int start,int count,int after) {}
+            public void onTextChanged(CharSequence value,int start,int before,int count) {
+                renderProjectSearchResults(projectId,value.toString(),results);
+            }
+            public void afterTextChanged(android.text.Editable value) {}
+        });
+        body.addView(searchCard);
+    }
+
+    private ProjectStore.TaskItem findProjectTask(long rootId,long taskId) {
+        java.util.ArrayList<Long> ids=new java.util.ArrayList<>();
+        collectProjectTreeIds(rootId,ids);
+        for(Long id:ids) {
+            java.util.List<ProjectStore.TaskItem> rows=ProjectStore.displayTasks(
+                db.getReadableDatabase(),id,"manual");
+            for(ProjectStore.TaskItem row:rows)if(row.id==taskId)return row;
+        }
+        return null;
+    }
+
+    private void collectProjectTreeIds(long id,java.util.List<Long> out) {
+        if(out.contains(id)||out.size()>500)return;
+        out.add(id);
+        for(ProjectStore.Project child:ProjectStore.children(db.getReadableDatabase(),id))
+            collectProjectTreeIds(child.id,out);
+    }
+
+    private void renderProjectSearchResults(long projectId,String raw,
+            LinearLayout target) {
+        target.removeAllViews();
+        String q=raw==null?"":raw.trim().toLowerCase(java.util.Locale.ROOT);
+        if(q.isEmpty())return;
+        int found=0;
+        java.util.ArrayList<Long> projectIds=new java.util.ArrayList<>();
+        collectProjectTreeIds(projectId,projectIds);
+        for(Long pid:projectIds) {
+            ProjectStore.Project p=ProjectStore.find(db.getReadableDatabase(),pid);
+            String projectName=p==null?"":p.name;
+            for(ProjectStore.TaskItem task:ProjectStore.displayTasks(
+                    db.getReadableDatabase(),pid,"manual")) {
+                String hay=(task.title+" "+task.dueDate+" "+projectName)
+                    .toLowerCase(java.util.Locale.ROOT);
+                if(hay.contains(q)) {
+                    smallButton(target,"Czynność • "+task.title
+                        +(task.dueDate.isEmpty()?"":" • "+task.dueDate),
+                        ()->openProjectTask(task.id));
+                    found++;
+                }
+            }
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT id,name,note,status FROM project_costs WHERE project_id=?",
+                    new String[]{Long.toString(pid)})) {
+                while(c.moveToNext()) {
+                    String name=c.getString(1)==null?"":c.getString(1);
+                    String noteValue=c.getString(2)==null?"":c.getString(2);
+                    String status=c.getString(3)==null?"":c.getString(3);
+                    if((name+" "+noteValue+" "+status+" "+projectName)
+                            .toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                        final String label=name;
+                        smallButton(target,"Zakup / koszt • "+label+" • "+projectName,
+                            ()->alert("Pozycja: "+label+"\nProjekt: "+projectName
+                                +"\nStatus: "+status+"\nNotatka: "+noteValue));
+                        found++;
+                    }
+                }
+            }
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT target_kind,target_id FROM project_resources WHERE project_id=?",
+                    new String[]{Long.toString(pid)})) {
+                while(c.moveToNext()) {
+                    String kind=c.getString(0);long targetId=c.getLong(1);
+                    StorageStore.Item item=StorageStore.find(db.getReadableDatabase(),targetId);
+                    if(item!=null&&(item.name+" "+StorageStore.location(
+                            db.getReadableDatabase(),item)+" "+projectName)
+                            .toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                        String label=item.name;
+                        smallButton(target,"Rzecz / Pudełko • "+label+" • "+projectName,
+                            ()->alert(label+"\n"+StorageStore.location(
+                                db.getReadableDatabase(),item)));
+                        found++;
+                    }
+                }
+            }
+        }
+        if(found==0)target.addView(text("Brak wyników w tym projekcie.",13,false));
+        else target.addView(text("Wyniki: "+found,12,false));
     }
 
     /** Raport jest generowany poza wątkiem UI; eksport nie modyfikuje projektu. */
@@ -6727,6 +6840,8 @@ public final class MainActivity extends Activity {
                         }
                         try {
                             ProjectStore.startWork(db.getWritableDatabase(),taskId);
+                            prefs.edit().putLong("project_last_active_task_"+project.id,taskId)
+                                .putLong("project_last_active_at_"+project.id,System.currentTimeMillis()).apply();
                             ProjectWorkNotification.showActive(this,taskId);
                             FeedbackSignals.success(this);
                             DiagnosticLog.event("PROJECT_WORK_STARTED","task="+taskId);
