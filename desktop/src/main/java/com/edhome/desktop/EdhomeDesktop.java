@@ -1476,7 +1476,7 @@ public final class EdhomeDesktop extends JFrame {
             recent.setBorder(new EmptyBorder(6,4,6,4));
             recent.addMouseListener(new java.awt.event.MouseAdapter(){
                 @Override public void mouseClicked(java.awt.event.MouseEvent e){
-                    expandedDesktopProjectTaskId=lastActiveId;showSection("Projekty");
+                    desktopProjectId=longValue(lastActiveTask,"project_id");expandedDesktopProjectTaskId=lastActiveId;showSection("Projekty");
                 }
             });
             searchResults.add(recent);
