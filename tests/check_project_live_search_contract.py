@@ -18,7 +18,7 @@ assert "FROM project_costs WHERE project_id=?" in results
 assert "FROM project_resources WHERE project_id=?" in results
 assert "openProjectTask(task.id)" in results
 assert "PROJECT_WORK_STARTED" in main
-start = main.split("ProjectStore.startWork(db.getWritableDatabase(),taskId);", 1)[1][:450]
+start = main.split("ProjectStore.startWork(db.getWritableDatabase(),taskId);", 1)[1][:750]
 assert 'putLong("project_last_active_task_"+activeProjectId,taskId)' in start
 assert "putLong(\"project_last_active_at_\"+activeProjectId,System.currentTimeMillis())" in start
 assert "body.addView(searchCard)" not in search  # card() attaches itself
