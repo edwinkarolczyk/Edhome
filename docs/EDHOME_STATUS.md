@@ -1,3 +1,16 @@
+## 2026-11-05 — Projekty: wyszukiwarka na żywo i ostatnio aktywna czynność (Beta; CI do weryfikacji)
+
+- Android: w szczegółach projektu dodano pole wyszukiwania na górze, bez przycisku Szukaj. Wpisywanie na bieżąco pokazuje wyniki i chowa pozostałe sekcje do czasu wyczyszczenia pola.
+- Android: wyszukiwanie obejmuje czynności, terminy, zakupy/koszty wraz z notatkami/statusami oraz przypisane Rzeczy/Pudełka; zakres obejmuje projekt i wszystkie poziomy podprojektów. Wyniki czynności otwierają wskazaną czynność.
+- Android: po uruchomieniu Start zapisywana jest ostatnio uruchomiona czynność; identyfikator i czas zapisu są propagowane do projektu oraz wszystkich jego nadrzędnych projektów. Nazwa czynności jest klikalnym skrótem.
+- Desktop: dodano analogiczne wyszukiwanie na żywo dla czynności, zakupów/kosztów i przypisanych zasobów w całym drzewie projektu; wyniki czynności pokazują interaktywną kartę. Ostatnia czynność jest zapamiętywana także dla projektów nadrzędnych, a skrót otwiera właściwy podprojekt.
+- Android Beta: `0.8.1.173 / versionCode 366`. Desktop Beta: `0.7.0.147`.
+- Dodano testy kontraktowe `check_project_live_search_contract.py` i `check_project_live_search_desktop_contract.py`, podpięte do odpowiednich workflow Beta.
+- **Status:** zmiany zapisane na `beta`; kompilacja i CI wymagają potwierdzenia. Nie ogłaszać APK/EXE jako gotowych przed zielonym CI i publikacją. Test na urządzeniach pozostaje wymagany.
+- `main` / Stable bez zmian.
+
+---
+
 ## 2026-10-31 — Projekty: czytelne rozliczenie na pierwszej stronie PDF (Android Beta 0.8.1.172 / versionCode 365; CI w toku)
 
 - Przebudowano górne podsumowanie finansowe PDF: większy nagłówek i kwota łączna, wyraźnie pokazane godziny pracy, koszt robocizny, materiały/elementy oraz zakupy planowane poza sumą poniesioną.
