@@ -23,6 +23,7 @@ assert "openProjectTask(task.id)" in results
 assert "PROJECT_WORK_STARTED" in main
 start = main.split("ProjectStore.startWork(db.getWritableDatabase(),taskId);", 1)[1][:750]
 assert 'putLong("project_last_active_task_"+activeProjectId,taskId)' in start
-assert "putLong(\"project_last_active_at_\"+activeProjectId,System.currentTimeMillis())" in start
+assert '.putLong("project_last_active_at_"+activeProjectId,' in start
+assert "System.currentTimeMillis()).apply()" in start
 assert "body.addView(searchCard)" not in search  # card() attaches itself
 print("Project live search and last active task shortcut: PASS")
