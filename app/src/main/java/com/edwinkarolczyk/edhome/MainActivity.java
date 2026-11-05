@@ -5721,7 +5721,14 @@ public final class MainActivity extends Activity {
         query.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence value,int start,int count,int after) {}
             public void onTextChanged(CharSequence value,int start,int before,int count) {
-                renderProjectSearchResults(projectId,value.toString(),results);
+                String searchValue=value.toString();
+                renderProjectSearchResults(projectId,searchValue,results);
+                for(int i=0;i<body.getChildCount();i++) {
+                    android.view.View child=body.getChildAt(i);
+                    if(child!=searchCard)
+                        child.setVisibility(searchValue.trim().isEmpty()
+                            ?android.view.View.VISIBLE:android.view.View.GONE);
+                }
             }
             public void afterTextChanged(android.text.Editable value) {}
         });
