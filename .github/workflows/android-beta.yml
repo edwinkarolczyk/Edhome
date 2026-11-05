@@ -66,8 +66,8 @@ jobs:
           import json, re
           from pathlib import Path
           gradle = Path("app/build.gradle").read_text(encoding="utf-8")
-          code = int(re.search(r"\\bversionCode\\s+(\\d+)", gradle).group(1))
-          name = re.search(r"\\bversionName\\s+'([^']+)'", gradle).group(1)
+          code = int(re.search(r"\bversionCode\s+(\d+)", gradle).group(1))
+          name = re.search(r"\bversionName\s+'([^']+)'", gradle).group(1)
           feed = json.loads(Path("beta-manifest.json").read_text(encoding="utf-8"))
           if code <= int(feed["versionCode"]):
               raise SystemExit(f"Beta versionCode {code} must be greater than published {feed['versionCode']}")
