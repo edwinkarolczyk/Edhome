@@ -9,6 +9,8 @@ results = main.split("private void renderProjectSearchResults", 1)[1].split("/**
 
 assert "addProjectSearch(project.id);" in detail
 assert 'setHint("Szukaj w projekcie:' in search
+assert search.index("searchCard.addView(query)") < search.index("searchCard.addView(recent)")
+assert "child.setVisibility" in search
 assert "TextWatcher" in search and "renderProjectSearchResults(projectId,searchValue,results)" in search
 assert "project_last_active_task_" in search
 assert "openProjectTask(lastTask)" in search
