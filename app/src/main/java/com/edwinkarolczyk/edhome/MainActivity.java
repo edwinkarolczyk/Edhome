@@ -5715,7 +5715,7 @@ public final class MainActivity extends Activity {
                 recent.setTextColor(accent);
                 recent.setPadding(dp(4),dp(10),dp(4),dp(10));
                 recent.setOnClickListener(v->openProjectTask(lastTask));
-                searchCard.addView(recent,0);
+                searchCard.addView(recent);
             }
         }
         query.addTextChangedListener(new android.text.TextWatcher() {
