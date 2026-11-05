@@ -60,6 +60,21 @@ jobs:
           gradle-version: "8.10.2"
       - name: Verify update-channel scripts
         run: python3 -m py_compile .github/scripts/publish_public_channel.py
+      - name: Verify Beta version is newer than the published update feed
+        run: |
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          gradle = Path("app/build.gradle").read_text(encoding="utf-8")
+          code = int(re.search(r"\\bversionCode\\s+(\\d+)", gradle).group(1))
+          name = re.search(r"\\bversionName\\s+'([^']+)'", gradle).group(1)
+          feed = json.loads(Path("beta-manifest.json").read_text(encoding="utf-8"))
+          if code <= int(feed["versionCode"]):
+              raise SystemExit(f"Beta versionCode {code} must be greater than published {feed['versionCode']}")
+          if name == feed["versionName"]:
+              raise SystemExit(f"Beta versionName {name} is already published")
+          print(f"Ready to build Beta {name} (code {code}); feed currently serves {feed['versionName']}")
+          PY
       - name: Fresh-install default settings and ZIP preservation contract
         run: python3 tests/check_fresh_install_defaults_contract.py
       - name: Compact activity cards regression
