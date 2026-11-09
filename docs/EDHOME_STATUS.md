@@ -1,3 +1,14 @@
+## 2026-11-09 — Projekty: czytelne wyniki wykrywania podobnych czynności (Android Beta 0.8.1.175)
+
+- Poprawiono okno ostrzeżenia: każda podobna czynność jest wyświetlana jako osobny, czytelny wiersz z pełną nazwą oraz jednoznaczną akcją „Otwórz tę czynność”.
+- Kliknięcie wiersza zamyka ostrzeżenie i przechodzi bezpośrednio do wskazanej czynności w jej projekcie/podprojekcie.
+- Zachowano „Dodaj mimo to” i „Anuluj”; brak automatycznego blokowania lub scalania wpisów.
+- Dodano/zmieniono kontrakt regresyjny wymagający widocznej nazwy i bezpośredniego otwierania pozycji.
+- Android Beta: `0.8.1.175 / versionCode 368`. CI i publikacja APK uruchamiają się po aktualizacji gałęzi `beta`.
+- `main` / Stable bez zmian. Publikację uznajemy za gotową dopiero po zielonym CI i dostępności APK/manifestu.
+
+---
+
 ## 2026-11-09 — Projekty: ostrzeganie o podobnych nazwach czynności (Android Beta 0.8.1.174; CI w toku)
 
 - Przy dodawaniu nowej czynności z szybkiego formularza projektu i pełnego formularza EDHOME sprawdza podobne nazwy wyłącznie w drzewie aktualnie otwartego projektu (projekt + jego podprojekty); nie przeszukuje innych projektów.
