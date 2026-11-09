@@ -379,8 +379,9 @@ jobs:
         run: python3 tests/check_project_labor_cost.py
       - name: Project expenses summary and cross-platform accounting regression
         run: python3 tests/check_project_expense_summary.py
-      - name: Project live search and last active task regression
+      - name: Project task duplicate warning contract
         run: python3 tests/check_project_task_duplicate_contract.py
+      - name: Project live search and last active task regression
         run: python3 tests/check_project_live_search_contract.py
       - name: Project PDF report contract
         run: python3 tests/check_project_pdf_report_contract.py
