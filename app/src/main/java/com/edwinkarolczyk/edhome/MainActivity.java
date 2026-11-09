@@ -6421,15 +6421,57 @@ public final class MainActivity extends Activity {
         if(matches.isEmpty()) { addAnyway.run(); return; }
         DiagnosticLog.event("PROJECT_TASK_DUPLICATE_CANDIDATE",
             "project="+projectId+" matches="+matches.size());
-        new AlertDialog.Builder(this)
+        LinearLayout duplicateContent=new LinearLayout(this);
+        duplicateContent.setOrientation(LinearLayout.VERTICAL);
+        duplicateContent.setPadding(dp(18),dp(8),dp(18),dp(8));
+        TextView explanation=text(
+            "W tym projekcie lub jego podprojekcie znaleziono podobne czynności. "
+                +"Wybierz konkretną pozycję, aby przejść bezpośrednio do jej szczegółów:",
+            14,false);
+        explanation.setTextColor(subdued);
+        duplicateContent.addView(explanation,new LinearLayout.LayoutParams(-1,-2));
+
+        LinearLayout duplicateRows=new LinearLayout(this);
+        duplicateRows.setOrientation(LinearLayout.VERTICAL);
+        for(int i=0;i<matches.size();i++) {
+            final long duplicateId=matches.get(i);
+            String duplicateTitle=labels.get(i);
+            LinearLayout duplicateRow=new LinearLayout(this);
+            duplicateRow.setOrientation(LinearLayout.VERTICAL);
+            duplicateRow.setPadding(dp(14),dp(10),dp(14),dp(10));
+            duplicateRow.setBackground(skin.panel(this,surface,16));
+            duplicateRow.setClickable(true);
+            duplicateRow.setFocusable(true);
+            TextView duplicateName=text(duplicateTitle,16,true);
+            duplicateName.setTextColor(ink);
+            TextView openHint=text("Otwórz tę czynność  →",13,true);
+            openHint.setTextColor(accent);
+            duplicateRow.addView(duplicateName,new LinearLayout.LayoutParams(-1,-2));
+            duplicateRow.addView(openHint,new LinearLayout.LayoutParams(-1,-2));
+            LinearLayout.LayoutParams rowParams=new LinearLayout.LayoutParams(-1,-2);
+            rowParams.setMargins(0,dp(4),0,dp(4));
+            duplicateRows.addView(duplicateRow,rowParams);
+            touchFeedback(duplicateRow);
+            duplicateRow.setOnClickListener(v->{
+                AlertDialog current=(AlertDialog)v.getTag();
+                if(current!=null)current.dismiss();
+                openProjectTask(duplicateId);
+            });
+        }
+        ScrollView duplicateScroll=new ScrollView(this);
+        duplicateScroll.setFillViewport(false);
+        duplicateScroll.addView(duplicateRows);
+        duplicateContent.addView(duplicateScroll,
+            new LinearLayout.LayoutParams(-1,-2));
+        AlertDialog duplicateDialog=new AlertDialog.Builder(this)
             .setTitle("Podobna czynność już istnieje")
-            .setMessage("W tym projekcie lub jego podprojekcie znaleziono podobną nazwę. "
-                +"Wybierz istniejącą czynność, aby ją otworzyć, albo dodaj nową mimo ostrzeżenia.")
-            .setItems(labels.toArray(new String[0]),(dialog,which)->
-                openProjectTask(matches.get(which)))
+            .setView(duplicateContent)
             .setPositiveButton("Dodaj mimo to",(dialog,which)->addAnyway.run())
             .setNegativeButton("Anuluj",null)
-            .show();
+            .create();
+        for(int i=0;i<duplicateRows.getChildCount();i++)
+            duplicateRows.getChildAt(i).setTag(duplicateDialog);
+        duplicateDialog.show();
     }
 
     private void showProjectQuickTasks(long projectId) {
