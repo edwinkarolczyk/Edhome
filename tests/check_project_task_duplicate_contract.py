@@ -9,7 +9,10 @@ scope = main.split("private void confirmProjectTaskDuplicate", 1)[1].split("priv
 assert "ProjectStore.projectTaskIds" in scope
 assert 'SELECT title,done FROM tasks WHERE id=?' in scope
 assert "ProjectTaskDuplicateRules.isSimilar(title,existingTitle)" in scope
-assert "Dodaj mimo to" in scope and "openProjectTask(matches.get(which))" in scope
+assert "Dodaj mimo to" in scope and "openProjectTask(duplicateId)" in scope
+assert 'text("Otwórz tę czynność  →",13,true)' in scope
+assert "duplicateName=text(duplicateTitle,16,true)" in scope
+assert "setItems(labels.toArray" not in scope
 assert "duplicateConfirmed[0]" in quick and "confirmProjectTaskDuplicate(project.id" in quick
 assert "projectDuplicateConfirmed[0]" in main
 assert "confirmProjectTaskDuplicate(selectedProjectId,title,null" in main
