@@ -6393,6 +6393,45 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("Anuluj",null).show();
     }
 
+    /**
+     * Ostrzega o podobnych nazwach tylko w drzewie aktualnie otwartego projektu.
+     * Obejmuje także czynności zakończone; wybór istniejącej otwiera ją zamiast
+     * tworzyć drugi wpis. Dodanie mimo ostrzeżenia pozostaje zawsze możliwe.
+     */
+    private void confirmProjectTaskDuplicate(long projectId,String candidate,
+            Long excludeTaskId,Runnable addAnyway) {
+        String title=TextEntryRules.capitalizeLabel(candidate==null?"":candidate.trim());
+        if(projectId<=0L||title.isEmpty()) { addAnyway.run(); return; }
+        java.util.ArrayList<Long> matches=new java.util.ArrayList<>();
+        java.util.ArrayList<String> labels=new java.util.ArrayList<>();
+        for(Long taskId:ProjectStore.projectTaskIds(
+                db.getReadableDatabase(),projectId)) {
+            if(excludeTaskId!=null&&excludeTaskId.equals(taskId))continue;
+            try(Cursor c=db.getReadableDatabase().rawQuery(
+                    "SELECT title,done FROM tasks WHERE id=?",
+                    new String[]{Long.toString(taskId)})) {
+                if(!c.moveToFirst())continue;
+                String existingTitle=c.getString(0);
+                if(!ProjectTaskDuplicateRules.isSimilar(title,existingTitle))continue;
+                matches.add(taskId);
+                labels.add(existingTitle+(c.getInt(1)!=0?" • wykonana":""));
+                if(matches.size()>=8)break;
+            }
+        }
+        if(matches.isEmpty()) { addAnyway.run(); return; }
+        DiagnosticLog.event("PROJECT_TASK_DUPLICATE_CANDIDATE",
+            "project="+projectId+" matches="+matches.size());
+        new AlertDialog.Builder(this)
+            .setTitle("Podobna czynność już istnieje")
+            .setMessage("W tym projekcie lub jego podprojekcie znaleziono podobną nazwę. "
+                +"Wybierz istniejącą czynność, aby ją otworzyć, albo dodaj nową mimo ostrzeżenia.")
+            .setItems(labels.toArray(new String[0]),(dialog,which)->
+                openProjectTask(matches.get(which)))
+            .setPositiveButton("Dodaj mimo to",(dialog,which)->addAnyway.run())
+            .setNegativeButton("Anuluj",null)
+            .show();
+    }
+
     private void showProjectQuickTasks(long projectId) {
         ProjectStore.Project project=ProjectStore.find(
             db.getReadableDatabase(),projectId);
@@ -6443,16 +6482,26 @@ public final class MainActivity extends Activity {
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Szybkie dodawanie • "+project.name)
             .setView(form).setCancelable(false).create();
-        Runnable save=()->{
+        final boolean[] duplicateConfirmed={false};
+        final Runnable[] saveAction={null};
+        saveAction[0]=()->{
             int minutes=quickMinutes[quickDuration.getSelectedItemPosition()];
             if(name.getText().toString().trim().isEmpty()) {
                 name.setError("Podaj nazwę.");return;
+            }
+            String taskTitle=TextEntryRules.capitalizeLabel(name.getText().toString().trim());
+            if(!duplicateConfirmed[0]) {
+                confirmProjectTaskDuplicate(project.id,taskTitle,null,()->{
+                    duplicateConfirmed[0]=true;
+                    saveAction[0].run();
+                });
+                return;
             }
             String dueValue=due.getText().toString().trim();
             String remind=reminder.getText().toString().trim();
             String custom=dueValue.isEmpty()||remind.isEmpty()?null:remind;
             try {
-                db.saveTask(null,name.getText().toString().trim(),dueValue,
+                db.saveTask(null,taskTitle,dueValue,
                     "once",1,project.placeId,"normal",minutes,
                     project.assigneeId,custom,0,new java.util.ArrayList<>(),
                     project.id);
@@ -6467,10 +6516,10 @@ public final class MainActivity extends Activity {
                 alert(error.getMessage()==null?"Nie zapisano czynności.":error.getMessage());
             }
         };
-        smallButton(form,"＋ Zapisz i dodaj następną",save);
+        smallButton(form,"＋ Zapisz i dodaj następną",saveAction[0]);
         smallButton(form,"✓ Zapisz i zakończ",()->{
             int before=db.openTasks();
-            save.run();
+            saveAction[0].run();
             if(db.openTasks()>before) {
                 dialog.dismiss();
                 render();
@@ -8729,6 +8778,7 @@ public final class MainActivity extends Activity {
             .setView(scroll)
             .setNegativeButton("Anuluj", null)
             .setPositiveButton("Zapisz", null).create();
+        final boolean[] projectDuplicateConfirmed={false};
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             .setOnClickListener(v -> {
                 String rule = TaskRules.RULES[repeat.getSelectedItemPosition()];
@@ -8829,6 +8879,13 @@ public final class MainActivity extends Activity {
                         && (selectedAssignee == null
                             || !rotationIds.contains(selectedAssignee))) {
                     alert("Aktualny wykonawca musi należeć do rotacji.");
+                    return;
+                }
+                if(id==null&&selectedProjectId!=null&&!projectDuplicateConfirmed[0]) {
+                    confirmProjectTaskDuplicate(selectedProjectId,title,null,()->{
+                        projectDuplicateConfirmed[0]=true;
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+                    });
                     return;
                 }
                 try {

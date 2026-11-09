@@ -1,3 +1,14 @@
+## 2026-11-09 — Projekty: ostrzeganie o podobnych nazwach czynności (Android Beta 0.8.1.174; CI w toku)
+
+- Przy dodawaniu nowej czynności z szybkiego formularza projektu i pełnego formularza EDHOME sprawdza podobne nazwy wyłącznie w drzewie aktualnie otwartego projektu (projekt + jego podprojekty); nie przeszukuje innych projektów.
+- Sprawdzane są także czynności zakończone. Porównanie działa offline, ignoruje wielkość liter, polskie znaki diakrytyczne i interpunkcję; uwzględnia podobieństwo fraz, wspólne słowa i niewielkie literówki.
+- Komunikat pozwala otworzyć istniejącą czynność, dodać nową mimo ostrzeżenia albo anulować. Nic nie jest automatycznie blokowane, scalane ani usuwane.
+- Dodano kontrakt regresyjny `tests/check_project_task_duplicate_contract.py` i podpięto go do Android Beta CI.
+- Android Beta podniesiony do `0.8.1.174 / versionCode 367`; pipeline ma wykonać testy, kompilację, podpis produkcyjny i publikację APK/manifestu.
+- **Status:** kod zapisany na `beta`; CI i publikacja APK nie są jeszcze potwierdzone. Test na fizycznym telefonie pozostaje wymagany. `main` / Stable bez zmian.
+
+---
+
 ## 2026-11-05 — poprawka blokady CI przed publikacją Android Beta 173
 
 - Run [42000375241](https://github.com/edwinkarolczyk/Edhome/actions/runs/42000375241) zatrzymał się na teście `check_desktop_sync_contract.py`: niespójna wersja Desktopu w kodzie/Gradle/workflow (`0.7.0.146` vs `0.7.0.147`). Testy Android projektu, w tym wyszukiwarka na żywo i ostatnia czynność, przeszły.
