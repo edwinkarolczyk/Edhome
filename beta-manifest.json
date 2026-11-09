@@ -1,8 +1,8 @@
 {
   "channel": "beta",
-  "versionCode": 367,
-  "versionName": "0.8.1.174",
-  "changelog": "EDHOME Beta 0.8.1.174 — Przy dodawaniu nowej czynności z szybkiego formularza projektu i pełnego formularza EDHOME sprawdza podobne nazwy wyłącznie w drzewie aktualnie otwartego projektu (projekt + jego podprojekty); nie przeszukuje innych projektów. Sprawdzane są także czynności zakończone. Porównanie działa offline, ignoruje wielkość liter, polskie znaki diakrytyczne i interpunkcję; uwzględnia podobieństwo fraz, wspólne słowa i niewielkie literówki. Komunikat pozwala otworzyć istniejącą czynność, dodać nową mimo ostrzeżenia albo anulować. Nic nie jest automatycznie blokowane, scalane ani usuwane. Dodano kontrakt regresyjny `tests/check_project_task_duplicate_contract.py` i podpięto go do Android Beta CI. Stable bez zmian.",
-  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.174/edhome-beta.apk",
-  "sha256": "9d5880c6c62568e0deee85e99b01c3446282febf582f65b8cb4693705f826419"
+  "versionCode": 368,
+  "versionName": "0.8.1.175",
+  "changelog": "EDHOME Beta 0.8.1.175 — Poprawki i usprawnienia beta. Stable bez zmian.",
+  "apkUrl": "https://github.com/edwinkarolczyk/Edhome/releases/download/beta-v0.8.1.175/edhome-beta.apk",
+  "sha256": "f45e8d524e662c526a56d7d5db41b991ce58a0660c1642fce762e8676a60adcc"
 }
