@@ -15,6 +15,8 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
@@ -26,6 +28,12 @@ public final class TaskAlarmService extends Service {
     private static final int NOTIFICATION_ID = 7138;
     private MediaPlayer player;
     private Vibrator vibrator;
+    private final Handler safetyHandler = new Handler(Looper.getMainLooper());
+    private static final long MAX_RINGING_MS = 10L * 60L * 1000L;
+    private final Runnable safetyStop = () -> {
+        stopPlayback();
+        DiagnosticLog.event("TASK_ALARM_AUTO_STOP_10MIN");
+    };
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || !ACTION_START.equals(intent.getAction())) {
@@ -39,7 +47,9 @@ public final class TaskAlarmService extends Service {
         if (title == null || title.trim().isEmpty()) title = "Czynność";
         createSilentChannel();
         startForeground(NOTIFICATION_ID, buildNotification(title, taskId, occurrence));
+        safetyHandler.removeCallbacks(safetyStop);
         startRinging();
+        safetyHandler.postDelayed(safetyStop, MAX_RINGING_MS);
         DiagnosticLog.event("TASK_ALARM_RINGING_STARTED", "task=" + taskId);
         return START_NOT_STICKY;
     }
@@ -142,6 +152,6 @@ public final class TaskAlarmService extends Service {
         if (manager != null) manager.cancel(NOTIFICATION_ID);
     }
 
-    @Override public void onDestroy() { stopRinging(); super.onDestroy(); }
+    @Override public void onDestroy() { safetyHandler.removeCallbacks(safetyStop); stopRinging(); super.onDestroy(); }
     @Override public IBinder onBind(Intent intent) { return null; }
 }
